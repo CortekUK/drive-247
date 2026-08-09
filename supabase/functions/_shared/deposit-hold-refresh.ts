@@ -1,0 +1,1778 @@
+// The chained-hold refresh ENGINE — one authorization link at a time.
+//
+// WHY THIS FILE EXISTS
+// A card authorization can never outlive the network's ceiling (Visa is exactly
+// 29d18h card-present-style; the card-absent merchant-initiated window is
+// 4d18h, and GMT's live Connect account — acct_1SrIFEPcUIaEGCY0 — is not
+// approved for extended authorization at all, so it lands on the ~5-7 day
+// network default). A 90-120 day rental therefore needs a CHAIN of 4-18 links:
+// cancel the incumbent authorization and place a replacement on the saved card
+// before the incumbent dies. The engineering problem is not the length of one
+// hold, it is the RELIABILITY OF EACH LINK — one bad night used to end a chain
+// permanently and silently ("I cannot refresh the hold. This is affecting our
+// day to day business" — GMT, Aug 2026).
+//
+// It also exists because `refresh-deposit-holds` and
+// `sandbox-refresh-deposit-holds` were hand-maintained verbatim FORKS. The
+// sandbox ("Time Machine") is the de-facto verification path for this code, so
+// a fork means staging green-lights logic production no longer runs. Both
+// drivers now import `refreshOneHold` from here; the sandbox keeps only its
+// three genuine differences (fail-closed scoping, tenant lock, preview).
+//
+// The defects this engine was written to kill, all verified against the old
+// forked code:
+//   1. Every throw — including throws that happened BEFORE Stripe was ever
+//      contacted, e.g. the tenants lookup — landed in one catch that wrote
+//      terminal 'expired'. The driver selected only 'held', so the rental was
+//      never looked at again. No alert, no retry, no backoff.
+//   2. The idempotency key embedded the OLD payment-intent id, which the
+//      failure path never updated, so a retry inside Stripe's 24h window
+//      replayed the cached decline verbatim.
+//   3. `deposit_hold_payment_method_id` was reused verbatim for the whole
+//      rental. Over 90 days, crossing a card expiry is a base-rate event.
+//   4. Currency was read from the CURRENT tenant row while the platform
+//      account was record-anchored (UK->UAE migration).
+//   5. Every write was a bare `.eq('id', …)` that discarded its `{ error }`, so
+//      a rental released or captured mid-loop was silently re-authorized.
+//   6. The auto-extend "release instead of refresh" branch ran AFTER the
+//      unconditional cancel — i.e. "destroy, then record that we released".
+//
+// And two the FIRST version of this engine introduced, caught in review:
+//   7. Widening the driver to `deposit_hold_status IN ('held','failed')` swept
+//      up the 'failed' rows the Stripe webhooks write when the FIRST placement
+//      of a brand-new hold fails. Those have no PaymentIntent and no amount, so
+//      the zero-amount branch would have rewritten them as 'released' across
+//      all 28 tenants on the first cron tick. See HOLD_HISTORY_PREDICATE and
+//      the hasHoldHistory gate.
+//   8. `deposit_hold_attempt_seq` is in the idempotency key, so a retry can
+//      never replay the previous key. A create that SUCCEEDED at Stripe but
+//      whose response was lost would therefore be re-attempted under a fresh
+//      key — a second live authorization on the renter's card, with the first
+//      invisible forever. See findLiveDepositIntent.
+//
+// FAIL SAFE, NEVER OPEN: whenever Stripe cannot be consulted conclusively we
+// keep treating the incumbent hold as LIVE rather than putting a second
+// authorization on a renter's card.
+
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import {
+  getConnectAccountId,
+  getStripeClientForRecord,
+  createDepositHoldIntentWithFallback,
+  validateStripeCustomerId,
+  TENANT_STRIPE_COLUMNS,
+  type StripeMode,
+} from "./stripe-client.ts";
+
+type Stripe = ReturnType<typeof getStripeClientForRecord>;
+type StripeOptions = { stripeAccount?: string } | undefined;
+
+// ---------------------------------------------------------------------------
+// Driver query — shared so production and the sandbox can never drift.
+// ---------------------------------------------------------------------------
+
+/** Every column `refreshOneHold` reads. Both drivers select exactly this. */
+export const HOLD_REFRESH_COLUMNS = `
+  id, tenant_id, customer_id, status,
+  auto_extend_enabled,
+  platform_account,
+  deposit_hold_payment_intent_id,
+  deposit_hold_amount,
+  deposit_hold_payment_method_id,
+  deposit_hold_stripe_customer_id,
+  deposit_hold_expires_at,
+  deposit_hold_placed_at,
+  deposit_hold_status,
+  deposit_hold_attempt_seq,
+  deposit_hold_failure_count,
+  deposit_hold_connect_account_id,
+  deposit_hold_stripe_mode,
+  deposit_hold_currency,
+  deposit_hold_chain_expires_at
+`;
+
+/**
+ * Rental lifecycle states that END a deposit chain — a DENY list, not an allow
+ * list.
+ *
+ * This used to be `REFRESHABLE_RENTAL_STATUSES = ['Active','Pending']`. The live
+ * `rentals_status_check` in the oldest schema dump permits Pending / Active /
+ * Closed / Rejected / Cancelled, but the rest of the repo demonstrably deals in
+ * a WIDER vocabulary — `apps/booking/src/lib/vehicle-availability.ts` and both
+ * `use-vehicle-booked-dates` hooks list Pending/Active/Upcoming/Confirmed/
+ * Started, and the 2026-03-17 notification migrations key off 'Started' and
+ * 'Quoted'. An allow list therefore has a silent-death mode that is exactly what
+ * this workstream exists to kill: a rental that moves into a status nobody
+ * enumerated becomes invisible to the driver AND loses the claim CAS, so every
+ * remaining link of its chain never happens and nothing says so.
+ *
+ * Inverting it means an unknown status keeps the chain ALIVE (safe: the worst
+ * case is one more authorization on a card that is already authorized) while
+ * only unambiguously finished rentals stop it.
+ */
+export const TERMINAL_RENTAL_STATUSES = [
+  "Closed",
+  "Completed",
+  "Cancelled",
+  // US spelling — inshur-reconcile treats both as terminal, so both exist in
+  // somebody's data.
+  "Canceled",
+  "Rejected",
+] as const;
+
+/** PostgREST list literal for the deny list, e.g. `(Closed,Completed,…)`. */
+const TERMINAL_RENTAL_STATUS_LIST = `(${TERMINAL_RENTAL_STATUSES.join(",")})`;
+
+/**
+ * Hold states the driver picks up.
+ *
+ * 'failed' is in here deliberately: under the old engine failure was terminal
+ * ('expired', never re-selected). 'failed' now means "recoverable — retry after
+ * deposit_hold_next_retry_at". Everything else is either mid-flight and owned
+ * by another worker ('processing', 'refreshing', 'capturing'), waiting on a
+ * human ('requires_action', 'needs_review', 'disputed') or finished
+ * ('captured', 'released', 'expired').
+ *
+ * NOT every 'failed' row qualifies — see HOLD_HISTORY_PREDICATE.
+ */
+export const REFRESHABLE_HOLD_STATUSES = ["held", "failed"] as const;
+
+/**
+ * "This rental once carried a REAL authorization."
+ *
+ * `deposit_hold_status = 'failed'` has TWO producers with opposite meanings:
+ *
+ *   a) this engine, after a chain link failed to place its replacement. The
+ *      renter WAS secured a moment ago, `deposit_hold_placed_at` is set from the
+ *      original placement, and retrying is exactly right.
+ *   b) `stripe-webhook-live/index.ts` and `stripe-webhook-test/index.ts`, which
+ *      write `{ deposit_hold_status: 'failed' }` gated on
+ *      `.is('deposit_hold_status', null)` when the FIRST auto-placement of a
+ *      brand-new hold fails. place-deposit-hold's `releaseClaim()` resets the
+ *      status to NULL on every failure path but has already burned an
+ *      attempt_seq, so these rows carry attempt_seq >= 1 with NO PaymentIntent,
+ *      NO deposit_hold_amount and NO deposit_hold_placed_at. They mean "we never
+ *      managed to take this renter's deposit" and the refresh engine has no
+ *      business touching them — it chains authorizations, it does not place
+ *      first holds.
+ *
+ * Without this predicate the first production cron tick after deploy would have
+ * selected every (b) row across all 28 tenants, computed amountCents = 0 from the
+ * NULL amount, taken the "nothing to re-authorize" release branch and written
+ * `deposit_hold_status = 'released'` on rentals that never had a hold —
+ * destroying the 'Hold failed' signal the portal renders and removing the rows
+ * from the reconciler's non-terminal sweep. attempt_seq is NOT a usable
+ * discriminator (see (b) above); a persisted PaymentIntent or a
+ * `deposit_hold_placed_at` stamp is, because both are only ever written after
+ * Stripe confirmed an authorization.
+ */
+// PostgREST syntax note: both idioms used here have production precedent in
+// this repo — `col.not.is.null` inside `.or()` (reminders-generate/index.ts:288,
+// apps/portal insurances pages) and `and(...)` groups inside `.or()`
+// (reminders-digest/index.ts:58). Written as sibling `and(...)` groups rather
+// than a nested `or(...)` to keep it two levels deep.
+const HOLD_HISTORY_PREDICATE = [
+  "deposit_hold_status.eq.held",
+  "and(deposit_hold_status.eq.failed,deposit_hold_payment_intent_id.not.is.null)",
+  "and(deposit_hold_status.eq.failed,deposit_hold_placed_at.not.is.null)",
+].join(",");
+
+/** How far ahead of the REAL Stripe deadline we re-authorize. */
+export const DEFAULT_LOOKAHEAD_DAYS = 2;
+
+/** Max rentals one invocation will touch. See the batch note in the drivers. */
+export const DEFAULT_BATCH_LIMIT = 25;
+
+/**
+ * Apply the "due for a refresh" predicate to a select/count builder.
+ *
+ * Two filters are written as PostgREST `.or()` because the plain comparison is
+ * NULL-blind:
+ *   * `deposit_hold_expires_at` — `.lt()` against NULL evaluates to NULL, not
+ *     true, so rows whose expiry we never learned (or that we deliberately
+ *     cleared after a failed link) were INVISIBLE to the old driver forever.
+ *     A NULL expiry means "we do not know it is alive" and must sort FIRST.
+ *   * `deposit_hold_next_retry_at` — NULL means "no backoff pending".
+ * `.or()` is safe on `.select()`; it is NOT safe on `.update()` (PostgREST
+ * mis-qualifies the column and errors with "column rentals.deposit_hold_status
+ * does not exist"), which is why every write below branches instead.
+ */
+export function applyDueHoldFilters<T>(
+  query: T,
+  opts: { lookaheadDays?: number; now?: Date } = {}
+): T {
+  const now = opts.now ?? new Date();
+  const nowIso = now.toISOString();
+  const threshold = new Date(now.getTime() + (opts.lookaheadDays ?? DEFAULT_LOOKAHEAD_DAYS) * 86_400_000).toISOString();
+
+  // deno-lint-ignore no-explicit-any
+  let q: any = query;
+  q = q
+    // Rental lifecycle: a DENY list, and NULL-safe. `status` is nullable
+    // (DEFAULT 'Active', and the CHECK constraint passes NULL), and a NULL
+    // status must not be able to end a chain either.
+    .or(`status.is.null,status.not.in.${TERMINAL_RENTAL_STATUS_LIST}`)
+    // Hold state: 'held', plus only those 'failed' rows that evidence a real
+    // prior authorization. See HOLD_HISTORY_PREDICATE.
+    .or(HOLD_HISTORY_PREDICATE)
+    .or(`deposit_hold_expires_at.is.null,deposit_hold_expires_at.lt.${threshold}`)
+    .or(`deposit_hold_next_retry_at.is.null,deposit_hold_next_retry_at.lte.${nowIso}`)
+    // I9 / EC-25: never re-authorize past the end of the chain. Enforced here so
+    // a chain-expired rental cannot sit at the head of the queue (it has the
+    // oldest expiry) and starve the batch, and again inside refreshOneHold.
+    .or(`deposit_hold_chain_expires_at.is.null,deposit_hold_chain_expires_at.gt.${nowIso}`);
+  return q as T;
+}
+
+// ---------------------------------------------------------------------------
+// Error taxonomy (defect 1)
+// ---------------------------------------------------------------------------
+
+export type FailureClass = "transient" | "funds" | "sca" | "dead_card" | "ambiguous";
+
+/**
+ * Stripe's own guidance: "We recommend a maximum of eight retries… issuers
+ * might see additional retries as potential fraud." Past this the chain stops
+ * and asks for a human instead of hammering the issuer.
+ */
+export const MAX_HOLD_ATTEMPTS = 8;
+
+/** Infra / issuer-timeout style problems. Cheap to retry, no issuer decline. */
+const TRANSIENT_CODES = new Set([
+  "processing_error",
+  "issuer_not_available",
+  "reenter_transaction",
+  "approve_with_id",
+  "try_again_later",
+  "rate_limit",
+  "lock_timeout",
+  "api_connection_error",
+  "api_error",
+  "temporary_failure",
+  // OUR database, not Stripe's. casUpdate tags its throws with this so a
+  // momentary PostgREST/Postgres blip takes the ordinary 6h/24h/72h ladder as
+  // 'failed'. Left untagged it fell through to 'ambiguous' -> 'needs_review'
+  // with next_retry_at NULL, i.e. a transport hiccup silently retired the
+  // rental from the retry loop — the precise failure mode this engine exists to
+  // eliminate, and 'needs_review' has no notification wired to it yet.
+  "db_write_failed",
+]);
+
+/** Real declines about money. Retrying fast just burns issuer goodwill. */
+const FUNDS_CODES = new Set([
+  "insufficient_funds",
+  "withdrawal_count_limit_exceeded",
+  "card_velocity_exceeded",
+  // Soft issuer declines: the card is fine and the money may well be there, the
+  // issuer just said no to THIS request. Stripe's own advice is to try again
+  // later, so they take the SAME long ladder as a funds decline. They must not
+  // fall through to 'ambiguous' — do_not_honor/generic_decline are the two most
+  // common declines in existence, and a dead-end 'needs_review' on either would
+  // end most chains on a routine hiccup.
+  "generic_decline",
+  "do_not_honor",
+  "call_issuer",
+  "transaction_not_allowed",
+  "service_not_allowed",
+  // A decline Stripe gave us no decline_code for. stripeErrorCode() prefers
+  // decline_code, so this only matches the bare case — the specific hard
+  // declines (lost_card, stolen_card, …) are already routed to dead_card above.
+  "card_declined",
+]);
+
+/** The card itself is gone. Re-resolve the payment method, once. */
+const DEAD_CARD_CODES = new Set([
+  "expired_card",
+  "lost_card",
+  "stolen_card",
+  "pickup_card",
+  "restricted_card",
+  "resource_missing",
+]);
+
+/** Backoff ladders, indexed by prior failure count. */
+const TRANSIENT_BACKOFF_HOURS = [6, 24, 72];
+const FUNDS_BACKOFF_HOURS = [24, 72, 72];
+
+// deno-lint-ignore no-explicit-any
+function stripeErrorCode(err: any): string {
+  return String(
+    err?.decline_code ??
+      err?.raw?.decline_code ??
+      err?.code ??
+      err?.raw?.code ??
+      err?.type ??
+      err?.raw?.type ??
+      "unknown"
+  );
+}
+
+/**
+ * Classify a Stripe failure. Anything we cannot place goes to 'ambiguous' ->
+ * 'needs_review', NOT to a terminal status: writing 'expired' because our own
+ * code threw is precisely how chains died silently.
+ */
+// deno-lint-ignore no-explicit-any
+export function classifyStripeFailure(err: any): FailureClass {
+  const status = Number(err?.statusCode ?? err?.raw?.statusCode ?? err?.status ?? 0);
+  const type = String(err?.type ?? err?.raw?.type ?? "");
+  const code = stripeErrorCode(err);
+
+  // Network / rate limit / Stripe 5xx: never the customer's fault.
+  if (status === 429 || status >= 500) return "transient";
+  if (type === "StripeConnectionError" || type === "StripeAPIError") return "transient";
+  if (err instanceof TypeError && /fetch|network/i.test(String(err?.message))) return "transient";
+
+  if (code === "authentication_required" || code === "payment_intent_authentication_failure") return "sca";
+  if (FUNDS_CODES.has(code)) return "funds";
+  if (DEAD_CARD_CODES.has(code)) return "dead_card";
+  if (TRANSIENT_CODES.has(code)) return "transient";
+
+  return "ambiguous";
+}
+
+/**
+ * When to try this rental again.
+ *
+ * `expiresAt` is the deadline the row carried when the attempt STARTED. For
+ * non-funds failures we clamp the backoff to an hour before it, floored at
+ * now+30min.
+ *
+ * Be precise about what that buys, because the obvious reading is wrong: by the
+ * time `recordFailure` runs, the incumbent has already been cancelled, so this
+ * is NOT "one last swing before the authorization dies". What it actually does
+ * is stop a rental that WAS due imminently from being parked for 72h while it
+ * sits unsecured — the sooner-of-the-two is simply the more urgent retry, and
+ * the clamp can only ever shorten. It is load-bearing for the callers that fail
+ * BEFORE the cancel (the outer catch can be reached from the pre-cancel paths),
+ * where the incumbent genuinely is still live.
+ *
+ * We deliberately do NOT clamp funds declines: those must respect the long
+ * ladder so we are not re-presenting a declined card every half hour.
+ */
+export function computeRetryAt(
+  failureClass: FailureClass,
+  priorFailureCount: number,
+  expiresAt: string | null,
+  now: Date = new Date()
+): string {
+  const ladder = failureClass === "funds" ? FUNDS_BACKOFF_HOURS : TRANSIENT_BACKOFF_HOURS;
+  const hours = ladder[Math.min(priorFailureCount, ladder.length - 1)];
+  let candidate = new Date(now.getTime() + hours * 3_600_000);
+
+  if (failureClass !== "funds" && expiresAt) {
+    const deadline = new Date(expiresAt).getTime();
+    if (Number.isFinite(deadline)) {
+      // An hour before the deadline the row carried, and never sooner than 30
+      // minutes from now (the floor keeps a hard-down Stripe from turning into
+      // a hot loop).
+      const lastChance = Math.max(now.getTime() + 1_800_000, deadline - 3_600_000);
+      if (candidate.getTime() > lastChance) candidate = new Date(lastChance);
+    }
+  }
+  return candidate.toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Expiry provenance (defect 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Conservative fallback window when Stripe has not published a deadline.
+ *
+ * NOT the 7 days `_shared/stripe-client.ts:resolveHoldExpiry` assumes. Visa's
+ * card-absent MERCHANT-INITIATED window is 4d18h, so a 7-day guess plus the
+ * 2-day lookahead means the row is first examined AFTER the authorization has
+ * already died — the row says 'held', the money is back with the renter, and
+ * nothing ever notices. 4 days sits safely inside 4d18h, and
+ * `deposit_hold_expiry_source = 'fallback'` records that the value is a guess
+ * so the reconciler and the operator panel can tell it apart from the truth.
+ */
+export const FALLBACK_HOLD_WINDOW_DAYS = 4;
+
+export interface HoldWindow {
+  expiresAt: string;
+  source: "stripe_capture_before" | "fallback";
+  windowSeconds: number | null;
+  extendedAuthStatus: string | null;
+  captureBefore: string | null;
+  cardFunding: string | null;
+  cardBrand: string | null;
+  cardLast4: string | null;
+}
+
+/** Read the REAL deadline (and card identity) off the authorising charge. */
+async function readHoldWindow(
+  stripe: Stripe,
+  // deno-lint-ignore no-explicit-any
+  intent: any,
+  stripeOptions: StripeOptions,
+  now: Date
+): Promise<HoldWindow> {
+  const fallback = (): HoldWindow => ({
+    expiresAt: new Date(now.getTime() + FALLBACK_HOLD_WINDOW_DAYS * 86_400_000).toISOString(),
+    source: "fallback",
+    windowSeconds: null,
+    extendedAuthStatus: null,
+    captureBefore: null,
+    cardFunding: null,
+    cardBrand: null,
+    cardLast4: null,
+  });
+
+  try {
+    const latestCharge = intent?.latest_charge;
+    // deno-lint-ignore no-explicit-any
+    let charge: any = latestCharge && typeof latestCharge === "object" ? latestCharge : null;
+    if (!charge && typeof latestCharge === "string") {
+      charge = await stripe.charges.retrieve(latestCharge, stripeOptions);
+    }
+    const card = charge?.payment_method_details?.card;
+    const captureBefore = card?.capture_before;
+    const base = fallback();
+    base.cardFunding = card?.funding ?? null;
+    base.cardBrand = card?.brand ?? null;
+    base.cardLast4 = card?.last4 ?? null;
+    base.extendedAuthStatus = card?.extended_authorization?.status ?? null;
+
+    if (typeof captureBefore === "number" && captureBefore > 0) {
+      const expiresAt = new Date(captureBefore * 1000);
+      const created = typeof charge?.created === "number" ? charge.created * 1000 : now.getTime();
+      return {
+        ...base,
+        expiresAt: expiresAt.toISOString(),
+        source: "stripe_capture_before",
+        captureBefore: expiresAt.toISOString(),
+        windowSeconds: Math.max(0, Math.round((expiresAt.getTime() - created) / 1000)),
+      };
+    }
+    console.warn("[DEPOSIT-REFRESH] Stripe published no capture_before; using the conservative fallback window");
+    return base;
+  } catch (err) {
+    console.warn("[DEPOSIT-REFRESH] Could not read capture_before; using the conservative fallback window:", err);
+    return fallback();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Payment-method re-resolution (defect 3 / EC-13 / EC-73 / EC-74)
+// ---------------------------------------------------------------------------
+
+interface ResolvedCard {
+  id: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  funding: string | null;
+  source: "default" | "stored" | "list";
+}
+
+// deno-lint-ignore no-explicit-any
+function cardIsExpired(pm: any, now: Date): boolean {
+  const m = Number(pm?.card?.exp_month);
+  const y = Number(pm?.card?.exp_year);
+  if (!m || !y) return false; // unknown — let the issuer decide
+  // A card is good through the LAST day of its expiry month.
+  return new Date(Date.UTC(y, m, 1)).getTime() <= now.getTime();
+}
+
+// deno-lint-ignore no-explicit-any
+function toResolvedCard(pm: any, source: ResolvedCard["source"]): ResolvedCard {
+  return {
+    id: pm.id,
+    brand: pm?.card?.brand ?? null,
+    last4: pm?.card?.last4 ?? null,
+    expMonth: pm?.card?.exp_month ?? null,
+    expYear: pm?.card?.exp_year ?? null,
+    funding: pm?.card?.funding ?? null,
+    source,
+  };
+}
+
+/**
+ * Resolve the card to authorize THIS link on — every link, not once per rental.
+ *
+ * The old engine reused `rentals.deposit_hold_payment_method_id` verbatim for
+ * the entire rental. Across 90 days a card expiring, being reissued after
+ * fraud, or being replaced by the renter is a base-rate event, and every
+ * subsequent link then declined into a terminal status nobody was told about.
+ *
+ * Order is the same as place-deposit-hold's: the customer's CURRENT default
+ * payment method, then the id we stored, then whatever cards are on file.
+ * Obviously-expired cards are skipped rather than presented to the issuer.
+ * `exclude` carries the id that just failed so the one permitted re-resolution
+ * cannot hand back the same dead card.
+ *
+ * NOTE for whoever wires up `rental_card_mandates`: a link CAN legitimately move
+ * to a different card mid-chain (that is the point — otherwise a reissued card
+ * ends the rental's cover). The resolved id, brand, last4 and funding are
+ * persisted on the rental and on every deposit_hold_links row, which is what a
+ * 'pm_replaced' mandate invalidation would key off.
+ */
+async function resolvePaymentMethod(
+  stripe: Stripe,
+  customerId: string,
+  stripeOptions: StripeOptions,
+  storedPmId: string | null,
+  exclude: Set<string>,
+  now: Date
+): Promise<ResolvedCard | null> {
+  const customer = await stripe.customers.retrieve(
+    customerId,
+    { expand: ["invoice_settings.default_payment_method"] },
+    stripeOptions
+  );
+  // deno-lint-ignore no-explicit-any
+  if ((customer as any)?.deleted) return null;
+
+  // deno-lint-ignore no-explicit-any
+  const def = (customer as any)?.invoice_settings?.default_payment_method;
+  if (def && typeof def === "object" && def.type === "card" && !exclude.has(def.id) && !cardIsExpired(def, now)) {
+    return toResolvedCard(def, "default");
+  }
+
+  if (storedPmId && !exclude.has(storedPmId)) {
+    try {
+      const pm = await stripe.paymentMethods.retrieve(storedPmId, stripeOptions);
+      // An unattached PM cannot be charged off-session, and a PM attached to a
+      // DIFFERENT customer is a mis-anchored row (EC-73: five call sites re-mint
+      // stripe_customer_id) — either way, fall through rather than fail.
+      // deno-lint-ignore no-explicit-any
+      const attachedTo = (pm as any)?.customer;
+      if (pm?.type === "card" && attachedTo === customerId && !cardIsExpired(pm, now)) {
+        return toResolvedCard(pm, "stored");
+      }
+    } catch (err) {
+      console.warn("[DEPOSIT-REFRESH] Stored payment method unusable, falling through:", stripeErrorCode(err));
+    }
+  }
+
+  const list = await stripe.paymentMethods.list(
+    { customer: customerId, type: "card", limit: 10 },
+    stripeOptions
+  );
+  for (const pm of list.data) {
+    if (exclude.has(pm.id)) continue;
+    if (cardIsExpired(pm, now)) continue;
+    return toResolvedCard(pm, "list");
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Orphan reconciliation — never authorize a renter twice (fail-OPEN defect)
+// ---------------------------------------------------------------------------
+
+/** How far back an orphaned authorization could plausibly still be alive. */
+const ORPHAN_LOOKBACK_DAYS = 8;
+
+/**
+ * Find a LIVE deposit-hold authorization for this rental that we are not
+ * tracking.
+ *
+ * WHY: `deposit_hold_attempt_seq` is incremented on every attempt and the
+ * idempotency key is built from it, so a retry NEVER re-drives the previous
+ * key. If `paymentIntents.create` succeeded at Stripe but the response never
+ * reached us — a connection reset or a Stripe 5xx, both of which
+ * classifyStripeFailure (correctly) calls 'transient' — the next run would
+ * create a SECOND live authorization under a brand-new key while the first was
+ * still holding the renter's funds. And the first is unrecoverable by anything
+ * downstream: `stampLinkIntent` never ran, so its ledger row has a NULL
+ * payment_intent_id, and reconcile-deposit-holds explicitly refuses to guess on
+ * those. The renter ends up with one invisible frozen hold plus one visible one.
+ *
+ * HOW: list the customer's recent PaymentIntents and match on our own metadata.
+ * Deliberately NOT `paymentIntents.search` (Stripe's search index lags writes by
+ * up to a minute, and a lagging index here means "no orphan found" — the
+ * fail-OPEN answer), and deliberately NOT an idempotency-key replay: a replay
+ * only returns the cached response when the request body is byte-identical, and
+ * the body carries the payment method, which this engine re-resolves on every
+ * link. A body that has drifted returns `idempotency_error`, not the intent.
+ *
+ * Both the currently-resolved Stripe customer and the one anchored on the
+ * rental are swept, because EC-73's five re-mint sites can move the rental onto
+ * a new customer between attempts and the orphan stays attached to the old one.
+ */
+async function findLiveDepositIntent(
+  stripe: Stripe,
+  rentalId: string,
+  customerIds: string[],
+  stripeOptions: StripeOptions,
+  exclude: Set<string>,
+  now: Date
+  // deno-lint-ignore no-explicit-any
+): Promise<any | null> {
+  const createdGte = Math.floor((now.getTime() - ORPHAN_LOOKBACK_DAYS * 86_400_000) / 1000);
+  for (const customerId of customerIds) {
+    const page = await stripe.paymentIntents.list(
+      {
+        customer: customerId,
+        limit: 100,
+        created: { gte: createdGte },
+        expand: ["data.latest_charge"],
+      },
+      stripeOptions
+    );
+    for (const intent of page.data) {
+      if (exclude.has(intent.id)) continue;
+      // Only an authorization that is STILL holding funds matters. Anything
+      // canceled/succeeded/in-motion is either dead or somebody else's problem.
+      if (String(intent.status) !== "requires_capture") continue;
+      // deno-lint-ignore no-explicit-any
+      const md = ((intent as any).metadata ?? {}) as Record<string, string>;
+      if (md.rental_id !== rentalId) continue;
+      if (md.type !== "deposit_hold") continue;
+      return intent;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Row writes — optimistic concurrency on every single one (defect 5)
+// ---------------------------------------------------------------------------
+
+interface CasExpectation {
+  status: string;
+  paymentIntentId?: string | null;
+  /** Also require the rental to still be in a refreshable lifecycle state. */
+  requireRefreshableRental?: boolean;
+}
+
+/**
+ * Compare-and-set. Anchored on the hold status AND — when it matters — on the
+ * exact PaymentIntent the row carried when we read it.
+ *
+ * Status alone is not enough. The gap is not theoretical: this very engine sets
+ * 'refreshing', cancels PI_A and writes PI_B back as 'held', so a status-only
+ * predicate can match a row that now carries a DIFFERENT, LIVE authorization.
+ * Zero rows updated therefore means "somebody else owns this rental" and the
+ * caller must abort — cancelling anything it just created at Stripe first.
+ */
+async function casUpdate(
+  supabase: SupabaseClient,
+  rentalId: string,
+  patch: Record<string, unknown>,
+  expect: CasExpectation
+): Promise<boolean> {
+  // deno-lint-ignore no-explicit-any
+  let query: any = supabase
+    .from("rentals")
+    .update({ ...patch, deposit_hold_status_changed_at: new Date().toISOString() })
+    .eq("id", rentalId)
+    .eq("deposit_hold_status", expect.status);
+
+  if (expect.paymentIntentId !== undefined) {
+    query = expect.paymentIntentId === null
+      ? query.is("deposit_hold_payment_intent_id", null)
+      : query.eq("deposit_hold_payment_intent_id", expect.paymentIntentId);
+  }
+  if (expect.requireRefreshableRental) {
+    // EC-10: the operator closing the rental mid-loop (GMT's after-hours lockbox
+    // drops land inside the 03:00 UTC window) must beat us, not lose to us.
+    //
+    // DENY list, matching applyDueHoldFilters. `.or()` is not usable on an
+    // UPDATE here (PostgREST mis-qualifies the column and errors with "column
+    // rentals.deposit_hold_status does not exist"), so this cannot be made
+    // NULL-safe the way the SELECT is: a rental with a NULL status would fail
+    // the CAS and be reported as 'lost_race'. That is the SAFE direction — no
+    // Stripe call, no money moved, the row untouched and still selectable next
+    // run — and `status` has DEFAULT 'Active', so a NULL is pathological.
+    query = query.not("status", "in", TERMINAL_RENTAL_STATUS_LIST);
+  }
+
+  const { data, error } = await query.select("id");
+  // supabase-js RESOLVES on a failed statement instead of throwing; the old
+  // engine discarded `{ error }` on every write, which is how a released rental
+  // could be silently re-authorized.
+  //
+  // Tagged with a code so classifyStripeFailure routes it to the transient
+  // ladder. An untagged Error has no statusCode/type/code, lands in 'ambiguous'
+  // and would retire the rental to 'needs_review' over a database blip.
+  if (error) {
+    throw Object.assign(new Error(`deposit hold write failed: ${error.message}`), {
+      code: "db_write_failed",
+    });
+  }
+  return Array.isArray(data) && data.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// deposit_hold_links — the authorization ledger (item 10)
+// ---------------------------------------------------------------------------
+
+interface LinkContext {
+  supabase: SupabaseClient;
+  id: string | null;
+}
+
+async function openLink(
+  supabase: SupabaseClient,
+  row: Record<string, unknown>
+): Promise<LinkContext> {
+  const { data, error } = await supabase
+    .from("deposit_hold_links")
+    .insert({ ...row, outcome: "pending" })
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    // The ledger is audit substrate, not a gate: refusing to refresh because we
+    // could not write history would let a live hold die over a logging problem.
+    console.error("[DEPOSIT-REFRESH] Could not open deposit_hold_links row:", error.message);
+    return { supabase, id: null };
+  }
+  return { supabase, id: (data?.id as string) ?? null };
+}
+
+/**
+ * Stamp the PaymentIntent id onto a still-PENDING link, the instant Stripe
+ * returns one and before anything else can fail.
+ *
+ * This is what makes an orphan recoverable: reconcile-deposit-holds' stale
+ * pending-link sweep can only look an authorization up at Stripe if the link
+ * carries its id — a pending link with a NULL payment_intent_id is explicitly
+ * left alone there ("never guess"). Without this stamp, a crash between the
+ * create and the rental write leaves a live authorization on the renter's card
+ * that nothing in the product can find.
+ */
+async function stampLinkIntent(link: LinkContext, paymentIntentId: string): Promise<void> {
+  if (!link.id) return;
+  const { error } = await link.supabase
+    .from("deposit_hold_links")
+    .update({ payment_intent_id: paymentIntentId })
+    .eq("id", link.id)
+    .eq("outcome", "pending");
+  if (error) console.error("[DEPOSIT-REFRESH] Could not stamp PaymentIntent onto the link row:", error.message);
+}
+
+async function closeLink(link: LinkContext, patch: Record<string, unknown>): Promise<void> {
+  if (!link.id) return;
+  const { error } = await link.supabase
+    .from("deposit_hold_links")
+    .update({ ...patch, completed_at: new Date().toISOString() })
+    .eq("id", link.id);
+  if (error) console.error("[DEPOSIT-REFRESH] Could not close deposit_hold_links row:", error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Public surface
+// ---------------------------------------------------------------------------
+
+export type RefreshResult =
+  | "refreshed"
+  | "released"
+  | "skipped"
+  | "failed"
+  | "requires_action"
+  | "needs_review"
+  | "lost_race"
+  | "chain_expired"
+  | "config_unavailable";
+
+export interface RefreshOutcome {
+  rentalId: string;
+  result: RefreshResult;
+  message: string;
+  paymentIntentId?: string | null;
+  expiresAt?: string | null;
+  /** True when the row was left exactly as we found it. */
+  untouched: boolean;
+}
+
+export interface RefreshOptions {
+  /** Prefix for every console line; the sandbox uses its own. */
+  logPrefix?: string;
+  /** deposit_hold_links.actor — 'cron' in production, 'sandbox' in the harness. */
+  actor?: string;
+  /** Cache shared across a batch so one tenant is fetched once. */
+  tenantCache?: Map<string, Record<string, unknown> | null>;
+  now?: Date;
+}
+
+// deno-lint-ignore no-explicit-any
+type RentalRow = Record<string, any>;
+
+/**
+ * Refresh ONE rental's deposit hold: cancel the incumbent authorization and
+ * place its replacement, or decide not to. Never throws for anything the caller
+ * can act on — the outcome is the contract.
+ */
+export async function refreshOneHold(
+  supabase: SupabaseClient,
+  rental: RentalRow,
+  opts: RefreshOptions = {}
+): Promise<RefreshOutcome> {
+  const log = opts.logPrefix ?? "[DEPOSIT-REFRESH]";
+  const actor = opts.actor ?? "cron";
+  const now = opts.now ?? new Date();
+  const rentalId = rental.id as string;
+  const incumbentPi = (rental.deposit_hold_payment_intent_id as string | null) ?? null;
+  const startingStatus = (rental.deposit_hold_status as string | null) ?? "held";
+  const storedExpiresAt = (rental.deposit_hold_expires_at as string | null) ?? null;
+
+  const untouched = (result: RefreshResult, message: string): RefreshOutcome => {
+    console.warn(`${log} ${rentalId}: ${message}`);
+    return { rentalId, result, message, untouched: true };
+  };
+
+  // ── I9 / EC-25: the chain has a hard end. ─────────────────────────────────
+  // A rental left 'Active' past its end date is the most common operational
+  // slip in a 60-120 day fleet; without this the card is re-authorized every
+  // ~5 days forever after the car came back. The driver filters these out too;
+  // this is the belt to that braces, for direct callers.
+  const chainEnd = rental.deposit_hold_chain_expires_at as string | null;
+  if (chainEnd && new Date(chainEnd).getTime() <= now.getTime()) {
+    return untouched(
+      "chain_expired",
+      `chain bound ${chainEnd} has passed — not re-authorizing (capture or release is an operator decision)`
+    );
+  }
+
+  // ── Everything below the claim can write to the row. Everything ABOVE it must
+  //    not (defect 2). The tenants lookup and getConnectAccountId used to throw
+  //    into the one catch that wrote terminal 'expired', so a single missing
+  //    tenant row or an incomplete Stripe connection poisoned every hold that
+  //    tenant had, in one pass, permanently. ───────────────────────────────────
+  const tenantId = rental.tenant_id as string;
+  let tenant = opts.tenantCache?.get(tenantId) ?? null;
+  if (!opts.tenantCache?.has(tenantId)) {
+    const { data, error } = await supabase
+      .from("tenants")
+      .select(`${TENANT_STRIPE_COLUMNS}, currency_code`)
+      .eq("id", tenantId)
+      .maybeSingle();
+    if (error) {
+      return untouched("config_unavailable", `tenant lookup failed (${error.message}) — row left untouched`);
+    }
+    tenant = (data as Record<string, unknown> | null) ?? null;
+    opts.tenantCache?.set(tenantId, tenant);
+  }
+  if (!tenant) {
+    return untouched("config_unavailable", `tenant ${tenantId} not found — row left untouched`);
+  }
+
+  // ── I3: anchor Stripe context to the RECORD, not to the tenant's CURRENT row.
+  //    The UK->UAE migration moves accounts, modes and even currency underneath
+  //    live rentals; an existing hold's replacement must land on the SAME
+  //    account, in the SAME mode and the SAME currency as the authorization it
+  //    supersedes. Today's derivation is only a fallback for legacy rows
+  //    written before these columns existed. ─────────────────────────────────
+  let stripe: Stripe;
+  let connectAccountId: string | null;
+  let stripeMode: StripeMode;
+  let currency: string;
+  try {
+    stripeMode = ((rental.deposit_hold_stripe_mode as StripeMode | null) ??
+      ((tenant as Record<string, unknown>).stripe_mode as StripeMode) ??
+      "test") as StripeMode;
+    stripe = getStripeClientForRecord(rental, stripeMode);
+    connectAccountId =
+      (rental.deposit_hold_connect_account_id as string | null) ??
+      getConnectAccountId({
+        // deno-lint-ignore no-explicit-any
+        ...(tenant as any),
+        stripe_mode: stripeMode,
+        payment_model: rental.platform_account === "uae" ? "own" : "managed",
+      });
+    currency = String(
+      (rental.deposit_hold_currency as string | null) ??
+        ((tenant as Record<string, unknown>).currency_code as string | null) ??
+        "usd"
+    ).toLowerCase();
+  } catch (configErr) {
+    // getConnectAccountId THROWS for a live payment_model='own' tenant with no
+    // connected account. That is a configuration problem, not a hold problem.
+    return untouched(
+      "config_unavailable",
+      `Stripe context unresolvable (${configErr instanceof Error ? configErr.message : String(configErr)}) — row left untouched`
+    );
+  }
+  const stripeOptions: StripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+  const platformAccount = rental.platform_account === "uae" ? "uae" : "uk";
+
+  // ── A 'held' row with no PaymentIntent behind it cannot be proven dead, and
+  //    authorizing on the strength of a status field alone is exactly the
+  //    fail-OPEN move this workstream exists to prevent. 'failed' rows legitimately
+  //    carry no PI (we clear it when a replacement never got placed), and those
+  //    ARE the retry path. ────────────────────────────────────────────────────
+  if (!incumbentPi && startingStatus === "held") {
+    let flagged = false;
+    try {
+      flagged = await casUpdate(
+        supabase,
+        rentalId,
+        {
+          deposit_hold_status: "needs_review",
+          deposit_hold_last_error: "Hold recorded as 'held' with no PaymentIntent — cannot prove the authorization state",
+          deposit_hold_last_error_code: "missing_payment_intent",
+        },
+        { status: "held", paymentIntentId: null }
+      );
+    } catch (dbErr) {
+      return untouched(
+        "config_unavailable",
+        `could not flag a PaymentIntent-less hold (${dbErr instanceof Error ? dbErr.message : String(dbErr)})`
+      );
+    }
+    return {
+      rentalId,
+      result: flagged ? "needs_review" : "lost_race",
+      message: "held with no PaymentIntent — flagged for review rather than authorizing blind",
+      untouched: !flagged,
+    };
+  }
+
+  // ── Is there a REAL prior authorization to chain FROM? ────────────────────
+  //    The driver enforces the same thing in SQL (HOLD_HISTORY_PREDICATE); this
+  //    is the belt to that braces, because refreshOneHold is also called
+  //    directly by the sandbox and could be called by anything later.
+  //
+  //    A 'failed' row written by stripe-webhook-{live,test} when the FIRST
+  //    auto-placement failed carries no PaymentIntent, no deposit_hold_amount
+  //    and no deposit_hold_placed_at. It means "we never took this renter's
+  //    deposit" — the opposite of what this engine is for. Left ungated it fell
+  //    into the release branch below (amountCents 0 from a NULL amount) and
+  //    silently rewrote fleet-wide 'failed' into 'released'.
+  const hasHoldHistory = !!incumbentPi || !!(rental.deposit_hold_placed_at as string | null);
+  if (!hasHoldHistory) {
+    return untouched(
+      "skipped",
+      `hold status '${startingStatus}' with no PaymentIntent and no deposit_hold_placed_at — ` +
+        "this rental never carried an authorization, so there is no chain to extend " +
+        "(placing a first hold is place-deposit-hold's job, not the refresher's)"
+    );
+  }
+
+  // A NULL deposit_hold_amount is UNKNOWN, not zero. Coercing it to 0 turned
+  // "we cannot read the amount" into "there is nothing left to hold", which the
+  // release branch then acted on destructively. `amountKnown` keeps the two
+  // apart; a genuine 0 (e.g. capture-deposit-hold's multicapture remainder) is
+  // still a legitimate release.
+  const rawAmount = rental.deposit_hold_amount;
+  const amountKnown =
+    rawAmount !== null && rawAmount !== undefined && Number.isFinite(Number(rawAmount));
+  const amountCents = amountKnown ? Math.round(Number(rawAmount) * 100) : 0;
+  const attemptSeq = Number(rental.deposit_hold_attempt_seq ?? 0) + 1;
+  const priorFailures = Number(rental.deposit_hold_failure_count ?? 0);
+
+  // ── CLAIM. From here on we own the row and every exit path must write a
+  //    non-'refreshing' status (or explicitly hand the row back). A DB failure
+  //    on the claim itself leaves the row exactly as we found it. ─────────────
+  let claimed = false;
+  try {
+    claimed = await casUpdate(
+      supabase,
+      rentalId,
+      { deposit_hold_status: "refreshing", deposit_hold_attempt_seq: attemptSeq },
+      { status: startingStatus, paymentIntentId: incumbentPi, requireRefreshableRental: true }
+    );
+  } catch (dbErr) {
+    return untouched(
+      "config_unavailable",
+      `could not claim the hold (${dbErr instanceof Error ? dbErr.message : String(dbErr)}) — row left untouched`
+    );
+  }
+  if (!claimed) {
+    return untouched(
+      "lost_race",
+      "another worker (or a status/lifecycle change) owns this rental — skipped without touching Stripe"
+    );
+  }
+
+  /** Hand the row back to a recoverable state. Always CAS'd from 'refreshing'. */
+  const finish = async (
+    patch: Record<string, unknown>,
+    result: RefreshResult,
+    message: string,
+    extra: { paymentIntentId?: string | null; expiresAt?: string | null } = {}
+  ): Promise<RefreshOutcome> => {
+    const applied = await casUpdate(supabase, rentalId, patch, {
+      status: "refreshing",
+      paymentIntentId: incumbentPi,
+    });
+    if (!applied) {
+      console.warn(`${log} ${rentalId}: row moved while we held it as 'refreshing' — leaving the winner's state alone`);
+      return { rentalId, result: "lost_race", message: `${message} (but the row moved under us)`, untouched: false };
+    }
+    return { rentalId, result, message, untouched: false, ...extra };
+  };
+
+  /**
+   * A replacement authorization that exists at Stripe but that we have not
+   * managed to record. It MUST NOT be left alive: nothing in the product could
+   * find it, so the renter's money would be frozen with no way to release it.
+   * Set the moment Stripe returns a PaymentIntent, cleared the moment the id is
+   * safely persisted on the rental.
+   */
+  let unrecordedIntentId: string | null = null;
+
+  const cancelUnrecorded = async (reason: string): Promise<boolean> => {
+    if (!unrecordedIntentId) return false;
+    const id = unrecordedIntentId;
+    unrecordedIntentId = null;
+
+    // NEVER cancel an authorization the rental now points at. We only get here
+    // because the row moved out from under us, and one of the things that could
+    // have moved it is somebody RECORDING this very PaymentIntent (a webhook, a
+    // reconciler pass, or — for an adopted orphan — a path that found the same
+    // untracked authorization). Cancelling then would leave the renter
+    // unsecured, which is worse than the orphan we are trying to clean up.
+    //
+    // If we cannot read the row, do NOT cancel: stampLinkIntent has already put
+    // this id on the ledger, so the reconciler can still resolve it, whereas a
+    // wrongly-cancelled live hold is unrecoverable. Report it as orphaned so
+    // the rental is flagged for review.
+    try {
+      const { data, error } = await supabase
+        .from("rentals")
+        .select("deposit_hold_payment_intent_id")
+        .eq("id", rentalId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (data?.deposit_hold_payment_intent_id === id) {
+        console.warn(`${log} ${rentalId}: ${id} is now recorded on the rental — NOT cancelling (${reason})`);
+        return false;
+      }
+    } catch (probeErr) {
+      console.error(
+        `${log} ${rentalId}: could not confirm ${id} is unrecorded (${reason}); leaving it for the reconciler rather than risking a live hold:`,
+        probeErr
+      );
+      return true;
+    }
+
+    try {
+      await stripe.paymentIntents.cancel(id, stripeOptions);
+      console.warn(`${log} ${rentalId}: cancelled unrecorded authorization ${id} (${reason})`);
+      return false;
+    } catch (err) {
+      console.error(`${log} ${rentalId}: ORPHANED authorization ${id} — ${reason}; cancel failed:`, err);
+      return true;
+    }
+  };
+
+  /** finish() for an outcome that CARRIES the new PaymentIntent id. */
+  const finishWithIntent = async (
+    patch: Record<string, unknown>,
+    result: RefreshResult,
+    message: string,
+    intentId: string,
+    extra: { expiresAt?: string | null } = {}
+  ): Promise<RefreshOutcome> => {
+    const outcome = await finish(patch, result, message, { paymentIntentId: intentId, ...extra });
+    if (outcome.result !== "lost_race") {
+      unrecordedIntentId = null;
+      return outcome;
+    }
+    // The row moved, so the id we just created landed nowhere.
+    const orphaned = await cancelUnrecorded("row changed owner before the replacement could be recorded");
+    return {
+      ...outcome,
+      message: orphaned
+        ? `${outcome.message}; replacement ${intentId} could NOT be cancelled — needs manual cancellation`
+        : `${outcome.message}; replacement ${intentId} cancelled`,
+    };
+  };
+
+  try {
+    // ── Item 7 / defect 6: the "release instead of refresh" decision happens
+    //    BEFORE the cancel. Under the old order this branch ran AFTER an
+    //    unconditional cancel — i.e. "destroy the hold, then record that we
+    //    released it", with no way to abort in between. ─────────────────────
+    //
+    // AUTO-EXTEND rentals must NOT carry a deposit (renewal pricing replaces it
+    // — RevTek/Jeffrey incident). Manually-EXTENDED rentals are deliberately NOT
+    // excluded: they are normal rentals whose deposit must stay alive, and
+    // operators on network-default accounts (GMT) depend on this chain. The
+    // Jun-25 blanket ban conflated the two and cancelled their live holds
+    // (GMT incident, Jul 2026).
+    //
+    // Every arm below is reachable only for a rental with real hold history
+    // (see the hasHoldHistory gate above), and the amount arms additionally
+    // require the amount to be READABLE. "Release" is a destructive, one-way
+    // statement about the renter's money; it must never be the answer to "we
+    // could not read this row".
+    const releaseReason: string | null = rental.auto_extend_enabled === true
+      ? "auto-extend rental — renewal pricing replaces the deposit"
+      : !amountKnown
+      ? null
+      : amountCents <= 0
+      ? "deposit amount is zero"
+      : amountCents < 50
+      ? `deposit amount ${amountCents} minor units is below the network minimum — cannot be re-authorized`
+      : null;
+
+    // Unknown amount on a rental that DOES carry a chain. We can neither size a
+    // replacement nor honestly call the deposit released, and cancelling the
+    // incumbent would leave the renter unsecured on a guess. Park it for a
+    // human without touching Stripe — the incumbent stays live.
+    if (!releaseReason && !amountKnown) {
+      return await finish(
+        {
+          deposit_hold_status: "needs_review",
+          deposit_hold_last_error:
+            "deposit_hold_amount is NULL on a rental with an existing hold — cannot size a replacement authorization",
+          deposit_hold_last_error_code: "deposit_amount_unknown",
+          deposit_hold_next_retry_at: null,
+        },
+        "needs_review",
+        "deposit amount unknown — incumbent left alone and flagged for review"
+      );
+    }
+
+    if (releaseReason) {
+      const link = await openLink(supabase, {
+        rental_id: rentalId,
+        tenant_id: tenantId,
+        attempt_seq: attemptSeq,
+        action: "release",
+        superseded_pi_id: incumbentPi,
+        platform_account: platformAccount,
+        connect_account_id: connectAccountId,
+        stripe_mode: stripeMode,
+        amount_cents: amountCents,
+        currency,
+        actor,
+      });
+
+      let cancelError: string | null = null;
+      if (incumbentPi) {
+        try {
+          await stripe.paymentIntents.cancel(incumbentPi, stripeOptions);
+        } catch (err) {
+          const code = stripeErrorCode(err);
+          // Already captured/canceled/gone — the money is not ours to release.
+          if (code !== "payment_intent_unexpected_state" && code !== "resource_missing") throw err;
+          cancelError = code;
+        }
+      }
+
+      // The WHY lives on the ledger row, not on the rental. A release is an
+      // intended, correct outcome; parking its reason in
+      // `deposit_hold_last_error` made it render as a failure in the operator
+      // UI and left a stale "error" on the row indefinitely.
+      await closeLink(link, {
+        outcome: cancelError ? "orphaned" : "succeeded",
+        error_code: cancelError,
+        error_message: cancelError
+          ? `${releaseReason}; incumbent could not be cancelled: ${cancelError}`
+          : releaseReason,
+      });
+
+      // I6: never null the payment-method / customer columns on release — the
+      // next placement (and any later damage settlement) needs the card anchor.
+      return await finish(
+        {
+          deposit_hold_status: "released",
+          deposit_hold_payment_intent_id: null,
+          deposit_hold_expires_at: null,
+          deposit_hold_next_retry_at: null,
+          deposit_hold_last_error: null,
+          deposit_hold_last_error_code: null,
+        },
+        "released",
+        `released instead of refreshed — ${releaseReason}`
+      );
+    }
+
+    // ── Re-resolve the Stripe customer, then the card (defect 3). ───────────
+    // validateStripeCustomerId returns null ONLY for a missing/deleted customer
+    // and rethrows network/auth problems — those belong to the classifier, not
+    // to a "re-mint the customer" branch.
+    let customerId: string | null = await validateStripeCustomerId(
+      stripe,
+      rental.deposit_hold_stripe_customer_id as string | null,
+      stripeOptions
+    );
+    if (!customerId) {
+      // EC-73: five separate call sites re-mint customers.stripe_customer_id and
+      // leave the rental pointing at a dead object. Prefer the customer row's
+      // current id before declaring the chain unrecoverable.
+      const { data: customerRow } = await supabase
+        .from("customers")
+        .select("stripe_customer_id")
+        .eq("id", rental.customer_id)
+        .maybeSingle();
+      const candidate = (customerRow?.stripe_customer_id as string | null) ?? null;
+      customerId = candidate ? await validateStripeCustomerId(stripe, candidate, stripeOptions) : null;
+    }
+    if (!customerId) {
+      return await finish(
+        {
+          deposit_hold_status: "needs_review",
+          deposit_hold_last_error: "No usable Stripe customer for this rental on the anchored account",
+          deposit_hold_last_error_code: "customer_missing",
+          deposit_hold_failure_count: priorFailures + 1,
+          deposit_hold_next_retry_at: null,
+        },
+        "needs_review",
+        "no usable Stripe customer on the anchored account"
+      );
+    }
+
+    const triedPaymentMethods = new Set<string>();
+    const firstCard = await resolvePaymentMethod(
+      stripe,
+      customerId,
+      stripeOptions,
+      rental.deposit_hold_payment_method_id as string | null,
+      triedPaymentMethods,
+      now
+    );
+    if (!firstCard) {
+      // Nothing chargeable on file. There is no server-side fix — the renter has
+      // to add a card — so this waits for a human rather than burning attempts.
+      return await finish(
+        {
+          deposit_hold_status: "requires_action",
+          deposit_hold_stripe_customer_id: customerId,
+          deposit_hold_last_error: "No usable card on file — the customer must add a valid payment method",
+          deposit_hold_last_error_code: "no_payment_method",
+          deposit_hold_failure_count: priorFailures + 1,
+          deposit_hold_next_retry_at: null,
+        },
+        "requires_action",
+        "no usable card on file — customer action required"
+      );
+    }
+    // Non-null from here; reassigned only when a dead card forces one
+    // re-resolution below.
+    let card: ResolvedCard = firstCard;
+
+    // ── The authorization ledger row goes in BEFORE Stripe is touched, so a
+    //    crashed attempt is still discoverable (I1). ────────────────────────
+    //
+    // Idempotency key carries deposit_hold_attempt_seq (defect 2 / EC-18/EC-19):
+    // the old key embedded the OLD PaymentIntent id, which the failure path
+    // never updated, so every retry inside Stripe's 24h window replayed the
+    // cached decline verbatim — and a rebased amount on the same key returns
+    // `idempotency_error`, which the card-feature ladder does not match, so it
+    // rethrew straight into terminal 'expired'.
+    const idempotencyKey = `deposit-refresh-${rentalId}-${attemptSeq}-${amountCents}`;
+    const link = await openLink(supabase, {
+      rental_id: rentalId,
+      tenant_id: tenantId,
+      attempt_seq: attemptSeq,
+      action: "refresh",
+      superseded_pi_id: incumbentPi,
+      platform_account: platformAccount,
+      connect_account_id: connectAccountId,
+      stripe_mode: stripeMode,
+      amount_cents: amountCents,
+      currency,
+      idempotency_key: idempotencyKey,
+      actor,
+    });
+
+    // ── Cancel the incumbent. EC-09: `payment_intent_unexpected_state` is NOT
+    //    benign — the old code shrugged and placed a fresh full-amount hold on
+    //    top of whatever the PI had actually become. Re-read and decide. ─────
+    if (incumbentPi) {
+      try {
+        await stripe.paymentIntents.cancel(incumbentPi, stripeOptions);
+        console.log(`${log} ${rentalId}: incumbent ${incumbentPi} cancelled`);
+      } catch (cancelErr) {
+        const code = stripeErrorCode(cancelErr);
+
+        if (code === "resource_missing") {
+          // The PI does not exist on the anchored account. We cannot prove the
+          // renter's funds are free, so we must not authorize again.
+          await closeLink(link, { outcome: "failed", error_code: code, error_message: "incumbent not found on the anchored account" });
+          return await finish(
+            {
+              deposit_hold_status: "needs_review",
+              deposit_hold_last_error: `Incumbent PaymentIntent ${incumbentPi} not found on ${connectAccountId ?? "the platform account"}`,
+              deposit_hold_last_error_code: code,
+              deposit_hold_failure_count: priorFailures + 1,
+              deposit_hold_next_retry_at: null,
+            },
+            "needs_review",
+            "incumbent PaymentIntent not found on the anchored account — not re-authorizing"
+          );
+        }
+
+        if (code !== "payment_intent_unexpected_state") throw cancelErr;
+
+        // Unexpected state: find out WHICH state before doing anything.
+        const probe = await stripe.paymentIntents.retrieve(incumbentPi, stripeOptions);
+        const piStatus = String(probe.status);
+        if (piStatus === "succeeded") {
+          // Somebody captured the deposit while we were mid-flight. Placing a
+          // replacement would authorize the card a second time for money that
+          // has already been taken.
+          await closeLink(link, { outcome: "failed", error_code: "already_captured", error_message: "incumbent was captured mid-refresh" });
+          return await finish(
+            { deposit_hold_status: "captured", deposit_hold_expires_at: null, deposit_hold_next_retry_at: null },
+            "skipped",
+            "incumbent was captured mid-refresh — recorded as captured, no replacement placed"
+          );
+        }
+        if (piStatus === "requires_action" || piStatus === "processing" || piStatus === "requires_confirmation") {
+          // Still in motion. It may yet become a live authorization; a second
+          // one on the same card is the outcome we refuse to risk.
+          await closeLink(link, { outcome: "failed", error_code: "incumbent_in_motion", error_message: `incumbent is ${piStatus}` });
+          return await finish(
+            {
+              deposit_hold_status: "needs_review",
+              deposit_hold_last_error: `Incumbent PaymentIntent is ${piStatus}; refusing to place a second authorization`,
+              deposit_hold_last_error_code: "incumbent_in_motion",
+              deposit_hold_next_retry_at: null,
+            },
+            "needs_review",
+            `incumbent is ${piStatus} — refusing to place a second authorization`
+          );
+        }
+        // canceled / requires_payment_method — already dead, carry on.
+        console.warn(`${log} ${rentalId}: incumbent already ${piStatus}, continuing to the replacement`);
+      }
+    }
+
+    /** One replacement-authorization attempt on a given card. */
+    const createReplacement = async (paymentMethodId: string, key: string, pmReplaced: boolean) =>
+      await createDepositHoldIntentWithFallback(
+        stripe,
+        {
+          amount: amountCents,
+          currency,
+          customer: customerId,
+          payment_method: paymentMethodId,
+          capture_method: "manual",
+          confirm: true,
+          off_session: true,
+          description: `Security deposit hold (refreshed) for rental ${rentalId.substring(0, 8).toUpperCase()}`,
+          expand: ["latest_charge"],
+          metadata: {
+            rental_id: rentalId,
+            tenant_id: tenantId,
+            type: "deposit_hold",
+            refreshed: "true",
+            attempt_seq: String(attemptSeq),
+            superseded_pi: incumbentPi ?? "",
+            ...(pmReplaced ? { pm_replaced: "true" } : {}),
+          },
+        },
+        { ...(stripeOptions ?? {}), idempotencyKey: key }
+      );
+
+    // deno-lint-ignore no-explicit-any
+    const recordFailure = async (err: any, note?: string): Promise<RefreshOutcome> => {
+      const failureClass = classifyStripeFailure(err);
+      const code = stripeErrorCode(err);
+      const message = `${String(err?.message ?? err)}${note ? ` (${note})` : ""}`;
+      const failureCount = priorFailures + 1;
+      await closeLink(link, { outcome: "failed", error_code: code, error_message: message.slice(0, 500) });
+
+      // The incumbent is already cancelled at this point, so the renter is
+      // UNSECURED. We clear the PaymentIntent id and expiry to say so honestly:
+      // a NULL expiry sorts to the head of the driver's queue, and leaving the
+      // dead id in place would let the reconciler overwrite this recoverable
+      // 'failed' with terminal 'expired' and end the chain for good.
+      const base: Record<string, unknown> = {
+        deposit_hold_payment_intent_id: null,
+        deposit_hold_expires_at: null,
+        deposit_hold_failure_count: failureCount,
+        deposit_hold_last_error: message.slice(0, 500),
+        deposit_hold_last_error_code: code,
+        deposit_hold_payment_method_id: card.id,
+        deposit_hold_stripe_customer_id: customerId,
+      };
+
+      // SCA cannot be solved server-side: an off-session authorization needs the
+      // cardholder present. Straight to 'requires_action', no attempts burned.
+      if (failureClass === "sca") {
+        return await finish(
+          { ...base, deposit_hold_status: "requires_action", deposit_hold_next_retry_at: null },
+          "requires_action",
+          `authentication required — ${message}`
+        );
+      }
+      if (failureClass === "dead_card") {
+        return await finish(
+          { ...base, deposit_hold_status: "requires_action", deposit_hold_next_retry_at: null },
+          "requires_action",
+          `card unusable (${code}) — ${message}`
+        );
+      }
+      if (failureClass === "ambiguous") {
+        return await finish(
+          { ...base, deposit_hold_status: "needs_review", deposit_hold_next_retry_at: null },
+          "needs_review",
+          `unclassified Stripe failure (${code}) — ${message}`
+        );
+      }
+      if (failureCount >= MAX_HOLD_ATTEMPTS) {
+        // Stripe: "We recommend a maximum of eight retries… issuers might see
+        // additional retries as potential fraud."
+        return await finish(
+          { ...base, deposit_hold_status: "needs_review", deposit_hold_next_retry_at: null },
+          "needs_review",
+          `gave up after ${failureCount} attempts (${code}) — ${message}`
+        );
+      }
+      const retryAt = computeRetryAt(failureClass, priorFailures, storedExpiresAt, now);
+      return await finish(
+        { ...base, deposit_hold_status: "failed", deposit_hold_next_retry_at: retryAt },
+        "failed",
+        `${failureClass} failure (${code}); retrying after ${retryAt} — ${message}`
+      );
+    };
+
+    // ── ORPHAN RECONCILIATION, before we create anything. ──────────────────
+    //    A prior attempt that failed AFTER Stripe accepted the create leaves a
+    //    live authorization nothing can see (see findLiveDepositIntent). The
+    //    only moment we can catch it is here, because the attempt_seq-keyed
+    //    idempotency key guarantees the create below will NOT replay it.
+    //
+    //    Gated on priorFailures > 0: a clean first attempt has no lost response
+    //    to reconcile, and this costs a Stripe list call.
+    // deno-lint-ignore no-explicit-any
+    let newIntent: any = null;
+    let adoptedOrphan = false;
+
+    if (priorFailures > 0) {
+      const sweepCustomers = [
+        customerId,
+        (rental.deposit_hold_stripe_customer_id as string | null) ?? null,
+      ].filter((c, i, arr): c is string => !!c && arr.indexOf(c) === i);
+
+      // deno-lint-ignore no-explicit-any
+      let orphan: any = null;
+      try {
+        orphan = await findLiveDepositIntent(
+          stripe,
+          rentalId,
+          sweepCustomers,
+          stripeOptions,
+          new Set(incumbentPi ? [incumbentPi] : []),
+          now
+        );
+      } catch (probeErr) {
+        // FAIL SAFE, NEVER OPEN: we could not rule out a live orphan, so we do
+        // NOT create a second authorization. The retry ladder brings us back.
+        return await recordFailure(
+          probeErr,
+          "could not check Stripe for an untracked authorization — refusing to create a second one"
+        );
+      }
+
+      if (orphan) {
+        const sameMoney =
+          Number(orphan.amount) === amountCents &&
+          String(orphan.currency ?? "").toLowerCase() === currency;
+        if (sameMoney) {
+          // Adopt it. The renter's card is already authorized for exactly this
+          // deposit; creating another would double-authorize them.
+          console.warn(
+            `${log} ${rentalId}: ADOPTING untracked authorization ${orphan.id} from attempt ` +
+              `${orphan.metadata?.attempt_seq ?? "?"} instead of creating a second one`
+          );
+          newIntent = orphan;
+          adoptedOrphan = true;
+          // The orphan was authorized on whatever card THAT attempt resolved,
+          // which need not be the one we just resolved. Record the truth, not
+          // our intention.
+          const orphanPm = typeof orphan.payment_method === "string"
+            ? orphan.payment_method
+            : (orphan.payment_method?.id as string | undefined) ?? null;
+          if (orphanPm && orphanPm !== card.id) {
+            try {
+              card = toResolvedCard(await stripe.paymentMethods.retrieve(orphanPm, stripeOptions), "stored");
+            } catch {
+              // Keep the id (it is what the authorization is actually on) but
+              // do not carry the other card's expiry across with it.
+              card = { ...card, id: orphanPm, expMonth: null, expYear: null };
+            }
+          }
+        } else {
+          // A live deposit authorization for this rental in a DIFFERENT amount.
+          // Creating another would stack two holds on the renter; cancelling
+          // this one blind could destroy an authorization somebody else placed
+          // deliberately (a rebase, a manual placement). A human decides.
+          await closeLink(link, {
+            outcome: "failed",
+            payment_intent_id: orphan.id,
+            error_code: "orphan_amount_mismatch",
+            error_message: `untracked live authorization ${orphan.id} for ${orphan.amount} ${orphan.currency} vs expected ${amountCents} ${currency}`,
+          });
+          return await finish(
+            {
+              deposit_hold_status: "needs_review",
+              // Point the rental at the authorization that is ACTUALLY holding
+              // the renter's money. The incumbent this row still names was
+              // cancelled a moment ago, so leaving it there would hide live
+              // funds behind a dead id — the exact invisibility we are fixing.
+              // The expiry is cleared because the stored one belonged to the
+              // cancelled incumbent and nothing should trust it.
+              deposit_hold_payment_intent_id: orphan.id,
+              deposit_hold_expires_at: null,
+              deposit_hold_last_error:
+                `Untracked live authorization ${orphan.id} exists for this rental in a different amount ` +
+                `(${orphan.amount} ${String(orphan.currency ?? "").toUpperCase()} vs ${amountCents} ${currency.toUpperCase()}) — not placing a second one`,
+              deposit_hold_last_error_code: "orphan_amount_mismatch",
+              deposit_hold_failure_count: priorFailures + 1,
+              deposit_hold_next_retry_at: null,
+            },
+            "needs_review",
+            `untracked live authorization ${orphan.id} in a different amount — refusing to double-authorize`,
+            { paymentIntentId: orphan.id }
+          );
+        }
+      }
+    }
+
+    // ── Place the replacement (unless we just adopted one). ────────────────
+    if (!newIntent) {
+      try {
+        newIntent = await createReplacement(card.id, idempotencyKey, false);
+      } catch (createErr) {
+        // Dead card: re-resolve ONCE, excluding the card that just failed.
+        // Across 90 days a card expiring or being reissued after fraud is a
+        // base-rate event, and the issuer has usually already given the renter a
+        // replacement that is sitting on the Stripe customer already.
+        if (classifyStripeFailure(createErr) !== "dead_card") {
+          return await recordFailure(createErr);
+        }
+        triedPaymentMethods.add(card.id);
+        const replacement = await resolvePaymentMethod(
+          stripe,
+          customerId,
+          stripeOptions,
+          null,
+          triedPaymentMethods,
+          now
+        );
+        if (!replacement) {
+          return await recordFailure(createErr, "no alternative card on file");
+        }
+        console.warn(
+          `${log} ${rentalId}: ${stripeErrorCode(createErr)} on ${card.id}, retrying on ${replacement.id}`
+        );
+        card = replacement;
+        try {
+          // A different card is a different request, so the idempotency key must
+          // move with it or Stripe replays the first card's decline.
+          newIntent = await createReplacement(card.id, `${idempotencyKey}-pm2`, true);
+        } catch (retryErr) {
+          return await recordFailure(retryErr, "the replacement card also failed");
+        }
+      }
+    }
+    // Live at Stripe from here until we persist its id — record it on the
+    // ledger row FIRST so the reconciler can find it if we die in between.
+    // (An adopted orphan is in exactly the same position: live at Stripe, not
+    // yet recorded anywhere that can find it.)
+    unrecordedIntentId = newIntent.id;
+    await stampLinkIntent(link, newIntent.id);
+
+    const piStatus = String(newIntent.status);
+
+    if (piStatus === "requires_action") {
+      // EC-17: keep the PaymentIntent — an on-session confirm screen can still
+      // rescue it. NEVER store client_secret; it is re-fetched server-side.
+      await closeLink(link, {
+        outcome: "failed",
+        payment_intent_id: newIntent.id,
+        error_code: "authentication_required",
+        error_message: "replacement authorization needs cardholder verification",
+      });
+      return await finishWithIntent(
+        {
+          deposit_hold_status: "requires_action",
+          deposit_hold_payment_intent_id: newIntent.id,
+          deposit_hold_expires_at: null,
+          deposit_hold_payment_method_id: card.id,
+          deposit_hold_stripe_customer_id: customerId,
+          deposit_hold_last_error: "Replacement authorization needs cardholder verification (3DS)",
+          deposit_hold_last_error_code: "authentication_required",
+          deposit_hold_failure_count: priorFailures + 1,
+          deposit_hold_next_retry_at: null,
+        },
+        "requires_action",
+        "replacement needs cardholder verification (3DS)",
+        newIntent.id
+      );
+    }
+
+    if (piStatus !== "requires_capture") {
+      // Still in motion ('processing', 'requires_confirmation') or dead
+      // ('requires_payment_method'). Either way we persist the id so nothing is
+      // orphaned, and refuse to guess: 'held' would be a lie the capture path
+      // could act on, and a terminal status would end a chain that might still
+      // succeed. The reconciler resolves it against Stripe.
+      // deno-lint-ignore no-explicit-any
+      const lastError = (newIntent as any)?.last_payment_error;
+      const code = lastError ? stripeErrorCode(lastError) : `unexpected_status_${piStatus}`;
+      await closeLink(link, {
+        outcome: "failed",
+        payment_intent_id: newIntent.id,
+        error_code: code,
+        error_message: `replacement PaymentIntent is ${piStatus}`,
+      });
+      return await finishWithIntent(
+        {
+          deposit_hold_status: "needs_review",
+          deposit_hold_payment_intent_id: newIntent.id,
+          deposit_hold_expires_at: null,
+          deposit_hold_payment_method_id: card.id,
+          deposit_hold_stripe_customer_id: customerId,
+          deposit_hold_last_error: `Replacement PaymentIntent is ${piStatus}${lastError?.message ? `: ${lastError.message}` : ""}`.slice(0, 500),
+          deposit_hold_last_error_code: code,
+          deposit_hold_failure_count: priorFailures + 1,
+          deposit_hold_next_retry_at: null,
+        },
+        "needs_review",
+        `replacement PaymentIntent is ${piStatus} — flagged for review`,
+        newIntent.id
+      );
+    }
+
+    // ── Success. Record the REAL window and its provenance. ────────────────
+    const window = await readHoldWindow(stripe, newIntent, stripeOptions, now);
+    const verifiedFromStripe = window.source === "stripe_capture_before";
+    // An adopted orphan was authorized on an earlier attempt; its placement
+    // time is Stripe's, not ours.
+    const placedAt = adoptedOrphan && typeof newIntent.created === "number"
+      ? new Date(newIntent.created * 1000).toISOString()
+      : now.toISOString();
+
+    const applied = await casUpdate(
+      supabase,
+      rentalId,
+      {
+        deposit_hold_status: "held",
+        deposit_hold_payment_intent_id: newIntent.id,
+        deposit_hold_placed_at: placedAt,
+        deposit_hold_expires_at: window.expiresAt,
+        deposit_hold_expiry_source: window.source,
+        deposit_hold_window_seconds: window.windowSeconds,
+        // Tri-state, NOT a boolean-with-a-default. `null` means "Stripe did not
+        // tell us", which is a different fact from "the network said no" —
+        // HoldExpiryFacts in _shared/stripe-client.ts makes the same
+        // distinction ("null when unknown (never assume)"). Writing `false` on
+        // the fallback path claimed knowledge we do not have.
+        deposit_hold_extended_auth:
+          window.extendedAuthStatus === null ? null : window.extendedAuthStatus === "enabled",
+        // Only stamp "verified" when Stripe actually published the deadline. On
+        // the fallback path the expiry is an admitted guess
+        // (deposit_hold_expiry_source = 'fallback'); stamping it verified would
+        // let a downstream "verified recently?" check trust a value nothing
+        // verified. Left untouched so the previous genuine verification (or
+        // NULL) stands.
+        ...(verifiedFromStripe ? { deposit_hold_verified_at: now.toISOString() } : {}),
+        deposit_hold_payment_method_id: card.id,
+        deposit_hold_stripe_customer_id: customerId,
+        deposit_hold_card_brand: window.cardBrand ?? card.brand,
+        deposit_hold_card_last4: window.cardLast4 ?? card.last4,
+        deposit_hold_card_exp_month: card.expMonth,
+        deposit_hold_card_exp_year: card.expYear,
+        deposit_hold_card_funding: window.cardFunding ?? card.funding,
+        // Anchor legacy rows so the NEXT link never has to re-derive any of this.
+        deposit_hold_connect_account_id: connectAccountId,
+        deposit_hold_stripe_mode: stripeMode,
+        deposit_hold_currency: currency,
+        deposit_hold_failure_count: 0,
+        deposit_hold_next_retry_at: null,
+        deposit_hold_last_error: null,
+        deposit_hold_last_error_code: null,
+      },
+      { status: "refreshing", paymentIntentId: incumbentPi }
+    );
+
+    if (!applied) {
+      // Somebody else owns the row (release, capture, a competing worker). The
+      // authorization we just created belongs to nobody, so cancel it rather
+      // than leave a live hold on the renter's card that nothing can find.
+      const orphaned = await cancelUnrecorded("row changed owner mid-refresh");
+      await closeLink(link, {
+        outcome: orphaned ? "orphaned" : "failed",
+        payment_intent_id: newIntent.id,
+        error_code: "lost_race",
+        error_message: "row changed owner mid-refresh; replacement authorization cancelled",
+      });
+      return {
+        rentalId,
+        result: "lost_race",
+        message: orphaned
+          ? `row changed owner mid-refresh and the replacement ${newIntent.id} could NOT be cancelled — needs manual cancellation`
+          : "row changed owner mid-refresh; replacement authorization cancelled",
+        untouched: false,
+        paymentIntentId: newIntent.id,
+      };
+    }
+
+    // Safely recorded — it is the rental's hold now, not an orphan candidate.
+    unrecordedIntentId = null;
+
+    const how = adoptedOrphan ? "adopted" : "refreshed";
+
+    await closeLink(link, {
+      outcome: "succeeded",
+      payment_intent_id: newIntent.id,
+      capture_before: window.captureBefore,
+      extended_auth_status: window.extendedAuthStatus,
+      card_funding: window.cardFunding ?? card.funding,
+      ...(adoptedOrphan
+        ? {
+            error_message:
+              "adopted an untracked authorization from a previous attempt instead of creating a second one",
+          }
+        : {}),
+    });
+
+    console.log(
+      `${log} ${rentalId}: ${how} ${incumbentPi ?? "(none)"} -> ${newIntent.id}`,
+      `expires ${window.expiresAt} (${window.source})`,
+      `card ${card.source}:${card.brand ?? "?"}••${card.last4 ?? "??"}`
+    );
+    return {
+      rentalId,
+      result: "refreshed",
+      message: `${how} to ${newIntent.id}, capturable until ${window.expiresAt} (${window.source})`,
+      paymentIntentId: newIntent.id,
+      expiresAt: window.expiresAt,
+      untouched: false,
+    };
+  } catch (err) {
+    // Anything that escaped the classified paths above. The row is still ours
+    // at 'refreshing', so hand it back as RECOVERABLE — never as terminal
+    // 'expired', which is what ended chains silently.
+    const failureClass = classifyStripeFailure(err);
+    const code = stripeErrorCode(err);
+    const message = String((err as Error)?.message ?? err).slice(0, 500);
+    const failureCount = priorFailures + 1;
+    console.error(`${log} ${rentalId}: unhandled refresh failure (${failureClass}/${code}):`, err);
+
+    // If we got as far as creating a replacement but never recorded it (e.g. the
+    // success write itself failed), it is invisible to the whole product and
+    // must not be left holding the renter's money.
+    const orphaned = await cancelUnrecorded("unhandled failure after the replacement was created");
+
+    const terminalReview = failureClass === "ambiguous" || orphaned || failureCount >= MAX_HOLD_ATTEMPTS;
+    try {
+      return await finish(
+        {
+          deposit_hold_status: terminalReview ? "needs_review" : "failed",
+          deposit_hold_failure_count: failureCount,
+          deposit_hold_last_error: message,
+          deposit_hold_last_error_code: code,
+          deposit_hold_next_retry_at: terminalReview
+            ? null
+            : computeRetryAt(failureClass, priorFailures, storedExpiresAt, now),
+        },
+        terminalReview ? "needs_review" : "failed",
+        `unhandled failure (${code}): ${message}`
+      );
+    } catch (writeErr) {
+      // The database is the thing that is broken. The row stays 'refreshing';
+      // say so loudly rather than pretending we settled it.
+      console.error(`${log} ${rentalId}: could not record the failure — row left at 'refreshing':`, writeErr);
+      return {
+        rentalId,
+        result: "needs_review",
+        message: `unhandled failure (${code}): ${message}; the status write also failed, row is stuck at 'refreshing'`,
+        untouched: false,
+      };
+    }
+  }
+}

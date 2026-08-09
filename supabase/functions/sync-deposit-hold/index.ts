@@ -11,7 +11,7 @@ import {
   getChargePlatformAccount,
   getStripeClientForAccount,
   getStripeOptions,
-  resolveHoldExpiry,
+  resolveHoldExpiryDetailed,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
 
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
-      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_hold_payment_intent_id')
+      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_hold_payment_intent_id, platform_account')
       .eq('id', rentalId)
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
 
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
+      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
       .eq('id', rental.tenant_id)
       .single()
 
@@ -62,7 +62,8 @@ Deno.serve(async (req) => {
     // tenant's CURRENT charge platform, so resolve the same way here.
     const platformAccount = getChargePlatformAccount(tenant ?? {})
     const stripe = getStripeClientForAccount(platformAccount, stripeMode)
-    const stripeOptions = getStripeOptions(getConnectAccountId(tenant as any))
+    const connectAccountId = getConnectAccountId(tenant as any)
+    const stripeOptions = getStripeOptions(connectAccountId)
 
     const session = await stripe.checkout.sessions.retrieve(
       sessionId,
@@ -87,24 +88,80 @@ Deno.serve(async (req) => {
       typeof pi.customer === 'string' ? pi.customer : pi.customer?.id || null
 
     // Read the REAL expiry from Stripe (capture_before) rather than assuming 31 days.
-    const expiresAtIso = await resolveHoldExpiry(stripe, pi, stripeOptions)
+    const expiry = await resolveHoldExpiryDetailed(stripe, pi, stripeOptions)
+
+    // ANCHORING. This hold lives on `platformAccount` / `connectAccountId` /
+    // `stripeMode` / `pi.currency`, and every later capture, release and refresh
+    // must use exactly those — never the tenant's row as it reads that day.
+    const holdCurrency = String(pi.currency || tenant?.currency_code || 'usd').toLowerCase()
+    const nowIso = new Date().toISOString()
+
+    const update: Record<string, unknown> = {
+      deposit_hold_payment_intent_id: pi.id,
+      deposit_hold_status: 'held',
+      deposit_hold_status_changed_at: nowIso,
+      deposit_hold_amount: amount,
+      deposit_hold_placed_at: nowIso,
+      deposit_hold_expires_at: expiry.expiresAt,
+      deposit_hold_expiry_source: expiry.source,
+      deposit_hold_extended_auth: expiry.extendedAuth,
+      deposit_hold_window_seconds: expiry.windowSeconds,
+      deposit_hold_payment_method_id: pmId,
+      deposit_hold_stripe_customer_id: stripeCustomerId,
+      // Hold-scoped anchor columns. These, not rentals.platform_account, are
+      // what refresh/reconcile prefer — so recording them here means a hold
+      // synced from Checkout is resolvable even when the rental-level anchor is
+      // ambiguous (see below).
+      deposit_hold_connect_account_id: connectAccountId,
+      deposit_hold_stripe_mode: stripeMode,
+      deposit_hold_currency: holdCurrency,
+    }
+
+    // rentals.platform_account is the rental's MONEY ANCHOR: capture, release,
+    // refresh and refund all resolve their Stripe keys from it. This function
+    // used to overwrite it unconditionally from the tenant's CURRENT payment
+    // model, on a path reached by a browser redirect after Checkout success.
+    // So a rental whose payments were taken on 'uk' could be re-stamped 'uae'
+    // by a customer landing on a success URL mid-migration, after which every
+    // later operation on those payments targeted the wrong Stripe account.
+    //
+    // The column is NOT NULL DEFAULT 'uk', so "don't overwrite non-null" cannot
+    // be taken literally — a fresh rental for a UAE tenant also reads 'uk'.
+    // What makes the value load-bearing is money already anchored to it. So:
+    // stamp it only when no payment row is anchored to the current value.
+    if (rental.platform_account !== platformAccount) {
+      const { count: anchoredPayments, error: anchorCountError } = await supabase
+        .from('payments')
+        .select('id', { count: 'exact', head: true })
+        .eq('rental_id', rental.id)
+        .eq('platform_account', rental.platform_account)
+
+      if (anchorCountError) {
+        // Could not prove the anchor is safe to move — so don't move it.
+        console.error(
+          `sync-deposit-hold: could not check anchored payments for rental ${rental.id}; ` +
+            `leaving platform_account='${rental.platform_account}' alone:`,
+          anchorCountError
+        )
+      } else if ((anchoredPayments ?? 0) > 0) {
+        console.error(
+          `sync-deposit-hold: PLATFORM DIVERGENCE on rental ${rental.id} — ` +
+            `${anchoredPayments} payment(s) anchored to '${rental.platform_account}' but this ` +
+            `hold was placed on '${platformAccount}'. Keeping the existing anchor; the hold is ` +
+            `resolvable via deposit_hold_connect_account_id/deposit_hold_stripe_mode.`
+        )
+      } else {
+        // Nothing is anchored to the old value — it is the column default, not
+        // a record of where money lives. Safe to record where this hold sits.
+        update.platform_account = platformAccount
+      }
+    }
 
     // Persist hold details on the rental. Also backfill customer.stripe_customer_id
     // if the customer didn't have one yet (Checkout creates/links one).
     const { error: updateError } = await supabase
       .from('rentals')
-      .update({
-        deposit_hold_payment_intent_id: pi.id,
-        deposit_hold_status: 'held',
-        deposit_hold_amount: amount,
-        deposit_hold_placed_at: new Date().toISOString(),
-        deposit_hold_expires_at: expiresAtIso,
-        deposit_hold_payment_method_id: pmId,
-        deposit_hold_stripe_customer_id: stripeCustomerId,
-        // Record the platform account this hold lives on so capture/release/
-        // refresh target the right keys even if the tenant flips model later.
-        platform_account: platformAccount,
-      })
+      .update(update)
       .eq('id', rental.id)
     if (updateError) return errorResponse(`Failed to persist hold: ${updateError.message}`, 500)
 

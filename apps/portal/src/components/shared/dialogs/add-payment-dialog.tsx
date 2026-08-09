@@ -3,12 +3,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { formatInTimeZone, toZonedTime } from "date-fns-tz";
-import { CalendarIcon, DollarSign, Loader2, Banknote, CreditCard, Building2, Smartphone, FileText, MoreHorizontal, ExternalLink, Mail, ChevronDown, Info } from "lucide-react";
+import { CalendarIcon, DollarSign, Loader2, Banknote, CreditCard, Building2, Smartphone, FileText, MoreHorizontal, ExternalLink, Mail, ChevronDown, Info, ShieldAlert, AlertTriangle } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -18,6 +19,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useAuth } from "@/stores/auth-store";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus, useRentalChargesAndPayments } from "@/hooks/use-customer-balance";
@@ -57,32 +60,37 @@ interface AddPaymentDialogProps {
   extensionId?: string;
   /**
    * PAYG accrual id of the invoice the customer is paying off. When set, the
-   * Charge-via-Stripe and Email-Stripe-Link paths forward it as
+   * Send-payment-link and Email-Stripe-Link paths forward it as
    * `paygAccrualId` to `create-checkout-session`, which stamps it on the
    * Stripe Checkout metadata. The Stripe webhook then calls
    * `payg_settle_invoice(payment_id, accrual_id)` to flip the accrual to
    * `paid` (and supersede earlier opens), so PAYG status mirrors the
    * non-PAYG flow where Stripe payments settle automatically.
+   * The Charge-saved-card path does not forward it: like the manual
+   * Record-Payment path it settles through `apply-payment`, which resolves and
+   * settles the latest open accrual itself once the money is allocated.
    */
   paygAccrualId?: string;
   /**
    * scheduled_installments row id the customer is paying off. Same shape as
-   * paygAccrualId — Charge-via-Stripe and Email-Stripe-Link paths forward it
+   * paygAccrualId — Send-payment-link and Email-Stripe-Link paths forward it
    * to `create-checkout-session` which stamps `installment_id` on the Stripe
    * Checkout metadata. The Stripe webhook then calls
    * `installment_settle_invoice(payment_id, installment_id)` to flip the
    * scheduled installment to `paid` and supersede any cumulative
-   * predecessors. The manual Record-Payment path settles the installment via
-   * `mark-installment-paid` after the payment row commits (handled by the
-   * parent's `onPaymentSuccess('recorded')` callback).
+   * predecessors. The manual Record-Payment and Charge-saved-card paths settle
+   * the installment via `mark-installment-paid` after the payment row commits
+   * (handled by the parent's `onPaymentSuccess('recorded')` callback).
    */
   installmentId?: string;
   /**
    * Called after a successful action. The `kind` arg tells the caller whether
    * the payment is already settled in the DB or only initiated:
-   *   - 'recorded' — manual Record Payment path; ledger + payment row are committed.
-   *     Caller may safely run any "post-settle" logic (e.g. flipping invoice status).
-   *   - 'pending'  — Charge-via-Stripe / Email-Stripe-Link path; only a checkout
+   *   - 'recorded' — manual Record Payment path, or the Charge-saved-card path
+   *     (whose edge function inserts the payment row and runs `apply-payment`
+   *     before it responds). Ledger + payment row are committed, so the caller
+   *     may safely run any "post-settle" logic (e.g. flipping invoice status).
+   *   - 'pending'  — Send-payment-link / Email-Stripe-Link path; only a checkout
    *     session was created. The actual Stripe webhook will commit the payment
    *     and run any settlement logic. Callers MUST NOT mark anything as paid here.
    * The arg is optional so existing callers that ignore it keep working.
@@ -116,6 +124,66 @@ interface AddPaymentDialogProps {
    */
   depositHoldAmount?: number;
 }
+
+/**
+ * Like `extractFunctionError`, but also returns the edge function's `code` and
+ * the rest of the JSON body. charge-saved-card's whole contract is in those
+ * fields: `authentication_required` (the card is fine, the customer just has to
+ * authenticate — only a payment link fixes it), `possible_duplicate` (needs an
+ * explicit operator override) and `charged_but_not_recorded` (money HAS moved
+ * and `paymentIntentId` is the only handle anyone has on it). Collapsing those
+ * into a message string is what turns "we took their money" into "charge
+ * failed", so the body has to survive the unwrap.
+ *
+ * NOTE: this is deliberately a superset of `extractFunctionError` in
+ * `@/lib/edge-error`; that shared helper is owned elsewhere and returns only a
+ * string. Fold this back into it when the two can be changed together.
+ */
+const extractFunctionErrorDetail = async (
+  error: unknown,
+  fallback: string,
+): Promise<{ message: string; code?: string; body?: Record<string, any> }> => {
+  const ctx = (error as { context?: Response })?.context;
+  if (ctx && typeof ctx.clone === "function") {
+    try {
+      const body = await ctx.clone().json();
+      const msg = body?.error || body?.message;
+      return {
+        message: typeof msg === "string" && msg.trim() ? msg : fallback,
+        code: typeof body?.code === "string" ? body.code : undefined,
+        body: body && typeof body === "object" ? body : undefined,
+      };
+    } catch { /* body wasn't JSON — fall through */ }
+  }
+  const m = (error as { message?: string })?.message;
+  return {
+    message: m && m !== "Edge Function returned a non-2xx status code" ? m : fallback,
+  };
+};
+
+/** Minimum length the edge function enforces on the operator's reason. */
+const MIN_CHARGE_REASON_LENGTH = 5;
+
+/**
+ * FNV-1a. Used only to turn a charge intent into a short, STABLE token for the
+ * idempotency key — never for security. The point is determinism: the same
+ * rental + amount + purpose must produce the same key across a dialog reopen, a
+ * component remount and a full page reload, because "the request timed out, let
+ * me try again" is the exact moment a random-per-open key becomes a second real
+ * charge.
+ */
+const fnv1aHex = (input: string): string => {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+};
+
+/** 16 hex chars from two independent passes — enough to make collisions moot. */
+const stableIntentToken = (input: string): string =>
+  `${fnv1aHex(input)}${fnv1aHex(`${input.length}|${input.split("").reverse().join("")}`)}`;
 
 const PAYMENT_METHODS = [
   { value: "Cash", label: "Cash", icon: Banknote },
@@ -152,7 +220,8 @@ export const AddPaymentDialog = ({
   // from the `placeDepositHoldAfter` prop (true in the new-rental flow when the
   // tenant has a deposit configured) but the operator can UNCHECK it per guest
   // — e.g. auto-extend guests who don't pay a deposit. When unchecked, the
-  // Charge-via-Stripe / Email-Stripe-Link paths omit the hold entirely.
+  // Send-payment-link / Email-Stripe-Link / Charge-saved-card paths omit the
+  // hold entirely.
   const [depositHoldEnabled, setDepositHoldEnabled] = useState(Boolean(placeDepositHoldAfter));
   // Pending action awaiting operator confirmation in the deposit-hold popup.
   // Only used when placeDepositHoldAfter+tenant deposit is configured; in every
@@ -173,9 +242,54 @@ export const AddPaymentDialog = ({
   const submitInFlight = useRef(false);
   const stripeInFlight = useRef(false);
   const emailInFlight = useRef(false);
+  const chargeInFlight = useRef(false);
+  // Direct off-session charge of the card already on file (charge-saved-card).
+  // Separate confirmation step because this one actually moves money the moment
+  // it is clicked — unlike every other button in this footer, which only creates
+  // a link for the customer to act on.
+  const [chargeCardOpen, setChargeCardOpen] = useState(false);
+  const [chargeLoading, setChargeLoading] = useState(false);
+  const [chargeReason, setChargeReason] = useState("");
+  // Set when Stripe answers `authentication_required`: the card is good but the
+  // issuer wants the cardholder present, so the confirm step turns into an
+  // "email them a link instead" offer rather than a dead end.
+  const [chargeNeedsAuth, setChargeNeedsAuth] = useState(false);
+  // Set when the edge function charged the card but could NOT write the payments
+  // row (or could not prove it hadn't already). Money has moved and nothing
+  // records it. This is the one state in the dialog that must not be dismissible
+  // by clicking away, and must never be described as a failed charge.
+  const [chargeUnrecorded, setChargeUnrecorded] = useState<{ message: string; paymentIntentId?: string; amount?: number } | null>(null);
+  // Set when the edge function found a matching recent payment on this rental.
+  // The operator has to look at it and say "yes, charge again" — which is also
+  // the only thing that rotates the idempotency key for a deliberate repeat.
+  const [chargeDuplicate, setChargeDuplicate] = useState<{ message: string; existing?: Record<string, any> } | null>(null);
+  // Overpayment acknowledgement (mirrors the manual path's window.confirm).
+  const [overpayAcknowledged, setOverpayAcknowledged] = useState(false);
+  // Idempotency-key ROTATIONS, keyed by charge intent.
+  //
+  // The key itself is DERIVED, not minted: `stableIntentToken(rental|amount|purpose)`.
+  // That is deliberate. A key minted per confirm-step opening defeats the whole
+  // mechanism — the operator's response to a timed-out request is to cancel and
+  // reopen, which under a per-open key issues a genuinely second charge for the
+  // same money. A derived key survives reopen, remount and page reload, so the
+  // retry replays the first PaymentIntent instead of creating another.
+  //
+  // We only step the rotation when a repeat is provably safe or explicitly
+  // wanted: Stripe REFUSED (so no charge exists, and reusing the key would just
+  // replay Stripe's 24h-cached failure), or the operator confirmed a deliberate
+  // duplicate. Rotations are stored per intent so that editing the amount and
+  // editing it back cannot silently rewind to a burnt key.
+  const chargeRotations = useRef<Map<string, number>>(new Map());
+  // Intents whose duplicate warning the operator has already overridden. Without
+  // this, a "charge anyway" that times out and is overridden a second time would
+  // rotate the key twice and issue a real second charge — reintroducing the very
+  // hole the derived key closes.
+  const chargeDuplicateOverridden = useRef<Set<string>>(new Set());
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
+  const { appUser, hasRole } = useAuth();
+  const { canEdit } = useManagerPermissions();
   const queryClient = useQueryClient();
 
   useAuditLogOnOpen({
@@ -219,6 +333,15 @@ export const AddPaymentDialog = ({
   // Reset form when dialog closes
   useEffect(() => {
     if (!open) {
+      setChargeCardOpen(false);
+      setChargeReason("");
+      setChargeNeedsAuth(false);
+      setChargeDuplicate(null);
+      setOverpayAcknowledged(false);
+      // chargeUnrecorded is NOT cleared here and chargeRotations is NOT cleared
+      // either: the unrecorded panel owns its own dismissal (money has moved and
+      // the operator has to acknowledge it), and dropping the rotations would
+      // rewind a burnt idempotency key.
       form.reset({
         customer_id: "",
         vehicle_id: "",
@@ -327,12 +450,100 @@ export const AddPaymentDialog = ({
     enabled: !!rentalId && open,
   });
 
+  // Is there a card we could charge directly? Necessary-but-not-sufficient
+  // signal: the customer has a Stripe Customer id, which is only ever minted by
+  // a checkout that ran with setup_future_usage: 'off_session'. The edge
+  // function does the authoritative check (the id is validated against the exact
+  // account+mode it is about to charge, and the card must still be attached) and
+  // answers with a `no_card_on_file` code, so this is purely about not showing
+  // the operator a button that is guaranteed to fail.
+  const { data: savedStripeCustomerId } = useQuery({
+    queryKey: ["customer-card-on-file", selectedCustomerId, tenant?.id],
+    queryFn: async () => {
+      if (!selectedCustomerId) return null;
+      let query = supabase.from("customers").select("stripe_customer_id").eq("id", selectedCustomerId);
+      if (tenant?.id) query = query.eq("tenant_id", tenant.id);
+      const { data, error } = await query.maybeSingle();
+      if (error) return null;
+      return data?.stripe_customer_id ?? null;
+    },
+    enabled: !!selectedCustomerId && open,
+  });
+  const hasCardOnFile = !!savedStripeCustomerId;
+
   const customerVehicles = activeRentals || [];
   const selectedCustomer = customers?.find(c => c.id === selectedCustomerId);
   const customerEmail = selectedCustomer?.email || (rentalDetails?.customers as any)?.email;
   const customerName = selectedCustomer?.name || (rentalDetails?.customers as any)?.name || '';
 
-  const isAnyLoading = loading || stripeLoading || emailLoading;
+  const isAnyLoading = loading || stripeLoading || emailLoading || chargeLoading;
+
+  // Mirrors charge-saved-card's server-side RBAC gate: head_admin/admin (super
+  // admins are handed head_admin by the auth store), or a manager explicitly
+  // granted EDITOR on the payments tab. Viewers, ops and unscoped managers never
+  // see the button — and would be refused by the edge function anyway.
+  // hasRole() also enforces is_active, so a deactivated account fails both arms.
+  const canChargeSavedCard = hasRole(['head_admin', 'admin'])
+    || (hasRole('manager') && canEdit('payments'));
+
+  // Single source of truth for "how much the card will actually be charged".
+  //
+  // STRICTLY the operator-visible amount field. NO FALLBACK CHAIN — that is the
+  // whole point. The link buttons can afford a display/charge mismatch (the
+  // customer sees the real number on Stripe's own page and has to consent before
+  // anything moves); a direct off-session charge cannot, because the confirmation
+  // is the last thing ANYONE sees before the money is gone. A fallback to
+  // outstandingBalance / monthly_amount / the latest invoice means an operator who
+  // clears the field, or who clicks before the auto-fill lands, charges a number
+  // that was never on screen. If the field is empty or non-positive we charge
+  // nothing and say why. The field is already auto-populated from
+  // breakdownTotal / defaultAmount / outstandingBalance above.
+  const watchedAmount = form.watch("amount");
+  const parsedChargeAmount = Number(watchedAmount);
+  const chargeAmount = Number.isFinite(parsedChargeAmount) && parsedChargeAmount > 0
+    ? Math.round(parsedChargeAmount * 100) / 100
+    : 0;
+
+  // Ported from the manual Record-Payment path (which refuses this outright):
+  // nothing is owed, so an off-session charge has no basis at all. Skipped when
+  // the caller supplied the amount (extension / targeted payments), exactly as
+  // onSubmit skips it.
+  const chargeHasNoBasis = !defaultAmount && !breakdownItems
+    && outstandingBalance !== undefined && outstandingBalance === 0;
+  // Also ported: charging more than is owed leaves the excess as credit. The
+  // manual path asks first; so does this one, via an explicit acknowledgement.
+  const chargeIsOverpayment = !defaultAmount && !breakdownItems
+    && outstandingBalance !== undefined && outstandingBalance > 0
+    && chargeAmount > outstandingBalance;
+
+  // Why the charge button is unavailable, so the operator isn't left guessing at
+  // a dead control on a money screen.
+  const chargeBlockedReason = !rentalId
+    ? "Pick the rental this payment applies to first."
+    : chargeAmount <= 0
+      ? "Enter the amount to charge above — the card is charged exactly this figure."
+      : chargeHasNoBasis
+        ? "This customer has no outstanding balance to charge."
+        : null;
+  const canSubmitCharge = !chargeBlockedReason
+    && chargeReason.trim().length >= MIN_CHARGE_REASON_LENGTH
+    && (!chargeIsOverpayment || overpayAcknowledged);
+
+  // Idempotency identity of THIS charge: rental + exact amount + what it is for.
+  // The free-text reason is deliberately NOT in here. Reason wording varies
+  // between attempts ("card retry", "card retry 2"), and any input that the
+  // operator retypes on a retry would mint a new key and defeat the guard — the
+  // very failure this replaced. Deliberate repeats are handled explicitly by the
+  // duplicate confirmation, which rotates the key.
+  const chargeIntent = `${rentalId ?? ""}|${chargeAmount.toFixed(2)}|${(targetCategories ?? []).join(",")}|${extensionId ?? ""}`;
+  const chargeRequestIdFor = (intent: string) => {
+    const rotation = chargeRotations.current.get(intent) ?? 0;
+    return `chg-${stableIntentToken(intent)}${rotation > 0 ? `-r${rotation}` : ""}`;
+  };
+  /** Step the key — ONLY when a repeat is proven safe or explicitly wanted. */
+  const rotateChargeRequestId = (intent: string) => {
+    chargeRotations.current.set(intent, (chargeRotations.current.get(intent) ?? 0) + 1);
+  };
 
   const invalidateAllPaymentQueries = async (finalCustomerId?: string) => {
     const invalidateOptions = { refetchType: 'all' as const };
@@ -630,6 +841,199 @@ export const AddPaymentDialog = ({
     } finally {
       setStripeLoading(false);
       stripeInFlight.current = false;
+    }
+  };
+
+  // Direct charge of the saved card (charge-saved-card edge function).
+  //
+  // This is the ONLY button in this dialog that moves money by itself: the other
+  // two Stripe buttons create a Checkout URL and wait for the customer. The edge
+  // function inserts the payments row and calls apply-payment exactly like the
+  // manual Record-Payment path, so on success we report 'recorded' and callers
+  // may run their post-settle logic (installment settle, fine sync, …).
+  const handleChargeSavedCard = async (opts: { confirmDuplicate?: boolean } = {}) => {
+    if (chargeInFlight.current) return;
+    const finalCustomerId = selectedCustomerId || customer_id;
+    if (!finalCustomerId) { toast({ title: "Error", description: "Please select a customer first.", variant: "destructive" }); return; }
+    if (!rentalId) {
+      toast({
+        title: "Select a rental",
+        description: customerVehicles.length === 0
+          ? "This customer has no active rental to apply the payment to."
+          : "Pick the vehicle of the rental this payment applies to.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // EXACTLY the number rendered on the confirm button — see chargeAmount. If
+    // the operator-visible field is blank or non-positive there is no amount to
+    // charge, and we refuse rather than reach for a plausible-looking number the
+    // operator never saw.
+    const amount = chargeAmount;
+    if (amount <= 0) {
+      toast({
+        title: "Enter an amount",
+        description: "The card is charged exactly the amount in the form. Type it in first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Ported from the manual Record-Payment path, which refuses this outright.
+    if (chargeHasNoBasis) {
+      toast({ title: "No Outstanding Balance", description: "This customer has no outstanding balance to pay.", variant: "destructive" });
+      return;
+    }
+    // Ported from the manual path's overpayment window.confirm — here it is an
+    // explicit in-dialog acknowledgement, so it can't be dismissed by reflex.
+    if (chargeIsOverpayment && !overpayAcknowledged) {
+      toast({
+        title: "Confirm the overpayment",
+        description: `This is more than the ${formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')} outstanding. Tick the box to confirm the excess becomes credit.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const reason = chargeReason.trim();
+    if (reason.length < MIN_CHARGE_REASON_LENGTH) {
+      toast({ title: "Reason required", description: "Say why this card is being charged — it is written to the audit log.", variant: "destructive" });
+      return;
+    }
+
+    // A deliberate repeat is the ONE case where the key must move: the operator
+    // has looked at the existing payment and said "charge again anyway", and
+    // reusing the key would just replay the first PaymentIntent. Rotate ONCE per
+    // intent though — overriding twice must retry the same second charge, not
+    // create a third.
+    const intent = chargeIntent;
+    if (opts.confirmDuplicate && !chargeDuplicateOverridden.current.has(intent)) {
+      chargeDuplicateOverridden.current.add(intent);
+      rotateChargeRequestId(intent);
+    }
+    const clientRequestId = chargeRequestIdFor(intent);
+
+    chargeInFlight.current = true;
+    setChargeLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('charge-saved-card', {
+        body: {
+          rentalId,
+          amount: Math.round(amount * 100) / 100,
+          reason,
+          clientRequestId,
+          ...(opts.confirmDuplicate ? { confirmDuplicate: true } : {}),
+          ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
+          ...(extensionId ? { extensionId } : {}),
+          // Same contract as the Checkout paths: when the new-rental flow asked
+          // for a deposit hold and the operator left it ticked, the hold is
+          // placed on this same card right after the charge captures.
+          ...(depositHoldApplicable && depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
+        },
+      });
+
+      if (error) {
+        const detail = await extractFunctionErrorDetail(error, 'Failed to charge the saved card');
+
+        // MONEY HAS MOVED and nothing recorded it. This must never be reported
+        // as a failed charge: an operator who reads "charge failed" retries, and
+        // a retry on top of an unreconciled real charge is the worst outcome
+        // this whole feature can produce. Take over the dialog with a panel that
+        // states the charge happened, carries the PaymentIntent id, and does not
+        // auto-dismiss.
+        if (detail.code === 'charged_but_not_recorded') {
+          setChargeNeedsAuth(false);
+          setChargeDuplicate(null);
+          setChargeUnrecorded({
+            message: detail.message,
+            paymentIntentId: typeof detail.body?.paymentIntentId === 'string' ? detail.body.paymentIntentId : undefined,
+            amount: typeof detail.body?.amount === 'number' ? detail.body.amount : amount,
+          });
+          setChargeCardOpen(true);
+          // Deliberately no rotation and no toast: the key is the only thing
+          // that would stop a manual retry becoming a second charge.
+          return;
+        }
+
+        // The edge function found a matching recent payment on this rental. Show
+        // it and make the operator decide, rather than silently charging again.
+        if (detail.code === 'possible_duplicate') {
+          setChargeNeedsAuth(false);
+          setChargeDuplicate({
+            message: detail.message,
+            existing: detail.body?.existingPayment && typeof detail.body.existingPayment === 'object'
+              ? detail.body.existingPayment
+              : undefined,
+          });
+          return;
+        }
+
+        if (detail.code === 'authentication_required') {
+          // Not a decline. Keep the confirm step open and offer the link fallback.
+          setChargeNeedsAuth(true);
+          return;
+        }
+        // These two codes mean the edge function reached Stripe and Stripe
+        // REFUSED — no charge exists. Retrying under the same idempotency key
+        // would just replay the cached failure for the next 24h, even after the
+        // customer's bank clears the card, so step the key. Every other failure
+        // (network drop, timeout, charged_but_not_recorded) leaves it alone: there
+        // the charge may well have gone through, and replaying the same key is
+        // exactly what stops a second one.
+        if (detail.code === 'charge_failed' || detail.code === 'charge_not_succeeded') {
+          rotateChargeRequestId(intent);
+          // Fresh key ⇒ fresh attempt cycle, so a future duplicate warning is
+          // overridable again.
+          chargeDuplicateOverridden.current.delete(intent);
+        }
+        throw new Error(detail.message);
+      }
+      if (data && data.success === false) throw new Error(data.error || 'Failed to charge the saved card');
+
+      const cardLabel = data?.card?.last4 ? ` (${data.card.brand ?? 'card'} ••${data.card.last4})` : '';
+      toast({
+        title: data?.alreadyRecorded ? "Already charged" : "Card charged",
+        description: data?.alreadyRecorded
+          ? `This charge had already been recorded — nothing was charged twice.`
+          : `${formatCurrency(amount, tenant?.currency_code || 'USD')} charged to the card on file${cardLabel}.`,
+      });
+
+      // Money moved but something downstream did not — surface it loudly rather
+      // than letting a green toast imply everything landed.
+      const warnings: string[] = Array.isArray(data?.warnings) ? data.warnings : [];
+      for (const w of warnings) {
+        toast({ title: "Needs attention", description: w, variant: "destructive" });
+      }
+
+      await invalidateAllPaymentQueries(finalCustomerId);
+      // 'recorded' — the payment row and its ledger allocation are committed by
+      // the edge function before it responds.
+      if (onPaymentSuccess) onPaymentSuccess('recorded');
+      // Settled. Step the key so a later, genuinely-new charge of the same amount
+      // on the same rental isn't served this PaymentIntent back.
+      rotateChargeRequestId(intent);
+      chargeDuplicateOverridden.current.delete(intent);
+      setChargeCardOpen(false);
+      setChargeReason("");
+      setChargeDuplicate(null);
+      setOverpayAcknowledged(false);
+      form.reset();
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error("Error charging saved card:", error);
+      // Deliberately NOT "Charge failed". A timeout or a dropped connection ends
+      // up here too, and we genuinely do not know whether Stripe took the money —
+      // asserting either way is wrong. Retrying is safe because the idempotency
+      // key is unchanged on this path, so say that instead.
+      toast({
+        title: "Charge did not complete",
+        description: `${error.message || "Failed to charge the saved card."} Retrying is safe — it reuses the same request and cannot charge twice.`,
+        variant: "destructive",
+      });
+    } finally {
+      setChargeLoading(false);
+      chargeInFlight.current = false;
     }
   };
 
@@ -1029,6 +1433,46 @@ export const AddPaymentDialog = ({
                 </label>
               )}
 
+              {/* Charge the card already on file — the only button here that
+                  takes money by itself. Everything below it just produces a link
+                  for the customer to act on. Hidden entirely when there is no
+                  card, or when the operator's role can't charge one. */}
+              {selectedCustomerId && canChargeSavedCard && hasCardOnFile && (
+                <div className="space-y-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    // No amount on screen means no charge. The label only ever
+                    // shows a figure the operator typed or watched auto-fill.
+                    disabled={isAnyLoading || !!chargeBlockedReason}
+                    onClick={() => {
+                      setChargeNeedsAuth(false);
+                      setChargeDuplicate(null);
+                      setOverpayAcknowledged(false);
+                      setChargeReason("");
+                      // NOTE: no key is minted here. The idempotency key is derived
+                      // from the charge intent (see chargeRequestIdFor), so
+                      // cancelling and reopening this step after a timeout replays
+                      // the same request instead of issuing a second charge.
+                      setChargeCardOpen(true);
+                    }}
+                    className="w-full h-10 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                  >
+                    {chargeLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CreditCard className="w-4 h-4 shrink-0" />
+                    )}
+                    <span className="text-sm">
+                      Charge saved card{chargeAmount > 0 ? ` — ${formatCurrency(chargeAmount, tenant?.currency_code || 'USD')}` : ''}
+                    </span>
+                  </Button>
+                  {chargeBlockedReason && (
+                    <p className="text-[11px] leading-snug text-muted-foreground px-0.5">{chargeBlockedReason}</p>
+                  )}
+                </div>
+              )}
+
               {/* Stripe options row */}
               {selectedCustomerId && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1052,7 +1496,11 @@ export const AddPaymentDialog = ({
                         <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
                       </svg>
                     )}
-                    <span className="text-sm">Charge via Stripe</span>
+                    {/* NOT a charge: handleStripePayment only creates a Checkout
+                        session and window.open()s the URL. It was labelled
+                        "Charge via Stripe", which read as "take the money now"
+                        and is what made operators think a direct charge existed. */}
+                    <span className="text-sm">Send payment link</span>
                   </Button>
                   <Button
                     type="button"
@@ -1139,16 +1587,16 @@ export const AddPaymentDialog = ({
                 <div className="flex items-start gap-2">
                   <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <DialogTitle className="text-base">Charge via Stripe</DialogTitle>
+                    <DialogTitle className="text-base">Send payment link</DialogTitle>
                     <DialogDescription className="mt-1 text-xs">
-                      Opens a Stripe Checkout in a new tab for the customer.
+                      Opens a Stripe Checkout in a new tab for the customer. Nothing is charged until they pay.
                     </DialogDescription>
                   </div>
                 </div>
               </DialogHeader>
               <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-1">
                 <p>
-                  Customer is charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> for rental fees.
+                  Customer is charged <strong>{formatCurrency(stripeAmount, tenant?.currency_code || 'USD')}</strong> for rental fees when they complete checkout.
                 </p>
                 <p>
                   Immediately after the charge captures, a separate <strong>{formatCurrency(effectiveDepositAmount, tenant?.currency_code || 'USD')} pre-authorisation hold</strong> (not a charge) is placed on the same card — the customer only enters their card once.
@@ -1162,7 +1610,7 @@ export const AddPaymentDialog = ({
                     void handleStripePayment();
                   }}
                 >
-                  Open Stripe Checkout
+                  Open payment link
                 </Button>
               </div>
             </>
@@ -1198,6 +1646,280 @@ export const AddPaymentDialog = ({
                   }}
                 >
                   Send link
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Charge-saved-card confirmation. Deliberately heavier than the other
+          confirmations: this is the one action that takes the customer's money
+          the instant it is clicked, with the customer nowhere near the screen.
+          The reason is mandatory and lands in audit_logs alongside the actor,
+          the card and the platform account the charge ran on. */}
+      <Dialog
+        open={chargeCardOpen}
+        onOpenChange={(v) => {
+          // Never dismissable mid-request, and never dismissable at all while a
+          // charged-but-unrecorded result is on screen: that panel is the only
+          // record anyone has that the money moved.
+          if (chargeLoading || chargeUnrecorded) return;
+          setChargeCardOpen(v);
+          if (!v) { setChargeNeedsAuth(false); setChargeDuplicate(null); }
+        }}
+      >
+        <DialogContent
+          className={cn("sm:max-w-[460px]", chargeUnrecorded && "[&>button]:hidden")}
+          onEscapeKeyDown={(e) => { if (chargeLoading || chargeUnrecorded) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (chargeLoading || chargeUnrecorded) e.preventDefault(); }}
+        >
+          {chargeUnrecorded ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base text-red-700 dark:text-red-400">
+                      Card WAS charged — not recorded
+                    </DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      The money left the customer&apos;s card. It is not in the ledger.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="space-y-3 pt-1">
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                  <p className="font-medium">
+                    Do NOT retry this charge.
+                  </p>
+                  <p className="mt-1.5">
+                    Stripe took{' '}
+                    <strong>{formatCurrency(chargeUnrecorded.amount ?? chargeAmount, tenant?.currency_code || 'USD')}</strong>{' '}
+                    but the payment row could not be written, so nothing on this rental reflects it.
+                    Charging again would take the money twice.
+                  </p>
+                  {chargeUnrecorded.paymentIntentId && (
+                    <p className="mt-2">
+                      Reconcile against this Stripe PaymentIntent, then record the payment manually:
+                      <span className="mt-1 block break-all rounded bg-red-100 px-2 py-1 font-mono text-[11px] dark:bg-red-900/50 select-all">
+                        {chargeUnrecorded.paymentIntentId}
+                      </span>
+                    </p>
+                  )}
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {chargeUnrecorded.message}
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  This event is already in the audit log as <strong>payment_charge_saved_card_unrecorded</strong> with
+                  your name, the amount and the card used.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end pt-3">
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setChargeUnrecorded(null);
+                    setChargeCardOpen(false);
+                    setChargeReason("");
+                  }}
+                >
+                  I have noted the PaymentIntent
+                </Button>
+              </div>
+            </>
+          ) : chargeDuplicate ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base">Possible duplicate charge</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      Nothing has been charged yet.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="space-y-3 pt-1">
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  <p>{chargeDuplicate.message}</p>
+                  {chargeDuplicate.existing?.paymentDate && (
+                    <p className="mt-1.5">
+                      Recorded on <strong>{new Date(`${chargeDuplicate.existing.paymentDate}T00:00:00`).toLocaleDateString()}</strong>
+                      {chargeDuplicate.existing.method ? ` · ${chargeDuplicate.existing.method}` : ''}
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Check the rental&apos;s payments before continuing. If this really is a second, separate
+                  charge of {formatCurrency(chargeAmount, tenant?.currency_code || 'USD')}, confirm below.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end pt-3">
+                <Button
+                  variant="outline"
+                  disabled={chargeLoading}
+                  onClick={() => { setChargeDuplicate(null); setChargeCardOpen(false); }}
+                >
+                  Cancel — don&apos;t charge
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={chargeLoading}
+                  onClick={() => { setChargeDuplicate(null); void handleChargeSavedCard({ confirmDuplicate: true }); }}
+                >
+                  {chargeLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Charging...</>
+                  ) : (
+                    <>Charge anyway</>
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : chargeNeedsAuth ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base">Card needs authentication</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      Nothing was charged.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="text-xs text-muted-foreground leading-relaxed space-y-2 pt-1">
+                <p>
+                  The bank wants the cardholder to confirm this payment (3-D Secure), which can&apos;t happen
+                  while the customer isn&apos;t at the checkout. The card itself is fine — it just can&apos;t
+                  be charged without them.
+                </p>
+                <p>
+                  Send them a payment link instead: authenticating once through checkout also refreshes the
+                  saved card for future charges.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-end pt-3">
+                <Button variant="outline" onClick={() => { setChargeCardOpen(false); setChargeNeedsAuth(false); }}>
+                  Close
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={isAnyLoading || !customerEmail || (!latestInvoice && !rentalDetails)}
+                  onClick={() => {
+                    setChargeCardOpen(false);
+                    setChargeNeedsAuth(false);
+                    void handleSendInvoiceEmail();
+                  }}
+                >
+                  <Mail className="w-3.5 h-3.5 mr-1.5" /> Email payment link
+                </Button>
+                <Button
+                  disabled={isAnyLoading || stripeAmount <= 0}
+                  onClick={() => {
+                    setChargeCardOpen(false);
+                    setChargeNeedsAuth(false);
+                    void handleStripePayment();
+                  }}
+                >
+                  Open payment link
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-2">
+                  <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-base">Charge the saved card</DialogTitle>
+                    <DialogDescription className="mt-1 text-xs">
+                      Takes <strong>{formatCurrency(chargeAmount, tenant?.currency_code || 'USD')}</strong> from
+                      the card on file straight away. The customer is not prompted.
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="space-y-3 pt-1">
+                {chargeBlockedReason ? (
+                  <p className="rounded-md border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+                    {chargeBlockedReason}
+                  </p>
+                ) : (
+                  <p className="rounded-md border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                    The card is charged <strong>exactly {formatCurrency(chargeAmount, tenant?.currency_code || 'USD')}</strong> —
+                    the amount in the form above. Change it there if this is wrong.
+                  </p>
+                )}
+                {chargeIsOverpayment && (
+                  <label className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 cursor-pointer select-none dark:border-amber-900 dark:bg-amber-950/40">
+                    <Checkbox
+                      checked={overpayAcknowledged}
+                      onCheckedChange={(v) => setOverpayAcknowledged(v === true)}
+                      className="mt-0.5"
+                      disabled={chargeLoading}
+                    />
+                    <span className="text-xs leading-snug text-amber-900 dark:text-amber-200">
+                      This is more than the {formatCurrency(outstandingBalance, tenant?.currency_code || 'USD')} outstanding.
+                      The extra {formatCurrency(chargeAmount - outstandingBalance, tenant?.currency_code || 'USD')} will sit
+                      on the account as credit. Charge it anyway.
+                    </span>
+                  </label>
+                )}
+                <div>
+                  <Label className="text-sm font-medium">
+                    Reason <span className="text-red-500">*</span>
+                  </Label>
+                  <Textarea
+                    value={chargeReason}
+                    onChange={(e) => setChargeReason(e.target.value)}
+                    // Deliberately NOT a damage example. Charging a card on file
+                    // to recover damage needs the renter's express permission
+                    // obtained AFTER the damage (CA Civ. Code §1939.15(a), NY GBL
+                    // §396-z(7)), and the stored-credential mandate that captures
+                    // that permission has not shipped yet. A suggested-damage
+                    // placeholder would steer operators straight into it.
+                    placeholder="e.g. Agreed extension payment for week of 12 Aug, confirmed by phone"
+                    className="mt-1.5 min-h-[76px] text-sm"
+                    maxLength={500}
+                    disabled={chargeLoading}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Written to the audit log with your name, the amount and the card used. Minimum {MIN_CHARGE_REASON_LENGTH} characters.
+                  </p>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Use this only for amounts the renter has already agreed to pay. Recovering damage or
+                  cleaning costs from a card on file needs the renter&apos;s written permission obtained
+                  <em> after</em> the damage — get that first, and keep it on the rental.
+                </p>
+                {depositHoldApplicable && depositHoldEnabled && (
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    After the charge captures, a separate{' '}
+                    <strong>{formatCurrency(effectiveDepositAmount, tenant?.currency_code || 'USD')} pre-authorisation hold</strong>{' '}
+                    (not a charge) is placed on the same card.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 justify-end pt-3">
+                <Button variant="outline" disabled={chargeLoading} onClick={() => setChargeCardOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  disabled={chargeLoading || !canSubmitCharge}
+                  onClick={() => { void handleChargeSavedCard(); }}
+                >
+                  {chargeLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Charging...</>
+                  ) : chargeAmount > 0 ? (
+                    <>Charge {formatCurrency(chargeAmount, tenant?.currency_code || 'USD')}</>
+                  ) : (
+                    <>Charge</>
+                  )}
                 </Button>
               </div>
             </>

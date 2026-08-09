@@ -28,6 +28,8 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import {
   getConnectAccountId,
   getStripeClientForRecord,
+  readHoldCaptureFacts,
+  chainExpiryFromEndDate,
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
@@ -51,41 +53,34 @@ const PI_STATUS_TO_HOLD_STATUS: Record<string, string> = {
 /** Contract says `status: string`; null is only ever an internal value. */
 const reportStatus = (status: string | null): string => status ?? "none";
 
+type CaptureFacts = Awaited<ReturnType<typeof readHoldCaptureFacts>>;
+
 /**
- * Read the REAL capture deadline off the authorising charge.
+ * Read the REAL capture deadline (and the window the network granted) off the
+ * authorising charge, or null when Stripe has not published one.
  *
- * Deliberately NOT _shared/stripe-client.ts's resolveHoldExpiry: that helper
- * returns `now + 7 days` whenever it cannot read capture_before, and that value
- * MOVES on every call. Persisting it here would re-arm deposit_hold_expires_at
- * on every verify, and refresh-deposit-holds selects rentals to re-authorise
- * with `.lt('deposit_hold_expires_at', now + 2 days)` — so a rental verified
- * more often than once every 5 days could NEVER enter the refresh window and
- * its hold would die unnoticed at the real deadline. That is precisely the GMT
- * incident this function exists to prevent, so we return null instead of
- * guessing and the caller leaves the stored value alone.
+ * Deliberately NOT _shared/stripe-client.ts's resolveHoldExpiry /
+ * resolveHoldExpiryDetailed: those layer a `now + HOLD_EXPIRY_FALLBACK_DAYS`
+ * floor on top, and that value MOVES on every call. Persisting it here would
+ * re-arm deposit_hold_expires_at on every verify, and refresh-deposit-holds
+ * selects rentals to re-authorise with
+ * `.lt('deposit_hold_expires_at', now + 2 days)` — so a frequently-verified
+ * rental could NEVER enter the refresh window and its hold would die unnoticed
+ * at the real deadline. That is precisely the GMT incident this function exists
+ * to prevent, so we use the no-fallback reader and the caller leaves the stored
+ * value alone on null.
  */
-async function readCaptureDeadline(
+async function readCaptureFacts(
   stripe: ReturnType<typeof getStripeClientForRecord>,
   intent: any,
   stripeOptions: { stripeAccount?: string } | undefined
-): Promise<string | null> {
+): Promise<CaptureFacts> {
   try {
-    const latestCharge = intent?.latest_charge;
-    let charge: any = latestCharge && typeof latestCharge === "object" ? latestCharge : null;
-    // We ask Stripe to expand latest_charge, so this second round-trip should
-    // never happen — but a string id here would otherwise silently cost us the
-    // real deadline forever.
-    if (!charge && typeof latestCharge === "string") {
-      charge = await stripe.charges.retrieve(latestCharge, stripeOptions);
-    }
-    const captureBefore = charge?.payment_method_details?.card?.capture_before;
-    if (typeof captureBefore === "number" && captureBefore > 0) {
-      return new Date(captureBefore * 1000).toISOString();
-    }
+    return await readHoldCaptureFacts(stripe, intent, stripeOptions);
   } catch (err) {
     console.warn("[HOLD-VERIFY] Could not read capture_before; leaving stored expiry untouched:", err);
+    return null;
   }
-  return null;
 }
 
 Deno.serve(async (req) => {
@@ -117,7 +112,7 @@ Deno.serve(async (req) => {
     // role key; they are already trusted and have no app_users row.
     const isServiceRole = serviceRoleKey.length > 0 && token === serviceRoleKey;
 
-    let caller: { tenant_id: string | null; is_super_admin: boolean } | null = null;
+    let caller: { id: string | null; tenant_id: string | null; is_super_admin: boolean } | null = null;
     if (!isServiceRole) {
       const { data: userData, error: userErr } = await supabase.auth.getUser(token);
       if (userErr || !userData?.user) return errorResponse("Invalid token", 401);
@@ -126,7 +121,7 @@ Deno.serve(async (req) => {
       // auth_user_id (matching on `id` silently matches nothing).
       const { data: appUser } = await supabase
         .from("app_users")
-        .select("tenant_id, is_super_admin, is_active")
+        .select("id, tenant_id, is_super_admin, is_active")
         .eq("auth_user_id", userData.user.id)
         .maybeSingle();
 
@@ -134,15 +129,20 @@ Deno.serve(async (req) => {
         return errorResponse("Not authorised for this rental", 403);
       }
       caller = {
+        id: (appUser.id as string | null) ?? null,
         tenant_id: (appUser.tenant_id as string | null) ?? null,
         is_super_admin: appUser.is_super_admin === true,
       };
     }
 
+    // deposit_hold_links.actor: the app_user id when a human asked, a plain
+    // label when another edge function or the reconciler did.
+    const actor = caller?.id ?? (isServiceRole ? "reconciler" : "app_user");
+
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
       .select(
-        "id, tenant_id, deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_expires_at, platform_account"
+        "id, tenant_id, end_date, deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_expires_at, deposit_hold_chain_expires_at, platform_account, deposit_hold_attempt_seq"
       )
       .eq("id", rentalId)
       .single();
@@ -176,6 +176,69 @@ Deno.serve(async (req) => {
     // The PaymentIntent we are about to inspect. EVERY write below is anchored
     // to this id as well as to the status we read — see casUpdate.
     const probedPiId = rental.deposit_hold_payment_intent_id as string;
+
+    // Which link of the chain this verify is reporting on.
+    const attemptSeq = Number((rental as any).deposit_hold_attempt_seq ?? 0);
+
+    /**
+     * LEDGER: record what Stripe said about this link.
+     *
+     * UPSERT, not insert: deposit_hold_links is UNIQUE on
+     * (rental_id, attempt_seq, action), and a verify can be run any number of
+     * times against one attempt — an operator clicking "Check with Stripe"
+     * twice must not error, and an unbounded row per click would bury the
+     * placement/refresh rows that matter. So the row means "the LATEST verify
+     * of this link": created_at is deliberately not written, so it keeps the
+     * first verify's timestamp while completed_at tracks the most recent.
+     *
+     * FULL REPLACEMENT, not a partial merge. A PostgREST merge-duplicates
+     * upsert only overwrites the columns present in the payload, and the call
+     * sites carry different key sets — so a rental that once failed a verify
+     * and later verifies cleanly would end up with `outcome: 'succeeded'`
+     * sitting next to a stale `error_code: 'resource_missing'`, or a dead
+     * hold's row still carrying the previous run's `capture_before`. Every
+     * mutable column is therefore defaulted to null here and each call site
+     * overrides only what it actually observed, so one upsert fully replaces
+     * the prior verify observation. (created_at is deliberately never written:
+     * the row keeps the first verify's timestamp while completed_at tracks the
+     * most recent.)
+     *
+     * Non-fatal throughout: an audit write must never turn a successful
+     * reconciliation into a 500 — and supabase-js REJECTS on a transport
+     * failure rather than resolving with `{ error }`, so both are swallowed.
+     */
+    const recordVerify = async (fields: Record<string, unknown>) => {
+      try {
+        const { error } = await supabase
+          .from("deposit_hold_links")
+          .upsert(
+            {
+              rental_id: rentalId,
+              tenant_id: rental.tenant_id,
+              attempt_seq: attemptSeq,
+              action: "verify",
+              payment_intent_id: probedPiId,
+              platform_account: (rental as any).platform_account ?? null,
+              actor,
+              completed_at: new Date().toISOString(),
+              // Mutable set — every call site replaces the lot.
+              connect_account_id: null,
+              stripe_mode: null,
+              capture_before: null,
+              extended_auth_status: null,
+              outcome: null,
+              error_code: null,
+              error_message: null,
+              estimate_inputs: null,
+              ...fields,
+            },
+            { onConflict: "rental_id,attempt_seq,action" }
+          );
+        if (error) console.error("[HOLD-VERIFY] Failed to write deposit_hold_links row (continuing):", error);
+      } catch (ledgerErr) {
+        console.error("[HOLD-VERIFY] deposit_hold_links upsert threw (continuing):", ledgerErr);
+      }
+    };
 
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
@@ -222,6 +285,12 @@ Deno.serve(async (req) => {
     })();
 
     if (!stripeContext) {
+      await recordVerify({
+        outcome: "failed",
+        error_code: "stripe_context_unresolvable",
+        error_message: "Could not resolve a Stripe client/account for this rental; nothing was checked or changed.",
+        estimate_inputs: { hold_status_before: currentStatus, checked: false },
+      });
       return jsonResponse({
         verified: false,
         liveHold: false,
@@ -258,6 +327,13 @@ Deno.serve(async (req) => {
           connectAccountId ?? "(platform)",
           probedPiId
         );
+        await recordVerify({
+          connect_account_id: connectAccountId,
+          outcome: "orphaned",
+          error_code: "resource_missing",
+          error_message: `Stripe has no record of ${probedPiId} on ${connectAccountId ?? "(platform)"}.`,
+          estimate_inputs: { hold_status_before: currentStatus, checked: true },
+        });
         return jsonResponse({
           verified: false,
           liveHold: false,
@@ -320,6 +396,61 @@ Deno.serve(async (req) => {
       return Array.isArray(data) && data.length > 0;
     };
 
+    // "We consulted Stripe at this instant", and nothing else. Anchored to the
+    // same row identity as casUpdate so it can never land on a row that has
+    // moved on, but a 0-row result is NOT an error here: there is no state
+    // being corrected, so losing the race costs only a timestamp.
+    const stampVerifiedAt = async (extra: Record<string, unknown> = {}) => {
+      try {
+        let query = supabase
+          .from("rentals")
+          .update({ deposit_hold_verified_at: new Date().toISOString(), ...extra })
+          .eq("id", rentalId)
+          .eq("deposit_hold_payment_intent_id", probedPiId);
+        query = currentStatus === null
+          ? query.is("deposit_hold_status", null)
+          : query.eq("deposit_hold_status", currentStatus);
+        const { error } = await query;
+        // supabase-js resolves rather than throwing, so an unchecked write here
+        // would silently leave deposit_hold_verified_at looking like "never".
+        if (error) console.error("[HOLD-VERIFY] Could not stamp deposit_hold_verified_at:", error);
+      } catch (stampErr) {
+        // ...and it REJECTS on transport failure. This write corrects nothing,
+        // so it must never turn a good reconciliation into a 500.
+        console.error("[HOLD-VERIFY] deposit_hold_verified_at stamp threw (continuing):", stampErr);
+      }
+    };
+
+    // ── Chain bound: re-stamp FORWARD from the rental's LIVE end date. ───────
+    //
+    // rentals.deposit_hold_chain_expires_at is written once, at placement, from
+    // the end_date as it stood then — and refresh-deposit-holds treats it as a
+    // HARD STOP (both in its driver filter and in refreshOneHold). Extending a
+    // rental moves end_date but does not re-place the hold, so without this the
+    // chain terminates on the ORIGINAL end date and the deposit quietly stops
+    // being renewed while the car is still out. That is near-certain for a
+    // fleet of manually-extended rentals.
+    //
+    // FORWARD ONLY, deliberately. Moving the bound out is always safe (the
+    // refresher just keeps renewing a hold on a rental that is still running,
+    // and status/'Active' filtering plus the operator's release remain the
+    // other stops). Moving it IN could terminate a chain that is still needed,
+    // so a shortened rental keeps the longer bound until a human releases it.
+    // No `now` floor either: re-flooring on every verify would mean the chain
+    // never terminates at all.
+    const chainRestamp = ((): Record<string, string> => {
+      const live = chainExpiryFromEndDate((rental as any).end_date as string | null);
+      if (!live) return {};
+      const stored = (rental as any).deposit_hold_chain_expires_at as string | null;
+      if (!stored) return {}; // NULL already means "no ceiling" — leave it.
+      if (new Date(live).getTime() <= new Date(stored).getTime()) return {};
+      console.log(
+        "[HOLD-VERIFY] Chain bound re-stamped forward on rental", rentalId,
+        stored, "->", live, "(rental end date moved)"
+      );
+      return { deposit_hold_chain_expires_at: live };
+    })();
+
     // The row moved under us. Report what is there NOW instead of our stale
     // conclusion, and say so plainly — this is not an error, just a re-read.
     const reportLostRace = async (liveHold: boolean, expiresAt: string | null) => {
@@ -346,13 +477,37 @@ Deno.serve(async (req) => {
       // which is how holds died unnoticed in the first place.
       //
       // null means Stripe has not published a deadline for this charge. We
-      // persist NOTHING in that case (see readCaptureDeadline): inventing one
+      // persist NO DEADLINE in that case (see readCaptureFacts): inventing one
       // would push the rental out of the cron's window on every call.
-      const stripeExpiresAt = await readCaptureDeadline(stripe, intent, stripeOptions);
+      const facts = await readCaptureFacts(stripe, intent, stripeOptions);
+      const stripeExpiresAt = facts?.captureBefore ?? null;
       const reportedExpiresAt = stripeExpiresAt ?? storedExpiresAt;
       const expiryLabel = stripeExpiresAt ? stripeExpiresAt.slice(0, 10) : null;
 
+      // Written AFTER the write attempt below, so `outcome` describes what
+      // actually landed. Recording 'succeeded' up front made the ledger claim a
+      // reconciliation that a lost CAS never applied.
+      const recordLiveVerify = (extra: Record<string, unknown>) =>
+        recordVerify({
+          connect_account_id: connectAccountId,
+          stripe_mode: ((tenant as any).stripe_mode as string | null) ?? null,
+          capture_before: stripeExpiresAt,
+          extended_auth_status: facts?.extendedAuthStatus ?? null,
+          outcome: "succeeded",
+          ...extra,
+          estimate_inputs: {
+            pi_status: piStatus,
+            hold_status_before: currentStatus,
+            live_hold: true,
+            worker_owns_row: workerOwnsRow,
+            window_seconds: facts?.windowSeconds ?? null,
+            chain_expires_at_restamped: chainRestamp.deposit_hold_chain_expires_at ?? null,
+            ...((extra.estimate_inputs as Record<string, unknown> | undefined) ?? {}),
+          },
+        });
+
       if (workerOwnsRow) {
+        await recordLiveVerify({ estimate_inputs: { applied: false, reason: "worker_owns_row" } });
         return jsonResponse({
           verified: true,
           liveHold: true,
@@ -372,15 +527,74 @@ Deno.serve(async (req) => {
       const storedMs = storedExpiresAt ? new Date(storedExpiresAt).getTime() : NaN;
       const expiryDrifted = stripeExpiresAt !== null
         && !(Math.abs(storedMs - new Date(stripeExpiresAt).getTime()) < 1000);
+
+      // NOT SEEDING A FALLBACK HERE, deliberately.
+      //
+      // A live hold with a NULL deposit_hold_expires_at used to be invisible to
+      // the refresh cron (`.lt()` against NULL is NULL, not true), and the
+      // obvious fix is to write our HOLD_EXPIRY_FALLBACK_DAYS floor into the
+      // hole. The refresh driver now filters
+      // `deposit_hold_expires_at.is.null,deposit_hold_expires_at.lt.<threshold>`
+      // and sorts NULL FIRST — NULL means "we do not know this is alive", which
+      // is the most urgent state there is. Writing a 4-day floor over it would
+      // therefore make the row LESS urgent and push the refresh out by roughly
+      // the lookahead. Leaving the value alone is both the safer direction and
+      // the one that keeps every persisted expiry Stripe's own answer.
       const changed = currentStatus !== "held" || expiryDrifted;
 
       if (changed) {
-        const patch: Record<string, unknown> = { deposit_hold_status: "held" };
-        // Only ever persist a deadline Stripe actually told us.
-        if (stripeExpiresAt !== null) patch.deposit_hold_expires_at = stripeExpiresAt;
-        const applied = await casUpdate(patch);
-        if (!applied) return await reportLostRace(true, reportedExpiresAt);
-        console.log("[HOLD-VERIFY] Reconciled", rentalId, currentStatus, "->", "held", "expires", stripeExpiresAt ?? "(unchanged)");
+        const patch: Record<string, unknown> = {
+          deposit_hold_status: "held",
+          deposit_hold_verified_at: new Date().toISOString(),
+          // Carried on the same CAS so the chain bound can only move on a row
+          // we still own (see chainRestamp above; {} when nothing to move).
+          ...chainRestamp,
+        };
+        // Only stamp the status clock when the status itself moved.
+        if (currentStatus !== "held") patch.deposit_hold_status_changed_at = new Date().toISOString();
+        // ONLY ever persist a deadline Stripe actually told us — and when we
+        // do, label its provenance and record the window the network granted,
+        // so nothing downstream has to guess whether the timestamp is real.
+        if (stripeExpiresAt !== null) {
+          patch.deposit_hold_expires_at = stripeExpiresAt;
+          patch.deposit_hold_expiry_source = "stripe_capture_before";
+          patch.deposit_hold_extended_auth = facts?.extendedAuth ?? null;
+          patch.deposit_hold_window_seconds = facts?.windowSeconds ?? null;
+        }
+        let applied: boolean;
+        try {
+          applied = await casUpdate(patch);
+        } catch (casErr: any) {
+          // casUpdate throws on a DB error. Leave a trace before the 500 —
+          // "we consulted Stripe and could not save the answer" is exactly the
+          // state this ledger exists to make findable.
+          await recordLiveVerify({
+            outcome: "failed",
+            error_code: "rental_update_failed",
+            error_message: String(casErr?.message ?? casErr).slice(0, 500),
+            estimate_inputs: { applied: false },
+          });
+          throw casErr;
+        }
+        if (!applied) {
+          await recordLiveVerify({ estimate_inputs: { applied: false, reason: "lost_race" } });
+          return await reportLostRace(true, reportedExpiresAt);
+        }
+        await recordLiveVerify({ estimate_inputs: { applied: true } });
+        console.log(
+          "[HOLD-VERIFY] Reconciled", rentalId, currentStatus, "->", "held",
+          "expires", stripeExpiresAt ?? "(unchanged)"
+        );
+      } else {
+        // Nothing about the hold changed, but we DID just confirm it against
+        // Stripe — record when, so a reconciler can tell "checked, still fine"
+        // from "never checked". (workerOwnsRow already returned above, so this
+        // branch never touches a row another worker is mid-write on.)
+        // Best-effort by design: a 0-row result only means the row moved under
+        // us, and there is no state to correct. The chain re-stamp rides along
+        // on the same anchored write.
+        await stampVerifiedAt(chainRestamp);
+        await recordLiveVerify({ estimate_inputs: { applied: false, reason: "no_change" } });
       }
 
       return jsonResponse({
@@ -389,6 +603,10 @@ Deno.serve(async (req) => {
         status: "held",
         changed,
         expiresAt: reportedExpiresAt,
+        // Only ever 'stripe_capture_before' or null — this function never
+        // reports a deadline it invented (there isn't one).
+        expirySource: stripeExpiresAt !== null ? "stripe_capture_before" : null,
+        extendedAuth: facts?.extendedAuth ?? null,
         message: expiryLabel
           ? `The deposit hold is active and can be charged until ${expiryLabel}.`
           : "The deposit hold is active and can be charged. Stripe has not published a capture deadline for it yet.",
@@ -400,6 +618,18 @@ Deno.serve(async (req) => {
       // processing). No funds are held yet, but it is not dead either — writing
       // a terminal status here would be a lie, and there is no non-terminal
       // value in the CHECK constraint that means "mid-3DS".
+      await recordVerify({
+        connect_account_id: connectAccountId,
+        stripe_mode: ((tenant as any).stripe_mode as string | null) ?? null,
+        outcome: "succeeded",
+        estimate_inputs: {
+          pi_status: piStatus,
+          hold_status_before: currentStatus,
+          live_hold: false,
+          conclusive: false,
+        },
+      });
+      if (!workerOwnsRow) await stampVerifiedAt();
       return jsonResponse({
         verified: true,
         liveHold: false,
@@ -424,9 +654,47 @@ Deno.serve(async (req) => {
     const wouldClobber = workerOwnsRow || (currentStatus === "released" && trueStatus === "expired");
     const changed = !wouldClobber && currentStatus !== trueStatus;
 
+    // Same rule as the live branch: the ledger row is written AFTER the write
+    // attempt, so `outcome` and `applied` describe what actually landed.
+    const recordDeadVerify = (extra: Record<string, unknown>) =>
+      recordVerify({
+        connect_account_id: connectAccountId,
+        stripe_mode: ((tenant as any).stripe_mode as string | null) ?? null,
+        outcome: "succeeded",
+        ...extra,
+        estimate_inputs: {
+          pi_status: piStatus,
+          hold_status_before: currentStatus,
+          hold_status_after: wouldClobber ? currentStatus : trueStatus,
+          live_hold: false,
+          conclusive: true,
+          would_clobber: wouldClobber,
+          ...((extra.estimate_inputs as Record<string, unknown> | undefined) ?? {}),
+        },
+      });
+
     if (changed) {
-      const applied = await casUpdate({ deposit_hold_status: trueStatus });
-      if (!applied) return await reportLostRace(false, null);
+      let applied: boolean;
+      try {
+        applied = await casUpdate({
+          deposit_hold_status: trueStatus,
+          deposit_hold_status_changed_at: new Date().toISOString(),
+          deposit_hold_verified_at: new Date().toISOString(),
+        });
+      } catch (casErr: any) {
+        await recordDeadVerify({
+          outcome: "failed",
+          error_code: "rental_update_failed",
+          error_message: String(casErr?.message ?? casErr).slice(0, 500),
+          estimate_inputs: { applied: false },
+        });
+        throw casErr;
+      }
+      if (!applied) {
+        await recordDeadVerify({ estimate_inputs: { applied: false, reason: "lost_race" } });
+        return await reportLostRace(false, null);
+      }
+      await recordDeadVerify({ estimate_inputs: { applied: true } });
       console.warn(
         "[HOLD-VERIFY] Stale hold corrected on rental",
         rentalId,
@@ -436,6 +704,13 @@ Deno.serve(async (req) => {
         "is",
         piStatus + ")"
       );
+    } else if (!workerOwnsRow) {
+      // Already recorded correctly (or a 'released' we refuse to downgrade) —
+      // still a real Stripe consultation, so the clock moves.
+      await stampVerifiedAt();
+      await recordDeadVerify({ estimate_inputs: { applied: false, reason: "no_change" } });
+    } else {
+      await recordDeadVerify({ estimate_inputs: { applied: false, reason: "worker_owns_row" } });
     }
 
     const DEAD_HOLD_MESSAGES: Record<string, string> = {

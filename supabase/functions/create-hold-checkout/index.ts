@@ -19,6 +19,10 @@ import {
   isCardFeatureIneligibleError,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
+import {
+  resolveDepositAmount,
+  DEPOSIT_AMOUNT_TENANT_COLUMNS,
+} from '../_shared/deposit-amount.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 // Stripe PaymentIntent status -> the deposit_hold_status that is conclusively
@@ -81,7 +85,7 @@ Deno.serve(async (req) => {
 
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
-      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_amount_override, auto_extend_enabled, platform_account')
+      .select('id, tenant_id, customer_id, vehicle_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_amount_override, auto_extend_enabled, platform_account')
       .eq('id', rentalId)
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
@@ -99,7 +103,7 @@ Deno.serve(async (req) => {
     // Stripe config.
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount, currency_code, company_name')
+      .select(`stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name, ${DEPOSIT_AMOUNT_TENANT_COLUMNS}`)
       .eq('id', rental.tenant_id)
       .single()
     if (tenantError || !tenant) return errorResponse('Tenant not found', 404)
@@ -191,20 +195,24 @@ Deno.serve(async (req) => {
     if (!tenant.security_deposit_enabled) {
       return jsonResponse({ skipped: 'deposit_disabled_for_tenant' })
     }
-    // Per-rental override beats the tenant default — including an explicit 0,
-    // which means the operator unchecked the deposit for this rental and wants
-    // NO hold. This function previously ignored deposit_amount_override entirely
-    // and always used global_deposit_amount, so it placed a $150 hold even when
-    // the operator opted out (and got every custom override wrong too).
-    const overrideAmount = rental.deposit_amount_override !== null && rental.deposit_amount_override !== undefined
-      ? Number(rental.deposit_amount_override)
-      : null
-    const depositAmount = overrideAmount !== null
-      ? overrideAmount
-      : (Number(tenant.global_deposit_amount) || 0)
+    // Shared with place-deposit-hold (_shared/deposit-amount.ts): per-rental
+    // override → per-vehicle deposit for a scoped per_vehicle tenant → tenant
+    // global. This function used to stop at "override else global", ignoring
+    // deposit_mode entirely, so the portal's Add Hold button under-held every
+    // GMT vehicle priced above the tenant global while the automatic path held
+    // the correct amount for the same rental.
+    const deposit = await resolveDepositAmount(supabase, {
+      tenantId: rental.tenant_id,
+      tenant: tenant as any,
+      rental: rental as any,
+    })
+    const depositAmount = deposit.amount
     if (depositAmount <= 0) {
       return jsonResponse({ skipped: 'deposit_amount_is_zero' })
     }
+    console.log(
+      `create-hold-checkout: rental ${rentalId} deposit ${depositAmount} (source: ${deposit.source})`
+    )
 
     const { data: customer } = await supabase
       .from('customers')
@@ -245,6 +253,9 @@ Deno.serve(async (req) => {
           rental_id: rentalId,
           tenant_id: rental.tenant_id,
           customer_id: rental.customer_id,
+          // "Why was THIS amount authorised?" answered months later, when the
+          // tenant/vehicle figures have moved on.
+          deposit_source: deposit.source,
         },
       },
       metadata: {

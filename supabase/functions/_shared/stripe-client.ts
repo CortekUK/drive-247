@@ -152,6 +152,12 @@ export function getStripeOptions(connectAccountId: string | null): Stripe.Reques
 /**
  * payment_method_options.card for a deposit-hold PaymentIntent.
  *
+ * DEPRECATED as a direct request payload — it is only the richest rung of
+ * DEPOSIT_HOLD_CARD_VARIANTS below. Sending it without the downgrade ladder
+ * makes the whole call 500 on any Connect account not approved for these
+ * features (GMT's live account). New callers want
+ * createDepositHoldIntentWithFallback.
+ *
  * - request_extended_authorization: asks the card network to keep the hold
  *   alive up to ~30 days (Visa/Amex/Discover support it). WITHOUT this the auth
  *   expires at the network default of ~7 days — which is what silently killed
@@ -179,12 +185,27 @@ export const DEPOSIT_HOLD_CARD_OPTIONS = {
  *
  * Order matters: we keep request_extended_authorization as long as possible so
  * eligible accounts retain the ~30-day hold lifetime; only the final `null`
- * falls back to the ~7-day network default (still kept alive by the
+ * falls back to the ~5-7 day network default (still kept alive by the
  * refresh-deposit-holds cron).
+ *
+ * The third rung (multicapture ALONE) was added Aug 2026. The list previously
+ * went [{ext,mc}, {ext}, null], so an account refused the PAIR that would have
+ * been granted multicapture on its own dropped straight to no card features at
+ * all. GMT (acct_1SrIFEPcUIaEGCY0) is refused the pair; every rung that still
+ * wins something is worth trying, because each granted feature is one fewer
+ * link the chain has to survive.
+ *
+ * NOTE ON IDEMPOTENCY KEYS: callers suffix the key with the variant INDEX, so
+ * inserting a rung shifts what index 2 means. Within Stripe's 24h replay window
+ * a retry can therefore be handed the response the old index-2 (bare) attempt
+ * produced. That is benign in both directions — a cached success is a real
+ * PaymentIntent we still record, and a cached error just moves the loop on to
+ * index 3, which is a brand-new key.
  */
 export const DEPOSIT_HOLD_CARD_VARIANTS: Array<Record<string, string> | null> = [
   { request_extended_authorization: 'if_available', request_multicapture: 'if_available' },
   { request_extended_authorization: 'if_available' },
+  { request_multicapture: 'if_available' },
   null,
 ];
 
@@ -232,15 +253,153 @@ export async function createDepositHoldIntentWithFallback(
 }
 
 /**
- * Work out when a deposit-hold PaymentIntent ACTUALLY expires.
+ * How long we ASSUME an authorization lives when Stripe has not published a
+ * capture_before for it.
+ *
+ * Was 7 days, which was an over-estimate and therefore the dangerous direction.
+ * Visa's card-absent, merchant-initiated authorization window is 4d18h — with a
+ * 7-day guess plus refresh-deposit-holds' 2-day lookahead, the row is first
+ * examined roughly a day AFTER the real authorization already died, which is
+ * the silent-death mode this whole workstream exists to kill. An under-estimate
+ * costs one harmless early refresh; an over-estimate costs the deposit.
+ *
+ * Anything derived from this is stamped deposit_hold_expiry_source='fallback'
+ * so downstream code can tell a guess from Stripe's own answer.
+ */
+export const HOLD_EXPIRY_FALLBACK_DAYS = 4;
+
+export type HoldExpirySource = 'stripe_capture_before' | 'fallback';
+
+/** Everything the DB wants to know about an authorization's lifetime. */
+export interface HoldExpiryFacts {
+  /** ISO timestamp for deposit_hold_expires_at. */
+  expiresAt: string;
+  /** Whether expiresAt is Stripe's answer or our floor. Maps 1:1 to deposit_hold_expiry_source. */
+  source: HoldExpirySource;
+  /** true/false when the network told us; null when unknown (never assume "granted"). */
+  extendedAuth: boolean | null;
+  /** Raw Stripe value ('enabled' | 'disabled'), kept verbatim for the ledger. */
+  extendedAuthStatus: string | null;
+  /** Seconds the network actually granted; null when we are guessing. */
+  windowSeconds: number | null;
+}
+
+/**
+ * Read the authorization facts off the authorising charge, or null when Stripe
+ * has not published them.
+ *
+ * NEVER invents a value. Callers that need something to store can layer the
+ * fallback on top (resolveHoldExpiryDetailed); callers that must not persist a
+ * guess — verify-deposit-hold, whose whole job is reconciling against truth —
+ * use this directly and leave the stored value alone on null.
+ *
+ * Throws on transport/auth failures; a caller that cannot tolerate that should
+ * wrap it, and MUST NOT read the throw as "no deadline".
+ */
+export async function readHoldCaptureFacts(
+  stripe: Stripe,
+  paymentIntent: Stripe.PaymentIntent | Record<string, unknown>,
+  stripeOptions?: Stripe.RequestOptions
+): Promise<{
+  captureBefore: string;
+  extendedAuth: boolean | null;
+  extendedAuthStatus: string | null;
+  windowSeconds: number | null;
+} | null> {
+  const latestCharge = (paymentIntent as any).latest_charge;
+  let charge: any = latestCharge && typeof latestCharge === 'object' ? latestCharge : null;
+
+  // Callers expand latest_charge, so this second round-trip should not happen —
+  // but a bare string id here would otherwise cost us the real deadline forever.
+  if (!charge && typeof latestCharge === 'string') {
+    charge = await stripe.charges.retrieve(latestCharge, stripeOptions);
+  }
+
+  const card = charge?.payment_method_details?.card;
+  const captureBeforeUnix = card?.capture_before;
+  if (typeof captureBeforeUnix !== 'number' || captureBeforeUnix <= 0) return null;
+
+  const extendedAuthStatus = (card?.extended_authorization?.status as string | undefined) ?? null;
+  // Measure the granted window from the charge, not from now: a hold read back
+  // days later would otherwise look like it was granted a much shorter window.
+  const createdUnix = typeof charge?.created === 'number' ? charge.created : Math.floor(Date.now() / 1000);
+
+  return {
+    captureBefore: new Date(captureBeforeUnix * 1000).toISOString(),
+    extendedAuth: extendedAuthStatus === null ? null : extendedAuthStatus === 'enabled',
+    extendedAuthStatus,
+    windowSeconds: Math.max(0, captureBeforeUnix - createdUnix),
+  };
+}
+
+/**
+ * Work out when a deposit-hold PaymentIntent ACTUALLY expires, and say where
+ * that answer came from.
  *
  * Stripe surfaces the real deadline on the authorising charge as
  * `payment_method_details.card.capture_before` (unix seconds). When extended
- * authorization is granted this is ~30 days out; otherwise it's the ~7-day
- * default. We previously hardcoded +31 days everywhere, so the DB always
- * claimed the hold was alive long after Stripe had expired it. This reads the
- * truth from Stripe, expanding latest_charge when needed, and falls back to a
- * conservative 7 days if Stripe hasn't surfaced a deadline yet.
+ * authorization is granted this is ~30 days out; otherwise it's the ~5-7 day
+ * network default. We previously hardcoded +31 days everywhere, so the DB
+ * always claimed the hold was alive long after Stripe had expired it.
+ *
+ * The fallback used to be silent — the only console.warn lived in the catch, so
+ * the far more common case (Stripe simply had not published capture_before yet)
+ * produced a +7d guess that no log, and no column, distinguished from a real
+ * deadline. Both paths now log, and the caller gets the provenance so it can be
+ * persisted alongside the timestamp.
+ */
+export async function resolveHoldExpiryDetailed(
+  stripe: Stripe,
+  paymentIntent: Stripe.PaymentIntent,
+  stripeOptions?: Stripe.RequestOptions
+): Promise<HoldExpiryFacts> {
+  const piId = (paymentIntent as any)?.id ?? '(unknown)';
+  try {
+    const facts = await readHoldCaptureFacts(stripe, paymentIntent, stripeOptions);
+    if (facts) {
+      console.log(
+        `[HOLD-EXPIRY] pi=${piId} source=stripe_capture_before expires=${facts.captureBefore} ` +
+        `window=${facts.windowSeconds ? Math.round(facts.windowSeconds / 3600) : '?'}h ` +
+        `extended_auth=${facts.extendedAuthStatus ?? 'not_reported'}`
+      );
+      return {
+        expiresAt: facts.captureBefore,
+        source: 'stripe_capture_before',
+        extendedAuth: facts.extendedAuth,
+        extendedAuthStatus: facts.extendedAuthStatus,
+        windowSeconds: facts.windowSeconds,
+      };
+    }
+    console.warn(
+      `[HOLD-EXPIRY] pi=${piId} Stripe published no capture_before; ` +
+      `assuming the ${HOLD_EXPIRY_FALLBACK_DAYS}-day floor (source=fallback)`
+    );
+  } catch (err) {
+    console.warn(
+      `[HOLD-EXPIRY] pi=${piId} could not read capture_before; ` +
+      `assuming the ${HOLD_EXPIRY_FALLBACK_DAYS}-day floor (source=fallback):`,
+      err
+    );
+  }
+
+  return {
+    expiresAt: new Date(Date.now() + HOLD_EXPIRY_FALLBACK_DAYS * 86400 * 1000).toISOString(),
+    source: 'fallback',
+    extendedAuth: null,
+    extendedAuthStatus: null,
+    // Deliberately null: we do not know what the network granted, and writing
+    // the fallback's own length into deposit_hold_window_seconds would make a
+    // guess indistinguishable from a measurement.
+    windowSeconds: null,
+  };
+}
+
+/**
+ * Back-compat wrapper: same signature and return type this had before
+ * provenance was added, for callers owned by other workstreams
+ * (capture-deposit-hold, refresh-deposit-holds, sync-deposit-hold,
+ * sandbox-refresh-deposit-holds). They get the tightened 4-day floor
+ * automatically; only the provenance is dropped on the floor.
  *
  * @returns ISO timestamp string for deposit_hold_expires_at
  */
@@ -249,26 +408,59 @@ export async function resolveHoldExpiry(
   paymentIntent: Stripe.PaymentIntent,
   stripeOptions?: Stripe.RequestOptions
 ): Promise<string> {
-  try {
-    const latestCharge = (paymentIntent as any).latest_charge;
-    let charge: any = latestCharge && typeof latestCharge === 'object' ? latestCharge : null;
+  return (await resolveHoldExpiryDetailed(stripe, paymentIntent, stripeOptions)).expiresAt;
+}
 
-    if (!charge && typeof latestCharge === 'string') {
-      charge = await stripe.charges.retrieve(latestCharge, stripeOptions);
-    }
+// ---------------------------------------------------------------------------
+// Deposit-hold CHAIN bound
+//
+// Not Stripe-specific, but this is the only module both the placement path
+// (place-deposit-hold) and the reconciliation path (verify-deposit-hold)
+// already share, and the derivation MUST NOT drift between them: they both
+// write rentals.deposit_hold_chain_expires_at, which refresh-deposit-holds
+// treats as a hard stop.
+// ---------------------------------------------------------------------------
 
-    const captureBefore = charge?.payment_method_details?.card?.capture_before;
-    if (captureBefore) {
-      return new Date(captureBefore * 1000).toISOString();
-    }
-  } catch (err) {
-    console.warn('[HOLD-EXPIRY] Could not read capture_before, defaulting to 7 days:', err);
-  }
+/**
+ * How long past the rental's end date the deposit chain keeps re-authorising.
+ *
+ * PRODUCT DECISION NOT YET MADE. A chained hold has to stop somewhere, and the
+ * stopping point is a business call (how long after handback may the operator
+ * still charge for damage found later?), not an engineering one. 3 days is a
+ * deliberately conservative placeholder — it is NOT a ratified policy. Raise it
+ * here once the answer exists; nothing else keys off this number.
+ */
+export const CHAIN_GRACE_DAYS_AFTER_END = 3;
 
-  // Conservative default: standard card authorizations expire ~7 days out.
-  const fallback = new Date();
-  fallback.setDate(fallback.getDate() + 7);
-  return fallback.toISOString();
+/**
+ * The chain bound implied by a rental's CURRENT end date, or null when the
+ * rental is open-ended (rentals.end_date is nullable) — null means "no ceiling
+ * yet", which is how the refresher reads it.
+ *
+ * THIS VALUE IS A SNAPSHOT, NOT AN AUTHORITY. rentals.end_date moves whenever a
+ * rental is extended, and an extension does NOT re-run placement — so a bound
+ * frozen at placement time would terminate the chain on the ORIGINAL end date
+ * and the deposit would silently stop being renewed while the car is still out.
+ * Anything that persists this must therefore treat the stored column as a FLOOR
+ * that is re-stamped FORWARD whenever a later end date is observed (see
+ * verify-deposit-hold), and readers should prefer the live end date where they
+ * have it.
+ *
+ * Pure by design: no `now` floor is applied here, because a caller that
+ * re-stamps periodically would otherwise push the ceiling out on every call and
+ * the chain would never terminate at all. Placement applies its own floor once,
+ * deliberately.
+ */
+export function chainExpiryFromEndDate(endDate: string | null | undefined): string | null {
+  if (!endDate) return null;
+  // rentals.end_date is a DATE column, so new Date('2026-11-05') is UTC
+  // MIDNIGHT — the START of the last rental day. Anchoring the grace window
+  // there would silently cost a day, so anchor on the END of that day.
+  const dayStart = new Date(`${String(endDate).slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(dayStart.getTime())) return null;
+  return new Date(
+    dayStart.getTime() + (CHAIN_GRACE_DAYS_AFTER_END + 1) * 86_400_000 - 1
+  ).toISOString();
 }
 
 // ---------------------------------------------------------------------------

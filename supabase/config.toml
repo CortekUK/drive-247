@@ -242,3 +242,17 @@ verify_jwt = false
 # page, it writes deposit state, and it must never become callable anonymously.
 [functions.verify-deposit-hold]
 verify_jwt = true
+
+# 6-hourly sweep that reconciles EVERY non-terminal deposit hold against Stripe
+# (the fleet-wide counterpart to verify-deposit-hold's one-rental check).
+#
+# verify_jwt = false because pg_cron carries no user JWT — same reasoning as
+# inshur-reconcile above. The function itself requires the service-role key in
+# the Authorization header (constant-time compared), which is exactly what the
+# repo's cron template sends, so it is NOT anonymously callable despite the
+# gateway check being off. Deliberately not an X-Cron-Secret: the template does
+# not send one, and because net.http_post is asynchronous the resulting 401
+# would land in net._http_response and never in cron.job_run_details — the
+# schedule would look healthy while nothing was ever reconciled.
+[functions.reconcile-deposit-holds]
+verify_jwt = false
