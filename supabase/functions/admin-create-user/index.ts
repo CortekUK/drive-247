@@ -165,9 +165,49 @@ Deno.serve(async (req) => {
 
     console.log('Creating new user with tenant_id:', newUserTenantId, 'from creator tenant:', currentUserData.tenant_id, 'requested tenant:', tenant_id);
 
-    // Check if user already exists in auth by trying to list users with that email
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingAuthUser = existingUsers?.users?.find(u => u.email === email);
+    // Find any existing auth user for this address.
+    //
+    // Two bugs lived here. listUsers() is paginated and defaults to 50 per page,
+    // so past the first 50 accounts this found nobody. And the comparison was
+    // case-sensitive against a store that lowercases every address, so
+    // "Foo@x.com" never matched the stored "foo@x.com" — the function then tried
+    // to create a duplicate instead of linking the existing user.
+    const wantedEmail = email.trim().toLowerCase();
+    let existingAuthUser: { id: string; email?: string } | undefined;
+
+    for (let page = 1; page <= 20 && !existingAuthUser; page++) {
+      const { data: pageData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      });
+      if (listErr) {
+        console.error('Failed to list users:', listErr);
+        return new Response(
+          JSON.stringify({ error: 'Could not verify whether this user already exists' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const users = pageData?.users ?? [];
+      existingAuthUser = users.find((u: any) => (u.email ?? '').toLowerCase() === wantedEmail);
+      if (users.length < 200) break; // last page
+    }
+
+    // Refuse a duplicate profile in this tenant up front, case-insensitively.
+    // Without this an admin re-adding the same person silently created a second
+    // app_users row differing only by capitalisation, and the credentials modal
+    // handed out a password for whichever account happened to be created.
+    const { data: dupProfiles } = await supabaseAdmin
+      .from('app_users')
+      .select('id, email')
+      .eq('tenant_id', newUserTenantId)
+      .ilike('email', wantedEmail);
+
+    if (Array.isArray(dupProfiles) && dupProfiles.length > 0) {
+      return new Response(
+        JSON.stringify({ error: `A user with the email ${wantedEmail} already exists on this account.` }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let authUserId: string;
     let isExistingUser = false;
@@ -253,7 +293,7 @@ Deno.serve(async (req) => {
     } else {
       // Create new user in Supabase Auth
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
+        email: wantedEmail,
         password: temporaryPassword,
         email_confirm: true,
         user_metadata: {
@@ -278,7 +318,9 @@ Deno.serve(async (req) => {
       .from('app_users')
       .insert({
         auth_user_id: authUserId,
-        email,
+        // Store the normalised address. GoTrue lowercases what it holds, so a
+        // mixed-case value here only ever created a mismatch between the two.
+        email: wantedEmail,
         name,
         role,
         is_active: true,

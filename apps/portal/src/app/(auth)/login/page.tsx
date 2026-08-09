@@ -56,10 +56,7 @@ function LoginPageContent() {
   const { tenant } = useTenant();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [forgotStep, setForgotStep] = useState<"hidden" | "new-password">("hidden");
   const [resetEmail, setResetEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -267,7 +264,7 @@ function LoginPageContent() {
     }
   };
 
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     const email = form.getValues("email");
     if (!email) {
       setError("Please enter your email address first.");
@@ -280,43 +277,43 @@ function LoginPageContent() {
       return;
     }
 
+    // Send an email-verified recovery link instead of letting the visitor type a
+    // new password on the spot.
+    //
+    // This used to jump straight to a "choose a new password" step and POST it to
+    // emergency-password-reset, which performed no authorization at all — so
+    // anyone who knew a staff member's email address could set their password and
+    // take the account. Proving control of the mailbox is the whole point of a
+    // password reset.
     setResetEmail(email);
-    setNewPassword("");
-    setConfirmNewPassword("");
-    setForgotStep("new-password");
     setError("");
-  };
-
-  const handleSetNewPassword = async () => {
-    if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      setError("Passwords do not match");
-      return;
-    }
     setIsSubmitting(true);
-    setError("");
     try {
-      const { data: result, error: fnError } = await supabase.functions.invoke("emergency-password-reset", {
-        body: { email: resetEmail, tempPassword: newPassword },
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
-      if (fnError || !result?.success) {
-        setError(result?.error || fnError?.message || "Failed to reset password");
-        return;
-      }
-      toast({ title: "Password Reset", description: "Your password has been updated. Please sign in." });
-      setForgotStep("hidden");
-      setNewPassword("");
-      setConfirmNewPassword("");
-      form.setValue("email", resetEmail);
-    } catch (error) {
-      setError("An unexpected error occurred");
+      if (resetError) throw resetError;
+      // Always report success: revealing whether an address exists lets anyone
+      // enumerate staff accounts.
+      toast({
+        title: "Check your email",
+        description:
+          "If that address belongs to an account, we've sent a link to reset your password.",
+      });
+    } catch {
+      toast({
+        title: "Check your email",
+        description:
+          "If that address belongs to an account, we've sent a link to reset your password.",
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // handleSetNewPassword was removed with the "type a new password here" step.
+  // Setting a password now happens on /reset-password, which is only reachable
+  // with a valid recovery session from the emailed link.
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -360,81 +357,7 @@ function LoginPageContent() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {forgotStep === "new-password" ? (
-            <div className="space-y-4">
-              <div className="text-center space-y-2">
-                <h3 className="text-lg font-semibold">Set New Password</h3>
-                <p className="text-sm text-muted-foreground">
-                  Enter a new password for {resetEmail}
-                </p>
-              </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">New Password</label>
-                <PasswordInput
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Confirm New Password</label>
-                <PasswordInput
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  placeholder="Confirm new password"
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {newPassword.length > 0 && (
-                <div className="flex gap-3 text-xs">
-                  <span className={newPassword.length >= 8 ? "text-green-600" : "text-muted-foreground"}>
-                    {newPassword.length >= 8 ? "✓" : "○"} 8+ chars
-                  </span>
-                  <span className={/[A-Z]/.test(newPassword) ? "text-green-600" : "text-muted-foreground"}>
-                    {/[A-Z]/.test(newPassword) ? "✓" : "○"} Uppercase
-                  </span>
-                  <span className={/\d/.test(newPassword) ? "text-green-600" : "text-muted-foreground"}>
-                    {/\d/.test(newPassword) ? "✓" : "○"} Number
-                  </span>
-                </div>
-              )}
-
-              <Button
-                onClick={handleSetNewPassword}
-                disabled={isSubmitting || newPassword.length < 8 || newPassword !== confirmNewPassword}
-                className="w-full"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Resetting...
-                  </>
-                ) : (
-                  "Reset Password"
-                )}
-              </Button>
-
-              <Button
-                variant="ghost"
-                onClick={() => { setForgotStep("hidden"); setError(""); setNewPassword(""); setConfirmNewPassword(""); }}
-                className="w-full text-sm"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Sign In
-              </Button>
-            </div>
-          ) : (
+          {(
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 {error && (

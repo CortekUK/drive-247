@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>GMT Authorization Hold — Findings &amp; Plan</title>
+<style>
+  @page { size: A4; margin: 15mm 13mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #1a1a2e; font-size: 12px; line-height: 1.55; margin: 0;
+  }
+  .head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #6366f1; padding-bottom: 14px; margin-bottom: 20px;
+  }
+  .brand { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #0f172a; }
+  .brand span { color: #6366f1; }
+  .dept { font-size: 11px; color: #64748b; margin-top: 2px; letter-spacing: 0.3px; text-transform: uppercase; }
+  .meta { text-align: right; font-size: 11px; color: #64748b; line-height: 1.7; }
+  h1 { font-size: 17px; margin: 0 0 4px; color: #0f172a; }
+  .sub { color: #64748b; font-size: 12px; margin-bottom: 18px; }
+
+  h2 {
+    font-size: 12px; margin: 24px 0 10px; padding: 7px 12px; border-radius: 6px;
+    background: #0f172a; color: #fff; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  .plan {
+    border: 1px solid #c7d2fe; background: #eef2ff; border-left: 4px solid #6366f1;
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 18px;
+  }
+  .plan .pl-title { font-weight: 800; font-size: 13.5px; color: #3730a3; margin-bottom: 8px; }
+  .plan ol { margin: 0; padding-left: 20px; }
+  .plan li { margin-bottom: 7px; color: #1e1b4b; font-size: 12.5px; }
+  .plan li:last-child { margin-bottom: 0; }
+  .plan b { color: #312e81; }
+
+  .warn {
+    border: 1px solid #fecaca; background: #fef2f2; border-left: 4px solid #dc2626;
+    border-radius: 8px; padding: 13px 15px; margin-bottom: 16px;
+  }
+  .warn .w-title { font-weight: 800; font-size: 13px; color: #991b1b; margin-bottom: 5px; }
+  .warn p { margin: 5px 0 0; font-size: 11.5px; color: #450a0a; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  thead th {
+    background: #eef2ff; color: #0f172a; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.4px; text-align: left; padding: 8px 9px; border: 1px solid #e2e8f0;
+  }
+  td { padding: 9px; border: 1px solid #e9eaf0; vertical-align: top; font-size: 11.5px; }
+  td.n { text-align: center; font-weight: 800; color: #6366f1; width: 24px; }
+  tbody tr { page-break-inside: avoid; }
+
+  .badge {
+    display: inline-block; font-size: 9px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.4px; padding: 3px 7px; border-radius: 20px; white-space: nowrap;
+  }
+  .b-no      { background: #fee2e2; color: #b91c1c; }
+  .b-partial { background: #fef3c7; color: #b45309; }
+  .b-yes     { background: #dcfce7; color: #15803d; }
+
+  .item { border: 1px solid #e9eaf0; border-radius: 8px; padding: 11px 13px; margin-bottom: 9px; page-break-inside: avoid; }
+  .item-head { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+  .num { background: #0f172a; color: #fff; font-weight: 700; font-size: 10.5px; min-width: 21px; height: 21px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+  .num.red { background: #dc2626; }
+  .item-title { font-weight: 700; font-size: 12.5px; color: #0f172a; flex: 1; }
+  .item p { margin: 4px 0 0; font-size: 11.5px; color: #334155; }
+
+  .q { border: 1px solid #e9eaf0; border-left: 3px solid #d97706; border-radius: 6px;
+       padding: 10px 12px; margin-bottom: 8px; background: #fffbeb; page-break-inside: avoid; }
+  .q b { color: #0f172a; display: block; margin-bottom: 3px; font-size: 12px; }
+  .q p { margin: 0; font-size: 11.5px; color: #451a03; }
+
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 11px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .quote { font-style: italic; color: #475569; }
+  .muted { color: #64748b; }
+  .footer { margin-top: 26px; padding-top: 11px; border-top: 1px solid #e2e8f0; font-size: 9.5px; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <div>
+      <div class="brand">Drive<span>-247</span></div>
+      <div class="dept">Technical Department</div>
+    </div>
+    <div class="meta">
+      <div><b>Subject:</b> GMT — Authorization Hold</div>
+      <div><b>Date:</b> 7 August 2026</div>
+      <div><b>Ref:</b> Findings &amp; Implementation Plan</div>
+    </div>
+  </div>
+
+  <h1>Global Motion Transport — 90-Day Authorization Hold</h1>
+  <div class="sub">
+    Findings from a full audit of the deposit-hold system, the Visa rulebook, and Stripe's
+    authorization products — plus the plan we propose.
+  </div>
+
+  <div class="plan">
+    <div class="pl-title">The plan, in two lines</div>
+    <ol>
+      <li><b>Keep the hold alive by re-placing it before each expiry.</b> A scheduled job cancels the
+        expiring authorization and places a fresh one on the same card, so coverage rolls forward for
+        the full 90+ days. The network ceiling is 30 days at best, and GMT's account currently looks
+        closer to a week — so a 90-day rental means somewhere between 4 and 18 of these cycles, each one
+        a fresh chance for the card to decline. <b>But we fix one bug first</b> — today, cancelling a
+        hold cancels the entire rental, and the chain would trigger that every few days.</li>
+      <li><b>Change what the hold is <em>for</em>.</b> It covers <b>unpaid rent</b> — which the card
+        rules permit — and <b>not damage</b>, which they forbid at any duration. The rental agreement is
+        updated to tell the renter the hold will be re-placed. Damage is meant to move to a paid damage
+        waiver, but that is <b>not in the schedule below</b>: selling one involves state licensing rules
+        and price caps we have not checked, and Bonzah's agreement to it. Until it exists, GMT recovers
+        damage only by an after-the-fact claim — see decision 3.</li>
+    </ol>
+  </div>
+
+  <h2>What we found</h2>
+
+  <p style="margin-top:0">
+    Two things, and the second was a surprise.
+  </p>
+
+  <div class="item">
+    <div class="item-head"><div class="num">1</div><div class="item-title">A single authorization can never exceed 30 days — but chaining them is legitimate</div></div>
+    <p>
+      Confirmed from Stripe's documentation and Visa's own published rules directly: the ceiling is 30
+      days on every network (Visa is exactly 29 days 18 hours; Mastercard, Amex and Discover 30). That
+      ceiling is set by the card networks, not by Stripe, so no processor can compliantly offer a 90-day
+      hold. <b>However, nothing prohibits chaining, and the rules assume it.</b> Visa caps a vehicle
+      rental authorization at 30 days and separately requires a merchant to release it once that period
+      ends — so a rental longer than 30 days can only be covered by a sequence of authorizations, and
+      Visa's merchant guidance for extended rentals describes exactly that: close the original within
+      its validity period and request a new one. So GMT can have 90 days of continuous coverage; they
+      cannot have one unbroken 90-day hold. <b>We already have this mechanism built</b> — it just isn't
+      reliable enough to run it 4 to 18 times per rental.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><div class="num red">2</div><div class="item-title">The real constraint is not duration — it is what the hold is allowed to cover</div></div>
+    <p>
+      We downloaded the <b>Visa Core Rules and Product &amp; Service Rules, 18 April 2026 edition</b>
+      and read it directly. Rule <b>5.7.2.4</b> states an estimated authorization
+      <span class="quote">"does not include any amount covering potential damage, theft, other delayed
+      charges, insurance premiums, or tips."</span> Rule <b>5.8.8.4</b> — the Vehicle Rental Merchant
+      Asset Protection Program, which exists <em>specifically</em> to let rental companies over-authorize
+      <span class="quote">"to protect them from potential losses associated with extended rental
+      periods"</span> — repeats that the request
+      <span class="quote">"must not include an amount to cover for potential damage, theft, or other
+      delayed charge."</span>
+    </p>
+    <p>
+      <b>So a compliant card hold for damage does not exist at 90 days, at 30 days, or at 7 days.</b>
+      This is a live exposure today, independent of duration. Corroborated independently: SIXT's own
+      help centre states their deposit <span class="quote">"does not cover damage claims"</span> and
+      routes damage to a protection package instead.
+    </p>
+    <p class="muted">
+      Visa's sanctioned route for damage is a <b>delayed charge within 90 calendar days of the rental
+      return</b>, with documentation, a repair quote, the renter's right to an alternative estimate,
+      and a 20-business-day wait. The 90 days GMT wants does exist in the rules — on the other side of
+      the rental.
+    </p>
+  </div>
+
+  <h2>Verdicts on the four proposed solutions</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:24px">#</th>
+        <th style="width:145px">Proposal</th>
+        <th style="width:88px">Verdict</th>
+        <th>What we do</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="n">1</td>
+        <td><b>Stripe configuration change</b> to lengthen the hold</td>
+        <td><span class="badge b-no">Impossible</span><br><span class="muted" style="font-size:10px">as stated</span></td>
+        <td>
+          No setting produces 90 days; the ceiling is 30. Worth knowing <em>why</em> GMT is on ~7 days
+          today: extended authorization is an <b>interchange-plus pricing feature</b>, not a country or
+          risk restriction (Stripe: "no regional restrictions"). Two levers on our side cost nothing to
+          try — a fallback in our own code that gives up too early, and an industry category Stripe
+          guessed for GMT because we never set one. Vehicle rental is the favoured category on every
+          network: it is the only way to qualify at all on Amex and Discover, and on Visa it avoids both
+          a small per-transaction surcharge and a restriction that would exclude the way we place these
+          holds. Whether Stripe will let us change it is one of the ticket questions.
+        </td>
+      </tr>
+      <tr>
+        <td class="n">2</td>
+        <td><b>Raise a Stripe support ticket</b></td>
+        <td><span class="badge b-partial">Partial</span><br><span class="muted" style="font-size:10px">best case 30d</span></td>
+        <td>
+          File it — it blocks nothing and runs in parallel. But the best possible outcome is 30 days,
+          not 90. It is likely a <b>commercial pricing conversation</b> rather than a risk approval,
+          and if eligibility is assessed at platform level it could unlock all 28 tenants at once.
+          It only changes how <em>many</em> links we need — 4 or 5 instead of 13 to 18.
+        </td>
+      </tr>
+      <tr>
+        <td class="n">3</td>
+        <td><b>Application-level refresh job</b> that re-authorizes before expiry</td>
+        <td><span class="badge b-yes">Correct</span><br><span class="muted" style="font-size:10px">this is the plan</span></td>
+        <td>
+          This was the right instinct and it is the core of the plan. It already exists in our platform.
+          The work is making it survive a decline, and rebasing what it holds. See the defects below.
+        </td>
+      </tr>
+      <tr>
+        <td class="n">4</td>
+        <td><b>Direct "charge the card" action</b> instead of emailing links</td>
+        <td><span class="badge b-yes">Works</span><br><span class="muted" style="font-size:10px">easy win</span></td>
+        <td>
+          Correct, and cheaper than expected — off-session card charging already runs in production for
+          installments and auto-extensions. Only the staff-facing button is missing. Note the portal's
+          current "Charge via Stripe" button does <b>not</b> charge; it opens a payment link, and needs
+          renaming.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Defects that must be fixed before the chain runs</h2>
+
+  <div class="warn">
+    <div class="w-title">Going from 1 cancellation per rental to an estimated 13–18 turns two latent bugs into routine events</div>
+    <p>
+      The chained design is safe. The code it would run on is not — yet. These two are ship-blocking and
+      are roughly a day of work.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><div class="num red">A</div><div class="item-title">Cancelling a hold cancels the entire rental</div></div>
+    <p>
+      Our payment webhook reacts to a cancelled authorization by marking the payment refunded and then
+      setting the rental's status to <b>Cancelled</b> — with no check on whether the rental is live. On
+      any hold that has a payment record attached — which is exactly what defect B below creates — a
+      routine nightly re-authorization on a 90-day rental would flip it to Cancelled mid-term: the
+      vehicle could be re-listed, billing stops, revenue is reversed, and nobody would know why. Present
+      in all three webhook files.
+    </p>
+  </div>
+
+  <div class="item">
+    <div class="item-head"><div class="num red">B</div><div class="item-title">Holds placed via the portal button are booked as captured revenue</div></div>
+    <p>
+      A hold created through the "Add Hold" checkout is misclassified by the webhook as a completed
+      payment. It marks the rental as paid, writes a payment record for the full amount that was never
+      actually captured, and allocates it against real rent. Collected revenue is overstated, balances
+      zero out, and payment reminders stop. Under the new design — where the hold legitimately
+      <em>is</em> anticipated rent — this looks plausible, which makes it far harder to spot.
+    </p>
+  </div>
+
+  <p style="font-size:11.5px">
+    The full audit registered <b>86 edge cases</b> across the Stripe lifecycle, card and customer
+    changes, rental lifecycle, amounts, infrastructure, compliance, reconciliation and customer
+    experience. They are documented with handling in
+    <code>docs/GMT_CHAINED_HOLD_SPEC.md</code>.
+  </p>
+
+  <h2>How we roll it out</h2>
+
+  <table>
+    <thead>
+      <tr><th style="width:82px">Stage</th><th style="width:150px">What lands</th><th>Why in this order</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><b>Today</b></td><td>Verify five facts</td><td>Above all: is the refresh job even running? Nothing in our setup records that it was ever switched on, and it was silently never scheduled once before — discovered via five dead GMT holds. Today also settles the 13–18 figure, which is inferred from Stripe's published windows rather than measured on GMT's account.</td></tr>
+      <tr><td><b>Gate 0</b><br><span class="muted">day 1</span></td><td>Disarm defects A and B</td><td>Several later fixes create more payment records tied to holds. Each is a rental-cancellation trigger until this lands. <b>Nothing else ships first.</b></td></tr>
+      <tr><td><b>Gate 1</b><br><span class="muted">week 1</span></td><td>Lock each hold to the Stripe account it was created on</td><td>Otherwise the card-update fixes write a UAE payment method onto a UK-anchored hold.</td></tr>
+      <tr><td><b>Gate 2</b><br><span class="muted">week 1–2</span></td><td>Make the chain survive a decline — retries, error handling, alerting</td><td>Running the current code more often multiplies the existing failure modes. This is the milestone where GMT is genuinely protected.</td></tr>
+      <tr><td><b>Gate 3</b><br><span class="muted">week 2–3</span></td><td>Switch the hold over to covering unpaid rent</td><td>The money handling has to be corrected first, so that taking money from a hold actually clears the renter's outstanding rent instead of leaving it open.</td></tr>
+      <tr><td><b>Gate 4</b><br><span class="muted">week 3</span></td><td>Agreement disclosure</td><td>Must precede the <b>first</b> rebased hold, not follow it. Card rules require telling the renter the amount and that further authorizations will follow.</td></tr>
+      <tr><td><b>Not scheduled</b></td><td>Damage waiver</td><td>Blocked on decisions 3 and 4, and on legal and Bonzah sign-off. Between Gate 3 and this landing, GMT has no damage recovery except an after-the-fact claim.</td></tr>
+      <tr><td><b>Gate 5–6</b><br><span class="muted">week 3–4</span></td><td>Reconciler, operator screens, then GMT-only rollout</td><td>Stripe becomes the source of truth; the operator can finally see the chain's health.</td></tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:11.5px; margin-top:10px">
+    <b>Nothing is blocked on Stripe.</b> Every change ships behind a GMT-only flag first — these
+    functions move real money for 28 tenants.
+  </p>
+
+  <h2>Decisions we need</h2>
+
+  <div class="q">
+    <b>1. URGENT — the UAE migration and GMT now collide.</b>
+    <p>
+      A Stripe authorization, customer and saved card <b>cannot move between platform accounts</b>. With
+      60–120 day rentals starting before the previous one ends, GMT's migration readiness check will
+      essentially never go green — and it is currently bypassable by a "Flip anyway" button in the admin
+      panel. <b>The UAE migration owner needs to know GMT is now a 120-day problem</b>, before a flip
+      strands live holds. This is the most time-sensitive item in this document.
+    </p>
+  </div>
+
+  <div class="q">
+    <b>2. What may the hold cover, precisely? (needs counsel)</b>
+    <p>
+      Unpaid and anticipated <b>rent</b> is unambiguously permitted — it is what the renter will
+      genuinely spend. Fuel, mileage overage and late-return fees are arguably <em>delayed charges</em>,
+      which the same rules exclude. We are building to <b>rent only</b> until this is answered, because
+      putting the others into a documented formula would make a violation provable from our own code.
+    </p>
+  </div>
+
+  <div class="q">
+    <b>3. Will GMT run a damage-claims process?</b>
+    <p>
+      Taking damage out of the hold removes the only recovery mechanism that exists today. If GMT will
+      not run claims, damage recovery is limited to the waiver plus a fleet insurance policy — a pricing
+      decision about who absorbs small claims, not an engineering gap.
+    </p>
+  </div>
+
+  <div class="q">
+    <b>4. Which state does GMT operate in, and is a 90-day rental one agreement or chained 30-day extensions?</b>
+    <p>
+      Their state is currently inferred from an old marketing script, not their tenant record. New York
+      bans card deposits for damage outright on agreements of 30 days or less — so chaining short
+      extensions could pull every segment <em>inside</em> a rule that a single long agreement sits
+      outside. Only GMT can tell us how they paper these.
+    </p>
+  </div>
+
+  <div class="q">
+    <b>5. Does GMT accept debit cards on rentals over 30 days?</b>
+    <p>
+      Each cycle releases one authorization and requests another, and how fast a release clears is the
+      renter's bank's decision, not ours — so two pending items for the same rental will routinely be
+      visible at once. On a credit card that is confusing; on a debit card it is money the renter
+      genuinely cannot spend, up to 18 times over a 90-day rental. Clearer wording on the statement and a
+      notification per cycle reduce it; nothing we can build removes it. Our audit rates this the most
+      likely source of "I don't recognise this charge" disputes.
+    </p>
+  </div>
+
+  <div class="footer">
+    Drive-247 Technical Department &nbsp;·&nbsp; Prepared 7 August 2026 &nbsp;·&nbsp;
+    Sources: Visa Core Rules &amp; Product and Service Rules (18 April 2026, read directly), Visa's
+    published merchant guidance on estimated and incremental authorizations, Stripe documentation,
+    and a full audit of the Drive247 deposit-hold code.
+    Engineering detail: <code>docs/GMT_CHAINED_HOLD_SPEC.md</code> ·
+    <code>docs/GMT_AUTH_HOLD_90DAY_PLAN.md</code>
+  </div>
+
+</body>
+</html>
