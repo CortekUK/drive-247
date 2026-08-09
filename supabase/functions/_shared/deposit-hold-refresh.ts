@@ -75,6 +75,7 @@ import {
 } from "./stripe-client.ts";
 import {
   notifyDepositHoldFailure,
+  notifyDepositHoldOrphanedAuthorization,
   type DepositHoldMoneyState,
 } from "./deposit-hold-notify.ts";
 
@@ -1171,22 +1172,79 @@ export async function refreshOneHold(
 
   /**
    * What is true of the renter's money on the paths that have NOT yet cancelled
-   * the incumbent.
+   * the incumbent — ASKED OF STRIPE, never read off the row.
    *
-   * 'live' is asserted ONLY when the row itself records a live authorization —
-   * status 'held', a PaymentIntent present, and a stored deadline that has not
-   * passed — and nothing in this pass has touched it. A 'failed' row's
-   * PaymentIntent is NOT evidence (that is exactly the conflation that made the
-   * first version of the alert lie), and neither is a 'held' row whose
-   * authorization has already run out of time. Anything short of that is
-   * 'unknown', which prints no claim at all.
+   * This used to be a pure row inference: 'held' + a PaymentIntent id + a stored
+   * `deposit_hold_expires_at` in the future => "still live". Every one of those
+   * three is unreliable evidence:
+   *
+   *   * the stored deadline is frequently an ADMITTED GUESS — readHoldWindow
+   *     writes `deposit_hold_expiry_source = 'fallback'` when Stripe published
+   *     no `capture_before` — and HOLD_REFRESH_COLUMNS selects neither the
+   *     source nor `deposit_hold_verified_at`, so the inference could not even
+   *     tell a verified deadline from a fabricated one;
+   *   * 'held' is written by several paths and is exactly the status a lapsed,
+   *     captured or disputed authorization keeps until somebody looks;
+   *   * worst, the `customer_missing` exit below is reached PRECISELY when the
+   *     Stripe customer does not exist on the anchored account — i.e. the best
+   *     evidence in the whole engine that this record is anchored at the wrong
+   *     account — and the inference answered that with "the deposit is still
+   *     live". Compare the `resource_missing` exit, which correctly refuses to
+   *     claim anything.
+   *
+   * So: one `paymentIntents.retrieve` on the account the record is anchored to,
+   * and 'live' ONLY for a PaymentIntent Stripe itself reports as
+   * `requires_capture` with a capture deadline that has not passed. Everything
+   * else — no PaymentIntent, a retrieve that failed, any other status, a
+   * `capture_before` in the past — is 'unknown', and 'unknown' prints NO claim
+   * about the money at all.
+   *
+   * Deliberately NOT 'unsecured' on a canceled/failed PaymentIntent either: an
+   * untracked orphan from an earlier attempt can be holding the renter's funds
+   * (that is why findLiveDepositIntent exists), and telling an operator to
+   * re-place a hold on a card that is already authorized is the mirror harm.
+   *
+   * Called ONLY from the pre-cancel failure exits, so the extra Stripe call is
+   * paid on the rare bad path and never on a healthy refresh. Memoised because
+   * an exit could in principle ask twice; non-throwing by construction.
    */
-  const incumbentMoneyState: DepositHoldMoneyState =
-    incumbentPi &&
-      startingStatus === "held" &&
-      (!storedExpiresAt || new Date(storedExpiresAt).getTime() > now.getTime())
-      ? "live"
-      : "unknown";
+  let incumbentProbe: DepositHoldMoneyState | null = null;
+  const confirmIncumbentLive = async (): Promise<DepositHoldMoneyState> => {
+    if (incumbentProbe !== null) return incumbentProbe;
+    incumbentProbe = "unknown";
+    if (!incumbentPi) return incumbentProbe;
+    try {
+      const pi = await stripe.paymentIntents.retrieve(
+        incumbentPi,
+        { expand: ["latest_charge"] },
+        stripeOptions
+      );
+      if (String(pi?.status) === "requires_capture") {
+        // deno-lint-ignore no-explicit-any
+        const charge: any = (pi as any)?.latest_charge;
+        const captureBefore = typeof charge === "object"
+          ? charge?.payment_method_details?.card?.capture_before
+          : null;
+        const deadlinePassed = typeof captureBefore === "number" &&
+          captureBefore > 0 &&
+          captureBefore * 1000 <= now.getTime();
+        // A `requires_capture` PaymentIntent whose capture window has already
+        // closed is not money anybody can take; Stripe's status lags the
+        // network here. Say nothing rather than "still live".
+        if (!deadlinePassed) incumbentProbe = "live";
+      }
+    } catch (probeErr) {
+      // Never throws, never changes the outcome — the alert simply makes no
+      // claim about the money. Reaching here on `resource_missing` is itself
+      // meaningful (the id is not on this account), and 'unknown' is the honest
+      // answer to that too.
+      console.warn(
+        `${log} ${rentalId}: could not confirm incumbent ${incumbentPi} at Stripe ` +
+          `(${stripeErrorCode(probeErr)}) — the alert will make no claim about the deposit`
+      );
+    }
+    return incumbentProbe;
+  };
 
   /** One bell, at most, per call of refreshOneHold. */
   const alertFailure = async (args: {
@@ -1198,6 +1256,15 @@ export async function refreshOneHold(
     moneyStatement?: string | null;
     detail?: string | null;
     failureClass?: FailureClass | null;
+    /**
+     * Only needed by callers that pass NO patch: without one the helper would
+     * fall back to the row's `deposit_hold_last_error*` / `_failure_count`,
+     * which on those paths are the PREVIOUS attempt's values and would describe
+     * the wrong failure.
+     */
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    failureCount?: number | null;
   }): Promise<void> => {
     await notifyDepositHoldFailure({
       rental,
@@ -1206,6 +1273,9 @@ export async function refreshOneHold(
       result: args.result,
       message: args.message,
       failureClass: args.failureClass ?? null,
+      errorCode: args.errorCode ?? null,
+      errorMessage: args.errorMessage ?? null,
+      failureCount: args.failureCount ?? null,
       moneyState: args.moneyState,
       moneyStatement: args.moneyStatement ?? null,
       detail: args.detail ?? null,
@@ -1317,6 +1387,27 @@ export async function refreshOneHold(
    */
   let unrecordedIntentId: string | null = null;
 
+  /**
+   * WHY the compensating cancel did not happen, in the operator's words.
+   *
+   * `cancelUnrecorded` returning true covers two genuinely different situations
+   * and the human who has to go and look needs to know which: we could not
+   * CONFIRM the id was still unrecorded (so it may be perfectly fine — the
+   * winner may have recorded this very authorization), versus we confirmed it
+   * was unrecorded and the cancel itself failed (so it is almost certainly
+   * sitting on the renter's card). Set by cancelUnrecorded, read by the orphan
+   * bell below.
+   */
+  let unrecordedCleanupFailure: string | null = null;
+
+  /**
+   * The id we could not clean up. `unrecordedIntentId` is cleared the moment
+   * cancelUnrecorded runs, so without this the outer catch — which only sees the
+   * boolean — could tell an operator that "a replacement could not be cancelled"
+   * without being able to say WHICH one, which is an alert nobody can act on.
+   */
+  let strandedIntentId: string | null = null;
+
   const cancelUnrecorded = async (reason: string): Promise<boolean> => {
     if (!unrecordedIntentId) return false;
     const id = unrecordedIntentId;
@@ -1349,6 +1440,10 @@ export async function refreshOneHold(
         `${log} ${rentalId}: could not confirm ${id} is unrecorded (${reason}); leaving it for the reconciler rather than risking a live hold:`,
         probeErr
       );
+      unrecordedCleanupFailure =
+        "we could not re-read the rental to confirm the authorization was unclaimed, so it was left " +
+        "alone rather than risk cancelling a hold somebody else had just recorded";
+      strandedIntentId = id;
       return true;
     }
 
@@ -1358,8 +1453,47 @@ export async function refreshOneHold(
       return false;
     } catch (err) {
       console.error(`${log} ${rentalId}: ORPHANED authorization ${id} — ${reason}; cancel failed:`, err);
+      unrecordedCleanupFailure = `cancelling it at Stripe failed (${stripeErrorCode(err)})`;
+      strandedIntentId = id;
       return true;
     }
+  };
+
+  /**
+   * THE BELL FOR THE WORST OUTCOME IN THE ENGINE.
+   *
+   * A replacement authorization exists at Stripe, the rental does not point at
+   * it, and the compensating cancel did not happen. Nothing downstream can find
+   * it: the ledger link is closed 'orphaned', so reconcile-deposit-holds' stale
+   * sweep (which selects `outcome = 'pending'`) skips it, and its
+   * `superseded_pi_id` sweep cannot see it either — this orphan is the
+   * REPLACEMENT, carried in `payment_intent_id`. So the renter's funds can sit
+   * frozen indefinitely with nobody told.
+   *
+   * Both `lost_race` exits that can produce this used to return in silence. The
+   * driver does not help: it classifies `lost_race` as a correct outcome, so it
+   * is neither counted in `failed` nor pushed into `errors[]`, and the only
+   * trace was a console.error nobody reads.
+   *
+   * Alerting ONLY — this writes no `deposit_hold_status`, on purpose: the row
+   * belongs to whoever won the race and their state is the correct one.
+   * Non-throwing, like everything else on this path.
+   */
+  const alertOrphanedAuthorization = async (intentId: string, reason: string): Promise<void> => {
+    await notifyDepositHoldOrphanedAuthorization({
+      rental,
+      paymentIntentId: intentId,
+      reason,
+      cleanupFailure: unrecordedCleanupFailure,
+      amountCents: amountKnown ? amountCents : null,
+      currency,
+      connectAccountId,
+      stripeMode,
+      attemptSeq,
+      result: "lost_race",
+      source: actor,
+      supabase,
+    });
   };
 
   /** finish() for an outcome that CARRIES the new PaymentIntent id. */
@@ -1383,6 +1517,14 @@ export async function refreshOneHold(
     }
     // The row moved, so the id we just created landed nowhere.
     const orphaned = await cancelUnrecorded("row changed owner before the replacement could be recorded");
+    if (orphaned) {
+      // A LIVE authorization on a real card that no rental, no screen and no
+      // reconciler sweep points at. This used to return in silence.
+      await alertOrphanedAuthorization(
+        intentId,
+        "another worker took the rental before the authorization could be recorded"
+      );
+    }
     return {
       ...outcome,
       message: orphaned
@@ -1434,10 +1576,10 @@ export async function refreshOneHold(
         },
         "needs_review",
         "deposit amount unknown — incumbent left alone and flagged for review",
-        // Nothing here touched Stripe, so whatever the row recorded still
-        // stands: 'live' only if the row actually evidenced a live, unexpired
-        // authorization, 'unknown' otherwise.
-        { money: incumbentMoneyState }
+        // Nothing here cancelled anything, so the incumbent stands as Stripe
+        // reports it — which is the only thing we will repeat. The row's own
+        // 'held' + stored expiry is not evidence (see confirmIncumbentLive).
+        { money: await confirmIncumbentLive() }
       );
     }
 
@@ -1528,8 +1670,13 @@ export async function refreshOneHold(
         },
         "needs_review",
         "no usable Stripe customer on the anchored account",
-        // Pre-cancel: the incumbent has not been touched.
-        { money: incumbentMoneyState }
+        // Pre-cancel: the incumbent has not been touched. But this exit is
+        // reached BECAUSE the customer is missing on the anchored account, which
+        // is the strongest hint in the engine that the record is anchored wrong
+        // — so the row's own claim of a live hold is worth nothing here. Ask
+        // Stripe on that same account: if the PaymentIntent is not there either,
+        // the probe fails and the bell says nothing, which is correct.
+        { money: await confirmIncumbentLive() }
       );
     }
 
@@ -1556,8 +1703,9 @@ export async function refreshOneHold(
         },
         "requires_action",
         "no usable card on file — customer action required",
-        // Pre-cancel: we never reached the incumbent, so it stands as recorded.
-        { money: incumbentMoneyState }
+        // Pre-cancel: we never reached the incumbent, so it stands as STRIPE
+        // reports it — "as recorded" was the bug.
+        { money: await confirmIncumbentLive() }
       );
     }
     // Non-null from here; reassigned only when a dead card forces one
@@ -1612,7 +1760,12 @@ export async function refreshOneHold(
               deposit_hold_next_retry_at: null,
             },
             "needs_review",
-            "incumbent PaymentIntent not found on the anchored account — not re-authorizing"
+            "incumbent PaymentIntent not found on the anchored account — not re-authorizing",
+            // The id we hold does not exist on this account. That is neither
+            // proof the renter is secured nor proof they are not (the
+            // authorization may live on another account entirely, which is what
+            // the UK->UAE move makes possible), so the bell makes no claim.
+            { money: "unknown" }
           );
         }
 
@@ -1644,7 +1797,10 @@ export async function refreshOneHold(
               deposit_hold_next_retry_at: null,
             },
             "needs_review",
-            `incumbent is ${piStatus} — refusing to place a second authorization`
+            `incumbent is ${piStatus} — refusing to place a second authorization`,
+            // In motion: not capturable right now, but it may yet become a live
+            // authorization. Both "secured" and "unsecured" would be a guess.
+            { money: "unknown" }
           );
         }
         // canceled / requires_payment_method — already dead, carry on.
@@ -1679,8 +1835,26 @@ export async function refreshOneHold(
         { ...(stripeOptions ?? {}), idempotencyKey: key }
       );
 
-    // deno-lint-ignore no-explicit-any
-    const recordFailure = async (err: any, note?: string): Promise<RefreshOutcome> => {
+    const recordFailure = async (
+      // deno-lint-ignore no-explicit-any
+      err: any,
+      note?: string,
+      alertOpts: {
+        /**
+         * Overrides the per-error derivation below. Pass 'unknown' from any site
+         * that reached here WITHOUT ruling out a live authorization.
+         */
+        money?: DepositHoldMoneyState;
+        /**
+         * One extra sentence on the bell only, and DELIBERATELY only on the
+         * dead-end arms — the auto-recovering arm ('failed' with a scheduled
+         * retry) says "no action needed", and appending "go and check Stripe"
+         * to that both contradicts it and asks staff to do work the next
+         * attempt's orphan sweep does by itself.
+         */
+        alertDetail?: string | null;
+      } = {}
+    ): Promise<RefreshOutcome> => {
       const failureClass = classifyStripeFailure(err);
       const code = stripeErrorCode(err);
       const message = `${String(err?.message ?? err)}${note ? ` (${note})` : ""}`;
@@ -1702,27 +1876,71 @@ export async function refreshOneHold(
         deposit_hold_stripe_customer_id: customerId,
       };
 
+      // ── What we may SAY about the money. Per call site, not per family. ────
+      //
+      // This was a flat 'unsecured' for the whole family, on the reasoning that
+      // every exit here is post-cancel and `base` nulls the PaymentIntent. The
+      // first half is true; the second is about the ROW, not about Stripe. Two
+      // shapes of arrival leave a live authorization we cannot see:
+      //
+      //   * the orphan probe THREW — we came here precisely because we could
+      //     NOT rule out an untracked live authorization (it passes 'unknown');
+      //   * a create that failed WITHOUT a decision from Stripe — a connection
+      //     reset, a timeout, a 5xx. That is the lost-response case this engine
+      //     documents at findLiveDepositIntent: Stripe may well have accepted
+      //     the create and be holding the renter's funds under an id we never
+      //     received.
+      //
+      // 'unsecured' is therefore claimed ONLY when the issuer/Stripe gave us an
+      // actual verdict on the card — a decline, a dead card, an SCA demand. In
+      // all of those no authorization was created, so the renter genuinely is
+      // uncovered and saying so is what gets the deposit re-placed.
+      //
+      // This matters because the ambiguous / exhausted arms below tell staff to
+      // "re-place the hold on a working card": doing that on a card that is
+      // already authorized double-authorizes a real renter, which is the harm
+      // this helper's own docblock names.
+      const money: DepositHoldMoneyState = alertOpts.money ??
+        (failureClass === "transient" || failureClass === "ambiguous"
+          ? "unknown"
+          : "unsecured");
+      // Only for the DEAD-END arms. The auto-recovering arm deliberately gets
+      // no such note: it comes straight back, and the next attempt runs the
+      // orphan sweep (findLiveDepositIntent, gated on priorFailures > 0) which
+      // adopts exactly the authorization we are unsure about. Sending staff to
+      // audit Stripe for something the engine is about to reconcile itself is
+      // how an alert channel earns its mute.
+      const unknownMoneyNote = alertOpts.alertDetail ??
+        (money === "unknown"
+          ? "We could not confirm with Stripe whether an authorization was created for this attempt, " +
+            "so this alert makes no claim about the renter's deposit — check the rental against Stripe " +
+            "before placing another hold on their card."
+          : null);
+
       // SCA cannot be solved server-side: an off-session authorization needs the
       // cardholder present. Straight to 'requires_action', no attempts burned.
       if (failureClass === "sca") {
         return await finish(
           { ...base, deposit_hold_status: "requires_action", deposit_hold_next_retry_at: null },
           "requires_action",
-          `authentication required — ${message}`
+          `authentication required — ${message}`,
+          { money, failureClass, alertDetail: unknownMoneyNote }
         );
       }
       if (failureClass === "dead_card") {
         return await finish(
           { ...base, deposit_hold_status: "requires_action", deposit_hold_next_retry_at: null },
           "requires_action",
-          `card unusable (${code}) — ${message}`
+          `card unusable (${code}) — ${message}`,
+          { money, failureClass, alertDetail: unknownMoneyNote }
         );
       }
       if (failureClass === "ambiguous") {
         return await finish(
           { ...base, deposit_hold_status: "needs_review", deposit_hold_next_retry_at: null },
           "needs_review",
-          `unclassified Stripe failure (${code}) — ${message}`
+          `unclassified Stripe failure (${code}) — ${message}`,
+          { money, failureClass, alertDetail: unknownMoneyNote }
         );
       }
       if (failureCount >= MAX_HOLD_ATTEMPTS) {
@@ -1731,14 +1949,19 @@ export async function refreshOneHold(
         return await finish(
           { ...base, deposit_hold_status: "needs_review", deposit_hold_next_retry_at: null },
           "needs_review",
-          `gave up after ${failureCount} attempts (${code}) — ${message}`
+          `gave up after ${failureCount} attempts (${code}) — ${message}`,
+          { money, failureClass, alertDetail: unknownMoneyNote }
         );
       }
       const retryAt = computeRetryAt(failureClass, priorFailures, storedExpiresAt, now);
+      // The only AUTO-RECOVERING exit in this family: 'failed' WITH a scheduled
+      // retry. The alert is a warning that names the retry time and says no
+      // action is needed — the distinction that keeps the channel worth reading.
       return await finish(
         { ...base, deposit_hold_status: "failed", deposit_hold_next_retry_at: retryAt },
         "failed",
-        `${failureClass} failure (${code}); retrying after ${retryAt} — ${message}`
+        `${failureClass} failure (${code}); retrying after ${retryAt} — ${message}`,
+        { money, failureClass }
       );
     };
 
@@ -1774,9 +1997,21 @@ export async function refreshOneHold(
       } catch (probeErr) {
         // FAIL SAFE, NEVER OPEN: we could not rule out a live orphan, so we do
         // NOT create a second authorization. The retry ladder brings us back.
+        //
+        // And the bell must say the same thing the code just said. "We could not
+        // rule out a live authorization" and "the renter is unsecured" cannot
+        // both be true; the earlier flat 'unsecured' printed the second while
+        // the branch existed only because of the first.
         return await recordFailure(
           probeErr,
-          "could not check Stripe for an untracked authorization — refusing to create a second one"
+          "could not check Stripe for an untracked authorization — refusing to create a second one",
+          {
+            money: "unknown",
+            alertDetail:
+              "We could not reach Stripe to check whether an earlier attempt already left a live " +
+              "authorization on this card, so no replacement was placed and this alert makes no claim " +
+              "about the deposit. Check the renter's card at Stripe before placing another hold.",
+          }
         );
       }
 
@@ -1839,7 +2074,20 @@ export async function refreshOneHold(
             },
             "needs_review",
             `untracked live authorization ${orphan.id} in a different amount — refusing to double-authorize`,
-            { paymentIntentId: orphan.id }
+            {
+              paymentIntentId: orphan.id,
+              // A CONFIRMED capturable authorization — findLiveDepositIntent
+              // only ever returns 'requires_capture' — but for a different
+              // amount than this rental's deposit. Both "secured" and
+              // "unsecured" would mislead, so the sentence is written out.
+              money: "live",
+              moneyStatement:
+                `The renter's card IS still authorized, under ${orphan.id}, but for ` +
+                `${(Number(orphan.amount) / 100).toFixed(2)} ${String(orphan.currency ?? "").toUpperCase()} — ` +
+                `not this rental's ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()} deposit. ` +
+                `The previous authorization is gone and this rental now points at the one actually holding ` +
+                `funds; no second hold was placed.`,
+            }
           );
         }
       }
@@ -1854,6 +2102,13 @@ export async function refreshOneHold(
         // Across 90 days a card expiring or being reissued after fraud is a
         // base-rate event, and the issuer has usually already given the renter a
         // replacement that is sitting on the Stripe customer already.
+        //
+        // No `money` override on any of the three recordFailure calls in this
+        // block: it derives the claim from THIS error. A decline (funds /
+        // dead_card / sca) is Stripe telling us it created nothing, so
+        // 'unsecured' is a fact worth acting on; a connection reset or a 5xx is
+        // the lost-response case — Stripe may be holding the renter's funds
+        // under an id we never received — so the bell says nothing.
         if (classifyStripeFailure(createErr) !== "dead_card") {
           return await recordFailure(createErr);
         }
@@ -1914,7 +2169,17 @@ export async function refreshOneHold(
         },
         "requires_action",
         "replacement needs cardholder verification (3DS)",
-        newIntent.id
+        newIntent.id,
+        {
+          // THE INVERSION THE REVIEW CAUGHT. This patch records
+          // `deposit_hold_payment_intent_id` — but that PaymentIntent is
+          // 'requires_action' and is holding NOTHING, while the incumbent was
+          // cancelled a few lines above. Deriving "secured" from the presence of
+          // that id told the operator their renter was covered at the exact
+          // moment they were not.
+          money: "unsecured",
+          failureClass: "sca",
+        }
       );
     }
 
@@ -1947,7 +2212,19 @@ export async function refreshOneHold(
         },
         "needs_review",
         `replacement PaymentIntent is ${piStatus} — flagged for review`,
-        newIntent.id
+        newIntent.id,
+        {
+          // Same inversion as the 3DS exit: an id is recorded, no funds are
+          // held. 'requires_payment_method' is dead — the renter is definitely
+          // unsecured. 'processing' / 'requires_confirmation' may still become a
+          // live authorization, so we refuse to characterise it either way and
+          // let the reconciler settle it against Stripe.
+          money: piStatus === "requires_payment_method" ? "unsecured" : "unknown",
+          alertDetail:
+            piStatus === "requires_payment_method"
+              ? null
+              : `The replacement is still ${piStatus} at Stripe; it may yet settle, so check the rental before re-placing a hold.`,
+        }
       );
     }
 
@@ -2012,8 +2289,20 @@ export async function refreshOneHold(
         outcome: orphaned ? "orphaned" : "failed",
         payment_intent_id: newIntent.id,
         error_code: "lost_race",
-        error_message: "row changed owner mid-refresh; replacement authorization cancelled",
+        error_message: orphaned
+          ? "row changed owner mid-refresh; replacement authorization could NOT be cancelled"
+          : "row changed owner mid-refresh; replacement authorization cancelled",
       });
+      if (orphaned) {
+        // The single worst state the engine can produce: the authorization is
+        // live at Stripe, the rental points elsewhere, and closing the link as
+        // 'orphaned' puts it outside every reconciler sweep. Ring the bell with
+        // the id in it — a human in the Stripe dashboard is the only route back.
+        await alertOrphanedAuthorization(
+          newIntent.id,
+          "another worker took the rental after the replacement authorization had been created"
+        );
+      }
       return {
         rentalId,
         result: "lost_race",
@@ -2074,7 +2363,7 @@ export async function refreshOneHold(
 
     const terminalReview = failureClass === "ambiguous" || orphaned || failureCount >= MAX_HOLD_ATTEMPTS;
     try {
-      return await finish(
+      const outcome = await finish(
         {
           deposit_hold_status: terminalReview ? "needs_review" : "failed",
           deposit_hold_failure_count: failureCount,
@@ -2085,12 +2374,72 @@ export async function refreshOneHold(
             : computeRetryAt(failureClass, priorFailures, storedExpiresAt, now),
         },
         terminalReview ? "needs_review" : "failed",
-        `unhandled failure (${code}): ${message}`
+        `unhandled failure (${code}): ${message}`,
+        {
+          // This catch can be reached from BOTH sides of the cancel — a throw in
+          // the pre-cancel section leaves the incumbent live, a throw after it
+          // leaves nothing. We cannot tell which from here, so we make no claim
+          // about the renter's money at all.
+          money: "unknown",
+          failureClass,
+          // NAME THE PaymentIntent. "A replacement could not be cancelled" is
+          // not an actionable sentence — the only route back to that money is
+          // somebody opening that id in the Stripe dashboard.
+          alertDetail: orphaned
+            ? `A replacement authorization${strandedIntentId ? ` (${strandedIntentId})` : ""} was created at ` +
+              `Stripe and could NOT be cancelled` +
+              `${unrecordedCleanupFailure ? ` — ${unrecordedCleanupFailure}` : ""}. ` +
+              `It is not linked to this rental, so nothing in the portal can find, capture or release it: ` +
+              `open it in the Stripe dashboard and cancel it by hand, and check it before placing another ` +
+              `hold on this renter's card.`
+            : null,
+        }
       );
+      // finish() stays SILENT when its CAS did not apply — correct, because the
+      // row then carries the winner's state and describing our patch would
+      // describe a rental that does not exist. But the stranded authorization is
+      // ours either way and is nobody's state: it needs its own bell, or losing
+      // the race a second time hides it completely.
+      // Read into a const first: `strandedIntentId` is assigned inside a nested
+      // closure, so this is the one form that both narrows and cannot change
+      // between the guard and the call.
+      const stranded = strandedIntentId;
+      if (orphaned && outcome.result === "lost_race" && stranded) {
+        await alertOrphanedAuthorization(
+          stranded,
+          "the refresh failed after the authorization was created, and the rental then changed owner"
+        );
+      }
+      return outcome;
     } catch (writeErr) {
       // The database is the thing that is broken. The row stays 'refreshing';
       // say so loudly rather than pretending we settled it.
       console.error(`${log} ${rentalId}: could not record the failure — row left at 'refreshing':`, writeErr);
+      // ALERT — exit 2 of 3 that does NOT go through finish(), and the worst
+      // state in the engine: the row is stranded at 'refreshing', which is NOT
+      // in REFRESHABLE_HOLD_STATUSES, so the nightly driver will never look at
+      // this rental again. Only reconcile-deposit-holds un-strands it, and that
+      // has no alerting of its own. If this bell does not ring, nothing does.
+      await alertFailure({
+        result: "needs_review",
+        // The DB status is 'refreshing' — we deliberately do NOT pass a patch,
+        // and assert the alerting status explicitly, so the helper describes the
+        // situation rather than a status write that never landed.
+        status: "needs_review",
+        message: `unhandled failure (${code}): ${message}`,
+        moneyState: "unknown",
+        failureClass,
+        errorCode: code,
+        errorMessage: message,
+        failureCount,
+        detail:
+          `The status write ALSO failed, so this rental is stuck at 'refreshing': the nightly refresh ` +
+          `will not pick it up again until the hold status is reset.` +
+          (orphaned
+            ? ` A replacement authorization${strandedIntentId ? ` (${strandedIntentId})` : ""} was also ` +
+              `created at Stripe and could NOT be cancelled — cancel it by hand.`
+            : ""),
+      });
       return {
         rentalId,
         result: "needs_review",

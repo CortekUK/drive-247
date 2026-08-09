@@ -25,9 +25,14 @@ const pageSource = readFileSync(
 );
 
 /**
- * Every value rentals.deposit_hold_status can legally hold. The CHECK
- * constraint on the column permits exactly these seven and no more — a new
- * status cannot be introduced without a migration, so this list is closed.
+ * The seven statuses this row was originally built around.
+ *
+ * NOTE (Aug 2026): this is not the whole of the CHECK constraint. The
+ * chained-hold work widened rentals.deposit_hold_status to ELEVEN values —
+ * 'capturing', 'requires_action', 'needs_review' and 'disputed' joined the list,
+ * and the refresh engine writes two of them routinely. The row has since caught
+ * up; the four are covered by the last block of this file, which asserts what
+ * each of them badges, captions and offers.
  */
 const HOLD_STATUSES = [
   'processing',
@@ -37,6 +42,15 @@ const HOLD_STATUSES = [
   'expired',
   'refreshing',
   'failed',
+] as const;
+
+/** The full CHECK constraint, as applied to production. */
+const ALL_HOLD_STATUSES = [
+  ...HOLD_STATUSES,
+  'capturing',
+  'requires_action',
+  'needs_review',
+  'disputed',
 ] as const;
 
 /** status -> badge text, read out of the badge cell's if-ladder. */
@@ -289,5 +303,200 @@ describe('Security Deposit row — expiry line', () => {
     expect(expiryLine).toContain("expiry.tone === 'soon'");
     expect(expiryLine).toContain('text-amber-500');
     expect(expiryLine).toContain('AlertTriangle');
+  });
+});
+
+describe('the four statuses the chained-hold work added', () => {
+  /**
+   * WHAT THIS BLOCK USED TO SAY
+   * It recorded a gap. The schema permits ELEVEN values and this row knew seven;
+   * the other four hit neither if-ladder and fell through to the grey "No Hold"
+   * badge with the caption "No hold placed" — the EXACT regression the top of
+   * this file was written to close, reopened from the other end by the widened
+   * CHECK constraint. The assertions below the comment were
+   * `expect(badgeFor[status]).toBeUndefined()`, i.e. they pinned the gap open,
+   * and four `it.todo`s named the tests to write once it closed. It has closed,
+   * so they are written.
+   *
+   * It was never hypothetical for two of the four.
+   * `_shared/deposit-hold-refresh.ts` writes 'requires_action' on every SCA and
+   * dead-card decline and 'needs_review' on every unclassified failure and at
+   * the 8-attempt ceiling; the reconciler writes 'needs_review' for a hold it
+   * cannot verify. Each is a state where the renter is UNSECURED and a human is
+   * being asked to act.
+   *
+   * WHO HAS TO ACT is what decides the actions, and it differs per status — so
+   * that, rather than the styling, is what these tests assert:
+   *   capturing        nobody; a capture is in flight. No action at all, and
+   *                    deliberately not even Check with Stripe (see below).
+   *   requires_action  the CUSTOMER. No server-side fix exists, so the useful
+   *                    action is a fresh authorisation link to them.
+   *   needs_review     US. Check with Stripe is the whole job.
+   *   disputed         the dispute process. Charging and deducting are blocked.
+   */
+  const NEWLY_RENDERED = ['capturing', 'requires_action', 'needs_review', 'disputed'] as const;
+
+  /** The action block appended for exactly these four statuses. */
+  const newStatusExtras = (() => {
+    const start = pageSource.indexOf(
+      "&& ['capturing', 'requires_action', 'needs_review', 'disputed'].includes(depositHoldStatus || '')",
+    );
+    if (start === -1) {
+      throw new Error(
+        'The four-status action block is gone, or its condition was changed. These four statuses ' +
+          'fall through to "No Hold" without it — update this test to match the code it guards ' +
+          'rather than deleting the assertions.',
+      );
+    }
+    return pageSource.slice(start, pageSource.indexOf('{applied && (', start));
+  })();
+
+  /** The JSX offered for one status, from its branch to the next one. */
+  const branchFor = (status: string, until: string) => {
+    const from = newStatusExtras.indexOf(status);
+    expect(from, `no branch opens with \`${status}\``).toBeGreaterThan(-1);
+    const to = newStatusExtras.indexOf(until, from);
+    return stripComments(newStatusExtras.slice(from, to > from ? to : undefined));
+  };
+
+  it('lists every status the constraint permits', () => {
+    expect(ALL_HOLD_STATUSES).toHaveLength(11);
+    for (const status of NEWLY_RENDERED) {
+      expect(ALL_HOLD_STATUSES as readonly string[]).toContain(status);
+    }
+  });
+
+  it.each(NEWLY_RENDERED)('badges %s instead of falling through to "No Hold"', (status) => {
+    expect(badgeFor[status], `no badge branch for deposit_hold_status='${status}'`).toBeTruthy();
+    expect(badgeFor[status]).not.toBe('No Hold');
+  });
+
+  it.each(NEWLY_RENDERED)('captions %s instead of falling through to "No hold placed"', (status) => {
+    expect(detailFor[status], `no detail caption for deposit_hold_status='${status}'`).toBeTruthy();
+    expect(detailFor[status]).not.toBe('No hold placed');
+  });
+
+  it('gives each of the four a label of its own', () => {
+    // Collapsing any two of these would hide the one thing the operator needs:
+    // they call for four different people to act.
+    const labels = NEWLY_RENDERED.map((s) => badgeFor[s]);
+    expect(new Set(labels).size).toBe(NEWLY_RENDERED.length);
+    expect(badgeFor.capturing).toBe('Capturing');
+    expect(badgeFor.requires_action).toBe('Action Needed');
+    expect(badgeFor.needs_review).toBe('Needs Review');
+    expect(badgeFor.disputed).toBe('Disputed');
+  });
+
+  it('is reached from live writers, not only in theory', () => {
+    const engine = readFileSync(
+      resolve(__dirname, '../../../../../supabase/functions/_shared/deposit-hold-refresh.ts'),
+      'utf8',
+    );
+    expect(engine).toContain('deposit_hold_status: "requires_action"');
+    expect(engine).toContain('deposit_hold_status: "needs_review"');
+  });
+
+  it('captions the two live ones in the same words as the refresh toast', () => {
+    // REFRESH_RESULT_COPY on the same page already named 'requires_action' and
+    // 'needs_review'. The row now consults the same wording, so the toast the
+    // operator saw and the row they look at afterwards cannot disagree.
+    expect(pageSource).toContain("requires_action: 'Card needs the customer'");
+    expect(pageSource).toContain("needs_review: 'Needs a closer look'");
+    expect(detailFor.requires_action).toBe('Card needs the customer');
+    expect(detailFor.needs_review).toBe('Needs a closer look');
+  });
+
+  it('badges requires_action distinctly and offers a way to reach the customer', () => {
+    expect(badgeFor.requires_action).toBe('Action Needed');
+    const branch = branchFor(
+      "{depositHoldStatus === 'requires_action' && canEdit('rentals') && (",
+      "{(depositHoldStatus === 'requires_action'",
+    );
+    // Reaching the cardholder IS the fix: the engine has no server-side retry
+    // for an SCA or a dead card, so the action is a fresh authorisation link.
+    expect(branch).toContain('Send card link');
+    expect(branch).toContain('setShowAddHoldDialog(true)');
+    // It writes to the customer's card, so it is not a viewer action.
+    expect(branch).toContain("canEdit('rentals')");
+    // And the row says who has to act, rather than only colouring the badge.
+    expect(pageSource).toContain('Not secured — the customer must authorise the card');
+  });
+
+  it('badges needs_review distinctly and offers Check with Stripe', () => {
+    expect(badgeFor.needs_review).toBe('Needs Review');
+    const branch = branchFor(
+      "{(depositHoldStatus === 'requires_action' || depositHoldStatus === 'needs_review') && canEdit('rentals') && (",
+      '</>',
+    );
+    expect(branch).toContain('Check with Stripe');
+    expect(branch).toContain('handleVerifyDepositHold()');
+    expect(branch).toContain('disabled={verifyingHold}');
+    expect(branch).toContain("canEdit('rentals')");
+    // Nothing else moves a row off needs_review, so it must not be the one
+    // status whose only exit is a button that was never placed.
+    expect(newStatusExtras).toContain("depositHoldStatus === 'needs_review'");
+    expect(pageSource).toContain('Not secured — we could not establish what this authorisation is doing');
+  });
+
+  it('badges capturing as in-flight and offers no placement action', () => {
+    expect(badgeFor.capturing).toBe('Capturing');
+    expect(detailFor.capturing).toBe('Charging the hold');
+    const branch = branchFor(
+      "{depositHoldStatus === 'capturing' && (",
+      "{depositHoldStatus === 'disputed' && (",
+    );
+    expect(branch).toContain('animate-spin');
+    expect(branch).toContain('Capturing…');
+    // No second authorisation on top of a capture in flight…
+    expect(branch).not.toContain('setShowAddHoldDialog');
+    expect(branch).not.toContain('Add Hold');
+    // …and deliberately not Check with Stripe either: verify-deposit-hold treats
+    // only 'processing'/'refreshing' as worker-owned, so on 'capturing' it WOULD
+    // write, and a PaymentIntent still at requires_capture maps back to 'held' —
+    // stamping that straight over a capture that is mid-flight.
+    expect(branch).not.toContain('handleVerifyDepositHold');
+    const reconcileGate = "{(depositHoldStatus === 'requires_action' || depositHoldStatus === 'needs_review')";
+    expect(newStatusExtras).toContain(reconcileGate);
+    expect(newStatusExtras).not.toContain("depositHoldStatus === 'capturing' || ");
+  });
+
+  it('badges disputed distinctly and offers no placement action', () => {
+    expect(badgeFor.disputed).toBe('Disputed');
+    expect(detailFor.disputed).toBe('Disputed by the customer');
+    const branch = branchFor(
+      "{depositHoldStatus === 'disputed' && (",
+      "{depositHoldStatus === 'requires_action'",
+    );
+    expect(branch).toContain('Charge blocked');
+    expect(branch).not.toContain('setShowAddHoldDialog');
+    expect(branch).not.toContain('handleVerifyDepositHold');
+  });
+
+  it('blocks Deduct Deposit while the authorisation is disputed', () => {
+    // deduct-from-deposit draws on the same PaymentIntent the chargeback is
+    // against, so the row on the Excess Mileage side has to refuse too — a guard
+    // on the deposit row alone would leave the money path open.
+    const deductCell = pageSource.slice(
+      pageSource.indexOf('const depositCharge = (rentalCharges || []).find'),
+      pageSource.indexOf('setShowDeductFromDepositDialog(true)'),
+    );
+    expect(stripComments(deductCell)).toContain("rental.deposit_hold_status === 'disputed'");
+    expect(deductCell).toContain('Deposit disputed');
+  });
+
+  it('keeps the four out of the hold-only branch, so a manual deposit stays releasable', () => {
+    // Same rule the in-flight states follow: the hold-only branch REPLACES the
+    // generic ladder, and that ladder is where a deposit collected in cash gets
+    // its Release / Add Payment button. A rental whose card went bad must not
+    // lose it.
+    const holdBranch = stripComments(
+      pageSource.slice(
+        pageSource.indexOf("{category === 'Security Deposit' && (depositHoldStatus === 'held'"),
+        pageSource.indexOf(') : isExcessMileageUnpaid && excessMileageCharge ? ('),
+      ),
+    );
+    for (const status of NEWLY_RENDERED) {
+      expect(holdBranch, `${status} must not be captured by the hold-only branch`).not.toContain(`'${status}'`);
+    }
   });
 });

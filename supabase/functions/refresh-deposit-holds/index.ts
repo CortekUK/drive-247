@@ -28,6 +28,12 @@
 //     silently end a chain.
 //   * Writes a cron_runs heartbeat so "no alerts" can be told apart from "the
 //     job is dead".
+//   * ALERTS. Every non-healthy outcome now raises an operator bell — inside the
+//     engine for anything that writes a status, and in this file for the two
+//     things only the driver can see: an engine that threw (breaking its own
+//     return-don't-throw contract) and the per-tenant `config_unavailable`
+//     aggregate. Before this, a chain that died on day 45 of a 90-day rental was
+//     discovered when the car came back.
 //
 // AUTH: `verify_jwt = false` in config.toml (pg_cron carries no user JWT), so
 // the API gateway lets anonymous requests through and the check in THIS file is
@@ -52,8 +58,13 @@ import {
   applyDueHoldFilters,
   HOLD_REFRESH_COLUMNS,
   DEFAULT_BATCH_LIMIT,
+  MAX_HOLD_ATTEMPTS,
   type RefreshOutcome,
 } from "../_shared/deposit-hold-refresh.ts";
+import {
+  notifyDepositHoldFailure,
+  notifyDepositHoldConfigBlocked,
+} from "../_shared/deposit-hold-notify.ts";
 
 const JOB_NAME = "refresh-deposit-holds";
 
@@ -253,6 +264,11 @@ Deno.serve(async (req) => {
     // One tenant row per batch, not per rental.
     const tenantCache = new Map<string, Record<string, unknown> | null>();
 
+    // Rentals the engine left UNTOUCHED because a tenant/Stripe configuration
+    // could not be resolved, grouped by tenant so one broken Connect account
+    // raises one bell rather than one per rental.
+    const configBlocked = new Map<string, { rentalIds: string[]; message: string }>();
+
     for (const rental of batch) {
       if (Date.now() - startedMs > LOOP_BUDGET_MS) {
         // Stop cleanly rather than being killed mid-Stripe-call with a row
@@ -284,6 +300,35 @@ Deno.serve(async (req) => {
           message: `engine threw: ${message}`,
           untouched: false,
         };
+        // ALERT — exit 3 of 3 outside the engine's finish() funnel. The engine's
+        // contract is that it returns rather than throws, so reaching here means
+        // that contract broke: nothing inside it can have written a status, and
+        // the row is left in whatever state the throw interrupted (very likely
+        // 'refreshing', which the driver never re-selects). Without this the
+        // rental is invisible until somebody opens it.
+        //
+        // notifyDepositHoldFailure never throws, so it is safe in this catch.
+        await notifyDepositHoldFailure({
+          rental,
+          result: "needs_review",
+          status: "needs_review",
+          message: `engine threw: ${message}`,
+          errorMessage: message,
+          errorCode: "engine_threw",
+          // The throw could have happened anywhere — before the incumbent was
+          // cancelled, or after a replacement was created. We cannot tell, so
+          // the alert makes no claim about whether the renter is still secured.
+          moneyState: "unknown",
+          // Matches the seq the engine would have claimed the row with, so an
+          // alert it managed to raise before dying dedupes against this one.
+          attemptSeq: Number(rental.deposit_hold_attempt_seq ?? 0) + 1,
+          maxAttempts: MAX_HOLD_ATTEMPTS,
+          detail:
+            "The refresh engine itself threw, so the hold status may not have been written at all — " +
+            "check this rental's hold state against Stripe.",
+          source: "cron",
+          supabase,
+        });
       }
       processed++;
       results.push(outcome);
@@ -300,6 +345,19 @@ Deno.serve(async (req) => {
         // this driver exists to provide.
         skippedConfig++;
         console.warn(`[DEPOSIT-REFRESH] ${outcome.rentalId}: config unavailable — ${outcome.message}`);
+        // …but "no hold is in trouble" is only true for THIS run. The row was
+        // left untouched, so its authorization is not being renewed and will
+        // lapse on the network's own schedule. Collected per TENANT because the
+        // cause is one configuration, not N rentals — see the aggregated alert
+        // after the loop.
+        {
+          const tid = String(rental.tenant_id ?? "");
+          if (tid) {
+            const entry = configBlocked.get(tid) ?? { rentalIds: [], message: outcome.message };
+            entry.rentalIds.push(outcome.rentalId);
+            configBlocked.set(tid, entry);
+          }
+        }
       } else if (
         outcome.result === "failed" ||
         outcome.result === "needs_review" ||
@@ -311,6 +369,22 @@ Deno.serve(async (req) => {
         failed++;
         errors.push(`${outcome.rentalId}: ${outcome.result} — ${outcome.message}`);
       }
+    }
+
+    // ── The one non-per-rental bell. ──────────────────────────────────────────
+    // `config_unavailable` is not a hold failure, which is why it stays out of
+    // `failed` — but it IS a silent death: those authorizations simply stop
+    // being renewed. One aggregated, day-deduped alert per affected tenant is
+    // the difference between "the operator finds out" and "the counter on
+    // cron_runs goes up and nobody reads it". Never throws.
+    for (const [tid, entry] of configBlocked) {
+      await notifyDepositHoldConfigBlocked({
+        tenantId: tid,
+        rentalIds: entry.rentalIds,
+        sampleMessage: entry.message,
+        source: "cron",
+        now,
+      });
     }
 
     // Read-only heads-up: rows parked in 'refreshing' by a run that was killed

@@ -131,20 +131,22 @@ describe('classifyStripeFailure — every code the engine handles', () => {
   it('covers the whole table (a missing code silently becomes ambiguous)', () => {
     // Cross-check against the sets in the source, so a code added there without
     // a row here fails this test rather than going untested.
-    const declared = new Set(
-      [...engine.matchAll(/^\s*"([a-z_]+)",$/gm)].map((m) => m[1]),
-    );
+    const sets =
+      liftDeclaration(engine, 'TRANSIENT_CODES') +
+      liftDeclaration(engine, 'FUNDS_CODES') +
+      liftDeclaration(engine, 'DEAD_CARD_CODES');
+    const declared = [...sets.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+    expect(declared.length, 'the three code sets read as empty — the lift is broken').toBeGreaterThan(20);
+
     const tabled = new Set(CODE_TABLE.map(([c]) => c));
-    const untested = [...declared].filter(
-      (c) =>
-        !tabled.has(c) &&
-        // Only the members of the three code sets matter; the regex also picks up
-        // unrelated string arrays elsewhere in the file.
-        (liftDeclaration(engine, 'TRANSIENT_CODES') +
-          liftDeclaration(engine, 'FUNDS_CODES') +
-          liftDeclaration(engine, 'DEAD_CARD_CODES')).includes(`"${c}"`),
-    );
-    expect(untested, `these Stripe codes are handled by the engine but untested here`).toEqual([]);
+    const untested = declared.filter((c) => !tabled.has(c));
+    expect(untested, 'these Stripe codes are handled by the engine but untested here').toEqual([]);
+
+    // …and the two SCA codes, which are inline `if`s rather than set members.
+    for (const code of ['authentication_required', 'payment_intent_authentication_failure']) {
+      expect(engine).toContain(`code === "${code}"`);
+      expect(tabled.has(code)).toBe(true);
+    }
   });
 
   it.each(CODE_TABLE)("classifies decline_code '%s' as %s", (code, expected) => {
@@ -351,10 +353,25 @@ describe('the replica matches the real ladder', () => {
   });
 
   it('checks the four early exits in that order, before the recoverable default', () => {
-    const order = ['"sca"', '"dead_card"', '"ambiguous"', 'MAX_HOLD_ATTEMPTS', 'retryAt'].map((s) =>
-      ladder.indexOf(s),
-    );
-    expect(order.every((i) => i > -1)).toBe(true);
+    // Anchored on the BRANCH CONDITIONS, not on bare occurrences of the class
+    // names. A bare `"ambiguous"` also appears further up the function, in the
+    // `money` computation that decides whether the renter is unsecured or
+    // merely unknown — so matching the first occurrence of the string measured
+    // the wrong thing and reported the ladder as misordered when it was not.
+    const marks = [
+      'if (failureClass === "sca")',
+      'if (failureClass === "dead_card")',
+      'if (failureClass === "ambiguous")',
+      'if (failureCount >= MAX_HOLD_ATTEMPTS)',
+      'const retryAt = computeRetryAt(',
+    ];
+    const order = marks.map((s) => ladder.indexOf(s));
+    for (const [i, s] of marks.entries()) {
+      expect(order[i], `missing early exit: ${s}`).toBeGreaterThan(-1);
+    }
+    // Order is the whole point: `ambiguous` reaching the recoverable default
+    // would schedule a retry against a hold nobody can classify, and the
+    // attempt ceiling landing after `retryAt` would never cap anything.
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 

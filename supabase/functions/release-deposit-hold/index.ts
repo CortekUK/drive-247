@@ -4,6 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from "../_shared/stripe-client.ts";
+import { authorizeDepositHoldRequest } from "../_shared/deposit-hold-auth.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -19,6 +20,31 @@ Deno.serve(async (req) => {
 
     if (!rentalId) {
       return errorResponse("Missing required field: rentalId");
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+    // Releasing CANCELS a live card authorisation — it hands the customer their
+    // security deposit back. This function read no Authorization header at all,
+    // so the only check was the gateway's `verify_jwt = true` default, which the
+    // PUBLIC ANON KEY in the booking bundle satisfies. A renter who knew their
+    // own rental UUID could drop their own deposit on the way out of the car;
+    // any session on the project could do it to any tenant's rental.
+    //
+    // Deliberately NOT opened to the rental's customer (`allowRentalCustomer` is
+    // off): releasing is an operator decision taken at key handover, never a
+    // self-service one. Every caller in the repo is portal staff — the rental
+    // page's manual release and hooks/use-key-handover.ts (receiving the keys).
+    // No webhook, cron or edge function invokes this.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      logPrefix: "[DEPOSIT-RELEASE]",
+    });
+    if (!auth.ok) return errorResponse(auth.message, auth.status);
+
+    // Body `tenantId` only selects Stripe config below; it can never widen what
+    // the guard above just decided.
+    if (tenantId && auth.rental.tenant_id && tenantId !== auth.rental.tenant_id) {
+      return errorResponse("Not authorised for this rental", 403);
     }
 
     console.log("[DEPOSIT-RELEASE] Releasing hold for rental:", rentalId);

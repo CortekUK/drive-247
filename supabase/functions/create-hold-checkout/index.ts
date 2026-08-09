@@ -24,6 +24,7 @@ import {
   DEPOSIT_AMOUNT_TENANT_COLUMNS,
 } from '../_shared/deposit-amount.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { authorizeDepositHoldRequest } from '../_shared/deposit-hold-auth.ts'
 
 // Stripe PaymentIntent status -> the deposit_hold_status that is conclusively
 // true when we see it. Only these three mean the authorisation is DEAD and the
@@ -82,6 +83,27 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
+
+    // ── Auth ──────────────────────────────────────────────────────────────
+    // This mints a Stripe Checkout session on the TENANT'S connected account
+    // that authorises their configured deposit, and returns a live payment URL
+    // plus the tenant's company name and deposit figure. It read no
+    // Authorization header, so the only check was the gateway's
+    // `verify_jwt = true` default — satisfied by the PUBLIC ANON KEY that ships
+    // in the booking app's JavaScript bundle. Any session on the project could
+    // mint sessions against any tenant's Stripe account and read back their
+    // deposit configuration.
+    //
+    // Runs before the rental read and before any Stripe call. `successUrl` /
+    // `cancelUrl` are caller-supplied and land in a Stripe redirect, which is a
+    // further reason this must not be anonymous. Every caller in the repo is
+    // portal staff (components/shared/dialogs/add-hold-dialog.tsx — "Add Hold",
+    // both the new-tab and email-the-link buttons). No machine caller exists.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      logPrefix: 'create-hold-checkout',
+    })
+    if (!auth.ok) return errorResponse(auth.message, auth.status)
 
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')

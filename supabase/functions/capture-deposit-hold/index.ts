@@ -12,6 +12,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getConnectAccountId, getStripeClientForRecord, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
+import { authorizeDepositHoldRequest } from "../_shared/deposit-hold-auth.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -30,6 +31,34 @@ Deno.serve(async (req) => {
     }
     if (amount <= 0) {
       return errorResponse("Amount must be greater than 0");
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+    // This function CAPTURES MONEY off a card authorisation and writes a payment
+    // + ledger charge for it. It previously read no Authorization header at all,
+    // so the gateway's `verify_jwt = true` default was the only check — and that
+    // default is satisfied by the PUBLIC ANON KEY shipped in the booking app's
+    // JavaScript bundle. Any session on the project, including a booking-site
+    // renter of another tenant, could POST a rentalId and take that tenant's
+    // deposit.
+    //
+    // Runs BEFORE the rental fetch and before every Stripe call, so a refusal
+    // costs nothing and leaks nothing. The guard resolves the rental itself in
+    // order to compare tenants. Every caller in the repo is portal staff
+    // (components/shared/dialogs/charge-deposit-dialog.tsx — the "Charge"
+    // button); there is no webhook or cron caller to break.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      logPrefix: "[DEPOSIT-CAPTURE]",
+    });
+    if (!auth.ok) return errorResponse(auth.message, auth.status);
+
+    // `tenantId` from the body is a convenience hint only — it is used below
+    // solely to look up Stripe config, and the guard above has already proved
+    // the caller may act on THIS rental. Never let it stand in for the rental's
+    // own tenant.
+    if (tenantId && auth.rental.tenant_id && tenantId !== auth.rental.tenant_id) {
+      return errorResponse("Not authorised for this rental", 403);
     }
 
     const { data: rental, error: rentalError } = await supabase

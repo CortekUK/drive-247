@@ -33,6 +33,7 @@ import {
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+import { authorizeDepositHoldRequest } from "../_shared/deposit-hold-auth.ts";
 
 // Stripe PaymentIntent status -> the deposit_hold_status that is TRUE when we
 // see it. Only these four are conclusive; anything else (requires_action,
@@ -52,6 +53,25 @@ const PI_STATUS_TO_HOLD_STATUS: Record<string, string> = {
 
 /** Contract says `status: string`; null is only ever an internal value. */
 const reportStatus = (status: string | null): string => status ?? "none";
+
+// ── Who may run a verification ─────────────────────────────────────────────
+//
+// This endpoint WRITES: it corrects rentals.deposit_hold_status, re-stamps the
+// expiry/verified clocks and pushes the chain bound forward. Moving a row off
+// 'held' is exactly what unblocks placement — i.e. what permits a fresh
+// authorisation on a renter's card — so it is an editor action, and client-side
+// gating (useManagerPermissions().canEdit) is UX, never an authorisation
+// boundary.
+//
+// The server-side decision lives in `authorizeDepositHoldRequest`
+// (_shared/deposit-hold-auth.ts), shared with capture-deposit-hold,
+// place-deposit-hold, create-hold-checkout and release-deposit-hold so all five
+// money paths admit exactly the same people: active staff of the RENTAL'S OWN
+// tenant holding head_admin / admin / ops, a manager with an editor grant on the
+// rentals tab, any super admin, or a trusted machine caller. A viewer is
+// refused, and so is any role nobody has thought about yet. This function passes
+// none of the widening options — no renter and no unidentified caller may ever
+// verify a hold.
 
 type CaptureFacts = Awaited<ReturnType<typeof readHoldCaptureFacts>>;
 
@@ -103,41 +123,28 @@ Deno.serve(async (req) => {
     // Supabase project — and booking-app CUSTOMERS authenticate against the same
     // project. This endpoint writes deposit state, so it must additionally
     // prove the caller is staff of the rental's own tenant.
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    if (!token) return errorResponse("Missing authorization", 401);
-
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    // Server-to-server callers (other edge functions, cron) present the service
-    // role key; they are already trusted and have no app_users row.
-    const isServiceRole = serviceRoleKey.length > 0 && token === serviceRoleKey;
-
-    let caller: { id: string | null; tenant_id: string | null; is_super_admin: boolean } | null = null;
-    if (!isServiceRole) {
-      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
-      if (userErr || !userData?.user) return errorResponse("Invalid token", 401);
-
-      // app_users has its own primary key; the auth user is linked via
-      // auth_user_id (matching on `id` silently matches nothing).
-      const { data: appUser } = await supabase
-        .from("app_users")
-        .select("id, tenant_id, is_super_admin, is_active")
-        .eq("auth_user_id", userData.user.id)
-        .maybeSingle();
-
-      if (!appUser || appUser.is_active === false) {
-        return errorResponse("Not authorised for this rental", 403);
-      }
-      caller = {
-        id: (appUser.id as string | null) ?? null,
-        tenant_id: (appUser.tenant_id as string | null) ?? null,
-        is_super_admin: appUser.is_super_admin === true,
-      };
-    }
+    //
+    // The decision itself is `authorizeDepositHoldRequest` in
+    // _shared/deposit-hold-auth.ts, shared with capture-deposit-hold,
+    // place-deposit-hold, create-hold-checkout and release-deposit-hold. This was
+    // inline until those four were fixed; extracting it is what stops the five
+    // money paths drifting apart. Behaviour is unchanged for this function: an
+    // active staff member of the RENTAL'S OWN tenant with a write role, a super
+    // admin, or a trusted machine caller. No renter and no unidentified caller —
+    // this call site passes neither widening option.
+    //
+    // Runs before the rental read, so a refusal costs one lookup and leaks
+    // nothing. The guard resolves the rental's tenant itself in order to compare.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      logPrefix: "[HOLD-VERIFY]",
+    });
+    if (!auth.ok) return errorResponse(auth.message, auth.status);
 
     // deposit_hold_links.actor: the app_user id when a human asked, a plain
-    // label when another edge function or the reconciler did.
-    const actor = caller?.id ?? (isServiceRole ? "reconciler" : "app_user");
+    // label when another edge function or the reconciler did. Unchanged from the
+    // inline version — the machine callers here are all reconciliation jobs.
+    const actor = auth.caller.kind === "staff" ? auth.caller.actor : "reconciler";
 
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
@@ -151,7 +158,11 @@ Deno.serve(async (req) => {
       return errorResponse("Rental not found", 404);
     }
 
-    if (caller && !caller.is_super_admin && caller.tenant_id !== rental.tenant_id) {
+    // Belt-and-braces on the tenant boundary the guard already enforced against
+    // its own read of this rental. Cheap, and it means a future edit that lets a
+    // caller name a different rental than the one authorised cannot go unnoticed.
+    if (auth.rental.id !== (rental.id as string) || auth.rental.tenant_id !== rental.tenant_id) {
+      console.error("[HOLD-VERIFY] Authorised rental does not match the rental read; refusing.");
       return errorResponse("Not authorised for this rental", 403);
     }
 

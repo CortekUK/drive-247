@@ -80,13 +80,23 @@ export type AlertingHoldStatus = (typeof ALERTING_HOLD_STATUSES)[number];
  * operator the renter was secured at the precise moment they were not — the
  * single worst thing an alert about money can do.
  *
- *   'live'      — a CONFIRMED capturable authorization exists right now. Only
- *                 the engine may assert this, and only when it either left the
- *                 incumbent untouched on a row that records it as live, or is
- *                 pointing at a PaymentIntent it has just seen at Stripe in
- *                 `requires_capture`.
+ *   'live'      — a CONFIRMED capturable authorization exists right now, where
+ *                 "confirmed" means STRIPE SAID SO IN THIS INVOCATION: a
+ *                 PaymentIntent seen at `requires_capture` whose capture window
+ *                 has not closed. A row that merely reads 'held' with a
+ *                 PaymentIntent id and a stored expiry is NOT evidence — the
+ *                 stored expiry is frequently an admitted guess
+ *                 (`deposit_hold_expiry_source = 'fallback'`), and a lapsed,
+ *                 captured or disputed authorization keeps the 'held' status
+ *                 until somebody looks. An earlier version inferred 'live' from
+ *                 exactly that row state and printed it as fact.
  *   'unsecured' — there is definitively no live authorization: the incumbent was
- *                 cancelled and no capturable replacement took its place.
+ *                 cancelled and a REPLACEMENT WAS DEFINITIVELY NOT CREATED —
+ *                 Stripe or the issuer returned a verdict (a decline, a dead
+ *                 card, an SCA demand). A create that failed with no verdict (a
+ *                 connection reset, a timeout, a 5xx) is NOT this: Stripe may
+ *                 have accepted it and be holding funds under an id we never
+ *                 received, so that case is 'unknown'.
  *   'unknown'   — we cannot prove either. WE THEN SAY NOTHING ABOUT THE MONEY.
  *                 Silence is the correct output of doubt here; a guess in either
  *                 direction sends the operator to do the wrong thing (sit on an
@@ -340,11 +350,19 @@ export async function notifyDepositHoldFailure(
     );
     const maxAttempts = firstNumber(params.maxAttempts) ?? DEFAULT_MAX_ATTEMPTS;
 
-    const nextRetryAt = firstString(
-      params.nextRetryAt,
-      patch.deposit_hold_next_retry_at,
-      rental.deposit_hold_next_retry_at,
+    // A patch that sets `deposit_hold_next_retry_at: null` is ASSERTING "no
+    // retry is scheduled" — every 'needs_review' / 'requires_action' exit does
+    // exactly that. Falling through to the row's older value would resurrect a
+    // stale retry time and, worse, could make a dead-end failure read as
+    // auto-recovering. An explicit null in the patch therefore wins.
+    const patchTouchedRetry = Object.prototype.hasOwnProperty.call(
+      patch,
+      "deposit_hold_next_retry_at",
     );
+    const nextRetryAt = firstString(params.nextRetryAt) ??
+      (patchTouchedRetry
+        ? firstString(patch.deposit_hold_next_retry_at)
+        : firstString(rental.deposit_hold_next_retry_at));
     const errorCode = firstString(
       params.errorCode,
       patch.deposit_hold_last_error_code,
@@ -595,10 +613,16 @@ export async function notifyDepositHoldConfigBlocked(params: {
     await notifyOperatorsInApp({
       tenantId,
       type: DEPOSIT_HOLD_CONFIG_ALERT_TYPE,
-      title: `Deposit holds not being renewed — configuration unavailable`,
+      title: `Deposit holds not being renewed — the run could not proceed`,
       message:
-        `${count} deposit hold${count === 1 ? "" : "s"} could not be renewed this run because this tenant's ` +
-        `Stripe configuration could not be resolved${sample ? ` (${sample.slice(0, 200)})` : ""}. ` +
+        // DO NOT name Stripe as the cause here. `config_unavailable` is also
+        // returned for pure DATABASE problems — the tenant lookup erroring, the
+        // claim write failing, the PaymentIntent-less flag write failing — and
+        // sending an operator to audit their Connect settings after a PostgREST
+        // blip burns the channel's credibility. The sample message below carries
+        // the actual cause; the headline states only what is certain.
+        `${count} deposit hold${count === 1 ? "" : "s"} could not be renewed this run because the ` +
+        `configuration or records needed to do it could not be read${sample ? ` (${sample.slice(0, 200)})` : ""}. ` +
         `The existing authorization${count === 1 ? "" : "s"} ${count === 1 ? "was" : "were"} left untouched — ` +
         `nothing was charged and nothing was cancelled — but ${count === 1 ? "it" : "they"} will lapse on ` +
         `the card network's own schedule unless the configuration is fixed.`,
@@ -625,6 +649,168 @@ export async function notifyDepositHoldConfigBlocked(params: {
     );
   } catch (err) {
     console.error("[deposit-hold-notify] config alert failed, swallowing:", err);
+    return;
+  }
+}
+
+/**
+ * Third slug: an authorization that exists at Stripe and that NOTHING in the
+ * product points at.
+ *
+ * Separate from `DEPOSIT_HOLD_ALERT_TYPE` for two reasons, both hard:
+ *   * `notifyOperatorsInApp` scopes dedupe to `type` + key, and this keys per
+ *     PaymentIntent rather than per (rental, status, attempt);
+ *   * this is NOT a hold-status alert. The rental's `deposit_hold_status` here
+ *     belongs to whoever won the race — it may legitimately read 'held',
+ *     'released' or 'captured' — so routing this through the status-shaped bell
+ *     would have meant asserting a status the row does not carry.
+ */
+export const DEPOSIT_HOLD_ORPHAN_ALERT_TYPE = "deposit_hold_orphaned_authorization";
+
+/**
+ * "There is a live authorization out there and we lost the thread." — the
+ * stranded-PaymentIntent bell.
+ *
+ * WHEN: the engine created (or adopted) a replacement authorization at Stripe,
+ * then failed to record it on the rental because another worker took the row,
+ * AND the compensating cancel did not happen — either because we could not
+ * confirm the id was still unrecorded, or because the cancel itself failed.
+ *
+ * WHY IT IS ITS OWN BELL: this is the worst state the engine can produce. The
+ * renter's funds may be frozen under an id that appears on no rental, in no
+ * portal screen, and in no reconciler sweep (the ledger row is closed
+ * 'orphaned', and the reconciler's pending sweep only looks at 'pending'). The
+ * ONLY route back is a human opening this PaymentIntent in the Stripe
+ * dashboard, so the id is in the message body — not just in metadata — because
+ * that is what an operator can copy.
+ *
+ * WHAT IT REFUSES TO SAY: whether the renter is secured. `orphaned` is raised
+ * both when the cancel failed (the authorization probably IS live) and when we
+ * could not even confirm the id was unrecorded (in which case the winner may
+ * have recorded this very id, and everything is fine). Claiming either would be
+ * a guess, and a wrong "you are covered" is exactly what this workstream exists
+ * to stop. The copy therefore describes the ARTEFACT and the ACTION, and says
+ * nothing about cover.
+ *
+ * NEVER THROWS.
+ */
+export async function notifyDepositHoldOrphanedAuthorization(params: {
+  /** The rental row (needs `id` and `tenant_id`; `rental_number` if it has it). */
+  rental: Record<string, unknown>;
+  /** The authorization nothing points at. Required — the alert is about it. */
+  paymentIntentId: string;
+  /** What the engine was doing when it lost the row, in one clause. */
+  reason: string;
+  /** Why the compensating cancel did not happen, in one clause. */
+  cleanupFailure?: string | null;
+  /** Deposit size in MINOR units, when known. */
+  amountCents?: number | null;
+  /** ISO 4217 code. Falls back to `deposit_hold_currency` on the row. */
+  currency?: string | null;
+  /** Connect account the authorization lives on — where to go look. */
+  connectAccountId?: string | null;
+  /** 'test' | 'live' — which Stripe dashboard. */
+  stripeMode?: string | null;
+  /** The attempt that produced it, for the audit trail. */
+  attemptSeq?: number | null;
+  /** The engine's `RefreshResult` (always 'lost_race' today). */
+  result?: string | null;
+  /** 'cron' | 'sandbox' | 'manual'. */
+  source?: string;
+  /** Service-role client, for the best-effort `rental_number` lookup. */
+  // deno-lint-ignore no-explicit-any
+  supabase?: any;
+}): Promise<void> {
+  try {
+    const rental = params.rental ?? {};
+    const rentalId = firstString(rental.id);
+    const tenantId = firstString(rental.tenant_id);
+    const intentId = firstString(params.paymentIntentId);
+
+    if (!rentalId || !tenantId || !intentId) {
+      console.error(
+        "[deposit-hold-notify] orphan alert missing rental id / tenant_id / PaymentIntent id — cannot raise",
+        { rentalId, tenantId, intentId },
+      );
+      return;
+    }
+
+    let rentalNumber = firstString(rental.rental_number);
+    if (!rentalNumber && params.supabase) {
+      rentalNumber = await lookupRentalNumber(params.supabase, rentalId);
+    }
+    const ref = rentalRef(rentalNumber, rentalId);
+
+    // Same rule as the failure bell: no currency, no number. A "$" printed on a
+    // GBP authorization is a wrong number in an alert about money.
+    const amountMajor = params.amountCents !== null && params.amountCents !== undefined &&
+        Number.isFinite(Number(params.amountCents))
+      ? Number(params.amountCents) / 100
+      : null;
+    const currency = firstString(params.currency, rental.deposit_hold_currency)?.toUpperCase() ?? null;
+    const amountText = amountMajor !== null && currency ? formatCurrency(amountMajor, currency) : null;
+
+    const mode = firstString(params.stripeMode);
+    const account = firstString(params.connectAccountId);
+    const whereToLook = account
+      ? ` (Stripe account ${account}${mode ? `, ${mode} mode` : ""})`
+      : mode
+      ? ` (${mode} mode)`
+      : "";
+
+    const reason = firstString(params.reason) ?? "the rental changed owner before it could be recorded";
+    const cleanup = firstString(params.cleanupFailure);
+
+    const title = `Untracked deposit authorization — ${ref}`;
+    const body =
+      `A ${amountText ? `${amountText} ` : ""}deposit authorization was created at Stripe for ${ref} ` +
+      `but never recorded on the rental — ${reason}${cleanup ? `, and ${cleanup}` : ""}. ` +
+      `It is not linked to this rental, so nothing in the portal can find, capture or release it: ` +
+      `PaymentIntent ${intentId}${whereToLook}. ` +
+      `Open it in the Stripe dashboard and cancel it (or capture it deliberately) — if it is still ` +
+      `authorized, the renter's funds stay frozen until it lapses. ` +
+      `Check it BEFORE placing another hold on this renter's card, or they can end up authorized twice.`;
+
+    await notifyOperatorsInApp({
+      tenantId,
+      type: DEPOSIT_HOLD_ORPHAN_ALERT_TYPE,
+      title,
+      message: body,
+      link: `/rentals/${rentalId}`,
+      metadata: {
+        rental_id: rentalId,
+        rental_number: rentalNumber,
+        // NOT `payment_intent_id`: this id is deliberately NOT the rental's hold
+        // — the whole point is that the rental points somewhere else (or
+        // nowhere). A consumer must never read it as the current hold.
+        orphaned_payment_intent_id: intentId,
+        connect_account_id: account,
+        stripe_mode: mode,
+        severity: "critical",
+        result: params.result ?? "lost_race",
+        reason,
+        cleanup_failure: cleanup,
+        attempt_seq: params.attemptSeq ?? null,
+        amount: amountMajor,
+        currency,
+        // We do not know whether the renter is covered — see the docblock. Null
+        // is "unknown", never "no".
+        money_state: "unknown",
+        secured: null,
+        source: params.source ?? "cron",
+      },
+      // Per PaymentIntent. One stranded authorization is one bell, forever: it
+      // is a static condition until a human acts, and re-ringing it nightly is
+      // how a channel gets muted. A NEW stranded id rings again, which is right.
+      dedupeKey: `deposit_hold_orphan:${rentalId}:${intentId}`,
+    });
+
+    console.error(
+      `[deposit-hold-notify] ORPHANED AUTHORIZATION alerted: tenant ${tenantId}, rental ${rentalId}, ` +
+        `PaymentIntent ${intentId} (${reason}${cleanup ? `; ${cleanup}` : ""})`,
+    );
+  } catch (err) {
+    console.error("[deposit-hold-notify] orphan alert failed, swallowing:", err);
     return;
   }
 }

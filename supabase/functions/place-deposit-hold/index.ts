@@ -14,6 +14,7 @@ import {
   CHAIN_GRACE_DAYS_AFTER_END,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+import { authorizeDepositHoldRequest } from "../_shared/deposit-hold-auth.ts";
 
 // Stripe PaymentIntent status -> the deposit_hold_status that is conclusively
 // true when we see it. Only these three mean the authorisation is DEAD and the
@@ -77,12 +78,64 @@ Deno.serve(async (req) => {
       return errorResponse("Missing required field: rentalId");
     }
 
-    // Who is asking, for the deposit_hold_links ledger. No caller sends this
-    // today; manualOverride already distinguishes a deliberate staff action
-    // from the automatic placement paths, so that is the honest default.
-    const actor = typeof actorInput === "string" && actorInput.trim()
+    // ── Auth ────────────────────────────────────────────────────────────────
+    // This authorises real money on a renter's card. It read no Authorization
+    // header, so the gateway's `verify_jwt = true` default was the only check —
+    // and the PUBLIC ANON KEY in the booking bundle satisfies that. Any session
+    // on the project could force an authorisation on another tenant's renter.
+    //
+    // This endpoint has the widest caller set of the five, so the guard is
+    // configured, not bolted on:
+    //
+    //  * SERVER-TO-SERVER (service-role bearer) — stripe-webhook-test,
+    //    stripe-webhook-live (both on `place_deposit_hold` session metadata) and
+    //    charge-saved-card. These are the automatic placement paths for the
+    //    portal's new-rental flow; breaking them would stop deposits being held
+    //    across every tenant, which is far worse than the hole.
+    //  * PORTAL STAFF — rentals/[id] (post-charge auto-placement),
+    //    charge-deposit-dialog ("Refresh hold", manualOverride: true) and
+    //    use-key-handover (giving the keys). Tenant-scoped and role-checked.
+    //  * THE RENTER THEMSELVES (`allowRentalCustomer`) — the booking app's
+    //    success page places the hold from the browser after payment. A signed-in
+    //    renter is admitted only for their OWN rental, resolved through
+    //    customer_users; they can never capture or release it.
+    //  * GUEST BOOKINGS (`allowUnidentifiedAutomation`) — the same success page
+    //    reached with no session at all. This is the ONLY mechanism that places a
+    //    deposit hold for a website booking: the webhook path needs
+    //    `place_deposit_hold` metadata and only the PORTAL sets it. Refusing here
+    //    would silently stop deposits on every customer-originated booking. So an
+    //    unidentified caller is admitted for AUTOMATIC placement only — never with
+    //    manualOverride, which bypasses the extended-rental block. Known, bounded
+    //    residual gap; see the note on the option in _shared/deposit-hold-auth.ts.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      logPrefix: "[DEPOSIT-HOLD]",
+      allowRentalCustomer: true,
+      allowUnidentifiedAutomation: true,
+      manualOverride: !!manualOverride,
+    });
+    if (!auth.ok) return errorResponse(auth.message, auth.status);
+
+    // Body `tenantId` is a hint used only to load Stripe/deposit config below.
+    // The guard has already bound the caller to the rental's real tenant, and a
+    // mismatch means the caller is describing a different rental than the one
+    // they named.
+    if (tenantId && auth.rental.tenant_id && tenantId !== auth.rental.tenant_id) {
+      return errorResponse("Not authorised for this rental", 403);
+    }
+
+    // Who is asking, for the deposit_hold_links ledger.
+    //
+    // A PROVEN identity always wins: when the guard resolved a real human (an
+    // app_user's id, or "customer"), that is what the ledger records — a
+    // client-supplied `actor` must not be able to sign someone else's name to a
+    // card authorisation. `actorInput` is still honoured for the machine paths,
+    // where it is the only way a trusted caller can say which job it was, and it
+    // remains length-capped. No caller sends it today.
+    const humanActor = auth.caller.kind === "staff" || auth.caller.kind === "customer";
+    const actor = !humanActor && typeof actorInput === "string" && actorInput.trim()
       ? actorInput.trim().slice(0, 120)
-      : (manualOverride ? "app_user" : "system");
+      : auth.caller.actor;
 
     console.log("[DEPOSIT-HOLD] Placing hold for rental:", rentalId);
 
