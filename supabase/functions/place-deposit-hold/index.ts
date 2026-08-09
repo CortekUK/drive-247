@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     // re-writes the row as 'held' carrying a BRAND NEW live PI, so a
     // status-only guard would happily mark that live hold dead and we would
     // authorise the customer's card a second time.
-    const probedPiId = (rental.deposit_hold_payment_intent_id as string | null) ?? null;
+    const probedPiId = (rental.deposit_hold_payment_intent_id as string | null) || null;
     if (priorHoldStatus === "held") {
       let alive = true;
       let deadStatus: string | null = null;
