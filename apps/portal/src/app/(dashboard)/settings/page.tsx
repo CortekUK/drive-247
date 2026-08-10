@@ -1924,8 +1924,8 @@ const Settings = () => {
                   </p>
                   {hideRegEnabled && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Photos are not covered by this setting. If a plate is legible in a vehicle
-                      photo, replace or hide that photo as well.
+                      Vehicle photos must be handled individually: open the vehicle, select each
+                      photo showing a plate, and use Trax to hide the number plate.
                     </p>
                   )}
                 </div>
