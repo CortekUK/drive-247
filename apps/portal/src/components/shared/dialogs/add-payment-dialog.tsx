@@ -563,6 +563,17 @@ export const AddPaymentDialog = ({
       queryClient.invalidateQueries({ queryKey: ["rental-insurance-policies"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["rental-invoice"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["ledger-entries"], ...invalidateOptions }),
+      // The Payment Links panel. Every action in this dialog that mints a Stripe
+      // Checkout session ("Charge via Stripe", "Email Stripe Link") writes a
+      // `payments` row carrying stripe_checkout_session_id — which is exactly
+      // what useRentalPaymentLinks reads. Without these two keys the row lands in
+      // the database but the panel keeps serving its cache and reads
+      // "No payment links have been sent yet", because the app sets
+      // staleTime: 60s AND refetchOnWindowFocus: false (app/providers.tsx:47-48),
+      // so returning to the tab does not refresh it either. Reported by GMT after
+      // sending two links and seeing neither.
+      queryClient.invalidateQueries({ queryKey: ["rental-payment-links"], ...invalidateOptions }),
+      queryClient.invalidateQueries({ queryKey: ["customer-payment-links"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["payment-applications"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["outstanding-balance"], ...invalidateOptions }),
       queryClient.invalidateQueries({ queryKey: ["excess-mileage-charge"], ...invalidateOptions }),
