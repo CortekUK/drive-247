@@ -199,3 +199,51 @@ export function vehicleDisplayLabel(
 export function canSearchByRegistration(tenant: TenantLike): boolean {
   return canRevealRegistration(tenant);
 }
+
+/* ────────────────────────── vehicle photos ──────────────────────────
+ * The plate can also be legible INSIDE a photo, which no text rule can fix.
+ * The operator marks photos one at a time from the vehicle page; this is the
+ * serving half of that.
+ */
+
+/** Sub-select for a customer-facing vehicle_photos join. */
+export const VEHICLE_PHOTO_COLUMNS =
+  'vehicle_photos ( photo_url, redacted_url, redaction_status, display_order )';
+
+export type VehiclePhoto = {
+  photo_url?: string | null;
+  redacted_url?: string | null;
+  redaction_status?: string | null;
+};
+
+/**
+ * Which image a CUSTOMER should see.
+ *
+ * Deliberately NOT deny-by-default, and the reason matters. The operator
+ * reviews photos one at a time, so `none` means "not looked at yet", not
+ * "unsafe" — and blanking a whole gallery the moment someone flips the text
+ * toggle would be a worse surprise than the thing it guards against. Most
+ * fleet photos contain no plate at all: of the eight real ones measured on this
+ * platform, none did.
+ *
+ * So: a photo the operator has redacted serves the redacted copy; everything
+ * else serves the original. What makes that honest is the UI — the button is
+ * per photo, and the operator is the one asserting a photo is fine.
+ *
+ * Staff never call this; apps/portal always shows the original.
+ */
+export function customerPhotoUrl(
+  photo: VehiclePhoto | null | undefined,
+  tenant: TenantLike,
+): string | null {
+  if (!photo) return null;
+  if (isRegistrationHidden(tenant) && photo.redaction_status === 'redacted' && photo.redacted_url) {
+    return photo.redacted_url;
+  }
+  return photo.photo_url ?? null;
+}
+
+/** True when this tenant may use the per-photo plate-blurring controls. */
+export function canRedactPhotos(tenant: TenantLike): boolean {
+  return isRegistrationHidden(tenant);
+}

@@ -65,6 +65,8 @@ import {
   displayRegistration,
   vehicleDisplayName,
   canSearchByRegistration,
+  VEHICLE_PHOTO_COLUMNS,
+  customerPhotoUrl,
 } from "@/lib/vehicle-identity";
 interface VehiclePhoto {
   photo_url: string;
@@ -1098,7 +1100,7 @@ const MultiStepBookingWidget = () => {
     let vehiclesQuery = supabaseUntyped
       .from("vehicles")
       .select(
-        vehiclePublicColumns(tenant, 'vehicle_photos ( photo_url, display_order )')
+        vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
       )
       .eq("tenant_id", tenant.id)
       .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
@@ -4218,7 +4220,7 @@ const MultiStepBookingWidget = () => {
                             {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
                               <>
                                 <img
-                                  src={optimizedImageUrl(vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url, { width: 800, quality: 65, resize: "cover" })}
+                                  src={optimizedImageUrl(customerPhotoUrl(vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)], tenant) || customerPhotoUrl(vehicle.vehicle_photos[0], tenant) || '', { width: 800, quality: 65, resize: "cover" })}
                                   alt={vehicleName}
                                   className="w-full h-full object-cover"
                                   loading="lazy"

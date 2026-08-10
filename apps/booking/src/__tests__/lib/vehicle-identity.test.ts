@@ -26,6 +26,9 @@ import {
   vehicleDisplayName,
   vehicleDisplayLabel,
   canSearchByRegistration,
+  customerPhotoUrl,
+  canRedactPhotos,
+  VEHICLE_PHOTO_COLUMNS,
 } from '@/lib/vehicle-identity';
 
 const showing = { hide_vehicle_registration: false };
@@ -227,5 +230,57 @@ describe('an unresolved tenant must fail CLOSED', () => {
     expect(isRegistrationHidden(null)).toBe(false);   // has not opted in
     expect(canRevealRegistration(null)).toBe(false);  // but must not be revealed
     expect(canRevealRegistration(showing)).toBe(true);
+  });
+});
+
+
+describe('customerPhotoUrl — which image a customer sees', () => {
+  const original = { photo_url: 'https://x/original.jpg', redacted_url: null, redaction_status: 'none' };
+  const done = { photo_url: 'https://x/original.jpg', redacted_url: 'https://x/redacted.jpg', redaction_status: 'redacted' };
+  const cleared = { photo_url: 'https://x/original.jpg', redacted_url: null, redaction_status: 'no_plate' };
+
+  it('serves the redacted copy once the operator has blurred it', () => {
+    expect(customerPhotoUrl(done, hiding)).toBe('https://x/redacted.jpg');
+  });
+
+  it('serves the original to a tenant that shows plates, even if a redacted copy exists', () => {
+    // The redacted copy is not a deletion. A tenant who turns the setting back
+    // off must get their real photos back.
+    expect(customerPhotoUrl(done, showing)).toBe('https://x/original.jpg');
+  });
+
+  it('serves the original for photos the operator has not reviewed', () => {
+    // Deliberately NOT deny-by-default: `none` means "not looked at", and most
+    // fleet photos contain no plate. Blanking a gallery on toggle-on would be a
+    // worse surprise than the thing it guards against.
+    expect(customerPhotoUrl(original, hiding)).toBe('https://x/original.jpg');
+  });
+
+  it('serves the original when the operator confirmed there is no plate', () => {
+    expect(customerPhotoUrl(cleared, hiding)).toBe('https://x/original.jpg');
+  });
+
+  it('never returns a redacted url that does not exist', () => {
+    const broken = { photo_url: 'https://x/o.jpg', redacted_url: null, redaction_status: 'redacted' };
+    expect(customerPhotoUrl(broken, hiding)).toBe('https://x/o.jpg');
+  });
+
+  it('handles a missing photo', () => {
+    expect(customerPhotoUrl(null, hiding)).toBeNull();
+    expect(customerPhotoUrl(undefined, showing)).toBeNull();
+  });
+});
+
+describe('the photo select and the redaction gate', () => {
+  it('asks for the columns the serving decision needs', () => {
+    for (const c of ['photo_url', 'redacted_url', 'redaction_status']) {
+      expect(VEHICLE_PHOTO_COLUMNS).toContain(c);
+    }
+  });
+
+  it('offers the blur controls only to a tenant that hides plates', () => {
+    expect(canRedactPhotos(hiding)).toBe(true);
+    expect(canRedactPhotos(showing)).toBe(false);
+    expect(canRedactPhotos(null)).toBe(false);
   });
 });

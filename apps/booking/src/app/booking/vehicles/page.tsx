@@ -17,7 +17,10 @@ import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
 import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
-import { vehiclePublicColumns, displayRegistration } from "@/lib/vehicle-identity";
+import { vehiclePublicColumns, displayRegistration,
+  VEHICLE_PHOTO_COLUMNS,
+  customerPhotoUrl,
+} from "@/lib/vehicle-identity";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -103,7 +106,7 @@ const BookingVehiclesContent = () => {
       let query = supabaseUntyped
         .from("vehicles")
         .select(
-          vehiclePublicColumns(tenant, 'vehicle_photos ( photo_url, display_order )')
+          vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
         )
         // Case-insensitive status match so rows saved as lowercase "available"/"rented"
         // aren't silently dropped (mirrors the homepage MultiStepBookingWidget query).
@@ -412,9 +415,9 @@ const BookingVehiclesContent = () => {
               {vehicles.map((vehicle) => (
                 <Card key={vehicle.id} className="overflow-hidden hover:shadow-glow transition-all">
                   <div className="aspect-[4/3] overflow-hidden bg-muted">
-                    {vehicle.vehicle_photos?.[0]?.photo_url ? (
+                    {customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) ? (
                       <img
-                        src={vehicle.vehicle_photos[0].photo_url}
+                        src={customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant)!}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                       />

@@ -16373,7 +16373,13 @@ export type Database = {
           created_at: string
           display_order: number | null
           id: string
+          original_url: string | null
           photo_url: string
+          redacted_at: string | null
+          redacted_by: string | null
+          redacted_url: string | null
+          redaction_regions: Json | null
+          redaction_status: string
           tenant_id: string | null
           updated_at: string
           vehicle_id: string
@@ -16382,7 +16388,13 @@ export type Database = {
           created_at?: string
           display_order?: number | null
           id?: string
+          original_url?: string | null
           photo_url: string
+          redacted_at?: string | null
+          redacted_by?: string | null
+          redacted_url?: string | null
+          redaction_regions?: Json | null
+          redaction_status?: string
           tenant_id?: string | null
           updated_at?: string
           vehicle_id: string
@@ -16391,7 +16403,13 @@ export type Database = {
           created_at?: string
           display_order?: number | null
           id?: string
+          original_url?: string | null
           photo_url?: string
+          redacted_at?: string | null
+          redacted_by?: string | null
+          redacted_url?: string | null
+          redaction_regions?: Json | null
+          redaction_status?: string
           tenant_id?: string | null
           updated_at?: string
           vehicle_id?: string
