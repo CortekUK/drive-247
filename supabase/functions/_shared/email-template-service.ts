@@ -939,12 +939,29 @@ export async function getTenantInfo(
   supabaseClient: any,
   tenantId: string
 ): Promise<{ company_name: string; company_email: string; company_phone: string; company_address: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string; hide_vehicle_registration: boolean }> {
+  // Branding columns that every project has, kept separate from the newer flag.
+  const BASE = 'company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code';
   try {
-    const { data, error } = await supabaseClient
+    let { data, error } = await supabaseClient
       .from('tenants')
-      .select('company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code, hide_vehicle_registration')
+      .select(`${BASE}, hide_vehicle_registration`)
       .eq('id', tenantId)
       .single();
+
+    // hide_vehicle_registration exists in production but not in every project
+    // this shared file is deployed to (staging did not have it when this was
+    // written). PostgREST fails the WHOLE select on one unknown column, so
+    // without this retry a schema-behind project would lose the tenant row
+    // entirely and send every email under generic "DRIVE 247" branding instead
+    // of the operator's. Branding must not depend on a privacy flag.
+    if (error) {
+      console.warn('[getTenantInfo] Retrying without hide_vehicle_registration:', error.message);
+      ({ data, error } = await supabaseClient
+        .from('tenants')
+        .select(BASE)
+        .eq('id', tenantId)
+        .single());
+    }
 
     if (error) throw error;
 
@@ -970,6 +987,11 @@ export async function getTenantInfo(
       accent_color: '#C5A572',
       logo_url: null,
       currency_code: 'USD',
+      // We could not read the tenant at all, so we cannot know their
+      // preference. false preserves today's behaviour for the ~41 tenants who
+      // have not opted in; a tenant who HAS opted in is protected by the
+      // retry above, which only drops this one column and keeps the row.
+      hide_vehicle_registration: false,
     };
   }
 }

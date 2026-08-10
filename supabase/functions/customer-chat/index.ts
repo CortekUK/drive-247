@@ -390,11 +390,23 @@ serve(async (req) => {
     }
 
     // Get tenant name and currency for personalized branding
-    const { data: tenantData } = await supabase
+    let { data: tenantData } = await supabase
       .from('tenants')
       .select('company_name, currency_code, hide_vehicle_registration')
       .eq('id', tenantId)
       .single();
+
+    // hide_vehicle_registration is not present in every project this function
+    // is deployed to. PostgREST rejects the whole select on one unknown column,
+    // which would cost the tenant their name and currency in every customer
+    // chat. Retry without it rather than let a privacy flag break branding.
+    if (!tenantData) {
+      ({ data: tenantData } = await supabase
+        .from('tenants')
+        .select('company_name, currency_code')
+        .eq('id', tenantId)
+        .single());
+    }
 
     const tenantName = tenantData?.company_name || 'Drive247';
     const currencyCode = tenantData?.currency_code || 'USD';
