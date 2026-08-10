@@ -23,7 +23,9 @@ import {
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { format } from 'date-fns';
-import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
+import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration,
+  customerPhotoUrl,
+} from "@/lib/vehicle-identity";
 
 type BookingFilter = 'all' | 'active' | 'current' | 'past';
 type SortOrder = 'newest' | 'oldest';
@@ -249,7 +251,7 @@ export default function BookingsPage() {
               const vehicleName = vehicle
                 ? vehicleDisplayName(vehicle, tenant)
                 : 'Unknown Vehicle';
-              const photoUrl = vehicle?.photo_url || vehicle?.vehicle_photos?.[0]?.photo_url;
+              const photoUrl = customerPhotoUrl(vehicle?.vehicle_photos?.[0], tenant) || vehicle?.photo_url;
               const hasInsuranceAlert = insuranceReuploadRentalIds.has(rental.id);
               const needsSignature = rental.document_status === 'sent' || rental.document_status === 'delivered';
               const hasPendingExtension = rental.is_extended && rental.extension_checkout_url;

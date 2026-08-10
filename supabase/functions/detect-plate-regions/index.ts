@@ -184,6 +184,14 @@ Deno.serve(async (req) => {
 
     // Super admins may act across tenants; everyone else is pinned to their own.
     const isSuperAdmin = appUser.is_super_admin === true;
+    // Role gate. `role` was selected but never read, so ops/viewer could spend
+    // AWS Rekognition calls on any photo in their tenant. Mirrors the gate in
+    // save-photo-redaction so the button and the API agree on who may act.
+    const ALLOWED_ROLES = ['head_admin', 'admin', 'manager'];
+    if (!isSuperAdmin && !ALLOWED_ROLES.includes(appUser.role)) {
+      return errorResponse('Your role cannot edit vehicle photos.', 403);
+    }
+
     if (!isSuperAdmin && appUser.tenant_id !== tenantId) {
       console.warn(
         `detect-plate-regions: user ${appUser.id} (tenant ${appUser.tenant_id}) tried tenant ${tenantId}`

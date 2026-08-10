@@ -245,7 +245,21 @@ Deno.serve(async (req) => {
       return errorResponse("Photo not found.", 404);
     }
 
-    if (photo.tenant_id !== tenantId) {
+    // vehicle_photos.tenant_id is NULLABLE and both portal upload paths can write
+    // NULL when TenantContext has not resolved. detect-plate-regions falls back to
+    // the parent vehicle's tenant; without the same fallback here, detection would
+    // succeed, the operator would draw a box, and only the save would 403 —
+    // telling them a photo they own belongs to someone else.
+    let owningTenantId: string | null = photo.tenant_id ?? null;
+    if (!owningTenantId && photo.vehicle_id) {
+      const { data: parentVehicle } = await admin
+        .from("vehicles")
+        .select("tenant_id")
+        .eq("id", photo.vehicle_id)
+        .maybeSingle();
+      owningTenantId = parentVehicle?.tenant_id ?? null;
+    }
+    if (owningTenantId !== tenantId) {
       return errorResponse("This photo does not belong to the specified tenant.", 403);
     }
 

@@ -71,7 +71,9 @@ import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCar
 import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
-import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
+import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration,
+  customerPhotoUrl,
+} from "@/lib/vehicle-identity";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -696,7 +698,7 @@ export default function BookingDetailPage() {
 
   const vehiclePhotoUrl =
     vehicle?.photo_url ||
-    vehicle?.vehicle_photos?.[0]?.photo_url ||
+    customerPhotoUrl(vehicle?.vehicle_photos?.[0], tenant) ||
     null;
 
   const mileageAllowance = (() => {

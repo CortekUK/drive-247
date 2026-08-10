@@ -4458,7 +4458,7 @@ const MultiStepBookingWidget = () => {
                         {vehicle.vehicle_photos && vehicle.vehicle_photos.length > 0 ? (
                           <>
                             <img
-                              src={vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)]?.photo_url || vehicle.vehicle_photos[0].photo_url}
+                              src={customerPhotoUrl(vehicle.vehicle_photos[getVehicleImageIndex(vehicle.id)], tenant) || customerPhotoUrl(vehicle.vehicle_photos[0], tenant) || ''}
                               alt={vehicleName}
                               className="w-full h-full object-cover"
                               loading="lazy"
@@ -4674,9 +4674,9 @@ const MultiStepBookingWidget = () => {
                   {/* Selected Vehicle */}
                   <div className="flex gap-3">
                     <div className="w-16 h-16 rounded-md overflow-hidden bg-muted flex-shrink-0 relative">
-                      {selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url ? (
+                      {customerPhotoUrl(selectedVehicle.vehicle_photos?.[0], tenant) || selectedVehicle.photo_url ? (
                         <img
-                          src={selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url || ''}
+                          src={customerPhotoUrl(selectedVehicle.vehicle_photos?.[0], tenant) || selectedVehicle.photo_url || ''}
                           alt={vehicleDisplayName(selectedVehicle, tenant)}
                           className="w-full h-full object-cover"
                           loading="lazy"
@@ -4687,7 +4687,7 @@ const MultiStepBookingWidget = () => {
                           }}
                         />
                       ) : null}
-                      <div className={`${selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url ? 'hidden' : 'flex'} w-full h-full items-center justify-center absolute inset-0`}>
+                      <div className={`${customerPhotoUrl(selectedVehicle.vehicle_photos?.[0], tenant) || selectedVehicle.photo_url ? 'hidden' : 'flex'} w-full h-full items-center justify-center absolute inset-0`}>
                         <Car className="w-6 h-6 text-muted-foreground opacity-30" />
                       </div>
                     </div>

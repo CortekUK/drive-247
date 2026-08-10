@@ -23,6 +23,7 @@ import { RenewRentalDialog } from './RenewRentalDialog';
 import { RentalTimeline } from './RentalTimeline';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { customerPhotoUrl } from "@/lib/vehicle-identity";
 
 interface RentalCardProps {
   rental: CustomerRental;
@@ -121,7 +122,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
 
   const vehicleImage =
     vehicle?.photo_url ||
-    vehicle?.vehicle_photos?.[0]?.photo_url ||
+    customerPhotoUrl(vehicle?.vehicle_photos?.[0], tenant) ||
     '/placeholder.svg';
 
   const durationDays = differenceInDays(

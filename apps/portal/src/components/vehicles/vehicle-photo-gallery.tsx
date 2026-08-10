@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { PlateRedactionDialog } from "@/components/vehicles/plate-redaction-dialog";
 import { useTenant } from "@/contexts/TenantContext";
 import { EyeOff, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/stores/auth-store";
 
 interface VehiclePhoto {
   id: string;
@@ -102,7 +103,10 @@ const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastP
           Staff always see the ORIGINAL above; this button governs what the
           BOOKING SITE serves. */}
       {canRedact && (
-        <div className="absolute bottom-2 left-2 z-10">
+        // Bottom-RIGHT on purpose: bottom-left is the dnd drag handle, and
+        // covering it broke photo reordering for exactly the tenants who get
+        // this button.
+        <div className="absolute bottom-2 right-2 z-10">
           {photo.redaction_status === "redacted" ? (
             <button
               type="button"
@@ -199,7 +203,15 @@ export const VehiclePhotoGallery = ({
   // Fetch vehicle photos
   // Only a tenant that hides plates from customers gets these controls. With the
   // setting off there is nothing to hide FROM, so the button would be noise.
-  const canRedact = (tenant as { hide_vehicle_registration?: boolean } | null)?.hide_vehicle_registration === true;
+  // Two conditions, both required. The tenant must hide plates (otherwise there
+  // is nothing to hide FROM), and the user must hold a role the edge function
+  // will actually accept — save-photo-redaction refuses ops/viewer, so showing
+  // them the button would mean a guaranteed 403 after they had done the work.
+  const { appUser } = useAuth();
+  const REDACT_ROLES = ['head_admin', 'admin', 'manager'];
+  const canRedact =
+    (tenant as { hide_vehicle_registration?: boolean } | null)?.hide_vehicle_registration === true &&
+    (!!appUser?.is_super_admin || REDACT_ROLES.includes(appUser?.role ?? ''));
   const [redactPhoto, setRedactPhoto] = useState<VehiclePhoto | null>(null);
 
   const { data: photos = [], isLoading } = useQuery({

@@ -14,6 +14,7 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
 import { formatCurrency } from "@/lib/format-utils";
+import { customerPhotoUrl } from "@/lib/vehicle-identity";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -214,9 +215,9 @@ const BookingVehicles = () => {
               {vehicles.map((vehicle) => (
                 <Card key={vehicle.id} className="overflow-hidden hover:shadow-glow transition-all">
                   <div className="aspect-[4/3] overflow-hidden bg-muted">
-                    {vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url ? (
+                    {customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) || vehicle.photo_url ? (
                       <img
-                        src={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url || ''}
+                        src={customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) || vehicle.photo_url || ''}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                       />
