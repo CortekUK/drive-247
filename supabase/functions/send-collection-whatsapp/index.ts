@@ -96,12 +96,21 @@ Deno.serve(async (req) => {
     // substitutes {{vehicle_reg}} directly, so no per-message guard would reach
     // it. vehicleName is kept — this message tells someone which car to collect.
     try {
-      const { data: privacyRow } = await supabase
+      const { data: privacyRow, error: privacyErr } = await supabase
         .from('tenants')
         .select('hide_vehicle_registration')
         .eq('id', data.tenantId)
         .single();
-      if (privacyRow?.hide_vehicle_registration === true) {
+      // PostgREST returns errors rather than throwing, so the catch below never
+      // fired and this failed OPEN. Check `error` explicitly.
+      if (privacyErr) {
+        const missingColumn = privacyErr.code === '42703'
+          || /column .* does not exist/i.test(privacyErr.message || '');
+        if (!missingColumn) {
+          console.warn('[collection-whatsapp] Privacy flag unreadable; withholding:', privacyErr.message);
+          data.vehicleReg = '';
+        }
+      } else if (privacyRow?.hide_vehicle_registration === true) {
         data.vehicleReg = '';
       }
     } catch (e) {

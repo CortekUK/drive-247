@@ -37,10 +37,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Pickup Date:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -105,10 +102,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Pickup Date:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -225,7 +219,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Original Rental Period:</strong></td>
@@ -276,10 +270,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Rental Start:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -336,7 +327,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Return Date:</strong></td>
@@ -389,7 +380,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Rental Period:</strong></td>
@@ -440,10 +431,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Return Date:</strong></td>
     <td>{{rental_end_date}}</td>
@@ -593,7 +581,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Previous End Date:</strong></td>
@@ -954,13 +942,22 @@ export async function getTenantInfo(
     // without this retry a schema-behind project would lose the tenant row
     // entirely and send every email under generic "DRIVE 247" branding instead
     // of the operator's. Branding must not depend on a privacy flag.
+    // Retry ONLY when the column is genuinely absent (a project behind prod's
+    // schema). Retrying on ANY error meant a transient failure silently dropped
+    // the column, `undefined === true` evaluated false, and the plate was shown
+    // for a tenant who had opted in — a fail-OPEN in the fail-closed path.
+    let columnMissing = false;
     if (error) {
-      console.warn('[getTenantInfo] Retrying without hide_vehicle_registration:', error.message);
-      ({ data, error } = await supabaseClient
-        .from('tenants')
-        .select(BASE)
-        .eq('id', tenantId)
-        .single());
+      columnMissing = error.code === '42703'
+        || /column .* does not exist/i.test(error.message || '');
+      if (columnMissing) {
+        console.warn('[getTenantInfo] Column absent on this project; retrying without it.');
+        ({ data, error } = await supabaseClient
+          .from('tenants')
+          .select(BASE)
+          .eq('id', tenantId)
+          .single());
+      }
     }
 
     if (error) throw error;
@@ -974,7 +971,9 @@ export async function getTenantInfo(
       accent_color: data.accent_color || '#C5A572',
       logo_url: data.logo_url || null,
       currency_code: data.currency_code || 'USD',
-      hide_vehicle_registration: data.hide_vehicle_registration === true,
+      // On the retry path the column was not selected, so undefined means
+      // 'this project predates the feature' — nobody can have opted in.
+      hide_vehicle_registration: columnMissing ? false : data.hide_vehicle_registration === true,
     };
   } catch (err) {
     console.warn('Error fetching tenant info:', err);
@@ -1022,6 +1021,9 @@ export async function resolveEmailData(
 
   // Start with empty data
   const result: EmailTemplateData = {};
+  // Always defined, so an unreplaced {{vehicle_reg_row}} never ships as literal text.
+  result.vehicle_reg_suffix = '';
+  result.vehicle_reg_row = '';
 
   // Fetch tenant info if tenantId provided
   let currencyCode = 'USD';
@@ -1120,6 +1122,14 @@ export async function resolveEmailData(
           result.vehicle_model = vehicle.model || '';
           result.vehicle_year = vehicle.year?.toString() || '';
           result.vehicle_reg = hideVehicleReg ? '' : (vehicle.reg || '');
+          // Companions so a withheld plate leaves no empty brackets and no
+          // "Registration:" row with a blank cell. Templates use these instead
+          // of wrapping {{vehicle_reg}} in punctuation they cannot make
+          // conditional themselves.
+          result.vehicle_reg_suffix = result.vehicle_reg ? ` (${result.vehicle_reg})` : '';
+          result.vehicle_reg_row = result.vehicle_reg
+            ? `  <tr>\n    <td><strong>Registration:</strong></td>\n    <td>${result.vehicle_reg}</td>\n  </tr>`
+            : '';
           result.vehicle_color = vehicle.color || '';
           result.vehicle_vin = hideVehicleReg ? '' : (vehicle.vin || '');
           result.vehicle_fuel_type = vehicle.fuel_type || '';

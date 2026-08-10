@@ -400,12 +400,17 @@ serve(async (req) => {
     // is deployed to. PostgREST rejects the whole select on one unknown column,
     // which would cost the tenant their name and currency in every customer
     // chat. Retry without it rather than let a privacy flag break branding.
+    // Retry only for a genuinely absent column. Retrying on any failure meant a
+    // transient error dropped the flag and fed the plate into the LLM context.
+    let chatColumnMissing = false;
     if (!tenantData) {
-      ({ data: tenantData } = await supabase
+      const probe = await supabase
         .from('tenants')
         .select('company_name, currency_code')
         .eq('id', tenantId)
-        .single());
+        .single();
+      tenantData = probe.data;
+      chatColumnMissing = true;
     }
 
     const tenantName = tenantData?.company_name || 'Drive247';
@@ -415,7 +420,13 @@ serve(async (req) => {
     // car am I getting?" to be told it, and no amount of hiding pixels on the
     // booking site prevents that. Withheld at the source rather than by asking
     // the model not to mention it.
-    const hideVehicleReg = tenantData?.hide_vehicle_registration === true;
+    // Fail CLOSED: if we could not read the tenant at all, withhold. Only the
+    // schema-behind case (retry succeeded without the column) shows the plate.
+    const hideVehicleReg = !tenantData
+      ? true
+      : chatColumnMissing
+        ? false
+        : (tenantData as any).hide_vehicle_registration === true;
 
     // Parse request body
     let body: CustomerChatRequest;

@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { getTenantInfo, wrapEmailHtml } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { hidePlateForTenant, vehicleLabel, plateOrBlank } from "../_shared/vehicle-privacy.ts";
 
 interface ReceiptRequest {
   installmentId: string;
@@ -126,6 +127,10 @@ serve(async (req) => {
 
     // Get tenant info for branding
     const tenantInfo = await getTenantInfo(supabase, data.tenantId);
+    // getTenantInfo already carries the flag; blank before vehicleName is composed.
+    if (tenantInfo.hide_vehicle_registration && (data as any).vehicle) {
+      (data as any).vehicle.reg = '';
+    }
 
     // Get additional details if not provided
     let rentalNumber = data.rentalNumber;

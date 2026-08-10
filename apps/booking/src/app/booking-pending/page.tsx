@@ -21,7 +21,7 @@ const BookingPendingContent = () => {
   const searchParams = useSearchParams();
   const { customerUser } = useCustomerAuthStore();
   const { clearBooking } = useBookingStore();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
@@ -37,6 +37,13 @@ const BookingPendingContent = () => {
   }, []);
 
   useEffect(() => {
+    // Wait until TenantContext has finished resolving. vehiclePublicColumnsNested()
+    // withholds `reg` while the tenant is unknown (fail closed), so running this
+    // on mount — when tenant is still null — permanently dropped the registration
+    // row for EVERY tenant, including the ~41 that show plates. Once resolution
+    // has finished we proceed either way: a genuinely absent tenant then keeps
+    // the plate withheld, which is the correct fail-closed outcome.
+    if (tenantLoading) return;
     const fetchBookingDetails = async () => {
       if (!rentalId) {
         setLoading(false);
@@ -114,7 +121,7 @@ const BookingPendingContent = () => {
     };
 
     fetchBookingDetails();
-  }, [rentalId]);
+  }, [rentalId, tenant?.id, tenantLoading]);
 
   return (
     <>

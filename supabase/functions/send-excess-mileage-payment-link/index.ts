@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
 
     // Send email with payment link
     const branding = await getTenantBranding(effectiveTenantId, supabase);
-    const vehicleName = vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.reg})` : "your rental vehicle";
+    const vehicleName = vehicle ? `${vehicleLabel(vehicle, hidePlate)}` : "your rental vehicle";
     const formattedAmount = formatCurrency(amount, currencyCode);
 
     const emailContent = `

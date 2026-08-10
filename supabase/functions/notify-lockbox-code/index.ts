@@ -263,12 +263,23 @@ serve(async (req) => {
     // leave them with no identifier at all.
     if (data.tenantId) {
       try {
-        const { data: privacyRow } = await supabase
+        const { data: privacyRow, error: privacyErr } = await supabase
           .from('tenants')
           .select('hide_vehicle_registration')
           .eq('id', data.tenantId)
           .single();
-        if (privacyRow?.hide_vehicle_registration === true) {
+        // PostgREST RETURNS errors, it does not throw — so the catch below was
+        // unreachable and this guard silently failed OPEN. Inspect `error`.
+        // A missing column means the project predates the feature (no tenant can
+        // have opted in); anything else is unknown, so withhold.
+        if (privacyErr) {
+          const missingColumn = privacyErr.code === '42703'
+            || /column .* does not exist/i.test(privacyErr.message || '');
+          if (!missingColumn) {
+            console.warn('[lockbox] Privacy flag unreadable; withholding the plate:', privacyErr.message);
+            data.vehicleReg = '';
+          }
+        } else if (privacyRow?.hide_vehicle_registration === true) {
           data.vehicleReg = '';
         }
       } catch (e) {
@@ -294,7 +305,7 @@ serve(async (req) => {
       try {
         const { data: tenantData } = await supabase
           .from('tenants')
-          .select('company_name, app_name, contact_email, slug, primary_color, accent_color, logo_url, hide_vehicle_registration')
+          .select('company_name, app_name, contact_email, slug, primary_color, accent_color, logo_url')
           .eq('id', data.tenantId)
           .single();
 

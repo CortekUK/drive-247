@@ -19,7 +19,7 @@ import { parseDateOnly } from "@/lib/date-utils";
 import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 const InvoicePaymentSuccess = () => {
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isHoldFlow, setIsHoldFlow] = useState(false);
@@ -208,7 +208,7 @@ const InvoicePaymentSuccess = () => {
 
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const { customerUser } = useCustomerAuthStore();
   const { clearBooking } = useBookingStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
@@ -229,6 +229,11 @@ const BookingSuccessContent = () => {
   }, []);
 
   useEffect(() => {
+    // Wait for TenantContext. vehiclePublicColumnsNested() withholds `reg` while
+    // the tenant is unknown (fail closed), so running on mount permanently
+    // dropped the registration row for every tenant — including the ~41 that
+    // show plates. Once resolution finishes we proceed either way.
+    if (tenantLoading) return;
     const updateRentalStatus = async () => {
       if (!sessionId) {
         setLoading(false);
@@ -601,7 +606,7 @@ const BookingSuccessContent = () => {
     };
 
     updateRentalStatus();
-  }, [sessionId, rentalId]);
+  }, [sessionId, rentalId, tenant?.id, tenantLoading]);
 
   // Fire confetti when booking details have loaded
   const fireConfetti = useCallback(() => {

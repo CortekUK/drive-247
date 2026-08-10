@@ -9,6 +9,7 @@ import {
 } from "../_shared/resend-service.ts";
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { hidePlateForTenant, vehicleLabel, plateOrBlank } from "../_shared/vehicle-privacy.ts";
 
 interface SendInvoiceEmailRequest {
   invoiceId?: string;
@@ -116,7 +117,7 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, cu
                 ${invoice.vehicles ? `
                 <tr>
                   <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
-                  <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${invoice.vehicles.make} ${invoice.vehicles.model} (${invoice.vehicles.reg})</td>
+                  <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${vehicleLabel(invoice.vehicles, hidePlate)}</td>
                 </tr>
                 ` : ""}
               </table>
@@ -331,6 +332,11 @@ serve(async (req) => {
     }
 
     // Generate email HTML
+    // Blank at source so every branch of generateEmailContent() is covered.
+    const hidePlate = await hidePlateForTenant(supabase, tenantId);
+    if (hidePlate && (invoice as any)?.vehicles) {
+      (invoice as any).vehicles.reg = null;
+    }
     const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription, depositHoldAmount);
     const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
