@@ -75,6 +75,7 @@ import { cn } from '@/lib/utils';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { parseDateOnly } from '@/lib/date-utils';
+import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
 
 // Mock data for demo installments
 const mockInstallmentPlans = [
@@ -193,7 +194,7 @@ function NextPaymentCard({
 
   const vehicle = plan.rentals?.vehicles;
   const vehicleName = vehicle
-    ? `${vehicle.make || ''} ${vehicle.model || ''} (${vehicle.reg})`.trim()
+    ? vehicleDisplayLabel(vehicle, tenant)
     : 'Vehicle';
 
   return (
@@ -340,7 +341,7 @@ function InstallmentPlanCard({
   const currencyCode = tenant?.currency_code || 'USD';
   const vehicle = plan.rentals?.vehicles;
   const vehicleName = vehicle
-    ? `${vehicle.make || ''} ${vehicle.model || ''} (${vehicle.reg})`.trim()
+    ? vehicleDisplayLabel(vehicle, tenant)
     : 'Vehicle';
 
   const paidInstallments = plan.paid_installments || 0;
@@ -694,7 +695,7 @@ function InvoiceList({
       {invoices.map((invoice) => {
         const vehicle = invoice.vehicles;
         const vehicleName = vehicle
-          ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+          ? vehicleDisplayLabel(vehicle, tenant)
           : null;
 
         const isPaid = invoice.computed_status === 'paid';
@@ -766,7 +767,7 @@ function InvoiceDetailSheet({
 
   const vehicle = invoice.vehicles;
   const vehicleName = vehicle
-    ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+    ? vehicleDisplayLabel(vehicle, tenant)
     : 'Vehicle';
 
   const dueDate = invoice.due_date ? parseDateOnly(invoice.due_date) : null;

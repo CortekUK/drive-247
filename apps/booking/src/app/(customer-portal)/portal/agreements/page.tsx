@@ -42,6 +42,8 @@ const safeFormat = (dateStr: string | null | undefined, fmt: string): string => 
   return isValid(d) ? format(d, fmt) : 'N/A';
 };
 import { toast } from 'sonner';
+import { useTenant } from "@/contexts/TenantContext";
+import { vehicleDisplayLabel } from "@/lib/vehicle-identity";
 
 function StatCard({
   title,
@@ -87,6 +89,7 @@ function AgreementCard({
   isViewing: boolean;
   isSigning: boolean;
 }) {
+  const { tenant } = useTenant();
   const statusInfo = getAgreementStatusInfo(agreement.document_status);
   const hasSignedDocument = !!agreement.signed_document?.file_url;
   const hasEnvelope = !!agreement.document_id;
@@ -94,9 +97,9 @@ function AgreementCard({
   const needsSignature = hasEnvelope && !hasSignedDocument &&
     agreement.document_status !== 'completed' &&
     agreement.document_status !== 'signed';
-  const vehicleInfo = agreement.vehicles
-    ? `${agreement.vehicles.make || ''} ${agreement.vehicles.model || ''} - ${agreement.vehicles.reg}`.trim()
-    : 'Vehicle';
+  // Hyphen form left "Audi A4 - " dangling once the plate was withheld; the
+  // shared helper omits the suffix entirely instead.
+  const vehicleInfo = vehicleDisplayLabel(agreement.vehicles, tenant);
   const isExtension = agreement.agreement_type === 'extension';
 
   return (
@@ -272,10 +275,11 @@ function AgreementViewerDialog({
   isLoading: boolean;
 }) {
   if (!agreement) return null;
+  const { tenant } = useTenant();
 
-  const vehicleInfo = agreement.vehicles
-    ? `${agreement.vehicles.make || ''} ${agreement.vehicles.model || ''} - ${agreement.vehicles.reg}`.trim()
-    : 'Vehicle';
+  // Hyphen form left "Audi A4 - " dangling once the plate was withheld; the
+  // shared helper omits the suffix entirely instead.
+  const vehicleInfo = vehicleDisplayLabel(agreement.vehicles, tenant);
   const isExtension = agreement.agreement_type === 'extension';
 
   return (

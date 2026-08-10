@@ -71,6 +71,7 @@ import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCar
 import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
+import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -803,7 +804,7 @@ export default function BookingDetailPage() {
           {(() => {
             const ref = (rental as { rental_number?: string | null }).rental_number || rental.id?.slice(0, 8).toUpperCase();
             const vehicleTitle = vehicle
-              ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || vehicle.reg
+              ? vehicleDisplayName(vehicle, tenant)
               : 'Booking Details';
             return (
               <>
@@ -838,7 +839,7 @@ export default function BookingDetailPage() {
                 </div>
                 <p className="text-sm text-muted-foreground mt-1 truncate">
                   {vehicleTitle}
-                  {vehicle?.reg && ` • ${vehicle.reg}`}
+                  {displayRegistration(vehicle, tenant) && ` • ${displayRegistration(vehicle, tenant)}`}
                 </p>
               </>
             );
@@ -1099,7 +1100,9 @@ export default function BookingDetailPage() {
               customerEmail={customerUser?.customer?.email || undefined}
               customerPhone={customerUser?.customer?.phone || undefined}
               vehicle={{
-                reg: (rental as any).vehicles?.reg,
+                // ?? undefined because this prop models "no plate" as undefined,
+                // while displayRegistration returns null for it.
+                reg: displayRegistration((rental as any).vehicles, tenant) ?? undefined,
                 make: (rental as any).vehicles?.make,
                 model: (rental as any).vehicles?.model,
               }}

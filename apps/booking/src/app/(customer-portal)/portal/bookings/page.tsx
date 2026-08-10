@@ -23,6 +23,7 @@ import {
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { format } from 'date-fns';
+import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
 
 type BookingFilter = 'all' | 'active' | 'current' | 'past';
 type SortOrder = 'newest' | 'oldest';
@@ -246,7 +247,7 @@ export default function BookingsPage() {
             {sortedRentals.map((rental) => {
               const vehicle = rental.vehicles;
               const vehicleName = vehicle
-                ? `${vehicle.make || ''} ${vehicle.model || ''}`.trim() || vehicle.reg
+                ? vehicleDisplayName(vehicle, tenant)
                 : 'Unknown Vehicle';
               const photoUrl = vehicle?.photo_url || vehicle?.vehicle_photos?.[0]?.photo_url;
               const hasInsuranceAlert = insuranceReuploadRentalIds.has(rental.id);
@@ -281,8 +282,8 @@ export default function BookingsPage() {
                         #{getRef(rental)}
                       </span>
                       <p className="font-medium truncate">{vehicleName}</p>
-                      {vehicle?.reg && (
-                        <span className="text-xs text-muted-foreground hidden sm:inline">{vehicle.reg}</span>
+                      {displayRegistration(vehicle, tenant) && (
+                        <span className="text-xs text-muted-foreground hidden sm:inline">{displayRegistration(vehicle, tenant)}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
