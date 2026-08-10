@@ -44,6 +44,7 @@ import { parseDateOnly } from '@/lib/date-utils';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { vehicleDisplayName } from "@/lib/vehicle-identity";
 
 function StatCard({
   title,
@@ -256,6 +257,7 @@ function getPolicyStatusBadge(status: string) {
 }
 
 function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: CustomerBonzahPolicy; currencyCode: string; tenantId: string | undefined }) {
+  const { tenant } = useTenant();
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const coverageTypes = policy.coverage_types || {};
   const activeCoverages = getActiveCoverageLabels(coverageTypes, COVERAGE_LABELS);
@@ -263,7 +265,7 @@ function InsurancePolicyCard({ policy, currencyCode, tenantId }: { policy: Custo
   const rental = policy.rentals;
   const vehicle = rental?.vehicles;
   const vehicleName = vehicle
-    ? [vehicle.make, vehicle.model].filter(Boolean).join(' ') || vehicle.reg
+    ? vehicleDisplayName(vehicle, tenant)
     : null;
   const isExtension = policy.policy_type === 'extension';
 

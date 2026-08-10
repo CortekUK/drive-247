@@ -28,6 +28,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useFleetList } from "@/hooks/use-fleet-list";
 import { useBookingStore } from "@/stores/booking-store";
 import { enquirySchema, type EnquiryFormValues } from "@/client-schemas/enquiry";
+import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 const ANY_VEHICLE = "__any__";
 
@@ -219,12 +220,12 @@ export function EnquiryModal({ open, onOpenChange, defaultVehicleId }: EnquiryMo
                   <SelectContent className="max-h-72">
                     <SelectItem value={ANY_VEHICLE}>Any vehicle</SelectItem>
                     {fleet.map((v) => {
-                      const label = [v.make, v.model].filter(Boolean).join(" ") || v.reg;
+                      const label = vehicleDisplayName(v, tenant);
                       return (
                         <SelectItem key={v.id} value={v.id}>
                           <span className="flex items-center gap-2">
                             <span>{label}</span>
-                            <span className="text-xs text-muted-foreground">{v.reg}</span>
+                            <span className="text-xs text-muted-foreground">{displayRegistration(v, tenant)}</span>
                             {v.is_currently_booked && (
                               <span className="text-xs text-amber-600">• currently booked</span>
                             )}

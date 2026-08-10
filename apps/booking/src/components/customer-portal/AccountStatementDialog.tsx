@@ -10,6 +10,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { formatCurrency } from "@/lib/format-utils";
 import { useCustomerStatement, type StatementData, type StatementGroup } from "@/hooks/use-customer-statement";
+import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 interface Props {
   open: boolean;
@@ -49,6 +50,7 @@ function StatementContent({
   generatedAt,
   printable,
 }: ContentProps) {
+  const { tenant } = useTenant();
   const fmt = (n: number) => formatCurrency(round2(n), currencyCode);
   const { customer, groups, grand } = data;
 
@@ -107,7 +109,7 @@ function StatementContent({
         </div>
       ) : (
         groups.map((g: StatementGroup) => {
-          const vehicleName = g.vehicle.make && g.vehicle.model ? `${g.vehicle.make} ${g.vehicle.model}` : (g.vehicle.reg ?? "");
+          const vehicleName = vehicleDisplayName(g.vehicle, tenant);
           return (
             <div
               key={g.rentalId ?? "account"}
@@ -121,7 +123,7 @@ function StatementContent({
                 <div style={{ fontWeight: 600, fontSize: 13 }}>
                   {g.rentalId ? `Rental ${g.rentalNumber}` : g.rentalNumber}
                   {vehicleName ? ` · ${vehicleName}` : ""}
-                  {g.vehicle.reg ? ` (${g.vehicle.reg})` : ""}
+                  {displayRegistration(g.vehicle, tenant) ? ` (${displayRegistration(g.vehicle, tenant)})` : ""}
                 </div>
                 {(g.startDate || g.endDate) && (
                   <div style={{ fontSize: 12, color: "#6b7280" }}>

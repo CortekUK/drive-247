@@ -7,13 +7,16 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { CheckCircle, Mail, Phone, Calendar, Car, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useBookingStore } from "@/stores/booking-store";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { parseDateOnly } from "@/lib/date-utils";
+import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
+import { useTenant } from "@/contexts/TenantContext";
 
 const BookingEnquirySubmittedContent = () => {
+  const { tenant } = useTenant();
   const searchParams = useSearchParams();
   const { clearBooking } = useBookingStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
@@ -44,12 +47,12 @@ const BookingEnquirySubmittedContent = () => {
 
       try {
         // Fetch rental details with customer and vehicle info
-        const { data: rental, error: fetchError } = await supabase
+        const { data: rental, error: fetchError } = await supabaseUntyped
           .from("rentals")
           .select(`
             *,
             customer:customers(*),
-            vehicle:vehicles(*)
+            ${vehiclePublicColumnsNested(tenant, 'vehicle:vehicles')}
           `)
           .eq("id", rentalId)
           .maybeSingle(); // Use maybeSingle to avoid error if not found
@@ -61,7 +64,7 @@ const BookingEnquirySubmittedContent = () => {
           // Format rental details for display
           const vehicleName = rental.vehicle?.make && rental.vehicle?.model
             ? `${rental.vehicle.make} ${rental.vehicle.model}`
-            : rental.vehicle?.reg || 'Vehicle';
+            : vehicleDisplayName(rental.vehicle, tenant);
 
           setBookingDetails({
             rental_id: rental.id,
@@ -69,7 +72,7 @@ const BookingEnquirySubmittedContent = () => {
             customer_name: rental.customer?.name || 'Customer',
             customer_email: rental.customer?.email,
             vehicle_name: vehicleName,
-            vehicle_reg: rental.vehicle?.reg,
+            vehicle_reg: displayRegistration(rental.vehicle, tenant) ?? '',
             pickup_date: rental.start_date ? format(parseDateOnly(rental.start_date), "MMM dd, yyyy") : 'TBD',
             return_date: rental.end_date ? format(parseDateOnly(rental.end_date), "MMM dd, yyyy") : 'TBD',
             rental_period_type: rental.rental_period_type,
