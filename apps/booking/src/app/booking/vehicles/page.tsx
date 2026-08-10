@@ -45,7 +45,7 @@ interface Vehicle {
 const BookingVehiclesContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const { updateContext, context } = useBookingStore();
   // The customer's chosen pickup location (multiple-locations mode). Used to show
   // only vehicles assigned to that location (plus unassigned "any location" cars).
@@ -78,9 +78,16 @@ const BookingVehiclesContent = () => {
     // unknown until it resolves (and unknown means withhold, so querying early
     // would permanently omit the plate for tenants who show it), and the
     // tenant_id filter below is a no-op while tenant is null.
-    if (!tenant?.id) return;
+    if (!tenant?.id) {
+      // `loading` starts true and is only cleared inside loadVehicles(), so
+      // returning early here would spin forever on a tenant that never
+      // resolves (bad subdomain, network failure). Once the context has
+      // finished trying, stop the spinner and let the empty state render.
+      if (!tenantLoading) setLoading(false);
+      return;
+    }
     loadVehicles();
-  }, [tenant?.id]);
+  }, [tenant?.id, tenantLoading]);
 
   const loadVehicles = async () => {
     setLoading(true);
