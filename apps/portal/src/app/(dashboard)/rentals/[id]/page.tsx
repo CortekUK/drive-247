@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Fragment } from "react";
+import { useState, useEffect, useMemo, Fragment, Children, type ReactNode } from "react";
 import { differenceInDays, format } from "date-fns";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -14,7 +14,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil, MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
@@ -177,6 +178,154 @@ const REFRESH_RESULT_TITLES: Record<string, string> = {
 // failure.
 const NOTHING_DUE_MESSAGE =
   'Nothing needed refreshing on this rental right now. The chain only re-authorises a hold as its deadline approaches, a failed hold waits out its retry backoff first, and a hold that never authorised successfully has nothing to re-drive — use "Add Hold" for that. Use "Check with Stripe" if the status itself looks wrong.';
+
+/**
+ * The Pre-Auth Hold row's non-money actions, collapsed behind a kebab (⋯).
+ *
+ * The Action column gives every other row ONE control. This row had four text
+ * actions plus a bell competing for the same right-aligned gutter, which left
+ * the two that matter at vehicle return — Release and Charge — no more
+ * prominent than a diagnostic. So the split is by consequence, not by
+ * frequency: anything that moves money or places an authorisation (Release,
+ * Charge, Refresh & Charge, Add Hold, Send card link) stays inline and one
+ * click; the reconcile/retry pair, which an operator reaches for only when
+ * something looks wrong, moves in here.
+ *
+ * This is a component, not inline JSX, because the deposit row renders that
+ * pair from three mutually-exclusive deposit_hold_status blocks (held/expired,
+ * processing/refreshing/failed, requires_action/needs_review). They had already
+ * started to drift — the two Force refresh buttons carry different tooltips —
+ * and hand-rolling a fourth copy of the markup would guarantee more of it.
+ *
+ * Permission gates are NOT decided here, and that is deliberate. The menu takes
+ * its items as CHILDREN so each `canEdit('rentals')` / `isAdmin()` predicate
+ * stays written out at the branch it has always guarded, next to the comment
+ * explaining it — rather than being hoisted into one clever row-level boolean
+ * where a later edit could widen it for every status at once. Two rules follow:
+ *   - a gated-out action is ABSENT, never rendered disabled. Collapsing a
+ *     control into a menu must not change who can reach it.
+ *   - if every child is gated out, the trigger itself does not render, because
+ *     a ⋯ that opens onto nothing is worse than the clutter it replaced. That
+ *     is what the Children.toArray count below is for: React drops the `false`
+ *     a failed `cond && <Item/>` leaves behind, so an empty array means every
+ *     gate said no.
+ *
+ * Every handler stops propagation: the table row is itself clickable, so a
+ * click that escapes navigates the operator away instead of opening the menu.
+ */
+function HoldActionsMenu({
+  emphasizeTrigger = false,
+  triggerLabel,
+  busy = false,
+  busyLabel,
+  children,
+}: {
+  /** needs_review has no other way out of the status, so the closed trigger
+   *  inherits the find-me styling its inline button used to carry. Without it,
+   *  the one status whose entire job is a single action would be the one status
+   *  drawn as an unremarkable grey dot. */
+  emphasizeTrigger?: boolean;
+  /** Text beside the ⋯ for statuses where the menu is the ONLY exit. An
+   *  unlabelled icon is fine when it holds extras next to a visible Release /
+   *  Charge; it is not fine when it is the single thing an operator must find
+   *  (needs_review). Costs a few pixels on one status, saves a support call. */
+  triggerLabel?: string;
+  /** Radix closes the menu on select, so once an action starts the row would
+   *  otherwise show NOTHING while it runs — the item's "Checking…" spinner is
+   *  behind a click the operator just dismissed. That reads as a dead button and
+   *  invites a second click on a money-adjacent action, so the closed trigger
+   *  carries the in-flight state itself. */
+  busy?: boolean;
+  busyLabel?: string;
+  children?: ReactNode;
+}) {
+  if (Children.toArray(children).length === 0) return null;
+
+  const label = busy ? (busyLabel ?? triggerLabel) : triggerLabel;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={busy ? (busyLabel ?? "Working…") : "More actions"}
+          aria-busy={busy || undefined}
+          title={busy ? (busyLabel ?? "Working…") : "More actions"}
+          className={cn(
+            "inline-flex items-center justify-center gap-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted/60 data-[state=open]:text-foreground",
+            label && "px-2 text-xs font-medium",
+            emphasizeTrigger &&
+              "border border-indigo-500/40 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 hover:text-indigo-500 data-[state=open]:bg-indigo-500/20 data-[state=open]:text-indigo-500",
+            busy && "text-indigo-500",
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {busy ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <MoreHorizontal className="h-4 w-4" />
+          )}
+          {label}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * One item in the hold kebab: the action's label over a muted one-line gloss of
+ * what it will actually do.
+ *
+ * `spinning` / `disabled` are separate props because they are separate ideas —
+ * the label already carries the in-flight wording ("Checking…"), and an item can
+ * legitimately be busy without the caller wanting it clickable-through.
+ *
+ * `title` is the original button's tooltip, passed through verbatim. The kebab
+ * hides these actions behind one more click, so the sentence that explained what
+ * each one does is worth MORE here than it was inline, not less.
+ */
+function HoldMenuAction({
+  tone,
+  label,
+  description,
+  title,
+  spinning = false,
+  disabled = false,
+  onSelect,
+}: {
+  tone: string;
+  label: string;
+  description: string;
+  title: string;
+  spinning?: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <DropdownMenuItem
+      className="flex-col items-start gap-0.5 py-2"
+      disabled={disabled}
+      title={title}
+      // Radix turns Enter/Space on a focused item into a click, so this one
+      // handler serves pointer and keyboard alike. The stopPropagation is not
+      // belt-and-braces: DropdownMenuContent portals out of the <tr>, but the
+      // row's onClick is the kind of thing that gets re-parented later.
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+    >
+      <span className={cn("inline-flex items-center gap-2 text-xs font-medium", tone)}>
+        <RefreshCw className={`h-3 w-3 ${spinning ? 'animate-spin' : ''}`} />
+        {label}
+      </span>
+      <span className="pl-5 text-[11px] text-muted-foreground">{description}</span>
+    </DropdownMenuItem>
+  );
+}
 
 // Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
 // notation ("10:30 AM"). Returns null when the value is missing so callers
@@ -4062,53 +4211,55 @@ const RentalDetail = () => {
                               )
                             )}
 
-                            {/* Reconcile against Stripe. Gated on canEdit because
-                                verify-deposit-hold WRITES (it corrects
-                                deposit_hold_status), so it is not a viewer action.
-                                Only offered where there is a PaymentIntent worth
-                                asking about — never on the no-hold row. */}
-                            {depositHoldStatus && canEdit('rentals') && (
-                              <button
-                                className="text-xs font-medium text-indigo-500 hover:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                                disabled={verifyingHold}
-                                title="Ask Stripe whether this authorisation is still live and correct the status"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleVerifyDepositHold();
-                                }}
-                              >
-                                <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
-                                {verifyingHold ? 'Checking…' : 'Check with Stripe'}
-                              </button>
-                            )}
+                            {/* Both diagnostics moved behind the ⋯ so that Release
+                                and Charge above are the only one-click actions in
+                                this cell. Nothing about WHO may run them changed:
+                                the two gates below are the same expressions that
+                                guarded the inline buttons, kept here rather than
+                                hoisted so each stays next to its reason. */}
+                            <HoldActionsMenu busy={verifyingHold || forceRefreshingHold} busyLabel={verifyingHold ? "Checking…" : "Refreshing…"}>
+                              {/* Reconcile against Stripe. Gated on canEdit because
+                                  verify-deposit-hold WRITES (it corrects
+                                  deposit_hold_status), so it is not a viewer action.
+                                  Only offered where there is a PaymentIntent worth
+                                  asking about — never on the no-hold row. */}
+                              {depositHoldStatus && canEdit('rentals') && (
+                                <HoldMenuAction
+                                  tone="text-indigo-500"
+                                  disabled={verifyingHold}
+                                  spinning={verifyingHold}
+                                  label={verifyingHold ? 'Checking…' : 'Check with Stripe'}
+                                  description="Confirm the real status with Stripe"
+                                  title="Ask Stripe whether this authorisation is still live and correct the status"
+                                  onSelect={() => handleVerifyDepositHold()}
+                                />
+                              )}
 
-                            {/* Re-drive the chain for this one rental instead of
-                                waiting for the nightly cron. Gated to 'held' —
-                                NOT to every status with a hold — because
-                                REFRESHABLE_HOLD_STATUSES in the engine is
-                                exactly ['held','failed']. An 'expired' row can
-                                never be selected by the driver, so a Force
-                                refresh there would always report "nothing was
-                                due" and read as a broken button; Refresh &
-                                Charge / Add Hold are the real routes out of
-                                'expired' and are already offered above.
-                                head_admin/admin only: the engine CANCELS the
-                                live authorisation before placing a
-                                replacement. */}
-                            {depositHoldStatus === 'held' && isAdmin() && (
-                              <button
-                                className="text-xs font-medium text-violet-500 hover:text-violet-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                                disabled={forceRefreshingHold}
-                                title="Run the deposit-hold refresh for this rental now instead of waiting for tonight's job"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowForceRefreshDialog(true);
-                                }}
-                              >
-                                <RefreshCw className={`h-3 w-3 ${forceRefreshingHold ? 'animate-spin' : ''}`} />
-                                {forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
-                              </button>
-                            )}
+                              {/* Re-drive the chain for this one rental instead of
+                                  waiting for the nightly cron. Gated to 'held' —
+                                  NOT to every status with a hold — because
+                                  REFRESHABLE_HOLD_STATUSES in the engine is
+                                  exactly ['held','failed']. An 'expired' row can
+                                  never be selected by the driver, so a Force
+                                  refresh there would always report "nothing was
+                                  due" and read as a broken button; Refresh &
+                                  Charge / Add Hold are the real routes out of
+                                  'expired' and are already offered above.
+                                  head_admin/admin only: the engine CANCELS the
+                                  live authorisation before placing a
+                                  replacement. */}
+                              {depositHoldStatus === 'held' && isAdmin() && (
+                                <HoldMenuAction
+                                  tone="text-violet-500"
+                                  disabled={forceRefreshingHold}
+                                  spinning={forceRefreshingHold}
+                                  label={forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
+                                  description="Re-authorise now"
+                                  title="Run the deposit-hold refresh for this rental now instead of waiting for tonight's job"
+                                  onSelect={() => setShowForceRefreshDialog(true)}
+                                />
+                              )}
+                            </HoldActionsMenu>
                           </div>
                         ) : isExcessMileageUnpaid && excessMileageCharge ? (
                           <div className="flex items-center gap-2 justify-end">
@@ -4320,39 +4471,38 @@ const RentalDetail = () => {
                                 Add Hold
                               </button>
                             )}
-                            <button
-                              className="text-xs font-medium text-indigo-500 hover:text-indigo-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                              disabled={verifyingHold}
-                              title="Ask Stripe whether this authorisation is still live and correct the status"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleVerifyDepositHold();
-                              }}
-                            >
-                              <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
-                              {verifyingHold ? 'Checking…' : 'Check with Stripe'}
-                            </button>
-                            {/* Force refresh is offered on 'failed' only.
-                                'processing'/'refreshing' mean another worker
-                                holds the CAS claim on this row: dispatching
-                                into that would at best lose the race and at
-                                worst race a live Stripe call, so those two get
-                                Check with Stripe and nothing else — the same
-                                rule that denies them a placement button above. */}
-                            {depositHoldStatus === 'failed' && isAdmin() && (
-                              <button
-                                className="text-xs font-medium text-violet-500 hover:text-violet-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
-                                disabled={forceRefreshingHold}
-                                title="Retry the deposit-hold chain for this rental now instead of waiting for tonight's job"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowForceRefreshDialog(true);
-                                }}
-                              >
-                                <RefreshCw className={`h-3 w-3 ${forceRefreshingHold ? 'animate-spin' : ''}`} />
-                                {forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
-                              </button>
-                            )}
+                            {/* Same kebab as the ladder above. Add Hold stays
+                                inline beside it because it places a real
+                                authorisation; these two only look at one. */}
+                            <HoldActionsMenu busy={verifyingHold || forceRefreshingHold} busyLabel={verifyingHold ? "Checking…" : "Refreshing…"}>
+                              <HoldMenuAction
+                                tone="text-indigo-500"
+                                disabled={verifyingHold}
+                                spinning={verifyingHold}
+                                label={verifyingHold ? 'Checking…' : 'Check with Stripe'}
+                                description="Confirm the real status with Stripe"
+                                title="Ask Stripe whether this authorisation is still live and correct the status"
+                                onSelect={() => handleVerifyDepositHold()}
+                              />
+                              {/* Force refresh is offered on 'failed' only.
+                                  'processing'/'refreshing' mean another worker
+                                  holds the CAS claim on this row: dispatching
+                                  into that would at best lose the race and at
+                                  worst race a live Stripe call, so those two get
+                                  Check with Stripe and nothing else — the same
+                                  rule that denies them a placement button above. */}
+                              {depositHoldStatus === 'failed' && isAdmin() && (
+                                <HoldMenuAction
+                                  tone="text-violet-500"
+                                  disabled={forceRefreshingHold}
+                                  spinning={forceRefreshingHold}
+                                  label={forceRefreshingHold ? 'Refreshing…' : 'Force refresh'}
+                                  description="Re-authorise now"
+                                  title="Retry the deposit-hold chain for this rental now instead of waiting for tonight's job"
+                                  onSelect={() => setShowForceRefreshDialog(true)}
+                                />
+                              )}
+                            </HoldActionsMenu>
                           </>
                         )}
 
@@ -4435,27 +4585,38 @@ const RentalDetail = () => {
                             {/* Both of these states exist because something is
                                 unverified, so the reconcile is the way out of
                                 both. On 'needs_review' it is the ONLY way out,
-                                which is why it is drawn as a button rather than a
-                                text link. Not offered on 'capturing' or
-                                'disputed' — see the note above. */}
-                            {(depositHoldStatus === 'requires_action' || depositHoldStatus === 'needs_review') && canEdit('rentals') && (
-                              <button
-                                className={`text-xs font-medium text-indigo-500 hover:text-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 ${
-                                  depositHoldStatus === 'needs_review'
-                                    ? 'rounded-md border border-indigo-500/40 bg-indigo-500/10 px-2 py-1 hover:bg-indigo-500/20'
-                                    : 'hover:underline'
-                                }`}
-                                disabled={verifyingHold}
-                                title="Ask Stripe whether this authorisation is still live and correct the status"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleVerifyDepositHold();
-                                }}
-                              >
-                                <RefreshCw className={`h-3 w-3 ${verifyingHold ? 'animate-spin' : ''}`} />
-                                {verifyingHold ? 'Checking…' : 'Check with Stripe'}
-                              </button>
-                            )}
+                                which is why the emphasis it used to carry as an
+                                inline button now sits on the closed ⋯ trigger —
+                                otherwise the one status whose entire job is a
+                                single action would be the one status drawn as an
+                                unremarkable grey dot. Not offered on 'capturing'
+                                or 'disputed' — see the note above; the menu
+                                renders nothing at all for those two, and
+                                HoldActionsMenu suppresses its own trigger rather
+                                than opening onto an empty list. */}
+                            <HoldActionsMenu
+                              emphasizeTrigger={depositHoldStatus === 'needs_review'}
+                              /* needs_review's ONLY exit is the item inside this
+                                 menu, so the trigger is labelled as well as
+                                 emphasised — an operator should not have to
+                                 discover a bare icon to clear the one status
+                                 that cannot clear itself. */
+                              triggerLabel={depositHoldStatus === 'needs_review' ? 'Resolve' : undefined}
+                              busy={verifyingHold}
+                              busyLabel="Checking…"
+                            >
+                              {(depositHoldStatus === 'requires_action' || depositHoldStatus === 'needs_review') && canEdit('rentals') && (
+                                <HoldMenuAction
+                                  tone="text-indigo-500"
+                                  disabled={verifyingHold}
+                                  spinning={verifyingHold}
+                                  label={verifyingHold ? 'Checking…' : 'Check with Stripe'}
+                                  description="Confirm the real status with Stripe"
+                                  title="Ask Stripe whether this authorisation is still live and correct the status"
+                                  onSelect={() => handleVerifyDepositHold()}
+                                />
+                              )}
+                            </HoldActionsMenu>
                           </>
                         )}
 
