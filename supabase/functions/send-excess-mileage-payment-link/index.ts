@@ -5,6 +5,7 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, getStripeOptions } from "../_shared/stripe-client.ts";
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from "../_shared/resend-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { hidePlateForTenant, vehicleLabel } from "../_shared/vehicle-privacy.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -40,6 +41,7 @@ Deno.serve(async (req) => {
     }
 
     const effectiveTenantId = tenantId || rental.tenant_id;
+    const hidePlate = await hidePlateForTenant(supabase, effectiveTenantId);
 
     // Fetch tenant details for Stripe and branding
     const { data: tenantData, error: tenantError } = await supabase
@@ -79,8 +81,11 @@ Deno.serve(async (req) => {
               unit_amount: Math.round(amount * 100),
               product_data: {
                 name: "Excess Mileage Charge",
+                // Stripe renders this on the Checkout page AND emails it on the
+                // receipt, which we cannot retract later — so it must respect
+                // the flag at the point the string is built.
                 description: vehicle
-                  ? `${vehicle.make} ${vehicle.model} (${vehicle.reg})`
+                  ? vehicleLabel(vehicle, hidePlate)
                   : `Rental ${rentalId.substring(0, 8).toUpperCase()}`,
               },
             },

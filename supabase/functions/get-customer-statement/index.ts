@@ -12,6 +12,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { hidePlateForTenant } from "../_shared/vehicle-privacy.ts";
 
 // Display order for the per-rental category rollup.
 const CATEGORY_ORDER = [
@@ -54,6 +55,7 @@ Deno.serve(async (req) => {
     if (userError || !user) return errorResponse('Invalid session', 401);
 
     const admin = createClient(supabaseUrl, serviceKey);
+    const hidePlate = await hidePlateForTenant(admin, tenantId);
 
     // Resolve the caller. Two modes, both scoped so no one reads across the boundary:
     //  • CUSTOMER — a customer_users row for (auth_user_id, tenant): only their OWN
@@ -157,7 +159,9 @@ Deno.serve(async (req) => {
           vehicle: {
             make: (sample?.vehicle_make as string) ?? null,
             model: (sample?.vehicle_model as string) ?? null,
-            reg: (sample?.vehicle_reg as string) ?? null,
+            // Serves the customer's account + PAYG statement PDFs. Staff call
+            // this too, so it is gated on the flag rather than blanked outright.
+            reg: hidePlate ? null : ((sample?.vehicle_reg as string) ?? null),
           },
           categories: new Map<string, CatAcc>(),
           refunds: 0,

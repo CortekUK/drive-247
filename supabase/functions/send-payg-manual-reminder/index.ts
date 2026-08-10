@@ -433,7 +433,7 @@ Deno.serve(async (req) => {
     // 4. Fetch tenant config (slug needed to derive booking-app origin for Stripe success/cancel URLs)
     const { data: tenant, error: tenantErr } = await supabase
       .from("tenants")
-      .select("slug, currency_code, company_name, contact_email, contact_phone")
+      .select("slug, currency_code, company_name, contact_email, contact_phone, hide_vehicle_registration")
       .eq("id", r.tenant_id)
       .maybeSingle();
 
@@ -526,6 +526,8 @@ Deno.serve(async (req) => {
       }
     }
 
+    // The tenant row is already loaded here; no extra round-trip.
+    const hidePlate = (tenant as any)?.hide_vehicle_registration === true;
     const templateData = {
       customer_name: r.customers.name || "Customer",
       customer_email: r.customers.email || "",
@@ -535,7 +537,10 @@ Deno.serve(async (req) => {
       days_active: String(daysActive),
       vehicle_make: r.vehicles?.make || "",
       vehicle_model: r.vehicles?.model || "",
-      vehicle_reg: r.vehicles?.reg || "",
+      // Blank at composition: this function is a FORK of the shared email
+      // renderer with the privacy guard absent, so nothing downstream —
+      // including the tenant's own saved template — would catch it.
+      vehicle_reg: hidePlate ? "" : (r.vehicles?.reg || ""),
       company_name: companyName,
       company_email: tenant?.contact_email || "",
       company_phone: tenant?.contact_phone || "",
