@@ -35,7 +35,10 @@ interface InvoiceDialogProps {
     phone?: string;
   };
   vehicle: {
-    reg: string;
+    // Nullable: callers resolve the plate through displayRegistration() before
+    // passing it, so this is null whenever the tenant hides plates. Typing it
+    // as a plain string is what let "Reg: " and "Vehicle ()" render.
+    reg: string | null;
     make?: string;
     model?: string;
   };
@@ -64,7 +67,11 @@ interface InvoiceDialogProps {
 // Separate printable component
 const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, selectedExtras, rentalDays, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string; currencyCode: string }) => {
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
-  const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
+  // `reg` arrives already resolved by the caller — null when the tenant hides
+  // plates — so this must not end at it, or the invoice loses the vehicle name.
+  const vehicleName = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim()
+    || vehicle.reg
+    || 'Vehicle';
   // If there's a discount, subtotal is the discounted amount, so we need to calculate original
   const discountAmount = invoice.discount_amount || 0;
   const originalRentalFee = invoice.subtotal + discountAmount;
@@ -110,7 +117,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
           <div>
             <p className="text-gray-600">Vehicle:</p>
             <p className="font-medium">{vehicleName}</p>
-            <p className="text-gray-500 text-xs">Reg: {vehicle.reg}</p>
+            {vehicle.reg && <p className="text-gray-500 text-xs">Reg: {vehicle.reg}</p>}
           </div>
           <div>
             <p className="text-gray-600">Rental Period:</p>
@@ -136,7 +143,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
                 <div>
                   <p className="font-medium">Rental Fee</p>
                   <p className="text-xs text-gray-600">
-                    {vehicleName} ({vehicle.reg})
+                    {vehicleName}{vehicle.reg ? ` (${vehicle.reg})` : ''}
                   </p>
                   {rentalBreakdown && rentalBreakdown.length > 0 && (
                     <div className="mt-1 space-y-0.5">
@@ -287,7 +294,11 @@ export const InvoiceDialog = ({
   const currencyCode = tenant?.currency_code || 'USD';
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
   const printRef = useRef<HTMLDivElement>(null);
-  const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
+  // `reg` arrives already resolved by the caller — null when the tenant hides
+  // plates — so this must not end at it, or the invoice loses the vehicle name.
+  const vehicleName = [vehicle.make, vehicle.model].filter(Boolean).join(' ').trim()
+    || vehicle.reg
+    || 'Vehicle';
   // If there's a discount, subtotal is the discounted amount, so we need to calculate original
   const discountAmount = invoice.discount_amount || 0;
   const originalRentalFee = invoice.subtotal + discountAmount;
@@ -384,7 +395,7 @@ export const InvoiceDialog = ({
                 <div>
                   <p className="text-muted-foreground">Vehicle:</p>
                   <p className="font-medium">{vehicleName}</p>
-                  <p className="text-muted-foreground text-xs">Reg: {vehicle.reg}</p>
+                  {vehicle.reg && <p className="text-muted-foreground text-xs">Reg: {vehicle.reg}</p>}
                 </div>
                 <div>
                   <p className="text-muted-foreground">Rental Period:</p>
@@ -412,7 +423,7 @@ export const InvoiceDialog = ({
                         <div>
                           <p className="font-medium">Rental Fee</p>
                           <p className="text-xs text-muted-foreground">
-                            {vehicleName} ({vehicle.reg})
+                            {vehicleName}{vehicle.reg ? ` (${vehicle.reg})` : ''}
                           </p>
                         </div>
                       </td>
@@ -426,7 +437,7 @@ export const InvoiceDialog = ({
                         <div>
                           <p className="font-medium">Rental Fee</p>
                           <p className="text-xs text-muted-foreground">
-                            {vehicleName} ({vehicle.reg})
+                            {vehicleName}{vehicle.reg ? ` (${vehicle.reg})` : ''}
                           </p>
                           {rentalBreakdown && rentalBreakdown.length > 0 && (
                             <div className="mt-1 space-y-0.5">
