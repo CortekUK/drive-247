@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""kg - the drive-247 knowledge-graph pipeline.
+
+    kg build            full deterministic build (everything except the agent stage)
+    kg update           incremental: re-extract only what changed, then re-merge
+    kg status           what exists, how big, and what is stale
+    kg merge            re-merge unit graphs into the unified graph
+    kg assemble         rebuild unit graphs from structural + semantic fragments
+    kg chunk            (re)plan the semantic fan-out, print the agent count
+    kg pending          list the chunk specs waiting for a semantic pass
+    kg html             regenerate the unified HTML view
+    kg query "..."      query the unified graph        (-u <unit> for one unit)
+    kg path "A" "B"     shortest path between two nodes
+    kg explain "X"      explain a node and its neighbours
+    kg hook install     rebuild structure automatically on every git commit
+    kg hook uninstall
+    kg doctor           verify the workspace is wired up correctly
+
+Individual stages, if you need them: detect | ast | sql | resolve
+"""
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+LIB = HERE / "lib"
+KG = HERE.parent
+sys.path.insert(0, str(LIB))
+
+def _resolve_python() -> str:
+    """Find the interpreter that can import graphify, and remember it.
+
+    state/python is machine-local and gitignored, so on a fresh clone this
+    rediscovers the interpreter from the `graphify` launcher's shebang rather
+    than failing. pipx/uv/venv installs are all shebang-discoverable.
+    """
+    pin = KG / "state" / "python"
+    if pin.exists():
+        p = pin.read_text().strip()
+        if p and Path(p).exists():
+            return p
+    candidates = []
+    launcher = shutil.which("graphify")
+    if launcher:
+        try:
+            first = Path(launcher).read_text(errors="ignore").splitlines()[0]
+            if first.startswith("#!"):
+                candidates.append(first[2:].strip().split()[0])
+        except (OSError, IndexError):
+            pass
+    candidates.append(sys.executable)
+    for c in candidates:
+        if not c or not Path(c).exists():
+            continue
+        try:
+            subprocess.run([c, "-c", "import graphify"], check=True, capture_output=True)
+        except Exception:
+            continue
+        pin.parent.mkdir(parents=True, exist_ok=True)
+        pin.write_text(c)
+        return c
+    return sys.executable
+
+
+PY = _resolve_python()
+GRAPHIFY_BIN = str(Path(PY).parent / "graphify")
+
+
+def _reexec_if_needed():
+    """Stages import graphify, which only exists in the pinned interpreter.
+
+    Compare interpreter paths literally, not via realpath: a pipx/venv `python`
+    is typically a symlink to the same system binary, so realpath makes the venv
+    look identical to the interpreter we are trying to escape. What differs is
+    sys.prefix (and therefore site-packages), not the executable inode.
+    The env sentinel makes an exec loop impossible if the venv is broken.
+    """
+    try:
+        import graphify  # noqa: F401
+        return
+    except ImportError:
+        pass
+    if Path(PY).exists() and Path(PY) != Path(sys.executable) and not os.environ.get("KG_REEXEC"):
+        os.environ["KG_REEXEC"] = "1"
+        os.execv(PY, [PY, str(Path(__file__).resolve())] + sys.argv[1:])
+    print("error: graphify is not importable from the pinned interpreter.", file=sys.stderr)
+    print(f"  pinned : {PY}", file=sys.stderr)
+    print(f"  running: {sys.executable}", file=sys.stderr)
+    print("  fix    : pipx install graphifyy   (then rerun `kg doctor`)", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_build(argv):
+    _reexec_if_needed()
+    import kg_detect, kg_ast, kg_sql, kg_resolve, kg_chunk, kg_assemble, kg_merge
+    print("== detect ==");  kg_detect.run()
+    print("\n== sql ==");   kg_sql.run()
+    print("\n== ast ==");   kg_ast.run()
+    print("\n== resolve =="); kg_resolve.run()
+    print("\n== chunk ==");  specs = kg_chunk.run()
+    print("\n== assemble =="); kg_assemble.run()
+    print("\n== merge ==");  kg_merge.run()
+    import kg_update
+    from kgcommon import STATE, write_json
+    write_json(STATE / "manifest.json", kg_update.snapshot())
+    print(f"\nStructural build complete. {len(specs)} semantic chunk specs are in "
+          f"state/chunks/ - run the agent stage to add meaning.")
+
+
+def cmd_update(argv):
+    _reexec_if_needed()
+    import kg_update
+    kg_update.run()
+
+
+def cmd_stage(name):
+    def f(argv):
+        _reexec_if_needed()
+        mod = __import__(f"kg_{name}")
+        mod.run(argv or None) if name in ("detect", "ast", "resolve", "assemble") else mod.run()
+    return f
+
+
+def cmd_status(argv):
+    _reexec_if_needed()
+    from kgcommon import UNITS, unit_out, MERGED, STATE, load_json
+    print(f"{'unit':16s} {'nodes':>7s} {'edges':>7s} {'communities':>12s}  graph.json")
+    tot_n = tot_e = 0
+    for u in UNITS:
+        g = load_json(unit_out(u["name"]) / "graph.json")
+        if not g:
+            print(f"{u['name']:16s} {'-':>7s} {'-':>7s} {'-':>12s}  (not built)")
+            continue
+        n, e = len(g.get("nodes", [])), len(g.get("links", []))
+        c = len({x.get("community") for x in g.get("nodes", []) if x.get("community") is not None})
+        tot_n += n; tot_e += e
+        print(f"{u['name']:16s} {n:7d} {e:7d} {c:12d}  units/{u['name']}/graphify-out/graph.json")
+    m = load_json(MERGED / "graph.json")
+    print("-" * 64)
+    if m:
+        mc = len({x.get("community") for x in m.get("nodes", []) if x.get("community") is not None})
+        print(f"{'UNIFIED':16s} {len(m.get('nodes', [])):7d} {len(m.get('links', [])):7d} {mc:12d}  merged/graph.json")
+    else:
+        print("UNIFIED          (not built)")
+    print(f"{'(sum of units)':16s} {tot_n:7d} {tot_e:7d}")
+
+    need = load_json(STATE / "needs_semantic.json", {}) or {}
+    if need.get("specs"):
+        print(f"\nSTALE: {len(need['files'])} changed file(s) awaiting a semantic pass "
+              f"({len(need['specs'])} chunk spec(s) in state/chunks_incremental/).")
+        print("       Structural layer is current; only meaning is behind.")
+    else:
+        print("\nSemantic layer: up to date.")
+
+
+def cmd_pending(argv):
+    _reexec_if_needed()
+    from kgcommon import STATE, load_json
+    need = load_json(STATE / "needs_semantic.json", {}) or {}
+    for s in need.get("specs", []):
+        print(s)
+    if not need.get("specs"):
+        print("(nothing pending)")
+
+
+def cmd_html(argv):
+    _reexec_if_needed()
+    import kg_html
+    kg_html.run()
+
+
+def cmd_graphify_passthru(sub):
+    def f(argv):
+        graph = KG / "merged" / "graph.json"
+        rest = list(argv)
+        if rest and rest[0] in ("-u", "--unit"):
+            graph = KG / "units" / rest[1] / "graphify-out" / "graph.json"
+            rest = rest[2:]
+        if not graph.exists():
+            print(f"error: {graph} not built yet. Run `kg build` first.", file=sys.stderr)
+            sys.exit(1)
+        os.execv(GRAPHIFY_BIN, [GRAPHIFY_BIN, sub] + rest + ["--graph", str(graph)])
+    return f
+
+
+def cmd_hook(argv):
+    action = argv[0] if argv else "status"
+    from_root = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=KG.parent,
+                               capture_output=True, text=True)
+    if from_root.returncode != 0:
+        print("error: not a git repository", file=sys.stderr)
+        sys.exit(1)
+    hooks = Path(from_root.stdout.strip())
+    if not hooks.is_absolute():
+        hooks = KG.parent / hooks
+    hook = hooks / "hooks" / "post-commit"
+    marker = "# >>> drive-247 knowledge-graph >>>"
+    body = f"""{marker}
+# Refresh the structural layer of the knowledge graph after each commit.
+# Deterministic and fast - no LLM, no network. Semantic refresh is reported
+# by `kg status` and applied on demand.
+if [ -x "{KG}/bin/kg" ]; then
+  "{KG}/bin/kg" update --quiet >/dev/null 2>&1 &
+fi
+# <<< drive-247 knowledge-graph <<<
+"""
+    if action == "install":
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        cur = hook.read_text() if hook.exists() else "#!/bin/sh\n"
+        if marker in cur:
+            print("already installed")
+        else:
+            hook.write_text(cur.rstrip("\n") + "\n\n" + body)
+            hook.chmod(0o755)
+            print(f"installed post-commit hook -> {hook}")
+    elif action == "uninstall":
+        if hook.exists() and marker in hook.read_text():
+            txt = hook.read_text()
+            start = txt.index(marker)
+            end = txt.index("# <<< drive-247 knowledge-graph <<<") + len("# <<< drive-247 knowledge-graph <<<\n")
+            hook.write_text(txt[:start] + txt[end:])
+            print("uninstalled")
+        else:
+            print("not installed")
+    else:
+        print("installed" if hook.exists() and marker in hook.read_text() else "not installed")
+
+
+def cmd_doctor(argv):
+    from kgcommon import UNITS, unit_out, MERGED, STATE
+    ok = True
+    print(f"interpreter : {PY}  {'OK' if Path(PY).exists() else 'MISSING'}")
+    try:
+        subprocess.run([PY, "-c", "import graphify"], check=True, capture_output=True)
+        print("graphify    : importable")
+    except Exception:
+        print("graphify    : NOT importable"); ok = False
+    print(f"repo root   : {KG.parent}")
+    ig = KG.parent / ".graphifyignore"
+    print(f"ignorefile  : {'present' if ig.exists() else 'MISSING'}")
+    for u in UNITS:
+        p = unit_out(u["name"]) / "graph.json"
+        print(f"  unit {u['name']:16s} {'built' if p.exists() else 'not built'}")
+    print(f"unified     : {'built' if (MERGED / 'graph.json').exists() else 'not built'}")
+    print(f"manifest    : {'present' if (STATE / 'manifest.json').exists() else 'missing'}")
+    sys.exit(0 if ok else 1)
+
+
+COMMANDS = {
+    "build": cmd_build, "update": cmd_update, "status": cmd_status,
+    "merge": cmd_stage("merge"), "assemble": cmd_stage("assemble"),
+    "chunk": cmd_stage("chunk"), "detect": cmd_stage("detect"),
+    "ast": cmd_stage("ast"), "sql": cmd_stage("sql"), "resolve": cmd_stage("resolve"),
+    "pending": cmd_pending, "html": cmd_html, "hook": cmd_hook, "doctor": cmd_doctor,
+    "query": cmd_graphify_passthru("query"),
+    "path": cmd_graphify_passthru("path"),
+    "explain": cmd_graphify_passthru("explain"),
+}
+
+
+def main():
+    argv = [a for a in sys.argv[1:] if a != "--quiet"]
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+    cmd = argv[0]
+    if cmd not in COMMANDS:
+        print(f"unknown command: {cmd}\n", file=sys.stderr)
+        print(__doc__)
+        sys.exit(1)
+    COMMANDS[cmd](argv[1:])
+
+
+if __name__ == "__main__":
+    main()

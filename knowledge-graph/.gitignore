@@ -1,0 +1,47 @@
+# What to keep in git, and why.
+#
+# Kept: the pipeline itself, and the semantic fragments produced by the
+# extraction agents (.graphify_chunk_*.json). Those fragments are the only
+# artifact here that cannot be regenerated for free - they cost a full agent
+# fan-out over ~1600 files. Everything else is derived from them plus the
+# source tree, so `kg assemble && kg merge` rebuilds it deterministically.
+#
+# Ignored: the derived graphs. They are large (a ~13MB merged graph.json),
+# churn on every rebuild, and diff as unreadable JSON noise.
+
+# --- derived graphs and views (rebuild with: kg assemble && kg merge && kg html)
+merged/graph.json
+merged/graph.html
+merged/GRAPH_REPORT.md
+merged/.graphify_extract.json
+merged/.graphify_analysis.json
+units/*/graphify-out/graph.json
+units/*/graphify-out/graph.html
+units/*/graphify-out/GRAPH_REPORT.md
+units/*/graphify-out/.graphify_extract.json
+units/*/graphify-out/.graphify_analysis.json
+
+# --- free to regenerate: structural layer (kg ast / kg sql / kg resolve)
+units/*/graphify-out/.graphify_ast.json
+units/*/graphify-out/.graphify_struct.json
+units/*/graphify-out/cache/
+
+# --- machine-local: absolute path to this machine's graphify interpreter,
+#     re-pinned by `kg doctor` / a fresh build on any other machine
+state/python
+units/*/graphify-out/.graphify_python
+__pycache__/
+*.pyc
+
+# --- transient run state
+state/detect.json
+state/chunks/
+state/chunks_incremental/
+state/assemble_report.json
+state/community_summary.json
+
+# Explicitly kept, despite living beside ignored files:
+#   units/*/graphify-out/.graphify_chunk_*.json   agent output, expensive
+#   merged/labels.json                            hand/agent-authored names
+#   state/manifest.json                           change detection baseline
+#   state/needs_semantic.json                     staleness record

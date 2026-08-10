@@ -192,27 +192,32 @@ def run() -> dict:
             loc = _line_of(sql, m.start())
             add(pid, f"RLS: {pname}", "rls_policy", src, loc, policy_on=tbl)
             edge(pid, _sid("tbl", tbl), "secures", "EXTRACTED", 1.0, src, loc)
+            edge(mig_id, pid, "defines", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_INDEX.finditer(sql):
             iid = _sid("idx", m.group(1).lower())
             loc = _line_of(sql, m.start())
             add(iid, m.group(1).lower(), "index", src, loc)
             edge(iid, _sid("tbl", m.group(2).lower()), "indexes", "EXTRACTED", 1.0, src, loc)
+            edge(mig_id, iid, "defines", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_RLS.finditer(sql):
             tid = _sid("tbl", m.group(1).lower())
             if tid in nodes:
                 nodes[tid]["rls_enabled"] = True
 
-        # ALTER TABLE ... REFERENCES outside a CREATE body
         for m in RE_ALTER_TABLE.finditer(sql):
             tid = _sid("tbl", m.group(1).lower())
+            loc = _line_of(sql, m.start())
+            # Without this, a migration that only ALTERs a table produces no
+            # edges at all and lands as an isolated node - which was most of the
+            # 277 single-node "communities" in the database unit.
+            edge(mig_id, tid, "alters", "EXTRACTED", 1.0, src, loc)
             seg = sql[m.end():m.end() + 600]
             for rm in RE_REFERENCES.finditer(seg):
                 target = _sid("tbl", rm.group(1).lower())
                 if target != tid:
-                    edge(tid, target, "references", "EXTRACTED", 1.0, src,
-                         _line_of(sql, m.start()))
+                    edge(tid, target, "references", "EXTRACTED", 1.0, src, loc)
 
     # Drop edges pointing at tables that were never created (e.g. auth.users),
     # but keep the referenced entity as an explicit external node.
