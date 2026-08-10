@@ -104,6 +104,128 @@ function isPlateShaped(rawText: string): boolean {
   return true;
 }
 
+/* ───────────────────── edge cases: skew, OCR drift, split plates ─────────────
+ * Measured reality: on eight real photos from this platform Rekognition found
+ * ZERO plates. Everything below widens the net for the cases where a plate IS
+ * legible but the naive comparison misses it. None of it makes automatic
+ * redaction safe — a human still confirms — it only reduces how often the
+ * operator has to draw the box by hand.
+ */
+
+/**
+ * Collapse the glyph pairs OCR genuinely confuses on plates.
+ *
+ * A plate is read at an angle, in poor light, on a dirty surface. "HU23 YWB"
+ * comes back as "HUZ3 YW8" and an exact compare says "not this car" — so we
+ * would show the operator nothing and make them draw the box on a plate the
+ * detector actually found. Both sides are collapsed to the same canonical
+ * alphabet before comparing.
+ *
+ * This is for MATCHING ONLY. The text shown to the operator is always the raw
+ * detection, never the canonicalised form, so nobody is told we read something
+ * we did not.
+ */
+function canonicalisePlate(value: string): string {
+  return normalisePlate(value)
+    .replace(/[O]/g, '0')
+    .replace(/[IL]/g, '1')
+    .replace(/[S]/g, '5')
+    .replace(/[B]/g, '8')
+    .replace(/[Z]/g, '2')
+    .replace(/[G]/g, '6')
+    .replace(/[Q]/g, '0')
+    .replace(/[D]/g, '0');
+}
+
+/** Axis-aligned cover of a word, using the ROTATED polygon when present. */
+function coverOf(w: { box: { Left: number; Top: number; Width: number; Height: number }; polygon?: Array<{ X: number; Y: number }> }) {
+  const bb = { x: w.box.Left, y: w.box.Top, w: w.box.Width, h: w.box.Height };
+  if (!w.polygon || w.polygon.length < 3) return { ...bb, skewed: false };
+
+  const xs = w.polygon.map((p) => p.X);
+  const ys = w.polygon.map((p) => p.Y);
+  const px = Math.min(...xs), py = Math.min(...ys);
+  const pw = Math.max(...xs) - px, ph = Math.max(...ys) - py;
+
+  // Union of both, because each can clip where the other does not: the
+  // axis-aligned box is Rekognition's own estimate, the polygon is the measured
+  // quad. Covering both is the only option that cannot leave a corner readable.
+  const x = Math.min(bb.x, px), y = Math.min(bb.y, py);
+  const cover = {
+    x, y,
+    w: Math.max(bb.x + bb.w, px + pw) - x,
+    h: Math.max(bb.y + bb.h, py + ph) - y,
+  };
+
+  // A rotated quad fills less of its own bounding box than an upright one. That
+  // ratio is a usable skew signal, and skewed text needs more slack because the
+  // glyph corners sit furthest from the centre.
+  const quadArea = Math.abs(
+    w.polygon.reduce((acc, p, i) => {
+      const q = w.polygon![(i + 1) % w.polygon!.length];
+      return acc + (p.X * q.Y - q.X * p.Y);
+    }, 0) / 2
+  );
+  const boxArea = cover.w * cover.h;
+  const fill = boxArea > 0 ? quadArea / boxArea : 1;
+  return { ...cover, skewed: fill < 0.86 };
+}
+
+/** Grow a region. Skewed plates get more, because their corners overhang most. */
+function padRegion(r: { x: number; y: number; w: number; h: number }, skewed: boolean) {
+  const f = skewed ? 0.16 : 0.08;
+  const dx = r.w * f, dy = r.h * f;
+  return {
+    x: Math.max(0, r.x - dx),
+    y: Math.max(0, r.y - dy),
+    w: Math.min(1 - Math.max(0, r.x - dx), r.w + dx * 2),
+    h: Math.min(1 - Math.max(0, r.y - dy), r.h + dy * 2),
+  };
+}
+
+/** Union of two regions. */
+function unionRegion(a: any, b: any) {
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+}
+
+/**
+ * Rebuild a plate that OCR split across words.
+ *
+ * "AB12 CDE" frequently returns as two WORD detections. Comparing each against
+ * the full reg matches neither, so the plate is found and then discarded. This
+ * joins horizontally-adjacent, vertically-aligned words and re-tests the
+ * concatenation, covering the union of their boxes.
+ *
+ * Adjacency is required so we cannot staple together two unrelated words from
+ * opposite ends of the photo just because their letters happen to concatenate
+ * into the registration.
+ */
+function mergeSplitPlate(words: any[], canonReg: string) {
+  if (!canonReg) return null;
+  for (let i = 0; i < words.length; i++) {
+    for (let j = i + 1; j < Math.min(i + 4, words.length); j++) {
+      const a = words[i], b = words[j];
+      const ca = coverOf(a), cb = coverOf(b);
+
+      const sameLine = Math.abs((ca.y + ca.h / 2) - (cb.y + cb.h / 2)) < Math.max(ca.h, cb.h) * 0.6;
+      const gap = cb.x - (ca.x + ca.w);
+      const adjacent = gap > -0.01 && gap < Math.max(ca.w, cb.w) * 0.8;
+      if (!sameLine || !adjacent) continue;
+
+      if (canonicalisePlate(a.text + b.text) === canonReg) {
+        return {
+          region: unionRegion(ca, cb),
+          skewed: ca.skewed || cb.skewed,
+          text: `${a.text} ${b.text}`,
+          confidence: Math.min(a.confidence, b.confidence),
+        };
+      }
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -308,16 +430,23 @@ Deno.serve(async (req) => {
     // 6. Match. Two independent paths, and the response says which fired.
     // ---------------------------------------------------------------------
     const normalisedReg = vehicle.reg ? normalisePlate(vehicle.reg) : '';
+    // Canonical form collapses the glyphs OCR confuses, so a plate read as
+    // "HUZ3 YW8" still matches HU23 YWB instead of being silently discarded.
+    const canonReg = vehicle.reg ? canonicalisePlate(vehicle.reg) : '';
 
     const regions = ocr.words
       .map((word) => {
         const normalisedWord = normalisePlate(word.text);
 
         // Path A: the OCR word IS this vehicle's registration. High trust.
+        // Exact first, then the OCR-tolerant comparison — an angled or dirty
+        // plate rarely comes back character-perfect, and treating that as "not
+        // this car" is the difference between finding the plate and not.
         const matchedReg =
           normalisedReg.length > 0 &&
           normalisedWord.length > 0 &&
-          normalisedWord === normalisedReg;
+          (normalisedWord === normalisedReg ||
+            (canonReg.length > 0 && canonicalisePlate(word.text) === canonReg));
 
         if (matchedReg) {
           if (word.confidence < MIN_CONFIDENCE_EXACT_MATCH) return null;
@@ -329,13 +458,19 @@ Deno.serve(async (req) => {
           if (word.confidence < MIN_CONFIDENCE_HEURISTIC) return null;
         }
 
+        // Cover the union of the axis-aligned box and the rotated polygon, then
+        // pad — more when the quad says the plate is skewed, because that is
+        // when the glyph corners sit furthest outside a straight rectangle.
+        const cover = coverOf(word);
+        const padded = padRegion(cover, cover.skewed);
+
         return {
-          // Rekognition ratios → the x/y/w/h the client expects. Still 0-1
-          // ratios, NOT pixels: the caller multiplies by the rendered size.
-          x: word.box.Left,
-          y: word.box.Top,
-          w: word.box.Width,
-          h: word.box.Height,
+          // Still 0-1 ratios, NOT pixels: the caller multiplies by rendered size.
+          x: padded.x,
+          y: padded.y,
+          w: padded.w,
+          h: padded.h,
+          skewed: cover.skewed,
           text: word.text,
           confidence: Math.round(word.confidence * 100) / 100,
           matchedReg,
@@ -348,6 +483,24 @@ Deno.serve(async (req) => {
         if (a.matchedReg !== b.matchedReg) return a.matchedReg ? -1 : 1;
         return b.confidence - a.confidence;
       });
+
+    // Split plates: "AB12 CDE" often returns as two WORDs, so neither matches
+    // the full registration on its own and the plate is found then thrown away.
+    // Only added when nothing already matched exactly, so this can never
+    // displace a cleaner single-word hit.
+    if (!regions.some((r: any) => r.matchedReg)) {
+      const merged = mergeSplitPlate(ocr.words, canonReg);
+      if (merged) {
+        const padded = padRegion(merged.region, merged.skewed);
+        regions.unshift({
+          x: padded.x, y: padded.y, w: padded.w, h: padded.h,
+          skewed: merged.skewed,
+          text: merged.text,
+          confidence: Math.round(merged.confidence * 100) / 100,
+          matchedReg: true,
+        } as any);
+      }
+    }
 
     // Every word OCR saw, for debugging and for a manual-pick UI. Same ratio
     // coordinate space as `regions`.

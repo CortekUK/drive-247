@@ -258,6 +258,17 @@ export async function detectText(imageBase64: string): Promise<DetectTextResult>
       .filter((d) => d?.Type === 'WORD' && d?.Geometry?.BoundingBox)
       .map((d) => {
         const bb = d.Geometry.BoundingBox;
+        // Polygon carries the ROTATED quad; BoundingBox is axis-aligned. For a
+        // plate photographed at an angle the two disagree, and it is the polygon
+        // that tells the truth about where the glyphs actually sit. We keep it
+        // and let the caller cover the union, because an axis-aligned box drawn
+        // from a rotated quad can clip a corner of the plate — which is the one
+        // failure that leaves characters readable after "redaction".
+        const poly: Array<{ X: number; Y: number }> = Array.isArray(d?.Geometry?.Polygon)
+          ? d.Geometry.Polygon
+              .filter((pt: any) => typeof pt?.X === 'number' && typeof pt?.Y === 'number')
+              .map((pt: any) => ({ X: Number(pt.X), Y: Number(pt.Y) }))
+          : [];
         return {
           text: String(d.DetectedText ?? ''),
           confidence: typeof d.Confidence === 'number' ? d.Confidence : 0,
@@ -267,6 +278,7 @@ export async function detectText(imageBase64: string): Promise<DetectTextResult>
             Width: Number(bb.Width ?? 0),
             Height: Number(bb.Height ?? 0),
           },
+          polygon: poly.length >= 3 ? poly : undefined,
         };
       })
       // A word with no text is useless to both the matcher and the UI.
