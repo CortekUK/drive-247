@@ -65,6 +65,8 @@
       "Bash(fuser -k 3001/tcp)",
       "Bash(npx eslint *)",
       "Bash(npx supabase functions deploy:*)",
+      "Bash(supabase functions deploy:*)",
+      "Bash(supabase functions list:*)",
       "mcp__0af8510d-dbbd-4419-95b8-e7a1643cdd5e__generate_diagram",
       "Bash(curl:*api.supabase.com*)"
     ],
