@@ -1,0 +1,15 @@
+{
+  "unit": "docs",
+  "unit_label": "Docs - specs, plans, audits",
+  "unit_kind": "documents",
+  "chunk": 5,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/docs/graphify-out/.graphify_chunk_docs_005.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/docs/diagrams/payments-money-model.html",
+    "/home/haseeb-raza/Desktop/drive-247/docs/drive247-system-flow-map.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/flows/subscription-checkout.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/gmt-auth-hold-verdicts.html",
+    "/home/haseeb-raza/Desktop/drive-247/docs/jangram-action-items.html"
+  ]
+}

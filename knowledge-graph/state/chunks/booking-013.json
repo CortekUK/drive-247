@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 13,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_013.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/delivery-tiers.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/esign-credit-alert.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/format-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/google-places-session.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/invoiceUtils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/legal-page-content.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/mileage-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/optimize-image.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/payg-rate.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/sanitize-html.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/sanitize.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/tenantQueries.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/theme-mode.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/timezones.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/us-states.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/vehicle-availability.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/vehicle-identity.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/middleware.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/pages/_app.tsx"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 12,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_012.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/getting-started-checklist.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/go-live-banner.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/integration-status-grid.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/low-credits-banner.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/maintenance-banner.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/platform-status-banner.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/recent-activity.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/revenue-chart.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/setup-hub.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/setup-reminder-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/enquiries/enquiry-detail-drawer.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/datetime-picker.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-ai-summary.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-categories-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-export-buttons.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-line-chart.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-pie-chart.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-tab-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/expenses/expense-table.tsx"
+  ]
+}

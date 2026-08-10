@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 10,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_010.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-agreements.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-announcements.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-auto-extension.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-chat.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-documents.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-installments.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-insurance-policies.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-invoices.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-notifications.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-onboarding.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-rentals.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-statement.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-unread.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-verification.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-dynamic-pricing.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-extension-conflicts.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-extension-pricing.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-fleet-list.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-gig-driver-images.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-installment-plan-realtime.ts"
+  ]
+}

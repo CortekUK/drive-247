@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 5,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_005.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/pending-bookings/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/pl-dashboard/monthly/[month]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/plates/[id]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/plates/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/promotions/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/reminders/analytics/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/reminders/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/analytics/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/reports/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/agreement-templates/edit/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/agreement-templates/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/apply-form/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/blacklist/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/email-templates/[key]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/email-templates/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/lead-management/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/reminders/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/users/page.tsx"
+  ]
+}

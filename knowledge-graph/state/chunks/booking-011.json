@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 11,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_011.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-lead-document-upload.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-maintenance-banner.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-mobile.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-payg-invoices.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-payg-ledger.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-payg-timeline.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-payment-actions.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-rental-agreements.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-rental-extension-totals.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-rental-extras.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-rental-insurance-policies.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-rental-invoice.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-rental-ledger-data.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-toast.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-trax-chat.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-vehicle-booked-dates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useBlogPosts.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useBonzahPremium.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useBonzahVehicleEligibility.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useBrandingSettings.ts"
+  ]
+}

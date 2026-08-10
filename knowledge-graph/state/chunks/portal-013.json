@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 13,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_013.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/feedback/feedback-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/feedback/feedback-force-prompt.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/add-fine-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/authority-payment-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/bulk-action-bar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/enhanced-file-upload.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/fine-appeal-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/fine-filters.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/fine-kpis.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/icons/tesla-logo.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/installments/InstallmentBreakdown.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/installments/InstallmentCalendar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/installments/InstallmentScheduleTable.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/installments/InstallmentSection.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/ai-scan-progress.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/attach-verification-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/customer-selection-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/document-upload-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/generate-insurance-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/inspection-registration-status-chip.tsx"
+  ]
+}

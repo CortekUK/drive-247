@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 8,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_008.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/vehicles/vehicle-disposal.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/vehicles/vehicle-expense.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/booking-header-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/contact-card-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/contact-form-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/contact-info-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/empty-state-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/extras-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/faqs-manager.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/fleet-hero-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/hero-section-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/home-cta-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/home-hero-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/how-it-works-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/inclusions-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/promo-badge-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/promotions-hero-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/rental-rates-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/seo-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/service-highlights-editor.ts"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 23,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_023.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/forms/date-picker-input.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/forms/rental-date-picker.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/app-sidebar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/avatar-crop-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/bonzah-balance.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/brand-logo.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/credit-balance.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/dynamic-theme-provider.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/global-search.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/header-search.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/notification-bell.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/theme-toggle.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/user-menu.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/rental-picker.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/status/fine-status-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/time-machine/service-display.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/unsaved-changes-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/card-brand-icon.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/pricing-card.tsx"
+  ]
+}

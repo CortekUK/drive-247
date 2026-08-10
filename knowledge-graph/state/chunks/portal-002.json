@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 2,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_002.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-idempotency.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-row.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-status-machine.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/expense-utils.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/feedback-throttle.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/inshur-transforms.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/payg-rate.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/platform-tos.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/template-variables.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/setup.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(auth)/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(auth)/login/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(auth)/reset-password/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/agreements/analytics/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/agreements/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/audit-logs/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/automations/[id]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/automations/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/blocked-customers/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/blocked-dates/page.tsx"
+  ]
+}

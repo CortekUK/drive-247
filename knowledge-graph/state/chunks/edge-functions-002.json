@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 2,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_002.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-templates/admin-new-booking.html",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-templates/booking-approved.html",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-templates/booking-pending.html",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-templates/booking-rejected.html",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/format-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/inshur-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/matching.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/migration-progress.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/modives-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/notify-inapp.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/openai.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/platform-tos.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/resend-service.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/stripe-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-gate.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-stripe.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-webhook-events.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tenant-auth.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-fleet-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts"
+  ]
+}

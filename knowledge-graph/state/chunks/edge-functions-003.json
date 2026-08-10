@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 3,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_003.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-sms-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/vehicle-privacy.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/whatsapp-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/accept-offer/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/accrue-payg-charges/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/activate-installment-plan/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/adjust-customer-balance/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-create-sales-agent/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-create-user/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-deactivate-user/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-delete-tenant/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-force-logout/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-reset-password/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-toggle-lead-management/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-update-role/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-document-ocr/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-draft-message/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-extract-from-conversation/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-face-match/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-rank-matches/index.ts"
+  ]
+}

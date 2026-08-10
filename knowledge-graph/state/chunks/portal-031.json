@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 31,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_031.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-damage-detection.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-dashboard-kpis.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-data-cleanup.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-debounce.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-dynamic-theme.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-email-notification-prefs.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-email-templates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-enhanced-rentals.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-enquiries.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-enquiry-stats.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-esign-credit-alert-config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-esign-usage.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-expense-categories.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-expense-summary.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-expenses.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-extension-conflicts.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-extension-pricing.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-feedback-after-review.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-feedback-settings.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-fines-data.ts"
+  ]
+}

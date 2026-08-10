@@ -1,0 +1,29 @@
+{
+  "unit": "scripts",
+  "unit_label": "Scripts - ops, seeding, deployment",
+  "unit_kind": "ops-scripts",
+  "chunk": 1,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/scripts/graphify-out/.graphify_chunk_scripts_001.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/scripts/README.md",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/add-vehicle-dates.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/add-vehicle-photos.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/bulk-update-branding.js",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/create-site-settings-page.js",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/db-switch.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/kill-dev-ports.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/seed-100-bonzah-vehicles.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/seed-bonzah-demo.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/seed-mock-receipts.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/seed-vehicles.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/seed-vehicles.ts",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/sim/helpers.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/sim/scenario-payg-30-days.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/tenant-onboarding.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/test-notification-emails.ts",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/update-cms-content.js",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/update-vehicle-images.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/wipe-all-data.mjs"
+  ]
+}

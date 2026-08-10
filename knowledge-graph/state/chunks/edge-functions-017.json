@@ -1,0 +1,16 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 17,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_017.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-deposit-hold/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-insurance-document/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-otp/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-session/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/view-offer/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/void-payment-link/index.ts"
+  ]
+}

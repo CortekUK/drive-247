@@ -1,0 +1,11 @@
+{
+  "unit": "admin",
+  "unit_label": "Admin - super-admin dashboard",
+  "unit_kind": "nextjs-app",
+  "chunk": 5,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/admin/graphify-out/.graphify_chunk_admin_005.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/[id]/page.tsx"
+  ]
+}

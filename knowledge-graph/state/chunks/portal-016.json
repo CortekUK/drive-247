@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 16,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_016.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/payments/payment-management.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/payments/payment-summary-cards.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/plates/add-plate-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/plates/assign-plate-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/plates/enhanced-add-plate-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/plates/enhanced-assign-plate-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/plates/plate-history-drawer.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/plates/plate-status-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reminders/add-reminder-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/AgreementTimeline.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/ExtensionRequestDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/InstallmentPlanCard.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/InsuranceTimeline.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/VehicleConflictDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/additional-drivers-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/additional-drivers-form.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/auto-extension-section.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/bonzah-availability-notice.tsx"
+  ]
+}

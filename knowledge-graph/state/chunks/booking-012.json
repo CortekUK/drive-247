@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 12,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_012.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useDeliveryLocations.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useDynamicTheme.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useGoogleMapsLoader.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useHasFaqs.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/usePageContent.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useSiteSettings.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useWorkingHours.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/agreement-injection.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/agreement-mileage.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/agreement-terms.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/ai-insurance-verification.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/auditLogger.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/bonzah-addendum.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/bonzah-compliance.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/bonzah-dates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/calculate-extras-total.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/calculate-rental-price.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/coverage-labels.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/date-utils.ts"
+  ]
+}

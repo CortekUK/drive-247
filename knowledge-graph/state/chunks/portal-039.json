@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 39,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_039.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/reminder-generator.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/reminder-notifier.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/reminder-templates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/rental-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/search-service.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/services/email-service.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/services/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/services/notification-service.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/services/sms-service.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/template-variables.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/tenant-logo-sync.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/tenantQueries.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/timezones.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/us-states.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/usage-categories.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/vehicle-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/middleware.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/middleware/tenantMiddleware.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/stores/auth-store.ts"
+  ]
+}
