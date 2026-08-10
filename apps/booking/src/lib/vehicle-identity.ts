@@ -48,6 +48,26 @@ export function isRegistrationHidden(tenant: TenantLike): boolean {
 }
 
 /**
+ * May we reveal the plate *right now*?
+ *
+ * Distinct from `!isRegistrationHidden()`, and the distinction is the whole
+ * point. TenantContext starts as `null` and fills in after an async round-trip,
+ * so "the tenant has not opted in" and "we do not yet know what the tenant
+ * wants" are different states that a plain `=== true` check collapses into one.
+ * Collapsing them fails OPEN on a privacy control: the pages that query on
+ * mount would serve the plate during that window, which for a `useEffect(…, [])`
+ * that never re-runs means always.
+ *
+ * So: reveal only when we have a resolved tenant that permits it. Unknown means
+ * withhold. Callers must therefore wait for the tenant before querying, or a
+ * plate-showing tenant would never get its plates back.
+ */
+export function canRevealRegistration(tenant: TenantLike): boolean {
+  if (!tenant) return false;
+  return !isRegistrationHidden(tenant);
+}
+
+/**
  * Columns a customer-facing vehicle query may read.
  *
  * `reg` is appended only when the tenant permits it, so a hidden plate is never
@@ -101,7 +121,7 @@ const VEHICLE_PUBLIC_COLUMN_LIST = [
  */
 export function vehiclePublicColumns(tenant: TenantLike, ...extra: string[]): string {
   const columns: string[] = [...VEHICLE_PUBLIC_COLUMN_LIST];
-  if (!isRegistrationHidden(tenant)) {
+  if (canRevealRegistration(tenant)) {
     columns.push('reg');
   }
   return [...columns, ...extra.filter(Boolean)].join(', ');
@@ -123,7 +143,7 @@ export function displayRegistration(
   tenant: TenantLike,
 ): string | null {
   if (!vehicle?.reg) return null;
-  if (isRegistrationHidden(tenant)) return null;
+  if (!canRevealRegistration(tenant)) return null;
   return vehicle.reg;
 }
 
@@ -177,5 +197,5 @@ export function vehicleDisplayLabel(
  * customer search boxes must consult this.
  */
 export function canSearchByRegistration(tenant: TenantLike): boolean {
-  return !isRegistrationHidden(tenant);
+  return canRevealRegistration(tenant);
 }

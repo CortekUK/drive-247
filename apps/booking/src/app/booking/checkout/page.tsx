@@ -145,8 +145,12 @@ const BookingCheckoutContent = () => {
       router.push("/booking");
       return;
     }
+    // Wait for the tenant: the plate flag is unknown until it resolves, and an
+    // unknown tenant means the plate is withheld from the SELECT for good on a
+    // useEffect that never re-runs.
+    if (!tenant?.id) return;
     loadData();
-  }, []);
+  }, [tenant?.id]);
 
 
   const loadData = async () => {

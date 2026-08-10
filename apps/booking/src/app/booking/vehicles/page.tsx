@@ -74,8 +74,13 @@ const BookingVehiclesContent = () => {
       router.push("/booking");
       return;
     }
+    // Wait for the tenant before querying. Two reasons: the plate flag is
+    // unknown until it resolves (and unknown means withhold, so querying early
+    // would permanently omit the plate for tenants who show it), and the
+    // tenant_id filter below is a no-op while tenant is null.
+    if (!tenant?.id) return;
     loadVehicles();
-  }, []);
+  }, [tenant?.id]);
 
   const loadVehicles = async () => {
     setLoading(true);

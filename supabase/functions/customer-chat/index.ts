@@ -497,6 +497,21 @@ serve(async (req) => {
       console.log('RPC context:', JSON.stringify(context, null, 2));
     }
 
+    // Strip the plate AFTER both branches, not inside one of them.
+    //
+    // The direct-query fallback above builds `vehicle_registration` itself, but
+    // the normal path is the RPC — and get_customer_rag_context selects
+    // 'vehicle_registration', v.reg (20260205100000_add_customer_rag_context.sql:47),
+    // so filtering only the fallback left the plate flowing into the model on
+    // every request that succeeded. Sanitising where the two paths converge is
+    // the only place that cannot be bypassed by whichever branch ran.
+    if (hideVehicleReg && Array.isArray((context as any)?.rentals)) {
+      (context as any).rentals = (context as any).rentals.map((r: any) => ({
+        ...r,
+        vehicle_registration: null,
+      }));
+    }
+
     // Build messages array for chat completion
     const messages: ChatMessage[] = [
       { role: 'system', content: getSystemPrompt(customerName, context || {}, tenantName, currencyCode) },

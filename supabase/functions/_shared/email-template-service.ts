@@ -1074,6 +1074,10 @@ export async function resolveEmailData(
             result.company_phone = tenantInfo.company_phone;
             result.company_address = tenantInfo.company_address;
             currencyCode = tenantInfo.currency_code;
+            // Was missing: this branch resolves the tenant from the rental when
+            // no tenantId was passed, so without it the plate flag was simply
+            // never consulted on that path.
+            hideVehicleReg = tenantInfo.hide_vehicle_registration;
           } catch (_) { /* already logged */ }
         }
 
@@ -1151,6 +1155,16 @@ export async function resolveEmailData(
     if (value !== undefined && value !== null && value !== '') {
       result[key] = value;
     }
+  }
+
+  // ...except for the plate and VIN. Callers win on everything else, but this
+  // merge runs AFTER the blanking above, so a caller passing vehicle_reg in
+  // overrides would silently reinstate exactly what the tenant asked us to
+  // withhold. No caller does that today; this makes it impossible rather than
+  // merely unlikely, since the next one to do it would leave no trace.
+  if (hideVehicleReg) {
+    result.vehicle_reg = '';
+    result.vehicle_vin = '';
   }
 
   return result;

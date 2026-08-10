@@ -188,6 +188,10 @@ const Pricing = () => {
   };
 
   useEffect(() => {
+    // Skip the tenant=null first pass. It served `reg` and rendered the plate
+    // before the tenant-scoped refetch replaced it, so a hiding tenant's plates
+    // visibly flashed on the fleet cards.
+    if (!tenant?.id) return;
     loadVehicles();
   }, [tenant?.id]);
 

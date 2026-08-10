@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isRegistrationHidden,
+  canRevealRegistration,
   vehiclePublicColumns,
   vehiclePublicColumnsNested,
   displayRegistration,
@@ -189,9 +190,42 @@ describe('canSearchByRegistration — a searchable hidden field is not hidden', 
     expect(canSearchByRegistration(hiding)).toBe(false);
   });
 
-  it('matches isRegistrationHidden so the two can never drift apart', () => {
+  it('matches canRevealRegistration so the two can never drift apart', () => {
     for (const t of [showing, hiding, {}, null, undefined]) {
-      expect(canSearchByRegistration(t)).toBe(!isRegistrationHidden(t));
+      expect(canSearchByRegistration(t)).toBe(canRevealRegistration(t));
     }
+  });
+});
+
+describe('an unresolved tenant must fail CLOSED', () => {
+  // TenantContext starts null and fills in after an async round-trip. The first
+  // version of this module used `=== true`, which treats "not opted in" and "we
+  // do not know yet" as the same thing — so three pages that query on mount
+  // served the plate during that window, and for a useEffect(…, []) that never
+  // re-runs, that meant always. A privacy control must fail closed.
+  it('withholds the plate from the SELECT while the tenant is unknown', () => {
+    for (const unknown of [null, undefined]) {
+      expect(vehiclePublicColumns(unknown).split(',').map(c => c.trim())).not.toContain('reg');
+    }
+  });
+
+  it('does not render the plate while the tenant is unknown', () => {
+    expect(displayRegistration(car, null)).toBeNull();
+    expect(displayRegistration(car, undefined)).toBeNull();
+  });
+
+  it('does not let the plate be searched while the tenant is unknown', () => {
+    expect(canSearchByRegistration(null)).toBe(false);
+  });
+
+  it('still names the vehicle rather than going blank', () => {
+    expect(vehicleDisplayName(car, null)).toBe('BMW X5');
+    expect(vehicleDisplayName({ reg: 'AB12 XYZ' }, null)).toBe('Vehicle');
+  });
+
+  it('distinguishes "unknown" from "opted out" — they are not the same state', () => {
+    expect(isRegistrationHidden(null)).toBe(false);   // has not opted in
+    expect(canRevealRegistration(null)).toBe(false);  // but must not be revealed
+    expect(canRevealRegistration(showing)).toBe(true);
   });
 });
