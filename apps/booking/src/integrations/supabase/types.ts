@@ -15023,6 +15023,7 @@ export type Database = {
           google_maps_url: string | null
           hero_background_url: string | null
           hide_checkout_price_breakdown: boolean
+          hide_vehicle_registration: boolean
           id: string
           inshur_2fa_token: string | null
           inshur_billing_mode: string | null
@@ -15279,6 +15280,7 @@ export type Database = {
           google_maps_url?: string | null
           hero_background_url?: string | null
           hide_checkout_price_breakdown?: boolean
+          hide_vehicle_registration?: boolean
           id?: string
           inshur_2fa_token?: string | null
           inshur_billing_mode?: string | null
@@ -15535,6 +15537,7 @@ export type Database = {
           google_maps_url?: string | null
           hero_background_url?: string | null
           hide_checkout_price_breakdown?: boolean
+          hide_vehicle_registration?: boolean
           id?: string
           inshur_2fa_token?: string | null
           inshur_billing_mode?: string | null

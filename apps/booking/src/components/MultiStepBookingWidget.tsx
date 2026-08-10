@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { TimePicker } from "@/components/ui/time-picker";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { rentalOccupiesWindow, todayStr } from "@/lib/vehicle-availability";
 import { toast } from "sonner";
@@ -60,6 +60,12 @@ import { calculateRentalPriceBreakdown, parseDateString as parseDateStringSafe }
 import { parseDateOnly } from "@/lib/date-utils";
 import { calcExtrasTotal } from "@/lib/calculate-extras-total";
 import { clampToBonzahStart } from "@/lib/bonzah-dates";
+import {
+  vehiclePublicColumns,
+  displayRegistration,
+  vehicleDisplayName,
+  canSearchByRegistration,
+} from "@/lib/vehicle-identity";
 interface VehiclePhoto {
   photo_url: string;
 }
@@ -1084,18 +1090,20 @@ const MultiStepBookingWidget = () => {
     // Build query for vehicles with tenant filtering
     // Include both Available and Rented vehicles — Rented vehicles may be available for non-overlapping dates.
     // The overlap check below handles date-based blocking.
-    let vehiclesQuery = supabase
+    // Allowlist, not `*` — this widget is mounted on the public homepage, so
+    // `select('*')` published every vehicle column to anonymous visitors.
+    // Ordering moves to make/model: `.order("reg")` would ask PostgREST to sort
+    // by a column we may not be selecting, and ordering a public list by the
+    // plate also quietly reveals plate order.
+    let vehiclesQuery = supabaseUntyped
       .from("vehicles")
-      .select(`
-        *,
-        vehicle_photos (
-          photo_url,
-          display_order
-        )
-      `)
+      .select(
+        vehiclePublicColumns(tenant, 'vehicle_photos ( photo_url, display_order )')
+      )
       .eq("tenant_id", tenant.id)
       .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
-      .order("reg");
+      .order("make")
+      .order("model");
 
     const { data: vehiclesData } = await vehiclesQuery;
 
@@ -2720,10 +2728,16 @@ const MultiStepBookingWidget = () => {
     // Search filter - search in make, model, reg, and color
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
+      // Two reasons this is not `v.reg.toLowerCase()` any more. A field that is
+      // hidden but still searchable is not hidden — typing a plate and watching
+      // exactly one car appear confirms that car's plate. And `reg` is no longer
+      // selected at all for a tenant who hides it, so the old unguarded call
+      // would now throw on undefined and take the whole fleet list down.
+      const searchReg = canSearchByRegistration(tenant);
       filtered = filtered.filter(v =>
         (v.make && v.make.toLowerCase().includes(term)) ||
         (v.model && v.model.toLowerCase().includes(term)) ||
-        v.reg.toLowerCase().includes(term) ||
+        (searchReg && v.reg && v.reg.toLowerCase().includes(term)) ||
         (v.colour && v.colour.toLowerCase().includes(term))
       );
     }
@@ -2765,7 +2779,7 @@ const MultiStepBookingWidget = () => {
 
             // If pickup falls before buffer deadline, vehicle is still in cooldown
             if (pickupDateTime < bufferDeadline && pickupDateTime >= rentalEnd) {
-              console.log(`[BufferTime] Vehicle ${vehicle.reg} hidden: rental ended ${rental.end_date} ${rental.return_time || '23:59'}, buffer until ${bufferDeadline.toISOString()}`);
+              console.log(`[BufferTime] Vehicle ${vehicle.make} ${vehicle.model} hidden: rental ended ${rental.end_date} ${rental.return_time || '23:59'}, buffer until ${bufferDeadline.toISOString()}`);
               return false;
             }
           }
@@ -3274,7 +3288,7 @@ const MultiStepBookingWidget = () => {
     if (validateStep2()) {
       // Analytics
       if ((window as any).gtag && selectedVehicle && estimatedBooking) {
-        const vehicleName = selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.make || selectedVehicle.model || selectedVehicle.reg;
+        const vehicleName = vehicleDisplayName(selectedVehicle, tenant);
         (window as any).gtag('event', 'continue_to_extras_clicked', {
           vehicle_id: formData.vehicleId,
           vehicle_name: vehicleName,
@@ -4145,7 +4159,7 @@ const MultiStepBookingWidget = () => {
                 <div className={cn("grid gap-6", viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1")}>
                   {filteredVehicles.map(vehicle => {
                     const badge = getVehicleBadge(vehicle);
-                    const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.make || vehicle.model || vehicle.reg;
+                    const vehicleName = vehicleDisplayName(vehicle, tenant);
                     const isRollsRoyce = (vehicle.make || '').toLowerCase().includes("rolls") || (vehicle.model || '').toLowerCase().includes("phantom");
                     const isSelected = formData.vehicleId === vehicle.id;
                     const estimation = calculateEstimatedTotal(vehicle);
@@ -4275,15 +4289,15 @@ const MultiStepBookingWidget = () => {
                             )}
 
                             {/* Registration Chip - hide when selected, show tick instead */}
-                            {!isSelected ? (
+                            {!isSelected && displayRegistration(vehicle, tenant) ? (
                               <div className="absolute top-3 right-3 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full z-20">
-                                {vehicle.reg}
+                                {displayRegistration(vehicle, tenant)}
                               </div>
-                            ) : (
+                            ) : isSelected ? (
                               <div className="absolute top-3 right-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg z-20">
                                 <Check className="w-5 h-5 text-black" />
                               </div>
-                            )}
+                            ) : null}
 
                           </div>
 
@@ -4426,9 +4440,9 @@ const MultiStepBookingWidget = () => {
                         }
                       }}>
                       {/* Registration Chip - hide when selected, show tick instead */}
-                      {!isSelected && (
+                      {!isSelected && displayRegistration(vehicle, tenant) && (
                         <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
-                          {vehicle.reg}
+                          {displayRegistration(vehicle, tenant)}
                         </div>
                       )}
 
@@ -4661,7 +4675,7 @@ const MultiStepBookingWidget = () => {
                       {selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url ? (
                         <img
                           src={selectedVehicle.vehicle_photos?.[0]?.photo_url || selectedVehicle.photo_url || ''}
-                          alt={selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.reg}
+                          alt={vehicleDisplayName(selectedVehicle, tenant)}
                           className="w-full h-full object-cover"
                           loading="lazy"
                           onError={(e) => {
@@ -4677,7 +4691,7 @@ const MultiStepBookingWidget = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm truncate">
-                        {selectedVehicle.make && selectedVehicle.model ? `${selectedVehicle.make} ${selectedVehicle.model}` : selectedVehicle.make || selectedVehicle.model || selectedVehicle.reg}
+                        {vehicleDisplayName(selectedVehicle, tenant)}
                       </p>
                       <p className="text-xs text-muted-foreground">{estimatedBooking.days} days</p>
                       {(() => {

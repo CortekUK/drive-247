@@ -301,8 +301,15 @@ const Settings = () => {
   const hideBreakdownEnabled = pendingHideBreakdown ?? persistedHideBreakdown;
   const [savingHideBreakdown, setSavingHideBreakdown] = useState(false);
 
+  // Plate/VIN suppression on the customer-facing booking site. Default OFF, so
+  // `=== true` — a tenant who has never touched this keeps showing plates.
+  const [pendingHideReg, setPendingHideReg] = useState<boolean | null>(null);
+  const persistedHideReg = (tenant as { hide_vehicle_registration?: boolean } | null)?.hide_vehicle_registration === true;
+  const hideRegEnabled = pendingHideReg ?? persistedHideReg;
+  const [savingHideReg, setSavingHideReg] = useState(false);
+
   const savePricingFlag = async (
-    column: 'show_effective_daily_rate' | 'hide_checkout_price_breakdown' | 'allow_rental_without_id_verification',
+    column: 'show_effective_daily_rate' | 'hide_checkout_price_breakdown' | 'allow_rental_without_id_verification' | 'hide_vehicle_registration',
     next: boolean,
     prev: boolean,
     prevPersisted: boolean,
@@ -1904,6 +1911,42 @@ const Settings = () => {
                   disabled={savingHideBreakdown}
                   className="flex-shrink-0"
                   aria-label="Toggle checkout price breakdown"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Hide vehicle registration numbers</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Keeps plate and VIN numbers off your public booking site — vehicle cards,
+                    checkout, invoices, statements and customer emails. Your staff always see
+                    them in this portal, and rental agreements still identify the vehicle.
+                  </p>
+                  {hideRegEnabled && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Photos are not covered by this setting. If a plate is legible in a vehicle
+                      photo, replace or hide that photo as well.
+                    </p>
+                  )}
+                </div>
+                <Switch
+                  checked={hideRegEnabled}
+                  onCheckedChange={(next) =>
+                    savePricingFlag(
+                      'hide_vehicle_registration',
+                      next,
+                      hideRegEnabled,
+                      persistedHideReg,
+                      setPendingHideReg,
+                      setSavingHideReg,
+                      next
+                        ? 'Registration numbers hidden from customers'
+                        : 'Registration numbers visible to customers',
+                    )
+                  }
+                  disabled={savingHideReg}
+                  className="flex-shrink-0"
+                  aria-label="Toggle vehicle registration visibility"
                 />
               </div>
             </CardContent>

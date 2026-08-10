@@ -938,11 +938,11 @@ export function wrapEmailHtml(
 export async function getTenantInfo(
   supabaseClient: any,
   tenantId: string
-): Promise<{ company_name: string; company_email: string; company_phone: string; company_address: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string }> {
+): Promise<{ company_name: string; company_email: string; company_phone: string; company_address: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string; hide_vehicle_registration: boolean }> {
   try {
     const { data, error } = await supabaseClient
       .from('tenants')
-      .select('company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code')
+      .select('company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code, hide_vehicle_registration')
       .eq('id', tenantId)
       .single();
 
@@ -957,6 +957,7 @@ export async function getTenantInfo(
       accent_color: data.accent_color || '#C5A572',
       logo_url: data.logo_url || null,
       currency_code: data.currency_code || 'USD',
+      hide_vehicle_registration: data.hide_vehicle_registration === true,
     };
   } catch (err) {
     console.warn('Error fetching tenant info:', err);
@@ -993,6 +994,12 @@ export async function resolveEmailData(
 
   // Fetch tenant info if tenantId provided
   let currencyCode = 'USD';
+  // Tenants can keep plates away from customers. Enforced HERE rather than
+  // in each template because tenants own editable copies of these templates:
+  // a tenant whose saved template still contains {{vehicle_reg}} would keep
+  // emailing the plate no matter what the shipped defaults say. Blanking the
+  // variable is the only fix that reaches those rows.
+  let hideVehicleReg = false;
   if (tenantId) {
     try {
       const tenantInfo = await getTenantInfo(supabaseClient, tenantId);
@@ -1001,6 +1008,7 @@ export async function resolveEmailData(
       result.company_phone = tenantInfo.company_phone;
       result.company_address = tenantInfo.company_address;
       currencyCode = tenantInfo.currency_code;
+      hideVehicleReg = tenantInfo.hide_vehicle_registration;
     } catch (err) {
       console.warn('[resolveEmailData] Error fetching tenant:', err);
     }
@@ -1076,9 +1084,9 @@ export async function resolveEmailData(
           result.vehicle_make = vehicle.make || '';
           result.vehicle_model = vehicle.model || '';
           result.vehicle_year = vehicle.year?.toString() || '';
-          result.vehicle_reg = vehicle.reg || '';
+          result.vehicle_reg = hideVehicleReg ? '' : (vehicle.reg || '');
           result.vehicle_color = vehicle.color || '';
-          result.vehicle_vin = vehicle.vin || '';
+          result.vehicle_vin = hideVehicleReg ? '' : (vehicle.vin || '');
           result.vehicle_fuel_type = vehicle.fuel_type || '';
           result.vehicle_daily_rent = vehicle.daily_rent ? formatCurrency(vehicle.daily_rent, currencyCode) : '';
           result.vehicle_weekly_rent = vehicle.weekly_rent ? formatCurrency(vehicle.weekly_rent, currencyCode) : '';

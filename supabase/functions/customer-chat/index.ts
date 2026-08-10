@@ -237,7 +237,7 @@ Customer Profile:
 Recent Rentals (${rentals.length}):
 ${rentals.map((r, i) => `${i + 1}. Rental #${r.rental_number || 'N/A'}
    - Status: ${r.status || 'N/A'}
-   - Vehicle: ${r.vehicle_make || ''} ${r.vehicle_model || ''} (${r.vehicle_registration || 'N/A'})
+   - Vehicle: ${r.vehicle_make || ''} ${r.vehicle_model || ''}${r.vehicle_registration ? ` (${r.vehicle_registration})` : ''}
    - Dates: ${r.start_date || 'N/A'} to ${r.end_date || 'N/A'}
    - Monthly: ${formatCurrencyLocal(Number(r.monthly_amount) || 0, currencyCode)}
    - Payment Status: ${r.payment_status || 'N/A'}`).join('\n')}` : '\nNo recent rentals.';
@@ -392,12 +392,18 @@ serve(async (req) => {
     // Get tenant name and currency for personalized branding
     const { data: tenantData } = await supabase
       .from('tenants')
-      .select('company_name, currency_code')
+      .select('company_name, currency_code, hide_vehicle_registration')
       .eq('id', tenantId)
       .single();
 
     const tenantName = tenantData?.company_name || 'Drive247';
     const currencyCode = tenantData?.currency_code || 'USD';
+    // This assistant talks to CUSTOMERS. If the tenant hides plates, the plate
+    // must never enter the model's context — a customer only has to ask "which
+    // car am I getting?" to be told it, and no amount of hiding pixels on the
+    // booking site prevents that. Withheld at the source rather than by asking
+    // the model not to mention it.
+    const hideVehicleReg = tenantData?.hide_vehicle_registration === true;
 
     // Parse request body
     let body: CustomerChatRequest;
@@ -459,7 +465,7 @@ serve(async (req) => {
         customer: customerData,
         rentals: rentalsData?.map(r => ({
           ...r,
-          vehicle_registration: r.vehicle?.reg,
+          vehicle_registration: hideVehicleReg ? null : r.vehicle?.reg,
           vehicle_make: r.vehicle?.make,
           vehicle_model: r.vehicle?.model,
         })) || [],

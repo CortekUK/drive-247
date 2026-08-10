@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { rentalOccupiesWindow, todayStr, type OccupancyRental } from "@/lib/vehicle-availability";
@@ -17,6 +17,7 @@ import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
 import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
+import { vehiclePublicColumns, displayRegistration } from "@/lib/vehicle-identity";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -84,15 +85,14 @@ const BookingVehiclesContent = () => {
 
       // Fetch vehicles that are Available or Rented (Rented vehicles may be available for non-overlapping dates)
       // Excludes Maintenance, Disposed, Sold etc. The overlap check below handles date-based blocking.
-      let query = supabase
+      // Allowlist, not `*` — see lib/vehicle-identity.ts. This page is public,
+      // and `select('*')` here was shipping lockbox codes and purchase prices
+      // to every anonymous visitor alongside the plate.
+      let query = supabaseUntyped
         .from("vehicles")
-        .select(`
-          *,
-          vehicle_photos (
-            photo_url,
-            display_order
-          )
-        `)
+        .select(
+          vehiclePublicColumns(tenant, 'vehicle_photos ( photo_url, display_order )')
+        )
         // Case-insensitive status match so rows saved as lowercase "available"/"rented"
         // aren't silently dropped (mirrors the homepage MultiStepBookingWidget query).
         .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented");
@@ -415,9 +415,11 @@ const BookingVehiclesContent = () => {
                   <div className="p-6">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <p className="text-xs text-accent uppercase tracking-wider font-medium mb-1">
-                          {vehicle.reg}
-                        </p>
+                        {displayRegistration(vehicle, tenant) && (
+                          <p className="text-xs text-accent uppercase tracking-wider font-medium mb-1">
+                            {displayRegistration(vehicle, tenant)}
+                          </p>
+                        )}
                         <h3 className="text-xl font-semibold">
                           {vehicle.make && vehicle.model
                             ? `${vehicle.make} ${vehicle.model}`

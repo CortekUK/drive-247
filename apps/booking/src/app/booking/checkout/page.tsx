@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, Check, Shield, CreditCard, Loader2, Truck } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -22,6 +22,7 @@ import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
 import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 import { getUnlimitedMileageOption } from "@/lib/mileage-utils";
+import { vehiclePublicColumns } from "@/lib/vehicle-identity";
 import { Infinity as InfinityIcon } from "lucide-react";
 const checkoutSchema = z.object({
   customerName: z.string().min(2, "Name must be at least 2 characters"),
@@ -151,9 +152,12 @@ const BookingCheckoutContent = () => {
   const loadData = async () => {
     try {
       // Load vehicle details (filtered by tenant)
-      let vehicleQuery = supabase
+      // Allowlist, not `*`. Nothing here rendered the plate, but `select('*')`
+      // still put it — and the lockbox code — into the page payload, and "not
+      // displayed" is not the same as "not sent".
+      let vehicleQuery = supabaseUntyped
         .from("vehicles")
-        .select("*")
+        .select(vehiclePublicColumns(tenant))
         .eq("id", vehicleId);
 
       if (tenant?.id) {
