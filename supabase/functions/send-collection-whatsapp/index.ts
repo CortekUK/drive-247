@@ -65,7 +65,7 @@ function buildDynamicSections(data: CollectionWhatsAppRequest): string {
 }
 
 function buildDefaultMessage(data: CollectionWhatsAppRequest): string {
-  let msg = `*Vehicle Collection Confirmation*\n\nHi ${data.customerName},\n\nYour vehicle *${data.vehicleName}* (${data.vehicleReg}) has been collected.\n\nBooking Ref: ${data.bookingRef}`;
+  let msg = `*Vehicle Collection Confirmation*\n\nHi ${data.customerName},\n\nYour vehicle *${data.vehicleName}*${data.vehicleReg ? ` (${data.vehicleReg})` : ''} has been collected.\n\nBooking Ref: ${data.bookingRef}`;
   msg += buildDynamicSections(data);
   return msg;
 }
@@ -90,6 +90,26 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Blank the plate at the source, before either the default message or the
+    // tenant's own collection template renders it. The custom-template path
+    // substitutes {{vehicle_reg}} directly, so no per-message guard would reach
+    // it. vehicleName is kept — this message tells someone which car to collect.
+    try {
+      const { data: privacyRow } = await supabase
+        .from('tenants')
+        .select('hide_vehicle_registration')
+        .eq('id', data.tenantId)
+        .single();
+      if (privacyRow?.hide_vehicle_registration === true) {
+        data.vehicleReg = '';
+      }
+    } catch (e) {
+      // Fail CLOSED — see notify-lockbox-code. A privacy flag that reverts to
+      // "show" on a failed lookup is not a privacy flag.
+      console.warn('[collection-whatsapp] Could not read plate-privacy flag; withholding the plate:', e);
+      data.vehicleReg = '';
+    }
 
     const creds = await getTenantWhatsAppCredentials(supabase, data.tenantId);
     if (!creds.isConfigured) {

@@ -987,11 +987,20 @@ export async function getTenantInfo(
       accent_color: '#C5A572',
       logo_url: null,
       currency_code: 'USD',
-      // We could not read the tenant at all, so we cannot know their
-      // preference. false preserves today's behaviour for the ~41 tenants who
-      // have not opted in; a tenant who HAS opted in is protected by the
-      // retry above, which only drops this one column and keeps the row.
-      hide_vehicle_registration: false,
+      // Fail CLOSED. We could not read the tenant at all, so we do not know
+      // their preference — and `false` here would silently un-hide the plate
+      // for a tenant who had opted in, which is the one outcome this flag
+      // exists to prevent.
+      //
+      // The earlier reasoning (that `false` preserves behaviour for the ~41
+      // tenants who have not opted in) traded a privacy guarantee for
+      // cosmetics. It is also moot: reaching this branch means the tenant row
+      // was unreadable, so the email is already going out with generic
+      // "DRIVE 247" branding rather than the operator's. An email that is
+      // already visibly degraded is not made worse by omitting a plate, and
+      // the same fail-closed rule now governs the client
+      // (canRevealRegistration) and the lockbox/WhatsApp senders.
+      hide_vehicle_registration: true,
     };
   }
 }
