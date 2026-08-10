@@ -1433,11 +1433,20 @@ export const AddPaymentDialog = ({
                 </label>
               )}
 
-              {/* Charge the card already on file — the only button here that
-                  takes money by itself. Everything below it just produces a link
-                  for the customer to act on. Hidden entirely when there is no
-                  card, or when the operator's role can't charge one. */}
-              {selectedCustomerId && canChargeSavedCard && hasCardOnFile && (
+              {/* Charge-saved-card button REMOVED from the UI on request.
+                  Front end only — every mechanism behind it is intentionally
+                  left in place: handleChargeSavedCard, the confirm dialog, the
+                  idempotency key derivation, canChargeSavedCard/hasCardOnFile,
+                  and the charge-saved-card edge function. Flip this back to
+                  `selectedCustomerId && canChargeSavedCard && hasCardOnFile`
+                  to restore it; nothing else needs changing.
+
+                  Deliberately NOT deleting the logic: it is the only path that
+                  takes money directly, so removing it would be a much larger
+                  change than hiding the entry point, and the confirm dialog it
+                  opens is still reachable from state if anything else sets
+                  chargeCardOpen. */}
+              {false && selectedCustomerId && canChargeSavedCard && hasCardOnFile && (
                 <div className="space-y-1">
                   <Button
                     type="button"
