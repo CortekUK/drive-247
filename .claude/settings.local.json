@@ -67,6 +67,7 @@
       "Bash(npx supabase functions deploy:*)",
       "Bash(supabase functions deploy:*)",
       "Bash(supabase functions list:*)",
+      "Bash(supabase functions invoke:*)",
       "mcp__0af8510d-dbbd-4419-95b8-e7a1643cdd5e__generate_diagram",
       "Bash(curl:*api.supabase.com*)"
     ],
