@@ -239,7 +239,7 @@
 
 {"source":"inspection_registration_status_chip_us_terminology_rename","target":"inspection_registration_status_chip_due_status_chip","relation":"rationale_for","confidence":"INFERRED","confidence_score":0.85,"source_file":"apps/portal/src/components/insurance/inspection-registration-status-chip.tsx","source_location":"L1-9","weight":1.0},
 {"source":"inspection_registration_status_chip_due_status_chip","target":"table_vehicles","relation":"references","confidence":"INFERRED","confidence_score":0.7,"source_file":"apps/portal/src/components/insurance/inspection-registration-status-chip.tsx","source_location":"L41-43","weight":1.0},
-{"source":"tesla_logo_brand_mark","target":"table_vehicles","relation":"conceptually_related_to","confidence":"INFERRED","confidence_score":0.5,"source_file":"apps/portal/src/components/icons/tesla-logo.tsx","source_location":"L10-25","weight":1.0}
+{"source":"tesla_logo_brand_mark","target":"table_vehicles","relation":"conceptually_related_to","confidence":"INFERRED","confidence_score":0.45,"source_file":"apps/portal/src/components/icons/tesla-logo.tsx","source_location":"L10-25","weight":1.0}
 ],
 "hyperedges":[
 {"id":"fine_money_lifecycle","label":"Fine money lifecycle: intake, ledger charge, bulk charge/waive, appeal credit, authority payout","nodes":["add_fine_dialog_fine_intake","add_fine_dialog_ledger_charge_mirror","bulk_action_bar_bulk_charge","bulk_action_bar_bulk_waive","fine_appeal_dialog_appeal_and_waiver","authority_payment_dialog_authority_settlement","table_ledger_entries","table_fines"],"relation":"participate_in","confidence":"INFERRED","confidence_score":0.85,"source_file":"apps/portal/src/components/fines/add-fine-dialog.tsx"},
