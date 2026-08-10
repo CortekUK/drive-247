@@ -106,6 +106,12 @@ const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastP
         // Bottom-RIGHT on purpose: bottom-left is the dnd drag handle, and
         // covering it broke photo reordering for exactly the tenants who get
         // this button.
+        //
+        // ALWAYS VISIBLE, unlike the delete/drag controls next to it. This was
+        // hover-only first and the immediate feedback was "there is no option
+        // to blur the plate" — an operator cannot hover their way to a control
+        // they do not know exists. Amber because it is an unfinished task: the
+        // plate on this photo is still visible to customers.
         <div className="absolute bottom-2 right-2 z-10">
           {photo.redaction_status === "redacted" ? (
             <button
@@ -129,7 +135,7 @@ const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastP
             <button
               type="button"
               onClick={() => onRedact(photo)}
-              className="flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+              className="flex items-center gap-1 rounded-md bg-amber-500 px-2 py-1 text-[11px] font-semibold text-black shadow-sm hover:bg-amber-400"
               title="Hide this vehicle's number plate from customers in this photo"
             >
               <EyeOff className="h-3 w-3" /> Hide number plate
