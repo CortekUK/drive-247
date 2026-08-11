@@ -25,8 +25,9 @@
 // PRINCIPLES (all three are load-bearing; breaking any one re-creates the incident)
 //
 //  1. RECORD-ANCHORED. The hold lives on the platform account, connected
-//     account and Stripe mode it was CREATED under (deposit_hold_connect_account_id
-//     / deposit_hold_stripe_mode, falling back to rentals.platform_account) —
+//     account and Stripe mode it was CREATED under (deposit_hold_platform_account
+//     / deposit_hold_connect_account_id / deposit_hold_stripe_mode, falling back
+//     to rentals.platform_account) —
 //     never the tenant's CURRENT values. Read it with the wrong platform's keys
 //     during the UK→UAE migration and Stripe reports the PI as missing, which
 //     looks exactly like an expired hold and would mark a live authorisation dead.
@@ -240,6 +241,10 @@ interface RentalRow {
   deposit_hold_connect_account_id: string | null;
   deposit_hold_stripe_mode: string | null;
   deposit_hold_currency: string | null;
+  /** The platform account the HOLD was created on ('uk' | 'uae'), written by
+   *  place-deposit-hold. NULL on every row placed before that write existed, in
+   *  which case rentals.platform_account remains the answer. */
+  deposit_hold_platform_account: string | null;
   deposit_hold_status_changed_at: string | null;
   deposit_hold_attempt_seq: number | null;
   deposit_hold_amount: number | null;
@@ -258,6 +263,7 @@ const RENTAL_COLUMNS = `
   deposit_hold_expires_at, deposit_hold_expiry_source,
   deposit_hold_extended_auth, deposit_hold_window_seconds,
   deposit_hold_connect_account_id, deposit_hold_stripe_mode, deposit_hold_currency,
+  deposit_hold_platform_account,
   deposit_hold_status_changed_at, deposit_hold_attempt_seq, deposit_hold_amount,
   deposit_hold_last_error_code, deposit_hold_release_requested_at,
   deposit_hold_card_brand, deposit_hold_card_last4,
@@ -410,11 +416,13 @@ async function isAuthorizedCaller(req: Request, supabase: SupabaseClient): Promi
  * Resolve the Stripe client the EXISTING hold lives behind.
  *
  * Preference order, strongest first:
- *   1. rentals.deposit_hold_stripe_mode / _connect_account_id — written at
- *      placement precisely so later operations never re-derive context.
+ *   1. rentals.deposit_hold_platform_account / _stripe_mode / _connect_account_id
+ *      — written at placement precisely so later operations never re-derive
+ *      context. Each is preferred independently: a row may carry one anchor and
+ *      not the others (they were added at different times).
  *   2. rentals.platform_account + the tenant's current Stripe columns — the
  *      legacy path, correct for every hold placed before the anchor columns
- *      existed.
+ *      existed, and still the answer for every row until they are populated.
  *
  * Returns null (never throws) when the context cannot be resolved:
  * getConnectAccountId THROWS for a live payment_model='own' tenant with no
@@ -429,7 +437,32 @@ function resolveStripeContext(rental: RentalRow, tenant: TenantRow | undefined):
         ? (rental.deposit_hold_stripe_mode as StripeMode)
         : null;
     const mode: StripeMode = anchoredMode ?? ((tenant?.stripe_mode as StripeMode) || "test");
-    const stripe = getStripeClientForRecord(rental, mode);
+
+    // WHICH PLATFORM ACCOUNT (UK vs UAE) the hold lives on.
+    //
+    // rentals.platform_account is the RENTAL's platform and other paths can
+    // rewrite it — sync-deposit-hold could overwrite the anchor — after which we
+    // looked the PaymentIntent up on the wrong platform, got resource_missing,
+    // and (correctly, by principle 2) refused to conclude anything. The hold then
+    // became permanently unreconcilable. deposit_hold_platform_account is written
+    // by place-deposit-hold and describes the HOLD, so it wins when present.
+    //
+    // COMPATIBILITY: the column is NULL on every row placed before it existed, and
+    // the fallback below is byte-for-byte what getStripeClientForRecord already
+    // does with rentals.platform_account (`=== 'uae' ? 'uae' : 'uk'`), so a NULL
+    // anchor resolves to exactly the client this function has always used. Only a
+    // row carrying a real 'uk'/'uae' value can take the new branch. A value that
+    // is neither (impossible under the CHECK, but not worth trusting on a money
+    // path) is ignored rather than guessed at.
+    const anchoredPlatform =
+      rental.deposit_hold_platform_account === "uk" || rental.deposit_hold_platform_account === "uae"
+        ? rental.deposit_hold_platform_account
+        : null;
+    const platformAccount = anchoredPlatform ?? (rental.platform_account === "uae" ? "uae" : "uk");
+    // Fed through the same helper as before so the key selection stays in one
+    // place; the synthetic record differs from `rental` only when the hold's own
+    // anchor is set and disagrees.
+    const stripe = getStripeClientForRecord({ platform_account: platformAccount }, mode);
 
     let connectAccountId = rental.deposit_hold_connect_account_id || null;
     if (!connectAccountId) {
@@ -448,7 +481,11 @@ function resolveStripeContext(rental: RentalRow, tenant: TenantRow | undefined):
         stripe_account_id: tenant.stripe_account_id,
         stripe_onboarding_complete: tenant.stripe_onboarding_complete,
         // The hold's own platform decides the model, not the tenant's today.
-        payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        // Same resolved value as the client above — deriving the account from a
+        // different platform than the keys is precisely the mismatch that yields
+        // resource_missing. Identical to the previous expression whenever
+        // deposit_hold_platform_account is NULL.
+        payment_model: platformAccount === "uae" ? "own" : "managed",
         own_stripe_account_id: tenant.own_stripe_account_id,
         own_stripe_test_account_id: tenant.own_stripe_test_account_id,
       });
@@ -473,6 +510,16 @@ function resolveLinkContext(link: LinkRow, rental: RentalRow | undefined, tenant
     id: link.rental_id,
     tenant_id: link.tenant_id,
     platform_account: link.platform_account ?? rental?.platform_account ?? null,
+    // MUST be set explicitly. The spread above now carries the RENTAL's
+    // deposit_hold_platform_account, which resolveStripeContext prefers over
+    // platform_account — so without this line a link would be resolved against the
+    // rental's CURRENT hold platform instead of the platform recorded for that
+    // link's own PaymentIntent. These sweeps cancel authorisations; the link's own
+    // anchor is the strongest evidence about the PI it names and must stay first.
+    // Falls through to the rental's hold anchor only when the link has none, and
+    // then to `platform_account` above (via resolveStripeContext) when both are
+    // NULL — which is every row today, so the link paths are unchanged.
+    deposit_hold_platform_account: link.platform_account ?? rental?.deposit_hold_platform_account ?? null,
     deposit_hold_stripe_mode: link.stripe_mode ?? rental?.deposit_hold_stripe_mode ?? null,
     deposit_hold_connect_account_id: link.connect_account_id ?? rental?.deposit_hold_connect_account_id ?? null,
   };

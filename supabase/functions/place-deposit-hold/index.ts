@@ -787,6 +787,16 @@ Deno.serve(async (req) => {
         deposit_hold_connect_account_id: connectAccountId,
         deposit_hold_stripe_mode: stripeMode,
         deposit_hold_currency: currencyCode,
+        // Which PLATFORM account (UK vs UAE) this authorisation actually lives
+        // on. `platform_account` above carries the same value today, but it is
+        // the RENTAL's platform and other paths may rewrite it — sync-deposit-hold
+        // could overwrite the anchor, after which reconcile-deposit-holds resolved
+        // its Stripe client from the wrong account, got resource_missing, and
+        // could never reconcile the hold again. This column is the hold's OWN
+        // platform and nothing but placement writes it, so the reconciler always
+        // has a true anchor to prefer. CHECK allows only null | 'uk' | 'uae';
+        // getChargePlatformAccount returns exactly 'uk' | 'uae'.
+        deposit_hold_platform_account: platformAccount,
         // Provenance of deposit_hold_expires_at, plus what the network actually
         // granted us. Answers "did this hold get 30 days or 7?" and "is that
         // expiry real or our floor?" — neither of which the DB could answer.

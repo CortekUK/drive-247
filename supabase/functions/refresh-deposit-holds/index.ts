@@ -37,11 +37,18 @@
 //
 // AUTH: `verify_jwt = false` in config.toml (pg_cron carries no user JWT), so
 // the API gateway lets anonymous requests through and the check in THIS file is
-// the only gate. It accepts either:
+// the only gate. It accepts:
 //   * `x-platform-secret` — what pg_cron sends, validated by the
 //     `platform_verify_secret(p_secret)` DB RPC, or
 //   * `Authorization: Bearer <super-admin user JWT>` — manual dispatch from the
-//     portal/admin UI.
+//     portal/admin UI, for any scope including the global sweep, or
+//   * `Authorization: Bearer <tenant head_admin/admin JWT>` — but ONLY together
+//     with an `only_rental_id` naming a rental of that admin's OWN tenant. This
+//     is the portal's "Force refresh" button, which is gated client-side on
+//     `isAdmin()`; before this tier existed the button 401'd for every operator
+//     it was built for, because a tenant admin has `is_super_admin = false`.
+//     A tenant admin with NO `only_rental_id` is REFUSED: driving every
+//     tenant's chain is not theirs to do.
 // Anything else is 401. This function accepts a caller-supplied
 // `only_rental_id` and applies it as a filter, and a refresh is DESTRUCTIVE (it
 // cancels the live authorisation before placing its replacement), so an
@@ -80,22 +87,61 @@ const LOOP_BUDGET_MS = 240_000;
 const LOG = "[DEPOSIT-REFRESH]";
 
 /**
+ * Roles a TENANT-level operator may hold to force a refresh on their own
+ * tenant's rental. Deliberately narrower than `STAFF_WRITE_ROLES` in
+ * `_shared/deposit-hold-auth.ts`, which also admits `ops` and an editor-granted
+ * `manager`:
+ *
+ *   * The portal only ever shows this control behind `isAdmin()`
+ *     (apps/portal/src/stores/auth-store.ts → head_admin | admin, and super
+ *     admins, whose role the auth store rewrites to 'head_admin'). Admitting
+ *     ops/manager here would hand out a server capability that no UI offers —
+ *     the exact inverse of the one-for-one UI/server alignment that module
+ *     documents.
+ *   * A force refresh is more consequential than the endpoints that module
+ *     guards: it CANCELS the live authorisation before attempting its
+ *     replacement, so a decline leaves the rental unsecured. That is why the
+ *     portal gates it on `isAdmin()` rather than the usual
+ *     `canEdit('rentals')`.
+ *
+ * If ops ever need it, it is one entry here plus one predicate in the portal —
+ * taken deliberately, not inherited by accident.
+ */
+const TENANT_REFRESH_ROLES = new Set(["head_admin", "admin"]);
+
+/**
  * The only gate on this endpoint (see the AUTH note in the file header).
  *
- * Accepts EITHER the platform secret (pg_cron) OR a super-admin user JWT
- * (manual dispatch). Mirrors `onboarding-daily-digest` and
+ * Accepts the platform secret (pg_cron), a super-admin user JWT (manual
+ * dispatch, any scope), or a tenant head_admin/admin JWT SCOPED to one rental
+ * of their own tenant. Mirrors `onboarding-daily-digest` and
  * `platform-rental-notify` rather than inventing a scheme, so there is exactly
  * one internal-caller credential to rotate.
  *
+ * Deliberately does NOT call `_shared/deposit-hold-auth.ts` even though the
+ * tenant tier mirrors its resolution logic line for line: that module accepts
+ * the service-role bearer (`ALLOW_SERVICE_ROLE`, which this endpoint refuses on
+ * purpose — see the file header), rejects a request with no `rentalId` with a
+ * 400 (which is the nightly global sweep), and admits ops/manager. Reusing it
+ * would change all three of those, so its *logic* is mirrored instead of its
+ * entry point.
+ *
  * Fails SAFE: every error path — a missing env var, an RPC error, a GoTrue
- * outage, a failed app_users lookup — returns false. An outage that made this
- * return true would expose a destructive money path.
+ * outage, an unreadable rental, a failed app_users lookup — returns false. An
+ * outage that made this return true would expose a destructive money path.
  *
  * @param supabase a SERVICE-ROLE client. `platform_verify_secret` is
- *   service-role-only, and the app_users lookup must not be filtered by RLS.
+ *   service-role-only, and the rentals / app_users lookups must not be filtered
+ *   by RLS.
+ * @param onlyRentalId the request body's `only_rental_id`, already parsed.
+ *   Absent (a global sweep) restricts the JWT path to super admins.
  */
 // deno-lint-ignore no-explicit-any
-async function isAuthorizedCaller(req: Request, supabase: any): Promise<boolean> {
+async function isAuthorizedCaller(
+  req: Request,
+  supabase: any,
+  onlyRentalId: string | null
+): Promise<boolean> {
   // 1. Platform secret — the cron path. Validated by a DB RPC so the secret
   //    itself never has to be present in this function's environment.
   const secret = req.headers.get("x-platform-secret");
@@ -152,7 +198,83 @@ async function isAuthorizedCaller(req: Request, supabase: any): Promise<boolean>
     console.error(LOG, "app_users lookup failed:", lookupError.message);
     return false;
   }
-  return (rows?.length ?? 0) > 0;
+  if ((rows?.length ?? 0) > 0) return true;
+
+  // 3. Tenant head_admin/admin, SCOPED to one rental of their own tenant — the
+  //    portal's "Force refresh" button. Kept as a separate query below the
+  //    super-admin one on purpose: widening that query instead would mean a
+  //    principal holding both a super-admin row and a tenant row could have
+  //    .limit(1) hand back the wrong one, so the proven path stays byte for
+  //    byte as it was and this only ever runs after it has already declined.
+  //
+  //    NO only_rental_id = the global sweep across every tenant's chain. A
+  //    tenant admin has no business driving that, so it stays super-admin only.
+  //    Empty string is treated as absent here for the same reason the batch
+  //    filters below ignore it (`if (onlyRentalId)`), so the two can never
+  //    disagree about what is scoped.
+  if (!onlyRentalId) {
+    console.warn(LOG, "Refused unscoped refresh for auth user", userId, "— not a super admin");
+    return false;
+  }
+
+  // The rental names the tenant; nothing the caller sent does. A read that
+  // errors (including a malformed UUID) or finds no row DENIES — without a
+  // tenant_id there is no tenant check to make.
+  const { data: rentalRow, error: rentalError } = await supabase
+    .from("rentals")
+    .select("id, tenant_id")
+    .eq("id", onlyRentalId)
+    .maybeSingle();
+  if (rentalError) {
+    console.error(LOG, "rental lookup failed during authorisation; denying:", rentalError.message);
+    return false;
+  }
+  const rentalTenantId = (rentalRow?.tenant_id as string | null) ?? null;
+  if (!rentalRow || !rentalTenantId) {
+    console.warn(LOG, "Refused refresh for auth user", userId, "— rental", onlyRentalId, "not found or has no tenant");
+    return false;
+  }
+
+  // THE SECURITY BOUNDARY. tenant_id is matched in the QUERY against the
+  // rental's own tenant, so a row for any other tenant can never come back and
+  // be mistaken for a match. Several rows are read rather than one because a
+  // principal may legitimately hold more than one app_users row; each candidate
+  // still has to satisfy every condition on its own.
+  const { data: staffRows, error: staffError } = await supabase
+    .from("app_users")
+    .select("id, role, is_active")
+    .eq("auth_user_id", userId)
+    .eq("tenant_id", rentalTenantId)
+    .limit(5);
+  if (staffError) {
+    console.error(LOG, "app_users tenant lookup failed; denying:", staffError.message);
+    return false;
+  }
+
+  const match = (staffRows ?? []).find(
+    // `is_active !== false` (not `=== true`): matches how
+    // _shared/deposit-hold-auth.ts reads a NULL is_active. Role is default-deny,
+    // so a NULL role or one added to the enum later is refused.
+    (r: Record<string, unknown>) =>
+      r?.is_active !== false && TENANT_REFRESH_ROLES.has(String(r?.role ?? ""))
+  );
+  if (!match) {
+    console.warn(
+      LOG,
+      "Refused refresh for auth user", userId,
+      "on rental", onlyRentalId,
+      "— no active head_admin/admin row in tenant", rentalTenantId
+    );
+    return false;
+  }
+
+  console.log(
+    LOG,
+    "Tenant admin", match.id,
+    "authorised for a scoped refresh of rental", onlyRentalId,
+    "in tenant", rentalTenantId
+  );
+  return true;
 }
 
 Deno.serve(async (req) => {
@@ -164,9 +286,29 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
-  // Before the cron_runs heartbeat and before the body is read: an unauthorised
-  // caller must not be able to write heartbeat rows either.
-  if (!(await isAuthorizedCaller(req, supabase))) {
+  // Optional sandbox/portal scoping. When `only_rental_id` is supplied (by the
+  // Time Machine sandbox control or the portal's Force-refresh button), the
+  // refresh is restricted to that ONE rental so a manual dispatch can never
+  // touch another tenant's holds. Absent (the production cron) = unchanged
+  // global behaviour: process all due holds.
+  //
+  // Parsed HERE, ahead of the gate, only because the gate needs it: the scope
+  // is what bounds a tenant admin to their own rental. A request body can be
+  // read once, and parsing it is side-effect free — an unauthorised caller
+  // still gets the same 401 below, before the cron_runs heartbeat and before
+  // any query runs.
+  let onlyRentalId: string | null = null;
+  let batchLimit = DEFAULT_BATCH_LIMIT;
+  try {
+    const reqBody = await req.json();
+    onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
+    const requested = Number(reqBody?.limit);
+    if (Number.isFinite(requested) && requested > 0) batchLimit = Math.min(Math.floor(requested), 100);
+  } catch { /* no/invalid body — global cron run */ }
+
+  // Before the cron_runs heartbeat: an unauthorised caller must not be able to
+  // write heartbeat rows either.
+  if (!(await isAuthorizedCaller(req, supabase, onlyRentalId))) {
     console.warn(LOG, "Unauthorized call rejected");
     return errorResponse("Unauthorized", 401);
   }
@@ -178,18 +320,8 @@ Deno.serve(async (req) => {
   try {
     console.log("[DEPOSIT-REFRESH] Starting deposit hold refresh check...");
 
-    // Optional sandbox scoping. When `only_rental_id` is supplied (by the Time
-    // Machine sandbox control), the refresh is restricted to that ONE rental so
-    // a manual dispatch can never touch another tenant's holds. Absent (the
-    // production cron) = unchanged global behaviour: process all due holds.
-    let onlyRentalId: string | null = null;
-    let batchLimit = DEFAULT_BATCH_LIMIT;
-    try {
-      const reqBody = await req.json();
-      onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
-      const requested = Number(reqBody?.limit);
-      if (Number.isFinite(requested) && requested > 0) batchLimit = Math.min(Math.floor(requested), 100);
-    } catch { /* no/invalid body — global cron run */ }
+    // `onlyRentalId` / `batchLimit` were read from the body above the auth gate
+    // (the gate needs the scope); they are used unchanged from here down.
 
     // Heartbeat row first, so a run that dies mid-loop still leaves evidence
     // (finished_at stays NULL — that is the dead-man signal).

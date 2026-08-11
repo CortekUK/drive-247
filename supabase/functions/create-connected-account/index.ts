@@ -14,6 +14,16 @@ const stripe = new Stripe(stripeLiveKey, {
   httpClient: Stripe.createFetchHttpClient(),
 })
 
+// Merchant category code 7512 = "Automobile Rental Agency".
+// This is deliberate and specific to how this platform takes security deposits:
+// Visa treats vehicle rental as a favoured category for extended / incremental
+// authorizations. Under 7512 the merchant is exempt from the misuse-of-authorization
+// surcharge, and is exempt from the restriction that would otherwise block the
+// merchant-initiated re-authorisations that the chained deposit-hold system relies on.
+// If Stripe does not accept this MCC we still onboard the tenant without it (see below);
+// and an MCC that Stripe itself assigns during review cannot be changed by the platform.
+const VEHICLE_RENTAL_MCC = '7512';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-requested-with, x-tenant-slug',
@@ -69,11 +79,13 @@ serve(async (req) => {
 
     // Create new Stripe Express account if one doesn't exist
     if (!stripeAccountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
+      // Unchanged account payload. Kept as a single object so the MCC fallback below
+      // recreates EXACTLY the account we would have created before this change.
+      const accountParams = {
+        type: 'express' as const,
         country: country || 'US', // Default to US
         email: email,
-        business_type: 'company',
+        business_type: 'company' as const,
         company: {
           name: businessName || tenant.company_name,
         },
@@ -84,7 +96,32 @@ serve(async (req) => {
         metadata: {
           tenant_id: tenantId,
         },
-      })
+      }
+
+      let account
+      try {
+        account = await stripe.accounts.create({
+          ...accountParams,
+          business_profile: { mcc: VEHICLE_RENTAL_MCC },
+        })
+      } catch (mccError: any) {
+        // Onboarding a tenant matters far more than the MCC, so degrade gracefully.
+        // Stripe rejects an MCC it does not consider appropriate with a deterministic
+        // 400 invalid_request_error, and in that case NO account was created — so
+        // retrying without the MCC is safe and cannot duplicate an account.
+        // Any other failure (network error, 5xx, rate limit) may have created an
+        // account server-side, so we rethrow instead of risking a second account;
+        // that path behaves exactly as it did before this change.
+        const isInvalidRequest =
+          mccError?.type === 'StripeInvalidRequestError' || mccError?.statusCode === 400
+        if (!isInvalidRequest) throw mccError
+
+        console.warn(
+          `Stripe rejected MCC ${VEHICLE_RENTAL_MCC} for tenant ${tenantId}; creating account without it.`,
+          mccError?.message
+        )
+        account = await stripe.accounts.create(accountParams)
+      }
 
       stripeAccountId = account.id
 

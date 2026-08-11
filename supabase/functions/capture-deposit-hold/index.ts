@@ -64,7 +64,8 @@ Deno.serve(async (req) => {
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
       .select(
-        "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id, auto_extend_enabled, platform_account"
+        "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, tenant_id, customer_id, vehicle_id, auto_extend_enabled, platform_account, " +
+          "deposit_hold_stripe_mode, deposit_hold_connect_account_id, deposit_hold_platform_account"
       )
       .eq("id", rentalId)
       .single();
@@ -87,17 +88,36 @@ Deno.serve(async (req) => {
       .eq("id", effectiveTenantId)
       .single();
 
-    const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || "test";
-    // The hold lives on the platform account it was CREATED on
-    // (rentals.platform_account) — capture with those keys + that platform's
-    // connected account, even if the tenant has since flipped payment model.
-    const stripe = getStripeClientForRecord(rental, stripeMode);
-    const connectAccountId = tenant
-      ? getConnectAccountId({
-          ...tenant,
-          payment_model: rental.platform_account === "uae" ? "own" : "managed",
-        })
-      : null;
+    // Capture against the HOLD'S OWN ANCHORS. Reading `tenant.stripe_mode` here
+    // meant a tenant who flipped test->live (or migrated UK->UAE) mid-rental
+    // would have us capture on an account the authorization never existed on:
+    // the capture fails, the operator is told the money could not be taken, and
+    // the real hold keeps sitting on the other account until it lapses.
+    const anchoredMode =
+      rental.deposit_hold_stripe_mode === "live" || rental.deposit_hold_stripe_mode === "test"
+        ? (rental.deposit_hold_stripe_mode as StripeMode)
+        : null;
+    const anchoredPlatform =
+      rental.deposit_hold_platform_account === "uk" || rental.deposit_hold_platform_account === "uae"
+        ? rental.deposit_hold_platform_account
+        : null;
+
+    const stripeMode: StripeMode = anchoredMode ?? ((tenant?.stripe_mode as StripeMode) || "test");
+    const platformAccount = anchoredPlatform ?? (rental.platform_account === "uae" ? "uae" : "uk");
+
+    const stripe = getStripeClientForRecord({ platform_account: platformAccount }, stripeMode);
+    const connectAccountId =
+      rental.deposit_hold_connect_account_id ||
+      (tenant
+        ? getConnectAccountId({
+            // Anchored mode, not tenant.stripe_mode: getConnectAccountId
+            // branches on mode, so passing today's value would select the
+            // account for the wrong mode while the client uses the hold's keys.
+            ...tenant,
+            stripe_mode: stripeMode,
+            payment_model: platformAccount === "uae" ? "own" : "managed",
+          })
+        : null);
     const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
 
     const capturedInCents = Math.round(amount * 100);
@@ -125,10 +145,14 @@ Deno.serve(async (req) => {
         "status:",
         preCaptureIntent.status
       );
+      // CAS: only condemn the PI we actually probed. Without this, a capture
+      // racing the refresh engine could stamp `expired` over a freshly placed
+      // replacement authorization that is perfectly alive.
       await supabase
         .from("rentals")
         .update({ deposit_hold_status: "expired" })
-        .eq("id", rentalId);
+        .eq("id", rentalId)
+        .eq("deposit_hold_payment_intent_id", rental.deposit_hold_payment_intent_id);
       // Structured signal (HTTP 200 so supabase-js doesn't swallow the body):
       // the UI uses this to switch to the two-step "Refresh hold → Charge" flow
       // instead of showing a raw error. The expired auth is dead and can't be
@@ -257,7 +281,16 @@ Deno.serve(async (req) => {
         verification_status: "auto_approved",
         stripe_payment_intent_id: rental.deposit_hold_payment_intent_id,
         capture_status: "captured",
-        platform_account: rental.platform_account === "uae" ? "uae" : "uk",
+        // MUST be the platform we actually captured on (`platformAccount`), not
+        // rentals.platform_account. Those two deliberately diverge during a
+        // UK<->UAE migration — sync-deposit-hold refuses to move
+        // rentals.platform_account once payments are anchored to the old value
+        // and logs "PLATFORM DIVERGENCE". process-refund resolves its Stripe
+        // keys and connected account from THIS row, so stamping the rental's
+        // value would send a later refund of this captured deposit to the
+        // account the charge does not exist on, and the money could not be
+        // returned.
+        platform_account: platformAccount,
         booking_source: "admin",
       })
       .select()
@@ -357,9 +390,38 @@ Deno.serve(async (req) => {
       rentalUpdate.deposit_hold_status = "captured";
       rentalUpdate.deposit_hold_amount = 0;
     }
-    const { error: updateError } = await supabase.from("rentals").update(rentalUpdate).eq("id", rentalId);
+    // Compare-and-set on the PaymentIntent we captured. If the refresh engine
+    // swapped in a replacement while this capture was in flight, writing
+    // unconditionally would stamp `captured` over a LIVE replacement
+    // authorization and strand the renter's funds behind a terminal status.
+    const { data: capturedRows, error: updateError } = await supabase
+      .from("rentals")
+      .update(rentalUpdate)
+      .eq("id", rentalId)
+      .eq("deposit_hold_payment_intent_id", rental.deposit_hold_payment_intent_id)
+      .select("id");
     if (updateError) {
       console.error("[DEPOSIT-CAPTURE] Failed to update rental:", updateError);
+    } else if (!capturedRows || capturedRows.length === 0) {
+      // Money HAS moved — never report this as a failure — but a DIFFERENT
+      // authorization now owns the row.
+      //
+      // Deliberately do NOT write here. The only way to reach this branch is
+      // that the refresh engine landed a replacement at 'held' with a live PI,
+      // and stamping anything over it (including 'needs_review') would take that
+      // live hold out of the refresh driver's selection — it re-selects only
+      // 'held' and 'failed' — so the replacement would stop being renewed and
+      // lapse. The capture itself is durably recorded in `payments` above, and
+      // the 6-hourly reconciler settles the rest. Loud log, no clobber.
+      console.error(
+        "[DEPOSIT-CAPTURE] Captured, but a newer authorization now owns the row — leaving it untouched.",
+        {
+          rentalId,
+          capturedPi: rental.deposit_hold_payment_intent_id,
+          capturedInCents,
+          note: "capture is recorded in payments; reconcile-deposit-holds will settle the live hold",
+        }
+      );
     }
 
     return jsonResponse({

@@ -151,6 +151,18 @@ Deno.serve(async (req) => {
       deposit_hold_connect_account_id: connectAccountId,
       deposit_hold_stripe_mode: stripeMode,
       deposit_hold_currency: holdCurrency,
+      // The platform this hold's PaymentIntent actually lives on.
+      //
+      // This is the anchor that matters most on THIS path. Below, we
+      // deliberately do NOT overwrite rentals.platform_account when the rental's
+      // payments are anchored to the old value — which is correct for those
+      // payments, but it means the rental-level anchor can legitimately point at
+      // a different platform than the hold. That is precisely the divergence
+      // reconcile-deposit-holds could not resolve: it looked the PaymentIntent up
+      // on the rental's platform, got resource_missing, and could never reconcile
+      // the hold again. Recording the hold's own platform here makes it
+      // resolvable regardless of what the rental-level anchor says.
+      deposit_hold_platform_account: platformAccount,
     }
 
     // rentals.platform_account is the rental's MONEY ANCHOR: capture, release,

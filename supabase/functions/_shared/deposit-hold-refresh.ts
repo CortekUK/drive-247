@@ -262,12 +262,19 @@ export interface ChainBound {
  *     amount/auto-extend release branches and the operator's own release remain
  *     the other stops. This matches verify-deposit-hold's forward-only re-stamp.
  *
- *  2. NULL ON EITHER SIDE MEANS "NO CEILING". A NULL stored column is how every
- *     row written before this column existed looks, and how an open-ended rental
- *     looks; inventing a ceiling for those would newly terminate chains across
- *     all 28 tenants on the first run after deploy. An unparseable stored value
- *     is treated the same way — fail SAFE (keep chaining), never fail closed on
- *     a value we cannot read.
+ *  2. ONLY A NULL/UNREADABLE **LIVE** SIDE MEANS "NO CEILING" — that is a
+ *     genuinely open-ended rental (end_date IS NULL), where any ceiling would
+ *     be invented.
+ *
+ *  2b. A NULL/unreadable STORED cache SEEDS from the live end_date instead,
+ *     floored at now + grace. This previously also meant "no ceiling", to avoid
+ *     mass-terminating chains on the first run after deploy — but measured
+ *     against production the seed terminates ZERO rows, while the old reading
+ *     left every unstamped hold re-authorising a renter's card indefinitely
+ *     after the car came back. For a mechanism that exists to stay inside
+ *     card-network rules, unbounded is the wrong direction to fail. The floor
+ *     keeps a hold placed onto an already-ended rental from dying at its first
+ *     link; see the inline note for why it cannot make the chain immortal.
  *
  * `end_date === undefined` is NOT the same fact as `end_date === null`: it means
  * the caller never selected the column. Guessing "open-ended" from an absent
@@ -295,8 +302,45 @@ export function resolveChainBound(rental: RentalRow, now: Date = new Date()): Ch
     return { effective: stored, stored, live, stale: false, expired: storedMs <= now.getTime() };
   }
 
-  // Rule 2: a NULL/unreadable value on EITHER side means "no ceiling".
-  if (!storedOk || !liveOk) return noCeiling;
+  // Rule 2: an unreadable LIVE side means "no ceiling" — that is a genuinely
+  // open-ended rental (end_date IS NULL), and inventing a ceiling for it would
+  // be a guess.
+  if (!liveOk) return noCeiling;
+
+  // Rule 2b: a NULL/unreadable STORED cache is NOT "open-ended" — it is simply
+  // a row written before this column existed, or by one of the three paths that
+  // mint 'held' without stamping it. We know the rental's real end date, so use
+  // it.
+  //
+  // This used to fall through to `noCeiling`, on the rationale that inventing a
+  // ceiling would mass-terminate chains on the first run after deploy. Measured
+  // against production that rationale does not hold: the seed terminates ZERO
+  // rows today, while the old behaviour left every unstamped hold with NO
+  // ceiling at all — re-authorising a renter's card indefinitely, weeks after
+  // the car came back. For a mechanism whose entire purpose is to stay inside
+  // card-network rules, unbounded is the wrong direction to fail.
+  //
+  // FLOORED at now + grace, and this floor is load-bearing. place-deposit-hold
+  // applies the same floor when a hold is placed on an ALREADY-ended rental
+  // (routine: staff hold a deposit late on an overdue or extended booking), but
+  // it only ever lands in the stored column. Without the floor here, a hold
+  // synced onto a rental that ended last week would be born with a bound
+  // already in the past and die at its first link, in silence — precisely the
+  // harm Rule 1 exists to prevent, just relocated.
+  //
+  // It cannot make the chain immortal: it fires only while `stored` is NULL,
+  // and the value is persisted under the claim CAS on the next pass, after
+  // which Rule 1 governs and extensions move the bound forward normally.
+  if (!storedOk) {
+    const seedMs = Math.max(liveMs, now.getTime() + CHAIN_GRACE_DAYS_AFTER_END * 86_400_000);
+    return {
+      effective: new Date(seedMs).toISOString(),
+      stored,
+      live,
+      stale: true,
+      expired: false,
+    };
+  }
 
   // Rule 1: the LATER of the two.
   const effectiveMs = Math.max(storedMs, liveMs);
@@ -996,8 +1040,11 @@ export async function refreshOneHold(
     // The write itself rides along on the claim below so it stays inside the
     // CAS and cannot stamp a row somebody else owns.
     console.log(
-      `${log} ${rentalId}: chain bound re-derived forward ` +
-        `${chain.stored} -> ${chain.effective} (rental end date moved)`
+      chain.stored === null
+        ? `${log} ${rentalId}: chain bound SEEDED from end_date -> ${chain.effective} ` +
+          `(row carried no bound; it was previously unbounded)`
+        : `${log} ${rentalId}: chain bound re-derived forward ` +
+          `${chain.stored} -> ${chain.effective} (rental end date moved)`
     );
   }
 
