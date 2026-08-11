@@ -1,19 +1,5 @@
 {
-  "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-chain-bound.test.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-key-handover.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/capture-deposit-hold/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/place-deposit-hold/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-connected-account/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/refresh-deposit-holds/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reconcile-deposit-holds/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-deposit-hold/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/release-deposit-hold/index.ts"
-  ],
-  "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
-  ],
+  "files": [],
+  "specs": [],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

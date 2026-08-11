@@ -86,7 +86,19 @@ type StripeOptions = { stripeAccount?: string } | undefined;
 // Driver query — shared so production and the sandbox can never drift.
 // ---------------------------------------------------------------------------
 
-/** Every column `refreshOneHold` reads. Both drivers select exactly this. */
+/**
+ * Every column `refreshOneHold` reads. Both drivers select exactly this.
+ *
+ * NOTE: this is a PostgREST column list, not SQL — no comments, no whitespace
+ * tricks beyond newlines.
+ *
+ * `deposit_hold_platform_account` is load-bearing and was MISSING here, which
+ * caused a live `account_invalid`: the connect-account and mode anchors were
+ * selected and honoured, but without the platform anchor refreshOneHold fell
+ * back to `rentals.platform_account` for the Stripe KEYS while still targeting
+ * the hold's connected ACCOUNT. Stripe rejects that pair outright. Any anchor
+ * added to the schema must be added here too or it silently does nothing.
+ */
 export const HOLD_REFRESH_COLUMNS = `
   id, tenant_id, customer_id, status,
   end_date,
@@ -103,6 +115,7 @@ export const HOLD_REFRESH_COLUMNS = `
   deposit_hold_failure_count,
   deposit_hold_connect_account_id,
   deposit_hold_stripe_mode,
+  deposit_hold_platform_account,
   deposit_hold_currency,
   deposit_hold_chain_expires_at
 `;
@@ -1081,18 +1094,36 @@ export async function refreshOneHold(
   let connectAccountId: string | null;
   let stripeMode: StripeMode;
   let currency: string;
+  let resolvedPlatform: string;
   try {
     stripeMode = ((rental.deposit_hold_stripe_mode as StripeMode | null) ??
       ((tenant as Record<string, unknown>).stripe_mode as StripeMode) ??
       "test") as StripeMode;
-    stripe = getStripeClientForRecord(rental, stripeMode);
+    // The PLATFORM anchor must be honoured the same way the MODE anchor above
+    // already is. This block used to read `rental.platform_account` while
+    // trusting `deposit_hold_stripe_mode` — half-anchored, which is worse than
+    // either extreme because it pairs the hold's KEYS with the rental's
+    // ACCOUNT.
+    //
+    // Caught live: a hold anchored to `uae` on acct_1SqMGnB9wIYWaRK0, sitting on
+    // a rental whose platform_account still said `uk`, resolved the UK test key
+    // and Stripe answered `account_invalid` — "the provided key does not have
+    // access to that account". Every link of every chained hold would fail this
+    // way for the duration of the UK->UAE migration, on the ONE function that
+    // runs unattended.
+    const anchoredPlatform =
+      rental.deposit_hold_platform_account === "uk" || rental.deposit_hold_platform_account === "uae"
+        ? (rental.deposit_hold_platform_account as string)
+        : null;
+    resolvedPlatform = anchoredPlatform ?? (rental.platform_account === "uae" ? "uae" : "uk");
+    stripe = getStripeClientForRecord({ platform_account: resolvedPlatform }, stripeMode);
     connectAccountId =
       (rental.deposit_hold_connect_account_id as string | null) ??
       getConnectAccountId({
         // deno-lint-ignore no-explicit-any
         ...(tenant as any),
         stripe_mode: stripeMode,
-        payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        payment_model: resolvedPlatform === "uae" ? "own" : "managed",
       });
     currency = String(
       (rental.deposit_hold_currency as string | null) ??
@@ -1108,7 +1139,10 @@ export async function refreshOneHold(
     );
   }
   const stripeOptions: StripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
-  const platformAccount = rental.platform_account === "uae" ? "uae" : "uk";
+  // Anchor-resolved above. This value is stamped onto the ledger rows and the
+  // replacement PaymentIntent's metadata, so it must describe where the money
+  // ACTUALLY is, not what the rental row happens to say today.
+  const platformAccount = resolvedPlatform;
 
   // ── A 'held' row with no PaymentIntent behind it cannot be proven dead, and
   //    authorizing on the strength of a status field alone is exactly the
