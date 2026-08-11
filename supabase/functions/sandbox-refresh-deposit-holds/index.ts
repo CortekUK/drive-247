@@ -159,10 +159,18 @@ Deno.serve(async (req) => {
 
     // Heartbeat, same as production — the harness exercises the observability
     // path too, and a sandbox run that dies mid-flight leaves the same evidence.
+    //
+    // REAL wall-clock, never the simulated one. `cron_runs` is operational
+    // monitoring: freshness checks ask "when did this job last run?", and a
+    // simulated clock stamped rows months into the future — so a dead-man check
+    // reading MAX(started_at) would report the job healthy forever, no matter how
+    // long it had actually been down. The Time Machine may move what the ENGINE
+    // believes the date is; it must not move what the OBSERVABILITY layer
+    // believes the date is.
     {
       const { data, error } = await supabase
         .from("cron_runs")
-        .insert({ job_name: JOB_NAME, started_at: now.toISOString(), total_due: batch.length })
+        .insert({ job_name: JOB_NAME, started_at: new Date().toISOString(), total_due: batch.length })
         .select("id")
         .maybeSingle();
       if (error) console.error("[SandboxDepositRefresh] Could not open cron_runs row:", error.message);
