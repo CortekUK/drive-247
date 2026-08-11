@@ -5712,7 +5712,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/capture-deposit-hold/index.ts": {
-    "sha": "3fdc0dfc12f8f2e9a82579bb91027946a8ae257a497bb463bc528374ef336e1b",
+    "sha": "3063c6a8729bc6a2ccd35deceb7a30e4d373eaa6095c8683438ad8e3b89248fe",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/place-deposit-hold/index.ts": {
@@ -6268,7 +6268,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts": {
-    "sha": "1ba6997cf465f035c637d8864f142670f483987946cc1778f4a4435c4f9ab86e",
+    "sha": "733dcaa9f2d5c2114f3e4e9596605c9542f30e28a03c90a9a1d26d09218bcd6f",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts": {
@@ -6284,7 +6284,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts": {
-    "sha": "dc917d1f1c8ccc50ac264b22d0643f8904c7443dbe0a6f803eae27c69882c758",
+    "sha": "c2c15d3cb328597a866232154a0b67fb57601010e5d36748b171e7607ced2619",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts": {
