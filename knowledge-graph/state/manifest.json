@@ -3328,7 +3328,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-key-handover.ts": {
-    "sha": "d60a884b6e736f2c7f4785cdb83b851ece2f6512cd6e760b1870d7254a516c8f",
+    "sha": "8b0bdb876eecd1ba97ae1ca43b8f525b62d08b09985624d784e4de4bd0276a8c",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-go-live-request.ts": {
@@ -3401,6 +3401,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/platform-tos.test.ts": {
     "sha": "cafcc675079f89de5785ccc021fd98c9489f386606339969076a4010d994559b",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-chain-bound.test.ts": {
+    "sha": "23e6424e28b611dccb98f712ca39926d6b7d945e51ffae48385423227e1b6bb8",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/delivery-tiers.test.ts": {
@@ -5704,11 +5708,11 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/capture-deposit-hold/index.ts": {
-    "sha": "ca0f952d5a117995291f559e45f20e2a574ba05addbd1f9b3a61ee8e321c917f",
+    "sha": "f0fe1f31e486c91ec883fb61ddf32aa9a145faf6ca5c6dda97ecd17e4f45aa81",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/place-deposit-hold/index.ts": {
-    "sha": "fc5a5fe88820472b7b9143354909287d1e619583d336653310108d95cb066a4d",
+    "sha": "0d371d8230f3c2dbe5c1327949551f67b18766130f1ed7593cb5f1a7623ed5be",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-customer-registration/index.ts": {
@@ -5832,7 +5836,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-connected-account/index.ts": {
-    "sha": "bb99a73b47a5ed6d0c1fbee8fbcea7844b6c8702145d158bb92cdb04a4dae716",
+    "sha": "34cc5eb856b8fe15d3b76f08fae547cbf103f9820cdb7352b6ddd792f8f31e98",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-signing-completed/index.ts": {
@@ -5888,11 +5892,11 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/refresh-deposit-holds/index.ts": {
-    "sha": "a913efae2646a1f96dc413edf4ec659d724a947906e2b30757239d3405272993",
+    "sha": "0f86850e551f86e00a4744904c89d0d5d40048755f351b3967ceea1bc34f1c77",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reconcile-deposit-holds/index.ts": {
-    "sha": "5dddcfe119af1b582fb6e2a734578c0536e34187c53bf9a36773b651dea994a8",
+    "sha": "5097a97d7f7f5e3ae95a904a071a9ce2cd6a0c8114c9eeaf6b3f88d77afaef68",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-fine-recorded/index.ts": {
@@ -5976,7 +5980,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-deposit-hold/index.ts": {
-    "sha": "4f173087055fe8ad2294d3e1b1280589ac1fdf9cc6cb0601fa3f2895961881bf",
+    "sha": "b9059b8f29579536c4e1f706e804f5bd81f99e882409273bf189f9f0768b4adc",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/pay-installment-early/index.ts": {
@@ -6276,7 +6280,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts": {
-    "sha": "69a6816a54a7d0f1f102495844dd1fd4aacc008b994733b1f416bfdebeea791b",
+    "sha": "a337c53d03c12c0c847859d57fd9dc2cf42f05b0891a510411abac69857f637b",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts": {
@@ -6400,7 +6404,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/release-deposit-hold/index.ts": {
-    "sha": "c7c61afed62d1c7ee5ebbd075a687bd22599e37fc2913638ca03cbc2f7f024d4",
+    "sha": "e2adc5223d480edbeee352009019cabfce6f0270a64b01d1e31b500d3a669da0",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-sms-status/index.ts": {

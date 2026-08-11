@@ -853,6 +853,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/template-variables.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/coverage-labels.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/platform-tos.test.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-chain-bound.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/delivery-tiers.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/calculate-extras-total.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-decline-classification.test.ts",
@@ -877,10 +878,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 869,
-    "total_words": 816067,
+    "total_files": 870,
+    "total_words": 817109,
     "counts": {
-      "code": 869
+      "code": 870
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1656,6 +1657,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/template-variables.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/coverage-labels.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/platform-tos.test.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-chain-bound.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/delivery-tiers.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/calculate-extras-total.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-decline-classification.test.ts",
@@ -3241,7 +3243,7 @@
       "video": []
     },
     "total_files": 326,
-    "total_words": 433710,
+    "total_words": 437188,
     "counts": {
       "code": 320,
       "document": 6
