@@ -66,6 +66,40 @@ Deno.serve(async (req) => {
     return json({ success: false, error: "sandbox: a valid only_rental_id (UUID) is required" }, 400);
   }
 
+  // ── TIME MACHINE: optional simulated clock. ────────────────────────────────
+  //
+  // A chain link only becomes due within DEFAULT_LOOKAHEAD_DAYS of its expiry,
+  // and a real Stripe authorisation lasts ~7 days — so verifying a refresh
+  // otherwise means either waiting the better part of a week or hand-editing
+  // `deposit_hold_expires_at`, which fabricates an expiry that contradicts
+  // Stripe and defeats the point of testing against a real hold.
+  //
+  // Moving the CLOCK instead leaves every row honest: the authorisation, its
+  // real capture_before, and the chain bound are all untouched, and the engine
+  // is asked the genuine question "would you refresh this, on that day?".
+  //
+  // Sandbox ONLY. The production driver has no such parameter — it must never
+  // be able to act on anything but the true current time.
+  let simulatedNow: Date | null = null;
+  if (body?.simulated_now !== undefined) {
+    const parsed = new Date(String(body.simulated_now));
+    if (Number.isNaN(parsed.getTime())) {
+      return json({ success: false, error: "sandbox: simulated_now is not a valid date" }, 400);
+    }
+    // Refuse a clock in the PAST: it cannot make a hold due that is not already
+    // due, so the only thing it can do is mask a real problem.
+    if (parsed.getTime() < Date.now() - 60_000) {
+      return json({ success: false, error: "sandbox: simulated_now may not be in the past" }, 400);
+    }
+    // Bound the reach. A chain is at most a few months long; anything beyond a
+    // year is a typo, and a far-future clock would sail past the chain bound and
+    // silently report 'chain_expired' as though the engine had decided it.
+    if (parsed.getTime() > Date.now() + 365 * 86_400_000) {
+      return json({ success: false, error: "sandbox: simulated_now may not be more than a year ahead" }, 400);
+    }
+    simulatedNow = parsed;
+  }
+
   let runId: string | null = null;
 
   try {
@@ -81,7 +115,13 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "sandbox: rental is not in the designated test tenant" }, 403);
     }
 
-    const now = new Date();
+    const now = simulatedNow ?? new Date();
+    if (simulatedNow) {
+      console.log(
+        `[SandboxDepositRefresh] TIME MACHINE: running as if it were ${now.toISOString()} ` +
+          `(real now ${new Date().toISOString()})`
+      );
+    }
 
     // ── Due-criteria query — the SAME shared predicate the production driver
     //    uses (so the harness cannot silently diverge), ALWAYS hard-scoped to
@@ -134,7 +174,11 @@ Deno.serve(async (req) => {
     const outcome = await refreshOneHold(supabase, batch[0], {
       logPrefix: "[SandboxDepositRefresh]",
       actor: "sandbox",
-      now: new Date(),
+      // Same clock the selection used. Passing a fresh `new Date()` here would
+      // let a row be SELECTED under the simulated clock and then judged against
+      // the real one — the engine would re-derive the chain bound and the retry
+      // backoff from a different day than the filter did.
+      now,
     });
 
     // ── W1 ALERTING ──────────────────────────────────────────────────────────

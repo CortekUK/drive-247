@@ -304,6 +304,18 @@ interface StripeContext {
   stripeOptions: { stripeAccount?: string } | undefined;
   connectAccountId: string | null;
   mode: StripeMode;
+  /**
+   * The platform this context ACTUALLY talks to — anchor-resolved, so it can
+   * differ from `rental.platform_account` during a UK<->UAE migration.
+   *
+   * Exposed because the ledger stamps below used to record
+   * `rental.platform_account` while operating on this one. Observed live: a
+   * `reconcile:held` row claiming `uk` next to a `uae` connect account. The
+   * operation succeeded, so nothing broke — but the audit trail is the only
+   * record of which platform an authorisation was touched on, and a migration
+   * post-mortem reading it would be misled.
+   */
+  platformAccount: string;
 }
 
 interface Summary {
@@ -496,6 +508,7 @@ function resolveStripeContext(rental: RentalRow, tenant: TenantRow | undefined):
       stripeOptions: connectAccountId ? { stripeAccount: connectAccountId } : undefined,
       connectAccountId,
       mode,
+      platformAccount,
     };
   } catch (err) {
     console.warn("[HOLD-RECONCILE] Stripe context unresolvable for rental", rental.id, err);
@@ -812,7 +825,7 @@ async function reconcileRental(
           attempt_seq: attemptSeq,
           action: "reconcile:unverifiable",
           payment_intent_id: probedPiId,
-          platform_account: rental.platform_account,
+          platform_account: ctx.platformAccount,
           connect_account_id: ctx.connectAccountId,
           stripe_mode: ctx.mode,
           outcome: "failed",
@@ -848,7 +861,7 @@ async function reconcileRental(
         attempt_seq: attemptSeq,
         action: "reconcile:needs_review",
         payment_intent_id: probedPiId,
-        platform_account: rental.platform_account,
+        platform_account: ctx.platformAccount,
         connect_account_id: ctx.connectAccountId,
         stripe_mode: ctx.mode,
         outcome: "succeeded",
@@ -995,7 +1008,7 @@ async function reconcileRental(
         attempt_seq: attemptSeq,
         action: "reconcile:held",
         payment_intent_id: probedPiId,
-        platform_account: rental.platform_account,
+        platform_account: ctx.platformAccount,
         connect_account_id: ctx.connectAccountId,
         stripe_mode: ctx.mode,
         amount_cents: amountCapturable,
@@ -1094,7 +1107,7 @@ async function reconcileRental(
     attempt_seq: attemptSeq,
     action: `reconcile:${resolvedStatus}`,
     payment_intent_id: probedPiId,
-    platform_account: rental.platform_account,
+    platform_account: ctx.platformAccount,
     connect_account_id: ctx.connectAccountId,
     stripe_mode: ctx.mode,
     amount_cents: capturedCents,
