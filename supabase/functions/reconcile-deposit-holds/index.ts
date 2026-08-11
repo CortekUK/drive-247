@@ -105,6 +105,11 @@ import {
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+// Imported rather than re-derived: this must agree with the refresh engine
+// EXACTLY about when a chain has ended, or the bell fires on a chain that is
+// still being renewed (noise) or stays silent on one that is not (the bug).
+import { resolveChainBound } from "../_shared/deposit-hold-refresh.ts";
+import { notifyDepositHoldChainEnded } from "../_shared/deposit-hold-notify.ts";
 
 // ---------------------------------------------------------------------------
 // Tunables
@@ -232,6 +237,9 @@ interface RentalRow {
   id: string;
   tenant_id: string;
   platform_account: string | null;
+  /** Both feed resolveChainBound — see the chain-ended bell below. */
+  end_date: string | null;
+  deposit_hold_chain_expires_at: string | null;
   deposit_hold_status: string | null;
   deposit_hold_payment_intent_id: string | null;
   deposit_hold_expires_at: string | null;
@@ -259,6 +267,7 @@ interface RentalRow {
 
 const RENTAL_COLUMNS = `
   id, tenant_id, platform_account,
+  end_date, deposit_hold_chain_expires_at,
   deposit_hold_status, deposit_hold_payment_intent_id,
   deposit_hold_expires_at, deposit_hold_expiry_source,
   deposit_hold_extended_auth, deposit_hold_window_seconds,
@@ -1000,6 +1009,35 @@ async function reconcileRental(
 
     const applied = await casUpdateRental(supabase, rental.id, currentStatus, probedPiId, patch);
     if (!applied) return { outcome: "lost_race" };
+
+    // ── CHAIN ENDED, MONEY STILL HELD ────────────────────────────────────────
+    // We have just PROVEN this authorization is live at Stripe. If the chain
+    // bound has also passed, nothing will renew it again and the engine
+    // deliberately will not capture or release on its own — so without a bell
+    // here the renter's funds sit ring-fenced until the network lapses them,
+    // days later, with no one told.
+    //
+    // This is the only sweep that can raise it: the refresh driver's SQL
+    // pre-filter drops the row the moment its bound passes, so the engine's own
+    // `chain_expired` branch never runs from cron.
+    //
+    // After the CAS, so a lost race cannot ring it. Deduped per rental inside
+    // the helper, and the helper never throws — a failed notification must not
+    // fail a reconcile pass that has already written the truth.
+    {
+      const bound = resolveChainBound(rental as Record<string, unknown>, new Date(nowIso));
+      if (bound.expired) {
+        await notifyDepositHoldChainEnded({
+          tenantId: rental.tenant_id,
+          rentalId: rental.id,
+          amount: rental.deposit_hold_amount != null ? Number(rental.deposit_hold_amount) : null,
+          currency: piCurrency ?? rental.deposit_hold_currency,
+          expiresAt: facts.captureBefore ?? rental.deposit_hold_expires_at,
+          chainEndedAt: bound.effective,
+          source: "reconciler",
+        });
+      }
+    }
 
     if (changed) {
       await recordLink(supabase, {

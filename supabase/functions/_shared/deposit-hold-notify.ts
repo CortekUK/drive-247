@@ -654,7 +654,90 @@ export async function notifyDepositHoldConfigBlocked(params: {
 }
 
 /**
- * Third slug: an authorization that exists at Stripe and that NOTHING in the
+ * "The chain has reached its end and the money is still ring-fenced."
+ *
+ * A chained deposit stops being renewed when the rental's end date plus the
+ * grace window has passed. The engine deliberately does NOT capture or release
+ * at that point — that is an operator decision — so the last authorization is
+ * left alive and simply lapses on the card network's own schedule, days later,
+ * with the renter's funds held the whole time and nobody told.
+ *
+ * WHY THIS LIVES IN THE RECONCILER AND NOT AT THE ENGINE'S `chain_expired` EXIT:
+ * the refresh driver's SQL pre-filter drops a row at the very moment its bound
+ * passes (the `chain_expires_at.gt.now` and `end_date.gte.now-grace` terms both
+ * fail together), so `refreshOneHold` is never even called and its
+ * `chain_expired` branch is effectively unreachable from cron. Observed
+ * directly: a 16-link chain walked past its bound returned `not-selected`, never
+ * `chain_expired`. The reconciler filters only on hold status, so it keeps
+ * seeing the row — it is the only sweep that still can.
+ *
+ * Keyed per RENTAL, not per rental+day: a chain ends exactly once, and this is a
+ * "come and do something" bell, not a recurring condition. Re-alerting nightly
+ * for a fortnight would train operators to ignore it.
+ *
+ * NEVER THROWS.
+ */
+export const DEPOSIT_HOLD_CHAIN_ENDED_ALERT_TYPE = "deposit_hold_chain_ended";
+
+export async function notifyDepositHoldChainEnded(params: {
+  tenantId: string;
+  rentalId: string;
+  /** Kept live at Stripe — the amount still ring-fenced on the renter's card. */
+  amount?: number | null;
+  currency?: string | null;
+  /** When the authorization lapses by itself if nobody acts. */
+  expiresAt?: string | null;
+  /** The chain bound that has passed. */
+  chainEndedAt?: string | null;
+  source?: string;
+}): Promise<void> {
+  try {
+    const tenantId = firstString(params.tenantId);
+    const rentalId = firstString(params.rentalId);
+    if (!tenantId || !rentalId) return;
+
+    const amt = typeof params.amount === "number" && params.amount > 0 ? params.amount : null;
+    const cur = (firstString(params.currency) ?? "").toUpperCase();
+    const money = amt ? `${cur ? cur + " " : ""}${amt.toFixed(2)}` : "The deposit";
+    const lapses = firstString(params.expiresAt);
+
+    await notifyOperatorsInApp({
+      tenantId,
+      type: DEPOSIT_HOLD_CHAIN_ENDED_ALERT_TYPE,
+      title: "Deposit hold no longer being renewed — capture or release it",
+      message:
+        `This rental has passed the end of its deposit chain, so the hold is no longer being ` +
+        `renewed. ${money} is STILL held on the renter's card right now` +
+        (lapses ? ` and the authorization lapses on its own after ${lapses.slice(0, 10)}` : "") +
+        `. Nothing has been charged and nothing has been cancelled — capture what you are owed ` +
+        `or release it back to the renter.`,
+      link: `/rentals/${rentalId}`,
+      metadata: {
+        rental_id: rentalId,
+        severity: "warning",
+        result: "chain_ended",
+        // The authorization is confirmed live at Stripe — the reconciler just
+        // probed it — so unlike config_unavailable this CAN claim money state.
+        money_state: "live",
+        secured: true,
+        amount: amt,
+        currency: cur || null,
+        expires_at: lapses,
+        chain_ended_at: firstString(params.chainEndedAt),
+        source: params.source ?? "reconciler",
+      },
+      dedupeKey: `deposit_hold_chain_ended:${rentalId}`,
+    });
+
+    console.log(`[deposit-hold-notify] chain-ended alert for rental ${rentalId}`);
+  } catch (err) {
+    console.error("[deposit-hold-notify] chain-ended alert failed, swallowing:", err);
+    return;
+  }
+}
+
+/**
+ * Fourth slug: an authorization that exists at Stripe and that NOTHING in the
  * product points at.
  *
  * Separate from `DEPOSIT_HOLD_ALERT_TYPE` for two reasons, both hard:
