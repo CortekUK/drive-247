@@ -780,8 +780,41 @@ async function resolvePaymentMethod(
 // Orphan reconciliation — never authorize a renter twice (fail-OPEN defect)
 // ---------------------------------------------------------------------------
 
-/** How far back an orphaned authorization could plausibly still be alive. */
-const ORPHAN_LOOKBACK_DAYS = 8;
+/**
+ * How far back an orphaned authorization could plausibly still be alive.
+ *
+ * This is a NETWORK FACT, not a tuning knob: no card authorisation outlives 30
+ * days on any network (Visa 29d18h; Mastercard/Amex/Discover 30), so nothing
+ * created before this can still be holding a renter's funds. 35 gives five days
+ * of slack over the ceiling.
+ *
+ * It was 8 — which was 7 (the observed default window) + 1 day. That was a valid
+ * PROOF only while every authorisation lasted ~7 days. The moment a Connect
+ * account becomes eligible for extended authorization the window becomes up to
+ * 29d18h, and an orphan created 20 days ago is still live and still holding
+ * money while sitting outside an 8-day search — so this function, whose entire
+ * job is "never authorize a renter twice", would return null and the caller
+ * would place a SECOND full-deposit hold on the same card. The first is
+ * unrecoverable (see the docblock below).
+ *
+ * Nothing in our code changes when Stripe enables that feature — we already send
+ * request_extended_authorization: 'if_available' — so this constant had to be
+ * correct BEFORE the flip, not after it.
+ *
+ * reconcile-deposit-holds' SUPERSEDED_LOOKBACK_MS already encodes the same fact
+ * at the same value; the two are deliberately equal and must move together.
+ */
+const ORPHAN_LOOKBACK_DAYS = 35;
+
+/**
+ * Pages of 100 to walk when sweeping for orphans. At an 8-day lookback a single
+ * page was almost certainly the whole story; over 35 days a customer on a long
+ * chain can legitimately exceed 100 PaymentIntents (each link mints one), and
+ * stopping at page 1 would silently reintroduce the miss this widening exists to
+ * prevent. Bounded rather than auto-paginated so a pathological customer cannot
+ * stall the batch.
+ */
+const ORPHAN_SWEEP_MAX_PAGES = 5;
 
 /**
  * Find a LIVE deposit-hold authorization for this rental that we are not
@@ -821,33 +854,64 @@ async function findLiveDepositIntent(
 ): Promise<any | null> {
   const createdGte = Math.floor((now.getTime() - ORPHAN_LOOKBACK_DAYS * 86_400_000) / 1000);
   for (const customerId of customerIds) {
-    const page = await stripe.paymentIntents.list(
-      {
-        customer: customerId,
-        limit: 100,
-        created: { gte: createdGte },
-        expand: ["data.latest_charge"],
-      },
-      stripeOptions
-    );
-    for (const intent of page.data) {
-      if (exclude.has(intent.id)) continue;
-      // Only an authorization that is STILL holding funds matters. Anything
-      // canceled/succeeded/in-motion is either dead or somebody else's problem.
-      if (String(intent.status) !== "requires_capture") continue;
-      // deno-lint-ignore no-explicit-any
-      const md = ((intent as any).metadata ?? {}) as Record<string, string>;
-      if (md.rental_id !== rentalId) continue;
-      // Rollovers count. capture-deposit-hold mints the remainder-hold left
-      // after a PARTIAL capture with type 'deposit_hold_rollover', so an exact
-      // match on 'deposit_hold' made every rollover invisible to the orphan
-      // sweep — the one mechanism whose entire job is finding authorisations
-      // the product has lost track of. A rollover holds the renter's money
-      // exactly like any other hold and is if anything MORE likely to be
-      // orphaned, since it is minted mid-capture when the row is contended.
-      if (md.type !== "deposit_hold" && md.type !== "deposit_hold_rollover") continue;
-      return intent;
+    let startingAfter: string | undefined = undefined;
+
+    for (let pageNo = 0; pageNo < ORPHAN_SWEEP_MAX_PAGES; pageNo++) {
+      const page = await stripe.paymentIntents.list(
+        {
+          customer: customerId,
+          limit: 100,
+          created: { gte: createdGte },
+          expand: ["data.latest_charge"],
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        },
+        stripeOptions
+      );
+
+      const match = scanPage(page.data, rentalId, exclude);
+      if (match) return match;
+
+      if (!page.has_more || page.data.length === 0) break;
+      startingAfter = page.data[page.data.length - 1].id;
+      if (pageNo === ORPHAN_SWEEP_MAX_PAGES - 1) {
+        // Say so. Silence here would be indistinguishable from "no orphan
+        // exists", which is the fail-OPEN answer this whole function exists to
+        // avoid giving.
+        console.warn(
+          `[deposit-hold] orphan sweep hit the ${ORPHAN_SWEEP_MAX_PAGES}-page cap for customer ${customerId} ` +
+            `on rental ${rentalId}; an orphan older than the last page would not be seen.`
+        );
+      }
     }
+  }
+  return null;
+}
+
+/** The per-page match, split out so the paging loop above stays readable. */
+function scanPage(
+  // deno-lint-ignore no-explicit-any
+  intents: any[],
+  rentalId: string,
+  exclude: Set<string>
+  // deno-lint-ignore no-explicit-any
+): any | null {
+  for (const intent of intents) {
+    if (exclude.has(intent.id)) continue;
+    // Only an authorization that is STILL holding funds matters. Anything
+    // canceled/succeeded/in-motion is either dead or somebody else's problem.
+    if (String(intent.status) !== "requires_capture") continue;
+    // deno-lint-ignore no-explicit-any
+    const md = ((intent as any).metadata ?? {}) as Record<string, string>;
+    if (md.rental_id !== rentalId) continue;
+    // Rollovers count. capture-deposit-hold mints the remainder-hold left
+    // after a PARTIAL capture with type 'deposit_hold_rollover', so an exact
+    // match on 'deposit_hold' made every rollover invisible to the orphan
+    // sweep — the one mechanism whose entire job is finding authorisations
+    // the product has lost track of. A rollover holds the renter's money
+    // exactly like any other hold and is if anything MORE likely to be
+    // orphaned, since it is minted mid-capture when the row is contended.
+    if (md.type !== "deposit_hold" && md.type !== "deposit_hold_rollover") continue;
+    return intent;
   }
   return null;
 }
@@ -1055,6 +1119,38 @@ export async function refreshOneHold(
         "not re-authorizing (capture or release is an operator decision)"
     );
   }
+  // ── The incumbent already outlives the chain. Leave it alone. ──────────────
+  //
+  // The check above is past-tense — "has the bound already passed?" — and was
+  // the ONLY question asked of the chain bound. Nothing ever compared the
+  // authorisation we are about to place against it.
+  //
+  // At a 7-day window that gap was invisible: a replacement placed inside the
+  // 2-day lookahead overshoots the bound by at most a few days. At 29d18h it
+  // becomes the common case — we would cancel a perfectly good authorisation
+  // that already covers the rest of the rental, purely to mint one that
+  // ring-fences the renter's money for weeks past handback. That is the
+  // opposite of what a deposit chain is for, and it is the direction that
+  // attracts card-network attention rather than the direction that satisfies it.
+  //
+  // Refusing here also removes the final link of every chain outright: if the
+  // incumbent reaches the bound, there is nothing left to renew.
+  //
+  // Guarded on a REAL stored expiry only. A NULL or unparseable one means we do
+  // not know when the incumbent dies, and assuming it survives would be the
+  // fail-OPEN answer.
+  if (chain.effective && storedExpiresAt) {
+    const incumbentEndsMs = new Date(storedExpiresAt).getTime();
+    const boundMs = new Date(chain.effective).getTime();
+    if (Number.isFinite(incumbentEndsMs) && Number.isFinite(boundMs) && incumbentEndsMs >= boundMs) {
+      return untouched(
+        "skipped",
+        `incumbent authorisation already runs to ${storedExpiresAt}, past the chain bound ` +
+          `${chain.effective} — not cancelling a live hold to place one that would outlive the rental`
+      );
+    }
+  }
+
   if (chain.stale) {
     // Diagnostic only — the decision above already used the recomputed value.
     // The write itself rides along on the claim below so it stays inside the

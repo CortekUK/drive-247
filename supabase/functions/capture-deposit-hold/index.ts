@@ -11,7 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getConnectAccountId, getStripeClientForRecord, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
+import { getConnectAccountId, getStripeClientForRecord, resolveHoldExpiryDetailed, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
 import { authorizeDepositHoldRequest } from "../_shared/deposit-hold-auth.ts";
 
 Deno.serve(async (req) => {
@@ -216,6 +216,9 @@ Deno.serve(async (req) => {
     //      remainder on the saved card.
     let newHoldPiId: string | null = null;
     let newHoldExpiresAt: string | null = null;
+    // Full provenance for the rollover, so the row never claims Stripe told us a
+    // deadline it did not.
+    let newHoldExpiry: Awaited<ReturnType<typeof resolveHoldExpiryDetailed>> | null = null;
     // Belt-and-braces: never RE-HOLD the remainder on an AUTO-EXTEND rental
     // (renewal pricing replaces the deposit). The operator's capture above still
     // completes — we just don't spin up a fresh hold for the remainder.
@@ -252,7 +255,20 @@ Deno.serve(async (req) => {
         );
         if (newHold.status === "requires_capture") {
           newHoldPiId = newHold.id;
-          newHoldExpiresAt = await resolveHoldExpiry(stripe, newHold, stripeOptions);
+          // resolveHoldExpiryDetailed, not the back-compat resolveHoldExpiry
+          // wrapper. The wrapper's fallback branch fabricates now + 4 days and
+          // throws away source/extendedAuth/windowSeconds — so the rollover
+          // inherited the PREVIOUS link's provenance label, typically
+          // 'stripe_capture_before', attached to a timestamp we invented. Every
+          // sibling writer avoids exactly this; deduct-from-deposit does the
+          // same rollover correctly and is the pattern copied here.
+          //
+          // It matters more once extended authorization is on: a 4-day
+          // fabricated expiry on a hold Stripe is actually holding for ~30 days
+          // makes the driver re-authorise roughly seven times more often than
+          // needed, which is the precise cost the feature exists to remove.
+          newHoldExpiry = await resolveHoldExpiryDetailed(stripe, newHold, stripeOptions);
+          newHoldExpiresAt = newHoldExpiry?.expiresAt ?? null;
           console.log("[DEPOSIT-CAPTURE] Rolled remainder", remainder, "into new hold", newHoldPiId);
         } else {
           console.warn("[DEPOSIT-CAPTURE] Rollover hold landed in unexpected status", newHold.status);
@@ -386,6 +402,18 @@ Deno.serve(async (req) => {
       rentalUpdate.deposit_hold_amount = remainder;
       rentalUpdate.deposit_hold_placed_at = new Date().toISOString();
       rentalUpdate.deposit_hold_expires_at = newHoldExpiresAt;
+      // Provenance MUST move with the expiry. Without these three the row kept
+      // the previous link's labels — usually 'stripe_capture_before' — bolted
+      // onto whatever this rollover produced, so a fabricated fallback deadline
+      // read as one Stripe had published. Nothing downstream can tell a real
+      // deadline from an invented one except this column.
+      rentalUpdate.deposit_hold_expiry_source = newHoldExpiry?.source ?? null;
+      rentalUpdate.deposit_hold_extended_auth = newHoldExpiry?.extendedAuth ?? null;
+      rentalUpdate.deposit_hold_window_seconds = newHoldExpiry?.windowSeconds ?? null;
+      // Anchor the replacement to the account/mode it was actually created on.
+      rentalUpdate.deposit_hold_connect_account_id = connectAccountId;
+      rentalUpdate.deposit_hold_stripe_mode = stripeMode;
+      rentalUpdate.deposit_hold_platform_account = platformAccount;
     } else {
       rentalUpdate.deposit_hold_status = "captured";
       rentalUpdate.deposit_hold_amount = 0;

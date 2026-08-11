@@ -690,8 +690,11 @@ export async function notifyDepositHoldChainEnded(params: {
   /** The chain bound that has passed. */
   chainEndedAt?: string | null;
   source?: string;
+  /** Injectable for tests; drives the weekly dedupe bucket below. */
+  now?: Date;
 }): Promise<void> {
   try {
+    const now = params.now ?? new Date();
     const tenantId = firstString(params.tenantId);
     const rentalId = firstString(params.rentalId);
     if (!tenantId || !rentalId) return;
@@ -726,7 +729,23 @@ export async function notifyDepositHoldChainEnded(params: {
         chain_ended_at: firstString(params.chainEndedAt),
         source: params.source ?? "reconciler",
       },
-      dedupeKey: `deposit_hold_chain_ended:${rentalId}`,
+      // WEEKLY, not once-ever.
+      //
+      // This started as a bare `:${rentalId}`, and notifyOperatorsInApp's dedupe
+      // has no created_at window — so one ignored notification silenced this
+      // rental permanently while the renter's money stayed ring-fenced. At the
+      // 7-day window that was survivable: the authorisation lapsed within a week
+      // of the bell. With extended authorization the same hold can sit live for
+      // nearly a month past handback, and a single easily-missed alert is not a
+      // control.
+      //
+      // Weekly rather than daily on purpose: this asks for a deliberate human
+      // decision (capture what you are owed, or hand it back), not an
+      // acknowledgement. A nightly repeat of a decision nobody has made yet is
+      // how a channel gets muted.
+      dedupeKey: `deposit_hold_chain_ended:${rentalId}:w${Math.floor(
+        now.getTime() / (7 * 86_400_000)
+      )}`,
     });
 
     console.log(`[deposit-hold-notify] chain-ended alert for rental ${rentalId}`);
