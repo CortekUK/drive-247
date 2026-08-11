@@ -49,6 +49,11 @@ def assemble_unit(name: str, report: dict) -> dict:
     nodes: dict[str, dict] = {n["id"]: n for n in struct["nodes"]}
     edges: list[dict] = list(struct["edges"])
     struct_ids = set(nodes)
+    # Explicit provenance. Downstream stages must be able to tell a node derived
+    # from source (AST/SQL) from one an agent proposed; source_file and
+    # source_location are present on both, so neither can be used as the test.
+    for n in nodes.values():
+        n["origin"] = "structural"
 
     stats = {"chunks": 0, "chunks_bad": 0, "sem_nodes": 0, "sem_edges": 0,
              "hyperedges": 0, "ids_normalised": 0, "edges_dropped": 0,
@@ -88,6 +93,7 @@ def assemble_unit(name: str, report: dict) -> dict:
                 stats["merged_into_ast"] += 1
             elif nid not in nodes:
                 n["semantic"] = True
+                n["origin"] = "semantic"
                 nodes[nid] = n
                 stats["sem_nodes"] += 1
 
@@ -142,7 +148,8 @@ def assemble_unit(name: str, report: dict) -> dict:
                 nodes[nid] = {
                     "id": nid, "label": nid.replace("_", " "), "file_type": "code",
                     "unit": name, "source_file": e.get("source_file"),
-                    "source_location": None, "kind": "concept", "inferred_stub": True,
+                    "source_location": None, "kind": "concept",
+                    "inferred_stub": True, "origin": "semantic",
                 }
                 stats["stub_nodes"] += 1
 
@@ -171,6 +178,15 @@ def build_unit_graph(name: str) -> tuple[int, int, int]:
     if G.number_of_nodes() == 0:
         print(f"{name:16s} EMPTY graph - skipped")
         return 0, 0, 0
+
+    # graphify refuses to shrink an existing graph.json, guarding against a run
+    # with chunk files missing. Here the extraction is reassembled from every
+    # chunk on disk each time, so a shrink is legitimate (a re-run agent can
+    # return slightly fewer nodes). Force it, but say so rather than hide it.
+    prev = load_json(out / "graph.json")
+    if prev and len(prev.get("nodes", [])) > G.number_of_nodes():
+        print(f"{name:16s} note: graph shrank {len(prev['nodes'])} -> "
+              f"{G.number_of_nodes()} nodes (re-extraction), overwriting")
     communities = cluster(G)
     cohesion = score_all(G, communities)
     labels = {cid: f"Community {cid}" for cid in communities}
@@ -185,7 +201,7 @@ def build_unit_graph(name: str) -> tuple[int, int, int]:
     rep = generate(G, communities, cohesion, labels, gods, surprises, detection,
                    {"input": 0, "output": 0}, name, suggested_questions=questions)
     (out / "GRAPH_REPORT.md").write_text(rep)
-    to_json(G, communities, str(out / "graph.json"))
+    to_json(G, communities, str(out / "graph.json"), force=True)
     write_json(out / ".graphify_analysis.json", {
         "communities": {str(k): v for k, v in communities.items()},
         "cohesion": {str(k): v for k, v in cohesion.items()},

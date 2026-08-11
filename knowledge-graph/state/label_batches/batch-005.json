@@ -1,0 +1,1504 @@
+{
+  "communities": [
+    {
+      "id": 56,
+      "size": 42,
+      "cohesion": 0.07,
+      "units": {
+        "web": 42
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 28,
+        "references": 22,
+        "rationale_for": 20,
+        "implements": 16,
+        "governs": 12,
+        "semantically_similar_to": 10
+      },
+      "members": [
+        {
+          "label": "Strategy-call qualifier intake (source=strategy-call)",
+          "file": "apps/web/src/actions/strategy-call.ts",
+          "kind": null
+        },
+        {
+          "label": "Canonical platform Terms of Service \u2014 one document, one URL, one version",
+          "file": "apps/web/src/app/(marketing)/terms/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Canonical Drive247 privacy policy (drive-247.com/privacy)",
+          "file": "apps/web/src/app/(marketing)/privacy/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Two-phase strategy-call funnel: qualify, then schedule",
+          "file": "apps/web/src/app/strategy-call/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Public route manifest with crawl priorities",
+          "file": "apps/web/src/app/sitemap.ts",
+          "kind": null
+        },
+        {
+          "label": "Landing-page consultation qualifier form (native selects)",
+          "file": "apps/web/src/components/forms/consultation-form.tsx",
+          "kind": null
+        },
+        {
+          "label": "Shared marketing chrome (header + footer)",
+          "file": "apps/web/src/app/(marketing)/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "contact_requests \u2014 shared marketing lead intake table",
+          "file": "apps/web/src/actions/lead-capture.ts",
+          "kind": null
+        },
+        {
+          "label": "Consultation qualifier intake (source=landing-page)",
+          "file": "apps/web/src/actions/lead-capture.ts",
+          "kind": null
+        },
+        {
+          "label": "Email-only newsletter lead capture",
+          "file": "apps/web/src/actions/lead-capture.ts",
+          "kind": null
+        },
+        {
+          "label": "Public security & compliance commitments",
+          "file": "apps/web/src/app/(marketing)/security/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Post-booking confirmation and expectation-setting page",
+          "file": "apps/web/src/app/strategy-call/confirmation/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "send-strategy-call-email edge function",
+          "file": "apps/web/src/actions/strategy-call.ts",
+          "kind": null
+        },
+        {
+          "label": "Footer legal navigation to privacy, terms and security",
+          "file": "apps/web/src/components/layout/footer.tsx",
+          "kind": null
+        },
+        {
+          "label": "Distraction-free chrome for the strategy-call funnel (logo only, no nav)",
+          "file": "apps/web/src/app/strategy-call/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "Hand-rolled email format validation regex",
+          "file": "apps/web/src/actions/lead-capture.ts",
+          "kind": null
+        },
+        {
+          "label": "GoHighLevel calendar iframe embed",
+          "file": "apps/web/src/app/strategy-call/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "PLATFORM_TOS_IS_DRAFT selects interim terms vs the Appendix A rewrite",
+          "file": "apps/web/src/app/(marketing)/terms/page.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "size": 38,
+      "cohesion": 0.08,
+      "units": {
+        "admin": 38
+      },
+      "kinds": {
+        "concept": 8
+      },
+      "relations": {
+        "implements": 26,
+        "reads_table": 16,
+        "rationale_for": 14,
+        "writes_table": 14,
+        "conceptually_related_to": 10,
+        "semantically_similar_to": 10
+      },
+      "members": [
+        {
+          "label": "tbl admin todos",
+          "file": "apps/admin/components/admin-todos/admin-todos-tab.tsx",
+          "kind": "concept"
+        },
+        {
+          "label": "Tenant Kanban todo board (three status columns, dnd-kit)",
+          "file": "apps/admin/components/admin-todos/todo-board.tsx",
+          "kind": null
+        },
+        {
+          "label": "Todo card editor with inline comments and delete",
+          "file": "apps/admin/components/admin-todos/todo-detail-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Todo cover image upload to the public todo-images bucket",
+          "file": "apps/admin/components/admin-todos/todo-image-upload.tsx",
+          "kind": null
+        },
+        {
+          "label": "Todo comment thread (post, list, delete)",
+          "file": "apps/admin/components/admin-todos/todo-comments.tsx",
+          "kind": null
+        },
+        {
+          "label": "Todo card creation form (title, priority, status, due date, assignee, cover)",
+          "file": "apps/admin/components/admin-todos/todo-create-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Todo card is simultaneously drag handle and click target",
+          "file": "apps/admin/components/admin-todos/todo-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "tbl app users",
+          "file": "apps/admin/components/admin-todos/todo-comments.tsx",
+          "kind": "concept"
+        },
+        {
+          "label": "Optimistic drag reorder with snapshot rollback then server resync",
+          "file": "apps/admin/components/admin-todos/todo-board.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant internal todo board tab",
+          "file": "apps/admin/components/admin-todos/admin-todos-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Admin identity avatar with initials fallback (assignees and comment authors)",
+          "file": "apps/admin/components/admin-todos/assignee-avatar.tsx",
+          "kind": null
+        },
+        {
+          "label": "tbl admin todo comments",
+          "file": "apps/admin/components/admin-todos/todo-card.tsx",
+          "kind": "concept"
+        },
+        {
+          "label": "Fractional position ordering (midpoint between neighbours, 1024 gap)",
+          "file": "apps/admin/components/admin-todos/todo-board.tsx",
+          "kind": null
+        },
+        {
+          "label": "Status column drop zone with sortable card list",
+          "file": "apps/admin/components/admin-todos/todo-column.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: upload the new object and commit the row before deleting the old object",
+          "file": "apps/admin/components/admin-todos/todo-image-upload.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: cards created here are visible only on this tenant's detail page",
+          "file": "apps/admin/components/admin-todos/admin-todos-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Priority visual tokens (dot and pill) for low/medium/high",
+          "file": "apps/admin/components/admin-todos/priority-badge.tsx",
+          "kind": null
+        },
+        {
+          "label": "isDraggingRef guard shared with the realtime subscription during a drag",
+          "file": "apps/admin/components/admin-todos/todo-board.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "size": 36,
+      "cohesion": 0.07,
+      "units": {
+        "admin": 36
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 40,
+        "implements": 15,
+        "invokes": 8,
+        "references": 6,
+        "reads_table": 5,
+        "shares_data_with": 4
+      },
+      "members": [
+        {
+          "label": "Cross-tenant security-deposit hold health monitor",
+          "file": "apps/admin/components/admin/deposit-hold-health.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant UK to UAE payment migration console",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Step 3 \u2014 payment_model flip between Managed and Own Stripe",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant deposit hold health panel (both platform accounts plus never-placed)",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Operator migration prompt control (off / soft-24h / hard block)",
+          "file": "apps/admin/components/admin/operator-prompt-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Explicit hold severity ladder (classifyHold) \u2014 failure outranks recency",
+          "file": "apps/admin/components/admin/deposit-hold-health.tsx",
+          "kind": null
+        },
+        {
+          "label": "Migration readiness check against both Stripe accounts and the database",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Step 1 \u2014 UAE subscription card-capture link (billing starts when the UK period ends)",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Gotcha: deposit_hold_amount is stored in MAJOR units unlike subscription plan cents \u2014 never divide by 100",
+          "file": "apps/admin/components/admin/deposit-hold-health.tsx",
+          "kind": null
+        },
+        {
+          "label": "Never-placed cohort: NULL deposit_hold_status with a recorded error means an unsecured rental",
+          "file": "apps/admin/components/admin/deposit-hold-health.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: three independent reads instead of a PostgREST embed, so an unresolvable relationship degrades labels rather than 400ing the whole table",
+          "file": "apps/admin/components/admin/deposit-hold-health.tsx",
+          "kind": null
+        },
+        {
+          "label": "Manual migration email compose, preview and send",
+          "file": "apps/admin/components/admin/operator-prompt-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "place-deposit-hold edge function",
+          "file": "apps/admin/components/admin/deposit-hold-health.tsx",
+          "kind": null
+        },
+        {
+          "label": "Flip side-effect: clear customers.stripe_customer_id because saved Stripe customer ids are platform-scoped",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Gotcha: deposit_hold_amount is in major units \u2014 do not route it through fmtMoney, which divides by 100",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "Step 2 \u2014 generate own-Stripe OAuth connect link per mode",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "check-migration-readiness edge function",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        },
+        {
+          "label": "create-uae-subscription-capture edge function",
+          "file": "apps/admin/components/admin/tenant-payments-tab.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "size": 35,
+      "cohesion": 0.09,
+      "units": {
+        "edge-functions": 21,
+        "database": 14
+      },
+      "kinds": {
+        "sql_function": 3,
+        "migration": 1
+      },
+      "relations": {
+        "contains": 39,
+        "calls": 35,
+        "rationale_for": 8,
+        "conceptually_related_to": 6,
+        "governs": 6,
+        "defines": 6
+      },
+      "members": [
+        {
+          "label": "tesla-fleet-client.ts",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Hourly Tesla Supercharger charge sync across all Tesla-connected tenants",
+          "file": "supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql",
+          "kind": null
+        },
+        {
+          "label": "Tesla Fleet OAuth tokens moved into Supabase Vault (tenants stores only secret UUIDs)",
+          "file": "supabase/migrations/20260520160000_tesla_tokens_to_vault.sql",
+          "kind": null
+        },
+        {
+          "label": "getValidTeslaToken()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "verifyState()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "service_role-only SECURITY DEFINER RPC boundary for vault secrets (edge functions never touch the vault schema)",
+          "file": "supabase/migrations/20260520160000_tesla_tokens_to_vault.sql",
+          "kind": null
+        },
+        {
+          "label": "tesla_get_tokens()",
+          "file": "supabase/migrations/20260520160000_tesla_tokens_to_vault.sql",
+          "kind": "sql_function"
+        },
+        {
+          "label": "20260520160000_tesla_tokens_to_vault.sql",
+          "file": "supabase/migrations/20260520160000_tesla_tokens_to_vault.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "refreshTeslaToken()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "signState()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "teslaApiRequest()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Tesla Fleet test/live mode toggle removal",
+          "file": "supabase/migrations/20260520150000_drop_tesla_fleet_mode.sql",
+          "kind": null
+        },
+        {
+          "label": "tesla_clear_tokens()",
+          "file": "supabase/migrations/20260520160000_tesla_tokens_to_vault.sql",
+          "kind": "sql_function"
+        },
+        {
+          "label": "tesla_store_tokens()",
+          "file": "supabase/migrations/20260520160000_tesla_tokens_to_vault.sql",
+          "kind": "sql_function"
+        },
+        {
+          "label": "getChargingHistory()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "getStateSecret()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "hmacSha256()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "listTeslaVehicles()",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "size": 33,
+      "cohesion": 0.09,
+      "units": {
+        "portal": 31,
+        "database": 2
+      },
+      "kinds": {
+        "sql_function": 2
+      },
+      "relations": {
+        "calls": 35,
+        "method": 32,
+        "imports": 25,
+        "contains": 18,
+        "invokes_function": 6,
+        "calls_sql_function": 4
+      },
+      "members": [
+        {
+          "label": "use-payment-verification.ts",
+          "file": "apps/portal/src/hooks/use-payment-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "notifications.ts",
+          "file": "apps/portal/src/lib/notifications.ts",
+          "kind": null
+        },
+        {
+          "label": "NotificationService",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": "notification-service.ts",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".notifyAdmins()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": "EmailService",
+          "file": "apps/portal/src/lib/services/email-service.ts",
+          "kind": null
+        },
+        {
+          "label": "SmsService",
+          "file": "apps/portal/src/lib/services/sms-service.ts",
+          "kind": null
+        },
+        {
+          "label": "email-service.ts",
+          "file": "apps/portal/src/lib/services/email-service.ts",
+          "kind": null
+        },
+        {
+          "label": "sms-service.ts",
+          "file": "apps/portal/src/lib/services/sms-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".sendEmail()",
+          "file": "apps/portal/src/lib/services/email-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".sendCompleteNotification()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".sendMessage()",
+          "file": "apps/portal/src/lib/services/sms-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".createInAppNotification()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".getAdminUserIds()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".notifyAdminsAllChannels()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".sendEmail()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": ".sendSms()",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": "sendBookingNotification()",
+          "file": "apps/portal/src/lib/notifications.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "size": 30,
+      "cohesion": 0.09,
+      "units": {
+        "portal": 30
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 40,
+        "semantically_similar_to": 18,
+        "conceptually_related_to": 13,
+        "rationale_for": 4,
+        "writes_table": 4,
+        "shares_data_with": 4
+      },
+      "members": [
+        {
+          "label": "Tenant marketing-site CMS \u2014 per-tenant editable page section content",
+          "file": "apps/portal/src/client-schemas/website-content/home-hero-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Website-content editor components still declare their Zod schema inline",
+          "file": "apps/portal/src/components/website-content/seo-editor.tsx",
+          "kind": null
+        },
+        {
+          "label": "Vehicle expense capture contract with fixed cost categories (Repair/Service/Tyres/Valet/Accessory/Other)",
+          "file": "apps/portal/src/client-schemas/vehicles/vehicle-expense.ts",
+          "kind": null
+        },
+        {
+          "label": "Contact form copy \u2014 subject options, success message and GDPR consent text",
+          "file": "apps/portal/src/client-schemas/website-content/contact-form-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Contact channel content \u2014 phone, email, office address and WhatsApp",
+          "file": "apps/portal/src/client-schemas/website-content/contact-info-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "FAQ entry contract (question, answer, active flag)",
+          "file": "apps/portal/src/client-schemas/website-content/faqs-manager.ts",
+          "kind": null
+        },
+        {
+          "label": "Daily / weekly / monthly rental tier taxonomy",
+          "file": "apps/portal/src/client-schemas/website-content/rental-rates-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Rental rates section copy for daily, weekly and monthly cards",
+          "file": "apps/portal/src/client-schemas/website-content/rental-rates-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Dead validation layer \u2014 extracted website-content client-schemas have zero importers",
+          "file": "apps/portal/src/client-schemas/website-content/seo-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Per-page SEO metadata content (title, description, keywords)",
+          "file": "apps/portal/src/client-schemas/website-content/seo-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Vehicle disposal form contract (date, sale proceeds, buyer, notes)",
+          "file": "apps/portal/src/client-schemas/vehicles/vehicle-disposal.ts",
+          "kind": null
+        },
+        {
+          "label": "Vehicle lifecycle P&L \u2014 book cost, running costs and gain/loss on disposal",
+          "file": "apps/portal/src/client-schemas/vehicles/vehicle-disposal.ts",
+          "kind": null
+        },
+        {
+          "label": "Contact card content with call and email CTA labels",
+          "file": "apps/portal/src/client-schemas/website-content/contact-card-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Fleet page hero content (headline, subheading, dual CTA)",
+          "file": "apps/portal/src/client-schemas/website-content/fleet-hero-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Generic hero section content (title, subtitle) with length caps",
+          "file": "apps/portal/src/client-schemas/website-content/hero-section-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Home hero content \u2014 headline, trust line and phone/book CTAs",
+          "file": "apps/portal/src/client-schemas/website-content/home-hero-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "How-it-works section heading content",
+          "file": "apps/portal/src/client-schemas/website-content/how-it-works-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Service inclusions content split into standard vs premium tiers",
+          "file": "apps/portal/src/client-schemas/website-content/inclusions-editor.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "size": 23,
+      "cohesion": 0.1,
+      "units": {
+        "portal": 23
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 16,
+        "governs": 12,
+        "conceptually_related_to": 7,
+        "implements": 6,
+        "invokes": 4,
+        "references": 4
+      },
+      "members": [
+        {
+          "label": "Portal staff login (tenant-branded, RBAC landing, policy acceptance)",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Recovery-session password reset landing page",
+          "file": "apps/portal/src/app/(auth)/reset-password/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "One canonical ToS: portal copies retired and 307-redirected to the marketing site",
+          "file": "apps/portal/src/__tests__/lib/platform-tos.test.ts",
+          "kind": null
+        },
+        {
+          "label": "login_success / login_failed audit rows written client-side from the login form",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Tenant policy acceptance captured at login and recorded server-side with the client IP",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Shared absolute legal URLs (PLATFORM_TERMS_URL / PLATFORM_PRIVACY_URL) for every portal consent surface",
+          "file": "apps/portal/src/lib/legal/urls.ts",
+          "kind": null
+        },
+        {
+          "label": "Forgot-password sends an email-verified recovery link instead of accepting a chosen password",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Appendix A integrity: 50 contiguous sections, cross-references, caps blocks",
+          "file": "apps/portal/src/__tests__/lib/platform-tos.test.ts",
+          "kind": null
+        },
+        {
+          "label": "Platform ToS version wiring across files no compiler links",
+          "file": "apps/portal/src/__tests__/lib/platform-tos.test.ts",
+          "kind": null
+        },
+        {
+          "label": "Verbatim consent checkbox copy pinned to the handoff memo",
+          "file": "apps/portal/src/components/legal/terms-consent.tsx",
+          "kind": null
+        },
+        {
+          "label": "Auth route-group shell wraps unauthenticated pages in tenant dynamic theming",
+          "file": "apps/portal/src/app/(auth)/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "profile_unavailable is not a bad password: no failed attempt, no audit row, no lockout",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: the post-login redirect waits for appUser and is_active, or login and dashboard bounce each other forever",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Role-based landing route: admins to /, ops to /vehicles, viewers to /reports",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: the recovery session is the proof of mailbox control that authorises the change, replacing an unauthenticated emergency-password-reset takeover path",
+          "file": "apps/portal/src/app/(auth)/reset-password/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Server-side platform ToS constants (version, pending version, canonical URL) for edge functions and Stripe",
+          "file": "supabase/functions/_shared/platform-tos.ts",
+          "kind": null
+        },
+        {
+          "label": "check-policy-acceptance edge function (records acceptance with server-side IP)",
+          "file": "supabase/functions/check-policy-acceptance/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: the reset flow always reports success, because revealing whether an address exists enumerates staff accounts",
+          "file": "apps/portal/src/app/(auth)/login/page.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "size": 20,
+      "cohesion": 0.13,
+      "units": {
+        "admin": 20
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 10,
+        "rationale_for": 10,
+        "references": 8,
+        "conceptually_related_to": 8,
+        "semantically_similar_to": 6,
+        "reads_table": 4
+      },
+      "members": [
+        {
+          "label": "Super-admin dashboard authentication gate",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Neon-purple dark design system for the super-admin app",
+          "file": "apps/admin/tailwind.config.ts",
+          "kind": null
+        },
+        {
+          "label": "Dual privilege model: super admin OR sales agent may enter admin",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Protected admin route guard: redirect on null user and confine sales-only users to /admin/sales",
+          "file": "apps/admin/app/admin/(protected)/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "Session restore with privilege re-verification on every load",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Sales-only sidebar narrowing via is_sales_agent && !is_super_admin",
+          "file": "apps/admin/components/admin/Sidebar.tsx",
+          "kind": null
+        },
+        {
+          "label": "Primary-super-admin-only administration of super admin accounts",
+          "file": "apps/admin/app/admin/(protected)/admins/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Portal staff authentication store (app_users, tenant-scoped RBAC)",
+          "file": "apps/portal/src/stores/auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: supabase client cast to any because is_sales_agent is absent from the generated Supabase types",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: logout always clears local state even if network sign-out fails, or a transient error strands the user in the dashboard",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: only PGRST116 (no rows) is a definitive denial; any other error drops to login WITHOUT signing out, so a network/RLS hiccup never destroys a valid sales-agent session",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Sales agent role flag on app_users",
+          "file": "apps/admin/store/authStore.ts",
+          "kind": null
+        },
+        {
+          "label": "Neon-purple palette CSS variables (--background 258 30% 12%, --primary 265 85% 65%, chart hues)",
+          "file": "apps/admin/app/globals.css",
+          "kind": null
+        },
+        {
+          "label": "shadcn CSS-variable to Tailwind colour token bridge (hsl(var(--x)) indirection)",
+          "file": "apps/admin/tailwind.config.ts",
+          "kind": null
+        },
+        {
+          "label": "Booking customer authentication store (customer_users, wholly separate identity space)",
+          "file": "apps/booking/src/stores/customer-auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "Admin Supabase browser client whose session drives is_super_admin() at the database",
+          "file": "apps/admin/lib/supabase.ts",
+          "kind": null
+        },
+        {
+          "label": "Class-based dark mode strategy (admin renders permanently dark)",
+          "file": "apps/admin/tailwind.config.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: dark-* tokens hardcoded as hex because they were previously undefined and only 'looked' dark by rendering transparent over a dark backdrop, hiding broken elements",
+          "file": "apps/admin/tailwind.config.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "size": 19,
+      "cohesion": 0.13,
+      "units": {
+        "docs": 19
+      },
+      "kinds": {
+        "concept": 11
+      },
+      "relations": {
+        "references": 20,
+        "writes_table": 12,
+        "conceptually_related_to": 6,
+        "rationale_for": 2,
+        "reads_table": 2,
+        "semantically_similar_to": 2
+      },
+      "members": [
+        {
+          "label": "Platform subscription: Drive247 charges the operator monthly",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "Subscription checkout flow: plan to Stripe Checkout to webhook to unlocked dashboard",
+          "file": "docs/flows/subscription-checkout.md",
+          "kind": null
+        },
+        {
+          "label": "First real invoice.paid auto-flips stripe_mode and bonzah_mode to live and stamps setup_completed_at",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "create subscription checkout platformbilling",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "Operator Stripe Connect onboarding and account.updated status sync",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "tbl tenants",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "Super-admin tenant creation provisions the tenant and its head_admin",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "manage subscription plans planadministration",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "subscription webhook platform billing",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "tbl subscription plans",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "tbl tenant subscriptions",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "admin create user staff provisioning",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "Subscription onboarding does a $1 validate-then-refund before the first real charge",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "Zero application_fee: the platform takes no per-transaction cut, it earns only from subscription",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "Platform subscription billing runs on a separate Stripe account, unrelated to Connect",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "go live banner golivecelebration",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "setup hub autoswitchtolive",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "stripe connect settings connectonboarding",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "size": 18,
+      "cohesion": 0.13,
+      "units": {
+        "portal": 18
+      },
+      "kinds": {},
+      "relations": {
+        "references": 10,
+        "governs": 9,
+        "conceptually_related_to": 8,
+        "rationale_for": 8,
+        "reads_table": 3,
+        "invokes": 3
+      },
+      "members": [
+        {
+          "label": "canManuallyVerify - who may record a manual ID verification override",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "hasRole / isAdmin - role check that also enforces is_active",
+          "file": "apps/portal/src/stores/auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "Admin fan-out audience is admin + head_admin only (managers excluded)",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": "canWaiveIdVerification - per-rental ID waiver requires flag AND role AND a named actor",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Head-admin-only tenant switch for rental-without-ID-verification",
+          "file": "apps/portal/src/app/(dashboard)/settings/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "TENANT_CORE_COLUMNS - the tenant columns the portal always selects",
+          "file": "apps/portal/src/contexts/TenantContext.tsx",
+          "kind": null
+        },
+        {
+          "label": "Absolute ID-verification gate on rental creation",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "tenantAllowsIdWaiver - strict opt-in on tenants.allow_rental_without_id_verification",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Super admins are promoted to head_admin and forced active when entering a tenant dashboard",
+          "file": "apps/portal/src/stores/auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "Waiver stamped on the rental row (id_verification_waived, _reason, _by)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Reduced-column retry that drops only the INSHUR block",
+          "file": "apps/portal/src/contexts/TenantContext.tsx",
+          "kind": null
+        },
+        {
+          "label": "Super admins are rewritten to role head_admin with is_active true",
+          "file": "apps/portal/src/stores/auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "Notify all tenant admins of an operational event",
+          "file": "apps/portal/src/lib/services/notification-service.ts",
+          "kind": null
+        },
+        {
+          "label": "The override mutates the customer, so it needs customers editor as well as rentals editor",
+          "file": "apps/portal/src/__tests__/components/rental-id-verification-override.test.ts",
+          "kind": null
+        },
+        {
+          "label": "Manual verification audit trail (customer_identity_manually_verified, reason, actor)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "The screen denied the waiver existed - reported as 'the toggle is not working'",
+          "file": "apps/portal/src/__tests__/components/rental-id-waiver.test.ts",
+          "kind": null
+        },
+        {
+          "label": "An RLS-blocked UPDATE returns 200 with an empty body - never report success on zero rows",
+          "file": "apps/portal/src/__tests__/components/rental-id-waiver.test.ts",
+          "kind": null
+        },
+        {
+          "label": "anon holds column-level grants on tenants; one ungranted column loses every login page's branding",
+          "file": "apps/portal/src/__tests__/components/rental-id-waiver.test.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "size": 17,
+      "cohesion": 0.17,
+      "units": {
+        "portal": 17
+      },
+      "kinds": {},
+      "relations": {
+        "contains": 32,
+        "calls": 14,
+        "imports": 7,
+        "depends_on": 2
+      },
+      "members": [
+        {
+          "label": "plate-redaction-dialog.tsx",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "exportRedactedJpeg()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handleConfirm()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "rectFromPoints()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "blobToBase64()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "canvasToBlob()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "commitDraft()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handlePointerCancel()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handlePointerLeave()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handlePointerMove()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "padRegion()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "clamp01()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handleNoPlate()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handlePointerDown()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "handleRestore()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "loadRaster()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "releaseRaster()",
+          "file": "apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "size": 16,
+      "cohesion": 0.14,
+      "units": {
+        "portal": 16
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 16,
+        "rationale_for": 8,
+        "governs": 4,
+        "references": 3,
+        "conceptually_related_to": 2,
+        "reads_table": 2
+      },
+      "members": [
+        {
+          "label": "Working hours as the booking-time gate",
+          "file": "apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Vehicle-scoped and global date-range blocking",
+          "file": "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+          "kind": null
+        },
+        {
+          "label": "Pre-block conflict check against Active/Confirmed rentals",
+          "file": "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+          "kind": null
+        },
+        {
+          "label": "Website Content CMS per-section editor schemas",
+          "file": "apps/portal/src/client-schemas/website-content/trust-badges-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "'availability' manager permission tab gates all blocking mutations",
+          "file": "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+          "kind": null
+        },
+        {
+          "label": "Terms section title validation",
+          "file": "apps/portal/src/client-schemas/website-content/terms-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Testimonials header section title validation",
+          "file": "apps/portal/src/client-schemas/website-content/testimonials-header-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "Per-day open/close weekly schedule with copy-to-all-days",
+          "file": "apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Booking hours are not the public site's advertised hours; the two can silently drift",
+          "file": "apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "working_hours_enabled deliberately not written \u2014 it is the booking site's master kill-switch",
+          "file": "apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Blocking never cancels existing rentals \u2014 it only prevents new bookings",
+          "file": "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+          "kind": null
+        },
+        {
+          "label": "Conflict check fails open \u2014 a failed query proceeds with the block anyway",
+          "file": "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+          "kind": null
+        },
+        {
+          "label": "Advisory warning when a new global block overlaps an existing one",
+          "file": "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+          "kind": null
+        },
+        {
+          "label": "Trust badge set constraints (1-6 badges, 20-char label, 100-char tooltip)",
+          "file": "apps/portal/src/client-schemas/website-content/trust-badges-editor.ts",
+          "kind": null
+        },
+        {
+          "label": "12-hour scroll-column time picker with 24h round-trip conversion",
+          "file": "apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Business timezone selection for all booking times",
+          "file": "apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "size": 16,
+      "cohesion": 0.17,
+      "units": {
+        "portal": 16
+      },
+      "kinds": {},
+      "relations": {
+        "reads_table": 10,
+        "invokes": 8,
+        "semantically_similar_to": 6,
+        "writes_table": 6,
+        "rationale_for": 6,
+        "governs": 4
+      },
+      "members": [
+        {
+          "label": "Internal 1-10 customer rating with tags, comment, skip and edit",
+          "file": "apps/portal/src/components/reviews/rental-review-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "rental_reviews table (one internal staff review per rental)",
+          "file": "apps/portal/src/components/reviews/rental-review-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Client-side average/count fallback when the AI summary row is missing",
+          "file": "apps/portal/src/components/reviews/customer-review-summary-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer review history surfaced inline during booking approval decisions",
+          "file": "apps/portal/src/components/reviews/approval-review-summary.tsx",
+          "kind": null
+        },
+        {
+          "label": "customer_review_summaries table (AI-generated per-customer summary)",
+          "file": "apps/portal/src/components/reviews/customer-review-summary-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Full per-customer review history with deep link to the reviewed rental",
+          "file": "apps/portal/src/components/reviews/customer-reviews-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "generate-review-summary edge function (OpenAI customer review summary)",
+          "file": "apps/portal/src/components/reviews/customer-review-summary-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rental review card with three states: none, skipped, reviewed",
+          "file": "apps/portal/src/components/reviews/review-display-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rental-list review column: pending / reviewed / skipped affordance",
+          "file": "apps/portal/src/components/reviews/review-status-badge.tsx",
+          "kind": null
+        },
+        {
+          "label": "Shared rating\u2192colour scale (>=8 green, >=5 amber, else red)",
+          "file": "apps/portal/src/components/reviews/review-tags.ts",
+          "kind": null
+        },
+        {
+          "label": "Reviews are fetched only while the dialog is open (customerId passed as undefined when closed)",
+          "file": "apps/portal/src/components/reviews/customer-reviews-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Review dialog impression is written to the audit log on open",
+          "file": "apps/portal/src/components/reviews/rental-review-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Copy states the rating is internal only \u2014 never shown to the customer",
+          "file": "apps/portal/src/components/reviews/rental-review-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Skipping records a real is_skipped review row rather than leaving no record",
+          "file": "apps/portal/src/components/reviews/rental-review-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Only rentals with status 'Completed' are reviewable; others render an inert dash",
+          "file": "apps/portal/src/components/reviews/review-status-badge.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rating colour thresholds reimplemented inline instead of calling getRatingColor",
+          "file": "apps/portal/src/components/reviews/review-status-badge.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "size": 16,
+      "cohesion": 0.12,
+      "units": {
+        "booking": 16
+      },
+      "kinds": {},
+      "relations": {
+        "invokes": 8,
+        "conceptually_related_to": 8,
+        "references": 6,
+        "rationale_for": 6,
+        "governs": 2,
+        "shares_data_with": 1
+      },
+      "members": [
+        {
+          "label": "Customer self-service installment payment actions",
+          "file": "apps/booking/src/hooks/use-payment-actions.ts",
+          "kind": null
+        },
+        {
+          "label": "Trax customer AI assistant chat",
+          "file": "apps/booking/src/hooks/use-trax-chat.ts",
+          "kind": null
+        },
+        {
+          "label": "Customer identity (customer_users to customers) driving billing calls",
+          "file": "apps/booking/src/stores/customer-auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "customer-chat edge function",
+          "file": "supabase/functions/customer-chat/index.ts",
+          "kind": null
+        },
+        {
+          "label": "update-payment-method edge function",
+          "file": "supabase/functions/update-payment-method/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Two toast systems coexist: shadcn use-toast and sonner",
+          "file": "apps/booking/src/hooks/use-toast.ts",
+          "kind": null
+        },
+        {
+          "label": "create-upfront-checkout edge function",
+          "file": "supabase/functions/create-upfront-checkout/index.ts",
+          "kind": null
+        },
+        {
+          "label": "pay-installment-early edge function",
+          "file": "supabase/functions/pay-installment-early/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Off-session charge falls back to a hosted Stripe checkout redirect",
+          "file": "apps/booking/src/hooks/use-payment-actions.ts",
+          "kind": null
+        },
+        {
+          "label": "Shared invalidation triple: customer-installment-plans / customer-payment-history / customer-rentals",
+          "file": "apps/booking/src/hooks/use-payment-actions.ts",
+          "kind": null
+        },
+        {
+          "label": "Edge functions cannot take GET query params \u2014 action passed in the invoke path",
+          "file": "apps/booking/src/hooks/use-payment-actions.ts",
+          "kind": null
+        },
+        {
+          "label": "supabase-js invoke() swallows the edge function's error body",
+          "file": "apps/booking/src/hooks/use-payment-actions.ts",
+          "kind": null
+        },
+        {
+          "label": "Retrying a failed payment replays the pay-single action verbatim",
+          "file": "apps/booking/src/hooks/use-payment-actions.ts",
+          "kind": null
+        },
+        {
+          "label": "Module-level toast singleton store outside React state",
+          "file": "apps/booking/src/hooks/use-toast.ts",
+          "kind": null
+        },
+        {
+          "label": "Assistant replies may carry a chart payload rendered as bar/pie/line",
+          "file": "apps/booking/src/hooks/use-trax-chat.ts",
+          "kind": null
+        },
+        {
+          "label": "Chat transcript is client-only and lost on unmount; failed turns are rolled back",
+          "file": "apps/booking/src/hooks/use-trax-chat.ts",
+          "kind": null
+        }
+      ]
+    }
+  ]
+}

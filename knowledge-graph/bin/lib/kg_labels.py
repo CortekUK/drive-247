@@ -120,7 +120,7 @@ def apply(graph_dir: Path = MERGED, name: str = "drive-247 monorepo") -> None:
                    analysis["surprises"], detection, {"input": 0, "output": 0},
                    name, suggested_questions=questions)
     (graph_dir / "GRAPH_REPORT.md").write_text(rep)
-    to_json(G, communities, str(graph_dir / "graph.json"))
+    to_json(G, communities, str(graph_dir / "graph.json"), force=True)
     analysis["questions"] = questions
     write_json(graph_dir / ".graphify_analysis.json", analysis)
     print(f"applied {len(labels_raw)} labels; report + graph.json regenerated")

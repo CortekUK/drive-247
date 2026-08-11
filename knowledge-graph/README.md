@@ -75,7 +75,7 @@ Two layers, and the distinction matters for keeping it current:
 The structural layer can never drift from the code. The semantic layer can, so
 `kg status` always reports exactly how far behind it is instead of pretending.
 
-## Five things this adds on top of stock graphify
+## Six things this adds on top of stock graphify
 
 Each of these exists because a measured failure on *this* repo required it.
 
@@ -124,7 +124,16 @@ directory — which is what keeps `Array.from(...)` out of the table graph.
 Because these are grep-level facts rather than model output, they cost nothing
 and re-run on every update, so the seam layer cannot drift.
 
-**5. Table concepts are folded onto the real schema.** Each unit's agents
+**5. Query ranks by relevance, not degree.** graphify renders a query's subgraph
+sorted by node degree. That works on a small corpus and inverts on this one:
+`tenants` has 855 edges and `rentals` 691, so every question — whatever it asked
+— came back topped by the same few hubs while the actual matches were pushed past
+the token budget. `kg query` ranks by match strength and reports each hit with the
+edges that carry information, deprioritising `contains`/`imports`/`depends_on`
+plumbing that the AST layer already guarantees. graphify's original behaviour is
+still available as `kg rawquery`.
+
+**6. Table concepts are folded onto the real schema.** Each unit's agents
 independently invented a private concept node for the same physical table
 (`portal__rentals`, `portal__rentals_table`, `booking__rentals`…), none of them
 connected to `database__tbl_rentals` — so "what touches the rentals table"
@@ -198,7 +207,8 @@ kg pending          chunk specs waiting for a semantic pass
 kg assemble         rebuild unit graphs from structural + semantic fragments
 kg merge            re-merge units into the unified graph
 kg html             regenerate the unified HTML view
-kg query "..."      query the unified graph   (-u <unit> to scope to one unit)
+kg query "..."      relevance-ranked query (-u <unit> to scope, --budget N)
+kg rawquery "..."   graphify's own BFS/DFS query (degree-ordered)
 kg path "A" "B"     shortest path between two nodes
 kg explain "X"      explain a node and its neighbours
 kg hook install     rebuild structure on every git commit

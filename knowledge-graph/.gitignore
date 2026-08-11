@@ -45,3 +45,5 @@ state/community_summary.json
 #   merged/labels.json                            hand/agent-authored names
 #   state/manifest.json                           change detection baseline
 #   state/needs_semantic.json                     staleness record
+state/.update.lock
+state/last-update.log

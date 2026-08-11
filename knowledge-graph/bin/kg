@@ -9,7 +9,8 @@
     kg chunk            (re)plan the semantic fan-out, print the agent count
     kg pending          list the chunk specs waiting for a semantic pass
     kg html             regenerate the unified HTML view
-    kg query "..."      query the unified graph        (-u <unit> for one unit)
+    kg query "..."      relevance-ranked query   (-u <unit> to scope, --budget N)
+    kg rawquery "..."   graphify's own BFS/DFS query (degree-ordered)
     kg path "A" "B"     shortest path between two nodes
     kg explain "X"      explain a node and its neighbours
     kg hook install     rebuild structure automatically on every git commit
@@ -191,6 +192,12 @@ def cmd_graphify_passthru(sub):
     return f
 
 
+def cmd_query(argv):
+    _reexec_if_needed()
+    import kg_query
+    kg_query.run(argv)
+
+
 def cmd_hook(argv):
     action = argv[0] if argv else "status"
     from_root = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=KG.parent,
@@ -205,10 +212,19 @@ def cmd_hook(argv):
     marker = "# >>> drive-247 knowledge-graph >>>"
     body = f"""{marker}
 # Refresh the structural layer of the knowledge graph after each commit.
-# Deterministic and fast - no LLM, no network. Semantic refresh is reported
-# by `kg status` and applied on demand.
+# Deterministic - no LLM, no network. Semantic refresh is reported by
+# `kg status` and applied on demand.
+#
+# flock -n: a rebuild takes minutes, so back-to-back commits would otherwise
+# start overlapping runs writing the same graph.json. If one is already
+# running, this commit's refresh is skipped - the next commit picks up all
+# the accumulated changes anyway, because the diff is computed from file
+# hashes rather than from the commit.
 if [ -x "{KG}/bin/kg" ]; then
-  "{KG}/bin/kg" update --quiet >/dev/null 2>&1 &
+  (
+    flock -n 9 || exit 0
+    "{KG}/bin/kg" update --quiet >"{KG}/state/last-update.log" 2>&1
+  ) 9>"{KG}/state/.update.lock" &
 fi
 # <<< drive-247 knowledge-graph <<<
 """
@@ -261,7 +277,8 @@ COMMANDS = {
     "ast": cmd_stage("ast"), "sql": cmd_stage("sql"), "resolve": cmd_stage("resolve"),
     "pending": cmd_pending, "html": cmd_html, "hook": cmd_hook, "doctor": cmd_doctor,
     "labels": cmd_stage("labels"),
-    "query": cmd_graphify_passthru("query"),
+    "query": cmd_query,
+    "rawquery": cmd_graphify_passthru("query"),
     "path": cmd_graphify_passthru("path"),
     "explain": cmd_graphify_passthru("explain"),
 }

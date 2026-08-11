@@ -1,0 +1,503 @@
+{
+  "communities": [
+    {
+      "id": 126,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "docs": 5
+      },
+      "kinds": {
+        "concept": 4
+      },
+      "relations": {
+        "references": 6,
+        "writes_table": 2
+      },
+      "members": [
+        {
+          "label": "Three identity-verification providers converge on identity_verifications",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "ai document ocr id extraction",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "cmd webhook ingestion",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "create veriff session identityverification",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "tbl identity verifications",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 127,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "portal": 4
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 6
+      },
+      "members": [
+        {
+          "label": "Portal legal routes redirect to the marketing site",
+          "file": "apps/portal/next.config.js",
+          "kind": null
+        },
+        {
+          "label": "307 not 308 - a permanent redirect cannot be recalled from users' caches",
+          "file": "apps/portal/next.config.js",
+          "kind": null
+        },
+        {
+          "label": "Redirect rather than delete: the login page's mandatory acceptance checkbox links here",
+          "file": "apps/portal/next.config.js",
+          "kind": null
+        },
+        {
+          "label": "Only one operator-to-Drive247 terms document may exist",
+          "file": "apps/portal/next.config.js",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 128,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "portal": 4
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4,
+        "conceptually_related_to": 2
+      },
+      "members": [
+        {
+          "label": "Inbound calls ring the browser and every configured phone at once; first to answer wins",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-team-member forwarding numbers were removed in favour of one main number",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Caller ID mode on forwarded calls \u2014 show the caller or show the business line",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-user forwarding number row, now unrendered dead UI",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 129,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "portal": 4
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4,
+        "invokes": 2
+      },
+      "members": [
+        {
+          "label": "AI-generated fleet utilisation insights",
+          "file": "apps/portal/src/hooks/use-rental-insights.ts",
+          "kind": null
+        },
+        {
+          "label": "rental-insights edge function",
+          "file": "supabase/functions/rental-insights/index.ts",
+          "kind": null
+        },
+        {
+          "label": "One OpenAI call per tenant per 10 minutes, shared across pages",
+          "file": "apps/portal/src/hooks/use-rental-insights.ts",
+          "kind": null
+        },
+        {
+          "label": "Insight payload capped at 30 rentals to stay within token limits",
+          "file": "apps/portal/src/hooks/use-rental-insights.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 130,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "portal": 4
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4,
+        "implements": 2
+      },
+      "members": [
+        {
+          "label": "E-sign usage normalised into the generic UsageCategoryData shape",
+          "file": "apps/portal/src/hooks/use-usage-data.ts",
+          "kind": null
+        },
+        {
+          "label": "Pluggable usage-metering category registry (esign today, sms planned)",
+          "file": "apps/portal/src/hooks/use-usage-data.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: an event counts as reported only when stripe_event_id is set, i.e. Stripe's meter accepted it",
+          "file": "apps/portal/src/hooks/use-usage-data.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: every category hook is called unconditionally to satisfy the rules of hooks",
+          "file": "apps/portal/src/hooks/use-usage-data.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 131,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "portal": 4
+      },
+      "kinds": {},
+      "relations": {
+        "invokes": 4,
+        "rationale_for": 2
+      },
+      "members": [
+        {
+          "label": "Additional-driver creation and verification/signing invite dispatch",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "create-additional-drivers edge function",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "send-additional-driver-invite edge function",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: additional-driver creation and invites are non-fatal because the rental row is already committed and the tooling is independent of it",
+          "file": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 132,
+      "size": 4,
+      "cohesion": 0.67,
+      "units": {
+        "database": 4
+      },
+      "kinds": {
+        "concept": 1
+      },
+      "relations": {
+        "rationale_for": 4,
+        "governs": 2,
+        "conceptually_related_to": 2,
+        "writes_table": 1
+      },
+      "members": [
+        {
+          "label": "Per-tenant custom booking and portal domains replacing {slug}.drive-247.com",
+          "file": "supabase/migrations/20260401130000_add_custom_domains.sql",
+          "kind": null
+        },
+        {
+          "label": "Rationale: partial indexes exist because middleware resolves the custom domain on every single request",
+          "file": "supabase/migrations/20260401130000_add_custom_domains.sql",
+          "kind": null
+        },
+        {
+          "label": "middleware customportaldomainlookup",
+          "file": "supabase/migrations/20260401130000_add_custom_domains.sql",
+          "kind": "concept"
+        },
+        {
+          "label": "Gotcha: the DB row alone routes nothing \u2014 the domain must also be added in Vercel with DNS pointed there",
+          "file": "supabase/migrations/20260401130000_add_custom_domains.sql",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 133,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "docs": 4
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "governs": 4,
+        "references": 2
+      },
+      "members": [
+        {
+          "label": "H1: replacing or removing a receipt orphans the old file in the paid private bucket",
+          "file": "docs/EXPENSE_TRACKER_AUDIT.md",
+          "kind": null
+        },
+        {
+          "label": "expense dialog orphanreceiptcleanup",
+          "file": "docs/EXPENSE_TRACKER_AUDIT.md",
+          "kind": "concept"
+        },
+        {
+          "label": "Receipts live in a private bucket served by 10-minute signed URLs, never public links",
+          "file": "docs/EXPENSE_TRACKER_AUDIT.md",
+          "kind": null
+        },
+        {
+          "label": "use expenses receiptstoragelifecycle",
+          "file": "docs/EXPENSE_TRACKER_AUDIT.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 134,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "docs": 4
+      },
+      "kinds": {
+        "concept": 1
+      },
+      "relations": {
+        "conceptually_related_to": 4,
+        "references": 2
+      },
+      "members": [
+        {
+          "label": "Bug 12: refresh reuses rentals.deposit_hold_payment_method_id verbatim and nothing updates it when a customer changes card \u2014 guaranteed eventual failure on a long rental",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Card expiry mid-rental is likely on 90 days and completely unmonitored \u2014 no payment_method.automatically_updated handler, and brand change is a hard stop for merchant-initiated charges",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "W9: the customer 'Update Card' flow is hidden behind having an installment plan, so a long-term renter cannot change their card and staff cannot do it for them",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "update payment method cardrotation",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 135,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "docs": 4
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4,
+        "conceptually_related_to": 2
+      },
+      "members": [
+        {
+          "label": "Sharpest customer-harm risk: debit holds can take weeks to clear, so a re-auth cadence lets a renter carry several ringfenced deposits while Stripe shows exactly one",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Explicit decision: do NOT reorder to create-before-cancel \u2014 two simultaneous full-amount authorizations can themselves cause the insufficient_funds decline they were meant to prevent, and worsen debit stacking",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "V2: create-before-cancel authorizes 2x the estimate systematically, 13-18 times per rental \u2014 defensible only with explicit overlap disclosure, seconds-long overlap and never on debit",
+          "file": "docs/GMT_CHAINED_HOLD_CRITIC.md",
+          "kind": null
+        },
+        {
+          "label": "Nothing in the codebase reads card.funding, so debit-specific policy cannot be enforced anywhere today",
+          "file": "docs/GMT_CHAINED_HOLD_CRITIC.md",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 136,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "docs": 4
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 4,
+        "governs": 2
+      },
+      "members": [
+        {
+          "label": "EC-48 debit release lag stacks two rent-scale encumbrances per link",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "EC-51 no charge.dispute.* handler exists in any booking webhook; add a disputed hold state",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "D4 open question: cancel-first gaps coverage, create-first authorizes 2x systematically",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "EC-36 no statement_descriptor anywhere: 13-18 unlabelled pending lines drive disputes",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 137,
+      "size": 4,
+      "cohesion": 0.5,
+      "units": {
+        "docs": 4
+      },
+      "kinds": {
+        "concept": 3
+      },
+      "relations": {
+        "references": 4,
+        "conceptually_related_to": 2
+      },
+      "members": [
+        {
+          "label": "PAYG daily accrual cron: idempotent by day index with a 30-day catch-up cap",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "accrue payg charges idempotency",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "accrue payg charges payg accrual cron",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "finalize payg rental capability",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 138,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "booking": 1,
+        "external": 1,
+        "portal": 1
+      },
+      "kinds": {
+        "external_package": 1
+      },
+      "relations": {
+        "depends_on": 4
+      },
+      "members": [
+        {
+          "label": "@radix-ui/react-aspect-ratio",
+          "file": null,
+          "kind": "external_package"
+        },
+        {
+          "label": "aspect-ratio.tsx",
+          "file": "apps/booking/src/components/ui/aspect-ratio.tsx",
+          "kind": null
+        },
+        {
+          "label": "aspect-ratio.tsx",
+          "file": "apps/portal/src/components/ui/aspect-ratio.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 139,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "portal": 3
+      },
+      "kinds": {},
+      "relations": {
+        "invokes": 2,
+        "rationale_for": 2
+      },
+      "members": [
+        {
+          "label": "AI-drafted outbound message by intent (welcome, doc_request, approval, offer, followup, decline)",
+          "file": "apps/portal/src/components/leads/lead-composer.tsx",
+          "kind": null
+        },
+        {
+          "label": "ai-draft-message edge function",
+          "file": "apps/portal/src/components/leads/lead-composer.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: window.confirm is intentional \u2014 a Radix modal would add 3 round-trips of UX state for a one-time guard",
+          "file": "apps/portal/src/components/leads/lead-composer.tsx",
+          "kind": null
+        }
+      ]
+    }
+  ]
+}

@@ -57,8 +57,13 @@ def canonicalise_tables(nodes: dict, edges: list) -> int:
 
     alias: dict[str, str] = {}
     for nid, n in list(nodes.items()):
-        if n.get("unit") == "database" or n.get("kind") or n.get("source_location"):
-            continue  # structural node, or already the real thing
+        # Fold only agent-proposed nodes. source_location cannot be the test:
+        # agents emit one too, which previously left `tenants table` (113 edges)
+        # standing beside the real `tenants` node.
+        if n.get("unit") == "database" or n.get("origin") != "semantic":
+            continue
+        if n.get("kind") not in (None, "concept"):
+            continue
         lab = re.sub(r'[^a-z0-9_\s]', '', str(n.get("label", "")).lower()).strip()
         m = _TABLE_ALIAS.match(lab)
         if not m:
@@ -172,7 +177,7 @@ def run() -> None:
                    {"input": 0, "output": 0}, "drive-247 monorepo",
                    suggested_questions=questions)
     (MERGED / "GRAPH_REPORT.md").write_text(rep)
-    to_json(G, communities, str(MERGED / "graph.json"))
+    to_json(G, communities, str(MERGED / "graph.json"), force=True)
     write_json(MERGED / ".graphify_analysis.json", {
         "communities": {str(k): v for k, v in communities.items()},
         "cohesion": {str(k): v for k, v in cohesion.items()},
