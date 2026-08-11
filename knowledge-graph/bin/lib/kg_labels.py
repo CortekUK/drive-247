@@ -61,6 +61,32 @@ def export(graph_dir: Path = MERGED, out: Path | None = None) -> Path:
     return out
 
 
+def batches(min_size: int = 3, per_batch: int = 14) -> list[str]:
+    """Split the digest into per-agent batch files.
+
+    Communities below min_size are left with their default "Community N" name:
+    a two-node community has nothing to summarise, and labelling it would spend
+    an agent to say less than the member list already says.
+    """
+    digest = load_json(STATE / "community_summary.json")["communities"]
+    worth = [c for c in digest if c["size"] >= min_size]
+    skipped = len(digest) - len(worth)
+    bdir = STATE / "label_batches"
+    if bdir.exists():
+        import shutil
+        shutil.rmtree(bdir)
+    bdir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(0, len(worth), per_batch):
+        p = bdir / f"batch-{i // per_batch + 1:03d}.json"
+        write_json(p, {"communities": worth[i:i + per_batch]})
+        paths.append(str(p))
+    write_json(STATE / "label_batch_index.json", {"batches": paths})
+    print(f"{len(worth)} communities to label in {len(paths)} batches "
+          f"({skipped} below size {min_size} keep default names)")
+    return paths
+
+
 def apply(graph_dir: Path = MERGED, name: str = "drive-247 monorepo") -> None:
     from graphify.build import build_from_json
     from graphify.analyze import suggest_questions
@@ -104,8 +130,11 @@ def run(argv=None):
     argv = argv or sys.argv[1:]
     if argv and argv[0] == "apply":
         apply()
+    elif argv and argv[0] == "batches":
+        batches()
     else:
         export()
+        batches()
 
 
 if __name__ == "__main__":

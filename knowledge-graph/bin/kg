@@ -122,7 +122,10 @@ def cmd_stage(name):
     def f(argv):
         _reexec_if_needed()
         mod = __import__(f"kg_{name}")
-        mod.run(argv or None) if name in ("detect", "ast", "resolve", "assemble") else mod.run()
+        if name in ("detect", "ast", "resolve", "assemble", "labels"):
+            mod.run(argv or None)
+        else:
+            mod.run()
     return f
 
 
@@ -257,6 +260,7 @@ COMMANDS = {
     "chunk": cmd_stage("chunk"), "detect": cmd_stage("detect"),
     "ast": cmd_stage("ast"), "sql": cmd_stage("sql"), "resolve": cmd_stage("resolve"),
     "pending": cmd_pending, "html": cmd_html, "hook": cmd_hook, "doctor": cmd_doctor,
+    "labels": cmd_stage("labels"),
     "query": cmd_graphify_passthru("query"),
     "path": cmd_graphify_passthru("path"),
     "explain": cmd_graphify_passthru("explain"),

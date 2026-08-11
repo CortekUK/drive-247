@@ -23,40 +23,55 @@ from kgcommon import STATE, UNIT_BY_NAME, unit_out, load_json, write_json, rel, 
 
 Q = r'["\']?'                       # optional quoting
 NAME = r'([a-zA-Z_][a-zA-Z0-9_]*)'
-SCHEMA = r'(?:(?:public|auth|storage|extensions)\s*\.\s*)?'
+# An identifier may be bare or double-quoted, and may be schema-qualified in
+# either style. This matters: supabase db pull writes pg_dump-style
+# `"public"."agreement_templates"`, and a pattern that treats the quote as a
+# single optional character captures the SCHEMA as the table name - which
+# collapsed all 55 tables of the baseline remote_schema.sql into one node
+# labelled "public".
+IDENT = r'(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)'
+QUAL = rf'(?:{IDENT}\s*\.\s*)?({IDENT})'
+SCHEMAS = {"public", "auth", "storage", "extensions", "graphql", "realtime", "vault"}
 
-RE_CREATE_TABLE = re.compile(
-    rf'create\s+table\s+(?:if\s+not\s+exists\s+)?{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
-RE_ALTER_TABLE = re.compile(
-    rf'alter\s+table\s+(?:only\s+)?{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
-RE_FUNCTION = re.compile(
-    rf'create\s+(?:or\s+replace\s+)?function\s+{Q}{SCHEMA}{Q}{NAME}{Q}\s*\(', re.I)
+RE_CREATE_TABLE = re.compile(rf'create\s+table\s+(?:if\s+not\s+exists\s+)?{QUAL}', re.I)
+RE_ALTER_TABLE = re.compile(rf'alter\s+table\s+(?:only\s+)?{QUAL}', re.I)
+RE_FUNCTION = re.compile(rf'create\s+(?:or\s+replace\s+)?function\s+{QUAL}\s*\(', re.I)
 RE_TRIGGER = re.compile(
-    rf'create\s+(?:or\s+replace\s+)?trigger\s+{Q}{NAME}{Q}(.*?)(?:;|$)', re.I | re.S)
+    rf'create\s+(?:or\s+replace\s+)?trigger\s+({IDENT})(.*?)(?:;|$)', re.I | re.S)
 RE_POLICY = re.compile(
-    rf'create\s+policy\s+{Q}([^"\']+?){Q}\s+on\s+{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
-RE_ENUM = re.compile(
-    rf'create\s+type\s+{Q}{SCHEMA}{Q}{NAME}{Q}\s+as\s+enum', re.I)
+    rf'create\s+policy\s+(?:"([^"]+)"|\'([^\']+)\'|([A-Za-z_][A-Za-z0-9_]*))'
+    rf'\s+on\s+{QUAL}', re.I)
+RE_ENUM = re.compile(rf'create\s+type\s+{QUAL}\s+as\s+enum', re.I)
 RE_INDEX = re.compile(
     rf'create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?'
-    rf'{Q}{NAME}{Q}\s+on\s+{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
-RE_REFERENCES = re.compile(
-    rf'references\s+{Q}{SCHEMA}{Q}{NAME}{Q}\s*\(', re.I)
+    rf'({IDENT})\s+on\s+{QUAL}', re.I)
+RE_REFERENCES = re.compile(rf'references\s+{QUAL}\s*\(', re.I)
 RE_RLS = re.compile(
-    rf'alter\s+table\s+(?:only\s+)?{Q}{SCHEMA}{Q}{NAME}{Q}\s+enable\s+row\s+level\s+security', re.I)
+    rf'alter\s+table\s+(?:only\s+)?{QUAL}\s+enable\s+row\s+level\s+security', re.I)
 RE_VIEW = re.compile(
-    rf'create\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+(?:if\s+not\s+exists\s+)?'
-    rf'{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
-RE_TRG_ON = re.compile(rf'\son\s+{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
-RE_TRG_EXEC = re.compile(
-    rf'execute\s+(?:procedure|function)\s+{Q}{SCHEMA}{Q}{NAME}{Q}', re.I)
+    rf'create\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+'
+    rf'(?:if\s+not\s+exists\s+)?{QUAL}', re.I)
+RE_TRG_ON = re.compile(rf'\son\s+{QUAL}', re.I)
+RE_TRG_EXEC = re.compile(rf'execute\s+(?:procedure|function)\s+{QUAL}', re.I)
 
-# Column capture inside a CREATE TABLE ( ... ) body
-RE_COL = re.compile(r'^\s*"?([a-z_][a-z0-9_]*)"?\s+([a-z][a-z0-9_ \[\]]*)', re.I | re.M)
+# Column capture inside a CREATE TABLE ( ... ) body. pg_dump quotes the type as
+# well (`"id" "uuid" DEFAULT ...`), so both sides must tolerate quoting.
+RE_COL = re.compile(
+    r'^\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s+"?([A-Za-z][A-Za-z0-9_ \[\]]*)"?', re.M)
 SQL_KEYWORDS = {
     'constraint', 'primary', 'unique', 'foreign', 'check', 'exclude', 'like',
     'create', 'alter', 'drop', 'if', 'not', 'references', 'on', 'default',
 }
+
+
+def _unq(s: str) -> str:
+    """Strip surrounding double quotes from an identifier."""
+    s = (s or "").strip()
+    return s[1:-1] if len(s) > 1 and s[0] == '"' and s[-1] == '"' else s
+
+
+def _name(m: re.Match, group: int = 1) -> str:
+    return _unq(m.group(group)).lower()
 
 
 def _sid(prefix: str, name: str) -> str:
@@ -131,7 +146,9 @@ def run() -> dict:
         add(mig_id, f.name, "migration", src, "L1")
 
         for m in RE_CREATE_TABLE.finditer(sql):
-            t = m.group(1).lower()
+            t = _name(m)
+            if t in SCHEMAS:
+                continue
             tid = _sid("tbl", t)
             loc = _line_of(sql, m.start())
             node = add(tid, t, "table", src, loc, columns=[], created_by=src)
@@ -139,7 +156,7 @@ def run() -> dict:
             body = _table_body(sql, m.end())
             cols = []
             for cm in RE_COL.finditer(body):
-                cname, ctype = cm.group(1).lower(), cm.group(2).strip().lower()
+                cname, ctype = _unq(cm.group(1)).lower(), _unq(cm.group(2).strip()).lower()
                 if cname in SQL_KEYWORDS:
                     continue
                 cols.append(f"{cname} {ctype}")
@@ -150,43 +167,54 @@ def run() -> dict:
             edge(mig_id, tid, "creates", "EXTRACTED", 1.0, src, loc)
             # foreign keys declared inside this table body
             for rm in RE_REFERENCES.finditer(body):
-                target = _sid("tbl", rm.group(1).lower())
+                rt = _name(rm)
+                if rt in SCHEMAS:
+                    continue
+                target = _sid("tbl", rt)
                 if target != tid:
                     edge(tid, target, "references", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_VIEW.finditer(sql):
-            vid = _sid("view", m.group(1).lower())
+            v = _name(m)
+            if v in SCHEMAS:
+                continue
+            vid = _sid("view", v)
             loc = _line_of(sql, m.start())
-            add(vid, m.group(1).lower(), "view", src, loc)
+            add(vid, v, "view", src, loc)
             edge(mig_id, vid, "creates", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_ENUM.finditer(sql):
-            eid = _sid("enum", m.group(1).lower())
+            e_ = _name(m)
+            eid = _sid("enum", e_)
             loc = _line_of(sql, m.start())
-            add(eid, m.group(1).lower(), "enum", src, loc)
+            add(eid, e_, "enum", src, loc)
             edge(mig_id, eid, "creates", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_FUNCTION.finditer(sql):
-            fid = _sid("fn", m.group(1).lower())
+            fn = _name(m)
+            fid = _sid("fn", fn)
             loc = _line_of(sql, m.start())
-            add(fid, f"{m.group(1).lower()}()", "sql_function", src, loc)
+            add(fid, f"{fn}()", "sql_function", src, loc)
             edge(mig_id, fid, "defines", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_TRIGGER.finditer(sql):
-            trg, tail = m.group(1).lower(), m.group(2) or ""
+            trg, tail = _name(m), m.group(2) or ""
             gid = _sid("trg", trg)
             loc = _line_of(sql, m.start())
             add(gid, trg, "trigger", src, loc)
             edge(mig_id, gid, "defines", "EXTRACTED", 1.0, src, loc)
             on = RE_TRG_ON.search(tail)
-            if on:
-                edge(gid, _sid("tbl", on.group(1).lower()), "fires_on", "EXTRACTED", 1.0, src, loc)
+            if on and _name(on) not in SCHEMAS:
+                edge(gid, _sid("tbl", _name(on)), "fires_on", "EXTRACTED", 1.0, src, loc)
             ex = RE_TRG_EXEC.search(tail)
             if ex:
-                edge(gid, _sid("fn", ex.group(1).lower()), "executes", "EXTRACTED", 1.0, src, loc)
+                edge(gid, _sid("fn", _name(ex)), "executes", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_POLICY.finditer(sql):
-            pname, tbl = m.group(1).strip(), m.group(2).lower()
+            pname = (m.group(1) or m.group(2) or m.group(3) or "").strip()
+            tbl = _unq(m.group(4)).lower()
+            if tbl in SCHEMAS:
+                continue
             h = hashlib.sha256(pname.encode()).hexdigest()[:8]
             pid = _sid("pol", f"{tbl}_{h}")
             loc = _line_of(sql, m.start())
@@ -195,19 +223,25 @@ def run() -> dict:
             edge(mig_id, pid, "defines", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_INDEX.finditer(sql):
-            iid = _sid("idx", m.group(1).lower())
+            idx_name, on_tbl = _name(m, 1), _unq(m.group(2)).lower()
+            if on_tbl in SCHEMAS:
+                continue
+            iid = _sid("idx", idx_name)
             loc = _line_of(sql, m.start())
-            add(iid, m.group(1).lower(), "index", src, loc)
-            edge(iid, _sid("tbl", m.group(2).lower()), "indexes", "EXTRACTED", 1.0, src, loc)
+            add(iid, idx_name, "index", src, loc)
+            edge(iid, _sid("tbl", on_tbl), "indexes", "EXTRACTED", 1.0, src, loc)
             edge(mig_id, iid, "defines", "EXTRACTED", 1.0, src, loc)
 
         for m in RE_RLS.finditer(sql):
-            tid = _sid("tbl", m.group(1).lower())
+            tid = _sid("tbl", _name(m))
             if tid in nodes:
                 nodes[tid]["rls_enabled"] = True
 
         for m in RE_ALTER_TABLE.finditer(sql):
-            tid = _sid("tbl", m.group(1).lower())
+            at = _name(m)
+            if at in SCHEMAS:
+                continue
+            tid = _sid("tbl", at)
             loc = _line_of(sql, m.start())
             # Without this, a migration that only ALTERs a table produces no
             # edges at all and lands as an isolated node - which was most of the
@@ -215,7 +249,10 @@ def run() -> dict:
             edge(mig_id, tid, "alters", "EXTRACTED", 1.0, src, loc)
             seg = sql[m.end():m.end() + 600]
             for rm in RE_REFERENCES.finditer(seg):
-                target = _sid("tbl", rm.group(1).lower())
+                rt = _name(rm)
+                if rt in SCHEMAS:
+                    continue
+                target = _sid("tbl", rt)
                 if target != tid:
                     edge(tid, target, "references", "EXTRACTED", 1.0, src, loc)
 

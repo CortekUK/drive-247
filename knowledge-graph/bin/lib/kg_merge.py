@@ -14,6 +14,7 @@ Writes merged/graph.json, merged/graph.html, merged/GRAPH_REPORT.md
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,52 @@ GLOBAL_UNITS = {"external", "seams"}
 
 def _is_global(nid: str, unit: str | None) -> bool:
     return nid.startswith(GLOBAL_PREFIXES) or (unit in GLOBAL_UNITS)
+
+
+# "rentals", "rentals table", "table rentals", "db table rentals", "rentals_table"
+_TABLE_ALIAS = re.compile(
+    r'^(?:db[\s_]+)?(?:table[\s_]+)?([a-z][a-z0-9_]*?)(?:[\s_]+table)?$')
+
+
+def canonicalise_tables(nodes: dict, edges: list) -> int:
+    """Fold semantic "the rentals table" concept nodes onto the real table node.
+
+    Each unit's agents independently invented a private concept node for the
+    same physical table (portal__rentals, portal__rentals_table, booking__rentals
+    ...), none of them connected to database__tbl_rentals. Left alone, "what
+    touches the rentals table" answers from four disconnected fragments.
+
+    Conservative on purpose: only folds when the label is *nothing but* the
+    table name (with an optional "table" qualifier), so "Rentals page" and
+    "Rental pricing rules" are untouched.
+    """
+    real: dict[str, str] = {}
+    for n in nodes.values():
+        if n.get("unit") == "database" and n.get("kind") in ("table", "view"):
+            real[str(n.get("label", "")).lower()] = n["id"]
+    if not real:
+        return 0
+
+    alias: dict[str, str] = {}
+    for nid, n in list(nodes.items()):
+        if n.get("unit") == "database" or n.get("kind") or n.get("source_location"):
+            continue  # structural node, or already the real thing
+        lab = re.sub(r'[^a-z0-9_\s]', '', str(n.get("label", "")).lower()).strip()
+        m = _TABLE_ALIAS.match(lab)
+        if not m:
+            continue
+        tgt = real.get(m.group(1))
+        if tgt and tgt != nid:
+            alias[nid] = tgt
+
+    if not alias:
+        return 0
+    for e in edges:
+        e["source"] = alias.get(e["source"], e["source"])
+        e["target"] = alias.get(e["target"], e["target"])
+    for nid in alias:
+        nodes.pop(nid, None)
+    return len(alias)
 
 
 def collect() -> dict:
@@ -80,6 +127,9 @@ def run() -> None:
     print("Merging units:")
     acc = collect()
     nodes, edges = acc["nodes"], acc["edges"]
+
+    folded = canonicalise_tables(nodes, edges)
+    print(f"  folded {folded} duplicate table-concept nodes onto the real schema")
 
     print("Deriving cross-unit seams:")
     extra_nodes, seam_edges = kg_link.build_links(list(nodes.values()))

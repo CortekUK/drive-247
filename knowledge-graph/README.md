@@ -75,15 +75,23 @@ Two layers, and the distinction matters for keeping it current:
 The structural layer can never drift from the code. The semantic layer can, so
 `kg status` always reports exactly how far behind it is instead of pretending.
 
-## Four things this adds on top of stock graphify
+## Five things this adds on top of stock graphify
 
 Each of these exists because a measured failure on *this* repo required it.
 
 **1. SQL is a first-class unit.** graphify's classifier has no `.sql` extension,
 so all 335 migrations — the authoritative data model — were invisible. `kg_sql.py`
-extracts tables, columns, foreign keys, indexes, triggers, RLS policies and SQL
-functions. Columns are stored as an attribute on the table node rather than as
-~1600 leaf nodes that would dominate clustering.
+extracts **141 tables, 532 RLS policies, 434 indexes, 165 SQL functions, 101
+triggers**, plus views, enums and foreign keys. Columns are stored as an attribute
+on the table node rather than as ~1600 leaf nodes that would dominate clustering.
+
+Identifier quoting is the subtle part. `supabase db pull` writes pg_dump style —
+`CREATE TABLE "public"."agreement_templates"` — and a pattern that treats the
+quote as one optional character captures the *schema* as the table name. That
+silently collapsed all 55 tables of the baseline `remote_schema.sql` into a
+single node labelled `public` with 387 edges. The extractor now parses
+quoted-or-bare, schema-qualified-or-not identifiers, which is where +55 of those
+tables came from.
 
 **2. Node ids are namespaced before merging.** `graphify merge-graphs` composes
 with `networkx.compose_all`, which merges by node id and does not namespace.
@@ -115,6 +123,15 @@ directory — which is what keeps `Array.from(...)` out of the table graph.
 
 Because these are grep-level facts rather than model output, they cost nothing
 and re-run on every update, so the seam layer cannot drift.
+
+**5. Table concepts are folded onto the real schema.** Each unit's agents
+independently invented a private concept node for the same physical table
+(`portal__rentals`, `portal__rentals_table`, `booking__rentals`…), none of them
+connected to `database__tbl_rentals` — so "what touches the rentals table"
+answered from four disconnected fragments. `canonicalise_tables()` folds them
+onto the real node, but only when the label is *nothing but* the table name with
+an optional "table" qualifier, so "Rentals page" and "Rental pricing rules" are
+left alone.
 
 ## Keeping it current
 
