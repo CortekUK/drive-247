@@ -188,6 +188,76 @@ describe('resolveChainBound', () => {
     });
   });
 
+  describe('`live` is the UN-FLOORED bound — the alerting caller depends on it', () => {
+    /**
+     * resolveChainBound serves two callers with opposite needs.
+     *
+     * The RE-AUTHORISING caller must not kill a hold placed late onto an
+     * already-ended rental, so the seed floors itself at now + grace and reports
+     * expired:false. The ALERTING caller (reconcile-deposit-holds' chain-ended
+     * bell) asks the opposite question — has this rental finished long enough ago
+     * that nothing will renew the authorisation again? — and gating that on
+     * `expired` made the bell unable to fire at all, because every hold in
+     * production carries a NULL cache and therefore always takes the floored
+     * seed path.
+     *
+     * `live` is what the bell reads instead. These assertions are what make that
+     * safe.
+     */
+    it('is populated even when the stored cache is NULL', () => {
+      const b = resolveChainBound(
+        { end_date: dayOffset(-30), deposit_hold_chain_expires_at: null },
+        NOW,
+      );
+      expect(b.live).not.toBeNull();
+    });
+
+    it('CAN be in the past, unlike the floored effective bound', () => {
+      const b = resolveChainBound(
+        { end_date: dayOffset(-30), deposit_hold_chain_expires_at: null },
+        NOW,
+      );
+      expect(ms(b.live)).toBeLessThan(NOW.getTime()); // the bell fires
+      expect(ms(b.effective)).toBeGreaterThan(NOW.getTime()); // the chain survives
+      expect(b.expired).toBe(false);
+    });
+
+    it('is NOT in the past while the rental is still running', () => {
+      // The bell must not ring on a live rental.
+      const b = resolveChainBound(
+        { end_date: dayOffset(10), deposit_hold_chain_expires_at: null },
+        NOW,
+      );
+      expect(ms(b.live)).toBeGreaterThan(NOW.getTime());
+    });
+
+    it('is null for an open-ended rental, so the bell cannot ring on one', () => {
+      const b = resolveChainBound(
+        { end_date: null, deposit_hold_chain_expires_at: null },
+        NOW,
+      );
+      expect(b.live).toBeNull();
+    });
+
+    it('crosses from future to past exactly at end_date + grace', () => {
+      const endDate = dayOffset(0);
+      const before = resolveChainBound(
+        { end_date: endDate, deposit_hold_chain_expires_at: null },
+        new Date(new Date(`${endDate}T23:59:59.999Z`).getTime() + GRACE_DAYS * 86_400_000 - 1000),
+      );
+      const after = resolveChainBound(
+        { end_date: endDate, deposit_hold_chain_expires_at: null },
+        new Date(new Date(`${endDate}T23:59:59.999Z`).getTime() + GRACE_DAYS * 86_400_000 + 1000),
+      );
+      expect(ms(before.live)).toBeGreaterThan(
+        new Date(`${endDate}T23:59:59.999Z`).getTime() + GRACE_DAYS * 86_400_000 - 1000 - 1,
+      );
+      expect(ms(after.live)).toBeLessThan(
+        new Date(`${endDate}T23:59:59.999Z`).getTime() + GRACE_DAYS * 86_400_000 + 1000,
+      );
+    });
+  });
+
   describe('an unselected end_date column is not the same fact as a NULL one', () => {
     it('falls back to the stored cache alone when end_date was not selected', () => {
       const stored = new Date(NOW.getTime() + 5 * 86_400_000).toISOString();

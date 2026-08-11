@@ -974,6 +974,16 @@ async function reconcileRental(
       patch.deposit_hold_last_error = null;
       patch.deposit_hold_last_error_code = null;
       patch.deposit_hold_next_retry_at = null;
+      // ...INCLUDING the counter. This was the one piece of failure state left
+      // standing, and leaving it made this recovery path a monotone accumulator:
+      // the only other writer of 0 is a successful refresh, so a
+      // fail -> recover -> fail loop climbed the ladder forever. computeRetryAt
+      // indexes the backoff by this count, so a row rescued at 3 waited the
+      // rung-3 delay for its next ordinary hiccup, and a row rescued at 7 was one
+      // transient blip (a Postgres wobble tagged db_write_failed counts) from
+      // MAX_HOLD_ATTEMPTS and the needs_review dead end. The authorisation is
+      // demonstrably live; the history that led here is spent.
+      patch.deposit_hold_failure_count = 0;
       changed = true;
     } else if (rental.deposit_hold_last_error_code === "resource_missing") {
       // A previous pass could not find this PaymentIntent (wrong anchor, or a
@@ -1026,14 +1036,32 @@ async function reconcileRental(
     // fail a reconcile pass that has already written the truth.
     {
       const bound = resolveChainBound(rental as Record<string, unknown>, new Date(nowIso));
-      if (bound.expired) {
+
+      // Ring on the LIVE bound, not on `bound.expired`.
+      //
+      // `expired` is the RE-AUTHORISING caller's question, and for a row whose
+      // cache is NULL the seed deliberately floors itself at now + grace and
+      // hard-codes expired:false — so that a hold placed late onto an
+      // already-ended rental is not killed at its first link. Correct there,
+      // fatal here: every deposit hold in production today carries a NULL cache,
+      // so gating the bell on `expired` made it unable to fire at all.
+      //
+      // `live` is the un-floored bound implied by the rental's own end_date,
+      // which is exactly the question this alert asks: has the rental finished
+      // long enough ago that nothing will renew this authorisation again?
+      const liveBoundMs = bound.live ? new Date(bound.live).getTime() : Number.NaN;
+      const chainIsOver = Number.isFinite(liveBoundMs)
+        ? liveBoundMs <= new Date(nowIso).getTime()
+        : bound.expired;
+
+      if (chainIsOver) {
         await notifyDepositHoldChainEnded({
           tenantId: rental.tenant_id,
           rentalId: rental.id,
           amount: rental.deposit_hold_amount != null ? Number(rental.deposit_hold_amount) : null,
           currency: piCurrency ?? rental.deposit_hold_currency,
           expiresAt: facts.captureBefore ?? rental.deposit_hold_expires_at,
-          chainEndedAt: bound.effective,
+          chainEndedAt: bound.live ?? bound.effective,
           source: "reconciler",
         });
       }

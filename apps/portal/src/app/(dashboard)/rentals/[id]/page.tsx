@@ -4582,6 +4582,34 @@ const RentalDetail = () => {
                               </button>
                             )}
 
+                            {/* 'needs_review' with NO PaymentIntent is a dead
+                                end: the engine NULLs the intent when it gives up
+                                (one unclassified Stripe error is enough — it does
+                                not take the 8-attempt ceiling), neither driver
+                                re-selects the row, and the reconciler has nothing
+                                to probe. Yet the alert this state raises tells the
+                                operator to "re-place the hold on a working card or
+                                release it" — actions this screen did not offer.
+                                Safe to place a new hold precisely BECAUSE the
+                                intent is null: nothing is authorised, so there is
+                                no double-hold to cause. When an intent DOES exist
+                                the ⋯ menu's reconcile remains the right route, so
+                                this button is gated on its absence. */}
+                            {depositHoldStatus === 'needs_review' &&
+                              !rental.deposit_hold_payment_intent_id &&
+                              canEdit('rentals') && (
+                                <button
+                                  className="text-xs font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                                  title="No authorisation exists on this rental — the last attempt gave up without one. Place a fresh hold."
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowAddHoldDialog(true);
+                                  }}
+                                >
+                                  Place new hold
+                                </button>
+                              )}
+
                             {/* Both of these states exist because something is
                                 unverified, so the reconcile is the way out of
                                 both. On 'needs_review' it is the ONLY way out,

@@ -174,6 +174,68 @@ Deno.serve(async (req) => {
     // a hold that was released and cleared) — report it as verified, not as an
     // error, so the caller can go straight to placing a hold.
     if (!rental.deposit_hold_payment_intent_id) {
+      // ── UNSTICK A STRANDED STATUS ────────────────────────────────────────
+      // A NULL PaymentIntent alongside a NON-terminal status is not "normal":
+      // it is the shape recordFailure leaves behind when it gives up. It NULLs
+      // the intent and writes 'needs_review' (ambiguous failure, or
+      // MAX_HOLD_ATTEMPTS exhausted) with next_retry_at NULL — and from there
+      // nothing moves the row again. Neither driver re-selects it
+      // (HOLD_HISTORY_PREDICATE admits only 'held' and two 'failed' shapes),
+      // the reconciler has no PaymentIntent to probe, and the portal gates its
+      // Add Hold button on expired / null / failed / requires_action — so
+      // 'needs_review' renders no way forward at all. The alert copy meanwhile
+      // tells the operator to "re-place the hold on a working card or release
+      // it": two actions the screen does not offer.
+      //
+      // It takes ONE unrecognised Stripe error to land here, not eight —
+      // classifyStripeFailure ends in a bare `return "ambiguous"`, and
+      // `account_invalid` (a real, observed failure) matches none of the code
+      // sets.
+      //
+      // Clearing the status is safe precisely BECAUSE the intent is NULL: there
+      // is no authorisation to contradict, no money to misreport, and nothing
+      // to cancel. It restores the row to the same state as a rental that never
+      // had a hold, which every placement path already handles. CAS'd on both
+      // the status and the NULL intent so a concurrent placement cannot be
+      // overwritten.
+      const STRANDED_WITHOUT_INTENT = ["needs_review", "requires_action", "failed", "refreshing", "processing"];
+      if (currentStatus && STRANDED_WITHOUT_INTENT.includes(currentStatus)) {
+        const { data: cleared } = await supabase
+          .from("rentals")
+          .update({
+            deposit_hold_status: null,
+            deposit_hold_status_changed_at: new Date().toISOString(),
+            deposit_hold_next_retry_at: null,
+            deposit_hold_failure_count: 0,
+            deposit_hold_last_error: null,
+            deposit_hold_last_error_code: null,
+          })
+          .eq("id", rental.id)
+          .eq("deposit_hold_status", currentStatus)
+          .is("deposit_hold_payment_intent_id", null)
+          .select("id");
+
+        if (cleared && cleared.length > 0) {
+          console.warn(
+            "[DEPOSIT-VERIFY] Cleared stranded status",
+            currentStatus,
+            "with no PaymentIntent on rental",
+            rental.id,
+            "— a new hold can now be placed."
+          );
+          return jsonResponse({
+            verified: true,
+            liveHold: false,
+            status: reportStatus(null),
+            changed: true,
+            expiresAt: null,
+            message:
+              `No authorisation exists on this rental — the previous attempt left it stuck as ` +
+              `"${currentStatus}". That has been cleared. You can place a new deposit hold.`,
+          });
+        }
+      }
+
       return jsonResponse({
         verified: true,
         liveHold: false,
@@ -562,7 +624,20 @@ Deno.serve(async (req) => {
           ...chainRestamp,
         };
         // Only stamp the status clock when the status itself moved.
-        if (currentStatus !== "held") patch.deposit_hold_status_changed_at = new Date().toISOString();
+        if (currentStatus !== "held") {
+          patch.deposit_hold_status_changed_at = new Date().toISOString();
+          // Recovering a row from a failure state must clear the failure state
+          // itself, counter included. The only other writer of 0 is a successful
+          // refresh, so leaving it made every rescue path an accumulator —
+          // computeRetryAt indexes the backoff ladder by this count, and a row
+          // repeatedly rescued here would eventually reach MAX_HOLD_ATTEMPTS on a
+          // single ordinary hiccup. Stripe has just confirmed the authorisation
+          // is live; the history that led here is spent.
+          patch.deposit_hold_failure_count = 0;
+          patch.deposit_hold_last_error = null;
+          patch.deposit_hold_last_error_code = null;
+          patch.deposit_hold_next_retry_at = null;
+        }
         // ONLY ever persist a deadline Stripe actually told us — and when we
         // do, label its provenance and record the window the network granted,
         // so nothing downstream has to guess whether the timestamp is real.

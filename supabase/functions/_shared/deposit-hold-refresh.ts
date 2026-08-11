@@ -838,7 +838,14 @@ async function findLiveDepositIntent(
       // deno-lint-ignore no-explicit-any
       const md = ((intent as any).metadata ?? {}) as Record<string, string>;
       if (md.rental_id !== rentalId) continue;
-      if (md.type !== "deposit_hold") continue;
+      // Rollovers count. capture-deposit-hold mints the remainder-hold left
+      // after a PARTIAL capture with type 'deposit_hold_rollover', so an exact
+      // match on 'deposit_hold' made every rollover invisible to the orphan
+      // sweep — the one mechanism whose entire job is finding authorisations
+      // the product has lost track of. A rollover holds the renter's money
+      // exactly like any other hold and is if anything MORE likely to be
+      // orphaned, since it is minted mid-capture when the row is contended.
+      if (md.type !== "deposit_hold" && md.type !== "deposit_hold_rollover") continue;
       return intent;
     }
   }

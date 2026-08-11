@@ -1,10 +1,9 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reconcile-deposit-holds/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts"
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-failure-classification.test.ts"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

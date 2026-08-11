@@ -859,6 +859,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-decline-classification.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/payg-rate.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-expiry-provenance.test.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-failure-classification.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-driver-predicate.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/inshur-transforms.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/add-hold-dialog.test.ts",
@@ -878,10 +879,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 870,
-    "total_words": 817109,
+    "total_files": 871,
+    "total_words": 818309,
     "counts": {
-      "code": 870
+      "code": 871
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1663,6 +1664,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-decline-classification.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/payg-rate.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-expiry-provenance.test.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-failure-classification.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-driver-predicate.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/inshur-transforms.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/add-hold-dialog.test.ts",

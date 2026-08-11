@@ -419,9 +419,42 @@ Deno.serve(async (req) => {
           rentalId,
           capturedPi: rental.deposit_hold_payment_intent_id,
           capturedInCents,
-          note: "capture is recorded in payments; reconcile-deposit-holds will settle the live hold",
+          // The rollover id MUST be in this payload. It is written nowhere else:
+          // the only persistence for it is `rentalUpdate`, which is the very
+          // write the CAS just rejected, and capture writes no ledger row. Left
+          // out, the id existed solely in memory and died with the request.
+          orphanedRolloverPi: newHoldPiId ?? null,
         }
       );
+
+      // Cancel the rollover we just minted, if any.
+      //
+      // It was authorised on the assumption that THIS row's hold was still the
+      // incumbent. It isn't — a newer authorization owns the row — so the
+      // rollover secures nothing and is not reachable from any record: the
+      // rental points elsewhere, no ledger row names it, and the orphan sweep
+      // cannot see it either (findLiveDepositIntent matches
+      // metadata.type === 'deposit_hold', while rollovers are minted as
+      // 'deposit_hold_rollover'). Without this it would sit on the renter's card
+      // holding real money until the network lapsed it days later, invisible to
+      // every screen and every alert.
+      //
+      // Cancelling is the conservative move: it touches ONLY the intent this
+      // request created moments ago and leaves the live replacement alone.
+      if (newHoldPiId) {
+        try {
+          await stripe.paymentIntents.cancel(newHoldPiId, stripeOptions);
+          console.warn("[DEPOSIT-CAPTURE] Cancelled orphaned rollover", newHoldPiId);
+        } catch (cancelErr) {
+          // Non-fatal: the capture succeeded and must still be reported as such.
+          // The id is already in the error log above for manual cleanup.
+          console.error(
+            "[DEPOSIT-CAPTURE] Could not cancel orphaned rollover",
+            newHoldPiId,
+            cancelErr
+          );
+        }
+      }
     }
 
     return jsonResponse({
