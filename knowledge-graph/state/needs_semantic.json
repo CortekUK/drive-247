@@ -1,6 +1,7 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-fixture-setup/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reconcile-deposit-holds/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts"
   ],
   "specs": [
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
