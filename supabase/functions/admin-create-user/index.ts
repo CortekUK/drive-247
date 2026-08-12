@@ -165,9 +165,85 @@ Deno.serve(async (req) => {
 
     console.log('Creating new user with tenant_id:', newUserTenantId, 'from creator tenant:', currentUserData.tenant_id, 'requested tenant:', tenant_id);
 
-    // Check if user already exists in auth by trying to list users with that email
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const existingAuthUser = existingUsers?.users?.find(u => u.email === email);
+    // A super admin's users carry a NULL tenant_id, and `tenant_id=eq.null` matches
+    // nothing in PostgREST — it has to be `is.null`. Filtering with eq() silently
+    // returned zero rows, so the duplicate and already-linked checks below never
+    // fired for super-admin-created users.
+    const scopeToTenant = (query: any) =>
+      newUserTenantId === null ? query.is('tenant_id', null) : query.eq('tenant_id', newUserTenantId);
+
+    const wantedEmail = email.trim().toLowerCase();
+
+    // Find out whether this email already has a login.
+    //
+    // This lookup used to page through auth.admin.listUsers(), which reads EVERY
+    // auth user on the project. A single malformed row anywhere in auth.users
+    // (e.g. a NULL in one of GoTrue's token columns, which it scans into a
+    // non-nullable Go string) makes that endpoint 500 — and because a failure
+    // here was treated as fatal, one bad row blocked creating any user at all.
+    //
+    // The RPC below reads the one row we actually care about, so it is unaffected
+    // by unrelated rows and does not scale with project size. listUsers() stays as
+    // a fallback, and if BOTH lookups fail we no longer give up: we let GoTrue
+    // itself be the authority on duplicates when we attempt the create.
+    let existingAuthUser: { id: string } | undefined;
+    let lookupResolved = false;
+
+    const { data: rpcRows, error: rpcError } = await supabaseAdmin
+      .rpc('admin_find_auth_user_by_email', { p_email: wantedEmail });
+
+    if (!rpcError) {
+      lookupResolved = true;
+      const match = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+      if (match?.id) existingAuthUser = { id: match.id };
+    } else {
+      console.error('admin_find_auth_user_by_email failed, falling back to listUsers:', rpcError);
+
+      for (let page = 1; page <= 20; page++) {
+        const { data: pageData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+          page,
+          perPage: 200,
+        });
+        if (listErr) {
+          console.error('Fallback listUsers also failed:', listErr);
+          break; // lookupResolved stays false — fall through to the create attempt
+        }
+        const users = pageData?.users ?? [];
+        const match = users.find((u: any) => (u.email ?? '').toLowerCase() === wantedEmail);
+        if (match) {
+          existingAuthUser = { id: match.id };
+          lookupResolved = true;
+          break;
+        }
+        if (users.length < 200) {
+          lookupResolved = true; // reached the last page without a match
+          break;
+        }
+      }
+    }
+
+    // Refuse a duplicate profile in this tenant up front, case-insensitively.
+    // Without this an admin re-adding the same person silently created a second
+    // app_users row differing only by capitalisation, and the credentials modal
+    // handed out a password for whichever account happened to be created.
+    //
+    // Compared in JS rather than with ilike(): `_` and `%` are legal in an email
+    // address but are wildcards to ILIKE, so `jo_n@x.com` would have collided
+    // with `john@x.com` and reported a duplicate that does not exist.
+    const { data: tenantProfiles } = await scopeToTenant(
+      supabaseAdmin.from('app_users').select('id, email')
+    );
+
+    const duplicateProfile = (tenantProfiles ?? []).find(
+      (p: any) => (p.email ?? '').trim().toLowerCase() === wantedEmail
+    );
+
+    if (duplicateProfile) {
+      return new Response(
+        JSON.stringify({ error: `A user with the email ${wantedEmail} already exists on this account.` }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let authUserId: string;
     let isExistingUser = false;
@@ -179,12 +255,12 @@ Deno.serve(async (req) => {
       isExistingUser = true;
 
       // Check if they already have an app_users record for this tenant
-      const { data: existingAppUser } = await supabaseAdmin
-        .from('app_users')
-        .select('id, tenant_id')
-        .eq('auth_user_id', authUserId)
-        .eq('tenant_id', newUserTenantId)
-        .single();
+      const { data: existingAppUser } = await scopeToTenant(
+        supabaseAdmin
+          .from('app_users')
+          .select('id, tenant_id')
+          .eq('auth_user_id', authUserId)
+      ).maybeSingle();
 
       if (existingAppUser) {
         // User already linked to this tenant
@@ -194,7 +270,7 @@ Deno.serve(async (req) => {
             success: true,
             user: {
               id: existingAppUser.id,
-              email,
+              email: wantedEmail,
               name,
               role,
               auth_user_id: authUserId
@@ -205,12 +281,32 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Check if user has an app_users record for a DIFFERENT tenant
-      const { data: otherTenantAppUser } = await supabaseAdmin
+      // Check if user has an app_users record for a DIFFERENT tenant.
+      // app_users has UNIQUE (auth_user_id), so a login maps to at most one
+      // profile — moving it is the only way to attach it to another tenant.
+      const { data: otherProfiles } = await supabaseAdmin
         .from('app_users')
-        .select('id, tenant_id')
+        .select('id, tenant_id, is_super_admin')
         .eq('auth_user_id', authUserId)
-        .single();
+        .limit(1);
+
+      const otherTenantAppUser = (otherProfiles ?? [])[0];
+
+      // Never move a platform account into a tenant. Because attaching a profile
+      // to a tenant also clears its super-admin standing, adding a super admin's
+      // email here would have stripped their platform-wide access — anyone who
+      // could reach this form could aim it at the owner's account. The
+      // check_tenant_id constraint refuses the write, but that surfaced as an
+      // opaque "Failed to update user tenant" 500, so say what actually happened.
+      if (otherTenantAppUser?.is_super_admin) {
+        console.error('Refusing to move a super admin into a tenant:', otherTenantAppUser.id);
+        return new Response(
+          JSON.stringify({
+            error: `${wantedEmail} belongs to a Drive247 platform account and cannot be added as a user here.`
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       if (otherTenantAppUser && otherTenantAppUser.tenant_id !== newUserTenantId) {
         // User exists but belongs to another tenant - update their tenant_id
@@ -240,7 +336,7 @@ Deno.serve(async (req) => {
             success: true,
             user: {
               id: updatedAppUser.id,
-              email,
+              email: wantedEmail,
               name,
               role,
               auth_user_id: authUserId
@@ -253,7 +349,7 @@ Deno.serve(async (req) => {
     } else {
       // Create new user in Supabase Auth
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
+        email: wantedEmail,
         password: temporaryPassword,
         email_confirm: true,
         user_metadata: {
@@ -262,11 +358,25 @@ Deno.serve(async (req) => {
         }
       });
 
-      if (createError || !newUser.user) {
-        console.error('Failed to create user in auth:', createError);
+      if (createError || !newUser?.user) {
+        console.error('Failed to create user in auth:', createError, 'lookupResolved:', lookupResolved);
+
+        // Reached when the lookup above could not run and this email in fact
+        // already has a login. Say so plainly instead of surfacing GoTrue's
+        // wording, which reads like the form itself is broken.
+        const message = createError?.message ?? 'Failed to create user';
+        const alreadyRegistered = /already/i.test(message) && /regist|exist/i.test(message);
+
         return new Response(
-          JSON.stringify({ error: createError?.message || 'Failed to create user' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            error: alreadyRegistered
+              ? `${wantedEmail} already has a login. Ask them to sign in with it, or reset their password instead.`
+              : message
+          }),
+          {
+            status: alreadyRegistered ? 409 : 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
         );
       }
 
@@ -278,7 +388,9 @@ Deno.serve(async (req) => {
       .from('app_users')
       .insert({
         auth_user_id: authUserId,
-        email,
+        // Store the normalised address. GoTrue lowercases what it holds, so a
+        // mixed-case value here only ever created a mismatch between the two.
+        email: wantedEmail,
         name,
         role,
         is_active: true,
@@ -335,20 +447,20 @@ Deno.serve(async (req) => {
         target_user_id: appUser.id,
         tenant_id: newUserTenantId,
         details: {
-          email,
+          email: wantedEmail,
           name,
           role
         }
       });
 
-    console.log('User created successfully:', { id: authUserId, email, role, isExistingUser });
+    console.log('User created successfully:', { id: authUserId, email: wantedEmail, role, isExistingUser });
 
     return new Response(
       JSON.stringify({
         success: true,
         user: {
           id: appUser.id,
-          email,
+          email: wantedEmail,
           name,
           role,
           auth_user_id: authUserId
