@@ -180,7 +180,6 @@ export async function loadFleetQuote(
     bufferMinutes,
     timezone,
     today: formatInTimeZone(new Date(), timezone, "yyyy-MM-dd"),
-    nowMs: Date.now(),
     monthlyTierDays: Math.max(7, monthlyTierDays),
     securityDepositEnabled: settings.security_deposit_enabled !== false,
     depositMode: settings.deposit_mode === "per_vehicle" ? "per_vehicle" : "global",

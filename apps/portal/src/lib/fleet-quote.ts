@@ -72,7 +72,6 @@ export interface FleetQuoteConfig {
   dailyPrices: Array<VehicleDailyPrice & { vehicle_id: string }>;
   today?: string;
   timezone?: string | null;
-  nowMs?: number;
   securityDepositEnabled?: boolean | null;
   depositMode?: string | null;
   globalSecurityDeposit?: number | string | null;
@@ -178,16 +177,6 @@ function localDateTimeMs(date: string, time: string, timezone?: string | null): 
   const [year, month, day] = date.split("-").map(Number);
   const [hour, minute] = time.slice(0, 5).split(":").map(Number);
   return new Date(year, month - 1, day, hour, minute, 0, 0).getTime();
-}
-
-export function quoteStartsBeforeNow(
-  startDate: string,
-  pickupTime: string,
-  timezone?: string | null,
-  nowMs: number = Date.now(),
-): boolean {
-  if (!isValidLocalDate(startDate) || !TIME_RE.test(pickupTime)) return true;
-  return localDateTimeMs(startDate, pickupTime, timezone) < nowMs;
 }
 
 function startOfLocalDayMs(date: string): number {
@@ -331,12 +320,10 @@ export function buildFleetQuote(
     config.timezone,
   );
   if (rangeError) throw new Error(rangeError);
-  if (
-    typeof config.nowMs === "number" &&
-    Number.isFinite(config.nowMs) &&
-    quoteStartsBeforeNow(config.startDate, config.pickupTime, config.timezone, config.nowMs)
-  ) {
-    throw new Error("Pickup must be in the future.");
+  // Quotes may start at any time today. This is an estimate workflow, not a
+  // booking checkout, so an earlier clock time today must not hide the fleet.
+  if (config.today && config.startDate < config.today) {
+    throw new Error("Pickup date cannot be in the past.");
   }
 
   const rentalDays = rentalDaysBetween(config.startDate, config.endDate);

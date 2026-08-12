@@ -7,7 +7,6 @@ import {
   formatQuotePlainText,
   isValidQuoteEmail,
   isValidQuoteReference,
-  quoteStartsBeforeNow,
   quoteLinesChanged,
   rentalBlocksQuoteWindow,
   safeQuoteFilename,
@@ -75,13 +74,6 @@ describe("fleet quote date validation", () => {
     expect(validateQuoteRange("2027-02-29", "2027-03-01", "09:00", "09:00")).toMatch(/valid/i);
     expect(shiftLocalDate("2026-12-31", 1)).toBe("2027-01-01");
     expect(shiftLocalDate("2028-03-01", -1)).toBe("2028-02-29");
-  });
-
-  it("compares pickup against the tenant timezone, including same-day past times", () => {
-    const beforePickup = Date.parse("2026-08-20T12:59:00.000Z");
-    const afterPickup = Date.parse("2026-08-20T13:01:00.000Z");
-    expect(quoteStartsBeforeNow("2026-08-20", "09:00", "America/New_York", beforePickup)).toBe(false);
-    expect(quoteStartsBeforeNow("2026-08-20", "09:00", "America/New_York", afterPickup)).toBe(true);
   });
 
   it("rejects a nonexistent wall-clock time during the tenant's DST spring gap", () => {
@@ -329,14 +321,22 @@ describe("buildFleetQuote", () => {
     expect(noDaily.available[0].total).toBe(240);
   });
 
-  it("rejects a pickup timestamp that is already past when now is supplied", () => {
-    expect(() => buildFleetQuote([vehicle()], [], [], {
+  it("allows an earlier time today but rejects a pickup date before today", () => {
+    const todayResult = buildFleetQuote([vehicle()], [], [], {
       ...config,
       startDate: "2026-08-12",
       endDate: "2026-08-13",
-      pickupTime: "09:00",
-      nowMs: Date.parse("2026-08-12T09:01:00.000Z"),
-    })).toThrow(/future/i);
+      pickupTime: "00:01",
+      today: "2026-08-12",
+    });
+    expect(todayResult.available).toHaveLength(1);
+
+    expect(() => buildFleetQuote([vehicle()], [], [], {
+      ...config,
+      startDate: "2026-08-11",
+      endDate: "2026-08-13",
+      today: "2026-08-12",
+    })).toThrow(/past/i);
   });
 
   it("applies manual daily prices and marks the quote as dynamic", () => {
