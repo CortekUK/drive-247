@@ -8,15 +8,15 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/next.config.js": {
-    "sha": "a3342c798dda90863397f39a109f1fa45c8cd510254b83692c843ed7cd7d7a78",
+    "sha": "7f46d2995ca76944ea28ab2833d056957db2c2ec7c4fcd9cd5b162608ed0d06f",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/tailwind.config.ts": {
     "sha": "6d36c0f4ef56ba94b47cefc2d49ca1a3ee15fe0596355e30b9a53288ba408479",
     "unit": "portal"
   },
-  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/middleware.ts": {
-    "sha": "16a47d1992b6df97e55b806c62a9969baed44008a7bee6f05d65db53b297cc69",
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/proxy.ts": {
+    "sha": "13ad9dcbc64bedd5bfba04b6edafb7d072c317d9725259afe64e5c3b7b6ed950",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/types/chat.ts": {
@@ -383,6 +383,10 @@
     "sha": "e7a3581ee673db4b1dc334dfcc21c83ebde060b5852bb3004054dbb07b6d6f5f",
     "unit": "portal"
   },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/quotes/page.tsx": {
+    "sha": "0adf9f6c554cd1fdca4aa0108f8717d05580d87d1bcdebcc630b85c74c3f62a0",
+    "unit": "portal"
+  },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/owner-payouts/page.tsx": {
     "sha": "a8e9d8c9ca89fec3535bf2c9c1edecb3930e4cb673a4d0329407d772629872e5",
     "unit": "portal"
@@ -444,7 +448,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/calculate-rental-price.ts": {
-    "sha": "87c337ff22713ca76f4b71884c7b5ee655258748eb454d53792561a8e37f5e3b",
+    "sha": "10f41fde70793bc678616e7948c44768112e934c844b2d1ee2208c2d8bdda2c2",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/template-variables.ts": {
@@ -489,6 +493,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/usage-categories.ts": {
     "sha": "279b178ecb6a064478973c4a6e413eedd9824f1ab0bbd5586c61e55cd3898559",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/fleet-quote.ts": {
+    "sha": "853f31b12b80365c71b1694459981be303ca300bdf7d06bde85fd55c425c13d1",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/payg-rate.ts": {
@@ -584,7 +592,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/permissions.ts": {
-    "sha": "1e3887c73560be01faaed3b5b46c264b7ee8ef9af86e45b43970549eb02f6bf4",
+    "sha": "6465e1e1fd96ec32b8ca530dc4db6ab315286074bc0575a7e9c7195e8cab26f5",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/bonzah-compliance.ts": {
@@ -1312,7 +1320,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/app-sidebar.tsx": {
-    "sha": "5d6caa25fe25f5669a44514440f9cd5b883cd03dc3dfde6f46ac5c8ee0790726",
+    "sha": "c6bfdf46155c19d9f96e74b38ae097612a94585d881df8b696b470d457cd3811",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/theme-toggle.tsx": {
@@ -3119,6 +3127,10 @@
     "sha": "3e075b4060f9c7d4d77901a44c665e9731902e1b9bc31d6a0a782c99b5546475",
     "unit": "portal"
   },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-fleet-quote.ts": {
+    "sha": "44098c5099a6218fc1ae204ede0eb9f70b97087f2d26a893c86ca148e268001e",
+    "unit": "portal"
+  },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-data-cleanup.ts": {
     "sha": "6661de22de421c9c8ace741439fefe52ae081dcf88f50474d291b57f711cb4ef",
     "unit": "portal"
@@ -3385,6 +3397,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-expiry.test.ts": {
     "sha": "a361971ec91217df667f5439d673a619be8b8ae983e26a84100c12897f066afa",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/fleet-quote.test.ts": {
+    "sha": "42f93474dfc2f8a237d24827cf75a7cc95604f190efb6846293da631a125b3ae",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-idempotency.test.ts": {
@@ -3732,7 +3748,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/calculate-rental-price.ts": {
-    "sha": "87c337ff22713ca76f4b71884c7b5ee655258748eb454d53792561a8e37f5e3b",
+    "sha": "10f41fde70793bc678616e7948c44768112e934c844b2d1ee2208c2d8bdda2c2",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/sanitize.ts": {
