@@ -12,13 +12,64 @@ import {
   getConnectAccountId,
   getChargePlatformAccount,
   getStripeClientForAccount,
+  getStripeClientForRecord,
   getStripeOptions,
   validateStripeCustomerId,
   DEPOSIT_HOLD_CARD_VARIANTS,
   isCardFeatureIneligibleError,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
+import {
+  resolveDepositAmount,
+  DEPOSIT_AMOUNT_TENANT_COLUMNS,
+} from '../_shared/deposit-amount.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
+import { authorizeDepositHoldRequest } from '../_shared/deposit-hold-auth.ts'
+
+// Stripe PaymentIntent status -> the deposit_hold_status that is conclusively
+// true when we see it. Only these three mean the authorisation is DEAD and the
+// row may be re-collected; requires_capture means it is alive, and everything
+// else (requires_action, requires_confirmation, processing) is still in motion
+// and must be treated as alive so we never authorise the same card twice.
+//
+// Duplicated in place-deposit-hold — _shared/stripe-client.ts is owned by the
+// deposit-hold refactor and this pair of guards must ship without touching it.
+const DEAD_PI_STATUS_TO_HOLD_STATUS: Record<string, string> = {
+  canceled: 'expired',
+  succeeded: 'captured',
+  requires_payment_method: 'failed',
+}
+
+/**
+ * Is the hold recorded on this rental STILL alive at Stripe?
+ *
+ * rentals.deposit_hold_status is written when a hold is placed and then never
+ * revisited: card authorisations expire on their own (~5-7 days by default) and
+ * Stripe cancels the PaymentIntent, but every webhook looks PaymentIntents up
+ * by payments.stripe_payment_intent_id, never by
+ * rentals.deposit_hold_payment_intent_id. So the row keeps saying 'held' on a
+ * dead auth forever, and the operator is told "A deposit hold is already active
+ * on this rental." with no way forward (GMT, Aug 2026).
+ *
+ * FAIL SAFE, NOT OPEN: any doubt — Stripe unreachable, an id Stripe has never
+ * heard of, a PI still mid-authorisation — returns `alive: true` so we keep
+ * today's conservative skip rather than risk double-authorising a customer.
+ */
+async function probeRecordedHold(
+  stripe: ReturnType<typeof getStripeClientForRecord>,
+  paymentIntentId: string,
+  stripeOptions: { stripeAccount?: string } | undefined
+): Promise<{ alive: boolean; deadStatus: string | null }> {
+  try {
+    const intent = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions)
+    const deadStatus = DEAD_PI_STATUS_TO_HOLD_STATUS[String(intent.status)] ?? null
+    if (deadStatus) return { alive: false, deadStatus }
+    return { alive: true, deadStatus: null }
+  } catch (err) {
+    console.warn('create-hold-checkout: could not verify existing hold at Stripe, treating as active:', err)
+    return { alive: true, deadStatus: null }
+  }
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req)
@@ -33,9 +84,30 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // ── Auth ──────────────────────────────────────────────────────────────
+    // This mints a Stripe Checkout session on the TENANT'S connected account
+    // that authorises their configured deposit, and returns a live payment URL
+    // plus the tenant's company name and deposit figure. It read no
+    // Authorization header, so the only check was the gateway's
+    // `verify_jwt = true` default — satisfied by the PUBLIC ANON KEY that ships
+    // in the booking app's JavaScript bundle. Any session on the project could
+    // mint sessions against any tenant's Stripe account and read back their
+    // deposit configuration.
+    //
+    // Runs before the rental read and before any Stripe call. `successUrl` /
+    // `cancelUrl` are caller-supplied and land in a Stripe redirect, which is a
+    // further reason this must not be anonymous. Every caller in the repo is
+    // portal staff (components/shared/dialogs/add-hold-dialog.tsx — "Add Hold",
+    // both the new-tab and email-the-link buttons). No machine caller exists.
+    const auth = await authorizeDepositHoldRequest(req, supabase, {
+      rentalId,
+      logPrefix: 'create-hold-checkout',
+    })
+    if (!auth.ok) return errorResponse(auth.message, auth.status)
+
     const { data: rental, error: rentalError } = await supabase
       .from('rentals')
-      .select('id, tenant_id, customer_id, deposit_hold_status, deposit_amount_override, auto_extend_enabled')
+      .select('id, tenant_id, customer_id, vehicle_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_amount_override, auto_extend_enabled, platform_account')
       .eq('id', rentalId)
       .single()
     if (rentalError || !rental) return errorResponse('Rental not found', 404)
@@ -48,34 +120,121 @@ Deno.serve(async (req) => {
       return jsonResponse({ skipped: 'auto_extend_rental' })
     }
 
-    if (rental.deposit_hold_status === 'held') {
-      return jsonResponse({ skipped: 'hold_already_active' })
-    }
-
+    // Fetched before the 'held' guard below because that guard now has to ask
+    // Stripe whether the recorded hold is real, and that needs the tenant's
+    // Stripe config.
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount, currency_code, company_name')
+      .select(`stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name, ${DEPOSIT_AMOUNT_TENANT_COLUMNS}`)
       .eq('id', rental.tenant_id)
       .single()
     if (tenantError || !tenant) return errorResponse('Tenant not found', 404)
 
+    if (rental.deposit_hold_status === 'held') {
+      // 'held' in the DB is NOT proof of a live authorisation — see
+      // probeRecordedHold above. Ask Stripe before slamming the door: an
+      // expired auth used to leave operators permanently unable to place a new
+      // hold ("I cannot refresh the hold", GMT, Aug 2026).
+      //
+      // The PI we probe is the one every write below is anchored to. Anchoring
+      // on status alone is unsafe: refresh-deposit-holds CANCELS the old PI and
+      // then re-writes the row as 'held' carrying a BRAND NEW live PI, so a
+      // status-only guard would happily mark that live hold dead and we would
+      // open a second authorisation on the customer's card.
+      const probedPiId = (rental.deposit_hold_payment_intent_id as string | null) || null
+      let alive = true
+      let deadStatus: string | null = null
+      try {
+        if (!probedPiId) {
+          // No PaymentIntent recorded at all, so nothing can be alive — the
+          // status is a leftover, not an authorisation. Let the operator place
+          // a hold.
+          alive = false
+        } else {
+          const stripeMode: StripeMode = (tenant.stripe_mode as StripeMode) || 'test'
+          // Record-anchored: the existing hold lives on the platform account it
+          // was CREATED on, which may differ from where a NEW hold would go if
+          // the tenant has since flipped payment model.
+          const holdStripe = getStripeClientForRecord(rental as any, stripeMode)
+          const holdOptions = getStripeOptions(
+            getConnectAccountId({
+              ...(tenant as any),
+              payment_model: (rental as any).platform_account === 'uae' ? 'own' : 'managed',
+            })
+          )
+          const probe = await probeRecordedHold(holdStripe, probedPiId, holdOptions)
+          alive = probe.alive
+          deadStatus = probe.deadStatus
+        }
+      } catch (probeErr) {
+        // getConnectAccountId throws for a live 'own' tenant with no connected
+        // account. Keep the old behaviour rather than inventing a new 500 on a
+        // path that used to return a clean skip.
+        console.warn('create-hold-checkout: hold liveness probe unavailable, treating as active:', probeErr)
+        alive = true
+      }
+
+      if (alive) {
+        return jsonResponse({ skipped: 'hold_already_active' })
+      }
+
+      // Correct the record so the portal badge stops claiming money is held.
+      // deadStatus === null here means the row said 'held' with NO PaymentIntent
+      // behind it — a leftover, so the honest value is NULL (never placed).
+      // Without this write the badge would keep claiming a hold after the
+      // operator abandons Stripe Checkout.
+      let healQuery = supabase
+        .from('rentals')
+        .update({ deposit_hold_status: deadStatus })
+        .eq('id', rentalId)
+        // Anchored to the exact row we probed: same status AND same PI (or the
+        // same absence of one). If either moved, this is no longer our row.
+        .eq('deposit_hold_status', 'held')
+      healQuery = probedPiId
+        ? healQuery.eq('deposit_hold_payment_intent_id', probedPiId)
+        : healQuery.is('deposit_hold_payment_intent_id', null)
+      const { data: healed, error: healError } = await healQuery.select('id')
+
+      if (healError) {
+        // Match place-deposit-hold: you cannot safely open a SECOND hold when
+        // you could not record that the first one died.
+        console.error('create-hold-checkout: failed to correct stale hold status:', healError)
+        return errorResponse(`Failed to correct stale deposit hold status: ${healError.message}`, 500)
+      }
+      if (!healed || healed.length === 0) {
+        // Somebody else moved the row (most likely the refresh cron replacing
+        // the PI). Our conclusion is about a PI that is no longer the rental's
+        // hold, so fall back to today's conservative answer.
+        console.warn(`create-hold-checkout: rental ${rentalId} changed under the hold probe; leaving it alone`)
+        return jsonResponse({ skipped: 'hold_already_active' })
+      }
+      console.warn(
+        `create-hold-checkout: stale hold on rental ${rentalId} corrected held -> ${deadStatus ?? 'null'}; placing a fresh hold`
+      )
+      // ...and fall through to create the checkout session for a new hold.
+    }
+
     if (!tenant.security_deposit_enabled) {
       return jsonResponse({ skipped: 'deposit_disabled_for_tenant' })
     }
-    // Per-rental override beats the tenant default — including an explicit 0,
-    // which means the operator unchecked the deposit for this rental and wants
-    // NO hold. This function previously ignored deposit_amount_override entirely
-    // and always used global_deposit_amount, so it placed a $150 hold even when
-    // the operator opted out (and got every custom override wrong too).
-    const overrideAmount = rental.deposit_amount_override !== null && rental.deposit_amount_override !== undefined
-      ? Number(rental.deposit_amount_override)
-      : null
-    const depositAmount = overrideAmount !== null
-      ? overrideAmount
-      : (Number(tenant.global_deposit_amount) || 0)
+    // Shared with place-deposit-hold (_shared/deposit-amount.ts): per-rental
+    // override → per-vehicle deposit for a scoped per_vehicle tenant → tenant
+    // global. This function used to stop at "override else global", ignoring
+    // deposit_mode entirely, so the portal's Add Hold button under-held every
+    // GMT vehicle priced above the tenant global while the automatic path held
+    // the correct amount for the same rental.
+    const deposit = await resolveDepositAmount(supabase, {
+      tenantId: rental.tenant_id,
+      tenant: tenant as any,
+      rental: rental as any,
+    })
+    const depositAmount = deposit.amount
     if (depositAmount <= 0) {
       return jsonResponse({ skipped: 'deposit_amount_is_zero' })
     }
+    console.log(
+      `create-hold-checkout: rental ${rentalId} deposit ${depositAmount} (source: ${deposit.source})`
+    )
 
     const { data: customer } = await supabase
       .from('customers')
@@ -116,6 +275,9 @@ Deno.serve(async (req) => {
           rental_id: rentalId,
           tenant_id: rental.tenant_id,
           customer_id: rental.customer_id,
+          // "Why was THIS amount authorised?" answered months later, when the
+          // tenant/vehicle figures have moved on.
+          deposit_source: deposit.source,
         },
       },
       metadata: {

@@ -6,7 +6,6 @@ import { Camera, Upload, RotateCcw, Car, X, GripVertical, Star } from "lucide-re
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useTenant } from "@/contexts/TenantContext";
 import {
   DndContext,
   closestCenter,
@@ -25,6 +24,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
+import { PlateRedactionDialog } from "@/components/vehicles/plate-redaction-dialog";
+import { useTenant } from "@/contexts/TenantContext";
+import { EyeOff, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/stores/auth-store";
 
 interface VehiclePhoto {
   id: string;
@@ -32,6 +35,13 @@ interface VehiclePhoto {
   photo_url: string;
   display_order: number;
   created_at: string;
+  // Per-photo plate redaction. Staff ALWAYS see photo_url (the original);
+  // redacted_url is what the booking site serves to customers once the
+  // operator has painted out a plate. `select("*")` already returns these —
+  // declaring them is what stops a rename silently disabling the controls.
+  redacted_url?: string | null;
+  original_url?: string | null;
+  redaction_status?: "none" | "redacted" | "no_plate" | null;
 }
 
 interface VehiclePhotoGalleryProps {
@@ -47,9 +57,12 @@ interface SortablePhotoProps {
   onDelete: (photo: VehiclePhoto) => void;
   isDeleting: boolean;
   isLastPhoto: boolean;
+  /** True only when this tenant hides plates from customers. */
+  canRedact: boolean;
+  onRedact: (photo: VehiclePhoto) => void;
 }
 
-const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastPhoto }: SortablePhotoProps) => {
+const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastPhoto, canRedact, onRedact }: SortablePhotoProps) => {
   const {
     attributes,
     listeners,
@@ -85,6 +98,51 @@ const SortablePhoto = ({ photo, index, vehicleReg, onDelete, isDeleting, isLastP
           e.currentTarget.style.display = "none";
         }}
       />
+
+      {/* Plate redaction — only for a tenant that hides plates from customers.
+          Staff always see the ORIGINAL above; this button governs what the
+          BOOKING SITE serves. */}
+      {canRedact && (
+        // Bottom-RIGHT on purpose: bottom-left is the dnd drag handle, and
+        // covering it broke photo reordering for exactly the tenants who get
+        // this button.
+        //
+        // ALWAYS VISIBLE, unlike the delete/drag controls next to it. This was
+        // hover-only first and the immediate feedback was "there is no option
+        // to blur the plate" — an operator cannot hover their way to a control
+        // they do not know exists. Amber because it is an unfinished task: the
+        // plate on this photo is still visible to customers.
+        <div className="absolute bottom-2 right-2 z-10">
+          {photo.redaction_status === "redacted" ? (
+            <button
+              type="button"
+              onClick={() => onRedact(photo)}
+              className="flex items-center gap-1 rounded-md bg-emerald-600/90 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-600"
+              title="Customers see a version with the plate painted out. Click to review or restore."
+            >
+              <ShieldCheck className="h-3 w-3" /> Plate hidden
+            </button>
+          ) : photo.redaction_status === "no_plate" ? (
+            <button
+              type="button"
+              onClick={() => onRedact(photo)}
+              className="flex items-center gap-1 rounded-md bg-slate-600/85 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-600"
+              title="You marked this photo as showing no plate. Click to change."
+            >
+              <ShieldCheck className="h-3 w-3" /> No plate
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onRedact(photo)}
+              className="flex items-center gap-1 rounded-md bg-amber-500 px-2 py-1 text-[11px] font-semibold text-black shadow-sm hover:bg-amber-400"
+              title="Hide this vehicle's number plate from customers in this photo"
+            >
+              <EyeOff className="h-3 w-3" /> Hide number plate
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Banner badge for first image */}
       {index === 0 && (
@@ -149,6 +207,19 @@ export const VehiclePhotoGallery = ({
   );
 
   // Fetch vehicle photos
+  // Only a tenant that hides plates from customers gets these controls. With the
+  // setting off there is nothing to hide FROM, so the button would be noise.
+  // Two conditions, both required. The tenant must hide plates (otherwise there
+  // is nothing to hide FROM), and the user must hold a role the edge function
+  // will actually accept — save-photo-redaction refuses ops/viewer, so showing
+  // them the button would mean a guaranteed 403 after they had done the work.
+  const { appUser } = useAuth();
+  const REDACT_ROLES = ['head_admin', 'admin', 'manager'];
+  const canRedact =
+    (tenant as { hide_vehicle_registration?: boolean } | null)?.hide_vehicle_registration === true &&
+    (!!appUser?.is_super_admin || REDACT_ROLES.includes(appUser?.role ?? ''));
+  const [redactPhoto, setRedactPhoto] = useState<VehiclePhoto | null>(null);
+
   const { data: photos = [], isLoading } = useQuery({
     queryKey: ["vehicle-photos", vehicleId],
     queryFn: async () => {
@@ -424,6 +495,8 @@ export const VehiclePhotoGallery = ({
                     vehicleReg={vehicleReg}
                     onDelete={handleDeletePhoto}
                     isDeleting={isDeleting}
+                    canRedact={canRedact}
+                    onRedact={setRedactPhoto}
                     isLastPhoto={photos.length === 1}
                   />
                 ))}
@@ -503,6 +576,22 @@ export const VehiclePhotoGallery = ({
           <p>JPG, PNG, WebP • Max 5MB per photo • Multiple selection supported</p>
         </div>
       </CardContent>
+
+      {/* Mounted once, driven by which photo the operator clicked. */}
+      {canRedact && redactPhoto && tenant?.id && (
+        <PlateRedactionDialog
+          open={!!redactPhoto}
+          onOpenChange={(open) => { if (!open) setRedactPhoto(null); }}
+          photo={{
+            id: redactPhoto.id,
+            photo_url: redactPhoto.photo_url,
+            redacted_url: redactPhoto.redacted_url ?? null,
+            redaction_status: redactPhoto.redaction_status ?? null,
+          }}
+          vehicleReg={vehicleReg}
+          tenantId={tenant.id}
+        />
+      )}
     </Card>
   );
 };

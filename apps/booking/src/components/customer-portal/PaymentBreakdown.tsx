@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Car,
   Percent,
@@ -72,6 +73,13 @@ interface PaymentBreakdownProps {
   customerName?: string | null;
 }
 
+interface HoldMeta {
+  deposit_hold_status?: string | null;
+  deposit_hold_last_error?: string | null;
+  deposit_hold_last_error_code?: string | null;
+  deposit_hold_next_retry_at?: string | null;
+}
+
 interface Row {
   label: string;
   category: string;
@@ -80,6 +88,183 @@ interface Row {
   icon: any;
   color: string;
   bg: string;
+}
+
+// Renter-facing wording for the pre-auth hold. The DB column is only our
+// claim about the hold, and it can now legitimately say things other than
+// "held" — including states that need the CUSTOMER to act, which no amount of
+// server-side retrying can fix. Say so plainly rather than flattening every
+// non-`held` value into a blank "Refundable deposit".
+const HOLD_DETAIL_COPY: Record<string, string> = {
+  held: 'On hold',
+  processing: 'Being placed',
+  refreshing: 'Being renewed',
+  capturing: 'Being charged',
+  requires_action: 'Needs your attention',
+  // `failed` carries a scheduled retry — it is not a dead end, so don't word it
+  // like one.
+  failed: 'Retrying automatically',
+  needs_review: "We're checking this",
+  disputed: 'Under dispute',
+  captured: 'Charged',
+  released: 'Released',
+  expired: 'No longer held',
+};
+
+// Not a DB status — the placement failed and the status was rolled back to
+// NULL, which otherwise renders as an ordinary "no hold yet" row.
+const NOT_PLACED_DETAIL = "Couldn't be placed";
+const NOT_PLACED_BADGE = {
+  label: 'Not placed',
+  cls: 'text-red-500 border-red-500/30 bg-red-500/10',
+};
+
+const HOLD_BADGE_COPY: Record<string, { label: string; cls: string }> = {
+  held: { label: 'Held', cls: 'text-amber-500 border-amber-500/30 bg-amber-500/10' },
+  processing: { label: 'Processing', cls: 'text-blue-500 border-blue-500/30 bg-blue-500/10' },
+  refreshing: { label: 'Renewing', cls: 'text-indigo-500 border-indigo-500/30 bg-indigo-500/10' },
+  capturing: { label: 'Charging', cls: 'text-purple-500 border-purple-500/30 bg-purple-500/10' },
+  requires_action: {
+    label: 'Action needed',
+    cls: 'text-orange-500 border-orange-500/30 bg-orange-500/10',
+  },
+  failed: { label: 'Not held', cls: 'text-red-500 border-red-500/30 bg-red-500/10' },
+  needs_review: { label: 'Checking', cls: 'text-amber-500 border-amber-500/30 bg-amber-500/10' },
+  disputed: { label: 'Disputed', cls: 'text-red-500 border-red-500/30 bg-red-500/10' },
+  captured: { label: 'Charged', cls: 'text-red-500 border-red-500/30 bg-red-500/10' },
+  released: { label: 'Released', cls: 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' },
+  expired: { label: 'Expired', cls: 'text-muted-foreground border-muted-foreground/30' },
+};
+
+// `requires_action` is written for THREE different reasons and only one of them
+// involves the bank: genuine SCA (`authentication_required`), a card that is
+// unusable after we re-resolved the payment method, and no usable card on file
+// at all. The last two are fixed by adding a working card — telling those
+// renters to look for an approval prompt in their banking app sends them
+// somewhere nothing will ever arrive. `deposit_hold_last_error_code` is the
+// only signal that separates them, so when we have it we branch on it, and
+// when we don't we say something that is true for all three.
+const SCA_ERROR_CODES = new Set([
+  'authentication_required',
+  'payment_intent_authentication_failure',
+]);
+
+// Codes that mean "this card cannot be used" — the fix is a different card.
+const CARD_PROBLEM_CODES = new Set([
+  'no_payment_method',
+  'card_declined',
+  'expired_card',
+  'incorrect_number',
+  'incorrect_cvc',
+  'invalid_cvc',
+  'invalid_number',
+  'invalid_expiry_month',
+  'invalid_expiry_year',
+  'lost_card',
+  'stolen_card',
+  'pickup_card',
+  'restricted_card',
+  'card_not_supported',
+  'card_velocity_exceeded',
+  'currency_not_supported',
+  'do_not_honor',
+  'transaction_not_allowed',
+  'invalid_account',
+  'account_closed',
+  'insufficient_funds',
+  'withdrawal_count_limit_exceeded',
+]);
+
+// KNOWN LIMITATION (tracked against `update-payment-method`, not fixable here):
+// that function resolves the Stripe account from the tenant's CURRENT config
+// rather than from the rental's anchored `platform_account`. For a tenant
+// mid UK→UAE flip, a card saved from this page lands on the new account's
+// Stripe customer while a UK-anchored hold chain re-resolves the payment
+// method on the old one, so the advertised fix silently does nothing. No
+// tenant with live holds is mid-flip today; the fix belongs in that function.
+const UPDATE_CARD_HINT = '“Update Card” on the Payments page';
+
+type HoldGuidance = { text: string; cls: string };
+
+const ACTION_CLS = 'text-orange-600 dark:text-orange-400';
+const CALM_CLS = 'text-muted-foreground';
+
+// `failed` is the AUTO-RECOVERING state: the hold engine writes it together
+// with a scheduled retry for transient and soft-decline failures and tries
+// again on a backoff. Asking the renter to do something here is wrong — the
+// states that genuinely need them are `requires_action` and a placement that
+// never happened at all.
+function retryPhrase(nextRetryAt?: string | null): string {
+  if (!nextRetryAt) return 'We’ll try again automatically.';
+  const ms = new Date(nextRetryAt).getTime();
+  if (Number.isNaN(ms)) return 'We’ll try again automatically.';
+  const mins = Math.round((ms - Date.now()) / 60000);
+  if (mins <= 1) return 'We’ll try again automatically, shortly.';
+  if (mins < 60) return `We’ll try again automatically in about ${mins} minutes.`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `We’ll try again automatically in about ${hours} hour${hours === 1 ? '' : 's'}.`;
+  return `We’ll try again automatically in about ${Math.round(hours / 24)} days.`;
+}
+
+function holdGuidanceFor(
+  status: string | null | undefined,
+  errorCode: string | null | undefined,
+  lastError: string | null | undefined,
+  nextRetryAt: string | null | undefined
+): HoldGuidance | undefined {
+  const code = (errorCode || '').toLowerCase();
+
+  // Hold was never placed: `place-deposit-hold` rolls the status back to empty
+  // on failure but leaves the error behind, so this looks like "no hold" unless
+  // we go looking for the error.
+  if (!status && lastError) {
+    return CARD_PROBLEM_CODES.has(code)
+      ? {
+          text: `We couldn’t place the security-deposit hold on your card. Adding a working card with ${UPDATE_CARD_HINT} will let us try again.`,
+          cls: ACTION_CLS,
+        }
+      : {
+          text: `We couldn’t place the security-deposit hold on your card yet. If it doesn’t clear shortly, check your card with ${UPDATE_CARD_HINT}.`,
+          cls: ACTION_CLS,
+        };
+  }
+
+  if (status === 'requires_action') {
+    if (SCA_ERROR_CODES.has(code)) {
+      return {
+        text: 'Your bank needs you to approve this hold. Check your banking app or a message from your bank and confirm it — this step can only be done by you.',
+        cls: ACTION_CLS,
+      };
+    }
+    if (CARD_PROBLEM_CODES.has(code)) {
+      return {
+        text: `We need a working card for this hold — your current one can’t be used. Add one with ${UPDATE_CARD_HINT}.`,
+        cls: ACTION_CLS,
+      };
+    }
+    // Cause unknown. Lead with the fix that is right in two of the three cases
+    // and still harmless in the third.
+    return {
+      text: `This hold needs you. Start with ${UPDATE_CARD_HINT} to make sure we have a working card — and if your bank has asked you to approve the hold instead, confirm it in your banking app.`,
+      cls: ACTION_CLS,
+    };
+  }
+
+  if (status === 'failed') {
+    return {
+      text: `This hold didn’t go through. ${retryPhrase(nextRetryAt)} Nothing for you to do — we’ll get in touch if we need a different card.`,
+      cls: CALM_CLS,
+    };
+  }
+
+  if (status === 'needs_review') {
+    return {
+      text: 'We’re looking into this hold. Nothing for you to do right now — our team will contact you if anything is needed from you.',
+      cls: CALM_CLS,
+    };
+  }
+
+  return undefined;
 }
 
 const EXT_CATEGORIES = [
@@ -100,6 +285,44 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
   const { data: paymentBreakdown } = useRentalPaymentBreakdown(rental.id);
   const { data: refundBreakdown } = useRentalRefundBreakdown(rental.id);
   const { data: insurancePolicies } = useRentalInsurancePolicies(rental.id);
+
+  // The hold columns the parent page does not select. Fetched here rather than
+  // widened upstream so this component owns everything it needs to describe the
+  // hold honestly — in particular the error code, without which we cannot tell
+  // an SCA prompt from a dead card, and the retry time, without which we would
+  // tell renters to act on a state the system fixes by itself.
+  const { data: holdMeta } = useQuery({
+    queryKey: ['rental-hold-meta', rental.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rentals')
+        .select(
+          'deposit_hold_status, deposit_hold_last_error, deposit_hold_last_error_code, deposit_hold_next_retry_at'
+        )
+        .eq('id', rental.id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as HoldMeta | null) ?? null;
+    },
+    enabled: !!rental.id,
+  });
+
+  // When the extra read fails or has not landed we fall back to the status the
+  // parent already had. Guidance then degrades to the cause-neutral wording
+  // rather than to a confident claim about a cause we cannot see.
+  const holdStatus = (holdMeta ? holdMeta.deposit_hold_status : rental.deposit_hold_status) as
+    | string
+    | null
+    | undefined;
+  const holdLastError = holdMeta?.deposit_hold_last_error ?? null;
+  // A hold that was never placed: status rolled back to NULL, error left behind.
+  const holdNotPlaced = !holdStatus && !!holdLastError;
+  const holdGuidance = holdGuidanceFor(
+    holdStatus,
+    holdMeta?.deposit_hold_last_error_code ?? null,
+    holdLastError,
+    holdMeta?.deposit_hold_next_retry_at ?? null
+  );
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedOriginal, setSelectedOriginal] = useState<Set<string>>(new Set());
@@ -302,14 +525,9 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
       label: 'Pre-Auth Hold',
       category: 'Security Deposit',
       amount: rental.deposit_hold_amount || invoice.securityDeposit,
-      detail:
-        rental.deposit_hold_status === 'held'
-          ? 'On hold'
-          : rental.deposit_hold_status === 'captured'
-            ? 'Charged'
-            : rental.deposit_hold_status === 'released'
-              ? 'Released'
-              : 'Refundable deposit',
+      detail: holdNotPlaced
+        ? NOT_PLACED_DETAIL
+        : HOLD_DETAIL_COPY[holdStatus || ''] || 'Refundable deposit',
       icon: Shield,
       color: 'text-amber-500',
       bg: 'bg-amber-500/10',
@@ -501,7 +719,12 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
                 0
               );
               const isSecurityDeposit = category === 'Security Deposit';
-              const holdStatus = rental.deposit_hold_status as string | null | undefined;
+              // The hold row carries meaning even when no money was ever taken
+              // — "we couldn't place it" is exactly the case where the amount
+              // is missing, and it must not be flattened into "Not applied".
+              const showHoldState =
+                isSecurityDeposit && (!!holdStatus || holdNotPlaced);
+              const rowGuidance = isSecurityDeposit ? holdGuidance : undefined;
               const refunded = isExtensionCategory && extensionId
                 ? (refundBreakdown?.extensionCategoryRefunds?.[`${extensionId}|${category}`] ?? 0)
                 : (refundBreakdown?.categoryRefunds?.[category] ?? 0);
@@ -517,7 +740,7 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
               return (
                 <Fragment key={category}>
                 <TableRow
-                  className={`${(!applied) && !thisIsPayg ? 'opacity-40' : ''} ${rowOnClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${thisIsPayg ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''} ${isFirstNonPaygAfterPayg ? 'border-t-4 border-t-indigo-200 dark:border-t-indigo-800/60' : ''}`}
+                  className={`${(!applied && !showHoldState) && !thisIsPayg ? 'opacity-40' : ''} ${rowOnClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${thisIsPayg ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''} ${isFirstNonPaygAfterPayg ? 'border-t-4 border-t-indigo-200 dark:border-t-indigo-800/60' : ''}`}
                   onClick={rowOnClick}
                 >
                   {selectable.length > 0 && (
@@ -546,8 +769,13 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
                           {rowOnClick && <ExternalLink className="h-3 w-3 text-muted-foreground" />}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {applied ? detail : 'Not applied'}
+                          {applied || showHoldState ? detail : 'Not applied'}
                         </p>
+                        {rowGuidance && (
+                          <p className={`text-xs mt-1 max-w-[26rem] ${rowGuidance.cls}`}>
+                            {rowGuidance.text}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </TableCell>
@@ -570,14 +798,16 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
                       // Security Deposit = Pre-Auth Hold — show hold-specific
                       // statuses based on deposit_hold_status, never "Paid".
                       if (isSecurityDeposit) {
-                        if (holdStatus === 'held')
-                          return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Held</Badge>;
-                        if (holdStatus === 'captured')
-                          return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Charged</Badge>;
-                        if (holdStatus === 'released')
-                          return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Released</Badge>;
-                        if (holdStatus === 'expired')
-                          return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Expired</Badge>;
+                        // Every status the column can carry gets its own badge,
+                        // plus the statusless-but-errored row that means the
+                        // hold was attempted and never landed. Anything else
+                        // falls through to "No Hold", which is only correct
+                        // when there genuinely is no hold and no failure.
+                        if (holdNotPlaced)
+                          return <Badge variant="outline" className={`${NOT_PLACED_BADGE.cls} text-[11px]`}>{NOT_PLACED_BADGE.label}</Badge>;
+                        const holdBadge = HOLD_BADGE_COPY[holdStatus || ''];
+                        if (holdBadge)
+                          return <Badge variant="outline" className={`${holdBadge.cls} text-[11px]`}>{holdBadge.label}</Badge>;
                         return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">No Hold</Badge>;
                       }
                       if (!applied)

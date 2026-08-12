@@ -424,6 +424,14 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     sample: 'Operator Terms & Conditions\n1. Agreement to Terms...',
     category: 'rental',
   },
+  {
+    key: 'bonzah_insurance_addendum',
+    label: 'Bonzah Insurance Addendum',
+    description:
+      "Bonzah's required insurance addendum, added automatically before the signature when Bonzah is connected. Insurer-supplied wording that cannot be edited. Place it yourself only if you want it somewhere else in the document; it is blank for tenants without Bonzah.",
+    sample: 'Pablow, Inc. dba bonzah.com - Insurance Addendum\n1. Insurance Requirement...',
+    category: 'rental',
+  },
 
   // Rental variables
   {

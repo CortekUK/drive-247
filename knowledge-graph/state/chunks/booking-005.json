@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 5,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_005.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/EnhancedServiceHighlights.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/EnhancedTestimonials.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/FAQ.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/FeedbackModal.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/Footer.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/GDPRConsent.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/GoogleAnalytics.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/HeroCarousel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/InstallmentSelector.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/InvoiceDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/LocationAutocomplete.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/LocationAutocompleteWithRadius.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/LocationPicker.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/MaintenanceBanner.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/MobileActions.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/Navigation.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/NotFound.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/PWAInstall.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/Privacy.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ProtectionPlanSelector.tsx"
+  ]
+}

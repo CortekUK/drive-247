@@ -125,7 +125,7 @@ const getEmailHtml = (data: NotifyRequest, branding: TenantBranding) => {
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName} (${data.vehicleReg})</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName}${data.vehicleReg ? ` (${data.vehicleReg})` : ''}</td>
                                             </tr>
                                             ${deliveryRow}
                                             ${instructionsRow}
@@ -249,6 +249,48 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Blank the plate ONCE, at the source, before anything renders it.
+    //
+    // This function emits the plate in four places — two default HTML bodies,
+    // the SMS (which is reused verbatim as the WhatsApp body), and the
+    // {{vehicle_reg}} substitution into the tenant's own lockbox_templates.
+    // Guarding each one would leave the next person to add a fifth. Clearing
+    // data.vehicleReg here covers all of them, including the custom-template
+    // path that no per-branch guard would reach.
+    //
+    // vehicleName is deliberately left intact: this message tells a customer
+    // which car to walk up to in a car park, so removing the plate must not
+    // leave them with no identifier at all.
+    if (data.tenantId) {
+      try {
+        const { data: privacyRow, error: privacyErr } = await supabase
+          .from('tenants')
+          .select('hide_vehicle_registration')
+          .eq('id', data.tenantId)
+          .single();
+        // PostgREST RETURNS errors, it does not throw — so the catch below was
+        // unreachable and this guard silently failed OPEN. Inspect `error`.
+        // A missing column means the project predates the feature (no tenant can
+        // have opted in); anything else is unknown, so withhold.
+        if (privacyErr) {
+          const missingColumn = privacyErr.code === '42703'
+            || /column .* does not exist/i.test(privacyErr.message || '');
+          if (!missingColumn) {
+            console.warn('[lockbox] Privacy flag unreadable; withholding the plate:', privacyErr.message);
+            data.vehicleReg = '';
+          }
+        } else if (privacyRow?.hide_vehicle_registration === true) {
+          data.vehicleReg = '';
+        }
+      } catch (e) {
+        // Fail CLOSED. A privacy control that silently reverts to "show"
+        // whenever a lookup blips is not a control. Losing the plate from one
+        // lockbox message is recoverable; leaking it is not.
+        console.warn('[lockbox] Could not read plate-privacy flag; withholding the plate:', e);
+        data.vehicleReg = '';
+      }
+    }
+
     // Tenant info defaults
     let tenantName = 'DRIVE 247';
     let contactEmail = 'support@drive-247.com';
@@ -283,7 +325,7 @@ serve(async (req) => {
     let customerSubject = `Your Vehicle Keys - ${tenantName}`;
     const branding: TenantBranding = { tenantName, contactEmail, primaryColor, accentColor, logoUrl };
     let customerHtml = getEmailHtml(data, branding);
-    let smsMessage = `${tenantName}: Your lockbox code is ${data.lockboxCode}. Vehicle: ${data.vehicleName} (${data.vehicleReg}).${data.deliveryAddress ? ` Address: ${data.deliveryAddress}.` : ''} Do not share this code.`;
+    let smsMessage = `${tenantName}: Your lockbox code is ${data.lockboxCode}. Vehicle: ${data.vehicleName}${data.vehicleReg ? ` (${data.vehicleReg})` : ''}.${data.deliveryAddress ? ` Address: ${data.deliveryAddress}.` : ''} Do not share this code.`;
 
     if (data.tenantId && supabase) {
       try {
@@ -402,7 +444,7 @@ serve(async (req) => {
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName} (${data.vehicleReg})</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleName}${data.vehicleReg ? ` (${data.vehicleReg})` : ''}</td>
                                             </tr>
                                             ${detailRows.join('\n                                            ')}
                                         </table>

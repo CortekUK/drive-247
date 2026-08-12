@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 8,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_008.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/feedback-insights/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fetch-payment-intent/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fetch-veriff-media/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/finalize-payg-rental/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/generate-expense-summary/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/generate-export/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/generate-insurance-reminders/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/generate-review-summary/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-apply-form-config/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-boldsign-document/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-booking-mode/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-connect-onboarding-link/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-customer-statement/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-stripe-config/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-subscription-details/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/hyper-api/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/inshur-cancel-coverage/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/inshur-check-eligibility/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/inshur-create-coverage/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/inshur-end-coverage/index.ts"
+  ]
+}

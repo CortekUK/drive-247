@@ -8,7 +8,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { CheckCircle, Download, Mail, Loader2, User, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
@@ -16,9 +16,10 @@ import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseDateOnly } from "@/lib/date-utils";
+import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 const InvoicePaymentSuccess = () => {
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isHoldFlow, setIsHoldFlow] = useState(false);
@@ -207,7 +208,7 @@ const InvoicePaymentSuccess = () => {
 
 const BookingSuccessContent = () => {
   const searchParams = useSearchParams();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const { customerUser } = useCustomerAuthStore();
   const { clearBooking } = useBookingStore();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
@@ -228,6 +229,11 @@ const BookingSuccessContent = () => {
   }, []);
 
   useEffect(() => {
+    // Wait for TenantContext. vehiclePublicColumnsNested() withholds `reg` while
+    // the tenant is unknown (fail closed), so running on mount permanently
+    // dropped the registration row for every tenant — including the ~41 that
+    // show plates. Once resolution finishes we proceed either way.
+    if (tenantLoading) return;
     const updateRentalStatus = async () => {
       if (!sessionId) {
         setLoading(false);
@@ -402,7 +408,7 @@ const BookingSuccessContent = () => {
                   // Send booking notification emails and create in-app notifications
                   try {
                     // Fetch rental details for notification
-                    const { data: rentalForNotify } = await supabase
+                    const { data: rentalForNotify } = await supabaseUntyped
                       .from("rentals")
                       .select(`
                         id,
@@ -411,7 +417,7 @@ const BookingSuccessContent = () => {
                         monthly_amount,
                         tenant_id,
                         customer:customers(id, name, email, phone),
-                        vehicle:vehicles(id, make, model, reg)
+                        ${vehiclePublicColumnsNested(tenant, 'vehicle:vehicles')}
                       `)
                       .eq("id", rentalId)
                       .single();
@@ -419,7 +425,7 @@ const BookingSuccessContent = () => {
                     if (rentalForNotify && rentalForNotify.customer && rentalForNotify.vehicle) {
                       const vehicleName = rentalForNotify.vehicle.make && rentalForNotify.vehicle.model
                         ? `${rentalForNotify.vehicle.make} ${rentalForNotify.vehicle.model}`
-                        : rentalForNotify.vehicle.reg;
+                        : vehicleDisplayName(rentalForNotify.vehicle, tenant);
 
                       console.log('📧 Sending booking notification...');
                       const { data: notifyResult, error: notifyError } = await supabase.functions.invoke('notify-booking-pending', {
@@ -434,7 +440,7 @@ const BookingSuccessContent = () => {
                           vehicleName: vehicleName,
                           vehicleMake: rentalForNotify.vehicle.make,
                           vehicleModel: rentalForNotify.vehicle.model,
-                          vehicleReg: rentalForNotify.vehicle.reg,
+                          vehicleReg: displayRegistration(rentalForNotify.vehicle, tenant) ?? '',
                           pickupDate: parseDateOnly(rentalForNotify.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                           returnDate: parseDateOnly(rentalForNotify.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
                           amount: rentalForNotify.monthly_amount || paymentDetails.amount,
@@ -516,12 +522,12 @@ const BookingSuccessContent = () => {
           }
 
           // Step 4: Fetch rental details with customer and vehicle info
-          const { data: rental, error: fetchError } = await supabase
+          const { data: rental, error: fetchError } = await supabaseUntyped
             .from("rentals")
             .select(`
               *,
               customer:customers(*),
-              vehicle:vehicles(*)
+              ${vehiclePublicColumnsNested(tenant, 'vehicle:vehicles')}
             `)
             .eq("id", rentalId)
             .single();
@@ -546,7 +552,7 @@ const BookingSuccessContent = () => {
             // Format rental details for display
             const vehicleName = rental.vehicle.make && rental.vehicle.model
               ? `${rental.vehicle.make} ${rental.vehicle.model}`
-              : rental.vehicle.reg;
+              : vehicleDisplayName(rental.vehicle, tenant);
 
             setBookingDetails({
               rental_id: rental.id,
@@ -554,7 +560,7 @@ const BookingSuccessContent = () => {
               customer_name: rental.customer.name,
               customer_email: rental.customer.email,
               vehicle_name: vehicleName,
-              vehicle_reg: rental.vehicle.reg,
+              vehicle_reg: displayRegistration(rental.vehicle, tenant) ?? '',
               pickup_date: format(parseDateOnly(rental.start_date), "MMM dd, yyyy"),
               return_date: format(parseDateOnly(rental.end_date), "MMM dd, yyyy"),
               rental_period_type: rental.rental_period_type,
@@ -600,7 +606,7 @@ const BookingSuccessContent = () => {
     };
 
     updateRentalStatus();
-  }, [sessionId, rentalId]);
+  }, [sessionId, rentalId, tenant?.id, tenantLoading]);
 
   // Fire confetti when booking details have loaded
   const fireConfetti = useCallback(() => {

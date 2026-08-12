@@ -10,6 +10,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { formatCurrency } from "@/lib/format-utils";
 import { useCustomerStatement, type StatementData, type StatementGroup } from "@/hooks/use-customer-statement";
+import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 interface Props {
   open: boolean;
@@ -49,6 +50,7 @@ function StatementContent({
   generatedAt,
   printable,
 }: ContentProps) {
+  const { tenant } = useTenant();
   const fmt = (n: number) => formatCurrency(round2(n), currencyCode);
   const { customer, groups, grand } = data;
 
@@ -107,7 +109,7 @@ function StatementContent({
         </div>
       ) : (
         groups.map((g: StatementGroup) => {
-          const vehicleName = g.vehicle.make && g.vehicle.model ? `${g.vehicle.make} ${g.vehicle.model}` : (g.vehicle.reg ?? "");
+          const vehicleName = vehicleDisplayName(g.vehicle, tenant);
           return (
             <div
               key={g.rentalId ?? "account"}
@@ -121,7 +123,7 @@ function StatementContent({
                 <div style={{ fontWeight: 600, fontSize: 13 }}>
                   {g.rentalId ? `Rental ${g.rentalNumber}` : g.rentalNumber}
                   {vehicleName ? ` · ${vehicleName}` : ""}
-                  {g.vehicle.reg ? ` (${g.vehicle.reg})` : ""}
+                  {displayRegistration(g.vehicle, tenant) ? ` (${displayRegistration(g.vehicle, tenant)})` : ""}
                 </div>
                 {(g.startDate || g.endDate) && (
                   <div style={{ fontSize: 12, color: "#6b7280" }}>
@@ -141,7 +143,11 @@ function StatementContent({
                 </thead>
                 <tbody>
                   {g.categories.map((c) => {
-                    const isFine = c.category === "Fine";
+                    // baseCategory, not category: a fine line now reads its own type
+                    // ("Smoking/ Cleaning Violation"), so matching the label would
+                    // silently drop the amber highlight and the warning marker that
+                    // tell a guest this charge is a penalty.
+                    const isFine = (c.baseCategory ?? c.category) === "Fine";
                     return (
                       <tr key={c.category} style={{ borderTop: "1px solid #e5e7eb" }}>
                         <td style={{ padding: "8px 12px", color: isFine ? "#b45309" : undefined, fontWeight: isFine ? 600 : undefined }}>

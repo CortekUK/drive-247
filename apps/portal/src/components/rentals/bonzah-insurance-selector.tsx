@@ -25,6 +25,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { US_STATES } from '@/lib/us-states';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  BONZAH_LINKS,
+  BONZAH_FLYER_URLS,
+  BONZAH_DISCLOSURE_PARAGRAPHS,
+  BONZAH_DISCLOSURE_AGREEMENT,
+  BONZAH_DISCLOSURE_HEADING,
+} from '@/lib/bonzah-compliance';
 
 export interface BonzahCustomerDetails {
   id: string;
@@ -59,13 +66,10 @@ const DEFAULT_COVERAGE: CoverageOptions = {
   pai: false,
 };
 
-// Brochure PDFs (stored in Supabase storage, same for all tenants)
-const BROCHURE_URLS: Record<keyof CoverageOptions, string> = {
-  cdw: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/cdw-brochure.pdf`,
-  rcli: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/rcli-brochure.pdf`,
-  sli: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/sli-brochure.pdf`,
-  pai: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/bonzah-brochures/pai-brochure.pdf`,
-};
+// Per-product coverage flyers. Bonzah's compliance document requires a flyer
+// link on each product; BONZAH_FLYER_URLS points at the insurer's canonical
+// copies rather than the mirrors we used to serve from Supabase storage.
+const BROCHURE_URLS: Record<keyof CoverageOptions, string> = BONZAH_FLYER_URLS;
 
 // The bundle's coverage details are simply CDW's + RCLI's combined (it IS those two coverages).
 const BUNDLE_FEATURES = [...COVERAGE_INFO.cdw.features, ...COVERAGE_INFO.rcli.features];
@@ -78,19 +82,20 @@ type BundleExclusion =
   | (typeof COVERAGE_INFO.rcli.exclusions)[number];
 const BUNDLE_CROSS_COVERED_EXCLUSIONS: readonly BundleExclusion[] = [
   'Does not cover non-rental vehicle damage', // CDW gap — RCLI covers it in the bundle
-  'Does not cover damage to the rental vehicle', // RCLI gap — CDW covers it in the bundle
+  'Does not cover rental vehicle damage', // RCLI gap — CDW covers it in the bundle
 ];
-// Bundle-only exclusion requested by Bonzah (Brandon) for the CDW+RCLI bundle
-// specifically — deliberately NOT added to COVERAGE_INFO.rcli.exclusions, so it does
-// not appear on the standalone RCLI card. Exact wording supplied by the insurer:
-// compliance text, do not reword.
-const BUNDLE_EXTRA_EXCLUSIONS = [
-  'Excludes medical, PIP, UIM, UM where allowed by law.',
-];
+// There used to be a bundle-only BUNDLE_EXTRA_EXCLUSIONS line here
+// ('Excludes medical, PIP, UIM, UM where allowed by law.') that Brandon asked for
+// when the bundle shipped. It is gone because the Aug 2026 compliance document now
+// states that exclusion on the CDW and RCLI products themselves, so both cards
+// carry the insurer's own current wording and the bundle inherits it below.
+// Deduped because CDW and RCLI share a word-for-word identical commercial-use
+// exclusion, which would otherwise be listed twice on the bundle card.
 const BUNDLE_EXCLUSIONS = [
-  ...[...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions]
-    .filter((exclusion) => !BUNDLE_CROSS_COVERED_EXCLUSIONS.includes(exclusion)),
-  ...BUNDLE_EXTRA_EXCLUSIONS,
+  ...new Set(
+    [...COVERAGE_INFO.cdw.exclusions, ...COVERAGE_INFO.rcli.exclusions]
+      .filter((exclusion) => !BUNDLE_CROSS_COVERED_EXCLUSIONS.includes(exclusion)),
+  ),
 ];
 
 const CoverageIcon = ({ type, className }: { type: keyof CoverageOptions; className?: string }) => {
@@ -660,7 +665,7 @@ export default function BonzahInsuranceSelector({
                         <div className="mt-0.5 text-[11px] text-[#CC004A]">Included in the CDW + RCLI bundle</div>
                       ) : (
                         <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground">
-                          <span>{info.deductible === 'None' ? 'No deductible' : `${info.deductible} deductible`}</span>
+                          <span>{info.deductibleLabel}</span>
                           <span>·</span>
                           <span>{info.maxCoverage.startsWith('$') ? `Up to ${info.maxCoverage}` : info.maxCoverage}</span>
                         </div>
@@ -699,6 +704,10 @@ export default function BonzahInsuranceSelector({
                   {/* Expanded details */}
                   <CollapsibleContent>
                     <div className="px-4 pb-3 border-t border-border/50 pt-3 mx-4 mb-1">
+                      {/* Insurer's product line + description, verbatim */}
+                      <p className="text-[11px] font-medium mb-0.5">{info.tagline}</p>
+                      <p className="text-[11px] text-muted-foreground leading-tight mb-2.5">{info.description}</p>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
                         <div>
                           <p className="text-[11px] font-medium mb-1.5">Covered</p>
@@ -779,19 +788,49 @@ export default function BonzahInsuranceSelector({
         </div>
       )}
 
-      {/* Disclaimer */}
-      <p className="text-[10px] text-muted-foreground leading-relaxed">
-        By selecting coverage, the renter agrees to Bonzah&apos;s{' '}
-        <a href="https://bonzah.com/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Terms</a>,{' '}
-        <a href="https://bonzah.com/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Privacy</a>, and{' '}
-        <a href="https://bonzah.com/included-and-restricted-vehicle-types" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Covered Vehicles</a>.
-        {tenant?.bonzah_brochure_url && (
-          <>
-            {' '}<a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground font-medium">View full coverage details</a>.
-          </>
-        )}
-        {' '}Insurance is only for drivers 21+ with a valid license.
-      </p>
+      {/* Bonzah Insurance Disclosure.
+          Insurer-supplied compliance text — rendered from constants in
+          @/lib/bonzah-compliance and deliberately not tenant-editable. Shown in
+          full here, not abbreviated: staff sell these products on the renter's
+          behalf, so the renter must be shown the same disclosure the booking
+          checkout shows. */}
+      <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-1.5">
+        <p className="text-[11px] font-semibold text-foreground">
+          {BONZAH_DISCLOSURE_HEADING}
+        </p>
+
+        {BONZAH_DISCLOSURE_PARAGRAPHS.map((paragraph, i) => (
+          <p key={i} className="text-[10px] text-muted-foreground leading-relaxed">
+            {paragraph}
+          </p>
+        ))}
+
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          {BONZAH_DISCLOSURE_AGREEMENT.prefix}
+          <a href={BONZAH_LINKS.termsOfService} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            {BONZAH_DISCLOSURE_AGREEMENT.termsLabel}
+          </a>
+          {BONZAH_DISCLOSURE_AGREEMENT.conjunction}
+          <a href={BONZAH_LINKS.privacyPolicy} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            {BONZAH_DISCLOSURE_AGREEMENT.privacyLabel}
+          </a>
+          {BONZAH_DISCLOSURE_AGREEMENT.suffix}
+        </p>
+
+        <p className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 text-[10px] text-muted-foreground">
+          <a href={BONZAH_LINKS.excludedVehicles} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            Excluded Vehicles
+          </a>
+          <a href={BONZAH_LINKS.faq} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+            Bonzah FAQs
+          </a>
+          {tenant?.bonzah_brochure_url && (
+            <a href={tenant.bonzah_brochure_url} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground font-medium">
+              View full coverage details
+            </a>
+          )}
+        </p>
+      </div>
     </div>
   );
 }

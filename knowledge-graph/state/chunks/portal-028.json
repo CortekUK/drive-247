@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 28,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_028.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/constants.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/defaults.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/pnl.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/shared.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/website-content.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/contexts/RealtimeChatContext.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/contexts/TenantContext.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/migration-view.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-active-rentals.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-agreement-templates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-ai-suggest.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-audit-log-on-open.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-audit-log.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-audit-logs.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-auth-validation.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-automations.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-blacklist.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-blocked-dates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-blog-categories.ts"
+  ]
+}

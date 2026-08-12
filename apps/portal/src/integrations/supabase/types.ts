@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _orphaned_data_audit: {
@@ -3784,6 +3759,45 @@ export type Database = {
           },
         ]
       }
+      cron_runs: {
+        Row: {
+          error: string | null
+          failed: number | null
+          finished_at: string | null
+          id: string
+          job_name: string
+          processed: number | null
+          started_at: string
+          succeeded: number | null
+          total_due: number | null
+          truncated: boolean | null
+        }
+        Insert: {
+          error?: string | null
+          failed?: number | null
+          finished_at?: string | null
+          id?: string
+          job_name: string
+          processed?: number | null
+          started_at?: string
+          succeeded?: number | null
+          total_due?: number | null
+          truncated?: boolean | null
+        }
+        Update: {
+          error?: string | null
+          failed?: number | null
+          finished_at?: string | null
+          id?: string
+          job_name?: string
+          processed?: number | null
+          started_at?: string
+          succeeded?: number | null
+          total_due?: number | null
+          truncated?: boolean | null
+        }
+        Relationships: []
+      }
       customer_announcement_views: {
         Row: {
           announcement_id: string
@@ -4624,6 +4638,133 @@ export type Database = {
           },
           {
             foreignKeyName: "delivery_locations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      deposit_hold_links: {
+        Row: {
+          action: string
+          actor: string | null
+          amount_cents: number | null
+          attempt_seq: number
+          capture_before: string | null
+          card_funding: string | null
+          completed_at: string | null
+          connect_account_id: string | null
+          created_at: string
+          currency: string | null
+          disclosed_amount: number | null
+          disclosure_ref: string | null
+          error_code: string | null
+          error_message: string | null
+          estimate_inputs: Json | null
+          extended_auth_status: string | null
+          id: string
+          idempotency_key: string | null
+          outcome: string | null
+          payment_intent_id: string | null
+          platform_account: string | null
+          rental_id: string
+          stripe_mode: string | null
+          superseded_pi_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          amount_cents?: number | null
+          attempt_seq: number
+          capture_before?: string | null
+          card_funding?: string | null
+          completed_at?: string | null
+          connect_account_id?: string | null
+          created_at?: string
+          currency?: string | null
+          disclosed_amount?: number | null
+          disclosure_ref?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          estimate_inputs?: Json | null
+          extended_auth_status?: string | null
+          id?: string
+          idempotency_key?: string | null
+          outcome?: string | null
+          payment_intent_id?: string | null
+          platform_account?: string | null
+          rental_id: string
+          stripe_mode?: string | null
+          superseded_pi_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          amount_cents?: number | null
+          attempt_seq?: number
+          capture_before?: string | null
+          card_funding?: string | null
+          completed_at?: string | null
+          connect_account_id?: string | null
+          created_at?: string
+          currency?: string | null
+          disclosed_amount?: number | null
+          disclosure_ref?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          estimate_inputs?: Json | null
+          extended_auth_status?: string | null
+          id?: string
+          idempotency_key?: string | null
+          outcome?: string | null
+          payment_intent_id?: string | null
+          platform_account?: string | null
+          rental_id?: string
+          stripe_mode?: string | null
+          superseded_pi_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deposit_hold_links_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_hold_links_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "deposit_hold_links_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "deposit_hold_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deposit_hold_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "deposit_hold_links_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -11501,6 +11642,131 @@ export type Database = {
           },
         ]
       }
+      rental_card_mandates: {
+        Row: {
+          accepted_at: string
+          card_brand: string | null
+          card_last4: string | null
+          customer_id: string
+          disclosed_amount: number | null
+          id: string
+          invalidated_at: string | null
+          invalidated_reason: string | null
+          mandate_text: string
+          mandate_version: string
+          payment_method_id: string | null
+          rental_id: string | null
+          signed_document_id: string | null
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          card_brand?: string | null
+          card_last4?: string | null
+          customer_id: string
+          disclosed_amount?: number | null
+          id?: string
+          invalidated_at?: string | null
+          invalidated_reason?: string | null
+          mandate_text: string
+          mandate_version: string
+          payment_method_id?: string | null
+          rental_id?: string | null
+          signed_document_id?: string | null
+          source: string
+          tenant_id: string
+        }
+        Update: {
+          accepted_at?: string
+          card_brand?: string | null
+          card_last4?: string | null
+          customer_id?: string
+          disclosed_amount?: number | null
+          id?: string
+          invalidated_at?: string | null
+          invalidated_reason?: string | null
+          mandate_text?: string
+          mandate_version?: string
+          payment_method_id?: string | null
+          rental_id?: string | null
+          signed_document_id?: string | null
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rental_card_mandates_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "rental_card_mandates_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       rental_damage_reports: {
         Row: {
           created_at: string | null
@@ -12581,12 +12847,38 @@ export type Database = {
           delivery_option: string | null
           deposit_amount_override: number | null
           deposit_hold_amount: number | null
+          deposit_hold_attempt_seq: number
+          deposit_hold_card_brand: string | null
+          deposit_hold_card_exp_month: number | null
+          deposit_hold_card_exp_year: number | null
+          deposit_hold_card_funding: string | null
+          deposit_hold_card_last4: string | null
+          deposit_hold_chain_expires_at: string | null
+          deposit_hold_connect_account_id: string | null
+          deposit_hold_currency: string | null
           deposit_hold_expires_at: string | null
+          deposit_hold_expiry_source: string | null
+          deposit_hold_extended_auth: boolean | null
+          deposit_hold_failure_count: number
+          deposit_hold_last_error: string | null
+          deposit_hold_last_error_code: string | null
+          deposit_hold_next_retry_at: string | null
           deposit_hold_payment_intent_id: string | null
           deposit_hold_payment_method_id: string | null
           deposit_hold_placed_at: string | null
+          deposit_hold_platform_account: string | null
+          deposit_hold_release_requested_at: string | null
           deposit_hold_status: string | null
+          deposit_hold_status_changed_at: string | null
           deposit_hold_stripe_customer_id: string | null
+          deposit_hold_stripe_mode: string | null
+          deposit_hold_target_amount: number | null
+          deposit_hold_verified_at: string | null
+          deposit_hold_window_seconds: number | null
+          disclosed_hold_amount: number | null
+          disclosed_hold_at: string | null
+          disclosed_hold_source: string | null
+          disclosed_hold_version: string | null
           discount_applied: number | null
           document_status: string | null
           docusign_envelope_id: string | null
@@ -12601,6 +12893,10 @@ export type Database = {
           has_installment_plan: boolean | null
           health_severity: string | null
           id: string
+          id_verification_waived: boolean
+          id_verification_waived_at: string | null
+          id_verification_waived_by: string | null
+          id_verification_waived_reason: string | null
           installment_plan_id: string | null
           insurance_premium: number | null
           insurance_status: string | null
@@ -12697,12 +12993,38 @@ export type Database = {
           delivery_option?: string | null
           deposit_amount_override?: number | null
           deposit_hold_amount?: number | null
+          deposit_hold_attempt_seq?: number
+          deposit_hold_card_brand?: string | null
+          deposit_hold_card_exp_month?: number | null
+          deposit_hold_card_exp_year?: number | null
+          deposit_hold_card_funding?: string | null
+          deposit_hold_card_last4?: string | null
+          deposit_hold_chain_expires_at?: string | null
+          deposit_hold_connect_account_id?: string | null
+          deposit_hold_currency?: string | null
           deposit_hold_expires_at?: string | null
+          deposit_hold_expiry_source?: string | null
+          deposit_hold_extended_auth?: boolean | null
+          deposit_hold_failure_count?: number
+          deposit_hold_last_error?: string | null
+          deposit_hold_last_error_code?: string | null
+          deposit_hold_next_retry_at?: string | null
           deposit_hold_payment_intent_id?: string | null
           deposit_hold_payment_method_id?: string | null
           deposit_hold_placed_at?: string | null
+          deposit_hold_platform_account?: string | null
+          deposit_hold_release_requested_at?: string | null
           deposit_hold_status?: string | null
+          deposit_hold_status_changed_at?: string | null
           deposit_hold_stripe_customer_id?: string | null
+          deposit_hold_stripe_mode?: string | null
+          deposit_hold_target_amount?: number | null
+          deposit_hold_verified_at?: string | null
+          deposit_hold_window_seconds?: number | null
+          disclosed_hold_amount?: number | null
+          disclosed_hold_at?: string | null
+          disclosed_hold_source?: string | null
+          disclosed_hold_version?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -12717,6 +13039,10 @@ export type Database = {
           has_installment_plan?: boolean | null
           health_severity?: string | null
           id?: string
+          id_verification_waived?: boolean
+          id_verification_waived_at?: string | null
+          id_verification_waived_by?: string | null
+          id_verification_waived_reason?: string | null
           installment_plan_id?: string | null
           insurance_premium?: number | null
           insurance_status?: string | null
@@ -12813,12 +13139,38 @@ export type Database = {
           delivery_option?: string | null
           deposit_amount_override?: number | null
           deposit_hold_amount?: number | null
+          deposit_hold_attempt_seq?: number
+          deposit_hold_card_brand?: string | null
+          deposit_hold_card_exp_month?: number | null
+          deposit_hold_card_exp_year?: number | null
+          deposit_hold_card_funding?: string | null
+          deposit_hold_card_last4?: string | null
+          deposit_hold_chain_expires_at?: string | null
+          deposit_hold_connect_account_id?: string | null
+          deposit_hold_currency?: string | null
           deposit_hold_expires_at?: string | null
+          deposit_hold_expiry_source?: string | null
+          deposit_hold_extended_auth?: boolean | null
+          deposit_hold_failure_count?: number
+          deposit_hold_last_error?: string | null
+          deposit_hold_last_error_code?: string | null
+          deposit_hold_next_retry_at?: string | null
           deposit_hold_payment_intent_id?: string | null
           deposit_hold_payment_method_id?: string | null
           deposit_hold_placed_at?: string | null
+          deposit_hold_platform_account?: string | null
+          deposit_hold_release_requested_at?: string | null
           deposit_hold_status?: string | null
+          deposit_hold_status_changed_at?: string | null
           deposit_hold_stripe_customer_id?: string | null
+          deposit_hold_stripe_mode?: string | null
+          deposit_hold_target_amount?: number | null
+          deposit_hold_verified_at?: string | null
+          deposit_hold_window_seconds?: number | null
+          disclosed_hold_amount?: number | null
+          disclosed_hold_at?: string | null
+          disclosed_hold_source?: string | null
+          disclosed_hold_version?: string | null
           discount_applied?: number | null
           document_status?: string | null
           docusign_envelope_id?: string | null
@@ -12833,6 +13185,10 @@ export type Database = {
           has_installment_plan?: boolean | null
           health_severity?: string | null
           id?: string
+          id_verification_waived?: boolean
+          id_verification_waived_at?: string | null
+          id_verification_waived_by?: string | null
+          id_verification_waived_reason?: string | null
           installment_plan_id?: string | null
           insurance_premium?: number | null
           insurance_status?: string | null
@@ -12948,6 +13304,13 @@ export type Database = {
             columns: ["delivery_location_id"]
             isOneToOne: false
             referencedRelation: "delivery_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rentals_id_verification_waived_by_fkey"
+            columns: ["id_verification_waived_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
           {
@@ -14593,6 +14956,7 @@ export type Database = {
           admin_email: string | null
           admin_name: string | null
           ai_monthly_quota: number
+          allow_rental_without_id_verification: boolean
           app_name: string | null
           area_around_enabled: boolean | null
           area_center_lat: number | null
@@ -14662,6 +15026,7 @@ export type Database = {
           google_maps_url: string | null
           hero_background_url: string | null
           hide_checkout_price_breakdown: boolean
+          hide_vehicle_registration: boolean
           id: string
           inshur_2fa_token: string | null
           inshur_billing_mode: string | null
@@ -14848,6 +15213,7 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           ai_monthly_quota?: number
+          allow_rental_without_id_verification?: boolean
           app_name?: string | null
           area_around_enabled?: boolean | null
           area_center_lat?: number | null
@@ -14917,6 +15283,7 @@ export type Database = {
           google_maps_url?: string | null
           hero_background_url?: string | null
           hide_checkout_price_breakdown?: boolean
+          hide_vehicle_registration?: boolean
           id?: string
           inshur_2fa_token?: string | null
           inshur_billing_mode?: string | null
@@ -15103,6 +15470,7 @@ export type Database = {
           admin_email?: string | null
           admin_name?: string | null
           ai_monthly_quota?: number
+          allow_rental_without_id_verification?: boolean
           app_name?: string | null
           area_around_enabled?: boolean | null
           area_center_lat?: number | null
@@ -15172,6 +15540,7 @@ export type Database = {
           google_maps_url?: string | null
           hero_background_url?: string | null
           hide_checkout_price_breakdown?: boolean
+          hide_vehicle_registration?: boolean
           id?: string
           inshur_2fa_token?: string | null
           inshur_billing_mode?: string | null
@@ -16007,7 +16376,13 @@ export type Database = {
           created_at: string
           display_order: number | null
           id: string
+          original_url: string | null
           photo_url: string
+          redacted_at: string | null
+          redacted_by: string | null
+          redacted_url: string | null
+          redaction_regions: Json | null
+          redaction_status: string
           tenant_id: string | null
           updated_at: string
           vehicle_id: string
@@ -16016,7 +16391,13 @@ export type Database = {
           created_at?: string
           display_order?: number | null
           id?: string
+          original_url?: string | null
           photo_url: string
+          redacted_at?: string | null
+          redacted_by?: string | null
+          redacted_url?: string | null
+          redaction_regions?: Json | null
+          redaction_status?: string
           tenant_id?: string | null
           updated_at?: string
           vehicle_id: string
@@ -16025,7 +16406,13 @@ export type Database = {
           created_at?: string
           display_order?: number | null
           id?: string
+          original_url?: string | null
           photo_url?: string
+          redacted_at?: string | null
+          redacted_by?: string | null
+          redacted_url?: string | null
+          redaction_regions?: Json | null
+          redaction_status?: string
           tenant_id?: string | null
           updated_at?: string
           vehicle_id?: string
@@ -17205,6 +17592,7 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
+          description: string | null
           due_date: string | null
           entry_date: string | null
           entry_id: string | null
@@ -18692,9 +19080,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],

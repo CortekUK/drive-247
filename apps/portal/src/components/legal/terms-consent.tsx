@@ -63,7 +63,19 @@ export function TermsConsent({
         id={`${id}-desc`}
         className="cursor-pointer text-xs leading-relaxed text-muted-foreground"
       >
-        I have read and agree to the{" "}
+        {/*
+          COPY IS VERBATIM FROM THE HANDOFF MEMO, item 3: 'A single checkbox:
+          "I agree to the Terms of Service and Privacy Policy," with each word
+          hyperlinked to its own canonical page.'
+
+          This briefly read "I have read and agree to the..." — a stronger
+          attestation, and the phrasing the login gate uses. But the memo's
+          closing note is explicit that legal copy goes back to Ghulam rather
+          than being improved inline, so the memo's wording stands until he says
+          otherwise. If you think the stronger form is worth having, ask him —
+          don't just edit it here.
+        */}
+        I agree to the{" "}
         <a
           href={PLATFORM_TERMS_URL}
           target="_blank"

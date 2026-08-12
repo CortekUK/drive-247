@@ -35,30 +35,90 @@ serve(async (req) => {
     if (!email || !tempPassword) {
       return new Response(
         JSON.stringify({ error: 'Email and temporary password are required' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
 
-    console.log(`Emergency password reset requested for: ${email}`);
+    // AUTHORIZATION — this function sets an arbitrary user's password.
+    //
+    // It previously had NO authorization of any kind: the body carried only an
+    // email and a new password, and the gateway accepts the public anon key as a
+    // valid JWT. Anyone who knew a staff member's email address could take over
+    // their account. The portal's "Forgot password?" flow called it directly,
+    // which is why it looked legitimate.
+    //
+    // Password RECOVERY for a signed-out user must go through an email-verified
+    // flow (supabase.auth.resetPasswordForEmail), not this. What remains here is
+    // the admin tool: an authenticated super admin resetting someone's password.
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const callerToken = authHeader.replace('Bearer ', '').trim();
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-    // Find user by email - use listUsers since getUserByEmail doesn't exist
-    const { data: userList, error: getUserError } = await supabaseAdmin.auth.admin.listUsers();
-    
+    if (!callerToken || callerToken === anonKey) {
+      return new Response(
+        JSON.stringify({ error: 'Not authorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: { user: caller }, error: callerErr } = await supabaseAdmin.auth.getUser(callerToken);
+    if (callerErr || !caller) {
+      return new Response(
+        JSON.stringify({ error: 'Not authorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: callerRows } = await supabaseAdmin
+      .from('app_users')
+      .select('is_super_admin, is_active')
+      .eq('auth_user_id', caller.id);
+
+    const isSuperAdmin = Array.isArray(callerRows)
+      && callerRows.some((r: any) => r.is_super_admin === true && r.is_active !== false);
+
+    if (!isSuperAdmin) {
+      console.warn(`[emergency-password-reset] DENIED for caller ${caller.id} targeting ${email}`);
+      return new Response(
+        JSON.stringify({ error: 'Not authorized' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Emergency password reset requested by super admin ${caller.id} for: ${email}`);
+
+    // Find user by email. listUsers() is paginated and defaults to 50 per page —
+    // an unpaginated call silently stopped finding anyone past the first 50 users,
+    // and the comparison was case-sensitive against a store that lowercases every
+    // address, so any mixed-case input reported "User not found".
+    const wanted = email.trim().toLowerCase();
+    let authUser: { id: string; email?: string } | undefined;
+    let getUserError: unknown = null;
+
+    for (let page = 1; page <= 20 && !authUser; page++) {
+      const { data: userList, error } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      });
+      if (error) { getUserError = error; break; }
+      const users = userList?.users ?? [];
+      authUser = users.find((u: any) => (u.email ?? '').toLowerCase() === wanted);
+      if (users.length < 200) break; // last page
+    }
+
     if (getUserError) {
       console.error('Failed to list users:', getUserError);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch users' }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
-    
-    const authUser = userList.users.find(user => user.email === email);
     
     if (!authUser) {
       console.error('User not found:', email);

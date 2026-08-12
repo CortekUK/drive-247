@@ -194,6 +194,16 @@ export interface Tenant {
   //  - hide_checkout_price_breakdown: hide the weekday/weekend/holiday breakdown at checkout
   show_effective_daily_rate: boolean | null;
   hide_checkout_price_breakdown: boolean | null;
+
+  /**
+   * Keep vehicle plates (and VIN) away from customers on this tenant's site.
+   *
+   * Read by lib/vehicle-identity.ts, which both withholds `reg` from the
+   * SELECT and suppresses it at every render site. `anon` holds a column-level
+   * SELECT grant for this — without it, Postgres refuses the whole tenant row
+   * and every site silently loses its branding.
+   */
+  hide_vehicle_registration: boolean | null;
 }
 
 interface TenantContextType {
@@ -482,7 +492,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           ga_measurement_id,
           customer_theme_mode,
           show_effective_daily_rate,
-          hide_checkout_price_breakdown
+          hide_checkout_price_breakdown,
+          hide_vehicle_registration
         `)
         .eq('slug', slug)
         // Load active AND suspended tenants so a suspended tenant resolves and

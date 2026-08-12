@@ -1,0 +1,874 @@
+{
+  "communities": [
+    {
+      "id": 84,
+      "size": 11,
+      "cohesion": 0.18,
+      "units": {
+        "docs": 11
+      },
+      "kinds": {
+        "concept": 7
+      },
+      "relations": {
+        "references": 10,
+        "conceptually_related_to": 4,
+        "semantically_similar_to": 2,
+        "rationale_for": 2,
+        "reads_table": 2
+      },
+      "members": [
+        {
+          "label": "Lockbox and collection key-handover notification chain",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "Signing is not activation: marking key handover complete is the true activation",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "BoldSign agreement send/sign with self-sent notifications (DisableEmails true)",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "WhatsApp Business verification gates the WhatsApp messaging tab",
+          "file": "docs/jangram-action-items.html",
+          "kind": null
+        },
+        {
+          "label": "send collection whatsapp capability",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "20260306140000 add whatsapp meta pertenantwhatsapp",
+          "file": "docs/jangram-action-items.html",
+          "kind": "concept"
+        },
+        {
+          "label": "boldsign webhook documentstatussync",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "boldsign webhook nokeyhandoveronsign",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "notify lockbox code capability",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "send lockbox scheduled capability",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "tbl lockbox templates",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "size": 10,
+      "cohesion": 0.22,
+      "units": {
+        "portal": 10
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 14,
+        "invokes": 2,
+        "references": 2,
+        "reads_table": 2,
+        "semantically_similar_to": 2
+      },
+      "members": [
+        {
+          "label": "Non-dismissible tenant billing paywall",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "past_due variant pays an existing invoice instead of buying a plan",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Tenant suspension full-screen access freeze",
+          "file": "apps/portal/src/components/tenant/tenant-suspended-screen.tsx",
+          "kind": null
+        },
+        {
+          "label": "create-subscription-checkout edge function",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Go-live billing anchor drives upfront_monthly first-charge date",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Never render a dead pay button \u2014 fall back to a human",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Sign-out escape hatch inside an inescapable modal",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Screen-reader-only DialogTitle for the loading state",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Client-verbatim expiry copy with 'here' as the invoice anchor",
+          "file": "apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Suspension has no self-service exit \u2014 only a super admin can reactivate",
+          "file": "apps/portal/src/components/tenant/tenant-suspended-screen.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "size": 10,
+      "cohesion": 0.24,
+      "units": {
+        "booking": 10
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 10,
+        "semantically_similar_to": 6,
+        "rationale_for": 4,
+        "shares_data_with": 2
+      },
+      "members": [
+        {
+          "label": "Lead application multi-step form schema",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        },
+        {
+          "label": "Enquiry-based booking request schema",
+          "file": "apps/booking/src/client-schemas/enquiry.ts",
+          "kind": null
+        },
+        {
+          "label": "Honeypot spam field on the application form",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        },
+        {
+          "label": "Honeypot spam field on the enquiry form",
+          "file": "apps/booking/src/client-schemas/enquiry.ts",
+          "kind": null
+        },
+        {
+          "label": "Required ISO date field with an explicit empty-value message",
+          "file": "apps/booking/src/client-schemas/enquiry.ts",
+          "kind": null
+        },
+        {
+          "label": "Applicant age bounds and their justification",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: schema duplicated as a Deno copy for the submit-application edge function",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        },
+        {
+          "label": "Per-step wizard validation schemas",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        },
+        {
+          "label": "Years-driving cannot exceed age minus 16",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        },
+        {
+          "label": "submit-application edge function",
+          "file": "apps/booking/src/client-schemas/apply.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "size": 9,
+      "cohesion": 0.22,
+      "units": {
+        "booking": 4,
+        "portal": 4,
+        "external": 1
+      },
+      "kinds": {
+        "external_package": 1
+      },
+      "relations": {
+        "contains": 12,
+        "depends_on": 6,
+        "imports": 2
+      },
+      "members": [
+        {
+          "label": "drawer.tsx",
+          "file": "apps/booking/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "drawer.tsx",
+          "file": "apps/portal/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "vaul",
+          "file": null,
+          "kind": "external_package"
+        },
+        {
+          "label": "Drawer()",
+          "file": "apps/booking/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "DrawerFooter()",
+          "file": "apps/booking/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "DrawerHeader()",
+          "file": "apps/booking/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "Drawer()",
+          "file": "apps/portal/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "DrawerFooter()",
+          "file": "apps/portal/src/components/ui/drawer.tsx",
+          "kind": null
+        },
+        {
+          "label": "DrawerHeader()",
+          "file": "apps/portal/src/components/ui/drawer.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "size": 9,
+      "cohesion": 0.39,
+      "units": {
+        "portal": 9
+      },
+      "kinds": {},
+      "relations": {
+        "contains": 16,
+        "calls": 12,
+        "imports": 3,
+        "depends_on": 2
+      },
+      "members": [
+        {
+          "label": "signature-pad.tsx",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "getCtx()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "draw()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "pointFromEvent()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "setupCanvas()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "begin()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "handleClear()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "onResize()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        },
+        {
+          "label": "end()",
+          "file": "apps/portal/src/components/settings/bonzah-onboarding/signature-pad.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "size": 9,
+      "cohesion": 0.25,
+      "units": {
+        "portal": 9
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 10,
+        "rationale_for": 4,
+        "semantically_similar_to": 2,
+        "shares_data_with": 2
+      },
+      "members": [
+        {
+          "label": "Credit wallet: balances, purchase, auto-refill",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Platform-ToS consent gate on credit purchase",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Live-only credit usage chart with time range and service filter",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Credit usage chart rebuilt on the analytics page",
+          "file": "apps/portal/src/app/(dashboard)/credits/analytics/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Credit usage analytics",
+          "file": "apps/portal/src/app/(dashboard)/credits/analytics/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Auto-refill threshold and top-up amount settings",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Post-checkout success polling while the credit purchase webhook settles",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: 5-credit minimum mirrors CREDIT_CONFIG.MIN_PURCHASE_CREDITS because the AED credits account cannot settle sub-200-fils Stripe totals",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: /credits is whitelisted past the subscription paywall, so a tenant with no plan could be charged having accepted nothing; the gate fails closed while the query is in flight",
+          "file": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "size": 9,
+      "cohesion": 0.42,
+      "units": {
+        "booking": 9
+      },
+      "kinds": {},
+      "relations": {
+        "contains": 16,
+        "calls": 14
+      },
+      "members": [
+        {
+          "label": "ai-insurance-verification.ts",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "parseAIResponse()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "verifyInsuranceDocument()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "analyzeTextResponse()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "buildVerificationPrompt()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "callOpenRouterAPI()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "getSuggestionForRejection()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "mapRecommendationToStatus()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        },
+        {
+          "label": "mapToRejectionCode()",
+          "file": "apps/booking/src/lib/ai-insurance-verification.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "size": 9,
+      "cohesion": 0.22,
+      "units": {
+        "edge-functions": 9
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 8,
+        "rationale_for": 6,
+        "governs": 2,
+        "reads_table": 1
+      },
+      "members": [
+        {
+          "label": "Reconcile every Stripe webhook endpoint's enabled_events with what subscription-webhook actually handles",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Auth accepts the raw service-role key OR an active super admin, so the reconciler can be driven from inside the database",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Sweeps the uk/uae x test/live account matrix; a key not held for a combination is skipped, not an error",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: additive only \u2014 never removes an event someone added by hand for a reason this repo does not know",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: a handler Stripe never sends an event to is dead code that reads as working \u2014 no error, no log; three invoice handlers sat unused this way",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Dry run by default: POST {} previews the diff, only {\"apply\": true} writes to Stripe",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "SUBSCRIPTION_WEBHOOK_EVENTS is the shared source of truth binding the handler code to Stripe-side subscription config",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: runs INSIDE Supabase so the four account/mode Stripe secrets never leave the function environment",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        },
+        {
+          "label": "An endpoint already subscribed to '*' is reported as covered and left untouched",
+          "file": "supabase/functions/sync-subscription-webhook-events/index.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 92,
+      "size": 9,
+      "cohesion": 0.25,
+      "units": {
+        "booking": 9
+      },
+      "kinds": {},
+      "relations": {
+        "governs": 8,
+        "rationale_for": 4,
+        "semantically_similar_to": 4,
+        "conceptually_related_to": 4,
+        "reads_table": 1
+      },
+      "members": [
+        {
+          "label": "Day-zero upfront display override (deposit + fees folded into slot 1)",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "Only overdue / due-today / open tiles are clickable",
+          "file": "apps/booking/src/components/installments/InstallmentCalendar.tsx",
+          "kind": null
+        },
+        {
+          "label": "Month-grid installment calendar with per-status colour tones",
+          "file": "apps/booking/src/components/installments/InstallmentCalendar.tsx",
+          "kind": null
+        },
+        {
+          "label": "One installment schedule table serving both operator and customer actions",
+          "file": "apps/booking/src/components/installments/InstallmentScheduleTable.tsx",
+          "kind": null
+        },
+        {
+          "label": "Pay button disabled until the slot reaches its due date",
+          "file": "apps/booking/src/components/installments/InstallmentScheduleTable.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: scheduled_installments rows carry only the rental portion, so day zero would understate what is owed",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "Upfront vs splittable amount breakdown display",
+          "file": "apps/booking/src/components/installments/InstallmentBreakdown.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: clicking future tiles would trigger early cumulative settlement or leave the schedule out of order",
+          "file": "apps/booking/src/components/installments/InstallmentCalendar.tsx",
+          "kind": null
+        },
+        {
+          "label": "Operator-side day-zero upfront helper in the portal installment section",
+          "file": "apps/portal/src/components/installments/InstallmentSection.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 93,
+      "size": 8,
+      "cohesion": 0.29,
+      "units": {
+        "portal": 8
+      },
+      "kinds": {},
+      "relations": {
+        "governs": 12,
+        "semantically_similar_to": 2,
+        "rationale_for": 2,
+        "conceptually_related_to": 1
+      },
+      "members": [
+        {
+          "label": "INSHUR/ABI field normalisation contract, executed against the real Deno module",
+          "file": "apps/portal/src/__tests__/lib/inshur-transforms.test.ts",
+          "kind": null
+        },
+        {
+          "label": "US phone normalisation that rejects UK numbers instead of truncating them",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "US ZIP normalisation (ZIP+4 truncated, UK postcodes rejected)",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "ABI date-time rendered as the named zone's wall clock, DST-correct, never hour 24",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "InshurError with INSHUR_INVALID_FIELD, so edge functions can tell operator data from ABI faults",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "VIN normalisation rejecting I, O and Q as OCR artefacts",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Name split that refuses a single-token name rather than insuring the wrong person",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Rationale: these transforms are the only copy of the rules and run before every ABI write, so they are imported rather than reimplemented next to the test",
+          "file": "apps/portal/src/__tests__/lib/inshur-transforms.test.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 94,
+      "size": 8,
+      "cohesion": 0.25,
+      "units": {
+        "portal": 8
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 6,
+        "conceptually_related_to": 4,
+        "implements": 4,
+        "contains": 1,
+        "reads_table": 1
+      },
+      "members": [
+        {
+          "label": "Unified customer communication hub \u2014 SMS, WhatsApp, Email and Calling",
+          "file": "apps/portal/src/components/settings/communication-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Call forwarding, voicemail and recording configuration",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Three-state channel readiness badge \u2014 active, pending, not set up",
+          "file": "apps/portal/src/components/settings/communication-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Voice calling cannot be enabled until Twilio SMS is configured with a phone number",
+          "file": "apps/portal/src/components/settings/communication-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Server value is synced into local state inside the render body, guarded only by a dirty flag",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Component returns null unless voice is enabled \u2014 the parent renders it unconditionally",
+          "file": "apps/portal/src/components/settings/call-forwarding-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "Email is the one always-on channel \u2014 sent via Resend with no per-tenant setup",
+          "file": "apps/portal/src/components/settings/communication-settings.tsx",
+          "kind": null
+        },
+        {
+          "label": "An SMS-only Twilio number allows outbound calls but no callbacks",
+          "file": "apps/portal/src/components/settings/communication-settings.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 95,
+      "size": 8,
+      "cohesion": 0.25,
+      "units": {
+        "booking": 8
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 6,
+        "rationale_for": 4,
+        "invokes": 2,
+        "shares_data_with": 2,
+        "governs": 1,
+        "writes_table": 1
+      },
+      "members": [
+        {
+          "label": "Cumulative overdue settlement stamped on the latest installment id",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "Direct Stripe Checkout redirect for an installment (no magic-link middleware)",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "installment_settle_invoice settlement routine",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "create-checkout-session edge function",
+          "file": "supabase/functions/create-checkout-session/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Superseded installments are presented to the customer as paid",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: paying the overdue total under the latest installment id lets the webhook supersede earlier slots",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: same flow as PAYG customer Pay and operator Charge via Stripe; webhook settles via installment_id metadata",
+          "file": "apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+          "kind": null
+        },
+        {
+          "label": "Stripe.js publishable key with a hardcoded test-key fallback",
+          "file": "apps/booking/src/config/stripe.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 96,
+      "size": 8,
+      "cohesion": 0.29,
+      "units": {
+        "web": 8
+      },
+      "kinds": {},
+      "relations": {
+        "contains": 8,
+        "imports": 8,
+        "depends_on": 1
+      },
+      "members": [
+        {
+          "label": "page.tsx",
+          "file": "apps/web/src/app/(marketing)/terms/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "platform-tos-document.tsx",
+          "file": "apps/web/src/components/legal/platform-tos-document.tsx",
+          "kind": null
+        },
+        {
+          "label": "interim-platform-terms.tsx",
+          "file": "apps/web/src/components/legal/interim-platform-terms.tsx",
+          "kind": null
+        },
+        {
+          "label": "platform-tos.ts",
+          "file": "apps/web/src/lib/legal/platform-tos.ts",
+          "kind": null
+        },
+        {
+          "label": "InterimPlatformTerms()",
+          "file": "apps/web/src/components/legal/interim-platform-terms.tsx",
+          "kind": null
+        },
+        {
+          "label": "TermsPage()",
+          "file": "apps/web/src/app/(marketing)/terms/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Block()",
+          "file": "apps/web/src/components/legal/platform-tos-document.tsx",
+          "kind": null
+        },
+        {
+          "label": "PlatformTosDocument()",
+          "file": "apps/web/src/components/legal/platform-tos-document.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 97,
+      "size": 8,
+      "cohesion": 0.5,
+      "units": {
+        "edge-functions": 8
+      },
+      "kinds": {},
+      "relations": {
+        "calls": 15,
+        "contains": 14,
+        "imports": 1
+      },
+      "members": [
+        {
+          "label": "agreement-injection.ts",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "injectAgreementClauses()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "insertBeforeSignature()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "injectBonzahAddendum()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "injectTerms()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "blockStartBefore()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "hasPlaceholder()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "injectMileage()",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        }
+      ]
+    }
+  ]
+}

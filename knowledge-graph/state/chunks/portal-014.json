@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 14,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_014.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-document-upload.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-filters.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-kpis.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-policy-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-policy-drawer.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-policy-status-chip.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/insurance-tab-content.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/rental-insurance-verifications-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/verification-detail-sheet.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/verification-score-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/verification-upload-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/verifications-tab.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/invoices/delete-invoice-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/invoices/payment-requests-tab.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/invoices/send-invoice-email-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/attach-automation-dropdown.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/blacklist-confirm-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/convert-to-rental-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/lead-activity-timeline.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/lead-ai-next-action.tsx"
+  ]
+}

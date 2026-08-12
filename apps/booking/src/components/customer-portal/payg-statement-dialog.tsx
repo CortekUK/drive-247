@@ -9,6 +9,7 @@ import { useReactToPrint } from "react-to-print";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import type { PaygInvoiceData, PaygInvoiceRow, PaygPaymentRow } from "@/hooks/use-payg-invoices";
+import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 interface PaygStatementDialogProps {
   open: boolean;
@@ -72,10 +73,11 @@ function StatementContent({
   generatedAt,
   printable,
 }: StatementContentProps) {
+  const { tenant } = useTenant();
   const fmt = (n: number) => formatCurrency(round2(n), currencyCode);
   const vehicleName = vehicle.make && vehicle.model
     ? `${vehicle.make} ${vehicle.model}`
-    : (vehicle.reg ?? "—");
+    : vehicleDisplayName(vehicle, tenant, "—");
 
   // Sort by dayIndex ASC for the statement table (chronological)
   const sortedInvoices = useMemo(
@@ -200,9 +202,9 @@ function StatementContent({
           <div>
             <p className={printable ? "" : "text-muted-foreground"} style={printable ? { color: "#6b7280", margin: 0 } : undefined}>Vehicle</p>
             <p className={printable ? "" : "font-medium"} style={printable ? { fontWeight: 500, margin: 0 } : undefined}>{vehicleName}</p>
-            {vehicle.reg && (
+            {displayRegistration(vehicle, tenant) && (
               <p className={printable ? "" : "text-muted-foreground text-xs"} style={printable ? { color: "#9ca3af", fontSize: 12, margin: 0 } : undefined}>
-                Reg: {vehicle.reg}
+                Reg: {displayRegistration(vehicle, tenant)}
               </p>
             )}
           </div>

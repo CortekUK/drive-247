@@ -13,6 +13,7 @@ import { CheckCircle2, FileSignature } from 'lucide-react';
 import type { BonzahOnboardingFormData, FileUrls } from '../schema';
 import { SectionTitle } from './section-title';
 import { SignaturePad } from '../signature-pad';
+import { BONZAH_LINKS } from '@/lib/bonzah-compliance';
 
 interface Props {
   fileUrls: FileUrls;
@@ -179,13 +180,16 @@ export function Step8Review({ fileUrls }: Props) {
             <div className="space-y-1 leading-tight">
               <FormLabel className="text-sm font-normal">
                 I agree to the{' '}
+                {/* Was bonzah.com/user-agreement, which 404s — an operator could
+                    not read what they were ticking. Business Partner Terms is the
+                    current operator-facing contract (reissued 4 Aug 2026). */}
                 <a
-                  href="https://bonzah.com/user-agreement"
+                  href={BONZAH_LINKS.businessPartnerTerms}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary underline hover:text-primary/80"
                 >
-                  User Agreement
+                  Business Partner Terms
                 </a>
                 .
               </FormLabel>

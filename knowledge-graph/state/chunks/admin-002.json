@@ -1,0 +1,30 @@
+{
+  "unit": "admin",
+  "unit_label": "Admin - super-admin dashboard",
+  "unit_kind": "nextjs-app",
+  "chunk": 2,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/admin/graphify-out/.graphify_chunk_admin_002.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/admin-todos-tab.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/assignee-avatar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/priority-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-board.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-column.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-comments.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-create-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-detail-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin-todos/todo-image-upload.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/BonzahContentEditor.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/BonzahSubmissions.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/CreateTenantDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/ForceLogoutAllControl.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Header.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/MobileHeader.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/OnboardingFollowUpSheet.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/SalesOnboardingDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/SendToBrandonDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Sidebar.tsx"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 10,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_010.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-approved/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-cancelled/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-pending/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-rejected/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-feedback-submission/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-fine-recorded/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-identity-verified/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-lockbox-code/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-operator-email/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-payment-failed/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-pickup-reminder/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-preauth-expiring/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-refund-processed/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-rental-completed/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-rental-extended/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-rental-reminder/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-rental-started/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-return-due/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-signing-completed/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/onboarding-daily-digest/index.ts"
+  ]
+}

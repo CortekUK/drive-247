@@ -37,10 +37,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Pickup Date:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -105,10 +102,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Pickup Date:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -225,7 +219,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Original Rental Period:</strong></td>
@@ -276,10 +270,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Rental Start:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -336,7 +327,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Return Date:</strong></td>
@@ -389,7 +380,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Rental Period:</strong></td>
@@ -440,10 +431,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Return Date:</strong></td>
     <td>{{rental_end_date}}</td>
@@ -593,7 +581,7 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Previous End Date:</strong></td>
@@ -938,13 +926,39 @@ export function wrapEmailHtml(
 export async function getTenantInfo(
   supabaseClient: any,
   tenantId: string
-): Promise<{ company_name: string; company_email: string; company_phone: string; company_address: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string }> {
+): Promise<{ company_name: string; company_email: string; company_phone: string; company_address: string; primary_color: string; accent_color: string; logo_url: string | null; currency_code: string; hide_vehicle_registration: boolean }> {
+  // Branding columns that every project has, kept separate from the newer flag.
+  const BASE = 'company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code';
   try {
-    const { data, error } = await supabaseClient
+    let { data, error } = await supabaseClient
       .from('tenants')
-      .select('company_name, contact_email, contact_phone, phone, address, primary_color, accent_color, logo_url, currency_code')
+      .select(`${BASE}, hide_vehicle_registration`)
       .eq('id', tenantId)
       .single();
+
+    // hide_vehicle_registration exists in production but not in every project
+    // this shared file is deployed to (staging did not have it when this was
+    // written). PostgREST fails the WHOLE select on one unknown column, so
+    // without this retry a schema-behind project would lose the tenant row
+    // entirely and send every email under generic "DRIVE 247" branding instead
+    // of the operator's. Branding must not depend on a privacy flag.
+    // Retry ONLY when the column is genuinely absent (a project behind prod's
+    // schema). Retrying on ANY error meant a transient failure silently dropped
+    // the column, `undefined === true` evaluated false, and the plate was shown
+    // for a tenant who had opted in — a fail-OPEN in the fail-closed path.
+    let columnMissing = false;
+    if (error) {
+      columnMissing = error.code === '42703'
+        || /column .* does not exist/i.test(error.message || '');
+      if (columnMissing) {
+        console.warn('[getTenantInfo] Column absent on this project; retrying without it.');
+        ({ data, error } = await supabaseClient
+          .from('tenants')
+          .select(BASE)
+          .eq('id', tenantId)
+          .single());
+      }
+    }
 
     if (error) throw error;
 
@@ -957,6 +971,9 @@ export async function getTenantInfo(
       accent_color: data.accent_color || '#C5A572',
       logo_url: data.logo_url || null,
       currency_code: data.currency_code || 'USD',
+      // On the retry path the column was not selected, so undefined means
+      // 'this project predates the feature' — nobody can have opted in.
+      hide_vehicle_registration: columnMissing ? false : data.hide_vehicle_registration === true,
     };
   } catch (err) {
     console.warn('Error fetching tenant info:', err);
@@ -969,6 +986,20 @@ export async function getTenantInfo(
       accent_color: '#C5A572',
       logo_url: null,
       currency_code: 'USD',
+      // Fail CLOSED. We could not read the tenant at all, so we do not know
+      // their preference — and `false` here would silently un-hide the plate
+      // for a tenant who had opted in, which is the one outcome this flag
+      // exists to prevent.
+      //
+      // The earlier reasoning (that `false` preserves behaviour for the ~41
+      // tenants who have not opted in) traded a privacy guarantee for
+      // cosmetics. It is also moot: reaching this branch means the tenant row
+      // was unreadable, so the email is already going out with generic
+      // "DRIVE 247" branding rather than the operator's. An email that is
+      // already visibly degraded is not made worse by omitting a plate, and
+      // the same fail-closed rule now governs the client
+      // (canRevealRegistration) and the lockbox/WhatsApp senders.
+      hide_vehicle_registration: true,
     };
   }
 }
@@ -990,9 +1021,18 @@ export async function resolveEmailData(
 
   // Start with empty data
   const result: EmailTemplateData = {};
+  // Always defined, so an unreplaced {{vehicle_reg_row}} never ships as literal text.
+  result.vehicle_reg_suffix = '';
+  result.vehicle_reg_row = '';
 
   // Fetch tenant info if tenantId provided
   let currencyCode = 'USD';
+  // Tenants can keep plates away from customers. Enforced HERE rather than
+  // in each template because tenants own editable copies of these templates:
+  // a tenant whose saved template still contains {{vehicle_reg}} would keep
+  // emailing the plate no matter what the shipped defaults say. Blanking the
+  // variable is the only fix that reaches those rows.
+  let hideVehicleReg = false;
   if (tenantId) {
     try {
       const tenantInfo = await getTenantInfo(supabaseClient, tenantId);
@@ -1001,6 +1041,7 @@ export async function resolveEmailData(
       result.company_phone = tenantInfo.company_phone;
       result.company_address = tenantInfo.company_address;
       currencyCode = tenantInfo.currency_code;
+      hideVehicleReg = tenantInfo.hide_vehicle_registration;
     } catch (err) {
       console.warn('[resolveEmailData] Error fetching tenant:', err);
     }
@@ -1044,6 +1085,10 @@ export async function resolveEmailData(
             result.company_phone = tenantInfo.company_phone;
             result.company_address = tenantInfo.company_address;
             currencyCode = tenantInfo.currency_code;
+            // Was missing: this branch resolves the tenant from the rental when
+            // no tenantId was passed, so without it the plate flag was simply
+            // never consulted on that path.
+            hideVehicleReg = tenantInfo.hide_vehicle_registration;
           } catch (_) { /* already logged */ }
         }
 
@@ -1076,9 +1121,17 @@ export async function resolveEmailData(
           result.vehicle_make = vehicle.make || '';
           result.vehicle_model = vehicle.model || '';
           result.vehicle_year = vehicle.year?.toString() || '';
-          result.vehicle_reg = vehicle.reg || '';
+          result.vehicle_reg = hideVehicleReg ? '' : (vehicle.reg || '');
+          // Companions so a withheld plate leaves no empty brackets and no
+          // "Registration:" row with a blank cell. Templates use these instead
+          // of wrapping {{vehicle_reg}} in punctuation they cannot make
+          // conditional themselves.
+          result.vehicle_reg_suffix = result.vehicle_reg ? ` (${result.vehicle_reg})` : '';
+          result.vehicle_reg_row = result.vehicle_reg
+            ? `  <tr>\n    <td><strong>Registration:</strong></td>\n    <td>${result.vehicle_reg}</td>\n  </tr>`
+            : '';
           result.vehicle_color = vehicle.color || '';
-          result.vehicle_vin = vehicle.vin || '';
+          result.vehicle_vin = hideVehicleReg ? '' : (vehicle.vin || '');
           result.vehicle_fuel_type = vehicle.fuel_type || '';
           result.vehicle_daily_rent = vehicle.daily_rent ? formatCurrency(vehicle.daily_rent, currencyCode) : '';
           result.vehicle_weekly_rent = vehicle.weekly_rent ? formatCurrency(vehicle.weekly_rent, currencyCode) : '';
@@ -1121,6 +1174,16 @@ export async function resolveEmailData(
     if (value !== undefined && value !== null && value !== '') {
       result[key] = value;
     }
+  }
+
+  // ...except for the plate and VIN. Callers win on everything else, but this
+  // merge runs AFTER the blanking above, so a caller passing vehicle_reg in
+  // overrides would silently reinstate exactly what the tenant asked us to
+  // withhold. No caller does that today; this makes it impossible rather than
+  // merely unlikely, since the next one to do it would leave no trace.
+  if (hideVehicleReg) {
+    result.vehicle_reg = '';
+    result.vehicle_vin = '';
   }
 
   return result;

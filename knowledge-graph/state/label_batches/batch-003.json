@@ -1,0 +1,1557 @@
+{
+  "communities": [
+    {
+      "id": 28,
+      "size": 135,
+      "cohesion": 0.02,
+      "units": {
+        "edge-functions": 135
+      },
+      "kinds": {
+        "concept": 6
+      },
+      "relations": {
+        "rationale_for": 100,
+        "conceptually_related_to": 51,
+        "implements": 49,
+        "reads_table": 32,
+        "semantically_similar_to": 28,
+        "writes_table": 25
+      },
+      "members": [
+        {
+          "label": "Chained deposit-hold refresh engine \u2014 one authorization link at a time across a 60-120 day rental",
+          "file": "supabase/functions/_shared/deposit-hold-refresh.ts",
+          "kind": null
+        },
+        {
+          "label": "Caller authorisation boundary for the four deposit-hold money endpoints",
+          "file": "supabase/functions/_shared/deposit-hold-auth.ts",
+          "kind": null
+        },
+        {
+          "label": "Licence-plate redaction persistence for vehicle photos",
+          "file": "supabase/functions/save-photo-redaction/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Licence-plate region detection in vehicle photos via AWS Rekognition DetectText",
+          "file": "supabase/functions/detect-plate-regions/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Operator-visible in-app alert when a deposit-hold chain link fails",
+          "file": "supabase/functions/_shared/deposit-hold-notify.ts",
+          "kind": null
+        },
+        {
+          "label": "AI comparison of handover versus return photos to flag new vehicle damage",
+          "file": "supabase/functions/detect-vehicle-damage/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Single source of truth for how much deposit to hold on a rental",
+          "file": "supabase/functions/_shared/deposit-amount.ts",
+          "kind": null
+        },
+        {
+          "label": "Recovery of credit_failed rental agreements",
+          "file": "supabase/functions/retry-credit-failed-agreements/index.ts",
+          "kind": null
+        },
+        {
+          "label": "E-sign usage metering to Stripe billing meters",
+          "file": "supabase/functions/report-usage-event/index.ts",
+          "kind": null
+        },
+        {
+          "label": "deposit_hold_links table (authorization ledger)",
+          "file": "supabase/functions/_shared/deposit-hold-refresh.ts",
+          "kind": null
+        },
+        {
+          "label": "Email OTP verification and Supabase Auth email confirmation",
+          "file": "supabase/functions/verify-otp/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Rekognition DetectText OCR used to locate number plates for photo redaction",
+          "file": "supabase/functions/_shared/aws-rekognition.ts",
+          "kind": null
+        },
+        {
+          "label": "aws-rekognition.ts",
+          "file": "supabase/functions/_shared/aws-rekognition.ts",
+          "kind": null
+        },
+        {
+          "label": "verification_otps table",
+          "file": "supabase/functions/send-verification-otp/index.ts",
+          "kind": null
+        },
+        {
+          "label": "get_customer_rag_context RPC with a direct-query fallback that rebuilds the same context shape",
+          "file": "supabase/functions/customer-chat/index.ts",
+          "kind": null
+        },
+        {
+          "label": "verify_jwt=true was satisfied by the public anon key, so any renter session could move another tenant's money",
+          "file": "supabase/functions/_shared/deposit-hold-auth.ts",
+          "kind": null
+        },
+        {
+          "label": "Staff write-role matrix: head_admin/admin/ops allowed, manager needs an editor grant on the rentals tab, viewer refused",
+          "file": "supabase/functions/_shared/deposit-hold-auth.ts",
+          "kind": null
+        },
+        {
+          "label": "Orphaned-authorization bell \u2014 a live Stripe hold nothing in the product points at",
+          "file": "supabase/functions/_shared/deposit-hold-notify.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "size": 135,
+      "cohesion": 0.02,
+      "units": {
+        "docs": 135
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 66,
+        "governs": 64,
+        "references": 54,
+        "implements": 48,
+        "rationale_for": 40,
+        "writes_table": 26
+      },
+      "members": [
+        {
+          "label": "refresh-deposit-holds edge function (nightly hold-chain driver)",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "rentals table (deposit_hold_* anchoring, retry, disclosure and card-identity columns)",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "deposit_hold_links: append-only per-link authorization ledger written before the Stripe call",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "Hold invariants I1-I10 (must always hold, with the mechanism that enforces each)",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "verify-deposit-hold edge function (probe Stripe and compare-and-set the recorded hold)",
+          "file": "docs/GMT_GATE0_HANDOVER.md",
+          "kind": null
+        },
+        {
+          "label": "EC-01 a payment_intent.canceled on a hold PI with a payments row cancels the live rental",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "EC-02 a security_deposit_hold checkout is booked as captured revenue and FIFO-allocated against real rent",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "Gate 0 change set: B1 webhooks, B2 hold-guard edge functions, B3 portal UI",
+          "file": "docs/GMT_GATE0_HANDOVER.md",
+          "kind": null
+        },
+        {
+          "label": "Card lifecycle across a 90-day chain (EC-13/14/71/72/73/74): expiry, reissue, CAU, brand change, re-minted customer",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "EC-04 payment_model flip nulls every customer's stripe_customer_id and strands UK-anchored holds",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "Strict gate order: Gate 0 disarm, 1 anchoring, 2 state machine, 3 money, 4 disclosure, 5 observability, 6 rollout",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "deposit_hold_status state machine (claim / live / recoverable / frozen / terminal)",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "payments table as the cash ledger for deposit captures",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "place-deposit-hold edge function (first link + operator re-placement)",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "reconcile-deposit-holds: 6-hourly DB<->Stripe truth reconciliation + orphan sweep",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "I3 record-anchored Stripe context (connect account, mode, currency frozen at placement)",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        },
+        {
+          "label": "Gate 0 manual test plan for the Deno edge-function work Vitest cannot execute",
+          "file": "docs/GMT_GATE0_TEST_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "AUTH_DISCLOSURE_HTML: non-tenant-editable card-authorization clause injected into every agreement",
+          "file": "docs/GMT_CHAINED_HOLD_SPEC.md",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "size": 132,
+      "cohesion": 0.02,
+      "units": {
+        "web": 122,
+        "edge-functions": 7,
+        "external": 3
+      },
+      "kinds": {
+        "external_package": 3
+      },
+      "relations": {
+        "imports": 128,
+        "contains": 104,
+        "depends_on": 70,
+        "conceptually_related_to": 28,
+        "calls": 26,
+        "rationale_for": 16
+      },
+      "members": [
+        {
+          "label": "button.tsx",
+          "file": "apps/web/src/components/ui/button.tsx",
+          "kind": null
+        },
+        {
+          "label": "use-fade-in.ts",
+          "file": "apps/web/src/hooks/use-fade-in.ts",
+          "kind": null
+        },
+        {
+          "label": "utils.ts",
+          "file": "apps/web/src/lib/utils.ts",
+          "kind": null
+        },
+        {
+          "label": "index.ts",
+          "file": "supabase/functions/send-strategy-call-email/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Drive247 platform Terms of Service \u2014 the 50-section contract between Cortek Systems Ltd and subscribing rental operators",
+          "file": "apps/web/src/lib/legal/platform-tos.ts",
+          "kind": null
+        },
+        {
+          "label": "page.tsx",
+          "file": "apps/web/src/app/(marketing)/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "dialog.tsx",
+          "file": "apps/web/src/components/ui/dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "constants.ts",
+          "file": "apps/web/src/lib/constants.ts",
+          "kind": null
+        },
+        {
+          "label": "Single source of truth for all marketing landing-page copy (no CMS, no DB \u2014 copy ships in the bundle)",
+          "file": "apps/web/src/lib/constants.ts",
+          "kind": null
+        },
+        {
+          "label": "accordion.tsx",
+          "file": "apps/web/src/components/ui/accordion.tsx",
+          "kind": null
+        },
+        {
+          "label": "select.tsx",
+          "file": "apps/web/src/components/ui/select.tsx",
+          "kind": null
+        },
+        {
+          "label": "One-shot scroll-reveal animation hook for marketing sections",
+          "file": "apps/web/src/hooks/use-fade-in.ts",
+          "kind": null
+        },
+        {
+          "label": "radix-ui",
+          "file": null,
+          "kind": "external_package"
+        },
+        {
+          "label": "tabs.tsx",
+          "file": "apps/web/src/components/ui/tabs.tsx",
+          "kind": null
+        },
+        {
+          "label": "emailWrapper()",
+          "file": "supabase/functions/send-strategy-call-email/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Lazy anon Supabase singleton for the marketing site \u2014 public anon key only, no tenant context and no service role",
+          "file": "apps/web/src/lib/supabase/server.ts",
+          "kind": null
+        },
+        {
+          "label": "lead-capture.ts",
+          "file": "apps/web/src/actions/lead-capture.ts",
+          "kind": null
+        },
+        {
+          "label": "header.tsx",
+          "file": "apps/web/src/components/layout/header.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "size": 132,
+      "cohesion": 0.02,
+      "units": {
+        "docs": 132
+      },
+      "kinds": {
+        "concept": 8
+      },
+      "relations": {
+        "governs": 76,
+        "references": 74,
+        "conceptually_related_to": 54,
+        "writes_table": 42,
+        "rationale_for": 34,
+        "reads_table": 34
+      },
+      "members": [
+        {
+          "label": "process-accounting-sync worker \u2014 batched FOR UPDATE SKIP LOCKED drain of pending sync rows",
+          "file": "docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md",
+          "kind": null
+        },
+        {
+          "label": "Stripe Connect end-to-end test scenario matrix",
+          "file": "docs/STRIPE_CONNECT_TESTING.md",
+          "kind": null
+        },
+        {
+          "label": "Stripe Connect production go-live checklist",
+          "file": "docs/STRIPE_CONNECT_PRODUCTION.md",
+          "kind": null
+        },
+        {
+          "label": "tenants.stripe_platform_account ('uk' | 'ae') \u2014 per-tenant platform-account routing",
+          "file": "docs/STRIPE_UAE_MIGRATION_CHECKLIST.md",
+          "kind": null
+        },
+        {
+          "label": "financial_event_sync_state table \u2014 one row per event per provider",
+          "file": "docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md",
+          "kind": null
+        },
+        {
+          "label": "Cross-tenant rental event stream monitoring",
+          "file": "docs/PLATFORM_MONITORING_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "tenants table (Stripe Connect columns: stripe_account_id, stripe_onboarding_complete, stripe_account_status)",
+          "file": "docs/STRIPE_CONNECT_TESTING.md",
+          "kind": null
+        },
+        {
+          "label": "accounting_connections table \u2014 per-tenant per-provider OAuth connection",
+          "file": "docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md",
+          "kind": null
+        },
+        {
+          "label": "Capture rental creation with a Postgres trigger instead of app code",
+          "file": "docs/PLATFORM_MONITORING_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "payments table (status, capture_status, refund_status, stripe_payment_intent_id, stripe_refund_id)",
+          "file": "docs/STRIPE_CONNECT_TESTING.md",
+          "kind": null
+        },
+        {
+          "label": "URGENT: authorizations, customers and saved cards cannot move between platform accounts",
+          "file": "docs/gmt-auth-hold-verdicts.html",
+          "kind": null
+        },
+        {
+          "label": "S1: after the UAE flip the chain survives but every recovery action dies \u2014 no hold can be re-placed, and a card update mints a UAE payment method onto a UK-anchored chain",
+          "file": "docs/GMT_CHAINED_HOLD_CRITIC.md",
+          "kind": null
+        },
+        {
+          "label": "rentals.creation_context \u2014 frozen integration-mode snapshot at rental creation",
+          "file": "docs/PLATFORM_MONITORING_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Per-integration live-ready rules (Stripe, BoldSign, Bonzah, Subscription, Modives)",
+          "file": "docs/PLATFORM_MONITORING_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Per-rental verdict email with severity in the subject line",
+          "file": "docs/PLATFORM_MONITORING_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Production webhook endpoint registration (Connect + payments) and signing secrets",
+          "file": "docs/STRIPE_CONNECT_PRODUCTION.md",
+          "kind": null
+        },
+        {
+          "label": "Migration off the ex-partner \"Cortek US\" Stripe account onto a self-owned account",
+          "file": "docs/STRIPE_UAE_MIGRATION_CHECKLIST.md",
+          "kind": null
+        },
+        {
+          "label": "Canonical Drive247-event \u2192 Xero/Zoho-action mapping",
+          "file": "docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "size": 131,
+      "cohesion": 0.02,
+      "units": {
+        "database": 85,
+        "edge-functions": 41,
+        "portal": 5
+      },
+      "kinds": {
+        "migration": 11,
+        "rls_policy": 9,
+        "concept": 8,
+        "index": 5,
+        "sql_function": 4,
+        "table": 2
+      },
+      "relations": {
+        "rationale_for": 65,
+        "defines": 52,
+        "implements": 44,
+        "conceptually_related_to": 38,
+        "references": 30,
+        "writes_table": 24
+      },
+      "members": [
+        {
+          "label": "agreement_templates",
+          "file": "supabase/migrations/20251219083413_remote_schema.sql",
+          "kind": "table"
+        },
+        {
+          "label": "generate_first_charge_for_rental()",
+          "file": "supabase/migrations/20251219083413_remote_schema.sql",
+          "kind": "sql_function"
+        },
+        {
+          "label": "installment_payment_links",
+          "file": "supabase/migrations/20260427120100_installment_payment_links.sql",
+          "kind": "table"
+        },
+        {
+          "label": "Rental agreement generation and BoldSign e-signature dispatch",
+          "file": "supabase/functions/create-boldsign-document/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Richer installment-specific agreement body (v2), applied only to uncustomised defaults",
+          "file": "supabase/migrations/20260427120800_installment_agreement_template_v2.sql",
+          "kind": null
+        },
+        {
+          "label": "Render-time injection of mileage, T&C and Bonzah clauses into stored agreement templates",
+          "file": "supabase/functions/_shared/agreement-injection.ts",
+          "kind": null
+        },
+        {
+          "label": "Pay-As-You-Go rental billing foundation: tenant policy, per-rental state and accrual bookkeeping",
+          "file": "supabase/migrations/20260410120000_add_payg_foundation.sql",
+          "kind": null
+        },
+        {
+          "label": "Security deposit held as a Stripe pre-auth, never written as a ledger charge",
+          "file": "supabase/migrations/20260420120500_remove_security_deposit_charge.sql",
+          "kind": null
+        },
+        {
+          "label": "First rental charge split into per-category ledger rows from the invoice breakdown",
+          "file": "supabase/migrations/20260418180000_fix_ledger_upsert_target.sql",
+          "kind": null
+        },
+        {
+          "label": "Magic-link token for unauthenticated installment payment",
+          "file": "supabase/migrations/20260427120100_installment_payment_links.sql",
+          "kind": null
+        },
+        {
+          "label": "Bonzah policy PDF retrieval (Insillion passthrough, returned as base64)",
+          "file": "supabase/functions/bonzah-download-pdf/index.ts",
+          "kind": null
+        },
+        {
+          "label": "UNIQUE(rental_id, accrual_day_index) makes cron double-posting structurally impossible",
+          "file": "supabase/migrations/20260410120000_add_payg_foundation.sql",
+          "kind": null
+        },
+        {
+          "label": "pg_cron job calling send-payg-reminders hourly",
+          "file": "supabase/migrations/20260410120200_add_payg_reminder_cron_job.sql",
+          "kind": null
+        },
+        {
+          "label": "PAYG cron jobs re-scheduled to send a service_role Authorization header",
+          "file": "supabase/migrations/20260415120000_fix_payg_audit_issues.sql",
+          "kind": null
+        },
+        {
+          "label": "Ledger upserts switched from constraint-name to index-inference ON CONFLICT",
+          "file": "supabase/migrations/20260418180000_fix_ledger_upsert_target.sql",
+          "kind": null
+        },
+        {
+          "label": "Invoice-to-ledger category split (Rental, Tax, Service Fee, Insurance, Delivery Fee, Collection Fee, Extras) with a single-charge fallback when no invoice exists",
+          "file": "supabase/migrations/20260725140000_fix_generate_first_charge_per_category_guard.sql",
+          "kind": null
+        },
+        {
+          "label": "rental_create_charge()",
+          "file": "supabase/migrations/20251219083413_remote_schema.sql",
+          "kind": "sql_function"
+        },
+        {
+          "label": "20251222220000_fix_tenant_id_in_ledger_functions.sql",
+          "file": "supabase/migrations/20251222220000_fix_tenant_id_in_ledger_functions.sql",
+          "kind": "migration"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "size": 127,
+      "cohesion": 0.02,
+      "units": {
+        "portal": 127
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 90,
+        "references": 42,
+        "invokes": 37,
+        "reads_table": 33,
+        "writes_table": 31,
+        "conceptually_related_to": 31
+      },
+      "members": [
+        {
+          "label": "Rental agreement PDF generation and BoldSign envelope send",
+          "file": "apps/portal/src/app/api/esign/route.ts",
+          "kind": null
+        },
+        {
+          "label": "Security deposit pre-auth hold lifecycle UI (11 statuses)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "rental_agreements table (extension agreements)",
+          "file": "apps/portal/src/app/(dashboard)/agreements/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "customer_documents table (signed agreement PDFs)",
+          "file": "apps/portal/src/app/(dashboard)/agreements/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Single-rental force refresh of the deposit-hold chain",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Payment breakdown by charge category with per-row actions",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "verify-deposit-hold response classifier (resolved/live/in_progress/needs_review)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-action permission gating via canEdit('rentals') and isAdmin()",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Reconcile deposit hold against Stripe ('Check with Stripe')",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Approve booking action (capture hold, flip status, notify)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-request BoldSign test/live mode resolution chain (agreement to rental to tenant)",
+          "file": "apps/portal/src/app/api/esign/route.ts",
+          "kind": null
+        },
+        {
+          "label": "Agreements analytics: type mix, signature rate, monthly trend, top customers",
+          "file": "apps/portal/src/app/(dashboard)/agreements/analytics/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Three-source agreement union: unsigned rentals, unsigned rental_agreements, signed customer_documents",
+          "file": "apps/portal/src/app/(dashboard)/agreements/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Booking approval gate (signed agreement then insurance checks)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Bonzah sellability, vehicle eligibility and insurable-days gate",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Deposit-hold kebab menu for non-money diagnostic actions",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Scope-aware insurance document upload (original vs extension)",
+          "file": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Agreement template {{variable}} substitution map",
+          "file": "apps/portal/src/app/api/esign/route.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "size": 120,
+      "cohesion": 0.02,
+      "units": {
+        "booking": 120
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 53,
+        "rationale_for": 47,
+        "implements": 46,
+        "governs": 44,
+        "semantically_similar_to": 35,
+        "invokes": 31
+      },
+      "members": [
+        {
+          "label": "Customer-portal query-key convention: every hook keys on customerUser.customer_id and gates on enabled",
+          "file": "apps/booking/src/stores/customer-auth-store.ts",
+          "kind": null
+        },
+        {
+          "label": "Customer rental-extension request awaiting admin approval",
+          "file": "apps/booking/src/components/customer-portal/ExtendRentalDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-category selectable self-service payment of outstanding rental charges",
+          "file": "apps/booking/src/components/customer-portal/PaymentBreakdown.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer rental-agreement (e-signature) portal view",
+          "file": "apps/booking/src/hooks/use-customer-agreements.ts",
+          "kind": null
+        },
+        {
+          "label": "Per-rental insurance certificate re-upload from the rental card",
+          "file": "apps/booking/src/components/customer-portal/EditInsuranceDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer onboarding completion gate (ID verification + insurance document)",
+          "file": "apps/booking/src/hooks/use-customer-onboarding.ts",
+          "kind": null
+        },
+        {
+          "label": "Account-level insurance certificate upload with policy metadata",
+          "file": "apps/booking/src/components/customer-portal/DocumentUploadDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer rental summary card and self-service action hub",
+          "file": "apps/booking/src/components/customer-portal/RentalCard.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer feature-announcement feed",
+          "file": "apps/booking/src/hooks/use-customer-announcements.ts",
+          "kind": null
+        },
+        {
+          "label": "Client-computed invoice status (paid/partial/pending/overdue) from rental payments",
+          "file": "apps/booking/src/hooks/use-customer-invoices.ts",
+          "kind": null
+        },
+        {
+          "label": "Customer rental history with vehicle and installment-plan expansion",
+          "file": "apps/booking/src/hooks/use-customer-rentals.ts",
+          "kind": null
+        },
+        {
+          "label": "Post-booking guest to customer-account conversion prompt",
+          "file": "apps/booking/src/components/booking/AuthPromptDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer portal navigation map (bookings, payments, verification, insurance, agreements, messages, settings)",
+          "file": "apps/booking/src/components/customer-portal/CustomerPortalSidebar.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer-initiated renewal clones a finished rental as a Pending rental",
+          "file": "apps/booking/src/components/customer-portal/RenewRentalDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer insurance-certificate document vault",
+          "file": "apps/booking/src/hooks/use-customer-documents.ts",
+          "kind": null
+        },
+        {
+          "label": "Customer statement of account (charged / paid / outstanding)",
+          "file": "apps/booking/src/components/customer-portal/AccountStatementDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "OTP-based customer password reset (send, verify, set new)",
+          "file": "apps/booking/src/components/booking/AuthPromptDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer-initiated cancellation request awaiting admin approval",
+          "file": "apps/booking/src/components/customer-portal/CancelBookingDialog.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "size": 112,
+      "cohesion": 0.02,
+      "units": {
+        "portal": 112
+      },
+      "kinds": {},
+      "relations": {
+        "governs": 70,
+        "conceptually_related_to": 60,
+        "reads_table": 48,
+        "implements": 44,
+        "semantically_similar_to": 35,
+        "rationale_for": 26
+      },
+      "members": [
+        {
+          "label": "Rentals list page",
+          "file": "apps/portal/src/app/(dashboard)/rentals/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Report-type \u2192 reporting-view dispatch with 50-row keyset pagination",
+          "file": "apps/portal/src/components/reports/data-table.tsx",
+          "kind": null
+        },
+        {
+          "label": "Tenant-scoped report filter options (customers, vehicles, payment types, statuses, date range)",
+          "file": "apps/portal/src/components/reports/filter-sidebar.tsx",
+          "kind": null
+        },
+        {
+          "label": "Fleet-wide profitability aggregation computed client-side from pnl_entries",
+          "file": "apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-renewal occurrence configuration (price, extras, email, agreement, insurance)",
+          "file": "apps/portal/src/components/rentals/occurrence-config-dialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Agreement template editor with side-by-side sample-data preview",
+          "file": "apps/portal/src/app/(dashboard)/settings/agreement-templates/edit/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Plates management list page",
+          "file": "apps/portal/src/app/(dashboard)/plates/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Reporting reads pre-aggregated Postgres views rather than base tables, all filtered on tenant_id",
+          "file": "apps/portal/src/app/(dashboard)/reports/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Unsaved-changes navigation guard with save-and-leave, shared by the agreement and email template editors",
+          "file": "apps/portal/src/app/(dashboard)/settings/agreement-templates/edit/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Server-side report export (CSV/XLSX/PDF) via the generate-export edge function",
+          "file": "apps/portal/src/components/reports/export-buttons.tsx",
+          "kind": null
+        },
+        {
+          "label": "Four agreement categories (standard, extension, payg, installment); the PAYG tab only appears when pay_as_you_go_enabled",
+          "file": "apps/portal/src/app/(dashboard)/settings/agreement-templates/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Hand-rolled client-side CSV export (string join + Blob + anchor click) duplicated across five dashboard pages",
+          "file": "apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Email template editor with subject line and sample-data preview",
+          "file": "apps/portal/src/app/(dashboard)/settings/email-templates/[key]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-vehicle profit/loss breakdown for a single month",
+          "file": "apps/portal/src/app/(dashboard)/pl-dashboard/monthly/[month]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Plate detail page",
+          "file": "apps/portal/src/app/(dashboard)/plates/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Global P&L dashboard page",
+          "file": "apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Fleet compliance reminder inbox with severity/type filters and per-object deep links (Vehicle, Customer, Rental, Fine, Integration)",
+          "file": "apps/portal/src/app/(dashboard)/reminders/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Reminder engine knobs: timezone, send_time, upcoming/due/overdue toggles, max_overdue_reminders, warranty due/expiring/expired flags",
+          "file": "apps/portal/src/app/(dashboard)/settings/reminders/page.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "size": 106,
+      "cohesion": 0.03,
+      "units": {
+        "docs": 106
+      },
+      "kinds": {},
+      "relations": {
+        "writes_table": 76,
+        "governs": 70,
+        "implements": 50,
+        "reads_table": 38,
+        "conceptually_related_to": 36,
+        "rationale_for": 32
+      },
+      "members": [
+        {
+          "label": "leads table \u2014 the pre-rental opportunity record replacing enquiries",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "submit-application edge function \u2014 public entry point that validates, dedups, blacklists, scores and creates the lead",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "automation_event_queue table \u2014 durable inbox decoupling event emission from automation matching",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "automation-execute-step edge function \u2014 service_role-only single step executor",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Automations module \u2014 independent trigger + ordered-step workflow engine",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Portal lead Kanban board with drag-drop stage moves and realtime card movement",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Customisable offer link \u2014 curated vehicles + flexible dates behind an 8-char short code",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Reuse map \u2014 the source of truth listing existing Drive247 surfaces that MUST NOT be re-implemented",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "send-lead-message edge function \u2014 one multi-channel outbound path (SMS/email/WhatsApp) into a conversation",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Anti-patterns \u2014 17 explicit prohibitions binding the implementation",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "automation_runs table \u2014 one execution against a generic entity, with status and resume_at",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "conversation_messages table \u2014 channel-agnostic message log with provider ids and delivery status",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "convert-lead-to-rental edge function \u2014 creates customer + rental and relinks the conversation",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "create-offer-link edge function \u2014 inserts the offer, advances the stage, dispatches and emits",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Minute-cadence event processor \u2014 matches published automations to queued events and starts runs",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Lead Management module \u2014 first-class lead-to-rental pipeline",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Vehicle matching engine \u2014 deterministic ranked options from availability, price and closeness",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        },
+        {
+          "label": "Reuse of existing verification and payment rails (Veriff/AI-OCR/face-match/CMD, Bonzah, BoldSign, Stripe preauth/checkout)",
+          "file": "docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "size": 95,
+      "cohesion": 0.03,
+      "units": {
+        "edge-functions": 95
+      },
+      "kinds": {},
+      "relations": {
+        "contains": 102,
+        "calls": 82,
+        "rationale_for": 44,
+        "implements": 26,
+        "writes_table": 13,
+        "imports": 13
+      },
+      "members": [
+        {
+          "label": "inshur-client.ts",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "index.ts",
+          "file": "supabase/functions/inshur-reconcile/index.ts",
+          "kind": null
+        },
+        {
+          "label": "INSHUR/ABI Period Z drift reconciliation cron",
+          "file": "supabase/functions/inshur-reconcile/index.ts",
+          "kind": null
+        },
+        {
+          "label": "index.ts",
+          "file": "supabase/functions/inshur-verify-credentials/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Monthly INSHUR vendor cost sync into per-vehicle P&L",
+          "file": "supabase/functions/inshur-sync-billing/index.ts",
+          "kind": null
+        },
+        {
+          "label": "reconcileTenant()",
+          "file": "supabase/functions/inshur-reconcile/index.ts",
+          "kind": null
+        },
+        {
+          "label": "addRenter()",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Query-param casing probe with tenant-level override persistence",
+          "file": "supabase/functions/inshur-sync-billing/index.ts",
+          "kind": null
+        },
+        {
+          "label": "abiGetStates()",
+          "file": "supabase/functions/inshur-verify-credentials/index.ts",
+          "kind": null
+        },
+        {
+          "label": "raiseAlert()",
+          "file": "supabase/functions/inshur-sync-billing/index.ts",
+          "kind": null
+        },
+        {
+          "label": "resolveStates()",
+          "file": "supabase/functions/inshur-verify-credentials/index.ts",
+          "kind": null
+        },
+        {
+          "label": "createRentalPeriod()",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "normalizeVin()",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Uninsured rental detection and automatic re-bind",
+          "file": "supabase/functions/inshur-reconcile/index.ts",
+          "kind": null
+        },
+        {
+          "label": "inshur_rental_coverage table (one Period Z cover row per rental)",
+          "file": "supabase/functions/inshur-reconcile/index.ts",
+          "kind": null
+        },
+        {
+          "label": "states-allowed endpoint path probe with override persistence",
+          "file": "supabase/functions/inshur-verify-credentials/index.ts",
+          "kind": null
+        },
+        {
+          "label": "parseRemote()",
+          "file": "supabase/functions/inshur-reconcile/index.ts",
+          "kind": null
+        },
+        {
+          "label": "getInshurApiUrl()",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "size": 94,
+      "cohesion": 0.03,
+      "units": {
+        "database": 47,
+        "edge-functions": 42,
+        "portal": 4,
+        "booking": 1
+      },
+      "kinds": {
+        "index": 8,
+        "rls_policy": 6,
+        "concept": 4,
+        "table": 3,
+        "migration": 2,
+        "trigger": 2
+      },
+      "relations": {
+        "defines": 32,
+        "rationale_for": 30,
+        "references": 30,
+        "contains": 24,
+        "semantically_similar_to": 21,
+        "calls": 21
+      },
+      "members": [
+        {
+          "label": "tesla_supercharger_charges",
+          "file": "supabase/migrations/20260401140000_add_tesla_fleet_integration.sql",
+          "kind": "table"
+        },
+        {
+          "label": "modives-client.ts",
+          "file": "supabase/functions/_shared/modives-client.ts",
+          "kind": null
+        },
+        {
+          "label": "20260401140000_add_tesla_fleet_integration.sql",
+          "file": "supabase/migrations/20260401140000_add_tesla_fleet_integration.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "20260512152933_add_cmd_verification.sql",
+          "file": "supabase/migrations/20260512152933_add_cmd_verification.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "Enquiry lead capture from the booking site for vehicles/dates not immediately bookable",
+          "file": "supabase/migrations/20260502120844_add_enquiries.sql",
+          "kind": null
+        },
+        {
+          "label": "cmd_webhook_events",
+          "file": "supabase/migrations/20260512152933_add_cmd_verification.sql",
+          "kind": "table"
+        },
+        {
+          "label": "index.ts",
+          "file": "supabase/functions/cmd-webhook/index.ts",
+          "kind": null
+        },
+        {
+          "label": "INSHUR/ABI Period Z per-rental commercial insurance issuance",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "modives_config",
+          "file": "supabase/migrations/20260512152933_add_cmd_verification.sql",
+          "kind": "table"
+        },
+        {
+          "label": "AI damage analysis comparing handover vs return photos",
+          "file": "supabase/migrations/20260502120000_add_rental_damage_reports.sql",
+          "kind": null
+        },
+        {
+          "label": "env()",
+          "file": "supabase/functions/_shared/modives-client.ts",
+          "kind": null
+        },
+        {
+          "label": "getCMDToken()",
+          "file": "supabase/functions/_shared/modives-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Supercharger charges pulled from Tesla and billed to the matching rental",
+          "file": "supabase/functions/_shared/tesla-sync-engine.ts",
+          "kind": null
+        },
+        {
+          "label": "Supercharger charge rows locked to service_role for INSERT and DELETE; tenant users keep SELECT and waive/charge UPDATE",
+          "file": "supabase/migrations/20260520140000_tighten_tesla_supercharger_rls.sql",
+          "kind": null
+        },
+        {
+          "label": "Tesla Fleet API client for vehicle listing and charging history",
+          "file": "supabase/functions/_shared/tesla-fleet-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Supercharger sessions recorded per rental and re-billed (pending / charged / waived / partially_charged)",
+          "file": "supabase/migrations/20260401140000_add_tesla_fleet_integration.sql",
+          "kind": null
+        },
+        {
+          "label": "app_users to auth.users referential integrity with ON DELETE SET NULL",
+          "file": "supabase/migrations/20260430140000_app_users_auth_user_id_fk.sql",
+          "kind": null
+        },
+        {
+          "label": "Rationale: a stale auth_user_id makes get_user_tenant_id() return NULL, silently emptying every tenant-gated SELECT",
+          "file": "supabase/migrations/20260430140000_app_users_auth_user_id_fk.sql",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "size": 93,
+      "cohesion": 0.03,
+      "units": {
+        "booking": 93
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 78,
+        "rationale_for": 52,
+        "invokes": 25,
+        "governs": 25,
+        "reads_table": 24,
+        "shares_data_with": 22
+      },
+      "members": [
+        {
+          "label": "Customer rental detail: one screen joining rental, vehicle, agreements, insurance, ledger, payments and installments",
+          "file": "apps/booking/src/app/(customer-portal)/portal/bookings/[id]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Vehicle plate/VIN suppression chokepoint (public column allowlist, display helpers, photo redaction gate)",
+          "file": "apps/booking/src/lib/vehicle-identity.ts",
+          "kind": null
+        },
+        {
+          "label": "Customer portal auth gate (customer_users session + tenant match + redirect with return URL)",
+          "file": "apps/booking/src/app/(customer-portal)/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer bookings list with all/active/current/past filters, reference search and status badges",
+          "file": "apps/booking/src/app/(customer-portal)/portal/bookings/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer payments centre combining invoices, installment plans, statement download and card management",
+          "file": "apps/booking/src/app/(customer-portal)/portal/payments/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer identity verification hub: status, document images, history and re-verification",
+          "file": "apps/booking/src/app/(customer-portal)/portal/verification/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer insurance hub: uploaded certificates plus Bonzah policies with coverage badges and expiry status",
+          "file": "apps/booking/src/app/(customer-portal)/portal/documents/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Active deposit-hold detection driving whether the customer is offered 'Update Card'",
+          "file": "apps/booking/src/app/(customer-portal)/portal/payments/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer agreement workflow: list, view, download and embedded BoldSign signing of rental and extension agreements",
+          "file": "apps/booking/src/app/(customer-portal)/portal/agreements/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Invite-token customer self-registration",
+          "file": "apps/booking/src/app/register/[token]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer account settings: profile photo, contact, timezone, address and licence, email and password changes",
+          "file": "apps/booking/src/app/(customer-portal)/portal/settings/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Mobile AI identity document and selfie capture",
+          "file": "apps/booking/src/app/verify/[token]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Booking mode decides pre-auth hold (manual) vs immediate capture (auto)",
+          "file": "apps/booking/src/components/BookingCheckoutStep.tsx",
+          "kind": null
+        },
+        {
+          "label": "Customer site provider composition",
+          "file": "apps/booking/src/app/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "Identical local StatCard component redefined in four customer-portal pages instead of shared",
+          "file": "apps/booking/src/app/(customer-portal)/portal/bookings/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Gig-driver proof image upload: tenant/customer-scoped storage paths, JPG/PNG under 10MB, blurred thumbnails",
+          "file": "apps/booking/src/app/(customer-portal)/portal/gig-driver/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Desktop-to-phone AI verification QR handoff",
+          "file": "apps/booking/src/app/register/[token]/page.tsx",
+          "kind": null
+        },
+        {
+          "label": "Server-side tenant SEO metadata resolution",
+          "file": "apps/booking/src/app/layout.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "size": 93,
+      "cohesion": 0.03,
+      "units": {
+        "database": 93
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 54,
+        "conceptually_related_to": 54,
+        "writes_table": 40,
+        "implements": 26,
+        "semantically_similar_to": 24,
+        "governs": 22
+      },
+      "members": [
+        {
+          "label": "is_super_admin() and get_user_tenant_id() as the tenant-isolation primitives",
+          "file": "supabase/migrations/20251222150000_fix_super_admin_rls.sql",
+          "kind": null
+        },
+        {
+          "label": "tenants",
+          "file": "MANUAL_MIGRATION.sql",
+          "kind": null
+        },
+        {
+          "label": "rentals",
+          "file": "docs/GMT_HOLD_SCHEMA.sql",
+          "kind": null
+        },
+        {
+          "label": "INSHUR / ABI Period Z rental insurance integration",
+          "file": "docs/INSHUR_SCHEMA.sql",
+          "kind": null
+        },
+        {
+          "label": "Align portal-created rentals with the customer booking flow's fields",
+          "file": "supabase/migrations/20251222160000_add_rental_booking_fields.sql",
+          "kind": null
+        },
+        {
+          "label": "Anchor Stripe account/mode/currency to the hold record, not the tenant row",
+          "file": "docs/GMT_HOLD_SCHEMA.sql",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant INSHUR credentials and mode configuration",
+          "file": "docs/INSHUR_SCHEMA.sql",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant Stripe test/live mode switch",
+          "file": "MANUAL_MIGRATION.sql",
+          "kind": null
+        },
+        {
+          "label": "Per-vehicle profit and loss reporting",
+          "file": "supabase/migrations/20251219150000_fix_view_pl_by_vehicle_tenant_id.sql",
+          "kind": null
+        },
+        {
+          "label": "pickup_locations",
+          "file": "supabase/migrations/20251222100000_add_pickup_location_settings.sql",
+          "kind": null
+        },
+        {
+          "label": "Customer blocking and shared identity blocklist",
+          "file": "supabase/migrations/20251222100001_fix_blocking_rls_and_functions.sql",
+          "kind": null
+        },
+        {
+          "label": "Tenant isolation on blocked_identities replacing an overly permissive admin policy set",
+          "file": "supabase/migrations/20251222100001_fix_blocking_rls_and_functions.sql",
+          "kind": null
+        },
+        {
+          "label": "Two tenant email roles: admin_email for platform mail, contact_email for operator outreach",
+          "file": "supabase/migrations/20251222110000_add_admin_email_to_tenants.sql",
+          "kind": null
+        },
+        {
+          "label": "Super-admin cross-tenant bypass applied uniformly to rentals, vehicles, customers, payments, fines and blocked_identities",
+          "file": "supabase/migrations/20251222150000_fix_super_admin_rls.sql",
+          "kind": null
+        },
+        {
+          "label": "Idempotent one-charge-per-rental-per-due-date ledger upsert",
+          "file": "supabase/migrations/20251222220000_fix_tenant_id_in_ledger_functions.sql",
+          "kind": null
+        },
+        {
+          "label": "Append-only authorization ledger for a hold chain",
+          "file": "docs/GMT_HOLD_SCHEMA.sql",
+          "kind": null
+        },
+        {
+          "label": "GMT chained deposit-hold (Gate 1 data model)",
+          "file": "docs/GMT_HOLD_SCHEMA.sql",
+          "kind": null
+        },
+        {
+          "label": "Rental coverage attempt log that records failures, not only successes",
+          "file": "docs/INSHUR_SCHEMA.sql",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "size": 93,
+      "cohesion": 0.03,
+      "units": {
+        "database": 93
+      },
+      "kinds": {},
+      "relations": {
+        "writes_table": 58,
+        "governs": 42,
+        "reads_table": 32,
+        "rationale_for": 30,
+        "implements": 26,
+        "conceptually_related_to": 24
+      },
+      "members": [
+        {
+          "label": "First rental charge split into per-category ledger lines from the invoice breakdown",
+          "file": "supabase/migrations/20260325120000_split_first_charge_by_category.sql",
+          "kind": null
+        },
+        {
+          "label": "Chat message notification routing by sender_type",
+          "file": "supabase/migrations/20260317140000_add_chat_message_notification_trigger.sql",
+          "kind": null
+        },
+        {
+          "label": "Test-mode credit spend isolated to test_balance",
+          "file": "supabase/migrations/20260308130000_fix_credit_test_mode.sql",
+          "kind": null
+        },
+        {
+          "label": "Server-side new-booking notification for portal staff",
+          "file": "supabase/migrations/20260317131000_add_rental_notification_trigger.sql",
+          "kind": null
+        },
+        {
+          "label": "Customer notification on booking approval and rejection",
+          "file": "supabase/migrations/20260317160000_add_rental_status_customer_notification.sql",
+          "kind": null
+        },
+        {
+          "label": "tenants (tenant configuration and integration credentials)",
+          "file": "supabase/migrations/20260306130000_add_twilio_subaccount.sql",
+          "kind": null
+        },
+        {
+          "label": "Ledger charge-category vocabulary (the CHECK constraint that gates every ledger line)",
+          "file": "supabase/migrations/20260308120000_add_extension_breakdown_categories.sql",
+          "kind": null
+        },
+        {
+          "label": "Notification visibility model: own + tenant broadcast + tenant admin + super admin",
+          "file": "supabase/migrations/20260317120000_fix_notification_rls_policies.sql",
+          "kind": null
+        },
+        {
+          "label": "Renewal-aware booking notification (staff broadcast + customer notice)",
+          "file": "supabase/migrations/20260317180000_add_renewal_customer_notification.sql",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant Meta WhatsApp Business API credentials",
+          "file": "supabase/migrations/20260306140000_add_whatsapp_meta.sql",
+          "kind": null
+        },
+        {
+          "label": "Three-distinct-tenant blocking threshold promotes an email to the global blacklist",
+          "file": "supabase/migrations/20260310130000_blacklist_super_admin_control.sql",
+          "kind": null
+        },
+        {
+          "label": "Unblocking a customer deactivates every derived identity (licence, id number, Veriff document) and refreshes the global count",
+          "file": "supabase/migrations/20260310130000_blacklist_super_admin_control.sql",
+          "kind": null
+        },
+        {
+          "label": "Fines attributed to the rental they occurred on",
+          "file": "supabase/migrations/20260314130000_add_rental_id_to_fines.sql",
+          "kind": null
+        },
+        {
+          "label": "CMS tenant isolation replaces wide-open USING(true) policies",
+          "file": "supabase/migrations/20260317130000_fix_cms_content_rls.sql",
+          "kind": null
+        },
+        {
+          "label": "rentals (booking/rental agreement lifecycle row)",
+          "file": "supabase/migrations/20260317131000_add_rental_notification_trigger.sql",
+          "kind": null
+        },
+        {
+          "label": "Switch from per-user fan-out to a single broadcast notification row",
+          "file": "supabase/migrations/20260317150000_fix_notification_triggers_broadcast.sql",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant required identity document type (licence / passport / id card)",
+          "file": "supabase/migrations/20260318140000_add_verification_document_type.sql",
+          "kind": null
+        },
+        {
+          "label": "Dual test/live credit balance tracking on tenant wallets",
+          "file": "supabase/migrations/20260305170000_add_test_balance_to_credit_wallets.sql",
+          "kind": null
+        }
+      ]
+    }
+  ]
+}

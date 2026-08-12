@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 6,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_006.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/QueryClientProvider.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/SEO.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ScrollToTop.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ScrollToTopOnNavigate.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ServiceHighlights.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/SuspendedGate.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/Terms.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/TestimonialsCarousel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ThemeInitializer.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ThemeToggle.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/TrustBadges.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/UniversalHero.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/VeriffCallback.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ai-scan-progress.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/apply-form.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/apply-progress.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-1-about.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-2-driver.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-3-intent.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-4-financial.tsx"
+  ]
+}

@@ -7,6 +7,7 @@ import { computePaygDailyRate } from '@/lib/payg-rate';
 import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
+import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -175,6 +176,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     });
 
     const variables: Record<string, string> = {
+        // Bonzah insurance addendum — insurer-mandated, gated on the tenant flag.
+        // Resolves to '' for non-Bonzah tenants so an operator who placed the
+        // placeholder by hand and later disconnects Bonzah is left with nothing
+        // rather than a stray literal.
+        bonzah_insurance_addendum: tenant?.integration_bonzah === true ? BONZAH_INSURANCE_ADDENDUM_HTML : '',
         // Customer — basic
         customer_name: customer?.name || '',
         customer_email: customer?.email || '',
@@ -643,6 +649,30 @@ function sanitizePdfText(s: string): string {
     return out;
 }
 
+/**
+ * Same as sanitizePdfText, but for text drawn on ONE line.
+ *
+ * sanitizePdfText deliberately preserves \t \n \r, because the multi-line
+ * renderers need them: renderTextToPdf splits on '\n', and drawWrappedRuns
+ * splits on /\s+/. Both consume the newline before it ever reaches pdf-lib.
+ *
+ * The single-line draw sites do NOT split. They hand the string straight to
+ * font.widthOfTextAtSize() and page.drawText(), and pdf-lib's WinAnsi encoder
+ * throws on a newline:
+ *     WinAnsi cannot encode "\n" (0x000a)
+ * That throw happens before the BoldSign document is ever created, so the
+ * agreement fails with document_id NULL and the operator sees only
+ * "Not Sent" with a Retry button that cannot ever succeed — 26 consecutive
+ * failures for Kedic Services (2026-08-09 to 08-11) before this was found.
+ *
+ * Collapsing to a single space is right for a table cell: the cell is one line
+ * high and the text is width-truncated below anyway, so preserving the break
+ * would gain nothing even if pdf-lib allowed it.
+ */
+function sanitizePdfLine(s: string): string {
+    return sanitizePdfText(s).replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+}
+
 const PAGE_W = 595;  // A4
 const PAGE_H = 842;
 const MARGIN = 50;
@@ -678,7 +708,12 @@ function pickFont(ctx: PdfCtx, bold: boolean, italic: boolean): PDFFont {
 
 /** Draw text, rendering e-sign tags in white (invisible but BoldSign-detectable) */
 function drawText(ctx: PdfCtx, rawText: string, x: number, fontSize: number, useFont: PDFFont, underline: boolean = false) {
-    const text = sanitizePdfText(rawText);
+    // sanitizePdfLine, NOT sanitizePdfText. This helper draws at a single
+    // baseline and never splits, so a preserved newline reaches pdf-lib and
+    // throws "WinAnsi cannot encode \n". The multi-line renderers
+    // (renderTextToPdf, drawWrappedRuns) keep using sanitizePdfText because
+    // they consume the newline themselves before drawing.
+    const text = sanitizePdfLine(rawText);
     if (ESIGN_TAG_TEST_RE.test(text)) {
         const segments = text.split(ESIGN_TAG_SPLIT_RE);
         let xPos = x;
@@ -840,7 +875,12 @@ function renderBlocksToPdf(ctx: PdfCtx, blocks: PdfBlock[]) {
                         });
 
                         if (cellText) {
-                            let display = sanitizePdfText(cellText);
+                            // sanitizePdfLine, NOT sanitizePdfText: a table cell is
+                            // drawn on one line and never splits, so a newline
+                            // surviving to drawText below throws
+                            // "WinAnsi cannot encode \n" and kills the whole
+                            // agreement before it reaches BoldSign.
+                            let display = sanitizePdfLine(cellText);
                             const maxTextW = colW - cellPad * 2;
                             while (cellFont.widthOfTextAtSize(display, S.body) > maxTextW && display.length > 1) {
                                 display = display.slice(0, -1);
@@ -915,7 +955,12 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
     const maxWidth = CONTENT_W;
 
     const lines = text.split('\n');
-    for (const line of lines) {
+    for (const rawLine of lines) {
+        // Splitting on '\n' leaves the '\r' of every CRLF line, and tabs are
+        // preserved by sanitizePdfText by design. Both reach
+        // widthOfTextAtSize() below, which encodes and throws
+        // `WinAnsi cannot encode`. Strip them before measuring, not after.
+        const line = rawLine.replace(/[\r\n\t]+/g, ' ');
         const words = line.split(' ');
         let currentLine = '';
         for (const word of words) {
@@ -1082,6 +1127,7 @@ TERMS:
 2. Customer will maintain the vehicle in good condition.
 3. Customer is responsible for any damage during rental.
 ${termsText ? `\n${'-'.repeat(70)}\nOPERATOR TERMS & CONDITIONS:\n\n${termsText}\n` : ''}
+${tenant?.integration_bonzah === true ? `\n${'-'.repeat(70)}\n${BONZAH_INSURANCE_ADDENDUM_TEXT}\n` : ''}
 
 ${'='.repeat(70)}
 
@@ -1180,11 +1226,18 @@ export async function POST(request: NextRequest) {
         if (body.tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days')
+                // integration_bonzah drives the Bonzah insurance addendum below.
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
         }
+
+        // Bonzah requires their insurance addendum on every agreement issued by a
+        // rental company that offers their products. Tenant-level only: it is a
+        // disclosure that Bonzah is available, not a receipt for a purchase, so it
+        // appears whether or not this renter bought coverage. See bonzah-addendum.ts.
+        const isBonzahTenant = (tenant as any)?.integration_bonzah === true;
 
         // Fetch installment plan if rental has one
         let installment: InstallmentData | null = null;
@@ -1264,8 +1317,10 @@ export async function POST(request: NextRequest) {
             borderWidth: 1,
         });
         const labelFontSize = 11;
-        const labelWidth = ctx.boldFont.widthOfTextAtSize(agreementTypeLabel, labelFontSize);
-        ctx.page.drawText(agreementTypeLabel, {
+        // Drawn raw, bypassing drawText()'s sanitiser — guard it here.
+        const safeTypeLabel = sanitizePdfLine(agreementTypeLabel);
+        const labelWidth = ctx.boldFont.widthOfTextAtSize(safeTypeLabel, labelFontSize);
+        ctx.page.drawText(safeTypeLabel, {
             x: MARGIN + (CONTENT_W - labelWidth) / 2,
             y: bannerY + (bannerHeight - labelFontSize) / 2 + 1,
             size: labelFontSize,
@@ -1320,7 +1375,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
+                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml, hasBonzahAddendum: isBonzahTenant }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
                 );
 
                 // Ensure a signature tag exists

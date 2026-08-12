@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 36,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_036.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-unread-count.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-unsaved-changes-warning.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-usage-data.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-booked-dates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-daily-prices.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-disposal.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-events.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-extras.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-files.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-owners.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-photo.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-pricing-overrides.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-services.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-swap.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-voice-call.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-void-payment-link.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-weekend-pricing.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-whatsapp-meta.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-working-hours-summary.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/client.ts"
+  ]
+}

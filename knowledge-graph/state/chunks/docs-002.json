@@ -1,0 +1,15 @@
+{
+  "unit": "docs",
+  "unit_label": "Docs - specs, plans, audits",
+  "unit_kind": "documents",
+  "chunk": 2,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/docs/graphify-out/.graphify_chunk_docs_002.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIM_EDGE_CASE_AUDIT.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/DATABASE_SCHEMA.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/EXPENSE_TRACKER_AUDIT.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/GMT_CHAINED_HOLD_CRITIC.md"
+  ]
+}

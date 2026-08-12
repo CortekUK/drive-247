@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 4,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_004.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/AIVerificationQR.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BlockedAccountDialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BonzahDetailsForm.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BonzahInsuranceSelector.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/Booking.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingCancelled.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingCheckout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingCheckoutStep.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingConfirmation.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingPending.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingPersistenceGuard.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingSuccess.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingVehicles.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingWidget.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ChauffeurServices.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/CheckoutProgressOverlay.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/CloseProtectionModal.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/ContactCard.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/DevJumpPanel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/EnhancedBookingWidget.tsx"
+  ]
+}

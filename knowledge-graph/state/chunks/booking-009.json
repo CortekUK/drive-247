@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 9,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_009.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/trax-chat/TraxChatButton.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/trax-chat/TraxChatChart.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/trax-chat/TraxChatPopup.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/trax-chat/TraxChatWidget.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/trax-chat/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/enquiry/enquiry-modal.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentBreakdown.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentCalendar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentScheduleTable.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/insurance-upload-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/legal/LegalPageShell.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/offer/offer-page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/portfolio/PortfolioCarousel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/portfolio/PortfolioFilters.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/portfolio/PortfolioGallery.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/config/stripe.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/config/tenant-config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/contexts/CustomerRealtimeChatContext.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/contexts/TenantContext.tsx"
+  ]
+}

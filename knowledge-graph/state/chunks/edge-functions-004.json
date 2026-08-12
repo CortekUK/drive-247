@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 4,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_004.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-suggest-next-action/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/apply-fine/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/apply-payment/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/apply-subscription-discount/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/auth-rate-limit/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/auto-extend-rentals/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/automation-execute-step/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/automation-poll-pending/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/automation-publish/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/automation-test-run/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/automation-trigger-event/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/aws-ses-email/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/aws-sns-sms/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-deposit-holds/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-payment-intent-ids/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/boldsign-webhook/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-calculate-premium/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-check-vehicle-eligibility/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-confirm-payment/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-create-quote/index.ts"
+  ]
+}

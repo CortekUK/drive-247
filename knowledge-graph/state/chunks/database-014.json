@@ -1,0 +1,23 @@
+{
+  "unit": "database",
+  "unit_label": "Database - schema, migrations, RLS",
+  "unit_kind": "sql-migrations",
+  "chunk": 14,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/database/graphify-out/.graphify_chunk_database_014.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260722120000_add_uae_customer_id.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260722140000_new_tenants_default_to_uae.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260723090000_lock_down_tenants_rls.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260725100000_backfill_setup_completed_at.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260725140000_fix_generate_first_charge_per_category_guard.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260727120000_subscription_sync_foundations.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260727160000_schedule_subscription_reconciler.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260729120000_add_ga_measurement_id.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260803120000_add_tenant_feedback.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260804100000_harden_tenant_feedback.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260806120000_add_platform_tos_acceptance.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260806190000_fix_pnl_entries_tenant_id.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260807120000_cascade_vehicle_delete_blockers.sql"
+  ]
+}

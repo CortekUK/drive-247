@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 1,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_001.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-mileage.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-terms.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/automation-events.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/aws-config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/aws-rekognition.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/boldsign-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-addendum.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-client.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/brand-colors.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/cors.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/credit-config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/credit-deduction.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-amount.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-auth.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/document-loaders.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-template-service.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-templates/admin-expiry-warning.html"
+  ]
+}

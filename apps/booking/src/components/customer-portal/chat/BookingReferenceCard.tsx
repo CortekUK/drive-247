@@ -7,6 +7,8 @@ import { parseDateOnly } from '@/lib/date-utils';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { BookingReference } from './BookingPicker';
+import { useTenant } from "@/contexts/TenantContext";
+import { displayRegistration } from "@/lib/vehicle-identity";
 
 interface BookingReferenceCardProps {
   booking: BookingReference;
@@ -50,6 +52,7 @@ function getStatusColor(status: string, isOwnMessage: boolean): string {
 }
 
 export function BookingReferenceCard({ booking, isOwnMessage }: BookingReferenceCardProps) {
+  const { tenant } = useTenant();
   const router = useRouter();
 
   const handleClick = () => {
@@ -124,7 +127,7 @@ export function BookingReferenceCard({ booking, isOwnMessage }: BookingReference
                 isOwnMessage ? 'text-white/70' : 'text-muted-foreground'
               )}
             >
-              {booking.vehicle.reg}
+              {displayRegistration(booking.vehicle, tenant)}
             </span>
           </div>
           <div

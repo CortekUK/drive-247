@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { rentalOccupiesWindow, todayStr, type OccupancyRental } from "@/lib/vehicle-availability";
@@ -17,6 +17,10 @@ import SEO from "@/components/SEO";
 import { formatInTimeZone } from "date-fns-tz";
 import { calculateRentalPriceBreakdown, parseDateString } from "@/lib/calculate-rental-price";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
+import { vehiclePublicColumns, displayRegistration,
+  VEHICLE_PHOTO_COLUMNS,
+  customerPhotoUrl,
+} from "@/lib/vehicle-identity";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -44,7 +48,7 @@ interface Vehicle {
 const BookingVehiclesContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const { updateContext, context } = useBookingStore();
   // The customer's chosen pickup location (multiple-locations mode). Used to show
   // only vehicles assigned to that location (plus unassigned "any location" cars).
@@ -73,8 +77,20 @@ const BookingVehiclesContent = () => {
       router.push("/booking");
       return;
     }
+    // Wait for the tenant before querying. Two reasons: the plate flag is
+    // unknown until it resolves (and unknown means withhold, so querying early
+    // would permanently omit the plate for tenants who show it), and the
+    // tenant_id filter below is a no-op while tenant is null.
+    if (!tenant?.id) {
+      // `loading` starts true and is only cleared inside loadVehicles(), so
+      // returning early here would spin forever on a tenant that never
+      // resolves (bad subdomain, network failure). Once the context has
+      // finished trying, stop the spinner and let the empty state render.
+      if (!tenantLoading) setLoading(false);
+      return;
+    }
     loadVehicles();
-  }, []);
+  }, [tenant?.id, tenantLoading]);
 
   const loadVehicles = async () => {
     setLoading(true);
@@ -84,15 +100,14 @@ const BookingVehiclesContent = () => {
 
       // Fetch vehicles that are Available or Rented (Rented vehicles may be available for non-overlapping dates)
       // Excludes Maintenance, Disposed, Sold etc. The overlap check below handles date-based blocking.
-      let query = supabase
+      // Allowlist, not `*` — see lib/vehicle-identity.ts. This page is public,
+      // and `select('*')` here was shipping lockbox codes and purchase prices
+      // to every anonymous visitor alongside the plate.
+      let query = supabaseUntyped
         .from("vehicles")
-        .select(`
-          *,
-          vehicle_photos (
-            photo_url,
-            display_order
-          )
-        `)
+        .select(
+          vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
+        )
         // Case-insensitive status match so rows saved as lowercase "available"/"rented"
         // aren't silently dropped (mirrors the homepage MultiStepBookingWidget query).
         .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented");
@@ -400,9 +415,9 @@ const BookingVehiclesContent = () => {
               {vehicles.map((vehicle) => (
                 <Card key={vehicle.id} className="overflow-hidden hover:shadow-glow transition-all">
                   <div className="aspect-[4/3] overflow-hidden bg-muted">
-                    {vehicle.vehicle_photos?.[0]?.photo_url ? (
+                    {customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) ? (
                       <img
-                        src={vehicle.vehicle_photos[0].photo_url}
+                        src={customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant)!}
                         alt={`${vehicle.make} ${vehicle.model}`}
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                       />
@@ -415,9 +430,11 @@ const BookingVehiclesContent = () => {
                   <div className="p-6">
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <p className="text-xs text-accent uppercase tracking-wider font-medium mb-1">
-                          {vehicle.reg}
-                        </p>
+                        {displayRegistration(vehicle, tenant) && (
+                          <p className="text-xs text-accent uppercase tracking-wider font-medium mb-1">
+                            {displayRegistration(vehicle, tenant)}
+                          </p>
+                        )}
                         <h3 className="text-xl font-semibold">
                           {vehicle.make && vehicle.model
                             ? `${vehicle.make} ${vehicle.model}`

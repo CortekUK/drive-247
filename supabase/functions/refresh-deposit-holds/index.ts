@@ -1,233 +1,590 @@
-// Auto-refresh deposit holds that are about to expire (within 2 days of the
-// REAL Stripe deadline). Runs daily via cron. Cancels the old hold, places a
-// new one on the saved payment method, and records the true expiry.
-// NOTE: standard card auths expire ~7 days out; only cards granted extended
-// authorization last up to ~30. We track the actual deadline per hold.
+// Keep security-deposit authorizations alive across a long rental by CHAINING
+// them: before each authorization expires, cancel it and place a replacement on
+// the saved card. A single card authorization can never exceed ~30 days (Visa
+// is 29d18h; accounts without extended authorization — GMT's included — get the
+// ~5-7 day network default), so a 90-120 day rental needs 4-18 links and the
+// RELIABILITY OF EACH LINK is the whole engineering problem.
+//
+// This file is only the DRIVER: which rentals are due, in what order, how many
+// per run, and the run's heartbeat. Every per-rental decision lives in
+// `_shared/deposit-hold-refresh.ts`, which `sandbox-refresh-deposit-holds`
+// imports too — the two were hand-maintained verbatim forks, so the Time
+// Machine was green-lighting logic production no longer ran.
+//
+// Driver-level fixes over the old version:
+//   * ORDERED and LIMITED. The old loop was serial and unbounded; Supabase edge
+//     functions die at 150s idle / 400s wall clock, stranding rows in
+//     'refreshing' that nothing reaps.
+//   * NULL-safe due filter. `.lt()` against a NULL deposit_hold_expires_at
+//     yields NULL, not true, so rows with no known expiry were invisible.
+//   * Picks up 'failed' rows whose backoff has elapsed. Failure is no longer
+//     terminal, so the driver has to be the thing that retries — but ONLY the
+//     'failed' rows that evidence a real prior authorization (a PaymentIntent
+//     or a deposit_hold_placed_at stamp). The Stripe webhooks write the same
+//     'failed' status when the FIRST placement never succeeded, and those rows
+//     are not this engine's to touch. See HOLD_HISTORY_PREDICATE.
+//   * Rental lifecycle is now a terminal-status DENY list rather than an
+//     ('Active','Pending') allow list, so a status nobody enumerated cannot
+//     silently end a chain.
+//   * Writes a cron_runs heartbeat so "no alerts" can be told apart from "the
+//     job is dead".
+//   * ALERTS. Every non-healthy outcome now raises an operator bell — inside the
+//     engine for anything that writes a status, and in this file for the two
+//     things only the driver can see: an engine that threw (breaking its own
+//     return-don't-throw contract) and the per-tenant `config_unavailable`
+//     aggregate. Before this, a chain that died on day 45 of a 90-day rental was
+//     discovered when the car came back.
+//
+// AUTH: `verify_jwt = false` in config.toml (pg_cron carries no user JWT), so
+// the API gateway lets anonymous requests through and the check in THIS file is
+// the only gate. It accepts:
+//   * `x-platform-secret` — what pg_cron sends, validated by the
+//     `platform_verify_secret(p_secret)` DB RPC, or
+//   * `Authorization: Bearer <super-admin user JWT>` — manual dispatch from the
+//     portal/admin UI, for any scope including the global sweep, or
+//   * `Authorization: Bearer <tenant head_admin/admin JWT>` — but ONLY together
+//     with an `only_rental_id` naming a rental of that admin's OWN tenant. This
+//     is the portal's "Force refresh" button, which is gated client-side on
+//     `isAdmin()`; before this tier existed the button 401'd for every operator
+//     it was built for, because a tenant admin has `is_super_admin = false`.
+//     A tenant admin with NO `only_rental_id` is REFUSED: driving every
+//     tenant's chain is not theirs to do.
+// Anything else is 401. This function accepts a caller-supplied
+// `only_rental_id` and applies it as a filter, and a refresh is DESTRUCTIVE (it
+// cancels the live authorisation before placing its replacement), so an
+// unauthenticated caller who merely knew a rental UUID could previously force a
+// cancel-and-reauthorize on a live hold. Deliberately NOT the service-role
+// bearer: a valid production service_role JWT is committed in plaintext at
+// supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql and is pending
+// rotation, so it is not a credential anything new should trust.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getConnectAccountId, getStripeClientForRecord, resolveHoldExpiry, createDepositHoldIntentWithFallback, type StripeMode } from "../_shared/stripe-client.ts";
+import {
+  refreshOneHold,
+  applyDueHoldFilters,
+  HOLD_REFRESH_COLUMNS,
+  DEFAULT_BATCH_LIMIT,
+  MAX_HOLD_ATTEMPTS,
+  type RefreshOutcome,
+} from "../_shared/deposit-hold-refresh.ts";
+import {
+  notifyDepositHoldFailure,
+  notifyDepositHoldConfigBlocked,
+} from "../_shared/deposit-hold-notify.ts";
+
+const JOB_NAME = "refresh-deposit-holds";
+
+/**
+ * Wall-clock budget for the rental loop. Supabase kills an edge function at
+ * ~400s; we stop well short so the cron_runs row and the response are always
+ * written. Anything left over is reported as `truncated` and picked up by the
+ * next run — which is safe now that ordering is deterministic (oldest deadline
+ * first).
+ */
+const LOOP_BUDGET_MS = 240_000;
+
+const LOG = "[DEPOSIT-REFRESH]";
+
+/**
+ * Roles a TENANT-level operator may hold to force a refresh on their own
+ * tenant's rental. Deliberately narrower than `STAFF_WRITE_ROLES` in
+ * `_shared/deposit-hold-auth.ts`, which also admits `ops` and an editor-granted
+ * `manager`:
+ *
+ *   * The portal only ever shows this control behind `isAdmin()`
+ *     (apps/portal/src/stores/auth-store.ts → head_admin | admin, and super
+ *     admins, whose role the auth store rewrites to 'head_admin'). Admitting
+ *     ops/manager here would hand out a server capability that no UI offers —
+ *     the exact inverse of the one-for-one UI/server alignment that module
+ *     documents.
+ *   * A force refresh is more consequential than the endpoints that module
+ *     guards: it CANCELS the live authorisation before attempting its
+ *     replacement, so a decline leaves the rental unsecured. That is why the
+ *     portal gates it on `isAdmin()` rather than the usual
+ *     `canEdit('rentals')`.
+ *
+ * If ops ever need it, it is one entry here plus one predicate in the portal —
+ * taken deliberately, not inherited by accident.
+ */
+const TENANT_REFRESH_ROLES = new Set(["head_admin", "admin"]);
+
+/**
+ * The only gate on this endpoint (see the AUTH note in the file header).
+ *
+ * Accepts the platform secret (pg_cron), a super-admin user JWT (manual
+ * dispatch, any scope), or a tenant head_admin/admin JWT SCOPED to one rental
+ * of their own tenant. Mirrors `onboarding-daily-digest` and
+ * `platform-rental-notify` rather than inventing a scheme, so there is exactly
+ * one internal-caller credential to rotate.
+ *
+ * Deliberately does NOT call `_shared/deposit-hold-auth.ts` even though the
+ * tenant tier mirrors its resolution logic line for line: that module accepts
+ * the service-role bearer (`ALLOW_SERVICE_ROLE`, which this endpoint refuses on
+ * purpose — see the file header), rejects a request with no `rentalId` with a
+ * 400 (which is the nightly global sweep), and admits ops/manager. Reusing it
+ * would change all three of those, so its *logic* is mirrored instead of its
+ * entry point.
+ *
+ * Fails SAFE: every error path — a missing env var, an RPC error, a GoTrue
+ * outage, an unreadable rental, a failed app_users lookup — returns false. An
+ * outage that made this return true would expose a destructive money path.
+ *
+ * @param supabase a SERVICE-ROLE client. `platform_verify_secret` is
+ *   service-role-only, and the rentals / app_users lookups must not be filtered
+ *   by RLS.
+ * @param onlyRentalId the request body's `only_rental_id`, already parsed.
+ *   Absent (a global sweep) restricts the JWT path to super admins.
+ */
+// deno-lint-ignore no-explicit-any
+async function isAuthorizedCaller(
+  req: Request,
+  supabase: any,
+  onlyRentalId: string | null
+): Promise<boolean> {
+  // 1. Platform secret — the cron path. Validated by a DB RPC so the secret
+  //    itself never has to be present in this function's environment.
+  const secret = req.headers.get("x-platform-secret");
+  if (secret) {
+    try {
+      const { data: ok, error } = await supabase.rpc("platform_verify_secret", { p_secret: secret });
+      if (error) console.error(LOG, "platform_verify_secret rpc failed:", error.message);
+      else if (ok === true) return true;
+    } catch (err) {
+      console.error(LOG, "platform_verify_secret rpc threw:", err);
+    }
+  }
+
+  // 2. Super-admin user JWT — the manual-dispatch path.
+  const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return false;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!supabaseUrl || !anonKey) {
+    console.error(LOG, "SUPABASE_URL / SUPABASE_ANON_KEY missing — cannot verify a user JWT; denying.");
+    return false;
+  }
+
+  let userId: string | null = null;
+  try {
+    const authClient = createClient(supabaseUrl, anonKey);
+    // NOTE: the anon key and the service-role key are themselves valid project
+    // JWTs, but neither carries a `sub`, so getUser() yields no user for them.
+    // That is what stops a bare apikey — or the leaked service_role key — from
+    // walking through this branch.
+    const { data, error } = await authClient.auth.getUser(token);
+    if (error) {
+      console.warn(LOG, "JWT rejected:", error.message);
+      return false;
+    }
+    userId = data?.user?.id ?? null;
+  } catch (err) {
+    console.error(LOG, "getUser threw:", err);
+    return false;
+  }
+  if (!userId) return false;
+
+  // Filter on is_super_admin in the query and take the first row rather than
+  // .single(): a principal with more than one app_users row would otherwise
+  // make .single() error and lock a legitimate super admin out.
+  const { data: rows, error: lookupError } = await supabase
+    .from("app_users")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .eq("is_super_admin", true)
+    .limit(1);
+  if (lookupError) {
+    console.error(LOG, "app_users lookup failed:", lookupError.message);
+    return false;
+  }
+  if ((rows?.length ?? 0) > 0) return true;
+
+  // 3. Tenant head_admin/admin, SCOPED to one rental of their own tenant — the
+  //    portal's "Force refresh" button. Kept as a separate query below the
+  //    super-admin one on purpose: widening that query instead would mean a
+  //    principal holding both a super-admin row and a tenant row could have
+  //    .limit(1) hand back the wrong one, so the proven path stays byte for
+  //    byte as it was and this only ever runs after it has already declined.
+  //
+  //    NO only_rental_id = the global sweep across every tenant's chain. A
+  //    tenant admin has no business driving that, so it stays super-admin only.
+  //    Empty string is treated as absent here for the same reason the batch
+  //    filters below ignore it (`if (onlyRentalId)`), so the two can never
+  //    disagree about what is scoped.
+  if (!onlyRentalId) {
+    console.warn(LOG, "Refused unscoped refresh for auth user", userId, "— not a super admin");
+    return false;
+  }
+
+  // The rental names the tenant; nothing the caller sent does. A read that
+  // errors (including a malformed UUID) or finds no row DENIES — without a
+  // tenant_id there is no tenant check to make.
+  const { data: rentalRow, error: rentalError } = await supabase
+    .from("rentals")
+    .select("id, tenant_id")
+    .eq("id", onlyRentalId)
+    .maybeSingle();
+  if (rentalError) {
+    console.error(LOG, "rental lookup failed during authorisation; denying:", rentalError.message);
+    return false;
+  }
+  const rentalTenantId = (rentalRow?.tenant_id as string | null) ?? null;
+  if (!rentalRow || !rentalTenantId) {
+    console.warn(LOG, "Refused refresh for auth user", userId, "— rental", onlyRentalId, "not found or has no tenant");
+    return false;
+  }
+
+  // THE SECURITY BOUNDARY. tenant_id is matched in the QUERY against the
+  // rental's own tenant, so a row for any other tenant can never come back and
+  // be mistaken for a match. Several rows are read rather than one because a
+  // principal may legitimately hold more than one app_users row; each candidate
+  // still has to satisfy every condition on its own.
+  const { data: staffRows, error: staffError } = await supabase
+    .from("app_users")
+    .select("id, role, is_active")
+    .eq("auth_user_id", userId)
+    .eq("tenant_id", rentalTenantId)
+    .limit(5);
+  if (staffError) {
+    console.error(LOG, "app_users tenant lookup failed; denying:", staffError.message);
+    return false;
+  }
+
+  const match = (staffRows ?? []).find(
+    // `is_active !== false` (not `=== true`): matches how
+    // _shared/deposit-hold-auth.ts reads a NULL is_active. Role is default-deny,
+    // so a NULL role or one added to the enum later is refused.
+    (r: Record<string, unknown>) =>
+      r?.is_active !== false && TENANT_REFRESH_ROLES.has(String(r?.role ?? ""))
+  );
+  if (!match) {
+    console.warn(
+      LOG,
+      "Refused refresh for auth user", userId,
+      "on rental", onlyRentalId,
+      "— no active head_admin/admin row in tenant", rentalTenantId
+    );
+    return false;
+  }
+
+  console.log(
+    LOG,
+    "Tenant admin", match.id,
+    "authorised for a scoped refresh of rental", onlyRentalId,
+    "in tenant", rentalTenantId
+  );
+  return true;
+}
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  );
 
+  // Optional sandbox/portal scoping. When `only_rental_id` is supplied (by the
+  // Time Machine sandbox control or the portal's Force-refresh button), the
+  // refresh is restricted to that ONE rental so a manual dispatch can never
+  // touch another tenant's holds. Absent (the production cron) = unchanged
+  // global behaviour: process all due holds.
+  //
+  // Parsed HERE, ahead of the gate, only because the gate needs it: the scope
+  // is what bounds a tenant admin to their own rental. A request body can be
+  // read once, and parsing it is side-effect free — an unauthorised caller
+  // still gets the same 401 below, before the cron_runs heartbeat and before
+  // any query runs.
+  let onlyRentalId: string | null = null;
+  let batchLimit = DEFAULT_BATCH_LIMIT;
+  try {
+    const reqBody = await req.json();
+    onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
+    const requested = Number(reqBody?.limit);
+    if (Number.isFinite(requested) && requested > 0) batchLimit = Math.min(Math.floor(requested), 100);
+  } catch { /* no/invalid body — global cron run */ }
+
+  // Before the cron_runs heartbeat: an unauthorised caller must not be able to
+  // write heartbeat rows either.
+  if (!(await isAuthorizedCaller(req, supabase, onlyRentalId))) {
+    console.warn(LOG, "Unauthorized call rejected");
+    return errorResponse("Unauthorized", 401);
+  }
+
+  const startedAt = new Date();
+  const startedMs = Date.now();
+  let runId: string | null = null;
+
+  try {
     console.log("[DEPOSIT-REFRESH] Starting deposit hold refresh check...");
 
-    // Optional sandbox scoping. When `only_rental_id` is supplied (by the Time
-    // Machine sandbox control), the refresh is restricted to that ONE rental so
-    // a manual dispatch can never touch another tenant's holds. Absent (the
-    // production cron) = unchanged global behaviour: process all due holds.
-    let onlyRentalId: string | null = null;
-    try {
-      const reqBody = await req.json();
-      onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
-    } catch { /* no/invalid body — global cron run */ }
+    // `onlyRentalId` / `batchLimit` were read from the body above the auth gate
+    // (the gate needs the scope); they are used unchanged from here down.
 
-    // Find active rentals with deposit holds expiring within 2 days of the real
-    // Stripe deadline. Running daily, this gives ~1 cron cycle of buffer before
-    // the auth dies — tight enough to avoid needless churn on 7-day holds, early
-    // enough to never miss the window.
-    const refreshThreshold = new Date();
-    refreshThreshold.setDate(refreshThreshold.getDate() + 2);
+    // Heartbeat row first, so a run that dies mid-loop still leaves evidence
+    // (finished_at stays NULL — that is the dead-man signal).
+    {
+      const { data, error } = await supabase
+        .from("cron_runs")
+        .insert({ job_name: JOB_NAME, started_at: startedAt.toISOString() })
+        .select("id")
+        .maybeSingle();
+      if (error) console.error("[DEPOSIT-REFRESH] Could not open cron_runs row:", error.message);
+      runId = (data?.id as string) ?? null;
+    }
 
-    let refreshQuery = supabase
-      .from("rentals")
-      .select(`
-        id, tenant_id, customer_id,
-        auto_extend_enabled,
-        deposit_hold_payment_intent_id,
-        deposit_hold_amount,
-        deposit_hold_payment_method_id,
-        deposit_hold_stripe_customer_id,
-        deposit_hold_expires_at,
-        platform_account
-      `)
-      .eq("status", "Active")
-      .eq("deposit_hold_status", "held")
-      .lt("deposit_hold_expires_at", refreshThreshold.toISOString())
-      .not("deposit_hold_payment_intent_id", "is", null);
-    // Sandbox scoping — hard-restrict to one rental when requested.
+    const now = new Date();
+
+    // How many are due in total, independent of the batch we are about to take.
+    // Without this a truncated run is indistinguishable from a quiet night.
+    let totalDue: number | null = null;
+    {
+      // deno-lint-ignore no-explicit-any
+      let countQuery: any = supabase.from("rentals").select("id", { count: "exact", head: true });
+      countQuery = applyDueHoldFilters(countQuery, { now });
+      if (onlyRentalId) countQuery = countQuery.eq("id", onlyRentalId);
+      const { count, error } = await countQuery;
+      if (error) console.error("[DEPOSIT-REFRESH] Count query failed:", error.message);
+      totalDue = count ?? null;
+    }
+
+    // deno-lint-ignore no-explicit-any
+    let refreshQuery: any = supabase.from("rentals").select(HOLD_REFRESH_COLUMNS);
+    refreshQuery = applyDueHoldFilters(refreshQuery, { now });
     if (onlyRentalId) refreshQuery = refreshQuery.eq("id", onlyRentalId);
+    // Oldest deadline first, and rows whose expiry we do NOT know (NULL — which
+    // now includes every link that failed to place a replacement, i.e. an
+    // UNSECURED rental) sort ahead of everything else.
+    refreshQuery = refreshQuery
+      .order("deposit_hold_expires_at", { ascending: true, nullsFirst: true })
+      .limit(batchLimit);
+
     const { data: rentalsToRefresh, error: queryError } = await refreshQuery;
 
     if (queryError) {
       console.error("[DEPOSIT-REFRESH] Query error:", queryError);
+      await closeRun(supabase, runId, { total_due: totalDue, error: queryError.message });
       return errorResponse("Failed to query rentals", 500);
     }
 
-    if (!rentalsToRefresh || rentalsToRefresh.length === 0) {
+    const batch = (rentalsToRefresh ?? []) as Record<string, unknown>[];
+
+    if (batch.length === 0) {
       console.log("[DEPOSIT-REFRESH] No holds need refreshing");
-      return jsonResponse({ success: true, refreshed: 0 });
+      await closeRun(supabase, runId, {
+        total_due: totalDue ?? 0,
+        processed: 0,
+        succeeded: 0,
+        failed: 0,
+        truncated: false,
+      });
+      return jsonResponse({ success: true, refreshed: 0, failed: 0, total: 0, totalDue: totalDue ?? 0 });
     }
 
-    console.log("[DEPOSIT-REFRESH] Found", rentalsToRefresh.length, "holds to refresh");
+    console.log("[DEPOSIT-REFRESH] Found", batch.length, "holds to process (total due:", totalDue, ")");
 
     let refreshed = 0;
     let failed = 0;
+    let skippedConfig = 0;
+    let processed = 0;
+    let truncated = (totalDue ?? batch.length) > batch.length;
     const errors: string[] = [];
+    const results: RefreshOutcome[] = [];
 
-    // Cache tenant Stripe configs to avoid repeated lookups
-    const tenantCache: Record<string, any> = {};
+    // One tenant row per batch, not per rental.
+    const tenantCache = new Map<string, Record<string, unknown> | null>();
 
-    for (const rental of rentalsToRefresh) {
+    // Rentals the engine left UNTOUCHED because a tenant/Stripe configuration
+    // could not be resolved, grouped by tenant so one broken Connect account
+    // raises one bell rather than one per rental.
+    const configBlocked = new Map<string, { rentalIds: string[]; message: string }>();
+
+    for (const rental of batch) {
+      if (Date.now() - startedMs > LOOP_BUDGET_MS) {
+        // Stop cleanly rather than being killed mid-Stripe-call with a row
+        // parked in 'refreshing'. The remainder is genuinely still due and the
+        // next run takes it in the same deterministic order.
+        console.warn("[DEPOSIT-REFRESH] Wall-clock budget reached; stopping after", processed, "rentals");
+        truncated = true;
+        break;
+      }
+
+      // refreshOneHold's contract is that it returns rather than throws, but one
+      // rental must never be able to take the rest of the batch down with it —
+      // the old loop shared a single catch and a single tenantCache, so one
+      // systemic fault at 03:00 could reach every live hold in one pass.
+      let outcome: RefreshOutcome;
       try {
-        console.log("[DEPOSIT-REFRESH] Processing rental:", rental.id);
-
-        // Mark as refreshing
-        await supabase
-          .from("rentals")
-          .update({ deposit_hold_status: "refreshing" })
-          .eq("id", rental.id);
-
-        // Get tenant Stripe config (cached)
-        if (!tenantCache[rental.tenant_id]) {
-          const { data: tenant } = await supabase
-            .from("tenants")
-            .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
-            .eq("id", rental.tenant_id)
-            .single();
-          tenantCache[rental.tenant_id] = tenant;
-        }
-
-        const tenant = tenantCache[rental.tenant_id];
-        if (!tenant) {
-          throw new Error(`Tenant not found: ${rental.tenant_id}`);
-        }
-
-        const stripeMode: StripeMode = (tenant.stripe_mode as StripeMode) || "test";
-        // Operate on the platform the hold was CREATED on (rentals.platform_account):
-        // the old PI, the saved card AND the replacement hold all live there —
-        // even if the tenant's payment model has since flipped.
-        const stripe = getStripeClientForRecord(rental, stripeMode);
-        const connectAccountId = getConnectAccountId({
-          ...tenant,
-          payment_model: rental.platform_account === "uae" ? "own" : "managed",
+        outcome = await refreshOneHold(supabase, rental, {
+          logPrefix: "[DEPOSIT-REFRESH]",
+          actor: "cron",
+          tenantCache,
+          now: new Date(),
         });
-        const stripeOptions = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+      } catch (rentalErr) {
+        const message = rentalErr instanceof Error ? rentalErr.message : String(rentalErr);
+        console.error("[DEPOSIT-REFRESH] Engine threw for rental", rental.id, rentalErr);
+        outcome = {
+          rentalId: String(rental.id),
+          result: "needs_review",
+          message: `engine threw: ${message}`,
+          untouched: false,
+        };
+        // ALERT — exit 3 of 3 outside the engine's finish() funnel. The engine's
+        // contract is that it returns rather than throws, so reaching here means
+        // that contract broke: nothing inside it can have written a status, and
+        // the row is left in whatever state the throw interrupted (very likely
+        // 'refreshing', which the driver never re-selects). Without this the
+        // rental is invisible until somebody opens it.
+        //
+        // notifyDepositHoldFailure never throws, so it is safe in this catch.
+        await notifyDepositHoldFailure({
+          rental,
+          result: "needs_review",
+          status: "needs_review",
+          message: `engine threw: ${message}`,
+          errorMessage: message,
+          errorCode: "engine_threw",
+          // The throw could have happened anywhere — before the incumbent was
+          // cancelled, or after a replacement was created. We cannot tell, so
+          // the alert makes no claim about whether the renter is still secured.
+          moneyState: "unknown",
+          // Matches the seq the engine would have claimed the row with, so an
+          // alert it managed to raise before dying dedupes against this one.
+          attemptSeq: Number(rental.deposit_hold_attempt_seq ?? 0) + 1,
+          maxAttempts: MAX_HOLD_ATTEMPTS,
+          detail:
+            "The refresh engine itself threw, so the hold status may not have been written at all — " +
+            "check this rental's hold state against Stripe.",
+          source: "cron",
+          supabase,
+        });
+      }
+      processed++;
+      results.push(outcome);
 
-        // Step 1: Cancel the old hold
-        try {
-          await stripe.paymentIntents.cancel(
-            rental.deposit_hold_payment_intent_id,
-            stripeOptions
-          );
-          console.log("[DEPOSIT-REFRESH] Old hold cancelled:", rental.deposit_hold_payment_intent_id);
-        } catch (cancelErr: any) {
-          if (cancelErr.code === "payment_intent_unexpected_state") {
-            console.warn("[DEPOSIT-REFRESH] Old hold already in final state, continuing...");
-          } else {
-            throw cancelErr;
+      if (outcome.result === "refreshed") {
+        refreshed++;
+      } else if (outcome.result === "config_unavailable") {
+        // NOT a failure. These are the rows the engine deliberately left
+        // UNTOUCHED because the tenant row or the Connect account could not be
+        // resolved — no hold is in trouble, a configuration is. Counting them
+        // in `failed` meant one mis-configured tenant reported a non-zero
+        // failure count on every run forever, which trains whoever watches
+        // cron_runs.failed to ignore it — eroding the exact dead-man signal
+        // this driver exists to provide.
+        skippedConfig++;
+        console.warn(`[DEPOSIT-REFRESH] ${outcome.rentalId}: config unavailable — ${outcome.message}`);
+        // …but "no hold is in trouble" is only true for THIS run. The row was
+        // left untouched, so its authorization is not being renewed and will
+        // lapse on the network's own schedule. Collected per TENANT because the
+        // cause is one configuration, not N rentals — see the aggregated alert
+        // after the loop.
+        {
+          const tid = String(rental.tenant_id ?? "");
+          if (tid) {
+            const entry = configBlocked.get(tid) ?? { rentalIds: [], message: outcome.message };
+            entry.rentalIds.push(outcome.rentalId);
+            configBlocked.set(tid, entry);
           }
         }
-
-        // AUTO-EXTEND rentals must NOT carry a deposit (renewal pricing replaces
-        // it — RevTek/Jeffrey incident). If one has a 'held' deposit from before
-        // the place-deposit-hold guard existed, RELEASE it here (the old hold was
-        // already cancelled in Step 1) instead of re-placing it.
-        //
-        // Manually-EXTENDED rentals are deliberately NOT excluded any more: they
-        // are normal rentals whose deposit must stay alive, and operators on
-        // 7-day-capped Stripe accounts (GMT) rely on this cron to re-authorise
-        // before expiry. The Jun-25 blanket ban conflated the two and this cron
-        // was cancelling their live holds (GMT incident, Jul 2026). The RevTek/
-        // Fabri spam came from AUTOMATIC placement paths, which stay guarded in
-        // place-deposit-hold — one cron re-auth per held hold cannot spam (a
-        // failed re-auth marks the hold 'expired' and is never retried).
-        const isLongRunning = (rental as any).auto_extend_enabled === true;
-        if (isLongRunning) {
-          await supabase
-            .from("rentals")
-            .update({
-              deposit_hold_status: "released",
-              deposit_hold_payment_intent_id: null,
-              deposit_hold_expires_at: null,
-            })
-            .eq("id", rental.id);
-          console.log("[DEPOSIT-REFRESH] Released (auto-extend — not refreshed):", rental.id);
-          continue;
-        }
-
-        // Step 2: Create new hold
-        const currencyCode = (tenant.currency_code || "usd").toLowerCase();
-        const amountInCents = Math.round((rental.deposit_hold_amount || 0) * 100);
-
-        // Request extended authorization so the refreshed hold lasts as long as
-        // the card allows, and expand the charge to read the real expiry. The
-        // shared helper downgrades card features for accounts not approved for
-        // them (e.g. GMT) so the refresh never 500s and silently lets the hold
-        // die — the whole reason this cron exists.
-        const newIntent = await createDepositHoldIntentWithFallback(
-          stripe,
-          {
-            amount: amountInCents,
-            currency: currencyCode,
-            customer: rental.deposit_hold_stripe_customer_id,
-            payment_method: rental.deposit_hold_payment_method_id,
-            capture_method: "manual",
-            confirm: true,
-            off_session: true,
-            description: `Security deposit hold (refreshed) for rental ${rental.id.substring(0, 8).toUpperCase()}`,
-            expand: ["latest_charge"],
-            metadata: {
-              rental_id: rental.id,
-              tenant_id: rental.tenant_id,
-              type: "deposit_hold",
-              refreshed: "true",
-            },
-          },
-          { ...(stripeOptions ?? {}), idempotencyKey: `deposit-refresh-${rental.id}-${rental.deposit_hold_payment_intent_id ?? "new"}` }
-        );
-
-        if (newIntent.status !== "requires_capture") {
-          throw new Error(`New hold failed with status: ${newIntent.status}`);
-        }
-
-        // Step 3: Update rental with the new hold info + its REAL expiry.
-        const newExpiresAt = await resolveHoldExpiry(stripe, newIntent, stripeOptions);
-
-        await supabase
-          .from("rentals")
-          .update({
-            deposit_hold_payment_intent_id: newIntent.id,
-            deposit_hold_status: "held",
-            deposit_hold_placed_at: new Date().toISOString(),
-            deposit_hold_expires_at: newExpiresAt,
-          })
-          .eq("id", rental.id);
-
-        console.log("[DEPOSIT-REFRESH] Refreshed:", rental.id, "→", newIntent.id);
-        refreshed++;
-      } catch (err: any) {
-        console.error("[DEPOSIT-REFRESH] Failed for rental:", rental.id, err.message);
+      } else if (
+        outcome.result === "failed" ||
+        outcome.result === "needs_review" ||
+        outcome.result === "requires_action"
+      ) {
+        // 'released', 'skipped', 'lost_race' and 'chain_expired' are correct
+        // outcomes, not failures — counting them would make the dead-man alert
+        // cry wolf every time an auto-extend rental comes through.
         failed++;
-        errors.push(`${rental.id}: ${err.message}`);
-
-        // Mark as expired if refresh failed
-        await supabase
-          .from("rentals")
-          .update({ deposit_hold_status: "expired" })
-          .eq("id", rental.id);
+        errors.push(`${outcome.rentalId}: ${outcome.result} — ${outcome.message}`);
       }
     }
 
-    console.log("[DEPOSIT-REFRESH] Complete. Refreshed:", refreshed, "Failed:", failed);
+    // ── The one non-per-rental bell. ──────────────────────────────────────────
+    // `config_unavailable` is not a hold failure, which is why it stays out of
+    // `failed` — but it IS a silent death: those authorizations simply stop
+    // being renewed. One aggregated, day-deduped alert per affected tenant is
+    // the difference between "the operator finds out" and "the counter on
+    // cron_runs goes up and nobody reads it". Never throws.
+    for (const [tid, entry] of configBlocked) {
+      await notifyDepositHoldConfigBlocked({
+        tenantId: tid,
+        rentalIds: entry.rentalIds,
+        sampleMessage: entry.message,
+        source: "cron",
+        now,
+      });
+    }
+
+    // Read-only heads-up: rows parked in 'refreshing' by a run that was killed
+    // mid-flight. This driver deliberately does NOT reap them — deciding whether
+    // such a row's authorization exists requires probing Stripe, which belongs
+    // to the reconciler, and guessing here is exactly how a renter ends up with
+    // two live holds. Surfacing the count is what lets anyone notice.
+    let stuckRefreshing = 0;
+    {
+      const staleBefore = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from("rentals")
+        .select("id", { count: "exact", head: true })
+        .eq("deposit_hold_status", "refreshing")
+        .lt("deposit_hold_status_changed_at", staleBefore);
+      stuckRefreshing = count ?? 0;
+      if (stuckRefreshing > 0) {
+        console.warn("[DEPOSIT-REFRESH]", stuckRefreshing, "rental(s) stuck in 'refreshing' for over an hour");
+      }
+    }
+
+    console.log(
+      "[DEPOSIT-REFRESH] Complete. Refreshed:", refreshed,
+      "Failed:", failed,
+      "Skipped (config):", skippedConfig,
+      "Processed:", processed,
+      "Truncated:", truncated
+    );
+
+    await closeRun(supabase, runId, {
+      total_due: totalDue ?? batch.length,
+      processed,
+      succeeded: refreshed,
+      failed,
+      truncated,
+    });
 
     return jsonResponse({
       success: true,
+      // Legacy response keys preserved — the Time Machine UI and existing
+      // dispatch tooling read these.
       refreshed,
       failed,
-      total: rentalsToRefresh.length,
+      total: batch.length,
+      totalDue: totalDue ?? batch.length,
+      processed,
+      truncated,
+      // Rows left untouched because a tenant/Connect configuration could not be
+      // resolved. Deliberately kept OUT of `failed` — see the loop above.
+      skippedConfig,
+      stuckRefreshing,
+      results,
       ...(errors.length > 0 ? { errors } : {}),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("[DEPOSIT-REFRESH] Error:", error);
-    return errorResponse(error.message, 500);
+    await closeRun(supabase, runId, { error: message });
+    return errorResponse(message, 500);
   }
 });
+
+// deno-lint-ignore no-explicit-any
+async function closeRun(supabase: any, runId: string | null, patch: Record<string, unknown>) {
+  if (!runId) return;
+  const { error } = await supabase
+    .from("cron_runs")
+    .update({ ...patch, finished_at: new Date().toISOString() })
+    .eq("id", runId);
+  if (error) console.error("[DEPOSIT-REFRESH] Could not close cron_runs row:", error.message);
+}

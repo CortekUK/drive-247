@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 1,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_001.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/next.config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/postcss.config.js",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/__tests__/lib/vehicle-identity.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/__tests__/setup.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/agreements/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/bookings/[id]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/bookings/history/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/bookings/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/documents/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/gig-driver/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/messages/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/notifications/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/payments/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/settings/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/verification/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/about/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/blog/rss/route.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/check-veriff-status/route.ts"
+  ]
+}

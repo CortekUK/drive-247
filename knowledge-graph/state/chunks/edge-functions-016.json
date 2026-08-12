@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 16,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_016.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-subscription-webhook-events/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-tesla-charges-cron/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-tesla-charges/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/tesla-fleet-api/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/trax-price-why/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-inbound-sms/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-inbound-whatsapp/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-sms-status/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-connect/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-inbound/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-status/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-whisper/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/undo-manual-payment/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/update-manager-permissions/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/update-payment-method/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/validate-ai-session/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/validate-customer-invite/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/validate-name-against-document/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/veriff-webhook/index.ts"
+  ]
+}

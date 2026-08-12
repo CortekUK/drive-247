@@ -143,9 +143,16 @@ export default function UsersManagement() {
       if (error) throw error;
       if (!result.success) throw new Error(result.error || 'Failed to create user');
 
-      // Send welcome email
+      // Send welcome email.
+      //
+      // supabase.functions.invoke RETURNS {data,error} on a non-2xx — it does not
+      // throw — so the old try/catch never fired and a failed send left no trace,
+      // while the toast still told the admin an email had gone out. That is how a
+      // user ends up with credentials nobody has: the password exists only in the
+      // modal, and if it is dismissed it is unrecoverable.
+      let emailDelivered = true;
       try {
-        await supabase.functions.invoke('send-user-welcome-email', {
+        const { error: emailError } = await supabase.functions.invoke('send-user-welcome-email', {
           body: {
             email: data.email,
             name: data.name,
@@ -153,12 +160,16 @@ export default function UsersManagement() {
             tenant_id: tenant?.id,
           }
         });
+        if (emailError) {
+          emailDelivered = false;
+          console.error('Failed to send welcome email:', emailError);
+        }
       } catch (emailError) {
+        emailDelivered = false;
         console.error('Failed to send welcome email:', emailError);
-        // Don't fail the whole operation if email fails
       }
 
-      return { ...result, temporaryPassword, name: data.name, email: data.email };
+      return { ...result, temporaryPassword, name: data.name, email: data.email, emailDelivered };
     },
     onSuccess: async (data) => {
       console.log('User created successfully, refreshing list...');
@@ -175,7 +186,10 @@ export default function UsersManagement() {
       setShowCredentialsModal(true);
       toast({
         title: "Success",
-        description: "User created successfully. A welcome email has been sent.",
+        description: data.emailDelivered
+          ? "User created successfully. A welcome email has been sent."
+          : "User created, but the welcome email could not be sent — copy the password below and give it to them directly.",
+        variant: data.emailDelivered ? undefined : "destructive",
       });
       logAction({ action: "user_created", entityType: "user", entityId: data.user_id || "unknown", details: { email: data.email, role: data.role } });
     },
@@ -443,7 +457,21 @@ export default function UsersManagement() {
               <TableBody>
                 {filteredUsers.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name || 'N/A'}</TableCell>
+                    <TableCell className="font-medium">
+                      {user.name || 'N/A'}
+                      {/* A row whose auth account is gone cannot sign in and
+                          cannot be password-reset. Without this it looks like a
+                          perfectly normal user, which is exactly how an admin
+                          ends up resetting the wrong one of two similar rows. */}
+                      {!user.auth_user_id && (
+                        <span
+                          className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-destructive/10 text-destructive align-middle"
+                          title="This user has no login account, so they cannot sign in. Remove them and add them again."
+                        >
+                          Can&apos;t sign in
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <Badge variant={getRoleBadgeVariant(user.role)}>

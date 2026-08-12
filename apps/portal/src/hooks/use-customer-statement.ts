@@ -6,6 +6,10 @@ import { useTenant } from '@/contexts/TenantContext';
 
 export interface StatementCategory {
   category: string;
+  /** Underlying ledger category ('Fine', 'Rental', …). `category` is the
+   *  display label, which for a fine is its own type. Optional so an
+   *  older cached response still type-checks. */
+  baseCategory?: string;
   charged: number;
   paid: number;
   outstanding: number;

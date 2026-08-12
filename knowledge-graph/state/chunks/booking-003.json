@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 3,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_003.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/fleet/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/global-error.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/not-found.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/offer/[code]/accepted/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/offer/[code]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/pay/[token]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/privacy/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/promotions/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/register/[token]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/sitemap.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/sms-opt-in/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/terms/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/testimonials/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/veriff-callback/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/verify/[token]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/client-schemas/apply.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/client-schemas/auth.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/client-schemas/enquiry.ts"
+  ]
+}

@@ -92,6 +92,18 @@ Deno.serve(async (req) => {
       );
     }
 
+    // A profile whose auth account is gone has nothing to reset. Passing the NULL
+    // straight to updateUserById produced an opaque GoTrue error that gave the
+    // admin no idea they were operating on a dead row.
+    if (!targetUser.auth_user_id) {
+      return new Response(
+        JSON.stringify({
+          error: 'This user has no login account, so their password cannot be reset. Remove them and add them again.',
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Only head_admin can reset passwords for other admins
     if ((targetUser.role === 'admin' || targetUser.role === 'head_admin') && currentUserData.role !== 'head_admin') {
       return new Response(

@@ -5,6 +5,7 @@ import { raiseEsignCreditAlert } from '@/lib/esign-credit-alert';
 import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
+import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -123,6 +124,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         mileage_allowance: _mileage.allowance,
         excess_mileage_rate: _mileage.excessRate,
         terms_and_conditions: termsBlock || '',
+        // Bonzah insurance addendum — insurer-mandated, gated on the tenant flag.
+        // Resolves to '' for non-Bonzah tenants so an operator who placed the
+        // placeholder by hand and later disconnects Bonzah is left with nothing
+        // rather than a stray literal.
+        bonzah_insurance_addendum: tenant?.integration_bonzah === true ? BONZAH_INSURANCE_ADDENDUM_HTML : '',
         // Customer — basic
         customer_name: customer?.name || '',
         customer_email: customer?.email || '',
@@ -313,6 +319,7 @@ TERMS:
 2. Customer will maintain the vehicle in good condition.
 3. Customer is responsible for any damage during rental.
 ${termsText ? `\n${'-'.repeat(70)}\nOPERATOR TERMS & CONDITIONS:\n\n${termsText}\n` : ''}
+${tenant?.integration_bonzah === true ? `\n${'-'.repeat(70)}\n${BONZAH_INSURANCE_ADDENDUM_TEXT}\n` : ''}
 
 ${'='.repeat(70)}
 
@@ -396,7 +403,8 @@ export async function POST(request: NextRequest) {
         if (tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days')
+                // integration_bonzah drives the Bonzah insurance addendum below.
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah')
                 .eq('id', tenantId)
                 .single();
             tenant = tenantData;
@@ -447,6 +455,8 @@ export async function POST(request: NextRequest) {
                     injectAgreementClauses(templateData.template_content, {
                         hasMileage: hasMileageConfigured,
                         hasTerms: !!termsBlockHtml,
+                        // Tenant-level disclosure, not tied to this renter's purchase.
+                        hasBonzahAddendum: (tenant as any)?.integration_bonzah === true,
                     }),
                     rental, customer, vehicle, tenant, verification, termsBlockHtml
                 );
@@ -488,7 +498,14 @@ export async function POST(request: NextRequest) {
         let y = pageHeight - margin;
 
         for (const rawLine of lines) {
-            const line = sanitizePdfText(rawLine);
+            // sanitizePdfText deliberately PRESERVES \n \r \t so multi-line
+            // renderers can consume them. This loop does not — it hands the
+            // result straight to drawText/widthOfTextAtSize, which encode, and
+            // pdf-lib throws `WinAnsi cannot encode "\n" (0x000a)` on any that
+            // survive. Splitting on '\n' leaves the '\r' of every CRLF line and
+            // every tab untouched, which is exactly how a whole tenant lost
+            // agreement creation. Collapse them here.
+            const line = sanitizePdfText(rawLine).replace(/[\r\n\t]+/g, ' ');
             // Wrap long lines
             const words = line.split(' ');
             let currentLine = '';

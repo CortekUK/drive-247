@@ -7,7 +7,7 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Clock, Mail, Phone, Calendar, Car, Loader2, User, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
@@ -15,12 +15,13 @@ import { useBookingStore } from "@/stores/booking-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseDateOnly } from "@/lib/date-utils";
+import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 
 const BookingPendingContent = () => {
   const searchParams = useSearchParams();
   const { customerUser } = useCustomerAuthStore();
   const { clearBooking } = useBookingStore();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading } = useTenant();
   const [bookingDetails, setBookingDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
@@ -36,6 +37,13 @@ const BookingPendingContent = () => {
   }, []);
 
   useEffect(() => {
+    // Wait until TenantContext has finished resolving. vehiclePublicColumnsNested()
+    // withholds `reg` while the tenant is unknown (fail closed), so running this
+    // on mount — when tenant is still null — permanently dropped the registration
+    // row for EVERY tenant, including the ~41 that show plates. Once resolution
+    // has finished we proceed either way: a genuinely absent tenant then keeps
+    // the plate withheld, which is the correct fail-closed outcome.
+    if (tenantLoading) return;
     const fetchBookingDetails = async () => {
       if (!rentalId) {
         setLoading(false);
@@ -44,12 +52,12 @@ const BookingPendingContent = () => {
 
       try {
         // Fetch rental details with customer and vehicle info
-        const { data: rental, error: fetchError } = await supabase
+        const { data: rental, error: fetchError } = await supabaseUntyped
           .from("rentals")
           .select(`
             *,
             customer:customers(*),
-            vehicle:vehicles(*)
+            ${vehiclePublicColumnsNested(tenant, 'vehicle:vehicles')}
           `)
           .eq("id", rentalId)
           .single();
@@ -61,7 +69,7 @@ const BookingPendingContent = () => {
           // Format rental details for display
           const vehicleName = rental.vehicle.make && rental.vehicle.model
             ? `${rental.vehicle.make} ${rental.vehicle.model}`
-            : rental.vehicle.reg;
+            : vehicleDisplayName(rental.vehicle, tenant);
 
           setBookingDetails({
             rental_id: rental.id,
@@ -69,7 +77,7 @@ const BookingPendingContent = () => {
             customer_name: rental.customer.name,
             customer_email: rental.customer.email,
             vehicle_name: vehicleName,
-            vehicle_reg: rental.vehicle.reg,
+            vehicle_reg: displayRegistration(rental.vehicle, tenant) ?? '',
             pickup_date: format(parseDateOnly(rental.start_date), "MMM dd, yyyy"),
             return_date: format(parseDateOnly(rental.end_date), "MMM dd, yyyy"),
             rental_period_type: rental.rental_period_type,
@@ -113,7 +121,7 @@ const BookingPendingContent = () => {
     };
 
     fetchBookingDetails();
-  }, [rentalId]);
+  }, [rentalId, tenant?.id, tenantLoading]);
 
   return (
     <>

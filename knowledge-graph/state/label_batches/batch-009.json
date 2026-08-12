@@ -1,0 +1,589 @@
+{
+  "communities": [
+    {
+      "id": 112,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "portal": 5
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 6,
+        "invokes": 2
+      },
+      "members": [
+        {
+          "label": "Portal staff privacy-policy and terms acceptance gate",
+          "file": "apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+          "kind": null
+        },
+        {
+          "label": "check-policy-acceptance edge function",
+          "file": "apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+          "kind": null
+        },
+        {
+          "label": "Acceptance check fails open so an edge-function error never locks staff out",
+          "file": "apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+          "kind": null
+        },
+        {
+          "label": "Hardcoded Supabase URL and anon key fallback for the raw gate fetch",
+          "file": "apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+          "kind": null
+        },
+        {
+          "label": "Super admins clear the gate in the frontend only, with no DB acceptance record",
+          "file": "apps/portal/src/components/policy/policy-acceptance-gate.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "portal": 5
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 4,
+        "rationale_for": 2,
+        "reads_table": 2
+      },
+      "members": [
+        {
+          "label": "Promo code applied to the extension rental fee, with tax and fee recomputed on the discounted base",
+          "file": "apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Duration discounts (min_duration_days > 0) auto-apply and cannot be entered as promo codes",
+          "file": "apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Negotiated manual extension price replaces the auto price and disables promo stacking",
+          "file": "apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx",
+          "kind": null
+        },
+        {
+          "label": "Promo and duration discounts never carry into auto-extension renewal cycles",
+          "file": "apps/portal/src/components/rentals/auto-extension-section.tsx",
+          "kind": null
+        },
+        {
+          "label": "promocodes table",
+          "file": "apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 114,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "portal": 5
+      },
+      "kinds": {},
+      "relations": {
+        "reads_table": 4,
+        "implements": 2,
+        "rationale_for": 2
+      },
+      "members": [
+        {
+          "label": "Third-party vehicle-owner payout CSV export",
+          "file": "apps/portal/src/components/reports/owner-payouts-export-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "owner_payouts table (payouts owed to third-party vehicle owners)",
+          "file": "apps/portal/src/components/reports/owner-payouts-export-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Outstanding balance derived client-side as net_owed minus amount_paid",
+          "file": "apps/portal/src/components/reports/owner-payouts-export-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "Date filter matches overlapping payout periods (period_end >= from, period_start <= to)",
+          "file": "apps/portal/src/components/reports/owner-payouts-export-card.tsx",
+          "kind": null
+        },
+        {
+          "label": "vehicle_owners table (third-party owner contact details)",
+          "file": "apps/portal/src/components/reports/owner-payouts-export-card.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 115,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "portal": 5
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4,
+        "semantically_similar_to": 2,
+        "governs": 2
+      },
+      "members": [
+        {
+          "label": "Canonical platform ToS / privacy URLs",
+          "file": "apps/portal/src/lib/legal/urls.ts",
+          "kind": null
+        },
+        {
+          "label": "PLATFORM_TOS_URL shown by Stripe when consent_collection is enabled",
+          "file": "supabase/functions/_shared/platform-tos.ts",
+          "kind": null
+        },
+        {
+          "label": "platform-tos.test.ts asserts the three legal-URL definitions agree",
+          "file": "apps/portal/src/__tests__/lib/platform-tos.test.ts",
+          "kind": null
+        },
+        {
+          "label": "Absolute URLs are required: on {tenant}.portal.drive-247.com a root-relative /terms can never reach the marketing site",
+          "file": "apps/portal/src/lib/legal/urls.ts",
+          "kind": null
+        },
+        {
+          "label": "One definition because these are consent links: a partial origin override left mandatory-acceptance screens silently pointing at production",
+          "file": "apps/portal/src/lib/legal/urls.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 116,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "portal": 5
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "implements": 4,
+        "references": 2,
+        "semantically_similar_to": 2
+      },
+      "members": [
+        {
+          "label": "Portal unit-test harness: jsdom, global APIs, shared setup file",
+          "file": "apps/portal/vitest.config.ts",
+          "kind": null
+        },
+        {
+          "label": "setup setup",
+          "file": "apps/portal/vitest.config.ts",
+          "kind": "concept"
+        },
+        {
+          "label": "vitest config bookingtestharness",
+          "file": "apps/portal/vitest.config.ts",
+          "kind": "concept"
+        },
+        {
+          "label": "Test-time '@' alias must mirror the app's tsconfig alias or every module mock breaks",
+          "file": "apps/portal/vitest.config.ts",
+          "kind": null
+        },
+        {
+          "label": "Convention: tests live only in src/__tests__ and are excluded from coverage",
+          "file": "apps/portal/vitest.config.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 117,
+      "size": 5,
+      "cohesion": 0.5,
+      "units": {
+        "booking": 5
+      },
+      "kinds": {},
+      "relations": {
+        "conceptually_related_to": 4,
+        "semantically_similar_to": 2,
+        "rationale_for": 2,
+        "references": 2
+      },
+      "members": [
+        {
+          "label": "Server-rendered tenant-branded chrome for /privacy, /terms and /sms-opt-in",
+          "file": "apps/booking/src/components/legal/LegalPageShell.tsx",
+          "kind": null
+        },
+        {
+          "label": "Rationale: client Navigation/Footer SSR fallback showed platform default branding and failed A2P 10DLC vetting (30908/30882)",
+          "file": "apps/booking/src/components/legal/LegalPageShell.tsx",
+          "kind": null
+        },
+        {
+          "label": "Per-tenant legal-entity line linking public brand to the registered messaging Brand",
+          "file": "apps/booking/src/config/tenant-config.ts",
+          "kind": null
+        },
+        {
+          "label": "useTenant returns safe defaults during SSR / when provider is unmounted",
+          "file": "apps/booking/src/contexts/TenantContext.tsx",
+          "kind": null
+        },
+        {
+          "label": "Chat hook returns inert no-op defaults when the provider is not mounted",
+          "file": "apps/booking/src/contexts/CustomerRealtimeChatContext.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 118,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "booking": 5
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4,
+        "semantically_similar_to": 2,
+        "governs": 2
+      },
+      "members": [
+        {
+          "label": "COVERAGE_INFO insurer disclosure copy (CDW/RCLI/SLI/PAI)",
+          "file": "apps/booking/src/hooks/useBonzahPremium.ts",
+          "kind": null
+        },
+        {
+          "label": "Portal copy of COVERAGE_INFO disclosure copy",
+          "file": "apps/portal/src/hooks/use-bonzah-premium.ts",
+          "kind": null
+        },
+        {
+          "label": "COMPLIANCE DATA \u2014 DO NOT REWORD: transcribed from Bonzah's disclosure document",
+          "file": "apps/booking/src/hooks/useBonzahPremium.ts",
+          "kind": null
+        },
+        {
+          "label": "PAI deductible corrected from None to $25 \u2014 the badge understated it to renters",
+          "file": "apps/booking/src/hooks/useBonzahPremium.ts",
+          "kind": null
+        },
+        {
+          "label": "SLI is not standalone \u2014 it must be bought with RCLI",
+          "file": "apps/booking/src/hooks/useBonzahPremium.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 119,
+      "size": 5,
+      "cohesion": 0.5,
+      "units": {
+        "admin": 5
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 2,
+        "references": 2,
+        "implements": 2,
+        "semantically_similar_to": 2,
+        "contains": 2
+      },
+      "members": [
+        {
+          "label": "Credit pricing table: $0.20 per credit, 1000 default test credits, e-sign 7 / Twilio 2 / license verification 31 credits",
+          "file": "apps/admin/lib/credit-config.ts",
+          "kind": null
+        },
+        {
+          "label": "Credit pricing is triplicated (admin, portal, edge _shared); the admin copy has zero importers and omits MIN_PURCHASE_CREDITS",
+          "file": "apps/admin/lib/credit-config.ts",
+          "kind": null
+        },
+        {
+          "label": "getServiceCost()",
+          "file": "apps/admin/lib/credit-config.ts",
+          "kind": null
+        },
+        {
+          "label": "Authoritative credit pricing consumed by the credit-deduction and credit-checkout edge functions",
+          "file": "supabase/functions/_shared/credit-config.ts",
+          "kind": null
+        },
+        {
+          "label": "credit-config.ts",
+          "file": "apps/admin/lib/credit-config.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 120,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "edge-functions": 5
+      },
+      "kinds": {},
+      "relations": {
+        "reads_table": 3,
+        "rationale_for": 2,
+        "governs": 2,
+        "implements": 2
+      },
+      "members": [
+        {
+          "label": "Blacklist identity matching \u2014 hard (exact phone/email/licence) versus soft (fuzzy name plus partial contact) verdicts",
+          "file": "supabase/functions/check-blacklist-match/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Cross-tenant blacklist scan gated by tenants.cross_tenant_blacklist_enabled, with the origin tenant masked to null on a foreign hit",
+          "file": "supabase/functions/check-blacklist-match/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Gotcha: candidates are pulled with .limit(500) and no ordering, so matches beyond the cap are silently invisible \u2014 worst on the cross-tenant path",
+          "file": "supabase/functions/check-blacklist-match/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Soft match requires BOTH a Levenshtein \u2264 2 name and a partial contact overlap (last-7 phone digits or the email local-part), and is same-tenant only",
+          "file": "supabase/functions/check-blacklist-match/index.ts",
+          "kind": null
+        },
+        {
+          "label": "blacklist_entries",
+          "file": "supabase/functions/check-blacklist-match/index.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 121,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "edge-functions": 5
+      },
+      "kinds": {},
+      "relations": {
+        "implements": 4,
+        "reads_table": 3,
+        "writes_table": 2
+      },
+      "members": [
+        {
+          "label": "Cross-tenant customer blacklist administration (super-admin only)",
+          "file": "supabase/functions/manage-global-blacklist/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Blacklist listing served from the v_global_blacklist_details view rather than the base table",
+          "file": "supabase/functions/manage-global-blacklist/index.ts",
+          "kind": null
+        },
+        {
+          "label": "Whitelist / re-blacklist override recording reason, actor and timestamp",
+          "file": "supabase/functions/manage-global-blacklist/index.ts",
+          "kind": null
+        },
+        {
+          "label": "global_blacklist table (cross-tenant banned customer emails)",
+          "file": "supabase/functions/manage-global-blacklist/index.ts",
+          "kind": null
+        },
+        {
+          "label": "v_global_blacklist_details view (blacklist entries joined to their context)",
+          "file": "supabase/functions/manage-global-blacklist/index.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 122,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "database": 5
+      },
+      "kinds": {
+        "migration": 3,
+        "sql_function": 1,
+        "rls_policy": 1
+      },
+      "relations": {
+        "defines": 8,
+        "secures": 1
+      },
+      "members": [
+        {
+          "label": "RLS: app_users_select_policy",
+          "file": "supabase/migrations/20260119130000_consolidate_app_users_rls.sql",
+          "kind": "rls_policy"
+        },
+        {
+          "label": "20260119130001_fix_app_users_rls_final.sql",
+          "file": "supabase/migrations/20260119130001_fix_app_users_rls_final.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "is_tenant_admin_for()",
+          "file": "supabase/migrations/20260119130001_fix_app_users_rls_final.sql",
+          "kind": "sql_function"
+        },
+        {
+          "label": "20260119130000_consolidate_app_users_rls.sql",
+          "file": "supabase/migrations/20260119130000_consolidate_app_users_rls.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "20260119140000_fix_app_users_rls_comprehensive.sql",
+          "file": "supabase/migrations/20260119140000_fix_app_users_rls_comprehensive.sql",
+          "kind": "migration"
+        }
+      ]
+    },
+    {
+      "id": 123,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "database": 5
+      },
+      "kinds": {
+        "migration": 4,
+        "external_table": 1
+      },
+      "relations": {
+        "alters": 8
+      },
+      "members": [
+        {
+          "label": "promocodes",
+          "file": null,
+          "kind": "external_table"
+        },
+        {
+          "label": "20260623120000_add_promocode_min_duration.sql",
+          "file": "supabase/migrations/20260623120000_add_promocode_min_duration.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "20260623160000_promocode_marketing_fields.sql",
+          "file": "supabase/migrations/20260623160000_promocode_marketing_fields.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "20260623180000_promocode_unique_per_tenant.sql",
+          "file": "supabase/migrations/20260623180000_promocode_unique_per_tenant.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "20260626120000_drop_promocode_marketing_fields.sql",
+          "file": "supabase/migrations/20260626120000_drop_promocode_marketing_fields.sql",
+          "kind": "migration"
+        }
+      ]
+    },
+    {
+      "id": 124,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "database": 5
+      },
+      "kinds": {},
+      "relations": {
+        "writes_table": 4,
+        "governs": 2,
+        "rationale_for": 2
+      },
+      "members": [
+        {
+          "label": "rental_additional_drivers table",
+          "file": "supabase/migrations/20260620120000_realtime_additional_drivers.sql",
+          "kind": null
+        },
+        {
+          "label": "rental_additional_drivers added to the supabase_realtime publication",
+          "file": "supabase/migrations/20260620120000_realtime_additional_drivers.sql",
+          "kind": null
+        },
+        {
+          "label": "Gotcha: the additional-drivers card subscribed to realtime but the table was never published, so verification/signing badges only refreshed on page load",
+          "file": "supabase/migrations/20260620120000_realtime_additional_drivers.sql",
+          "kind": null
+        },
+        {
+          "label": "boldsign-webhook edge function",
+          "file": "supabase/migrations/20260620120000_realtime_additional_drivers.sql",
+          "kind": null
+        },
+        {
+          "label": "veriff-webhook edge function",
+          "file": "supabase/migrations/20260620120000_realtime_additional_drivers.sql",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 125,
+      "size": 5,
+      "cohesion": 0.4,
+      "units": {
+        "docs": 5
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "rationale_for": 4,
+        "invokes": 2,
+        "references": 2
+      },
+      "members": [
+        {
+          "label": "W1: route deposit failures through notifyOperatorsInApp with a dedupeKey, on the existing payment_failed type so bell plus email arrive with zero DDL",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Rationale: run the reconciliation backfill before enabling alerting, or day one is an alert storm, the channel gets muted and the alerting is worthless",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "Do not build alerting on reminders-generate / reminders-digest: the digest's send step is a TODO plus a console.log and the generator's only caller is an uncalled hook",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": null
+        },
+        {
+          "label": "notify inapp dedupe key guard",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": "concept"
+        },
+        {
+          "label": "notify operator email type to category map",
+          "file": "docs/GMT_AUTH_HOLD_90DAY_PLAN.md",
+          "kind": "concept"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "unit": "docs",
+  "unit_label": "Docs - specs, plans, audits",
+  "unit_kind": "documents",
+  "chunk": 1,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/docs/graphify-out/.graphify_chunk_docs_001.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/docs/A2P_10DLC_SUBMISSION_GUIDE.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/AUTO_EXTENSION.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SANDBOX_ALL_SERVICES_PLAN.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIMULATION_TESTING_DESIGN.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIM_DEVPANEL_SPEC.md"
+  ]
+}

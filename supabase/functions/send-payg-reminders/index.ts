@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
 
     const { data: tenants, error: tenantErr } = await supabase
       .from("tenants")
-      .select("id, slug, payg_auto_reminders_enabled, payg_reminder_interval_days, currency_code, company_name, contact_email, contact_phone");
+      .select("id, slug, payg_auto_reminders_enabled, payg_reminder_interval_days, currency_code, company_name, contact_email, contact_phone, hide_vehicle_registration");
 
     if (tenantErr) throw tenantErr;
 
@@ -638,6 +638,8 @@ Deno.serve(async (req) => {
         // Resolve the tenant's `payg_reminder` template (custom or default fallback)
         // and substitute variables. This lets each tenant edit the reminder copy
         // from Settings → Email Templates without redeploying the function.
+        // The tenant row is already loaded here; no extra round-trip.
+        const hidePlate = (tenant as any)?.hide_vehicle_registration === true;
         const templateData = {
           customer_name: customer.name || "Customer",
           customer_email: customer.email || "",
@@ -647,7 +649,10 @@ Deno.serve(async (req) => {
           days_active: String(daysActive),
           vehicle_make: r.vehicles?.make || "",
           vehicle_model: r.vehicles?.model || "",
-          vehicle_reg: r.vehicles?.reg || "",
+          // Blank at composition: this function is a FORK of the shared email
+          // renderer with the privacy guard absent, so nothing downstream
+          // — including the tenant's own saved template — would catch it.
+          vehicle_reg: hidePlate ? "" : (r.vehicles?.reg || ""),
           company_name: tenant.company_name || "Drive247",
           company_email: tenant.contact_email || "",
           company_phone: tenant.contact_phone || "",

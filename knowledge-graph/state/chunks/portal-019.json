@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 19,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_019.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/swap-vehicle-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/aging-receivables-detail.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/data-table.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/empty-state-illustration.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/export-buttons.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/filter-sidebar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/owner-payouts-export-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/report-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reports/report-preview-modal.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/approval-review-summary.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/customer-review-summary-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/customer-reviews-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/rental-review-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/review-display-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/review-status-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/review-tags.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/InstallmentSettings.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/agreement-template-editor.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/bonzah-onboarding/file-upload.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/bonzah-onboarding/index.tsx"
+  ]
+}

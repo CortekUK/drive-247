@@ -1,0 +1,30 @@
+{
+  "unit": "web",
+  "unit_label": "Web - marketing site",
+  "unit_kind": "nextjs-app",
+  "chunk": 1,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/web/graphify-out/.graphify_chunk_web_001.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/README.md",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/eslint.config.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/next.config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/postcss.config.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/actions/lead-capture.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/actions/strategy-call.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/privacy/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/security/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/terms/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/robots.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/sitemap.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/confirmation/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/forms/consultation-form.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/forms/lead-capture-form.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/layout/footer.tsx"
+  ]
+}

@@ -456,9 +456,16 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
     } catch (error: any) {
       let errorMessage = "Failed to add vehicle. Please try again.";
 
-      // Check for unique constraint violation on registration number
-      if (error?.code === '23505' && error?.details?.includes('vehicles_reg_key')) {
-        errorMessage = `A vehicle with registration '${data.reg}' already exists. Please use a different registration number.`;
+      // Check for unique constraint violation on registration number.
+      // PostgREST puts the constraint name in `message` ("duplicate key value
+      // violates unique constraint \"vehicles_reg_key\"") and the DETAIL in
+      // `details` — testing only `details` meant this branch never fired and
+      // operators got the generic fallback instead.
+      const dup = `${error?.message ?? ''} ${error?.details ?? ''}`;
+      if (error?.code === '23505' && dup.includes('vehicles_reg_key')) {
+        errorMessage =
+          `A vehicle with registration '${data.reg}' already exists. If you were re-adding this vehicle, ` +
+          `the original may still be on your fleet — check your vehicles list, or delete the old entry first.`;
       } else if (error?.code === '23505') {
         errorMessage = "This vehicle registration number is already in use. Please check and try again.";
       } else if (error?.message) {

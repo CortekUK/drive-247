@@ -237,7 +237,7 @@ Customer Profile:
 Recent Rentals (${rentals.length}):
 ${rentals.map((r, i) => `${i + 1}. Rental #${r.rental_number || 'N/A'}
    - Status: ${r.status || 'N/A'}
-   - Vehicle: ${r.vehicle_make || ''} ${r.vehicle_model || ''} (${r.vehicle_registration || 'N/A'})
+   - Vehicle: ${r.vehicle_make || ''} ${r.vehicle_model || ''}${r.vehicle_registration ? ` (${r.vehicle_registration})` : ''}
    - Dates: ${r.start_date || 'N/A'} to ${r.end_date || 'N/A'}
    - Monthly: ${formatCurrencyLocal(Number(r.monthly_amount) || 0, currencyCode)}
    - Payment Status: ${r.payment_status || 'N/A'}`).join('\n')}` : '\nNo recent rentals.';
@@ -390,14 +390,43 @@ serve(async (req) => {
     }
 
     // Get tenant name and currency for personalized branding
-    const { data: tenantData } = await supabase
+    let { data: tenantData } = await supabase
       .from('tenants')
-      .select('company_name, currency_code')
+      .select('company_name, currency_code, hide_vehicle_registration')
       .eq('id', tenantId)
       .single();
 
+    // hide_vehicle_registration is not present in every project this function
+    // is deployed to. PostgREST rejects the whole select on one unknown column,
+    // which would cost the tenant their name and currency in every customer
+    // chat. Retry without it rather than let a privacy flag break branding.
+    // Retry only for a genuinely absent column. Retrying on any failure meant a
+    // transient error dropped the flag and fed the plate into the LLM context.
+    let chatColumnMissing = false;
+    if (!tenantData) {
+      const probe = await supabase
+        .from('tenants')
+        .select('company_name, currency_code')
+        .eq('id', tenantId)
+        .single();
+      tenantData = probe.data;
+      chatColumnMissing = true;
+    }
+
     const tenantName = tenantData?.company_name || 'Drive247';
     const currencyCode = tenantData?.currency_code || 'USD';
+    // This assistant talks to CUSTOMERS. If the tenant hides plates, the plate
+    // must never enter the model's context — a customer only has to ask "which
+    // car am I getting?" to be told it, and no amount of hiding pixels on the
+    // booking site prevents that. Withheld at the source rather than by asking
+    // the model not to mention it.
+    // Fail CLOSED: if we could not read the tenant at all, withhold. Only the
+    // schema-behind case (retry succeeded without the column) shows the plate.
+    const hideVehicleReg = !tenantData
+      ? true
+      : chatColumnMissing
+        ? false
+        : (tenantData as any).hide_vehicle_registration === true;
 
     // Parse request body
     let body: CustomerChatRequest;
@@ -459,7 +488,7 @@ serve(async (req) => {
         customer: customerData,
         rentals: rentalsData?.map(r => ({
           ...r,
-          vehicle_registration: r.vehicle?.reg,
+          vehicle_registration: hideVehicleReg ? null : r.vehicle?.reg,
           vehicle_make: r.vehicle?.make,
           vehicle_model: r.vehicle?.model,
         })) || [],
@@ -477,6 +506,21 @@ serve(async (req) => {
     } else {
       context = rpcContext || {};
       console.log('RPC context:', JSON.stringify(context, null, 2));
+    }
+
+    // Strip the plate AFTER both branches, not inside one of them.
+    //
+    // The direct-query fallback above builds `vehicle_registration` itself, but
+    // the normal path is the RPC — and get_customer_rag_context selects
+    // 'vehicle_registration', v.reg (20260205100000_add_customer_rag_context.sql:47),
+    // so filtering only the fallback left the plate flowing into the model on
+    // every request that succeeded. Sanitising where the two paths converge is
+    // the only place that cannot be bypassed by whichever branch ran.
+    if (hideVehicleReg && Array.isArray((context as any)?.rentals)) {
+      (context as any).rentals = (context as any).rentals.map((r: any) => ({
+        ...r,
+        vehicle_registration: null,
+      }));
     }
 
     // Build messages array for chat completion

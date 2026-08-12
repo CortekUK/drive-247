@@ -1,10 +1,27 @@
 // Deduct an amount from the security deposit to cover an excess mileage charge
 // Processes a partial Stripe refund of the deposit, then applies that amount to the excess mileage charge
+//
+// STRIPE QUIRK THAT USED TO EAT THE REST OF THE DEPOSIT: a partial capture of a
+// PaymentIntent automatically RELEASES the uncaptured remainder, and you cannot
+// capture the difference later. This function used to fire a bare
+// paymentIntents.capture({ amount_to_capture }) and then write
+// deposit_hold_status='captured' with the hold amount untouched — so deducting
+// $200 of a $1,500 hold on day 20 of a 90-day rental silently released $1,300
+// while the rental row kept claiming $1,500 was ringfenced for the other 70
+// days. capture-deposit-hold already solved this; the same rollover is applied
+// here: prefer multicapture on the same PI, else re-authorise the remainder on
+// the saved card, and either way write the reduced amount back.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from "../_shared/stripe-client.ts";
+import {
+  getConnectAccountId,
+  getStripeClientForRecord,
+  createDepositHoldIntentWithFallback,
+  resolveHoldExpiryDetailed,
+  type StripeMode,
+} from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
 Deno.serve(async (req) => {
@@ -22,6 +39,51 @@ Deno.serve(async (req) => {
     if (!rentalId || !amount || amount <= 0) {
       return errorResponse("Missing required fields: rentalId, amount (positive)");
     }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+    // This endpoint CAPTURES a renter's authorised money, and it had no caller
+    // check at all. `verify_jwt = true` is not one: the Supabase gateway accepts
+    // the project's anon key as a valid JWT, and booking-app CUSTOMERS
+    // authenticate against the same project — so before this, anyone holding
+    // the public anon key could post an arbitrary rentalId and pull money off
+    // someone else's card. Mirrors verify-deposit-hold's preamble exactly.
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    if (!token) return errorResponse("Missing authorization", 401);
+
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // Server-to-server callers (other edge functions, cron) present the service
+    // role key; they are already trusted and have no app_users row.
+    const isServiceRole = serviceRoleKey.length > 0 && token === serviceRoleKey;
+
+    let caller: { id: string | null; tenant_id: string | null; is_super_admin: boolean } | null = null;
+    if (!isServiceRole) {
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      if (userErr || !userData?.user) return errorResponse("Invalid token", 401);
+
+      // app_users has its own primary key; the auth user is linked via
+      // auth_user_id (matching on `id` silently matches nothing).
+      const { data: appUser } = await supabase
+        .from("app_users")
+        .select("id, tenant_id, is_super_admin, is_active")
+        .eq("auth_user_id", userData.user.id)
+        .maybeSingle();
+
+      // No app_users row means the caller is a customer or the raw anon key —
+      // neither may deduct from a deposit.
+      if (!appUser || appUser.is_active === false) {
+        return errorResponse("Not authorised for this rental", 403);
+      }
+      caller = {
+        id: (appUser.id as string | null) ?? null,
+        tenant_id: (appUser.tenant_id as string | null) ?? null,
+        is_super_admin: appUser.is_super_admin === true,
+      };
+    }
+
+    // deposit_hold_links.actor: the app_user id when a human asked, a plain
+    // label when another edge function or a cron did.
+    const actor = caller?.id ?? (isServiceRole ? "service_role" : "deduct-from-deposit");
 
     console.log("[DEDUCT-DEPOSIT] Processing deduction for rental:", rentalId, "amount:", amount);
 
@@ -49,7 +111,10 @@ Deno.serve(async (req) => {
     // Fetch rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("id, customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_hold_amount, platform_account")
+      // deposit_hold_attempt_seq / _currency are read for the deposit_hold_links
+      // ledger row this function writes (see recordCaptureLink below) — the
+      // attempt is the chain link every ledger row is keyed on.
+      .select("id, customer_id, vehicle_id, tenant_id, deposit_hold_status, deposit_hold_payment_intent_id, deposit_hold_amount, deposit_hold_payment_method_id, deposit_hold_stripe_customer_id, deposit_hold_connect_account_id, deposit_hold_stripe_mode, deposit_hold_currency, deposit_hold_attempt_seq, auto_extend_enabled, platform_account")
       .eq("id", rentalId)
       .single();
 
@@ -57,7 +122,23 @@ Deno.serve(async (req) => {
       return errorResponse("Rental not found", 404);
     }
 
-    const effectiveTenantId = tenantId || rental.tenant_id;
+    // Tenant scoping. A head admin of tenant A must not be able to deduct from
+    // tenant B's rental just because they hold a valid session.
+    if (caller && !caller.is_super_admin && caller.tenant_id !== rental.tenant_id) {
+      return errorResponse("Not authorised for this rental", 403);
+    }
+
+    // The rental is the authority on its own tenant. `tenantId` arrives in the
+    // request body, so honouring it would let a caller mis-file the ledger and
+    // deposit_hold_links rows under a tenant they chose — it is now only
+    // accepted when it agrees with the row.
+    if (tenantId && tenantId !== rental.tenant_id) {
+      console.warn(
+        "[DEDUCT-DEPOSIT] Ignoring body tenantId", tenantId,
+        "— rental", rentalId, "belongs to tenant", rental.tenant_id
+      );
+    }
+    const effectiveTenantId = rental.tenant_id;
 
     // Check the Security Deposit ledger — how much was charged and how much was already refunded
     const { data: depositCharges } = await supabase
@@ -108,17 +189,34 @@ Deno.serve(async (req) => {
     // Resolve Stripe client + connected account from the platform the RECORD
     // (hold rental / payment) was created on — never the tenant's current
     // model, which may have flipped since the money object was created.
-    const resolveForRecord = (record: { platform_account?: string | null }) => {
-      const client = getStripeClientForRecord(record, stripeMode);
+    const resolveForRecord = (record: { platform_account?: string | null }, modeOverride?: StripeMode) => {
+      const client = getStripeClientForRecord(record, modeOverride ?? stripeMode);
       const connectAccountId = tenantData
         ? getConnectAccountId({
             ...tenantData,
             payment_model: record.platform_account === "uae" ? "own" : "managed",
           })
         : null;
-      return { client, options: connectAccountId ? { stripeAccount: connectAccountId } : undefined };
+      return {
+        client,
+        connectAccountId,
+        options: connectAccountId ? { stripeAccount: connectAccountId } : undefined,
+      };
     };
-    const { client: stripe, options: stripeOptions } = resolveForRecord(rental);
+
+    // The HOLD carries its own anchor (written when it was placed). Prefer it
+    // over anything re-derived from the tenant row, which may have moved since:
+    // a mode or Connect-account flip mid-rental would otherwise send this
+    // capture at an account that has never heard of the PaymentIntent.
+    const holdMode: StripeMode =
+      rental.deposit_hold_stripe_mode === "test" || rental.deposit_hold_stripe_mode === "live"
+        ? (rental.deposit_hold_stripe_mode as StripeMode)
+        : stripeMode;
+    const holdResolved = resolveForRecord(rental, holdMode);
+    const stripe = holdResolved.client;
+    const holdConnectAccountId =
+      (rental.deposit_hold_connect_account_id as string | null) || holdResolved.connectAccountId;
+    const stripeOptions = holdConnectAccountId ? { stripeAccount: holdConnectAccountId } : undefined;
 
     // If there's an active deposit hold, capture from it instead of refunding
     if (rental.deposit_hold_status === 'held' && rental.deposit_hold_payment_intent_id) {
@@ -126,22 +224,311 @@ Deno.serve(async (req) => {
         return errorResponse(`Deduction amount (${amount}) exceeds hold amount (${rental.deposit_hold_amount})`);
       }
 
+      const originalHold = Number(rental.deposit_hold_amount) || 0;
+      const amountInCents = Math.round(amount * 100);
+      const remainder = Math.max(0, originalHold - amount);
+
+      // -----------------------------------------------------------------
+      // deposit_hold_links — the authorization ledger.
+      //
+      // This function moves a renter's authorised money and, on the rollover
+      // path, mints a BRAND NEW authorisation on their card. Neither was
+      // written down here before, so reconcile-deposit-holds' orphan sweep and
+      // any dispute-evidence packet saw a live PaymentIntent with nothing in
+      // the product pointing at it — which is exactly the signature of an
+      // orphan (spec invariant I1).
+      //
+      // UPSERT, not insert: deposit_hold_links is UNIQUE on
+      // (rental_id, attempt_seq, action), and this function does NOT mint a new
+      // attempt_seq (only place-deposit-hold's atomic claim does), so a second
+      // deduction from a multicapture hold reuses the same key. The row
+      // therefore means "the LATEST capture against this link". created_at is
+      // deliberately never written, so it keeps the first capture's timestamp
+      // while completed_at tracks the most recent.
+      //
+      // FULL REPLACEMENT, not a partial merge: a PostgREST merge-duplicates
+      // upsert only overwrites the columns present in the payload, so a
+      // deduction that failed and was retried successfully would end up with
+      // outcome 'succeeded' sitting next to the previous attempt's error_code.
+      // Every mutable column is defaulted to null here and each call site
+      // overrides only what it actually observed.
+      //
+      // GENUINELY best-effort: supabase-js RESOLVES with `{ error }` on a
+      // Postgres error but REJECTS on a transport failure, so BOTH are
+      // swallowed. An audit write must never throw past the money path — least
+      // of all into the outer catch, which would answer a SUCCESSFUL capture
+      // with a 500 and invite the operator to deduct a second time.
+      const attemptSeq = Number((rental as any).deposit_hold_attempt_seq ?? 0);
+      const recordCaptureLink = async (fields: Record<string, unknown>) => {
+        try {
+          const { error } = await supabase.from("deposit_hold_links").upsert(
+            {
+              rental_id: rentalId,
+              tenant_id: effectiveTenantId,
+              attempt_seq: attemptSeq,
+              action: "capture",
+              // Where this authorisation actually lives — resolved from the
+              // hold's own anchor, not the tenant row as it reads today.
+              platform_account: (rental as any).platform_account ?? null,
+              connect_account_id: holdConnectAccountId,
+              stripe_mode: holdMode,
+              // The app_user who asked, when a human did — resolved in the auth
+              // preamble. Falls back to a plain label for server-to-server.
+              actor,
+              completed_at: new Date().toISOString(),
+              // Mutable set — replaced wholesale by every call site.
+              payment_intent_id: null,
+              superseded_pi_id: null,
+              amount_cents: null,
+              currency: null,
+              capture_before: null,
+              extended_auth_status: null,
+              estimate_inputs: null,
+              outcome: null,
+              error_code: null,
+              error_message: null,
+              ...fields,
+            },
+            { onConflict: "rental_id,attempt_seq,action" }
+          );
+          if (error) {
+            console.error(
+              "[DEDUCT-DEPOSIT] Failed to write deposit_hold_links row (continuing):",
+              error
+            );
+          }
+        } catch (linkErr) {
+          console.error("[DEDUCT-DEPOSIT] deposit_hold_links upsert threw (continuing):", linkErr);
+        }
+      };
+
       try {
-        const amountInCents = Math.round(amount * 100);
-        const capturedIntent = await stripe.paymentIntents.capture(
+        // 1. Read the PI before touching it. Two jobs: prove the authorisation
+        //    is still alive (the DB says 'held' but nothing ever revisits that
+        //    column, so it routinely outlives the auth), and find out whether
+        //    it was authorised with multicapture available.
+        const preCaptureIntent = await stripe.paymentIntents.retrieve(
           rental.deposit_hold_payment_intent_id,
-          { amount_to_capture: amountInCents },
           stripeOptions
         );
-        console.log("[DEDUCT-DEPOSIT] Captured from hold:", capturedIntent.id, "amount:", amount);
 
-        // Update rental deposit hold status
-        await supabase.from("rentals").update({ deposit_hold_status: "captured" }).eq("id", rentalId);
+        if (preCaptureIntent.status !== "requires_capture") {
+          console.warn(
+            "[DEDUCT-DEPOSIT] Hold no longer capturable. PI",
+            preCaptureIntent.id,
+            "status:",
+            preCaptureIntent.status
+          );
+          // Reconcile the row to the truth so the portal stops advertising a
+          // hold that Stripe already released, then refuse. Failing closed:
+          // falling through to the refund path below would try to claw money
+          // back from an unrelated captured payment.
+          await supabase
+            .from("rentals")
+            .update({
+              deposit_hold_status: "expired",
+              deposit_hold_status_changed_at: new Date().toISOString(),
+              deposit_hold_amount: 0,
+            })
+            .eq("id", rentalId)
+            .eq("deposit_hold_payment_intent_id", rental.deposit_hold_payment_intent_id);
+          // Record the refusal AND the correction. Without this the ledger has
+          // no trace of why a rental flipped to 'expired' the moment someone
+          // tried to deduct from it.
+          await recordCaptureLink({
+            payment_intent_id: rental.deposit_hold_payment_intent_id,
+            amount_cents: amountInCents,
+            currency: String(
+              preCaptureIntent.currency || rental.deposit_hold_currency || currencyCode || "usd"
+            ).toLowerCase(),
+            outcome: "failed",
+            error_code: "hold_not_capturable",
+            error_message:
+              `PaymentIntent status was '${preCaptureIntent.status}', not 'requires_capture'; ` +
+              `the rental was reconciled to 'expired' and the deduction refused.`,
+            estimate_inputs: {
+              reason: "excess_mileage_deduction",
+              excess_charge_id: excessCharge.id,
+              requested_deduction: amount,
+              hold_amount_before: originalHold,
+              pi_status: preCaptureIntent.status,
+            },
+          });
+          return errorResponse(
+            "This deposit hold is no longer active at Stripe (the authorisation expired and the funds were released). Place a fresh hold, then deduct from it.",
+            409
+          );
+        }
 
-        // Create ledger entries
+        const holdCurrency = String(preCaptureIntent.currency || currencyCode || "usd").toLowerCase();
+        const multicaptureStatus = (preCaptureIntent as any)?.payment_method_options?.card?.multicapture;
+        const multicaptureAvailable = multicaptureStatus === "available";
+        console.log(
+          "[DEDUCT-DEPOSIT] PI", preCaptureIntent.id,
+          "multicapture:", multicaptureStatus ?? "n/a",
+          "hold:", originalHold, "deduct:", amount, "remainder:", remainder
+        );
+
+        // 2. Capture the requested amount.
+        //    Multicapture path keeps the remainder authorised on the SAME PI
+        //    (final_capture: false). Everything else is a plain partial capture,
+        //    which Stripe follows by releasing the remainder — handled at step 3.
+        let capturedIntent;
+        let usedMulticapture = false;
+        if (multicaptureAvailable && remainder > 0) {
+          try {
+            capturedIntent = await stripe.paymentIntents.capture(
+              rental.deposit_hold_payment_intent_id,
+              { amount_to_capture: amountInCents, final_capture: false },
+              stripeOptions
+            );
+            usedMulticapture = true;
+            console.log("[DEDUCT-DEPOSIT] Multicapture: captured", amount, "kept", remainder, "held on PI", capturedIntent.id);
+          } catch (mcErr) {
+            console.warn("[DEDUCT-DEPOSIT] Multicapture capture failed, falling back to rollover:", mcErr);
+            capturedIntent = await stripe.paymentIntents.capture(
+              rental.deposit_hold_payment_intent_id,
+              { amount_to_capture: amountInCents },
+              stripeOptions
+            );
+          }
+        } else {
+          capturedIntent = await stripe.paymentIntents.capture(
+            rental.deposit_hold_payment_intent_id,
+            { amount_to_capture: amountInCents },
+            stripeOptions
+          );
+          console.log("[DEDUCT-DEPOSIT] Single-capture: captured", amount, "on PI", capturedIntent.id);
+        }
+
+        // 3. Keep the remainder held. Without this the other 70 days of a
+        //    90-day rental run uncovered while the row says otherwise.
+        //    Skipped for auto-extend rentals, which never carry a deposit
+        //    (renewal pricing replaces it) — matching capture-deposit-hold.
+        let newHoldPiId: string | null = null;
+        let newHoldExpiry: Awaited<ReturnType<typeof resolveHoldExpiryDetailed>> | null = null;
+        const isAutoExtend = (rental as any).auto_extend_enabled === true;
+        if (
+          !usedMulticapture &&
+          remainder > 0 &&
+          !isAutoExtend &&
+          rental.deposit_hold_payment_method_id &&
+          rental.deposit_hold_stripe_customer_id
+        ) {
+          try {
+            const newHold = await createDepositHoldIntentWithFallback(
+              stripe,
+              {
+                amount: Math.round(remainder * 100),
+                currency: holdCurrency,
+                customer: rental.deposit_hold_stripe_customer_id,
+                payment_method: rental.deposit_hold_payment_method_id,
+                capture_method: "manual",
+                confirm: true,
+                off_session: true,
+                description: `Security deposit hold (rollover after excess-mileage deduction) for rental ${String(rentalId).substring(0, 8).toUpperCase()}`,
+                expand: ["latest_charge"],
+                metadata: {
+                  rental_id: rentalId,
+                  tenant_id: effectiveTenantId,
+                  type: "deposit_hold_rollover",
+                  previous_hold_pi: rental.deposit_hold_payment_intent_id,
+                },
+              },
+              {
+                ...(stripeOptions ?? {}),
+                idempotencyKey: `deposit-deduct-rollover-${rentalId}-${rental.deposit_hold_payment_intent_id}`,
+              }
+            );
+            if (newHold.status === "requires_capture") {
+              newHoldPiId = newHold.id;
+              newHoldExpiry = await resolveHoldExpiryDetailed(stripe, newHold, stripeOptions);
+              console.log("[DEDUCT-DEPOSIT] Rolled remainder", remainder, "into new hold", newHoldPiId);
+              // Stamp the NEW authorisation into the ledger the instant Stripe
+              // hands it over, before anything else can fail. Between this line
+              // and the rental write below there is a live hold on the renter's
+              // card that nothing else in the product references — a crash in
+              // that window is exactly the orphan this table exists to make
+              // findable. The full picture is upserted over this row at the end
+              // of the happy path; recording it as 'succeeded' rather than
+              // 'pending' is deliberate, because the reconciler CANCELS stale
+              // pending links and this one points at cover the renter still has.
+              await recordCaptureLink({
+                payment_intent_id: newHoldPiId,
+                superseded_pi_id: rental.deposit_hold_payment_intent_id,
+                amount_cents: amountInCents,
+                currency: holdCurrency,
+                capture_before:
+                  newHoldExpiry.source === "stripe_capture_before" ? newHoldExpiry.expiresAt : null,
+                extended_auth_status: newHoldExpiry.extendedAuthStatus ?? null,
+                outcome: "succeeded",
+                estimate_inputs: {
+                  reason: "excess_mileage_deduction",
+                  stage: "rollover_created",
+                  excess_charge_id: excessCharge.id,
+                  hold_amount_before: originalHold,
+                  captured_amount: amount,
+                  remaining_held: remainder,
+                  rollover_pi: newHoldPiId,
+                  captured_pi: rental.deposit_hold_payment_intent_id,
+                },
+              });
+            } else {
+              console.warn("[DEDUCT-DEPOSIT] Rollover hold landed in unexpected status", newHold.status);
+            }
+          } catch (rolloverErr) {
+            // Non-fatal: the deduction itself succeeded. The remainder is
+            // genuinely gone, and the row below records that honestly rather
+            // than claiming coverage that no longer exists.
+            console.error("[DEDUCT-DEPOSIT] Rollover hold failed; remainder released:", rolloverErr);
+          }
+        } else if (!usedMulticapture && remainder > 0) {
+          console.warn(
+            `[DEDUCT-DEPOSIT] Remainder ${remainder} released by Stripe and NOT re-held on rental ${rentalId} ` +
+              `(autoExtend=${isAutoExtend}, pm=${rental.deposit_hold_payment_method_id ? "yes" : "no"}, ` +
+              `customer=${rental.deposit_hold_stripe_customer_id ? "yes" : "no"})`
+          );
+        }
+
+        // 4. Write the hold state back. The old code wrote 'captured' with the
+        //    hold amount untouched in every case, which is the leak.
+        const nowIso = new Date().toISOString();
+        const rentalUpdate: Record<string, unknown> = { deposit_hold_status_changed_at: nowIso };
+        if (usedMulticapture) {
+          rentalUpdate.deposit_hold_status = "held";
+          rentalUpdate.deposit_hold_amount = remainder;
+          // Same PI, same placed_at, same expires_at — nothing else moved.
+        } else if (newHoldPiId) {
+          rentalUpdate.deposit_hold_status = "held";
+          rentalUpdate.deposit_hold_payment_intent_id = newHoldPiId;
+          rentalUpdate.deposit_hold_amount = remainder;
+          rentalUpdate.deposit_hold_placed_at = nowIso;
+          rentalUpdate.deposit_hold_expires_at = newHoldExpiry?.expiresAt ?? null;
+          rentalUpdate.deposit_hold_expiry_source = newHoldExpiry?.source ?? null;
+          rentalUpdate.deposit_hold_extended_auth = newHoldExpiry?.extendedAuth ?? null;
+          rentalUpdate.deposit_hold_window_seconds = newHoldExpiry?.windowSeconds ?? null;
+          // Anchor the replacement to where it actually lives.
+          rentalUpdate.deposit_hold_connect_account_id = holdConnectAccountId;
+          rentalUpdate.deposit_hold_stripe_mode = holdMode;
+          rentalUpdate.deposit_hold_currency = holdCurrency;
+        } else {
+          rentalUpdate.deposit_hold_status = "captured";
+          rentalUpdate.deposit_hold_amount = 0;
+        }
+        const { error: rentalUpdateError } = await supabase
+          .from("rentals")
+          .update(rentalUpdate)
+          .eq("id", rentalId);
+        if (rentalUpdateError) {
+          // Loud: the money moved at Stripe but the row may still claim the old
+          // hold. Surfacing this is what makes the mismatch findable.
+          console.error("[DEDUCT-DEPOSIT] Failed to update rental deposit hold state:", rentalUpdateError);
+        }
+
+        // 5. Ledger: unchanged behaviour — record the captured amount against
+        //    the excess mileage charge.
         const today = new Date().toISOString().split("T")[0];
 
-        // Deposit capture ledger entry
         await supabase.from("ledger_entries").insert({
           rental_id: rentalId, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id,
           tenant_id: effectiveTenantId, entry_date: today, due_date: today,
@@ -149,20 +536,97 @@ Deno.serve(async (req) => {
           reference: `Deposit captured for excess mileage`,
         });
 
-        // Update excess mileage charge remaining
         const newRemaining = Math.max(0, excessCharge.remaining_amount - amount);
         await supabase.from("ledger_entries").update({ remaining_amount: newRemaining }).eq("id", excessCharge.id);
+
+        const remainingHeld = usedMulticapture || newHoldPiId ? remainder : 0;
+
+        // 6. Ledger. Written LAST, once the outcome is known, so this path can
+        //    never leave an outcome:'pending' row behind — the reconciler
+        //    cancels stale pending links, and cancelling here would destroy a
+        //    live hold the renter is still covered by.
+        //
+        //    payment_intent_id is the authorisation this link LEAVES LIVE,
+        //    because that is what has to be reachable from the DB (I1): the
+        //    original PI under multicapture, the replacement after a rollover,
+        //    and — when Stripe released the remainder and nothing replaced it —
+        //    the captured PI, so the money movement is still traceable.
+        const liveHoldPiId = usedMulticapture
+          ? (rental.deposit_hold_payment_intent_id as string)
+          : newHoldPiId;
+        await recordCaptureLink({
+          payment_intent_id: liveHoldPiId ?? rental.deposit_hold_payment_intent_id,
+          // Only a rollover genuinely supersedes the old PI. By then that PI is
+          // SUCCEEDED at Stripe, so the reconciler's superseded sweep reads it,
+          // sees a terminal status and records it as checked — it never tries
+          // to cancel a captured charge. Left null on the multicapture path,
+          // where the same PI is still the live hold.
+          superseded_pi_id: newHoldPiId ? rental.deposit_hold_payment_intent_id : null,
+          // The money that MOVED. What is still authorised afterwards is in
+          // estimate_inputs.remaining_held — the two are different numbers and
+          // conflating them is what the original leak did.
+          amount_cents: amountInCents,
+          currency: holdCurrency,
+          // Only Stripe's own answer is persisted. resolveHoldExpiryDetailed
+          // layers a moving `now + fallback` floor on top when the network
+          // published nothing, and writing that into the ledger would record a
+          // deadline that was never granted.
+          capture_before:
+            newHoldExpiry?.source === "stripe_capture_before" ? newHoldExpiry.expiresAt : null,
+          extended_auth_status: newHoldExpiry?.extendedAuthStatus ?? null,
+          outcome: "succeeded",
+          estimate_inputs: {
+            reason: "excess_mileage_deduction",
+            excess_charge_id: excessCharge.id,
+            hold_amount_before: originalHold,
+            captured_amount: amount,
+            remaining_held: remainingHeld,
+            used_multicapture: usedMulticapture,
+            rollover_pi: newHoldPiId,
+            captured_pi: rental.deposit_hold_payment_intent_id,
+            remainder_released: !usedMulticapture && !newHoldPiId && remainder > 0,
+          },
+        });
 
         return jsonResponse({
           success: true,
           method: "hold_capture",
           deductedAmount: amount,
           excessMileageRemaining: newRemaining,
-          depositAvailableAfter: (rental.deposit_hold_amount || 0) - amount,
+          holdAmount: originalHold,
+          // What is ACTUALLY still authorised. Previously this reported
+          // originalHold - amount unconditionally, which was a fiction whenever
+          // Stripe had released the remainder.
+          remainingHeldAmount: remainingHeld,
+          depositAvailableAfter: remainingHeld,
+          newHoldPiId,
+          usedMulticapture,
+          remainderReleased: !usedMulticapture && !newHoldPiId && remainder > 0,
         });
       } catch (captureErr: any) {
-        console.error("[DEDUCT-DEPOSIT] Hold capture failed:", captureErr.message);
-        return errorResponse(`Failed to capture from deposit hold: ${captureErr.message}`);
+        console.error("[DEDUCT-DEPOSIT] Hold capture failed:", captureErr?.message ?? captureErr);
+        // A failed capture still touched Stripe, so the ledger records the
+        // attempt against this link. Whether the authorisation survived is
+        // deliberately NOT asserted here — the reconciler owns that question,
+        // and this row is what tells it to ask.
+        await recordCaptureLink({
+          payment_intent_id: rental.deposit_hold_payment_intent_id,
+          amount_cents: amountInCents,
+          currency: String(
+            rental.deposit_hold_currency || currencyCode || "usd"
+          ).toLowerCase(),
+          outcome: "failed",
+          error_code:
+            captureErr?.code ?? captureErr?.raw?.code ?? captureErr?.decline_code ?? null,
+          error_message: String(captureErr?.message ?? captureErr).slice(0, 500),
+          estimate_inputs: {
+            reason: "excess_mileage_deduction",
+            excess_charge_id: excessCharge.id,
+            requested_deduction: amount,
+            hold_amount_before: originalHold,
+          },
+        });
+        return errorResponse(`Failed to capture from deposit hold: ${captureErr?.message ?? captureErr}`);
       }
     }
 

@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 17,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_017.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/bonzah-insurance-selector.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/buy-insurance-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/cadence-editor-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/ai-insights-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/block-bar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/calendar-header.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/calendar-view.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/pricing-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/pricing-row.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/rental-bar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/vehicle-row.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/close-rental-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/compliance-status-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/contract-summary.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/damage-analysis-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/delete-rental-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/edit-pickup-return-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/inshur-coverage-block.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/key-handover-action-banner.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/key-handover-photos.tsx"
+  ]
+}

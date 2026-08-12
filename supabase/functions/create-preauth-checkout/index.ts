@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, DEPOSIT_HOLD_CARD_VARIANTS, isCardFeatureIneligibleError, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, resolveHoldExpiryDetailed, HOLD_EXPIRY_FALLBACK_DAYS, DEPOSIT_HOLD_CARD_VARIANTS, isCardFeatureIneligibleError, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -85,10 +85,6 @@ serve(async (req) => {
     // Determine which Connect account to use based on tenant mode/model
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
     console.log('Pre-auth checkout - mode:', stripeMode, 'connectAccount:', stripeAccountId, 'currency:', currencyCode)
-
-    // Calculate pre-auth expiry (7 days from now)
-    const preauthExpiresAt = new Date()
-    preauthExpiresAt.setDate(preauthExpiresAt.getDate() + 7)
 
     // Build payment_intent_data for Checkout Session
     const paymentMetadata = {
@@ -199,6 +195,76 @@ serve(async (req) => {
 
     console.log('Pre-auth checkout session created:', session.id)
 
+    // ---- preauth_expires_at: a CONSERVATIVE FLOOR, reconciled by the webhook --
+    // Whatever is written here is provisional. At this instant the customer has
+    // not completed Checkout, so no authorisation exists, so NOBODY — not even
+    // Stripe — knows the real capture deadline yet. This value therefore cannot
+    // be the truth; it can only be a floor that is safe to act on until the
+    // truth arrives.
+    //
+    // This used to be a flat now+7d and nothing ever corrected it. Two things
+    // were wrong. First, 7 days is not a card-network guarantee — Stripe
+    // publishes the real deadline as capture_before on the authorising charge,
+    // and without extended authorization a Visa card-absent,
+    // merchant-initiated window is ~4d18h, so 7 days was an OVER-estimate, the
+    // dangerous direction. Second, the clock does not start until the customer
+    // actually completes Checkout, so an authorisation created two days later
+    // inherited a deadline measured from the wrong moment. The portal's
+    // pending-bookings expiry badge and the payment-links panel read this
+    // column directly, so both errors reached operators as fact.
+    //
+    // Second half of the fix lives in stripe-webhook-live / stripe-webhook-test
+    // (reconcilePreauthExpiry): once the PaymentIntent is authorised they read
+    // the charge's capture_before and overwrite this column with Stripe's own
+    // answer, measured from the real authorisation moment. They persist nothing
+    // they did not read from Stripe, so a floor is never laundered into a fact.
+    //
+    // resolveHoldExpiryDetailed is the single place that knows how to read
+    // Stripe's answer and, when Stripe has not published one yet, how to fall
+    // back to the conservative floor rather than an optimistic guess. At this
+    // point the PaymentIntent is unconfirmed and has no charge, so the floor
+    // (HOLD_EXPIRY_FALLBACK_DAYS, deliberately SHORTER than the old 7 days) is
+    // what we normally get: understating coverage is the safe direction, since
+    // nobody plans a capture against a window that has already closed.
+    // Deliberately AFTER the session exists and fully wrapped: the session is
+    // already created and returned to the customer, so nothing in here may be
+    // allowed to fail the checkout. No `expand` on sessions.create for the same
+    // reason — a Stripe change there would break booking for every tenant.
+    let preauthExpiresAtIso = new Date(
+      Date.now() + HOLD_EXPIRY_FALLBACK_DAYS * 86400 * 1000
+    ).toISOString()
+    try {
+      const createdPiId =
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id
+      if (createdPiId) {
+        const createdPi = await stripe.paymentIntents.retrieve(
+          createdPiId,
+          { expand: ['latest_charge'] },
+          stripeOptions
+        )
+        const expiry = await resolveHoldExpiryDetailed(stripe, createdPi, stripeOptions)
+        preauthExpiresAtIso = expiry.expiresAt
+        console.log(
+          `Pre-auth expiry floor for session ${session.id}: ${preauthExpiresAtIso} ` +
+            `(source: ${expiry.source}) — the webhook reconciles this against the ` +
+            `charge's capture_before once the card is authorised`
+        )
+      } else {
+        console.warn(
+          `Pre-auth session ${session.id} exposed no PaymentIntent id; ` +
+            `using the ${HOLD_EXPIRY_FALLBACK_DAYS}-day floor for preauth_expires_at`
+        )
+      }
+    } catch (expiryErr) {
+      console.warn(
+        `Pre-auth expiry resolution failed for session ${session.id}; ` +
+          `using the ${HOLD_EXPIRY_FALLBACK_DAYS}-day floor:`,
+        expiryErr
+      )
+    }
+
     // Create payment record in database with pre-auth status
     // Note: PaymentIntent ID will be updated by webhook after checkout completes
     const { data: payment, error: paymentError } = await supabase
@@ -216,7 +282,7 @@ serve(async (req) => {
         is_manual_mode: true,
         stripe_checkout_session_id: session.id,
         capture_status: 'requires_capture',
-        preauth_expires_at: preauthExpiresAt.toISOString(),
+        preauth_expires_at: preauthExpiresAtIso,
         booking_source: 'website',
         tenant_id: tenantId,
         platform_account: platformAccount,

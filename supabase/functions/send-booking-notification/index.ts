@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { corsHeaders } from "../_shared/aws-config.ts";
+import { hidePlateForTenant, vehicleLabel, plateOrBlank } from "../_shared/vehicle-privacy.ts";
 import {
   sendEmail,
   getTenantNotificationRecipient,
@@ -113,7 +114,7 @@ function generateAdminEmailContent(data: BookingNotificationRequest, branding: T
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
-                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleMake} ${data.vehicleModel} (${data.vehicleReg})</td>
+                                                <td style="padding: 8px 0; color: #1a1a1a; font-weight: 600; font-size: 14px; text-align: right;">${data.vehicleMake} ${data.vehicleModel} ${data.vehicleReg ? ` (${data.vehicleReg})` : ''}</td>
                                             </tr>
                                             <tr>
                                                 <td style="padding: 8px 0; color: #666; font-size: 14px;">Start Date:</td>
@@ -173,7 +174,12 @@ serve(async (req) => {
       : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
 
     // Send customer confirmation email
-    const customerSubject = `Booking Confirmed - ${data.vehicleMake} ${data.vehicleModel} (${data.vehicleReg})`;
+    const customerSubject = `Booking Confirmed - ${data.vehicleMake} ${data.vehicleModel} ${data.vehicleReg ? ` (${data.vehicleReg})` : ''}`;
+    // Blank at source: the plate appears in the customer body AND the subject
+    // line, so it leaks without the mail even being opened.
+    if (await hidePlateForTenant(supabase, tenantId)) {
+      data.vehicleReg = '';
+    }
     const customerEmailContent = generateCustomerEmailContent(data, branding);
     const customerHtml = wrapWithBrandedTemplate(customerEmailContent, branding);
 

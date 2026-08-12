@@ -415,6 +415,18 @@ export function useKeyHandover(rentalId: string | undefined) {
           });
           if (releaseError) {
             console.warn('[KEY-HANDOVER] Deposit hold release failed:', releaseError);
+            // Stay non-blocking — keys are already back and the rental is closed —
+            // but do NOT fail silently. release-deposit-hold now returns 409 when
+            // it cannot prove the authorization is free (unanchored hold during
+            // the UK<->UAE window). Without a visible signal the operator walks
+            // away believing the renter's deposit was released when it may still
+            // be ring-fenced on the card.
+            toast({
+              title: "Deposit hold not released",
+              description:
+                "Keys were recorded, but the deposit hold could not be confirmed as released. Check the rental's hold status before closing out.",
+              variant: "destructive",
+            });
           } else {
             console.log('[KEY-HANDOVER] Deposit hold release result:', releaseData);
           }

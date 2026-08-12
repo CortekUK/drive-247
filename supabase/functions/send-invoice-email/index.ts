@@ -9,6 +9,7 @@ import {
 } from "../_shared/resend-service.ts";
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { hidePlateForTenant, vehicleLabel, plateOrBlank } from "../_shared/vehicle-privacy.ts";
 
 interface SendInvoiceEmailRequest {
   invoiceId?: string;
@@ -54,7 +55,12 @@ function formatDate(dateString: string): string {
   });
 }
 
-function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string, overrideAmount?: number, overrideDescription?: string, depositHoldAmount?: number): string {
+// `hidePlate` MUST be a parameter. It was previously read as a free variable from
+// the serve() handler's scope, which is a different function — at runtime that is
+// a ReferenceError, so EVERY invoice/payment-link email threw before sending and
+// the portal surfaced "Edge Function returned a non-2xx status code". Defaulted to
+// false so the signature stays backward-compatible for any other caller.
+function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, currencyCode: string, paymentUrl?: string, overrideAmount?: number, overrideDescription?: string, depositHoldAmount?: number, hidePlate: boolean = false): string {
   const displayAmount = overrideAmount ?? invoice.total_amount;
   const depositNotice = depositHoldAmount && depositHoldAmount > 0 ? `
         <table role="presentation" style="width: 100%; border-collapse: collapse; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 25px;">
@@ -116,7 +122,7 @@ function generateEmailContent(invoice: InvoiceData, branding: TenantBranding, cu
                 ${invoice.vehicles ? `
                 <tr>
                   <td style="padding: 8px 0; color: #666; font-size: 14px;">Vehicle:</td>
-                  <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${invoice.vehicles.make} ${invoice.vehicles.model} (${invoice.vehicles.reg})</td>
+                  <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; text-align: right;">${vehicleLabel(invoice.vehicles, hidePlate)}</td>
                 </tr>
                 ` : ""}
               </table>
@@ -331,7 +337,12 @@ serve(async (req) => {
     }
 
     // Generate email HTML
-    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription, depositHoldAmount);
+    // Blank at source so every branch of generateEmailContent() is covered.
+    const hidePlate = await hidePlateForTenant(supabase, tenantId);
+    if (hidePlate && (invoice as any)?.vehicles) {
+      (invoice as any).vehicles.reg = null;
+    }
+    const emailContent = generateEmailContent(invoice as InvoiceData, branding, tenantCurrencyCode, paymentUrl, overrideAmount, overrideDescription, depositHoldAmount, hidePlate);
     const emailHtml = wrapWithBrandedTemplate(emailContent, branding);
 
     console.log(`Sending invoice email to: ${toEmail}`);

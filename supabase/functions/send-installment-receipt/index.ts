@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/aws-config.ts";
 import { sendEmail } from "../_shared/resend-service.ts";
 import { getTenantInfo, wrapEmailHtml } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { hidePlateForTenant, vehicleLabel, plateOrBlank } from "../_shared/vehicle-privacy.ts";
 
 interface ReceiptRequest {
   installmentId: string;
@@ -126,6 +127,21 @@ serve(async (req) => {
 
     // Get tenant info for branding
     const tenantInfo = await getTenantInfo(supabase, data.tenantId);
+    // Plate privacy.
+    //
+    // This previously blanked `data.vehicle.reg` — the WRONG OBJECT. The email's
+    // `vehicleName` is composed further down from `plan.rentals.vehicles`, a
+    // separately-queried object that the blanking never touched, so the
+    // registration went out in 100% of these receipts for tenants who had asked
+    // to hide it. Redact at the point of COMPOSITION instead (below).
+    //
+    // Resolved via hidePlateForTenant rather than reading the column straight off
+    // tenantInfo, because that helper FAILS CLOSED — an unreadable flag withholds
+    // the plate rather than defaulting to showing it.
+    const hidePlate = await hidePlateForTenant(supabase, data.tenantId);
+    if (hidePlate && (data as any).vehicle) {
+      (data as any).vehicle.reg = '';
+    }
 
     // Get additional details if not provided
     let rentalNumber = data.rentalNumber;
@@ -163,7 +179,10 @@ serve(async (req) => {
         if (plan.rentals) {
           rentalNumber = plan.rentals.rental_number;
           if (plan.rentals.vehicles) {
-            vehicleName = `${plan.rentals.vehicles.make} ${plan.rentals.vehicles.model} (${plan.rentals.vehicles.reg})`;
+            // vehicleLabel() honours the privacy flag AND avoids the empty-bracket
+            // case ("BMW X5 ()") that a bare template literal produces once the
+            // registration is withheld.
+            vehicleName = vehicleLabel(plan.rentals.vehicles, hidePlate);
           }
         }
       }

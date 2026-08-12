@@ -502,3 +502,38 @@ The portal follows a specific Figma design system. Full reference: `.claude/proj
 
 These subdomains have dedicated Vercel deployments and should not be treated as tenant slugs:
 `www`, `admin`, `portal`, `api`, `app`
+
+## Knowledge Graph (`knowledge-graph/`)
+
+A queryable graph of this monorepo — every app, all ~320 edge functions, the
+database schema, and the seams between them. Use it to orient before reading
+files: it answers "what touches this table", "who calls this function", "what
+breaks if I change this" in one query instead of a repo-wide grep.
+
+```bash
+cd knowledge-graph
+./bin/kg query "how does a booking become a signed rental agreement?"
+./bin/kg query -u portal "how are manager permissions enforced?"
+./bin/kg explain "tenant_subscriptions"     # a table and everything touching it
+./bin/kg path "installment_plans" "stripe-webhook-live"
+./bin/kg status                             # sizes, and whether anything is stale
+```
+
+Two layers, and the difference matters when you trust it:
+
+- **Structural** (AST symbols, SQL schema, resolved imports, and the
+  `invokes_function` / `reads_table` / `writes_table` seams) is derived
+  deterministically from source. It cannot drift, and `kg update` rebuilds it
+  for free — no LLM.
+- **Semantic** (what code *means*: business capabilities, rationale, non-obvious
+  couplings) comes from an agent pass. It can lag behind the code.
+
+`kg status` always reports how far behind the semantic layer is. After
+significant changes, run `./bin/kg update`; if it reports pending chunk specs,
+refresh meaning by running the extraction agents over `./bin/kg pending`, then
+`./bin/kg assemble && ./bin/kg merge`.
+
+Every edge is tagged `EXTRACTED` (explicit in source), `INFERRED`, or
+`AMBIGUOUS` — check the tag before relying on an edge. `./bin/kg hook install`
+keeps the structural layer current on every commit. Full details:
+`knowledge-graph/README.md`.

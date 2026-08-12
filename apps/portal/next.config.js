@@ -1,5 +1,8 @@
 const dotenv = require('dotenv');
-dotenv.config({ path: '../../.env' });
+const path = require('path');
+
+const workspaceRoot = path.resolve(__dirname, '../..');
+dotenv.config({ path: path.join(workspaceRoot, '.env'), quiet: true });
 
 // Public home of the platform legal documents. Overridable so local dev can
 // point at the marketing app on :3002 instead of production.
@@ -10,6 +13,9 @@ const MARKETING_URL =
 const nextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ['test.portal.localhost', '*.portal.localhost'],
+  turbopack: {
+    root: workspaceRoot,
+  },
 
   // ── Legal documents live on the marketing site, not here ──────────────────
   //

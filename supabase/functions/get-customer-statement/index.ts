@@ -12,6 +12,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { hidePlateForTenant } from "../_shared/vehicle-privacy.ts";
 
 // Display order for the per-rental category rollup.
 const CATEGORY_ORDER = [
@@ -54,6 +55,7 @@ Deno.serve(async (req) => {
     if (userError || !user) return errorResponse('Invalid session', 401);
 
     const admin = createClient(supabaseUrl, serviceKey);
+    const hidePlate = await hidePlateForTenant(admin, tenantId);
 
     // Resolve the caller. Two modes, both scoped so no one reads across the boundary:
     //  • CUSTOMER — a customer_users row for (auth_user_id, tenant): only their OWN
@@ -136,7 +138,12 @@ Deno.serve(async (req) => {
     }
 
     // Group by rental_id; roll up charges by category (paid = charged - remaining).
-    interface CatAcc { charged: number; outstanding: number }
+    // baseCategory is the underlying ledger category ('Fine', 'Rental', …);
+    // the map KEY is the display label, which for a fine is its own type.
+    // Keeping both is the whole point: overwriting the key with the label
+    // silently broke every consumer that matched on 'Fine' — the grand
+    // "Fines & penalties" subtotal, the sort order, and the amber highlight.
+    interface CatAcc { charged: number; outstanding: number; baseCategory: string }
     interface GroupAcc {
       rentalId: string | null; rentalNumber: string;
       startDate: string | null; endDate: string | null;
@@ -157,7 +164,9 @@ Deno.serve(async (req) => {
           vehicle: {
             make: (sample?.vehicle_make as string) ?? null,
             model: (sample?.vehicle_model as string) ?? null,
-            reg: (sample?.vehicle_reg as string) ?? null,
+            // Serves the customer's account + PAYG statement PDFs. Staff call
+            // this too, so it is gated on the flag rather than blanked outright.
+            reg: hidePlate ? null : ((sample?.vehicle_reg as string) ?? null),
           },
           categories: new Map<string, CatAcc>(),
           refunds: 0,
@@ -171,8 +180,21 @@ Deno.serve(async (req) => {
       const amt = Number(row.amount) || 0;
       const rem = Number(row.remaining_amount) || 0;
       if (row.type === 'Charge') {
-        const cat = (row.category as string) || 'Other';
-        const c = g.categories.get(cat) ?? { charged: 0, outstanding: 0 };
+        // Group fines by WHAT THEY WERE FOR, not by the flat 'Fine' bucket.
+        //
+        // Every fine landed in one aggregated line — a guest with seven fines
+        // saw "Fine $657.48" and no way to tell what any of it was for, which
+        // is the fastest route to a chargeback. `description` is the fine's own
+        // type, carried by view_customer_statements, and is NULL for every
+        // other category, so nothing else changes shape.
+        //
+        // Same-type fines still merge (two toll charges become one "Toll Fees"
+        // line). That is deliberate: this document is a statement of account,
+        // and it already tells the reader to see the individual rental invoices
+        // for a full itemisation.
+        const baseCategory = (row.category as string) || 'Other';
+        const cat = (row.description as string) || baseCategory;
+        const c = g.categories.get(cat) ?? { charged: 0, outstanding: 0, baseCategory };
         c.charged = round2(c.charged + amt);
         c.outstanding = round2(c.outstanding + rem);
         g.categories.set(cat, c);
@@ -187,11 +209,17 @@ Deno.serve(async (req) => {
       const categories = [...g.categories.entries()]
         .map(([category, v]) => ({
           category,
+          // The ledger category behind the label. Renderers style on this, so a
+          // fine keeps its amber highlight even though the line now reads
+          // "Smoking/ Cleaning Violation" rather than "Fine".
+          baseCategory: v.baseCategory,
           charged: v.charged,
           paid: round2(v.charged - v.outstanding),
           outstanding: v.outstanding,
         }))
-        .sort((a, b) => categoryRank(a.category) - categoryRank(b.category) || a.category.localeCompare(b.category));
+        // Rank on the TRUE category, so fines still sit in their designated slot
+        // (before Tax) instead of falling to the end as unknown labels.
+        .sort((a, b) => categoryRank(a.baseCategory) - categoryRank(b.baseCategory) || a.category.localeCompare(b.category));
       const charged = round2(categories.reduce((s, c) => s + c.charged, 0));
       const outstanding = round2(categories.reduce((s, c) => s + c.outstanding, 0));
       return {
@@ -218,8 +246,13 @@ Deno.serve(async (req) => {
     const grandCharged = round2(groups.reduce((s, g) => s + g.charged, 0));
     const grandOutstanding = round2(groups.reduce((s, g) => s + g.outstanding, 0));
     const grandRefunds = round2(groups.reduce((s, g) => s + g.refunds, 0));
+    // Match on baseCategory, NOT the display label. A fine's label is now its
+    // own type ("Toll Fees"), so filtering on `category` made the 'Fine'
+    // predicate match nothing and silently zeroed the grand fines subtotal for
+    // every customer on the platform — the row is gated on `> 0`, so it did not
+    // render as $0.00, it disappeared.
     const sumCat = (pred: (c: string) => boolean) =>
-      round2(groups.reduce((s, g) => s + g.categories.filter((c) => pred(c.category)).reduce((t, c) => t + c.charged, 0), 0));
+      round2(groups.reduce((s, g) => s + g.categories.filter((c) => pred(c.baseCategory)).reduce((t, c) => t + c.charged, 0), 0));
 
     return jsonResponse({
       customer,

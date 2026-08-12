@@ -1,0 +1,15 @@
+{
+  "unit": "docs",
+  "unit_label": "Docs - specs, plans, audits",
+  "unit_kind": "documents",
+  "chunk": 4,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/docs/graphify-out/.graphify_chunk_docs_004.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/docs/PLATFORM_MONITORING_PLAN.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/STRIPE_CONNECT_PRODUCTION.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/STRIPE_CONNECT_TESTING.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/STRIPE_UAE_MIGRATION_CHECKLIST.md",
+    "/home/haseeb-raza/Desktop/drive-247/docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md"
+  ]
+}

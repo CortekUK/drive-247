@@ -1,0 +1,30 @@
+{
+  "unit": "booking",
+  "unit_label": "Booking - customer booking + customer portal",
+  "unit_kind": "nextjs-app",
+  "chunk": 2,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/booking/graphify-out/.graphify_chunk_booking_002.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/esign/route.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/esign/sign/route.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/esign/view/route.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/apply/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/apply/submitted/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/auth/callback/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/blog/[slug]/blog-post-client.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/blog/[slug]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/blog/blog-listing-client.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/blog/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-cancelled/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-enquiry-submitted/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-pending/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-success/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/checkout/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/vehicles/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/contact/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/error.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/faq/page.tsx"
+  ]
+}

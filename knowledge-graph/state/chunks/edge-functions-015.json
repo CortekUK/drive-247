@@ -1,0 +1,30 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 15,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_015.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/README.md",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/manifests.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/simulate-payg-days/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/simulate-payg-timelapse/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-connect-webhook/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-oauth-callback/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-oauth-start/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-webhook-live/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-webhook-test/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-webhook/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-application/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-customer-registration/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-enquiry/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/subscription-webhook/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/summarize-bonzah-submission/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-connect-status/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-deposit-hold/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-payment-intent/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-stripe-account/index.ts"
+  ]
+}

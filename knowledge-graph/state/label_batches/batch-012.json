@@ -1,0 +1,439 @@
+{
+  "communities": [
+    {
+      "id": 154,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "admin": 3
+      },
+      "kinds": {
+        "concept": 1
+      },
+      "relations": {
+        "governs": 2,
+        "implements": 2,
+        "depends_on": 1
+      },
+      "members": [
+        {
+          "label": "next.config.mjs",
+          "file": "apps/admin/next.config.mjs",
+          "kind": null
+        },
+        {
+          "label": "Admin builds fail on TypeScript errors (ignoreBuildErrors: false), unlike booking and portal",
+          "file": "apps/admin/next.config.mjs",
+          "kind": null
+        },
+        {
+          "label": "authstore salesagentuntypedcast",
+          "file": "apps/admin/next.config.mjs",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 155,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "external": 2,
+        "web": 1
+      },
+      "kinds": {
+        "external_package": 2
+      },
+      "relations": {
+        "depends_on": 4
+      },
+      "members": [
+        {
+          "label": "eslint.config.mjs",
+          "file": "apps/web/eslint.config.mjs",
+          "kind": null
+        },
+        {
+          "label": "eslint",
+          "file": null,
+          "kind": "external_package"
+        },
+        {
+          "label": "eslint-config-next",
+          "file": null,
+          "kind": "external_package"
+        }
+      ]
+    },
+    {
+      "id": 156,
+      "size": 3,
+      "cohesion": 1.0,
+      "units": {
+        "web": 3
+      },
+      "kinds": {},
+      "relations": {
+        "references": 2,
+        "semantically_similar_to": 2,
+        "conceptually_related_to": 2
+      },
+      "members": [
+        {
+          "label": "main#main \u2014 the skip link's landing target",
+          "file": "apps/web/src/app/(marketing)/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "Strategy-call layout's main has no id, so the global skip link has no target there",
+          "file": "apps/web/src/app/strategy-call/layout.tsx",
+          "kind": null
+        },
+        {
+          "label": "Skip-to-content accessibility anchor targeting #main",
+          "file": "apps/web/src/app/layout.tsx",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 157,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "edge-functions": 3
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 2,
+        "implements": 2
+      },
+      "members": [
+        {
+          "label": "Bonzah / Insillion insurance API client (auth, fetch wrapper, coverage codes, quote & policy shapes)",
+          "file": "supabase/functions/_shared/bonzah-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Bonzah auth token caching (14-minute TTL), per-username and legacy global",
+          "file": "supabase/functions/_shared/bonzah-client.ts",
+          "kind": null
+        },
+        {
+          "label": "ZIP+4 makes Bonzah quote finalize return an empty payment_id with status 0 \u2014 strip to 5 digits",
+          "file": "supabase/functions/_shared/bonzah-client.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 158,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "edge-functions": 3
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 2,
+        "semantically_similar_to": 2
+      },
+      "members": [
+        {
+          "label": "Free-text brand description to concrete tenant colour palette via OpenAI tool-call",
+          "file": "supabase/functions/_shared/brand-colors.ts",
+          "kind": null
+        },
+        {
+          "label": "Deterministic word/hex fallback so tenant provisioning is never blocked on the model",
+          "file": "supabase/functions/_shared/brand-colors.ts",
+          "kind": null
+        },
+        {
+          "label": "scripts/tenant-onboarding.mjs \u2014 the column mapping and dark-mode lightening ported verbatim from it",
+          "file": "supabase/functions/_shared/brand-colors.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 159,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "edge-functions": 3
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4
+      },
+      "members": [
+        {
+          "label": "Mock is a first-class mode because no INSHUR credentials exist yet",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Mock branch runs before any network code so an outage cannot silently fake cover",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        },
+        {
+          "label": "VIN-suffix-driven simulated ineligibility matrix documented in the settings UI",
+          "file": "supabase/functions/_shared/inshur-client.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 160,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "edge-functions": 3
+      },
+      "kinds": {},
+      "relations": {
+        "rationale_for": 4
+      },
+      "members": [
+        {
+          "label": "Deposit-hold card-feature downgrade ladder from richest to plainest variant",
+          "file": "supabase/functions/_shared/stripe-client.ts",
+          "kind": null
+        },
+        {
+          "label": "if_available is not actually safe: ineligible Connect accounts hard-fail the request",
+          "file": "supabase/functions/_shared/stripe-client.ts",
+          "kind": null
+        },
+        {
+          "label": "Idempotency keys suffixed by ladder index, so inserting a rung reshuffles replay meaning",
+          "file": "supabase/functions/_shared/stripe-client.ts",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 161,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "edge-functions": 3
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "rationale_for": 2,
+        "conceptually_related_to": 2
+      },
+      "members": [
+        {
+          "label": "The subscription hard block was enforced in the BROWSER only, so a grace-expired tenant could keep driving billable endpoints with a saved JWT",
+          "file": "supabase/functions/generate-review-summary/index.ts",
+          "kind": null
+        },
+        {
+          "label": "generate review summary gated",
+          "file": "supabase/functions/generate-review-summary/index.ts",
+          "kind": "concept"
+        },
+        {
+          "label": "subscription gate partialcoverage",
+          "file": "supabase/functions/generate-review-summary/index.ts",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 162,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "database": 3
+      },
+      "kinds": {
+        "external_table": 2,
+        "migration": 1
+      },
+      "relations": {
+        "alters": 4
+      },
+      "members": [
+        {
+          "label": "20260701140000_add_extra_billing_type.sql",
+          "file": "supabase/migrations/20260701140000_add_extra_billing_type.sql",
+          "kind": "migration"
+        },
+        {
+          "label": "rental_extras",
+          "file": null,
+          "kind": "external_table"
+        },
+        {
+          "label": "rental_extras_selections",
+          "file": null,
+          "kind": "external_table"
+        }
+      ]
+    },
+    {
+      "id": 163,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "database": 3
+      },
+      "kinds": {},
+      "relations": {
+        "writes_table": 2,
+        "implements": 2
+      },
+      "members": [
+        {
+          "label": "Insurance policy expiry status recalculation and overlap detection",
+          "file": "supabase/migrations/20251219083413_remote_schema.sql",
+          "kind": null
+        },
+        {
+          "label": "insurance_policies - customer/vehicle cover with derived expiry status",
+          "file": "supabase/migrations/20251219083413_remote_schema.sql",
+          "kind": null
+        },
+        {
+          "label": "recalculate_insurance_status - derives Active/ExpiringSoon/Expired from dates",
+          "file": "supabase/migrations/20251219083413_remote_schema.sql",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 164,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "docs": 3
+      },
+      "kinds": {
+        "concept": 1
+      },
+      "relations": {
+        "references": 2,
+        "conceptually_related_to": 2
+      },
+      "members": [
+        {
+          "label": "Minor 24: catch-up is tenant-aware maxDaysFor(), so scenarios must assert final DB state and never dispatch counts",
+          "file": "docs/CRON_SIM_EDGE_CASE_AUDIT.md",
+          "kind": null
+        },
+        {
+          "label": "accrue payg charges catchupcap",
+          "file": "docs/CRON_SIM_EDGE_CASE_AUDIT.md",
+          "kind": "concept"
+        },
+        {
+          "label": "Major 8: functions.invoke swallows non-2xx bodies, so 403/401/412 are indistinguishable and a catch-up-capped run looks broken",
+          "file": "docs/CRON_SIM_EDGE_CASE_AUDIT.md",
+          "kind": null
+        }
+      ]
+    },
+    {
+      "id": 165,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "docs": 3
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "references": 4
+      },
+      "members": [
+        {
+          "label": "Setup Hub tracks two go-live items: Stripe Connect active and Bonzah configured",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "setup hub trialsetuphub",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "use setup status golivechecklist",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 166,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "docs": 3
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "references": 2,
+        "writes_table": 2
+      },
+      "members": [
+        {
+          "label": "Reviews run operator-rates-customer, summarised by OpenAI",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": null
+        },
+        {
+          "label": "generate review summary capability",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        },
+        {
+          "label": "tbl rental reviews",
+          "file": "docs/drive247-system-flow-map.md",
+          "kind": "concept"
+        }
+      ]
+    },
+    {
+      "id": 167,
+      "size": 3,
+      "cohesion": 0.67,
+      "units": {
+        "docs": 3
+      },
+      "kinds": {
+        "concept": 2
+      },
+      "relations": {
+        "conceptually_related_to": 2,
+        "references": 2
+      },
+      "members": [
+        {
+          "label": "Unverified assumption: the deposit refresh cron may never have been scheduled",
+          "file": "docs/gmt-auth-hold-verdicts.html",
+          "kind": null
+        },
+        {
+          "label": "gmt auth hold 90day plan destructive refresh",
+          "file": "docs/gmt-auth-hold-verdicts.html",
+          "kind": "concept"
+        },
+        {
+          "label": "refresh deposit holds cron",
+          "file": "docs/gmt-auth-hold-verdicts.html",
+          "kind": "concept"
+        }
+      ]
+    }
+  ]
+}

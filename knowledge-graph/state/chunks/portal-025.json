@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 25,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_025.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/metric-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/mot-tax-status-chip.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/net-pl-chip.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/plate-redaction-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/service-history-table.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/service-plan-chip.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/spare-key-chip.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-compliance-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-daily-pricing-calendar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-disposal-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-dynamic-pricing.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-extras-manager.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-file-upload.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-ownership-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-photo-gallery.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-photo-thumbnail.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-photo-upload.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-plates-panel.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-status-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-undo-disposal-dialog.tsx"
+  ]
+}

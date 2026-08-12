@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 import Link from "next/link";
@@ -18,6 +18,13 @@ import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
 import { formatCurrency, getUnlimitedLabel, formatDistance, getDistanceUnitShort, getPerMonthLabel, type DistanceUnit } from "@/lib/format-utils";
 import { isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
+import {
+  vehiclePublicColumns,
+  displayRegistration,
+  vehicleDisplayName,
+  VEHICLE_PHOTO_COLUMNS,
+  customerPhotoUrl,
+} from "@/lib/vehicle-identity";
 import {
   Car,
   CarFront,
@@ -47,9 +54,17 @@ interface VehiclePhoto {
 
 interface Vehicle {
   id: string;
-  reg: string;
+  // Optional now: the plate is withheld from the query entirely for a tenant
+  // that hides it, so code here must cope with it being absent rather than
+  // assume a string is always present.
+  reg?: string | null;
   make: string;
   model: string;
+  // Read at render time but never declared, which `select('*')` hid. Declaring
+  // them is what stops a rename silently disabling a duration filter.
+  available_daily?: boolean | null;
+  available_weekly?: boolean | null;
+  available_monthly?: boolean | null;
   year?: number;
   colour: string;
   daily_rent: number;
@@ -71,13 +86,11 @@ interface Vehicle {
   pickup_location_id?: string | null;
 }
 
-// Helper to get vehicle display name
-const getVehicleName = (vehicle: Vehicle) => {
-  if (vehicle.make && vehicle.model) {
-    return `${vehicle.make} ${vehicle.model}`;
-  }
-  return vehicle.reg;
-};
+// Vehicle naming now lives in @/lib/vehicle-identity, because this local
+// version ended at `return vehicle.reg` — so for a tenant hiding plates, a car
+// with no make/model would have printed its plate as the page heading and in
+// the image alt text, defeating the setting at the exact moment it mattered.
+// The shared helper falls back to a neutral word instead.
 
 // Map icon names to actual icon components
 const getIconComponent = (iconName: string) => {
@@ -177,19 +190,25 @@ const Pricing = () => {
   };
 
   useEffect(() => {
+    // Skip the tenant=null first pass. It served `reg` and rendered the plate
+    // before the tenant-scoped refetch replaced it, so a hiding tenant's plates
+    // visibly flashed on the fleet cards.
+    if (!tenant?.id) return;
     loadVehicles();
   }, [tenant?.id]);
 
   const loadVehicles = async () => {
-    let query = supabase
+    // Explicit allowlist, never `*`. This is a public unauthenticated page and
+    // `vehicles` has RLS disabled with a table-level grant to `anon`, so every
+    // column selected here is readable by anyone — `select('*')` was publishing
+    // lockbox_code, lockbox_instructions, purchase_price and security_notes to
+    // the browser. vehiclePublicColumns() also withholds `reg` entirely when
+    // the tenant hides plates, so it is never sent rather than merely unshown.
+    let query = supabaseUntyped
       .from("vehicles")
-      .select(`
-        *,
-        vehicle_photos (
-          photo_url,
-          display_order
-        )
-      `)
+      .select(
+        vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
+      )
       .order("daily_rent");
 
     // Add tenant filter if tenant context exists
@@ -344,7 +363,8 @@ const Pricing = () => {
               </Card>
             ) : (
               filteredAndSortedVehicles.map((vehicle, index) => {
-                const vehicleName = getVehicleName(vehicle);
+                const vehicleName = vehicleDisplayName(vehicle, tenant);
+                const vehicleReg = displayRegistration(vehicle, tenant);
                 return (
                   <Card
                     key={vehicle.id}
@@ -356,11 +376,11 @@ const Pricing = () => {
                     <div className="relative p-4 md:p-6">
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
                         {/* Vehicle Image */}
-                        {vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url ? (
+                        {customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) || vehicle.photo_url ? (
                           <div className="w-full lg:w-48 flex-shrink-0">
                             <div className="relative aspect-[4/3] rounded-lg overflow-hidden shadow-glow border border-accent/20">
                               <img
-                                src={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url || ''}
+                                src={customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) || vehicle.photo_url || ''}
                                 alt={`${vehicleName} - Luxury vehicle`}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 loading="lazy"
@@ -377,7 +397,7 @@ const Pricing = () => {
                         {/* Left Content */}
                         <div className="flex-1 space-y-2">
                           <div className="flex items-start gap-3">
-                            {!vehicle.vehicle_photos?.[0]?.photo_url && !vehicle.photo_url && (
+                            {!customerPhotoUrl(vehicle.vehicle_photos?.[0], tenant) && !vehicle.photo_url && (
                               <div className="lg:hidden p-2 rounded-lg bg-accent/10 border border-accent/20 group-hover:bg-accent/20 transition-colors">
                                 <Car className="w-5 h-5 text-accent" />
                               </div>
@@ -388,9 +408,11 @@ const Pricing = () => {
                                   {vehicleName}
                                 </h3>
                               </div>
-                              <p className="text-[11px] sm:text-xs uppercase tracking-widest text-accent/80 font-medium">
-                                {vehicle.reg}
-                              </p>
+                              {vehicleReg && (
+                                <p className="text-[11px] sm:text-xs uppercase tracking-widest text-accent/80 font-medium">
+                                  {vehicleReg}
+                                </p>
+                              )}
                             </div>
                           </div>
 

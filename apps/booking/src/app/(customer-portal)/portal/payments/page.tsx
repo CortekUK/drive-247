@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow, isPast, isToday } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import {
   useCustomerInstallmentPlans,
   useInstallmentStats,
@@ -72,6 +75,7 @@ import { cn } from '@/lib/utils';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
 import { parseDateOnly } from '@/lib/date-utils';
+import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
 
 // Mock data for demo installments
 const mockInstallmentPlans = [
@@ -190,7 +194,7 @@ function NextPaymentCard({
 
   const vehicle = plan.rentals?.vehicles;
   const vehicleName = vehicle
-    ? `${vehicle.make || ''} ${vehicle.model || ''} (${vehicle.reg})`.trim()
+    ? vehicleDisplayLabel(vehicle, tenant)
     : 'Vehicle';
 
   return (
@@ -337,7 +341,7 @@ function InstallmentPlanCard({
   const currencyCode = tenant?.currency_code || 'USD';
   const vehicle = plan.rentals?.vehicles;
   const vehicleName = vehicle
-    ? `${vehicle.make || ''} ${vehicle.model || ''} (${vehicle.reg})`.trim()
+    ? vehicleDisplayLabel(vehicle, tenant)
     : 'Vehicle';
 
   const paidInstallments = plan.paid_installments || 0;
@@ -691,7 +695,7 @@ function InvoiceList({
       {invoices.map((invoice) => {
         const vehicle = invoice.vehicles;
         const vehicleName = vehicle
-          ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+          ? vehicleDisplayLabel(vehicle, tenant)
           : null;
 
         const isPaid = invoice.computed_status === 'paid';
@@ -763,7 +767,7 @@ function InvoiceDetailSheet({
 
   const vehicle = invoice.vehicles;
   const vehicleName = vehicle
-    ? `${vehicle.reg} ${vehicle.make || ''} ${vehicle.model || ''}`.trim()
+    ? vehicleDisplayLabel(vehicle, tenant)
     : 'Vehicle';
 
   const dueDate = invoice.due_date ? parseDateOnly(invoice.due_date) : null;
@@ -1069,6 +1073,54 @@ function DemoInstallmentTimeline({
   );
 }
 
+// A deposit hold (pre-authorisation) only truly ends when the money is taken
+// (`captured`) or handed back (`released`). Every other value — including
+// `failed` and `expired`, and a NULL status left behind by a placement that
+// errored — means the renter's card is still load-bearing for this rental,
+// either because funds are reserved on it or because we need a working card to
+// place the hold again.
+const TERMINAL_HOLD_STATUSES = ['captured', 'released'];
+
+// Long-term renters (60–120 day rentals) carry a deposit hold that has to be
+// re-authorised repeatedly over the life of the rental. If their card expires
+// or starts declining, the chain dies — and the only fix is a new card. Before
+// this hook the "Update Card" button was gated on having an installment plan,
+// so a renter with a hold and no plan had no way to give us one, and staff had
+// no way to do it for them.
+function useHasActiveDepositHold() {
+  const { customerUser } = useCustomerAuthStore();
+  const customerId = customerUser?.customer_id;
+
+  return useQuery({
+    queryKey: ['customer-active-deposit-hold', customerId],
+    queryFn: async () => {
+      if (!customerId) return false;
+      // No status filter in the query: a hold that FAILED TO PLACE has its
+      // status rolled back to NULL by `place-deposit-hold` while the error is
+      // left behind, so filtering on a non-null status would hide exactly the
+      // renters who most need a working card. Both columns are read and the
+      // decision is made below.
+      const { data, error } = await supabase
+        .from('rentals')
+        .select('deposit_hold_status, deposit_hold_last_error')
+        .eq('customer_id', customerId);
+      // Fail toward showing the control: being unable to answer the question
+      // must never be the reason a renter can't replace a failing card.
+      if (error) return true;
+      // Filtered client-side rather than with a `not.in` filter so the set of
+      // terminal statuses stays readable and can't be broken by quoting rules.
+      return (data || []).some((r) => {
+        const status = (r as { deposit_hold_status?: string | null }).deposit_hold_status;
+        const lastError = (r as { deposit_hold_last_error?: string | null })
+          .deposit_hold_last_error;
+        if (!status) return !!lastError; // attempted, never placed
+        return !TERMINAL_HOLD_STATUSES.includes(status);
+      });
+    },
+    enabled: !!customerId,
+  });
+}
+
 export default function PaymentsPage() {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
@@ -1076,6 +1128,7 @@ export default function PaymentsPage() {
   const { data: installmentStats, isLoading: installmentStatsLoading } = useInstallmentStats();
   const { data: invoiceStats, isLoading: invoiceStatsLoading } = useInvoiceStats();
   const { data: nextPayment, isLoading: nextLoading } = useNextInstallmentPayment();
+  const { data: hasActiveHold = false } = useHasActiveDepositHold();
 
   // Show success banner when redirected from Stripe payment
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() => {
@@ -1219,7 +1272,9 @@ export default function PaymentsPage() {
             <FileText className="h-4 w-4 mr-2" />
             Download statement
           </Button>
-          {activePlans.length > 0 && (
+          {/* Also shown for renters with a live deposit hold and no installment
+              plan — the saved card is what the hold is re-authorised against. */}
+          {(activePlans.length > 0 || hasActiveHold) && (
             <Button
               variant="outline"
               onClick={() => setUpdateCardDialog({ open: true })}

@@ -295,8 +295,34 @@ serve(async (req) => {
         .eq("id", rental.vehicle_id);
     }
 
-    // Release deposit hold if one exists
-    if (rental.deposit_hold_status === 'held' && rental.deposit_hold_payment_intent_id) {
+    // Release deposit hold if one exists.
+    //
+    // This USED to test `=== 'held'`. The deposit_hold_status CHECK was widened
+    // from 7 values to 11 on 2026-08-10 (adding capturing / requires_action /
+    // needs_review / disputed alongside the existing processing / refreshing),
+    // and this function was not redeployed with that change — so a rental
+    // cancelled while its hold sat in any of those six states had its Stripe
+    // authorisation left UNCANCELLED while the rental was marked cancelled and
+    // the vehicle returned to Available. The customer's money then stayed held
+    // until the card network expired it (~4 days, up to ~30 on an extended
+    // authorisation), and nothing swept for it: reconcile-deposit-holds
+    // reconciles hold state against Stripe, it does not release holds for
+    // cancelled rentals.
+    //
+    // The window is not rare any more — the nightly refresh (pg_cron jobid 57)
+    // and the 6-hourly reconciler (jobid 63) both move rows through
+    // 'refreshing' on a schedule.
+    //
+    // So: release on ANY non-terminal status. Terminal states are excluded
+    // because there is nothing to cancel — 'released'/'expired' are already
+    // gone, 'captured' is money we deliberately took, and 'failed' never
+    // produced a live authorisation.
+    const HOLD_TERMINAL = ['released', 'expired', 'captured', 'failed'];
+    if (
+      rental.deposit_hold_status
+      && !HOLD_TERMINAL.includes(rental.deposit_hold_status)
+      && rental.deposit_hold_payment_intent_id
+    ) {
       try {
         const { client: holdStripe, options: holdOptions } = resolveForRecord(rental);
         await holdStripe.paymentIntents.cancel(rental.deposit_hold_payment_intent_id, holdOptions);

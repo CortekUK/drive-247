@@ -17,6 +17,7 @@ import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { format } from "date-fns";
@@ -575,9 +576,7 @@ export default function BookingCheckoutStep({
           customerName: formData.customerName,
           customerPhone: formData.customerPhone,
           vehicleId: selectedVehicle.id,
-          vehicleName: selectedVehicle.make && selectedVehicle.model
-            ? `${selectedVehicle.make} ${selectedVehicle.model}`
-            : selectedVehicle.reg,
+          vehicleName: vehicleDisplayName(selectedVehicle, tenant),
           totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
           pickupDate: formData.pickupDate,
           returnDate: formData.dropoffDate,
@@ -628,9 +627,7 @@ export default function BookingCheckoutStep({
           customerName: formData.customerName,
           customerPhone: formData.customerPhone,
           vehicleId: selectedVehicle.id,
-          vehicleName: selectedVehicle.make && selectedVehicle.model
-            ? `${selectedVehicle.make} ${selectedVehicle.model}`
-            : selectedVehicle.reg,
+          vehicleName: vehicleDisplayName(selectedVehicle, tenant),
           tenantId: tenant?.id,
           upfrontAmount: selectedInstallmentPlan.upfrontTotal,
           firstInstallmentAmount: selectedInstallmentPlan.firstInstallmentAmount,
@@ -1570,13 +1567,19 @@ export default function BookingCheckoutStep({
                 <Car className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <p className="font-medium">
-                    {selectedVehicle.make && selectedVehicle.model
-                      ? `${selectedVehicle.make} ${selectedVehicle.model}`
-                      : selectedVehicle.reg}
+                    {vehicleDisplayName(selectedVehicle, tenant)}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedVehicle.colour ? `${selectedVehicle.colour} • ` : ''}{selectedVehicle.reg}
-                  </p>
+                  {/* Build the subtitle from whichever parts survive, then join.
+                      The old form hardcoded the separator, so hiding the plate
+                      left a dangling "Black • " on the payment summary. */}
+                  {[selectedVehicle.colour, displayRegistration(selectedVehicle, tenant)]
+                    .filter(Boolean).length > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      {[selectedVehicle.colour, displayRegistration(selectedVehicle, tenant)]
+                        .filter(Boolean)
+                        .join(' • ')}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -2228,7 +2231,8 @@ export default function BookingCheckoutStep({
             phone: formData.customerPhone,
           }}
           vehicle={{
-            reg: selectedVehicle.reg,
+            // Resolved here, so the invoice never has to know the tenant flag.
+            reg: displayRegistration(selectedVehicle, tenant),
             make: selectedVehicle.make,
             model: selectedVehicle.model,
           }}

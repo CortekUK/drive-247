@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { canRevealRegistration } from "@/lib/vehicle-identity";
 
 export interface FleetVehicle {
   id: string;
@@ -35,9 +36,12 @@ export function useFleetList() {
       setLoading(true);
       setError(null);
       try {
-        const { data: vehicles, error: vErr } = await supabase
+        const { data: vehicles, error: vErr } = await supabaseUntyped
           .from("vehicles")
-          .select("id, reg, make, model, status")
+          // reg only when this tenant permits it — this hook feeds the public
+          // /apply and enquiry vehicle pickers, so a hardcoded reg published
+          // every plate regardless of the setting.
+          .select(canRevealRegistration(tenant) ? "id, reg, make, model, status" : "id, make, model, status")
           .eq("tenant_id", tenant.id)
           .in("status", ["Available", "Rented"])
           .order("make", { ascending: true })

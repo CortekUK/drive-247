@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCustomerRentals, CustomerRental } from '@/hooks/use-customer-rentals';
 import { cn } from '@/lib/utils';
+import { useTenant } from "@/contexts/TenantContext";
+import { displayRegistration, canSearchByRegistration } from "@/lib/vehicle-identity";
 
 export interface BookingReference {
   id: string;
@@ -59,6 +61,7 @@ function formatRentalNumber(rental: CustomerRental): string {
 }
 
 export function BookingPicker({ onSelect, disabled }: BookingPickerProps) {
+  const { tenant } = useTenant();
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { data: rentals = [], isLoading } = useCustomerRentals('all');
@@ -69,7 +72,8 @@ export function BookingPicker({ onSelect, disabled }: BookingPickerProps) {
     const query = searchQuery.toLowerCase();
     return rentals.filter((rental) => {
       const vehicleName = `${rental.vehicles?.make || ''} ${rental.vehicles?.model || ''}`.toLowerCase();
-      const reg = rental.vehicles?.reg?.toLowerCase() || '';
+      // A searchable hidden plate is not hidden.
+      const reg = canSearchByRegistration(tenant) ? (rental.vehicles?.reg?.toLowerCase() || '') : '';
       const rentalNumber = formatRentalNumber(rental).toLowerCase();
       const status = rental.status.toLowerCase();
 
@@ -92,7 +96,8 @@ export function BookingPicker({ onSelect, disabled }: BookingPickerProps) {
       vehicle: {
         make: rental.vehicles?.make || null,
         model: rental.vehicles?.model || null,
-        reg: rental.vehicles?.reg || '',
+        // Resolved here so the plate never enters the persisted chat message.
+        reg: displayRegistration(rental.vehicles, tenant) ?? '',
       },
     };
     onSelect(bookingRef);
@@ -186,7 +191,7 @@ export function BookingPicker({ onSelect, disabled }: BookingPickerProps) {
                         </span>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-xs text-muted-foreground">
-                          {rental.vehicles?.reg}
+                          {displayRegistration(rental.vehicles, tenant)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">

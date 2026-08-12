@@ -175,6 +175,8 @@ export default function VehicleDetail() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  // Guards the delete against double-submit while the request is in flight.
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Lockbox inline edit state
@@ -1588,28 +1590,39 @@ export default function VehicleDetail() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={async () => {
+              onClick={async (e) => {
+                // Keep the dialog open while the delete runs. AlertDialogAction is a
+                // Radix Close primitive, so without this the dialog vanished the
+                // instant it was clicked — looking like success even when the
+                // delete failed, and leaving the button re-clickable.
+                e.preventDefault();
+                if (isDeleting) return;
+                setIsDeleting(true);
                 try {
-                  // Delete related records first to avoid foreign key constraints
-                  // Delete P&L entries
-                  await supabase.from('pnl_entries').delete().eq('vehicle_id', vehicle.id);
-
-                  // Delete vehicle photos
-                  await supabase.from('vehicle_photos').delete().eq('vehicle_id', vehicle.id);
-
-                  // Delete vehicle expenses
-                  await supabase.from('vehicle_expenses').delete().eq('vehicle_id', vehicle.id);
-
-                  // Delete service records
-                  await supabase.from('vehicle_services').delete().eq('vehicle_id', vehicle.id);
-
-                  // Now delete the vehicle
+                  // Children are removed by ON DELETE CASCADE at the database level.
+                  // This used to hand-delete pnl_entries/photos/expenses first, in
+                  // four unchecked, non-transactional calls — so a blocked delete
+                  // destroyed those rows and THEN failed, and an RLS-filtered delete
+                  // that matched nothing was indistinguishable from success.
                   const { error } = await supabase
                     .from('vehicles')
                     .delete()
                     .eq('id', vehicle.id);
 
                   if (error) throw error;
+
+                  // Photo rows cascade, but the stored files do not — clean them up
+                  // only after the vehicle is definitely gone.
+                  try {
+                    const paths = ((vehicle.vehicle_photos ?? []) as any[])
+                      .map((p: any) => p.photo_url?.split('/vehicle-photos/')[1])
+                      .filter(Boolean) as string[];
+                    if (paths.length) {
+                      await supabase.storage.from('vehicle-photos').remove(paths);
+                    }
+                  } catch (storageErr) {
+                    console.warn('Vehicle deleted; photo files could not be removed:', storageErr);
+                  }
 
                   // Audit log for vehicle deletion
                   logAction({
@@ -1619,21 +1632,35 @@ export default function VehicleDetail() {
                     details: { reg: vehicle.reg, make: vehicle.make, model: vehicle.model }
                   });
 
+                  // Without this the deleted vehicle lingers in the list for up to
+                  // the 60s staleTime, and re-adding the same reg looks broken.
+                  await queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
+
                   toast({
                     title: "Vehicle deleted",
-                    description: "The vehicle and all related records have been permanently deleted.",
+                    description: "The vehicle and its related records have been permanently deleted.",
                   });
 
+                  setShowDeleteDialog(false);
                   router.push('/vehicles');
                 } catch (error: any) {
+                  // Translate the one remaining block into something actionable.
+                  // Owner payout lines are financial records, so they are deliberately
+                  // NOT cascaded — the vehicle genuinely cannot be deleted.
+                  const raw = String(error?.message ?? '');
+                  const isPayoutBlock = raw.includes('owner_payout_lines');
                   toast({
-                    title: "Error",
-                    description: error.message,
+                    title: isPayoutBlock ? "This vehicle can't be deleted" : "Error",
+                    description: isPayoutBlock
+                      ? "It appears on one or more owner payouts, and deleting it would erase that payout history. Use Dispose instead to retire it from your fleet — it will stay off your booking site while the records remain intact."
+                      : raw || "Something went wrong deleting this vehicle.",
                     variant: "destructive",
                   });
+                } finally {
+                  setIsDeleting(false);
                 }
               }}
-              disabled={rentals && rentals.some(r => r.status === 'Active')}
+              disabled={isDeleting || (rentals ?? []).some(r => r.status === 'Active')}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete

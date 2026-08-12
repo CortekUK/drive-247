@@ -40,6 +40,9 @@ import {
 } from '@/lib/template-variables';
 import { toast } from '@/hooks/use-toast';
 import { TipTapEditor } from '@/components/settings/tiptap-editor';
+import { useTenant } from '@/contexts/TenantContext';
+import { injectAgreementClauses } from '@/lib/agreement-injection';
+import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 
@@ -65,6 +68,7 @@ export default function EditAgreementTemplatePage() {
   const [loaded, setLoaded] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
+  const { tenant } = useTenant();
   const sampleData = getSampleData();
 
   const currentTemplate = templateType === 'default' ? defaultTemplate : customTemplate;
@@ -150,7 +154,22 @@ export default function EditAgreementTemplatePage() {
     setTemplateContent(content);
   };
 
-  const previewContent = replaceVariables(templateContent, sampleData)
+  // Preview what will actually be SENT, not just the stored template. The
+  // Bonzah addendum is spliced in at render time for Bonzah-enabled tenants, so
+  // a preview that skipped injection showed no addendum while the real PDF had
+  // one — and an operator "fixing" that by pasting the clause in by hand would
+  // get it twice, since the idempotency guard looks for the placeholder, not
+  // the prose. Mileage/terms stay out of the preview: those depend on a
+  // specific rental, which the template editor has no concept of.
+  const isBonzahTenant = tenant?.integration_bonzah === true;
+  const previewContent = replaceVariables(
+    injectAgreementClauses(templateContent, {
+      hasMileage: false,
+      hasTerms: false,
+      hasBonzahAddendum: isBonzahTenant,
+    }),
+    { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '' },
+  )
     .replace(
       /\{\{@sig1\}\}/g,
       '<span style="display:inline-block;border:2px dashed #6366f1;border-radius:6px;padding:8px 24px;color:#6366f1;font-size:12px;font-weight:600;background:#eef2ff;">Signature</span>'

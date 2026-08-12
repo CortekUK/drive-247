@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 37,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_037.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/agreement-injection.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/agreement-mileage.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/agreement-terms.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/automation-event-registry.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/bonzah-addendum.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/bonzah-compliance.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/bonzah-dates.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/bonzah.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/booking-url.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/brand-palette.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/calculate-extension-price.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/calculate-extras-total.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/calculate-rental-price.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/calendar-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/coverage-labels.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/credit-config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/csv-export.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/date-utils.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/default-agreement-template.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/default-email-templates.ts"
+  ]
+}

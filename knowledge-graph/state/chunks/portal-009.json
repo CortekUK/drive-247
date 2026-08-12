@@ -1,0 +1,30 @@
+{
+  "unit": "portal",
+  "unit_label": "Portal - multi-tenant operator admin",
+  "unit_kind": "nextjs-app",
+  "chunk": 9,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/portal/graphify-out/.graphify_chunk_portal_009.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/terms-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/testimonials-header-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/client-schemas/website-content/trust-badges-editor.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/agreements/generate-agreement-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/automations/automation-flow-canvas.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/blocked-dates/working-hours-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/BookingPicker.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/BookingReferenceCard.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/BulkMessageModal.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChannelList.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatActionCard.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatChart.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatInput.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatMessage.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatMessageBubble.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatRentalCards.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatSidebar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/ChatWindow.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/CustomerChatInput.tsx"
+  ]
+}
