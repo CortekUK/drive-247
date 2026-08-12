@@ -12866,6 +12866,7 @@ export type Database = {
           deposit_hold_payment_intent_id: string | null
           deposit_hold_payment_method_id: string | null
           deposit_hold_placed_at: string | null
+          deposit_hold_platform_account: string | null
           deposit_hold_release_requested_at: string | null
           deposit_hold_status: string | null
           deposit_hold_status_changed_at: string | null
@@ -13011,6 +13012,7 @@ export type Database = {
           deposit_hold_payment_intent_id?: string | null
           deposit_hold_payment_method_id?: string | null
           deposit_hold_placed_at?: string | null
+          deposit_hold_platform_account?: string | null
           deposit_hold_release_requested_at?: string | null
           deposit_hold_status?: string | null
           deposit_hold_status_changed_at?: string | null
@@ -13156,6 +13158,7 @@ export type Database = {
           deposit_hold_payment_intent_id?: string | null
           deposit_hold_payment_method_id?: string | null
           deposit_hold_placed_at?: string | null
+          deposit_hold_platform_account?: string | null
           deposit_hold_release_requested_at?: string | null
           deposit_hold_status?: string | null
           deposit_hold_status_changed_at?: string | null
@@ -17589,6 +17592,7 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
+          description: string | null
           due_date: string | null
           entry_date: string | null
           entry_id: string | null

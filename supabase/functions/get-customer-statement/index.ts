@@ -175,7 +175,19 @@ Deno.serve(async (req) => {
       const amt = Number(row.amount) || 0;
       const rem = Number(row.remaining_amount) || 0;
       if (row.type === 'Charge') {
-        const cat = (row.category as string) || 'Other';
+        // Group fines by WHAT THEY WERE FOR, not by the flat 'Fine' bucket.
+        //
+        // Every fine landed in one aggregated line — a guest with seven fines
+        // saw "Fine $657.48" and no way to tell what any of it was for, which
+        // is the fastest route to a chargeback. `description` is the fine's own
+        // type, carried by view_customer_statements, and is NULL for every
+        // other category, so nothing else changes shape.
+        //
+        // Same-type fines still merge (two toll charges become one "Toll Fees"
+        // line). That is deliberate: this document is a statement of account,
+        // and it already tells the reader to see the individual rental invoices
+        // for a full itemisation.
+        const cat = (row.description as string) || (row.category as string) || 'Other';
         const c = g.categories.get(cat) ?? { charged: 0, outstanding: 0 };
         c.charged = round2(c.charged + amt);
         c.outstanding = round2(c.outstanding + rem);
