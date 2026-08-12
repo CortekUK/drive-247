@@ -2,11 +2,6 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
@@ -16,7 +11,7 @@ function isPlatformDomain(hostname: string): boolean {
   return PLATFORM_DOMAINS.some(d => host === d || host.endsWith('.' + d));
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
 
   // 1. Try subdomain extraction first (fast path — no DB call)
@@ -29,15 +24,24 @@ export async function middleware(request: NextRequest) {
       host = host.slice(4);
     }
 
-    const { data } = await supabase
-      .from('tenants')
-      .select('slug')
-      .eq('custom_portal_domain', host)
-      .eq('status', 'active')
-      .single();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (data) {
-      tenantSlug = data.slug;
+    // A missing local .env must not crash every route. Custom-domain lookup is
+    // unavailable without Supabase, but localhost and platform domains still
+    // work normally.
+    if (supabaseUrl && supabaseAnonKey) {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const { data } = await supabase
+        .from('tenants')
+        .select('slug')
+        .eq('custom_portal_domain', host)
+        .eq('status', 'active')
+        .single();
+
+      if (data) {
+        tenantSlug = data.slug;
+      }
     }
   }
 
