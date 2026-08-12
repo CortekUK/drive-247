@@ -2,7 +2,14 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
+
+// Fall back to the verified drive-247.com domain, not to onboarding@resend.dev.
+// That address is Resend's shared sandbox sender: it only ever delivers to the
+// Resend account owner, so every welcome email to an actual new user failed with
+// "You can only send testing emails to your own email address". FROM_EMAIL has
+// never been set in any environment, so the sandbox address was always the one
+// in use. Every other function on the platform sends from this domain.
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'noreply@drive-247.com'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -58,6 +65,11 @@ serve(async (req) => {
 
     // Construct portal URL
     const portalUrl = `https://${tenantSlug}.portal.drive-247.com`
+
+    // Send as the tenant, matching _shared/resend-service.ts, so the welcome
+    // email comes from the same address as every other email that tenant sends.
+    const fromEmail = tenant?.slug ? `${tenant.slug}@drive-247.com` : FROM_EMAIL
+    const fromName = companyName || 'Drive 247'
 
     const emailHtml = `
       <!DOCTYPE html>
@@ -130,6 +142,13 @@ serve(async (req) => {
       </html>
     `
 
+    // Without this the fetch below sends "Bearer undefined" and Resend replies
+    // with an auth error, which reads as a credential problem rather than a
+    // missing configuration one.
+    if (!RESEND_API_KEY) {
+      throw new Error('Email service is not configured (RESEND_API_KEY missing) — no email was delivered')
+    }
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -137,7 +156,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: FROM_EMAIL,
+        from: `${fromName} <${fromEmail}>`,
         to: [email],
         subject: `Welcome to ${companyName} - Your Account Details`,
         html: emailHtml,

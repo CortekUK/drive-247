@@ -2,7 +2,10 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'onboarding@resend.dev'
+// Not onboarding@resend.dev: that is Resend's shared sandbox sender and only
+// ever delivers to the Resend account owner. FROM_EMAIL is unset in every
+// environment, so that fallback was always the address actually in use.
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'noreply@drive-247.com'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
