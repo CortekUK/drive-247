@@ -143,7 +143,11 @@ function StatementContent({
                 </thead>
                 <tbody>
                   {g.categories.map((c) => {
-                    const isFine = c.category === "Fine";
+                    // baseCategory, not category: a fine line now reads its own type
+                    // ("Smoking/ Cleaning Violation"), so matching the label would
+                    // silently drop the amber highlight and the warning marker that
+                    // tell a guest this charge is a penalty.
+                    const isFine = (c.baseCategory ?? c.category) === "Fine";
                     return (
                       <tr key={c.category} style={{ borderTop: "1px solid #e5e7eb" }}>
                         <td style={{ padding: "8px 12px", color: isFine ? "#b45309" : undefined, fontWeight: isFine ? 600 : undefined }}>
