@@ -130,15 +130,22 @@ function findMatchingHoliday(
       const startDay = start.getDate();
       const endMonth = end.getMonth() + 1;
       const endDay = end.getDate();
-      const currentKey = month * 100 + day;
-      const startKey = startMonth * 100 + startDay;
-      const endKey = endMonth * 100 + endDay;
 
-      // A range such as Dec 20 → Jan 5 wraps over the year boundary.
-      const matches = startKey <= endKey
-        ? currentKey >= startKey && currentKey <= endKey
-        : currentKey >= startKey || currentKey <= endKey;
-      if (matches) return holiday;
+      // Simple case: same month range or single day
+      if (startMonth === endMonth) {
+        if (month === startMonth && day >= startDay && day <= endDay) {
+          return holiday;
+        }
+      } else {
+        // Spans multiple months
+        if (
+          (month === startMonth && day >= startDay) ||
+          (month === endMonth && day <= endDay) ||
+          (month > startMonth && month < endMonth)
+        ) {
+          return holiday;
+        }
+      }
     } else {
       // Exact date range comparison
       if (dateStr >= holiday.start_date && dateStr <= holiday.end_date) {
@@ -413,11 +420,7 @@ export function calculateRentalPriceBreakdown(
 ): RentalPriceResult {
   const pickup = parseDateString(pickupDate);
   const dropoff = parseDateString(dropoffDate);
-  // Rental dates are calendar dates, not elapsed local-time durations. Using
-  // local midnight timestamps over-counts the day where DST falls back (25h).
-  const pickupDay = Date.UTC(pickup.getFullYear(), pickup.getMonth(), pickup.getDate());
-  const dropoffDay = Date.UTC(dropoff.getFullYear(), dropoff.getMonth(), dropoff.getDate());
-  const rentalDays = Math.max(1, Math.ceil((dropoffDay - pickupDay) / (1000 * 60 * 60 * 24)));
+  const rentalDays = Math.max(1, Math.ceil((dropoff.getTime() - pickup.getTime()) / (1000 * 60 * 60 * 24)));
 
   const dailyRent = rates.daily_rent || 0;
   const weeklyRent = rates.weekly_rent || 0;
