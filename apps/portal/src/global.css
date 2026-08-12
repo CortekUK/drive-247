@@ -1,192 +1,366 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* Hide number input spinner arrows globally */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+@custom-variant dark (&:is(.dark *));
+
+/* ========================================================================
+   Keyframes
+   ======================================================================== */
+@keyframes border-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
-
-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
-
-/* Rental creation progress bar shimmer */
+@keyframes glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(0.98); }
+}
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-12deg); }
+  75% { transform: rotate(12deg); }
+}
 @keyframes rentalProgressShimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
 }
 
-.rental-progress-bar-fill {
-  position: relative;
-  background: hsl(var(--primary));
-  overflow: hidden;
+/* Periodic shine sweep — sweeps across once, then rests for the rest of the cycle */
+@keyframes shine-sweep {
+  0% { transform: translateX(-120%); }
+  14% { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
 }
 
-.rental-progress-bar-fill::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 50%;
-  background: linear-gradient(90deg, transparent, hsl(var(--primary-foreground) / 0.3), transparent);
-  animation: rentalProgressShimmer 1.5s ease-in-out infinite;
+/* Live timeline bars — staggered Gantt "fill" that grows from the left, holds, resets */
+@keyframes timeline-grow {
+  0% { transform: scaleX(0.2); opacity: 0.35; }
+  35% { transform: scaleX(1); opacity: 1; }
+  80% { transform: scaleX(1); opacity: 0.9; }
+  100% { transform: scaleX(0.2); opacity: 0.35; }
 }
 
+/* "Now" playhead — a soft vertical line scanning across the timeline */
+@keyframes playhead-scan {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
 
-/* Drive247 Design System
-All colors, gradients, fonts, etc should be defined here.
-All colors MUST be HSL.
-*/
+/* Calendar icon gentle bob */
+@keyframes icon-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
 
-@layer base {
-  :root {
-    /* Drive247 Color System - Light Mode: Elegant Ivory, Dark Green & Gold */
-    --background: 42 30% 96%;   /* Light Ivory/Cream */
-    --foreground: 159 21% 20%;  /* Dark Forest Green Text */
+/* Arrow nudge */
+@keyframes arrow-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
 
-    --card: 42 30% 98%;         /* Very Light Cream Cards */
-    --card-foreground: 159 21% 20%;
+/* A tiny car driving across the timeline */
+@keyframes car-drive {
+  0% { left: -10%; opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { left: 106%; opacity: 0; }
+}
 
-    --popover: 42 30% 98%;
-    --popover-foreground: 159 21% 20%;
+/* Ambient particles drifting upward */
+@keyframes particle-rise {
+  0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-52px) scale(0.2); opacity: 0; }
+}
 
-    /* Primary Brand: Elegant Gold */
-    --primary: 41 49% 56%;      /* Muted Gold #C6A256 */
-    --primary-foreground: 0 0% 100%;  /* White text on gold buttons */
-    --primary-hover: 41 49% 48%;
-    --primary-light: 41 49% 95%;
+/* ========================================================================
+   Tailwind v4 theme — maps the HSL design tokens to utilities.
+   Colours are kept as bare HSL triplets (consumed via hsl(var(--x))) so the
+   runtime tenant-branding injection (use-dynamic-theme.ts) keeps working.
+   ======================================================================== */
+@theme inline {
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
 
-    /* Secondary Brand: Gold */
-    --secondary: 41 49% 56%;
-    --secondary-foreground: 0 0% 100%;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 
-    --muted: 159 15% 88%;       /* Light grayish-green */
-    --muted-foreground: 159 15% 35%;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-hover: hsl(var(--primary-hover));
+  --color-primary-light: hsl(var(--primary-light));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-destructive-light: hsl(var(--destructive-light));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-success-light: hsl(var(--success-light));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-light: hsl(var(--warning-light));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-    --accent: 41 49% 56%;       /* Gold accent */
-    --accent-foreground: 0 0% 100%;
+  --shadow-card: var(--ds-shadow-card);
+  --shadow-hover: var(--ds-shadow-hover);
 
-    /* Status Colors - Adjusted for light background */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    --success-light: 142 76% 94%;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-border-rotate: border-rotate 6s linear infinite;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-glow: glow 2s ease-in-out infinite;
+  --animate-spin-slow: spin-slow 3s linear infinite;
+  --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-wiggle: wiggle 1s ease-in-out infinite;
+}
 
-    --warning: 41 92% 48%;
-    --warning-foreground: 0 0% 100%;
-    --warning-light: 41 92% 94%;
-
-    --destructive: 0 84.2% 55%;
-    --destructive-foreground: 0 0% 100%;
-    --destructive-light: 0 84% 94%;
-
-    /* UI Elements */
-    --border: 159 15% 80%;      /* Soft green-gray border */
-    --input: 159 15% 80%;
-    --ring: 41 49% 56%;         /* Gold focus rings */
-
-    --radius: 0.5rem;
-
-    /* Drive247 Sidebar - Light Mode */
-    --sidebar-background: 42 30% 98%;
-    --sidebar-foreground: 159 21% 20%;
-    --sidebar-primary: 41 49% 56%;  /* Gold active state */
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 159 15% 92%;
-    --sidebar-accent-foreground: 159 21% 20%;
-    --sidebar-border: 159 15% 80%;
-    --sidebar-ring: 41 49% 56%;
-
-    /* Drive247 Gradients - Light Mode */
-    --gradient-primary: linear-gradient(135deg, hsl(41 49% 56%), hsl(41 49% 66%));
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
-    --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
-    --gradient-subtle: linear-gradient(135deg, hsl(159 15% 92%), hsl(159 15% 88%));
-
-    /* Drive247 Shadows - Light Mode */
-    --shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
-    --shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
-    --shadow-hover: 0 10px 15px -3px hsl(41 49% 56% / 0.15), 0 4px 6px -2px hsl(41 49% 56% / 0.1);
-
-    /* Smooth Drive247 Animations */
-    --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
-    
-    /* Glow Effects - Gold (Light Mode) */
-    --glow-gold-subtle: 0 0 20px -5px hsl(var(--primary) / 0.15), 0 0 40px -10px hsl(var(--primary) / 0.08);
-    --glow-gold-intense: 0 0 30px -5px hsl(var(--primary) / 0.25), 0 0 60px -10px hsl(var(--primary) / 0.15);
-  }
-
-  .dark {
-    --background: 159 21% 8%;   /* Even darker forest green */
-    --foreground: 42 30% 92%;   /* Brighter ivory for dark mode */
-
-    --card: 159 21% 12%;
-    --card-foreground: 42 30% 92%;
-
-    --popover: 159 21% 12%;
-    --popover-foreground: 42 30% 92%;
-
-    --primary: 41 49% 60%;      /* Brighter gold for dark mode */
-    --primary-foreground: 159 21% 8%;
-    --primary-hover: 41 49% 70%;
-    --primary-light: 41 49% 22%;
-
-    --secondary: 41 49% 60%;
-    --secondary-foreground: 159 21% 8%;
-
-    --muted: 159 15% 20%;
-    --muted-foreground: 42 20% 75%;
-
-    --accent: 41 49% 60%;
-    --accent-foreground: 159 21% 8%;
-
-    --success: 142 76% 52%;
-    --success-foreground: 159 21% 8%;
-    --success-light: 142 76% 18%;
-
-    --warning: 41 92% 65%;
-    --warning-foreground: 159 21% 8%;
-    --warning-light: 41 92% 18%;
-
-    --destructive: 0 84% 70%;
-    --destructive-foreground: 159 21% 8%;
-    --destructive-light: 0 84% 18%;
-
-    --border: 159 15% 25%;
-    --input: 159 15% 25%;
-    --ring: 41 49% 60%;
-
-    /* Drive247 Sidebar - Dark Mode */
-    --sidebar-background: 159 21% 10%;
-    --sidebar-foreground: 42 30% 92%;
-    --sidebar-primary: 41 49% 60%;
-    --sidebar-primary-foreground: 159 21% 8%;
-    --sidebar-accent: 41 49% 25%;
-    --sidebar-accent-foreground: 42 30% 92%;
-    --sidebar-border: 159 15% 25%;
-    --sidebar-ring: 41 49% 60%;
-
-    --gradient-primary: linear-gradient(135deg, hsl(41 49% 60%), hsl(41 49% 70%));
-    --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
-    --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
-    --gradient-subtle: linear-gradient(135deg, hsl(159 15% 20%), hsl(159 15% 25%));
-
-    --shadow-sm: 0 1px 2px 0 hsl(159 21% 4% / 0.5);
-    --shadow-card: 0 4px 6px -1px hsl(159 21% 4% / 0.5), 0 2px 4px -1px hsl(159 21% 4% / 0.4);
-    --shadow-hover: 0 10px 15px -3px hsl(41 49% 60% / 0.3), 0 4px 6px -2px hsl(41 49% 60% / 0.2);
-    
-    /* Enhanced glow for dark mode */
-    --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
-    --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
+/* ========================================================================
+   Custom utilities (ported from the old tailwind.config.ts)
+   ======================================================================== */
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+  @media (width >= 1400px) {
+    max-width: 1400px;
   }
 }
+@utility scale-102 {
+  scale: 1.02;
+}
+@utility transition-smooth {
+  transition: var(--transition-smooth);
+}
+@utility bg-gradient-primary {
+  background-image: var(--gradient-primary);
+  color: #fff;
+}
+@utility bg-gradient-success {
+  background-image: var(--gradient-success);
+}
+@utility bg-gradient-warning {
+  background-image: var(--gradient-warning);
+}
+@utility bg-gradient-subtle {
+  background-image: var(--gradient-subtle);
+}
 
+/* ========================================================================
+   Drive247 Design System — colour tokens (all HSL)
+   ======================================================================== */
+:root {
+  /* Light Mode: Indigo primary on neutral greys */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 3.9%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 3.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 3.9%;
+
+  --primary: 248 68% 51%;
+  --primary-foreground: 226 100% 97%;
+  --primary-hover: 248 68% 45%;
+  --primary-light: 248 68% 95%;
+
+  --secondary: 240 4% 96%;
+  --secondary-foreground: 240 6% 10%;
+
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 9%;
+
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+  --success-light: 142 76% 94%;
+
+  --warning: 41 92% 48%;
+  --warning-foreground: 0 0% 100%;
+  --warning-light: 41 92% 94%;
+
+  --destructive: 357 100% 45%;
+  --destructive-foreground: 0 0% 100%;
+  --destructive-light: 0 84% 94%;
+
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 0 0% 63%;
+
+  --chart-1: 230 100% 82%;
+  --chart-2: 241 100% 69%;
+  --chart-3: 247 92% 60%;
+  --chart-4: 248 68% 51%;
+  --chart-5: 246 61% 42%;
+
+  --radius: 0.625rem;
+
+  /* Sidebar - Light Mode (tinted with the indigo canvas hue so it belongs to
+     the app gradient instead of reading as a standalone white slab) */
+  --sidebar-background: 248 44% 98%;
+  --sidebar-foreground: 0 0% 3.9%;
+  --sidebar-primary: 247 92% 60%;
+  --sidebar-primary-foreground: 226 100% 97%;
+  --sidebar-accent: 248 75% 94%;
+  --sidebar-accent-foreground: 248 60% 45%;
+  --sidebar-border: 248 25% 92%;
+  --sidebar-ring: 248 40% 70%;
+
+  /* Gradients - Light Mode */
+  --gradient-primary: linear-gradient(135deg, hsl(248 68% 51%), hsl(248 68% 61%));
+  --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
+  --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
+  --gradient-subtle: linear-gradient(135deg, hsl(159 15% 92%), hsl(159 15% 88%));
+
+  /* Shadows - Light Mode (mapped to shadow-card / shadow-hover via @theme) */
+  --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
+  --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(248 68% 51% / 0.15), 0 4px 6px -2px hsl(248 68% 51% / 0.1);
+
+  /* Transitions */
+  --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Glow Effects (Light Mode) */
+  --glow-gold-subtle: 0 0 20px -5px hsl(var(--primary) / 0.15), 0 0 40px -10px hsl(var(--primary) / 0.08);
+  --glow-gold-intense: 0 0 30px -5px hsl(var(--primary) / 0.25), 0 0 60px -10px hsl(var(--primary) / 0.15);
+}
+
+.dark {
+  --background: 0 0% 3.9%;
+  --foreground: 0 0% 98%;
+
+  --card: 0 0% 9.1%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 0 0% 9.1%;
+  --popover-foreground: 0 0% 98%;
+
+  --primary: 246 61% 42%;
+  --primary-foreground: 226 100% 97%;
+  --primary-hover: 246 61% 50%;
+  --primary-light: 246 61% 22%;
+
+  --secondary: 240 4% 16%;
+  --secondary-foreground: 0 0% 98%;
+
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 63%;
+
+  --accent: 0 0% 15%;
+  --accent-foreground: 0 0% 98%;
+
+  --success: 142 76% 52%;
+  --success-foreground: 159 21% 8%;
+  --success-light: 142 76% 18%;
+
+  --warning: 41 92% 65%;
+  --warning-foreground: 159 21% 8%;
+  --warning-light: 41 92% 18%;
+
+  --destructive: 359 100% 70%;
+  --destructive-foreground: 159 21% 8%;
+  --destructive-light: 0 84% 18%;
+
+  --border: 0 0% 100% / 10%;
+  --input: 0 0% 100% / 15%;
+  --ring: 0 0% 45%;
+
+  --chart-1: 230 100% 82%;
+  --chart-2: 241 100% 69%;
+  --chart-3: 247 92% 60%;
+  --chart-4: 248 68% 51%;
+  --chart-5: 246 61% 42%;
+
+  /* Sidebar - Dark Mode (subtle indigo tint to match the dark app gradient) */
+  --sidebar-background: 248 14% 10%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-primary: 241 100% 69%;
+  --sidebar-primary-foreground: 226 100% 97%;
+  --sidebar-accent: 248 18% 17%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 248 30% 100% / 10%;
+  --sidebar-ring: 248 20% 45%;
+
+  --gradient-primary: linear-gradient(135deg, hsl(246 61% 42%), hsl(246 61% 52%));
+  --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
+  --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
+  --gradient-subtle: linear-gradient(135deg, hsl(159 15% 20%), hsl(159 15% 25%));
+
+  --ds-shadow-sm: 0 1px 2px 0 hsl(159 21% 4% / 0.5);
+  --ds-shadow-card: 0 4px 6px -1px hsl(159 21% 4% / 0.5), 0 2px 4px -1px hsl(159 21% 4% / 0.4);
+  --ds-shadow-hover: 0 10px 15px -3px hsl(246 61% 42% / 0.3), 0 4px 6px -2px hsl(246 61% 42% / 0.2);
+
+  --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
+  --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
+}
+
+/* ========================================================================
+   Base layer
+   ======================================================================== */
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
   }
 
   html, body {
@@ -196,47 +370,55 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Drive247 Typography */
-  h1 {
-    @apply text-5xl font-bold;  /* 48px */
-  }
+  /* Typography */
+  h1 { @apply text-5xl font-bold; }   /* 48px */
+  h2 { @apply text-3xl font-semibold; } /* 32px */
+  h3 { @apply text-2xl font-medium; }  /* 24px */
 
-  h2 {
-    @apply text-3xl font-semibold;  /* 32px */
-  }
-
-  h3 {
-    @apply text-2xl font-medium;  /* 24px */
-  }
-
-  /* Mobile typography adjustments */
   @media (max-width: 768px) {
-    body {
-      @apply text-base;  /* 16px on mobile */
-    }
+    body { @apply text-base; }  /* 16px on mobile */
   }
-
   @media (min-width: 769px) {
-    body {
-      @apply text-sm;  /* 14px on desktop */
-    }
+    body { @apply text-sm; }  /* 14px on desktop */
   }
 
-  /* Small text for badges and metadata */
-  .text-metadata {
-    @apply text-xs;  /* 12px */
+  .text-metadata { @apply text-xs; }  /* 12px */
+
+  /* Hide number input spinner arrows globally */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
   }
 }
 
+/* ========================================================================
+   Components layer
+   ======================================================================== */
 @layer components {
+  /* Rental creation progress bar shimmer */
+  .rental-progress-bar-fill {
+    position: relative;
+    background: hsl(var(--primary));
+    overflow: hidden;
+  }
+  .rental-progress-bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: 50%;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary-foreground) / 0.3), transparent);
+    animation: rentalProgressShimmer 1.5s ease-in-out infinite;
+  }
 
-  /* Drive247 Component Styles */
-  
   /* Override browser autofill styling for consistent input backgrounds */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
@@ -247,12 +429,9 @@ All colors MUST be HSL.
     -webkit-text-fill-color: hsl(var(--foreground)) !important;
     transition: background-color 5000s ease-in-out 0s !important;
   }
-  
-  /* Professional rotating border effect */
-  .rotating-border {
-    @apply relative;
-  }
 
+  /* Professional rotating border effect */
+  .rotating-border { @apply relative; }
   .rotating-border::before {
     content: '';
     position: absolute;
@@ -262,74 +441,65 @@ All colors MUST be HSL.
     animation: border-rotate 6s linear infinite;
     z-index: -1;
   }
-
   @media (prefers-reduced-motion: reduce) {
     .rotating-border::before {
       animation: none;
       background: hsl(var(--primary) / 0.1);
     }
   }
-  
-  /* Buttons with purple focus rings and rounded-lg */
+
+  /* Buttons with focus rings and rounded-lg */
   .btn-primary {
     @apply bg-gradient-primary text-primary-foreground rounded-lg font-medium px-4 py-2 transition-all duration-200 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:opacity-90;
   }
 
-  /* Ensure gradient backgrounds have proper text color */
-  .bg-gradient-primary {
-    color: white !important;
-  }
-
-  /* Cards with hover scale and rounded-lg */
+  /* Cards with hover scale */
   .card-hover {
     @apply transition-all duration-200 hover:scale-102 hover:shadow-hover;
   }
 
-  /* Badges with rounded-full */
+  /* Badges */
   .badge-status {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-
-  /* Completed status badge - bright green */
   .badge-completed {
     background-color: #22c55e !important;
     color: #ffffff !important;
     border-color: transparent !important;
   }
 
-  /* Forms with purple focus rings */
+  /* Forms */
   .input-focus {
     @apply focus:ring-2 focus:ring-primary focus:border-primary rounded-md border-input;
   }
 
-  /* Tables with text-sm and hover highlighting */
+  /* Tables */
   .table-row {
     @apply text-sm hover:bg-muted/50 transition-colors duration-200;
   }
-
   .table-header {
     @apply text-xs font-medium text-muted-foreground uppercase tracking-wider;
   }
 }
 
+/* ========================================================================
+   Utilities layer
+   ======================================================================== */
 @layer utilities {
   /* Scrollbar utilities */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
   }
-
   .scrollbar-thin::-webkit-scrollbar {
-    -webkit-appearance: none; /* Override macOS default */
+    -webkit-appearance: none;
     height: 10px;
     width: 10px;
   }
-
   .scrollbar-thin::-webkit-scrollbar-track {
     background: hsl(var(--muted) / 0.1);
     border-radius: 9999px;
   }
-
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: hsl(var(--muted-foreground) / 0.2);
     border-radius: 9999px;
@@ -337,23 +507,29 @@ All colors MUST be HSL.
     background-clip: padding-box;
     transition: all 0.2s ease;
   }
-
   .scrollbar-thin:hover {
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted) / 0.2);
   }
-
   .scrollbar-thin:hover::-webkit-scrollbar-track {
     background: hsl(var(--muted) / 0.2);
   }
-
   .scrollbar-thin:hover::-webkit-scrollbar-thumb {
     background: hsl(var(--muted-foreground) / 0.5);
     background-clip: padding-box;
   }
-
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.7);
     background-clip: padding-box;
+  }
+
+  /* Soft ambient page background — faint indigo glow, adapts to light/dark */
+  .bg-app-gradient {
+    background-image:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.20), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+      radial-gradient(55rem 45rem at 50% 115%, hsl(var(--primary) / 0.12), transparent 55%),
+      linear-gradient(180deg, hsl(var(--primary) / 0.07) 0%, transparent 45%);
+    background-repeat: no-repeat;
   }
 
   /* Trax AI branding animations */
@@ -368,7 +544,6 @@ All colors MUST be HSL.
               drop-shadow(0 0 24px hsl(var(--accent) / 0.25));
     }
   }
-
   @keyframes trax-ring {
     0%, 100% {
       box-shadow: 0 0 6px -1px hsl(var(--accent) / 0.35),
@@ -380,15 +555,27 @@ All colors MUST be HSL.
                   inset 0 0 8px -1px hsl(var(--accent) / 0.2);
     }
   }
-
-  .trax-icon {
-    animation: trax-glow 2.5s ease-in-out infinite;
-  }
-
-  .trax-ring {
-    animation: trax-ring 2.5s ease-in-out infinite;
-  }
+  .trax-icon { animation: trax-glow 2.5s ease-in-out infinite; }
+  .trax-ring { animation: trax-ring 2.5s ease-in-out infinite; }
 }
+
+/* WhatsApp-style chat backdrop — faint indigo doodle dots over a tinted base.
+   Recoloured to the portal design system instead of WhatsApp's dark green. */
+.chat-doodle {
+  background-color: hsl(var(--muted) / 0.4);
+  background-image:
+    radial-gradient(hsl(var(--primary) / 0.06) 1.5px, transparent 1.6px),
+    radial-gradient(hsl(var(--primary) / 0.05) 1.5px, transparent 1.6px);
+  background-size: 28px 28px, 28px 28px;
+  background-position: 0 0, 14px 14px;
+}
+.dark .chat-doodle {
+  background-color: hsl(var(--background) / 0.6);
+  background-image:
+    radial-gradient(hsl(var(--primary) / 0.12) 1.5px, transparent 1.6px),
+    radial-gradient(hsl(var(--primary) / 0.10) 1.5px, transparent 1.6px);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Print isolation for the subscription receipt.
 

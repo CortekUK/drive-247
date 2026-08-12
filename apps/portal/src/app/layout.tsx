@@ -3,6 +3,10 @@ import { headers } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { Providers } from "./providers";
 import "@/global.css";
+import { Manrope } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope', display: 'swap' });
 
 export const dynamic = "force-dynamic";
 
@@ -108,15 +112,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={cn("font-sans", manrope.variable)}>
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
       <body suppressHydrationWarning>
