@@ -26,7 +26,6 @@ import {
   isValidLocalDate,
   isValidQuoteEmail,
   isValidQuoteReference,
-  quoteStartsBeforeNow,
   quoteLinesChanged,
   safeQuoteFilename,
   shiftLocalDate,
@@ -124,8 +123,8 @@ export default function FleetQuotesPage() {
       toast({ title: "Check the rental period", description: validationError, variant: "destructive" });
       return null;
     }
-    if (quoteStartsBeforeNow(search.startDate, search.pickupTime, timezone)) {
-      toast({ title: "Pickup is in the past", description: "Choose a future pickup date and time.", variant: "destructive" });
+    if (search.startDate < today) {
+      toast({ title: "Pickup date is in the past", description: "Choose today or a future date.", variant: "destructive" });
       return null;
     }
     try {
@@ -308,8 +307,8 @@ export default function FleetQuotesPage() {
       toast({ title: "Enter a valid customer email", variant: "destructive" });
       return;
     }
-    if (quoteStartsBeforeNow(search.startDate, search.pickupTime, timezone)) {
-      toast({ title: "Rental period is now in the past", description: "Generate a new quote with a current date.", variant: "destructive" });
+    if (search.startDate < today) {
+      toast({ title: "Rental period is now in the past", description: "Generate a new quote with today or a future date.", variant: "destructive" });
       return;
     }
 
