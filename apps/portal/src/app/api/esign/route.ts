@@ -955,7 +955,12 @@ function renderTextToPdf(ctx: PdfCtx, text: string) {
     const maxWidth = CONTENT_W;
 
     const lines = text.split('\n');
-    for (const line of lines) {
+    for (const rawLine of lines) {
+        // Splitting on '\n' leaves the '\r' of every CRLF line, and tabs are
+        // preserved by sanitizePdfText by design. Both reach
+        // widthOfTextAtSize() below, which encodes and throws
+        // `WinAnsi cannot encode`. Strip them before measuring, not after.
+        const line = rawLine.replace(/[\r\n\t]+/g, ' ');
         const words = line.split(' ');
         let currentLine = '';
         for (const word of words) {
@@ -1312,8 +1317,10 @@ export async function POST(request: NextRequest) {
             borderWidth: 1,
         });
         const labelFontSize = 11;
-        const labelWidth = ctx.boldFont.widthOfTextAtSize(agreementTypeLabel, labelFontSize);
-        ctx.page.drawText(agreementTypeLabel, {
+        // Drawn raw, bypassing drawText()'s sanitiser — guard it here.
+        const safeTypeLabel = sanitizePdfLine(agreementTypeLabel);
+        const labelWidth = ctx.boldFont.widthOfTextAtSize(safeTypeLabel, labelFontSize);
+        ctx.page.drawText(safeTypeLabel, {
             x: MARGIN + (CONTENT_W - labelWidth) / 2,
             y: bannerY + (bannerHeight - labelFontSize) / 2 + 1,
             size: labelFontSize,

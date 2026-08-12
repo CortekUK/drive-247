@@ -498,7 +498,14 @@ export async function POST(request: NextRequest) {
         let y = pageHeight - margin;
 
         for (const rawLine of lines) {
-            const line = sanitizePdfText(rawLine);
+            // sanitizePdfText deliberately PRESERVES \n \r \t so multi-line
+            // renderers can consume them. This loop does not — it hands the
+            // result straight to drawText/widthOfTextAtSize, which encode, and
+            // pdf-lib throws `WinAnsi cannot encode "\n" (0x000a)` on any that
+            // survive. Splitting on '\n' leaves the '\r' of every CRLF line and
+            // every tab untouched, which is exactly how a whole tenant lost
+            // agreement creation. Collapse them here.
+            const line = sanitizePdfText(rawLine).replace(/[\r\n\t]+/g, ' ');
             // Wrap long lines
             const words = line.split(' ');
             let currentLine = '';
