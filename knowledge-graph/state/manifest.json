@@ -836,7 +836,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/types.ts": {
-    "sha": "ece97c5a86bbb3e5621f3ff09b412f934a85a830ac4acbaf7d457ec81a123255",
+    "sha": "ecc47d241ec812f5c2dce3c4e2a88bd5f727d3cf9e6aa695f00cc68214c94d65",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/client.ts": {
@@ -1404,7 +1404,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/customers/customer-statement-dialog.tsx": {
-    "sha": "5f5bfbcaf05e176c687db023e74f21885909a7242024c6a9cdd765900a8470eb",
+    "sha": "1ae27ca0e06720e460fc6c0fdc990139ff8f09e3ab514cc41941e96e4652b791",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/customers/collect-payment-dialog.tsx": {
@@ -2824,7 +2824,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-customer-statement.ts": {
-    "sha": "e84ae3a20cea0ab4ae5ff0d74ffa921dda3914d59d1a240a1d87b864a920df7c",
+    "sha": "c6afa556eae2746690c81429319aa6c27b4ab370d55c1184bdc6884b28d0b9ba",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-setup-reminder.ts": {
@@ -3876,7 +3876,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/types.ts": {
-    "sha": "ece97c5a86bbb3e5621f3ff09b412f934a85a830ac4acbaf7d457ec81a123255",
+    "sha": "ecc47d241ec812f5c2dce3c4e2a88bd5f727d3cf9e6aa695f00cc68214c94d65",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/client.ts": {
@@ -4428,7 +4428,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/AccountStatementDialog.tsx": {
-    "sha": "f0793acbb51fc66951b9e4503808ffea619c76a0344095b81abd99971a0fd5e2",
+    "sha": "87f75014bd1ffe270b62efb481c925392d1da39a283abec33cbdb4ba703d2899",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/CustomerExtensionCalendar.tsx": {
@@ -4612,7 +4612,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-statement.ts": {
-    "sha": "a2d932c70b9da22e73d20cdf4c93b5856dfae43409d9a06bf6e4cc88a80f332d",
+    "sha": "a6275ffa34dcaed7ea22b300108b51b71d52135a412aa19e7a54ed3908adcfa2",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-verification.ts": {
@@ -5208,7 +5208,7 @@
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/src/integrations/supabase/types.ts": {
-    "sha": "ece97c5a86bbb3e5621f3ff09b412f934a85a830ac4acbaf7d457ec81a123255",
+    "sha": "ecc47d241ec812f5c2dce3c4e2a88bd5f727d3cf9e6aa695f00cc68214c94d65",
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/eslint.config.mjs": {
@@ -6048,7 +6048,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-customer-statement/index.ts": {
-    "sha": "f806e7b6310b69ff59d1e7b66dcfcb610fbfd7586af427ab8d06a4bbe6f9765b",
+    "sha": "4ac7bbe2d4fbf1cb371c761ca4afeec30dc5775a664e82bc8ad892630154a6d6",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-payg-reminders/index.ts": {

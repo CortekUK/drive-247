@@ -880,7 +880,7 @@
       "video": []
     },
     "total_files": 871,
-    "total_words": 818873,
+    "total_words": 818965,
     "counts": {
       "code": 871
     },
@@ -2112,7 +2112,7 @@
       "video": []
     },
     "total_files": 341,
-    "total_words": 428300,
+    "total_words": 428392,
     "counts": {
       "code": 326,
       "image": 15
@@ -2564,7 +2564,7 @@
       "video": []
     },
     "total_files": 91,
-    "total_words": 125377,
+    "total_words": 125393,
     "counts": {
       "code": 91
     },
@@ -3245,7 +3245,7 @@
       "video": []
     },
     "total_files": 326,
-    "total_words": 441348,
+    "total_words": 441663,
     "counts": {
       "code": 320,
       "document": 6
