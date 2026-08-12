@@ -143,6 +143,7 @@ export const SETTINGS_SUB_TABS: TabDefinition[] = [
 export const ROUTE_TO_TAB: Record<string, string> = {
   '/vehicles': 'vehicles',
   '/rentals': 'rentals',
+  '/quotes': 'rentals',
   '/pending-bookings': 'pending_bookings',
   '/blocked-dates': 'availability',
   '/vehicle-owners': 'vehicle_owners',
