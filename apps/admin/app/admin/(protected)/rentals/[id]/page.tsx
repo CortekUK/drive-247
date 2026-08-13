@@ -51,6 +51,7 @@ import { CardBrandIcon } from '@/components/ui/card-brand-icon';
 import { BarChart3 } from 'lucide-react';
 import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
+import { FinanceEventsTab } from '@/components/admin/finance-events-tab';
 import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
 import {
   ArrowLeft,
@@ -1424,6 +1425,7 @@ export default function TenantDetailsPage() {
           <TabsTrigger value="management">Management</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="finance">Finance Sync</TabsTrigger>
           <TabsTrigger value="todos">Todos</TabsTrigger>
         </TabsList>
 
@@ -2438,6 +2440,11 @@ export default function TenantDetailsPage() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Finance Sync Tab — super-admin debug view into the financial_events ledger */}
+        <TabsContent value="finance" className="space-y-6">
+          <FinanceEventsTab tenantId={tenant.id} />
         </TabsContent>
 
         {/* Todos Tab — per-tenant Kanban board (visible only on this tenant's page) */}

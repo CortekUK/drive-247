@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -36,6 +36,7 @@ import { ColorPicker } from '@/components/settings/color-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
 import { StripeConnectSettings } from '@/components/settings/stripe-connect-settings';
+import { AccountingSettings } from '@/components/settings/accounting-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
@@ -170,7 +171,7 @@ const Settings = () => {
   const allSettingsTabs = [
     'general', 'locations', 'branding',
     'requirements', 'duration', 'lockbox',
-    'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
+    'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments', 'accounting',
     'reminders', 'templates',
     'messaging', 'insurance', 'inshur', 'esign', 'tesla', 'blacklist',
     'subscription',
@@ -1684,6 +1685,7 @@ const Settings = () => {
                 { value: 'promos', icon: Zap, label: 'Promos' },
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Stripe' },
+                { value: 'accounting', icon: Landmark, label: 'Accounting' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'templates', icon: FileText, label: 'Templates' },
                 { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
@@ -2821,6 +2823,11 @@ const Settings = () => {
         <TabsContent value="payments" className="space-y-6">
           {/* Stripe Connect */}
           <StripeConnectSettings />
+        </TabsContent>
+
+        {/* Accounting Tab — Xero + Zoho Books connections (Growth+ tier) */}
+        <TabsContent value="accounting" className="space-y-6">
+          <AccountingSettings />
         </TabsContent>
 
         {/* Locations Tab */}

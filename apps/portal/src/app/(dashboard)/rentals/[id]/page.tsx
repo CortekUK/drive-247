@@ -48,6 +48,7 @@ import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalD
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
 import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
+import { AccountingSyncStripe } from "@/components/rentals/accounting-sync-stripe";
 import { InstallmentSection } from "@/components/installments/InstallmentSection";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
@@ -7744,6 +7745,10 @@ const RentalDetail = () => {
         preselectedVehicleId={rental?.vehicles?.id}
         preselectedVehicleReg={rental?.vehicles?.reg}
       />
+
+      {/* Finance Sync — per-rental sync stripe (Sprint 3). Renders nothing when
+          no provider connected or no events for this rental yet. */}
+      <AccountingSyncStripe rentalId={id} />
     </div>
   );
 };

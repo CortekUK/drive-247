@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { format, subDays } from 'date-fns';
 import { BarChart3, Download, FileText, TrendingUp, Users, Car, CreditCard, Clock, AlertTriangle, Info } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -412,6 +413,27 @@ const Reports = () => {
           Generate detailed reports and export data across your fleet
         </p>
       </div>
+
+      {/* Finance Sync — Vehicle Profitability tile (Spec §11, Sprint 4) */}
+      <Link
+        href="/reports/vehicle-profitability"
+        className="mb-6 block rounded-lg border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-4 transition-colors hover:border-indigo-300 hover:bg-indigo-50/50"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+              📊
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-indigo-900">Vehicle Profitability →</div>
+              <div className="text-xs text-indigo-700/80">
+                Per-vehicle revenue, expenses, profit and ROI · powered by Drive247&apos;s internal ledger
+              </div>
+            </div>
+          </div>
+          <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-medium text-white">New</span>
+        </div>
+      </Link>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Filters Sidebar */}
