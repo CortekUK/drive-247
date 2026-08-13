@@ -12,6 +12,13 @@ const DISMISS_KEY = "sidebar-promo:fleet-calendar-v3";
  * 3D "liquid glass" card (sculpted depth via layered highlights + shadows,
  * a single soft light source, minimal movement). Use this slot for feature
  * releases, training, or promotions. Dismissal persists via localStorage.
+ *
+ * The gradient runs down the darker half of the brand chart ramp (3 → 4 → 5)
+ * rather than a fixed indigo. Two reasons it is the ramp and not `primary`
+ * alone: a single colour flattens the card, and the ramp's lower steps stay
+ * dark enough that the white text on top survives a pale brand colour. Every
+ * shadow is neutral black for the same reason — an indigo-tinted shadow read
+ * as a bruise against any other hue.
  */
 export function SidebarPromo() {
   const [dismissed, setDismissed] = useState(true);
@@ -30,9 +37,9 @@ export function SidebarPromo() {
   return (
     <div
       className="group relative isolate overflow-hidden rounded-xl p-2.5 text-white
-        bg-gradient-to-br from-indigo-500 via-primary to-indigo-800
+        bg-gradient-to-br from-[hsl(var(--chart-3))] via-[hsl(var(--chart-4))] to-[hsl(var(--chart-5))]
         ring-1 ring-inset ring-white/20
-        shadow-[0_16px_32px_-12px_rgba(49,46,129,0.8),0_4px_10px_-4px_rgba(0,0,0,0.35),inset_0_1px_0_0_rgba(255,255,255,0.5),inset_0_-8px_16px_-8px_rgba(30,27,75,0.75)]
+        shadow-[0_16px_32px_-12px_rgba(0,0,0,0.55),0_4px_10px_-4px_rgba(0,0,0,0.35),inset_0_1px_0_0_rgba(255,255,255,0.5),inset_0_-8px_16px_-8px_rgba(0,0,0,0.45)]
         transition-transform duration-200 ease-out hover:-translate-y-0.5"
     >
       {/* Static glossy top sheen — the glass reflection */}
