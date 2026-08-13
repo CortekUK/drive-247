@@ -1724,7 +1724,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/accounting-settings.tsx": {
-    "sha": "baf539211a5451f35e1f4e578c10ecf0c65574203a5f79f6c6bbc0a6f366748a",
+    "sha": "351835d86735bb2d6c6f64fc572927f7919e4a5fe041892631268ebaa261b443",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/logo-upload-with-resize.tsx": {
@@ -8749,6 +8749,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql": {
     "sha": "5686a63f70fa8e1ba8b1f6bd130bad7303b554425bd908d005f394af76afe66c",
+    "unit": "database"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813150000_extend_accounting_oauth_state_ttl.sql": {
+    "sha": "4f36cd25bb1ca4a8609849777f0fc43c0a81165953dec67667cb3650b25d8b3b",
     "unit": "database"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql": {

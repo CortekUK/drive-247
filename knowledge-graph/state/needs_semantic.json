@@ -1,10 +1,11 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-callback/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-callback/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813150000_extend_accounting_oauth_state_ttl.sql",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/accounting-settings.tsx"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/database-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

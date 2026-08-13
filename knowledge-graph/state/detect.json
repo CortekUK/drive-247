@@ -899,7 +899,7 @@
       "video": []
     },
     "total_files": 890,
-    "total_words": 838367,
+    "total_words": 838859,
     "counts": {
       "code": 890
     },
@@ -4186,16 +4186,17 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260807120000_cascade_vehicle_delete_blockers.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260812190000_add_admin_find_auth_user_by_email.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813150000_extend_accounting_oauth_state_ttl.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
         "/home/haseeb-raza/Desktop/drive-247/MANUAL_MIGRATION.sql"
       ]
     },
-    "total_files": 361,
-    "total_words": 140958,
+    "total_files": 362,
+    "total_words": 141155,
     "counts": {
-      "code": 361
+      "code": 362
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20251219083413_remote_schema.sql",
@@ -4555,6 +4556,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260807120000_cascade_vehicle_delete_blockers.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260812190000_add_admin_find_auth_user_by_email.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813150000_extend_accounting_oauth_state_ttl.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
