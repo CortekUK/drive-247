@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkle, ChatCircleDots, Tray, Bell, CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { Sparkle, ChatCircleDots, Tray, Bell, Gift, CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { MessagesSheet, EnquiriesSheet } from "@/components/shared/layout/dock-sheets";
+import { WhatsNewSheet } from "@/components/releases/whats-new-sheet";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useNotifications } from "@/hooks/use-notifications";
+import { useReleases } from "@/hooks/use-releases";
 
 const BTN =
   "relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 ease-out hover:-translate-x-1 hover:scale-110 hover:text-primary";
@@ -34,7 +36,11 @@ export function QuickDock({ onAskAI }: { onAskAI: () => void }) {
   const { unreadCount: chatUnread } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
   const { unreadCount: notifUnread } = useNotifications();
+  const { unreadCount: releaseUnread } = useReleases();
   const enquiryPending = enquiryStats?.pending || 0;
+  // Releases stay OUT of the collective count on the collapsed handle. That
+  // badge means "someone is waiting on you"; an unread release note is not
+  // urgent and would train people to ignore a genuinely urgent number.
   const collective = (chatUnread || 0) + enquiryPending + (notifUnread || 0);
 
   // Collapsed: a thin handle with a pull-out arrow + the collective count.
@@ -122,6 +128,24 @@ export function QuickDock({ onAskAI }: { onAskAI: () => void }) {
               />
             </TooltipTrigger>
             <TooltipContent side="left">Notifications</TooltipContent>
+          </Tooltip>
+
+          {/* What's new — a quiet dot rather than a count, since nothing here
+              is waiting on the operator. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <WhatsNewSheet
+                trigger={
+                  <button className={BTN} aria-label="What's new">
+                    <Gift className={ICON} />
+                    {releaseUnread > 0 && (
+                      <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary ring-2 ring-card" />
+                    )}
+                  </button>
+                }
+              />
+            </TooltipTrigger>
+            <TooltipContent side="left">What&apos;s new</TooltipContent>
           </Tooltip>
         </div>
       </div>

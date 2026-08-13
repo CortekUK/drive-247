@@ -21,6 +21,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialogInner } from "@/components/chat";
 import { QuickDock } from "@/components/shared/layout/quick-dock";
+import { ReleaseModal } from "@/components/releases/release-modal";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
@@ -326,9 +327,13 @@ export default function DashboardLayout({
             dock opens it, so its state has to outlive any one screen. */}
         <TraxAIDialogInner isOpen={traxOpen} setIsOpen={setTraxOpen} />
 
-        {/* Right-edge quick dock — AI · Messages · Enquiries · Notifications.
-            Replaces the old top header bar. */}
+        {/* Right-edge quick dock — AI · Messages · Enquiries · Notifications ·
+            What's new. Replaces the old top header bar. */}
         <QuickDock onAskAI={() => setTraxOpen(true)} />
+
+        {/* Weekly release note. Renders nothing unless there is an unseen
+            release AND none has been shown this week. */}
+        <ReleaseModal />
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
