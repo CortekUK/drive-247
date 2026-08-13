@@ -15,7 +15,7 @@ export function CreditBalance() {
       <TooltipTrigger asChild>
         <Link
           href="/credits"
-          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-sm font-medium transition-colors hover:bg-accent ${
+          className={`flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors hover:bg-accent ${
             isLowBalance
               ? "text-red-600 dark:text-red-400"
               : "text-[#404040] dark:text-gray-300"

@@ -300,9 +300,10 @@ export function CommandCenter({
       />
 
       {/* Header — always visible */}
-      <button
+      <Button
+        variant="ghost"
         onClick={toggleCollapsed}
-        className="w-full px-3 sm:px-5 py-3.5 flex items-center justify-between gap-3 sm:gap-4 hover:bg-muted/10 transition-colors cursor-pointer"
+        className="w-full h-auto rounded-none px-3 sm:px-5 py-3.5 flex items-center justify-between gap-3 sm:gap-4 hover:bg-muted/10 hover:text-foreground transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-4 min-w-0">
           {allComplete ? (
@@ -351,7 +352,7 @@ export function CommandCenter({
             }`}
           />
         </div>
-      </button>
+      </Button>
 
       {/* Expandable content */}
       <div

@@ -15,21 +15,12 @@ import { SubscriptionGateDialog } from "@/components/subscription/subscription-g
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
 import { TenantSuspendedScreen } from "@/components/tenant/tenant-suspended-screen";
-import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
-import { HeaderSearch } from "@/components/shared/layout/header-search";
-import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
-import { NotificationBell } from "@/components/shared/layout/notification-bell";
-import { CreditBalance } from "@/components/shared/layout/credit-balance";
-import { BonzahBalance } from "@/components/shared/layout/bonzah-balance";
 import { DynamicThemeProvider } from "@/components/shared/layout/dynamic-theme-provider";
-import {
-  SidebarProvider,
-  SidebarTrigger,
-  SidebarInset,
-} from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TraxAIDialog } from "@/components/chat";
+import { TraxAIDialogInner } from "@/components/chat";
+import { QuickDock } from "@/components/shared/layout/quick-dock";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
@@ -75,6 +66,8 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  /** Trax is opened from the dock now, so its state lives at layout level. */
+  const [traxOpen, setTraxOpen] = useState(false);
   const { user, appUser, loading, profileUnavailable, refetchAppUser, signOut } = useAuth();
   const { tenant, loading: tenantLoading } = useTenant();
   const {
@@ -319,31 +312,23 @@ export default function DashboardLayout({
 
   return (
     <DynamicThemeProvider>
-      <SidebarProvider>
+      <SidebarProvider className="bg-background bg-app-gradient">
         <AppSidebar />
-        <SidebarInset className="overflow-x-hidden">
-          <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
-            <SidebarTrigger className="-ml-1 flex-shrink-0" />
-            <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
-              <HeaderSearch />
-            </div>
-            <TraxAIDialog />
-            <div className="ml-auto flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
-              <div className="hidden min-[420px]:flex items-center gap-1 sm:gap-2">
-                <BonzahBalance />
-                <CreditBalance />
-              </div>
-              <NotificationBell />
-              <ThemeToggle />
-              <UserMenu />
-            </div>
-          </header>
+        <SidebarInset className="overflow-x-hidden bg-transparent">
           <MaintenanceBanner />
 
-          <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <main className="flex flex-1 flex-col gap-4 p-4">
             {children}
           </main>
         </SidebarInset>
+
+        {/* Trax lives at layout level now that the header button is gone — the
+            dock opens it, so its state has to outlive any one screen. */}
+        <TraxAIDialogInner isOpen={traxOpen} setIsOpen={setTraxOpen} />
+
+        {/* Right-edge quick dock — AI · Messages · Enquiries · Notifications.
+            Replaces the old top header bar. */}
+        <QuickDock onAskAI={() => setTraxOpen(true)} />
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
