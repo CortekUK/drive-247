@@ -201,8 +201,17 @@ Deno.serve(async (req) => {
     const orgs = orgJson.organizations ?? [];
     if (orgs.length === 0) {
       // Genuinely empty — the API said success and returned no organisations.
+      // Log the full shape, not just "empty". If Zoho ever returns a body with
+      // neither `code` nor `organizations` the apiFailed check above cannot see
+      // it, and we would land here reporting "no organisations" for what was
+      // actually a malformed response. Recording the keys makes that visible.
       console.warn(
-        `zoho-oauth-callback: account has no Zoho Books organisations (region=${region}, endpoint=${orgsEndpoint})`,
+        "zoho-oauth-callback: account has no Zoho Books organisations",
+        `region=${region}`,
+        `endpoint=${orgsEndpoint}`,
+        `code=${orgJson.code ?? "—"}`,
+        `message=${orgJson.message ?? "—"}`,
+        `keys=[${Object.keys(orgJson).join(",")}]`,
       );
       return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=no_organisations");
     }
