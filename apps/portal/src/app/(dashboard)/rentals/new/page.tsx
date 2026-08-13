@@ -80,7 +80,10 @@ import { RentalProgressOverlay } from "@/components/rentals/rental-progress-over
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
-import { BookingModeGrid } from "@/components/rentals/booking-mode-selector";
+import { BookingModeGrid, type BookingMode } from "@/components/rentals/booking-mode-selector";
+import { RentalOnboardingShell } from "@/components/rentals/rental-onboarding-shell";
+import { CustomerList } from "@/components/rentals/customer-step";
+import { VehicleList } from "@/components/rentals/vehicle-step";
 import {
   AdditionalDriversForm,
   validateAdditionalDrivers,
@@ -212,6 +215,16 @@ const CreateRental = () => {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [promoCodeOpen, setPromoCodeOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+
+  /**
+   * Guided intake gate. `bookingMode` mirrors the isPayAsYouGo/isAutoExtend
+   * pair the form has always used — it is the step's view of the same choice,
+   * not a second source of truth.
+   */
+  const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
+  const [onboardingStep, setOnboardingStep] = useState<
+    "mode" | "customer" | "vehicle" | "form"
+  >("mode");
 
   // Bonzah insurance state
   const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
@@ -2735,6 +2748,156 @@ const CreateRental = () => {
     toast({ title: "Form cleared" });
   };
 
+  /** Modes this tenant has switched on. `installments` is a plan inside a
+      regular rental here, not a fourth mode, so it is never offered. */
+  const availableBookingModes = useMemo(
+    () => [
+      'fixed' as const,
+      ...((rentalSettings as any)?.pay_as_you_go_enabled ? ['payg' as const] : []),
+      ...((rentalSettings as any)?.auto_extend_enabled ? ['auto_extend' as const] : []),
+    ],
+    [rentalSettings]
+  );
+
+  /**
+   * Single implementation of "the operator chose a billing mode", shared by the
+   * intake step and the in-form grid so the two can never drift. Every reset
+   * below is carried over verbatim from the original radio handler.
+   */
+  const applyBookingMode = (mode: BookingMode) => {
+    setBookingMode(mode);
+    // The grid calls the standard mode "fixed"; this page has always called it
+    // "regular", and the submit path keys off that name.
+    const val = mode === 'fixed' ? 'regular' : mode;
+    setIsPayAsYouGo(val === 'payg');
+    setIsAutoExtend(val === 'auto_extend');
+    if (val === 'auto_extend') {
+      // Auto-extend bills per-period upfront — like PAYG it's Weekly/Monthly with an
+      // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
+      setInstallmentPlanType('full');
+      setInstallmentAmountOverride(null);
+      if (form.getValues('rental_period_type') === 'Daily') {
+        form.setValue('rental_period_type', 'Weekly');
+      }
+      setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
+    }
+    if (val === 'payg') {
+      setInstallmentPlanType('full');
+      setInstallmentAmountOverride(null);
+      form.setValue('promo_code', '');
+      setPromoDetails(null);
+      setPromoError(null);
+      form.setValue('end_date', undefined as any);
+      form.setValue('return_time', undefined as any);
+      form.setValue('return_location', '');
+      // PAYG is Weekly or Monthly only (per product spec — no daily rate).
+      // Default to Weekly; user can switch to Monthly in the period selector.
+      form.setValue('rental_period_type', 'Weekly');
+      // Clear the rate fields — user enters the per-period billing amount
+      // explicitly so they confirm the rate they're billing (no silent auto-fill
+      // from vehicle.daily_rent, which is a daily price not a weekly/monthly one).
+      setPerPeriodRate(null);
+      form.setValue('monthly_amount', undefined as any);
+      setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+      setBonzahPremium(0);
+      setSelectedExtras({});
+      setDeliveryFeeOverride(0);
+      setCollectionFeeOverride(0);
+      setInsuranceDocId(null);
+    }
+  };
+
+  const goToStep = (i: number) => {
+    const map = ["mode", "customer", "vehicle", "form"] as const;
+    setOnboardingStep(map[i] ?? "mode");
+  };
+
+  /*
+    Guided intake: Booking Mode → Customer → Vehicle → the full form.
+
+    Deliberately a gate in FRONT of the existing form rather than a rewrite of
+    it. Each step writes into the same react-hook-form fields and the same
+    payment-mode state the form has always used, so the submit path, validation
+    and every pricing effect below are untouched. Skipping ahead via the
+    breadcrumbs is allowed — nothing here is a new requirement, it is the same
+    three fields asked one at a time instead of all at once.
+
+    v2's fourth "Schedule" step is omitted: its component took no props and
+    collected nothing, and the form already gathers dates properly.
+  */
+  if (onboardingStep !== "form") {
+    if (onboardingStep === "mode") {
+      return (
+        <RentalOnboardingShell
+          currentStep={0}
+          subtitle="Choose how this rental will be billed to get started"
+          onStepClick={goToStep}
+          onContinue={() => setOnboardingStep("customer")}
+          continueDisabled={!bookingMode}
+        >
+          <BookingModeGrid
+            selected={bookingMode}
+            available={availableBookingModes}
+            onSelect={applyBookingMode}
+          />
+        </RentalOnboardingShell>
+      );
+    }
+
+    if (onboardingStep === "customer") {
+      return (
+        <RentalOnboardingShell
+          currentStep={1}
+          subtitle="Choose the customer for this rental"
+          onStepClick={goToStep}
+          onContinue={() => setOnboardingStep("vehicle")}
+          continueDisabled={!form.watch("customer_id")}
+        >
+          <CustomerList
+            selected={form.watch("customer_id") || null}
+            onSelect={(id) =>
+              form.setValue("customer_id", id, { shouldValidate: true, shouldDirty: true })
+            }
+            onInvite={() => setInviteDialogOpen(true)}
+            customers={(customers ?? []).map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              email: c.email ?? undefined,
+              phone: c.phone ?? undefined,
+            }))}
+          />
+        </RentalOnboardingShell>
+      );
+    }
+
+    return (
+      <RentalOnboardingShell
+        currentStep={2}
+        subtitle="Choose the vehicle for this rental"
+        onStepClick={goToStep}
+        onContinue={() => setOnboardingStep("form")}
+        continueDisabled={!form.watch("vehicle_id")}
+        continueLabel="Continue to rental details"
+      >
+        <VehicleList
+          selected={form.watch("vehicle_id") || null}
+          onSelect={(id) =>
+            form.setValue("vehicle_id", id, { shouldValidate: true, shouldDirty: true })
+          }
+          vehicles={(vehicles ?? []).map((v: any) => ({
+            id: v.id,
+            make: v.make ?? undefined,
+            model: v.model ?? undefined,
+            reg: v.reg ?? undefined,
+            status: v.status ?? undefined,
+            dailyRate: v.daily_rent ?? undefined,
+          }))}
+          currency={currencySymbol}
+        />
+      </RentalOnboardingShell>
+    );
+  }
+
   return (
     <>
     <RentalProgressOverlay
@@ -3506,53 +3669,8 @@ const CreateRental = () => {
                         fourth mode, and offering it here would select something
                         the submit handler has no concept of.
                       */
-                      available={[
-                        'fixed' as const,
-                        ...((rentalSettings as any)?.pay_as_you_go_enabled ? ['payg' as const] : []),
-                        ...((rentalSettings as any)?.auto_extend_enabled ? ['auto_extend' as const] : []),
-                      ]}
-                      onSelect={(mode) => {
-                        // The grid calls the standard mode "fixed"; this page has
-                        // always called it "regular" and the handler below plus the
-                        // submit path both key off that name.
-                        const val = mode === 'fixed' ? 'regular' : mode;
-                        setIsPayAsYouGo(val === 'payg');
-                        setIsAutoExtend(val === 'auto_extend');
-                        if (val === 'auto_extend') {
-                          // Auto-extend bills per-period upfront — like PAYG it's Weekly/Monthly with an
-                          // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
-                          setInstallmentPlanType('full');
-                          setInstallmentAmountOverride(null);
-                          if (form.getValues('rental_period_type') === 'Daily') {
-                            form.setValue('rental_period_type', 'Weekly');
-                          }
-                          setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
-                        }
-                        if (val === 'payg') {
-                          setInstallmentPlanType('full');
-                          setInstallmentAmountOverride(null);
-                          form.setValue('promo_code', '');
-                          setPromoDetails(null);
-                          setPromoError(null);
-                          form.setValue('end_date', undefined as any);
-                          form.setValue('return_time', undefined as any);
-                          form.setValue('return_location', '');
-                          // PAYG is Weekly or Monthly only (per product spec — no daily rate).
-                          // Default to Weekly; user can switch to Monthly in the period selector.
-                          form.setValue('rental_period_type', 'Weekly');
-                          // Clear the rate fields — user enters the per-period billing amount
-                          // explicitly so they confirm the rate they're billing (no silent auto-fill
-                          // from vehicle.daily_rent, which is a daily price not a weekly/monthly one).
-                          setPerPeriodRate(null);
-                          form.setValue('monthly_amount', undefined as any);
-                          setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
-                          setBonzahPremium(0);
-                          setSelectedExtras({});
-                          setDeliveryFeeOverride(0);
-                          setCollectionFeeOverride(0);
-                          setInsuranceDocId(null);
-                        }
-                      }}
+                      available={availableBookingModes}
+                      onSelect={applyBookingMode}
                     />
 
                     {isAutoExtend && (
