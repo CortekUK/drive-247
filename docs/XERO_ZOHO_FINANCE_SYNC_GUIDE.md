@@ -220,16 +220,34 @@ When the OAuth consent screen asks you to sign in, use the credentials below.
 
 | Field | Value |
 |-------|-------|
-| Login URL | <https://accounts.zoho.com> |
-| Email (username) | `neemacortek@gmail.com` |
-| Account name | Neemacortek |
-| Password | `Cortek2907!` |
+| Login URL | <https://accounts.zoho.com> — **`.com` only** |
+| Email (username) | `corteksystemsltd@gmail.com` |
+| Account name | Cortek |
+| Password | *Not recorded here — held by the Drive247 team.* |
+
+> **Changed 2026-08-13.** Zoho moved from `neemacortek@gmail.com` to the Cortek
+> account. The old address would not sign in (`accounts.zoho.eu` reported "Your
+> account is not active"), and the API client is now registered under Cortek at
+> api-console.zoho.com. The Xero row above still uses `neemacortek@gmail.com` —
+> the two providers no longer share an account.
+>
+> The password is deliberately not written down. The previous value belonged to
+> the old account, so carrying it over would only produce repeated failed logins
+> and risk locking the new one — and this file is committed to git, which the
+> security note below already says it should not be.
+>
+> **Data centre matters.** Zoho accounts are per-region and do not roam: an
+> account created on `.com` does not exist on `.eu`, and Zoho reports that as
+> "account is not active" rather than "no such account". Sign in at
+> `accounts.zoho.com`, and pick **Global (.com)** in the portal's region modal.
 
 > **Security & handling:**
 > - Treat these credentials like production secrets — do **not** commit them to git, post them in tickets, or share them outside the engineering team.
 > - If you suspect either credential has leaked, notify the Drive247 team immediately so we can rotate.
 > - Two-factor authentication may be enabled on these accounts. If you hit a 2FA prompt during OAuth, coordinate with the Drive247 team to receive the code.
-> - The same email (`neemacortek@gmail.com`) is used for both providers — make sure you're on the correct provider's login page before entering the password.
+> - The two providers now use **different** accounts: Xero is `neemacortek@gmail.com`,
+>   Zoho is `corteksystemsltd@gmail.com`. They shared one address until 2026-08-13 —
+>   check which provider you are signing in to before entering anything.
 
 ### 4.4 Drive247 environment prep
 
