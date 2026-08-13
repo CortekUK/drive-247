@@ -1,6 +1,9 @@
 /**
- * Diagnostic test for Supabase configuration
- * Run this to verify environment variables and API key are loaded correctly
+ * Opt-in diagnostic for Supabase configuration.
+ *
+ * Database tables are deliberately not queried here. This helper may be run
+ * while the login page is anonymous, where RLS-protected queries are expected
+ * to fail and would create a misleading Next.js console-error overlay.
  */
 
 import { supabase } from './supabase';
@@ -40,25 +43,6 @@ export async function testSupabaseConfig() {
     console.error('✗ Connection failed:', err);
   }
 
-  // Test public query (should work with anon key)
-  console.log('\nDatabase Query Test:');
-  try {
-    const { data, error } = await supabase
-      .from('tenants')
-      .select('count')
-      .limit(1);
-
-    if (error) {
-      console.error('✗ Query failed:', error.message);
-      console.error('  Code:', error.code);
-      console.error('  Details:', error.details);
-    } else {
-      console.log('✓ Query successful');
-    }
-  } catch (err) {
-    console.error('✗ Query error:', err);
-  }
-
   console.groupEnd();
 
   return {
@@ -66,9 +50,4 @@ export async function testSupabaseConfig() {
     keyValid: clientKey?.startsWith('eyJ') && !clientKey?.endsWith('.placeholder'),
     url: clientUrl,
   };
-}
-
-// Auto-run in development
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  testSupabaseConfig();
 }

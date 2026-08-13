@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { testSupabaseConfig } from '@/lib/supabase-test';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -15,9 +14,6 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Run diagnostic test on mount
-    testSupabaseConfig();
-
     if (user) {
       router.push('/admin/dashboard');
     }

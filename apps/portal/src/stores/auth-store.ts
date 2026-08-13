@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast';
 export interface AppUser {
   id: string;
   auth_user_id: string;
+  tenant_id: string | null;
   email: string;
   name: string | null;
   role: 'head_admin' | 'admin' | 'manager' | 'ops' | 'viewer';

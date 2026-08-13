@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useAuth } from "@/stores/auth-store";
+import { useAuth, useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -221,6 +221,12 @@ function LoginPageContent() {
         // Record successful attempt
         await recordLoginAttempt(data.email, true);
 
+        // signIn resolves only after the app_users profile is loaded. Read the
+        // freshly committed store value rather than this render's stale
+        // `appUser`, otherwise the login audit row has no tenant/actor and
+        // cannot be used as real tenant engagement by Health Score.
+        const signedInAppUser = useAuthStore.getState().appUser;
+
         // Record policy acceptance via edge function (captures IP server-side)
         if (requiresPolicyAcceptance && data.acceptPolicies && tenant?.id) {
           try {
@@ -243,6 +249,9 @@ function LoginPageContent() {
         try {
           await supabase.from("audit_logs").insert({
             action: "login_success",
+            tenant_id: signedInAppUser?.tenant_id || tenant?.id || null,
+            actor_id: signedInAppUser?.id || null,
+            entity_type: "session",
             details: {
               email: data.email,
               remember_me: data.rememberMe,

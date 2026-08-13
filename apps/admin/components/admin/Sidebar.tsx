@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   TrendingUp,
   Activity,
+  HeartPulse,
 } from 'lucide-react';
 
 interface NavItem {
@@ -72,6 +73,7 @@ function useNavigation() {
       items: [
         { name: 'Platform Rentals', href: '/admin/platform-rentals', icon: Activity },
         { name: 'Tenant Readiness', href: '/admin/readiness', icon: ShieldCheck },
+        { name: 'Health Score', href: '/admin/health-score', icon: HeartPulse },
       ],
     },
     {

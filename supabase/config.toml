@@ -210,6 +210,11 @@ verify_jwt = true
 [functions.onboarding-daily-digest]
 verify_jwt = false
 
+# Tenant Health Score — the function verifies either x-platform-secret for cron
+# or a Super Admin user JWT for manual evaluations before doing any work.
+[functions.evaluate-health-scores]
+verify_jwt = false
+
 # Automations engine support functions.
 [functions.automation-test-run]
 verify_jwt = true
