@@ -38,11 +38,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { ThemePresetGrid } from '@/components/settings/appearance/theme-preset-grid';
-import { PortalPreview } from '@/components/settings/appearance/portal-preview';
+import { LivePortalPreview } from '@/components/settings/appearance/live-portal-preview';
+import { BrandSwatches } from '@/components/settings/appearance/brand-swatches';
 import { BrandColorField } from '@/components/settings/appearance/brand-color-field';
+import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
@@ -328,12 +329,14 @@ export default function AppearanceSettingsPage() {
               </TabsList>
             </Tabs>
           </div>
-          <PortalPreview
+          <LivePortalPreview
             primary={preview.primary}
             secondary={preview.secondary}
             accent={preview.accent}
             background={preview.background}
             mode={mode}
+            logoUrl={mode === 'dark' ? form.dark_logo_url || form.logo_url : form.logo_url}
+            appName={form.app_name || tenant?.company_name}
           />
           <p className="text-xs text-muted-foreground">
             {peeked
@@ -348,13 +351,18 @@ export default function AppearanceSettingsPage() {
       {/* Custom colour */}
       <section className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
         <div>
-          <h2 className="text-base font-medium">Custom colour</h2>
+          <h2 className="text-base font-medium">Brand colour</h2>
           <p className="text-sm text-muted-foreground">
-            Prefer your own? Set your brand colour and we&apos;ll build the rest of
-            the theme around it.
+            Prefer your own? Pick a colour and we&apos;ll build the rest of the
+            theme around it.
           </p>
         </div>
-        <div className="max-w-md">
+        <div className="max-w-xl space-y-6">
+          <BrandSwatches
+            value={form.light_primary_color}
+            onChange={applyCustomColor}
+            disabled={readOnly}
+          />
           <BrandColorField
             value={form.light_primary_color}
             onChange={applyCustomColor}
@@ -390,18 +398,16 @@ export default function AppearanceSettingsPage() {
             </p>
           </div>
 
-          <LogoUploadWithResize
-            currentLogoUrl={form.logo_url || undefined}
+          <LogoStudio
+            logoUrl={form.logo_url}
+            darkLogoUrl={form.dark_logo_url}
             onLogoChange={(url) => setForm((p) => ({ ...p, logo_url: url }))}
-            label="Logo"
-            description="Used across the portal. A wide wordmark works best."
-          />
-
-          <LogoUploadWithResize
-            currentLogoUrl={form.dark_logo_url || undefined}
-            onLogoChange={(url) => setForm((p) => ({ ...p, dark_logo_url: url }))}
-            label="Logo for dark mode"
-            description="Optional. Upload a lighter version if your main logo is dark and disappears against a dark sidebar."
+            onDarkLogoChange={(url) => setForm((p) => ({ ...p, dark_logo_url: url }))}
+            brandColor={form.light_primary_color}
+            lightSidebar={form.light_secondary_color}
+            darkSidebar={form.dark_secondary_color}
+            companyName={form.app_name || tenant?.company_name || ''}
+            disabled={readOnly}
           />
 
           <div className="space-y-2">

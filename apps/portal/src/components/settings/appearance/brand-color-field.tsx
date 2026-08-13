@@ -1,19 +1,21 @@
 'use client';
 
 /**
- * Custom brand colour — the escape hatch behind the presets.
+ * Advice that sits under the brand-colour swatches.
  *
- * Two things make this safe to hand to a non-designer:
+ * Two things make a custom colour safe to hand to a non-designer:
  *  1. It judges the colour out loud and offers a one-click fix when the choice
  *     would make text hard to read.
  *  2. It can lift colours straight out of their uploaded logo, which is how
  *     most tenants get a genuinely on-brand portal without picking anything.
+ *
+ * The colour *input* itself lives in `BrandSwatches` — this deliberately
+ * renders no picker of its own so there is only ever one place to set the value.
  */
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ColorPicker } from '@/components/settings/color-picker';
 import {
   deepenUntilReadable,
   extractLogoColors,
@@ -71,13 +73,6 @@ export function BrandColorField({
 
   return (
     <div className="space-y-4">
-      <ColorPicker
-        label="Brand colour"
-        value={value}
-        onChange={onChange}
-        description="Used for buttons, links, active menu items and highlights. Everything else is worked out from it."
-      />
-
       {/* Readability verdict — the guard that keeps a portal usable */}
       {verdict && (
         <div
