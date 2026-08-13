@@ -2,11 +2,25 @@
  * AccountingSettings — Sprint 2 surface.
  *
  * Settings → Accounting tab. Gated to Growth+ tier via useFeatureAccess
- * (Confirmed Decision D1). Shows two provider cards (Xero + Zoho Books). For
- * each: not-connected → "Connect" button; connected → status row + Disconnect.
+ * (Confirmed Decision D1). For each provider: not-connected → "Connect" button;
+ * connected → status row + Disconnect.
  *
- * Sprint 5 — both Xero and Zoho cards are fully wired. Zoho card opens the
- * region-selector modal before redirecting to the right data centre.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ZOHO IS HIDDEN FROM THE UI (2026-08-13), NOT REMOVED.
+ *
+ * Only the operator-facing entry point is gated off — flip ZOHO_UI_ENABLED to
+ * true and the card, the region-selector modal and the connect flow all come
+ * back exactly as they were. Everything behind it is intentionally untouched:
+ * the zoho-oauth-start / zoho-oauth-callback edge functions, zoho-client.ts,
+ * the 'zoho' value in the accounting_provider enum, and every
+ * `provider === "xero" ? … : "Zoho Books"` label in the mappings, sync log and
+ * backfill screens. Those labels are unreachable while no Zoho connection can
+ * be created, and keeping them means re-enabling costs one line rather than a
+ * re-implementation.
+ *
+ * Practical note: ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET are not set in the
+ * Supabase project either, so the flow could not complete today regardless.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 "use client";
 
@@ -35,6 +49,13 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+/**
+ * Single switch for the whole Zoho Books surface. Set to true to restore the
+ * provider card, the region-selector modal and the connect flow. Nothing else
+ * needs changing — see the note at the top of this file.
+ */
+const ZOHO_UI_ENABLED = false;
+
 type View =
   | { kind: "cards" }
   | { kind: "mappings"; provider: AccountingProvider }
@@ -51,7 +72,9 @@ export function AccountingSettings() {
     return (
       <div className="space-y-3">
         <Skeleton className="h-44 w-full rounded-lg" />
-        <Skeleton className="h-44 w-full rounded-lg" />
+        {/* Second placeholder only if a second card will actually arrive —
+            otherwise the skeleton promises a card that never renders. */}
+        {ZOHO_UI_ENABLED && <Skeleton className="h-44 w-full rounded-lg" />}
       </div>
     );
   }
@@ -82,7 +105,9 @@ export function AccountingSettings() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* One card alone would stretch the full row in a 2-col grid, so only
+          ask for two columns when there is genuinely a second provider. */}
+      <div className={ZOHO_UI_ENABLED ? "grid gap-4 lg:grid-cols-2" : "grid gap-4 lg:max-w-xl"}>
         <ProviderCard
           provider="xero"
           name="Xero"
@@ -92,20 +117,24 @@ export function AccountingSettings() {
           onOpenMappings={() => setView({ kind: "mappings", provider: "xero" })}
           onOpenLog={() => setView({ kind: "log", provider: "xero" })}
         />
-        <ProviderCard
-          provider="zoho"
-          name="Zoho Books"
-          tagline="Online accounting for small businesses"
-          connection={zoho.data}
-          onConnect={ConnectZohoButton}
-          onOpenMappings={() => setView({ kind: "mappings", provider: "zoho" })}
-          onOpenLog={() => setView({ kind: "log", provider: "zoho" })}
-        />
+        {ZOHO_UI_ENABLED && (
+          <ProviderCard
+            provider="zoho"
+            name="Zoho Books"
+            tagline="Online accounting for small businesses"
+            connection={zoho.data}
+            onConnect={ConnectZohoButton}
+            onOpenMappings={() => setView({ kind: "mappings", provider: "zoho" })}
+            onOpenLog={() => setView({ kind: "log", provider: "zoho" })}
+          />
+        )}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        You can connect both providers if you use different accounting systems for different parts of your business.
-      </p>
+      {ZOHO_UI_ENABLED && (
+        <p className="text-xs text-muted-foreground">
+          You can connect both providers if you use different accounting systems for different parts of your business.
+        </p>
+      )}
     </div>
   );
 }
@@ -306,7 +335,7 @@ function FinanceSyncPaywall({ planName, requiredTier }: { planName: string | nul
         </h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
           You&apos;re currently on {planName ?? "the Basic tier"}. Upgrade to {requiredTier} to sync rentals,
-          payments, refunds and damages to Xero or Zoho Books automatically.
+          payments, refunds and damages to {ZOHO_UI_ENABLED ? "Xero or Zoho Books" : "Xero"} automatically.
         </p>
         <Button asChild className="mt-4 bg-[#0f172a] text-white hover:bg-[#0f172a]/90">
           <a href="/settings?tab=subscription">
