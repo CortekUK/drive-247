@@ -5944,7 +5944,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-callback/index.ts": {
-    "sha": "7a16d5a5f26dd2be332169533853021fb925086ac9543ffe1ffbf14fb128a971",
+    "sha": "83b880fb7c97e07803241362711522f842f56a977f2f337332e3c4bbcfd876a3",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fetch-payment-intent/index.ts": {
@@ -6728,7 +6728,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-callback/index.ts": {
-    "sha": "45385672a218d89c1e3d7cb7d9509532a8e0ce31d258ff102207e7ef2ff8281f",
+    "sha": "3f8493ae1d54c5cf88927ec074341be93099fdb697e1a8ca32d77f5ea472b56c",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-confirm-payment/index.ts": {
