@@ -16,7 +16,7 @@
  * derived by matching those colours back against the preset list.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, RotateCcw, Save } from 'lucide-react';
 
@@ -42,7 +42,7 @@ import { BrandSwatches } from '@/components/settings/appearance/brand-swatches';
 import { BrandColorField } from '@/components/settings/appearance/brand-color-field';
 import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 
-import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { useTenantBranding, type TenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useThemePreview } from '@/hooks/use-theme-preview';
@@ -86,6 +86,31 @@ function paletteFromBrandColor(hex: string): ThemePalette {
   };
 }
 
+/** Server branding → the shape this screen edits, with defaults filled in. */
+function formFromBranding(
+  branding: TenantBranding,
+  companyName?: string | null
+): AppearanceForm {
+  const base = paletteFromBrandColor(branding.primary_color || '#C6A256');
+  return {
+    primary_color: branding.primary_color || base.primary_color,
+    secondary_color: branding.secondary_color || base.secondary_color,
+    accent_color: branding.accent_color || base.accent_color,
+    light_primary_color: branding.light_primary_color || base.light_primary_color,
+    light_secondary_color: branding.light_secondary_color || base.light_secondary_color,
+    light_accent_color: branding.light_accent_color || base.light_accent_color,
+    light_background_color: branding.light_background_color || base.light_background_color,
+    dark_primary_color: branding.dark_primary_color || base.dark_primary_color,
+    dark_secondary_color: branding.dark_secondary_color || base.dark_secondary_color,
+    dark_accent_color: branding.dark_accent_color || base.dark_accent_color,
+    dark_background_color: branding.dark_background_color || base.dark_background_color,
+    app_name: branding.app_name || companyName || '',
+    logo_url: branding.logo_url,
+    dark_logo_url: branding.dark_logo_url,
+    favicon_url: branding.favicon_url,
+  };
+}
+
 const EMPTY_FORM: AppearanceForm = {
   ...paletteFromBrandColor('#C6A256'),
   app_name: '',
@@ -113,44 +138,49 @@ export default function AppearanceSettingsPage() {
   const { preview: previewTheme, restore: restoreTheme, commit: commitTheme } =
     useThemePreview();
 
-  // Hydrate once branding arrives. Re-runs if the tenant is switched.
+  /**
+   * Server truth, captured once.
+   *
+   * `dirty` cannot be derived from `branding`: try-on mode writes the candidate
+   * palette straight into the branding query cache so the live portal repaints,
+   * which moves BOTH sides of the comparison together — the form always equalled
+   * `branding`, so the Save button never enabled and a chosen colour could not be
+   * kept. Hydration had the same flaw: it re-ran on every preview and reset the
+   * form from values the tenant had not saved.
+   */
+  const savedRef = useRef<AppearanceForm | null>(null);
+
+  // Hydrate once per tenant. Deliberately NOT keyed on `branding`, which now
+  // mutates during preview.
   useEffect(() => {
-    if (!branding) return;
-    const base = paletteFromBrandColor(branding.primary_color || '#C6A256');
-    setForm({
-      primary_color: branding.primary_color || base.primary_color,
-      secondary_color: branding.secondary_color || base.secondary_color,
-      accent_color: branding.accent_color || base.accent_color,
-      light_primary_color: branding.light_primary_color || base.light_primary_color,
-      light_secondary_color: branding.light_secondary_color || base.light_secondary_color,
-      light_accent_color: branding.light_accent_color || base.light_accent_color,
-      light_background_color: branding.light_background_color || base.light_background_color,
-      dark_primary_color: branding.dark_primary_color || base.dark_primary_color,
-      dark_secondary_color: branding.dark_secondary_color || base.dark_secondary_color,
-      dark_accent_color: branding.dark_accent_color || base.dark_accent_color,
-      dark_background_color: branding.dark_background_color || base.dark_background_color,
-      app_name: branding.app_name || tenant?.company_name || '',
-      logo_url: branding.logo_url,
-      dark_logo_url: branding.dark_logo_url,
-      favicon_url: branding.favicon_url,
-    });
+    if (loaded || !branding) return;
+    const next = formFromBranding(branding, tenant?.company_name);
+    savedRef.current = next;
+    setForm(next);
     setLoaded(true);
-  }, [branding, tenant?.company_name]);
+  }, [branding, loaded, tenant?.company_name]);
+
+  // Re-hydrate when the tenant is switched underneath us.
+  useEffect(() => {
+    setLoaded(false);
+    savedRef.current = null;
+  }, [tenant?.id]);
 
   const dirty = useMemo(() => {
-    if (!branding || !loaded) return false;
+    const saved = savedRef.current;
+    if (!saved || !loaded) return false;
     return (
-      form.primary_color !== (branding.primary_color || '') ||
-      form.light_primary_color !== (branding.light_primary_color || '') ||
-      form.dark_primary_color !== (branding.dark_primary_color || '') ||
-      form.secondary_color !== (branding.secondary_color || '') ||
-      form.accent_color !== (branding.accent_color || '') ||
-      form.app_name !== (branding.app_name || tenant?.company_name || '') ||
-      form.logo_url !== branding.logo_url ||
-      form.dark_logo_url !== branding.dark_logo_url ||
-      form.favicon_url !== branding.favicon_url
+      form.primary_color !== saved.primary_color ||
+      form.light_primary_color !== saved.light_primary_color ||
+      form.dark_primary_color !== saved.dark_primary_color ||
+      form.secondary_color !== saved.secondary_color ||
+      form.accent_color !== saved.accent_color ||
+      form.app_name !== saved.app_name ||
+      form.logo_url !== saved.logo_url ||
+      form.dark_logo_url !== saved.dark_logo_url ||
+      form.favicon_url !== saved.favicon_url
     );
-  }, [form, branding, loaded, tenant?.company_name]);
+  }, [form, loaded]);
 
   /**
    * Apply a palette to the form *and* to the running portal, so the tenant sees
@@ -173,25 +203,7 @@ export default function AppearanceSettingsPage() {
   /** Drop the previewed colours and put the live portal back to what's saved. */
   const discardChanges = () => {
     restoreTheme();
-    if (!branding) return;
-    setForm((prev) => ({
-      ...prev,
-      primary_color: branding.primary_color || prev.primary_color,
-      secondary_color: branding.secondary_color || prev.secondary_color,
-      accent_color: branding.accent_color || prev.accent_color,
-      light_primary_color: branding.light_primary_color || prev.light_primary_color,
-      light_secondary_color: branding.light_secondary_color || prev.light_secondary_color,
-      light_accent_color: branding.light_accent_color || prev.light_accent_color,
-      light_background_color: branding.light_background_color || prev.light_background_color,
-      dark_primary_color: branding.dark_primary_color || prev.dark_primary_color,
-      dark_secondary_color: branding.dark_secondary_color || prev.dark_secondary_color,
-      dark_accent_color: branding.dark_accent_color || prev.dark_accent_color,
-      dark_background_color: branding.dark_background_color || prev.dark_background_color,
-      app_name: branding.app_name || tenant?.company_name || '',
-      logo_url: branding.logo_url,
-      dark_logo_url: branding.dark_logo_url,
-      favicon_url: branding.favicon_url,
-    }));
+    if (savedRef.current) setForm(savedRef.current);
   };
 
   const handleSave = async () => {
@@ -213,8 +225,9 @@ export default function AppearanceSettingsPage() {
         dark_logo_url: form.dark_logo_url,
         favicon_url: form.favicon_url,
       });
-      // The previewed palette is server truth now — drop the revert baseline or
-      // a later Discard would resurrect the colours we just replaced.
+      // The previewed palette is server truth now — advance both baselines, or
+      // Save stays enabled and a later Discard resurrects the old colours.
+      savedRef.current = { ...form };
       commitTheme();
       toast({
         title: 'Appearance saved',
