@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { ChevronRight, ChevronLeft, Check, Baby, Coffee, MapPin, UserCheck, Car, Crown, TrendingUp, Users as GroupIcon, Calculator, Shield, CheckCircle, CalendarIcon, Clock, Search, Grid3x3, List, SlidersHorizontal, X, AlertCircle, AlertTriangle, FileCheck, RefreshCw, Upload, Gauge, User, Loader2, Globe, Briefcase, ExternalLink, Mail, Phone as PhoneIcon, Maximize2 } from "lucide-react";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { format, differenceInHours } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { cn } from "@/lib/utils";
 import BookingConfirmation from "./BookingConfirmation";
 import LocationPicker from "./LocationPicker";
@@ -351,22 +352,28 @@ const MultiStepBookingWidget = () => {
     if (!formData.pickupDate) return baseOpen;
 
     const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
-    const earliestPickup = new Date(Date.now() + leadTimeHours * 60 * 60 * 1000);
+    // Round the rolling cutoff up to a five-minute slot. Showing a truncated
+    // minute (for example 6:05 when the real cutoff is 6:05:42) makes that
+    // displayed boundary fail the exact lead-time validation on Continue.
+    const slotMs = 5 * 60 * 1000;
+    const earliestPickup = new Date(
+      Math.ceil((Date.now() + leadTimeHours * 60 * 60 * 1000) / slotMs) * slotMs
+    );
     const pickupDate = parseDateString(formData.pickupDate);
+    const tenantTimezone = workingHours.timezone;
 
     // Only adjust on the boundary date (earliest allowed day)
-    if (format(pickupDate, 'yyyy-MM-dd') === format(earliestPickup, 'yyyy-MM-dd')) {
-      const leadHH = earliestPickup.getHours().toString().padStart(2, '0');
-      const leadMM = earliestPickup.getMinutes().toString().padStart(2, '0');
-      const leadTimeStr = `${leadHH}:${leadMM}`;
+    if (format(pickupDate, 'yyyy-MM-dd') === formatInTimeZone(earliestPickup, tenantTimezone, 'yyyy-MM-dd')) {
+      const leadTimeStr = formatInTimeZone(earliestPickup, tenantTimezone, 'HH:mm');
       // Use the later of business open and lead time cutoff
       const [baseH, baseM] = baseOpen.split(':').map(Number);
       const baseMinutes = baseH * 60 + baseM;
-      const leadMinutes = earliestPickup.getHours() * 60 + earliestPickup.getMinutes();
+      const [leadH, leadM] = leadTimeStr.split(':').map(Number);
+      const leadMinutes = leadH * 60 + leadM;
       return leadMinutes > baseMinutes ? leadTimeStr : baseOpen;
     }
     return baseOpen;
-  }, [pickupDateWorkingHours, formData.pickupDate, tenant]);
+  }, [pickupDateWorkingHours, formData.pickupDate, tenant, workingHours.timezone]);
 
   // Compute effective open time for return — on the earliest date, enforce min rental
   const effectiveReturnOpen = useMemo(() => {
@@ -3098,7 +3105,8 @@ const MultiStepBookingWidget = () => {
     if (formData.pickupDate && formData.pickupTime) {
       const leadTimeHours = tenant?.booking_lead_time_hours ?? 24;
       if (leadTimeHours > 0) {
-        const pickupDateTime = new Date(`${formData.pickupDate}T${formData.pickupTime}`);
+        const bookingTimezone = formData.customerTimezone || tenant?.timezone || 'America/Chicago';
+        const pickupDateTime = fromZonedTime(`${formData.pickupDate}T${formData.pickupTime}:00`, bookingTimezone);
         const now = new Date();
         const hoursUntilPickup = (pickupDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
         if (hoursUntilPickup < leadTimeHours) {
@@ -3113,7 +3121,13 @@ const MultiStepBookingWidget = () => {
     // DOB validation moved to Step 4 (Customer Details)
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const firstError = Object.values(newErrors).find(Boolean);
+    if (firstError) {
+      // Several errors render below compact date controls and are easy to miss
+      // on mobile. Always explain why Continue did not advance.
+      toast.error(firstError);
+    }
+    return !firstError;
   };
   const validateStep2 = () => {
     const newErrors: {
@@ -3764,6 +3778,7 @@ const MultiStepBookingWidget = () => {
                     businessHoursClose={!pickupDateWorkingHours.isAlwaysOpen && pickupDateWorkingHours.enabled ? pickupDateWorkingHours.close : undefined}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
+                    referenceDate={formData.pickupDate}
                   />
                 </div>
                 {errors.pickupDate && <p className="text-sm text-destructive">{errors.pickupDate}</p>}
@@ -3868,6 +3883,7 @@ const MultiStepBookingWidget = () => {
                     businessHoursClose={!dropoffDateWorkingHours.isAlwaysOpen && dropoffDateWorkingHours.enabled ? dropoffDateWorkingHours.close : undefined}
                     customerTimezone={formData.customerTimezone}
                     tenantTimezone={workingHours.timezone}
+                    referenceDate={formData.dropoffDate}
                   />
                 </div>
                 {errors.dropoffDate && <p className="text-sm text-destructive">{errors.dropoffDate}</p>}

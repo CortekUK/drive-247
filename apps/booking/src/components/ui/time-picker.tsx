@@ -18,6 +18,7 @@ interface TimePickerProps {
   // Timezone props for cross-timezone validation
   customerTimezone?: string // Customer's selected timezone (IANA identifier)
   tenantTimezone?: string // Tenant's business timezone (IANA identifier)
+  referenceDate?: string // Selected calendar date (yyyy-MM-dd), used for DST-aware conversion
 }
 
 /**
@@ -181,18 +182,24 @@ export function TimePicker({
   businessHoursOpen,
   businessHoursClose,
   customerTimezone,
-  tenantTimezone
+  tenantTimezone,
+  referenceDate
 }: TimePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false)
   const [hours, setHours] = React.useState("12")
   const [minutes, setMinutes] = React.useState("00")
   const [period, setPeriod] = React.useState<"AM" | "PM">("PM")
 
-  const hasBusinessHours = businessHoursOpen && businessHoursClose
+  const hasBusinessHours = Boolean(businessHoursOpen && businessHoursClose)
 
   // Calculate business hours in customer's timezone for display
   // If timezones are different, convert business hours
   const needsTimezoneConversion = customerTimezone && tenantTimezone && customerTimezone !== tenantTimezone
+  const conversionDate = React.useMemo(() => {
+    if (!referenceDate) return new Date()
+    const [year, month, day] = referenceDate.split("-").map(Number)
+    return new Date(year, month - 1, day, 12, 0, 0)
+  }, [referenceDate])
   const displayBusinessHours = React.useMemo(() => {
     if (!hasBusinessHours) return null
     if (needsTimezoneConversion) {
@@ -200,11 +207,38 @@ export function TimePicker({
         businessHoursOpen!,
         businessHoursClose!,
         customerTimezone!,
-        tenantTimezone!
+        tenantTimezone!,
+        conversionDate
       )
     }
     return { open: businessHoursOpen!, close: businessHoursClose! }
-  }, [hasBusinessHours, businessHoursOpen, businessHoursClose, customerTimezone, tenantTimezone, needsTimezoneConversion])
+  }, [hasBusinessHours, businessHoursOpen, businessHoursClose, customerTimezone, tenantTimezone, needsTimezoneConversion, conversionDate])
+
+  const setSelectionFrom24HourTime = React.useCallback((time: string) => {
+    const [h, m] = time.split(":").map(Number)
+    setHours((h === 0 ? 12 : h > 12 ? h - 12 : h).toString().padStart(2, "0"))
+    setMinutes((m || 0).toString().padStart(2, "0"))
+    setPeriod(h >= 12 ? "PM" : "AM")
+  }, [])
+
+  // A saved selection can become invalid as the rolling lead-time boundary moves
+  // (for example, 6:00 PM remains in session storage when the earliest time is
+  // now 6:05 PM). Start the popover at the earliest valid time instead of opening
+  // with Apply disabled and forcing the customer to guess a valid minute.
+  const handleOpenChange = (open: boolean) => {
+    if (open && displayBusinessHours) {
+      const selectedTime = value || (() => {
+        let hour24 = parseInt(hours, 10)
+        if (period === "AM" && hour24 === 12) hour24 = 0
+        if (period === "PM" && hour24 !== 12) hour24 += 12
+        return `${hour24.toString().padStart(2, "0")}:${minutes}`
+      })()
+      if (!isTimeWithinBusinessHours(selectedTime, displayBusinessHours.open, displayBusinessHours.close)) {
+        setSelectionFrom24HourTime(displayBusinessHours.open)
+      }
+    }
+    setIsOpen(open)
+  }
 
   // Default the picker to business hours opening time when no value is set
   React.useEffect(() => {
@@ -217,7 +251,7 @@ export function TimePicker({
       setMinutes((m || 0).toString().padStart(2, "0"))
       setPeriod(openPeriod)
     }
-  }, [displayBusinessHours, value])
+  }, [displayBusinessHours, value, setSelectionFrom24HourTime])
 
   // Parse existing value on mount or when value changes
   React.useEffect(() => {
@@ -322,7 +356,7 @@ export function TimePicker({
   }
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           id={id}
@@ -442,15 +476,7 @@ export function TimePicker({
                     type="button"
                     variant={period === "AM" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => {
-                      setPeriod("AM")
-                      // Auto-correct after period change if invalid
-                      setTimeout(() => {
-                        if (hasBusinessHours && !isCurrentSelectionValid()) {
-                          autoCorrectToValidTime()
-                        }
-                      }, 0)
-                    }}
+                    onClick={() => setPeriod("AM")}
                     className={cn("w-16 h-8", period === "AM" && "bg-accent text-accent-foreground hover:bg-accent/90")}
                   >
                     AM
@@ -459,15 +485,7 @@ export function TimePicker({
                     type="button"
                     variant={period === "PM" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => {
-                      setPeriod("PM")
-                      // Auto-correct after period change if invalid
-                      setTimeout(() => {
-                        if (hasBusinessHours && !isCurrentSelectionValid()) {
-                          autoCorrectToValidTime()
-                        }
-                      }, 0)
-                    }}
+                    onClick={() => setPeriod("PM")}
                     className={cn("w-16 h-8", period === "PM" && "bg-accent text-accent-foreground hover:bg-accent/90")}
                   >
                     PM
