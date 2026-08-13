@@ -10,8 +10,12 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Calculator, CheckCircle2, AlertTriangle, Loader2, ExternalLink, ChevronRight, Settings2, ScrollText } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
 import { useFeatureAccess } from "@/hooks/use-feature-access";
 import {
   useAccountingConnections,
@@ -40,12 +44,79 @@ type View =
   | { kind: "mappings"; provider: AccountingProvider }
   | { kind: "log"; provider: AccountingProvider };
 
+/**
+ * Human wording for the `reason` codes the OAuth callbacks emit. Anything not
+ * listed falls through to the raw code, which is still better than silence.
+ */
+const OAUTH_REASONS: Record<string, string> = {
+  state_expired:
+    "The connection request timed out before you finished authorising. Click Connect again and complete the provider's screens without pausing.",
+  invalid_state: "That connection link had already been used or was not recognised. Click Connect to start a fresh one.",
+  state_provider_mismatch: "That connection link was for a different provider. Click Connect again.",
+  missing_params: "The provider redirected back without an authorisation code.",
+  server_misconfigured: "The server is missing this provider's API credentials.",
+  token_exchange_failed: "The provider rejected the authorisation code.",
+  invalid_code: "The provider rejected the authorisation code — it may have already been used.",
+  invalid_client: "The provider rejected our API credentials. The client id or secret is wrong for this data centre.",
+  no_access_token: "The provider did not return an access token.",
+  no_refresh_token:
+    "The provider did not return a refresh token, so the connection could not be kept alive. Revoke the app in the provider's console and reconnect.",
+  connections_lookup_failed: "Connected, but we could not read your organisation list.",
+  organisations_lookup_failed: "Connected, but we could not read your organisation list.",
+  no_organisations: "That account has no organisations we can sync to.",
+  persist_failed: "The connection succeeded but could not be saved. Please try again.",
+};
+
 export function AccountingSettings() {
   const access = useFeatureAccess("finance_sync");
   const allConnections = useAccountingConnections();
   const xero = useActiveAccountingConnection("xero");
   const zoho = useActiveAccountingConnection("zoho");
   const [view, setView] = useState<View>({ kind: "cards" });
+
+  // ── Report the OAuth round-trip result ───────────────────────────────────
+  //
+  // The callbacks redirect back with ?status=success|error&provider=…&reason=…
+  // but this page only ever read ?tab, so every outcome was swallowed. On
+  // failure the operator landed on an ordinary-looking settings page with no
+  // message at all and reasonably concluded it had worked; on success the
+  // provider card kept its cached "not connected" state until a manual reload.
+  //
+  // Provider-agnostic on purpose — Xero had exactly the same blind spot.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { tenant, refetchTenant } = useTenant();
+  const handledOAuthResult = useRef(false);
+
+  useEffect(() => {
+    const status = searchParams.get("status");
+    const provider = searchParams.get("provider");
+    if (!status || !provider) return;
+    // StrictMode double-invokes effects in dev; without this the toast fires twice.
+    if (handledOAuthResult.current) return;
+    handledOAuthResult.current = true;
+
+    const label = provider === "zoho" ? "Zoho Books" : "Xero";
+
+    if (status === "success") {
+      // The card reads cached connection state, so it will not show the new
+      // connection until these are refetched.
+      qc.invalidateQueries({ queryKey: ["accounting-connections", tenant?.id] });
+      void refetchTenant?.();   // integration_<provider> drives other UI
+      toast.success(`${label} connected`);
+    } else {
+      const reason = searchParams.get("reason") ?? "unknown";
+      toast.error(`Couldn't connect ${label}`, {
+        description: OAUTH_REASONS[reason] ?? `The provider reported: ${reason}`,
+        duration: 10000,
+      });
+    }
+
+    // Strip the result params so a refresh or a back-navigation does not
+    // replay the toast, while keeping the operator on the accounting tab.
+    router.replace("/settings?tab=accounting");
+  }, [searchParams, router, qc, tenant?.id, refetchTenant]);
 
   if (access.isLoading || allConnections.isLoading) {
     return (
