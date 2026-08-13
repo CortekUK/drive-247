@@ -312,18 +312,22 @@ export function TimePicker({
 
   // Auto-correct time to nearest valid business hours
   // Uses timezone-converted business hours for correction
-  const autoCorrectToValidTime = () => {
-    if (!hasBusinessHours || !displayBusinessHours) return
+  const autoCorrectToValidTime = (
+    candidateHours: string = hours,
+    candidateMinutes: string = minutes,
+    candidatePeriod: "AM" | "PM" = period
+  ): boolean => {
+    if (!hasBusinessHours || !displayBusinessHours) return false
 
-    let hour24 = parseInt(hours, 10)
+    let hour24 = parseInt(candidateHours, 10)
     if (isNaN(hour24)) hour24 = 9 // Default to 9 if invalid
-    if (period === "AM") {
+    if (candidatePeriod === "AM") {
       if (hour24 === 12) hour24 = 0
     } else {
       if (hour24 !== 12) hour24 += 12
     }
 
-    const currentMinutes = hour24 * 60 + parseInt(minutes || "0", 10)
+    const currentMinutes = hour24 * 60 + parseInt(candidateMinutes || "0", 10)
     const openMinutes = timeToMinutes(displayBusinessHours.open)
     const closeMinutes = timeToMinutes(displayBusinessHours.close)
 
@@ -333,7 +337,7 @@ export function TimePicker({
       // [open, 24:00) ∪ [00:00, close]; "invalid" means the closed gap between
       // close and open. Snap such a pick up to the opening time — the start of
       // the evening window is the intuitive nearest valid slot.
-      if (currentMinutes >= openMinutes || currentMinutes <= closeMinutes) return
+      if (currentMinutes >= openMinutes || currentMinutes <= closeMinutes) return false
       correctedMinutes = openMinutes
     } else if (currentMinutes < openMinutes) {
       // Before opening - set to opening time
@@ -343,7 +347,7 @@ export function TimePicker({
       correctedMinutes = closeMinutes
     } else {
       // Within range, no correction needed
-      return
+      return false
     }
 
     // Convert corrected minutes back to hours/minutes/period
@@ -355,6 +359,7 @@ export function TimePicker({
     setHours(correctedHour12.toString().padStart(2, "0"))
     setMinutes(correctedMins.toString().padStart(2, "0"))
     setPeriod(correctedPeriod)
+    return true
   }
 
   return (
@@ -421,7 +426,11 @@ export function TimePicker({
                     }
                     if (val > 12) val = 12
                     if (val < 1) val = 1
-                    setHours(val.toString().padStart(2, "0"))
+                    const nextHours = val.toString().padStart(2, "0")
+                    setHours(nextHours)
+                    // Validate the value being entered, not the previous React
+                    // state. Thus 7:15 PM immediately clamps to a 7:00 PM close.
+                    autoCorrectToValidTime(nextHours, minutes, period)
                   }}
                   onBlur={() => {
                     // Auto-correct to valid business hours on blur
@@ -455,7 +464,9 @@ export function TimePicker({
                     }
                     if (val > 59) val = 59
                     if (val < 0) val = 0
-                    setMinutes(val.toString().padStart(2, "0"))
+                    const nextMinutes = val.toString().padStart(2, "0")
+                    setMinutes(nextMinutes)
+                    autoCorrectToValidTime(hours, nextMinutes, period)
                   }}
                   onBlur={() => {
                     // Auto-correct to valid business hours on blur
@@ -478,7 +489,10 @@ export function TimePicker({
                     type="button"
                     variant={period === "AM" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setPeriod("AM")}
+                    onClick={() => {
+                      setPeriod("AM")
+                      autoCorrectToValidTime(hours, minutes, "AM")
+                    }}
                     className={cn("w-16 h-8", period === "AM" && "bg-accent text-accent-foreground hover:bg-accent/90")}
                   >
                     AM
@@ -487,7 +501,10 @@ export function TimePicker({
                     type="button"
                     variant={period === "PM" ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setPeriod("PM")}
+                    onClick={() => {
+                      setPeriod("PM")
+                      autoCorrectToValidTime(hours, minutes, "PM")
+                    }}
                     className={cn("w-16 h-8", period === "PM" && "bg-accent text-accent-foreground hover:bg-accent/90")}
                   >
                     PM
