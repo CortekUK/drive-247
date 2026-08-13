@@ -128,6 +128,14 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+-- The RETURNS TABLE columns above declare OUT parameters named id, tenant_id,
+-- state, provider, attempts, currency, metadata … every one of which is also a
+-- real column on the tables this body touches. Without this directive plpgsql
+-- resolves a bare identifier to the VARIABLE, so `SET state = 'syncing'` and the
+-- WHERE clauses could silently bind to the OUT param instead of the column.
+-- Force column resolution; the only true variables here (p_batch_size,
+-- p_claim_timeout_minutes, v_cutoff) share no name with any column.
+#variable_conflict use_column
 DECLARE
   v_cutoff TIMESTAMPTZ := now() - make_interval(mins => GREATEST(p_claim_timeout_minutes, 1));
 BEGIN
@@ -211,7 +219,9 @@ SET search_path = public
 AS $$
 DECLARE
   v_inserted INTEGER;
+  v_revived  INTEGER;
 BEGIN
+  -- 1. Enqueue events that never got a sync row for this provider.
   INSERT INTO public.financial_event_sync_state (financial_event_id, tenant_id, provider, state)
   SELECT e.id, e.tenant_id, p_provider, 'pending'
     FROM public.financial_events e
@@ -219,7 +229,37 @@ BEGIN
      AND (p_since IS NULL OR e.occurred_at >= p_since)
   ON CONFLICT (financial_event_id, provider) DO NOTHING;
   GET DIAGNOSTICS v_inserted = ROW_COUNT;
-  RETURN v_inserted;
+
+  -- 2. Revive rows that were dead-lettered ONLY because there was no live
+  --    connection to sync through.
+  --
+  --    Without this, reconnecting does not actually recover anything: an
+  --    auth-class failure dead-letters immediately (no retry budget), and step 1
+  --    cannot help because those rows already exist, so ON CONFLICT DO NOTHING
+  --    skips them. The events would stay stranded until someone clicked retry on
+  --    each one individually — which is precisely the failure this whole
+  --    migration exists to stop.
+  --
+  --    Deliberately narrow: only connection-class errors are revived. A genuine
+  --    validation failure (bad account mapping, unsupported currency) is NOT
+  --    fixed by reconnecting and must stay dead-lettered for the operator.
+  UPDATE public.financial_event_sync_state
+     SET state           = 'pending',
+         dead_lettered_at = NULL,
+         next_attempt_at  = NULL,
+         claimed_at       = NULL,
+         attempts         = 0
+   WHERE tenant_id = p_tenant_id
+     AND provider  = p_provider
+     AND state     = 'failed'
+     AND dead_lettered_at IS NOT NULL
+     AND (
+           last_error_code IN ('NO_ACTIVE_CONNECTION', 'TOKEN_FETCH_FAILED', 'auth')
+        OR last_error ILIKE '%No active%connection%'
+         );
+  GET DIAGNOSTICS v_revived = ROW_COUNT;
+
+  RETURN v_inserted + v_revived;
 END;
 $$;
 
