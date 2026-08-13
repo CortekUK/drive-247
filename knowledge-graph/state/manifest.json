@@ -652,7 +652,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/edge-error.ts": {
-    "sha": "a7950123c271ea572559b78c8001518bcb1a520a263671018adefedc7d283017",
+    "sha": "2aabe253b62998cc8c8f19a88bc81552961627bf29d88f42a2475aa5f2d04c66",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/agreement-terms.ts": {
@@ -1628,7 +1628,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/convert-to-rental-dialog.tsx": {
-    "sha": "582b74c20738b56034ea218c373b95c0c665789dc62e779d2fbd07fa784862dd",
+    "sha": "5b9bba9630a6d66d68b828da9a7e8abf63e0687967ec92cf2b9b232b6489dd11",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/lead-board.tsx": {
@@ -2740,7 +2740,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-sync.ts": {
-    "sha": "d1bcb9648ab615932eb0c31207022d57d4f9db5da26192c2b50f2cf24e58f659",
+    "sha": "4e4bf9ea425f225a3db10384af304c8c83f7916e6541da75db2b561aef2923fe",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-subscription-plans.ts": {
@@ -2860,7 +2860,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-profitability.ts": {
-    "sha": "a208e46b490b930a3093078fd0aeb5ff01361b5c9cd7a4c9861f6c091887f5b9",
+    "sha": "5f6bbfd88b49300ffb3cc91f108573af8fbaa219d66b06e6d6320af9f880f0d5",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-bonzah-training.ts": {
@@ -2932,7 +2932,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-connection.ts": {
-    "sha": "9cd4f25f6110b5488b197715c0e2ad9f6bb12df5d60defe34bffac99447fa939",
+    "sha": "dca499c684e2dfc2bf7d961f25df62bd5092a09cb472e31e043abcb8a7af21a6",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-credit-wallet.ts": {
@@ -3064,7 +3064,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-backfill.ts": {
-    "sha": "ccb1b5cca90677c7f8a39f51be0cc7dc425cc14e1858c9ffedc1f2c2b608843e",
+    "sha": "fed8340feac76494804c073e1111cb7302c71059d53df951dea89df8be6f6619",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-expense-summary.ts": {
@@ -3292,7 +3292,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-automations.ts": {
-    "sha": "91b047b81f7d71ab1b4dae13e9743ffddb8a6ea7123593fb90e5f042c5569f0f",
+    "sha": "3528d4b6b352bdb449d9f680f3a929821d0a0bd20cc427da27b012fea9060757",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-bonzah-retry-all.ts": {
@@ -5896,7 +5896,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-start/index.ts": {
-    "sha": "8cb993928ee57fb5aa1d3268fbed27759b1699c1c22efbb315d911eb3cdb5af5",
+    "sha": "a85bf6da62d730e7a46f89074f01b0ccf5a7a4cc455a797812555b424813f5dd",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/manifests.ts": {
@@ -6896,7 +6896,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-start/index.ts": {
-    "sha": "7b6492f5e1ca5098f4e5f581e59e272b7eff4ff0d045d8770bc5bca023cd47fe",
+    "sha": "0d01977607c1d3245311f1c4e30568e637893b6bb55700d719db144a703b38da",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-invoice-email/index.ts": {

@@ -1,5 +1,18 @@
 {
-  "files": [],
-  "specs": [],
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/edge-error.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/convert-to-rental-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-sync.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-profitability.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-connection.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-backfill.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-automations.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-start/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-start/index.ts"
+  ],
+  "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+  ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }
