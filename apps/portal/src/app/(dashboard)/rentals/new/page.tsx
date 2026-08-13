@@ -80,6 +80,7 @@ import { RentalProgressOverlay } from "@/components/rentals/rental-progress-over
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
+import { BookingModeGrid } from "@/components/rentals/booking-mode-selector";
 import {
   AdditionalDriversForm,
   validateAdditionalDrivers,
@@ -3496,9 +3497,25 @@ const CreateRental = () => {
                     <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
                   </div>
                   <div className="p-5 space-y-4">
-                    <RadioGroup
-                      value={isAutoExtend ? 'auto_extend' : isPayAsYouGo ? 'payg' : 'regular'}
-                      onValueChange={(val) => {
+                    <BookingModeGrid
+                      selected={isAutoExtend ? 'auto_extend' : isPayAsYouGo ? 'payg' : 'fixed'}
+                      /*
+                        Only the modes this tenant has switched on. `installments`
+                        is deliberately absent: on this page instalments are a
+                        payment plan configured *inside* a regular rental, not a
+                        fourth mode, and offering it here would select something
+                        the submit handler has no concept of.
+                      */
+                      available={[
+                        'fixed' as const,
+                        ...((rentalSettings as any)?.pay_as_you_go_enabled ? ['payg' as const] : []),
+                        ...((rentalSettings as any)?.auto_extend_enabled ? ['auto_extend' as const] : []),
+                      ]}
+                      onSelect={(mode) => {
+                        // The grid calls the standard mode "fixed"; this page has
+                        // always called it "regular" and the handler below plus the
+                        // submit path both key off that name.
+                        const val = mode === 'fixed' ? 'regular' : mode;
                         setIsPayAsYouGo(val === 'payg');
                         setIsAutoExtend(val === 'auto_extend');
                         if (val === 'auto_extend') {
@@ -3536,34 +3553,7 @@ const CreateRental = () => {
                           setInsuranceDocId(null);
                         }
                       }}
-                      className="space-y-2"
-                    >
-                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                        <RadioGroupItem value="regular" />
-                        <div>
-                          <span className="text-sm font-medium">Regular</span>
-                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
-                        </div>
-                      </label>
-                      {(rentalSettings as any)?.pay_as_you_go_enabled && (
-                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isPayAsYouGo ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                          <RadioGroupItem value="payg" />
-                          <div>
-                            <span className="text-sm font-medium">Pay As You Go</span>
-                            <p className="text-xs text-muted-foreground">Rental amount, tax, and percentage-based service fees are paid incrementally (in arrears)</p>
-                          </div>
-                        </label>
-                      )}
-                      {(rentalSettings as any)?.auto_extend_enabled && (
-                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isAutoExtend ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
-                          <RadioGroupItem value="auto_extend" />
-                          <div>
-                            <span className="text-sm font-medium">Auto-Extend</span>
-                            <p className="text-xs text-muted-foreground">Renews each period automatically and charges the customer upfront. Set the end date to the first period's end.</p>
-                          </div>
-                        </label>
-                      )}
-                    </RadioGroup>
+                    />
 
                     {isAutoExtend && (
                       <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
