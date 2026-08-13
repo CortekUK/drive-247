@@ -1724,7 +1724,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/accounting-settings.tsx": {
-    "sha": "351835d86735bb2d6c6f64fc572927f7919e4a5fe041892631268ebaa261b443",
+    "sha": "673aa85dcad89d192a0617ea7ecd3b0b02b21149ae4d940c8976f28536112f80",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/logo-upload-with-resize.tsx": {
@@ -5944,7 +5944,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-callback/index.ts": {
-    "sha": "b4a2fff76c9f26181e281c92d6269393adc5d7bc31afd4a0dca918fa9269cf19",
+    "sha": "d3b4d2ed11fafdc92900f1201ff73defd8e73e64ea4c456781b5f6325522785b",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fetch-payment-intent/index.ts": {
