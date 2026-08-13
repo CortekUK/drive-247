@@ -10,8 +10,11 @@
  *   - Spec §14.2: error classification → retry / mark-expired / surface
  *   - Spec §14 backoff schedule: 1m, 5m, 30m, 2h, 12h, dead-letter
  *
- * Picks 100 rows per tick via `FOR UPDATE SKIP LOCKED` so duplicate cron
- * triggers can't double-process. Each row goes through:
+ * Claims a bounded batch (ACCOUNTING_SYNC_BATCH_SIZE, default 40) through the
+ * `process_accounting_sync_claim_batch` RPC, which uses FOR UPDATE SKIP LOCKED
+ * so overlapping cron ticks take disjoint rows, leases each claim so a dead
+ * worker's batch is reclaimed rather than stranded, and skips dead-lettered
+ * rows. Each row goes through:
  *
  *   1. ensureContact(provider, event) → external contact id
  *   2. handleEventByType(event, contactId):
@@ -40,11 +43,27 @@ import {
 import { nextAttemptAfter } from "../_shared/accounting/backoff.ts";
 import { isFinalisedStatus } from "../_shared/accounting/rental-status.ts";
 
-const BATCH_SIZE = 100;
+// Rows claimed per tick. Deliberately well below the old value of 100: each row
+// costs 2–3 provider API calls (ensure contact → find invoice → create/append),
+// so a 100-row batch meant 200–300 Xero calls against a 60-calls/minute limit.
+// That guaranteed a 429 partway through every large batch.
+const BATCH_SIZE = Number(Deno.env.get("ACCOUNTING_SYNC_BATCH_SIZE") ?? 40);
 
-// Per-provider rate limits (per minute). Defaults from spec §3.
-const RATE_LIMIT_XERO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_XERO") ?? 50);
-const RATE_LIMIT_ZOHO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_ZOHO") ?? 80);
+// How long a claimed row may stay in-flight before another tick may reclaim it.
+// Must exceed the worst-case processing time for one row.
+const CLAIM_TIMEOUT_MINUTES = Number(Deno.env.get("ACCOUNTING_SYNC_CLAIM_TIMEOUT_MINUTES") ?? 15);
+
+// Provider API budget for a single tick, expressed in ACTUAL API CALLS, not
+// rows. The cron fires every 2 minutes, so the budget is (limit/min × 2) with
+// headroom left for the OAuth refresh cron sharing the same quota.
+//
+// The previous formula was `Math.ceil(LIMIT * (2 / 60)) * 60`, which collapses
+// to 120 for Xero and 180 for Zoho regardless of the configured limit — both
+// above BATCH_SIZE, so the guard could never fire even once.
+const RATE_LIMIT_XERO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_XERO") ?? 55);
+const RATE_LIMIT_ZOHO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_ZOHO") ?? 90);
+const TICK_MINUTES = 2;
+const CALLS_PER_ROW = 3;   // worst case: ensureContact + findInvoice + create/append
 
 /**
  * Unique id for this cron-tick invocation. The `rental_sync_locks` table uses
@@ -108,17 +127,26 @@ Deno.serve(async (req) => {
       errors: [],
     };
 
-    // Pull a batch. We use the index `(state, next_attempt_at) WHERE state IN ('pending','failed')`.
+    // Claim a batch. The RPC locks with FOR UPDATE SKIP LOCKED, reclaims rows
+    // whose in-flight lease expired, and never hands back dead-lettered rows.
+    //
+    // There is deliberately NO fallback path here. The original code fell back
+    // to a PostgREST SELECT-then-bulk-UPDATE whenever this RPC errored — and
+    // because the RPC was never actually created, that fallback ran on every
+    // tick for three months. It cannot lock, so it claimed 100 rows at once and
+    // stranded every row it did not reach in state='syncing', where nothing
+    // would ever look at them again. A loud failure here is strictly better
+    // than a silent path that corrupts the queue.
     const { data: batchRaw, error: batchErr } = await supabase.rpc("process_accounting_sync_claim_batch", {
       p_batch_size: BATCH_SIZE,
+      p_claim_timeout_minutes: CLAIM_TIMEOUT_MINUTES,
     });
     if (batchErr) {
-      // Fallback: a simpler SELECT + UPDATE in case the RPC doesn't exist yet.
-      // We'll define the RPC in a migration but want this fn to be resilient.
-      const fallback = await claimBatchFallback(supabase);
-      if (fallback.length === 0) return jsonResponse({ ...summary, note: "no rows" });
-      for (const row of fallback) await processOne(supabase, row, summary);
-      return jsonResponse(summary);
+      console.error("process-accounting-sync: claim RPC failed — NOT falling back:", batchErr);
+      return errorResponse(
+        `Claim RPC unavailable: ${batchErr.message}. Apply migration 20260813120000_fix_accounting_sync_claim_and_deadletter.sql.`,
+        500,
+      );
     }
 
     const batch = (batchRaw ?? []) as Array<SyncStateRow & FinancialEventRow & {
@@ -126,25 +154,30 @@ Deno.serve(async (req) => {
     }>;
     summary.picked = batch.length;
 
-    // Per-provider request counter for the rate-limit guard. We don't query a
-    // rolling window — we just budget THIS tick's allowance and defer the rest.
+    // Per-provider API-call budget for THIS tick. Counted in calls, not rows —
+    // one row costs up to CALLS_PER_ROW calls, and undercounting is what pushed
+    // us past Xero's 60/min ceiling and into the 429s.
     const remaining: Record<ProviderName, number> = {
-      xero: Math.ceil(RATE_LIMIT_XERO * (2 / 60)) * 60,  // budget for 2-min tick (~ rate * 2)
-      zoho: Math.ceil(RATE_LIMIT_ZOHO * (2 / 60)) * 60,
+      xero: RATE_LIMIT_XERO * TICK_MINUTES,
+      zoho: RATE_LIMIT_ZOHO * TICK_MINUTES,
     };
 
     for (const row of batch) {
-      if (remaining[row.provider as ProviderName] <= 0) {
-        // Defer this row to the next tick (clear state back to pending without
-        // bumping attempts since it's not really a failure).
+      const p = row.provider as ProviderName;
+      // Reserve the worst case before starting the row. If the row cannot be
+      // funded in full we stop rather than begin work we may not finish — a
+      // half-processed row is how invoices end up duplicated.
+      if (remaining[p] < CALLS_PER_ROW) {
+        // Release the claim so the next tick picks it up. This is not a
+        // failure, so attempts is untouched and claimed_at is cleared.
         await supabase
           .from("financial_event_sync_state")
-          .update({ state: "pending", next_attempt_at: null })
+          .update({ state: "pending", next_attempt_at: null, claimed_at: null })
           .eq("id", row.sync_id);
         summary.rate_limited_deferred++;
         continue;
       }
-      remaining[row.provider as ProviderName]--;
+      remaining[p] -= CALLS_PER_ROW;
       await processOne(supabase, row, summary);
     }
 
@@ -244,8 +277,22 @@ async function processOne(
         break;
 
       case "payment_receipt": {
-        // Need to find the open invoice for this rental's other sync rows.
-        const invoiceId = await findOpenInvoiceForRental(supabase, row.tenant_id, row.provider as ProviderName, row.rental_id);
+        // Find the open invoice for this rental, else fall back to its most
+        // recent invoice.
+        //
+        // The fallback is load-bearing. findOpenInvoiceForRental deliberately
+        // returns null once the rental is finalised (closed/cancelled/completed)
+        // so no new lines get appended — but a payment arriving after the rental
+        // closes is the normal case, not an edge case: final settlement, a late
+        // installment, a deposit shortfall. Without the fallback every one of
+        // those failed with "No open invoice", retried on the transient
+        // schedule, and dead-lettered — leaving Xero showing an unpaid invoice
+        // for a rental the customer had in fact paid in full.
+        //
+        // `refund` below already had this fallback; payment_receipt did not.
+        const invoiceId =
+          (await findOpenInvoiceForRental(supabase, row.tenant_id, row.provider as ProviderName, row.rental_id))
+          ?? (await findLatestInvoiceForRental(supabase, row.tenant_id, row.provider as ProviderName, row.rental_id));
         if (!invoiceId) {
           await markFailed(supabase, row.sync_id, row.attempts,
             new ProviderError("No open invoice for this rental yet — payment will retry once an invoice exists", "transient", undefined, "WAITING_FOR_INVOICE"));
@@ -382,13 +429,23 @@ async function ensureContact(
     externalIdHint: row.customer_id.slice(0, 30),     // ContactNumber idempotency anchor
   });
 
-  await supabase.from("accounting_contact_links").insert({
-    tenant_id: row.tenant_id,
-    customer_id: row.customer_id,
-    provider: provider.name,
-    external_contact_id: created.externalId,
-    external_contact_name: ctx.customerName,
-  });
+  // Upsert, not insert. Two rows for the same customer can be claimed by
+  // different ticks and both reach here before either has written the link; a
+  // bare insert makes the loser throw a unique violation, which gets classified
+  // 'unknown' and burns a retry on work that actually succeeded.
+  await supabase
+    .from("accounting_contact_links")
+    .upsert(
+      {
+        tenant_id: row.tenant_id,
+        customer_id: row.customer_id,
+        provider: provider.name,
+        external_contact_id: created.externalId,
+        external_contact_name: ctx.customerName,
+      },
+      // Column order matches the accounting_contact_links_uniq index exactly.
+      { onConflict: "tenant_id,provider,customer_id", ignoreDuplicates: true },
+    );
   return created.externalId;
 }
 
@@ -624,6 +681,7 @@ async function markSynced(
       last_error: null,
       last_error_code: null,
       next_attempt_at: null,
+      claimed_at: null,          // release the in-flight lease
       ...fields,
     })
     .eq("id", syncStateId);
@@ -639,6 +697,13 @@ async function markFailed(
   // apps/portal/src/__tests__/lib/accounting-backoff.test.ts).
   const nextAttempt = nextAttemptAfter(currentAttempts, err.classification);
 
+  // A null next_attempt_at means "do not auto-retry" — dead-letter, or an
+  // auth/validation error needing operator action. That MUST be recorded
+  // explicitly: the claim predicate treats a null next_attempt_at on its own as
+  // "claim immediately", so relying on null alone made dead-letter a no-op and
+  // let rows accumulate 56,000+ attempts against a threshold of 5.
+  const deadLettered = nextAttempt === null;
+
   await supabase
     .from("financial_event_sync_state")
     .update({
@@ -647,6 +712,8 @@ async function markFailed(
       last_error: err.message.slice(0, 1000),
       last_error_code: err.errorCode ?? err.classification,
       next_attempt_at: nextAttempt?.toISOString() ?? null,
+      dead_lettered_at: deadLettered ? new Date().toISOString() : null,
+      claimed_at: null,          // release the in-flight lease
     })
     .eq("id", syncStateId);
 }
@@ -668,49 +735,17 @@ async function flagConnectionExpired(
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Fallback claim path — used when the SQL RPC isn't available.
-// SELECT ... FOR UPDATE SKIP LOCKED is the ideal, but we can't run that
-// over PostgREST. Best we can do via PostgREST: an atomic UPDATE that flips
-// state to 'syncing' and RETURNING the joined event data.
+// NOTE: the old `claimBatchFallback` lived here and has been deleted.
+//
+// It existed because FOR UPDATE SKIP LOCKED cannot be expressed over PostgREST,
+// so it approximated a claim with SELECT-then-bulk-UPDATE. That approximation
+// is unsound: it flips the whole batch to 'syncing' up front, and any row the
+// worker does not reach before it dies is stranded in a state the claim query
+// never re-selects. Because the RPC it was meant to back up was never created,
+// this path ran on every tick from 2026-05-26 and stranded 36 production rows.
+//
+// The claim is now exclusively `process_accounting_sync_claim_batch`
+// (migration 20260813120000), which locks properly and leases rows so a dead
+// worker's batch is reclaimed rather than lost. If that RPC is missing the
+// function now fails loudly instead of silently degrading.
 // ──────────────────────────────────────────────────────────────────────────
-
-async function claimBatchFallback(
-  supabase: SupabaseClient,
-): Promise<Array<SyncStateRow & FinancialEventRow & { sync_id: string }>> {
-  const nowIso = new Date().toISOString();
-  // Step 1: select candidate sync_state ids (no FOR UPDATE here — concurrent runs
-  // are rare; idempotency in the provider layer covers the edge case).
-  const { data: candidatesRaw } = await supabase
-    .from("financial_event_sync_state")
-    .select("id, financial_event_id, tenant_id, provider, state, attempts, external_invoice_id")
-    .in("state", ["pending", "failed"])
-    .or(`next_attempt_at.is.null,next_attempt_at.lte.${nowIso}`)
-    .order("next_attempt_at", { ascending: true, nullsFirst: true })
-    .limit(BATCH_SIZE);
-  const candidates = (candidatesRaw ?? []) as SyncStateRow[];
-  if (candidates.length === 0) return [];
-
-  // Step 2: atomically claim them — mark state='syncing'.
-  const ids = candidates.map((c) => c.id);
-  await supabase
-    .from("financial_event_sync_state")
-    .update({ state: "syncing", last_attempt_at: nowIso })
-    .in("id", ids);
-
-  // Step 3: join with financial_events for the worker's row data.
-  const eventIds = candidates.map((c) => c.financial_event_id);
-  const { data: eventsRaw } = await supabase
-    .from("financial_events")
-    .select("id, tenant_id, rental_id, customer_id, vehicle_id, event_type, amount_cents, tax_cents, currency, occurred_at, description, metadata")
-    .in("id", eventIds);
-  const events = (eventsRaw ?? []) as FinancialEventRow[];
-  const eventById = new Map(events.map((e) => [e.id, e]));
-
-  return candidates
-    .map((c) => {
-      const e = eventById.get(c.financial_event_id);
-      if (!e) return null;
-      return { ...c, ...e, sync_id: c.id };
-    })
-    .filter((x): x is SyncStateRow & FinancialEventRow & { sync_id: string } => !!x);
-}

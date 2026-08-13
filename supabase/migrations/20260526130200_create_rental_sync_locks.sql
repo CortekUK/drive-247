@@ -28,6 +28,11 @@ CREATE TABLE IF NOT EXISTS public.rental_sync_locks (
 ALTER TABLE public.rental_sync_locks ENABLE ROW LEVEL SECURITY;
 
 -- Service role only; no tenant access path needed.
+-- Idempotent: this migration was originally applied to production out of band
+-- and is NOT recorded in supabase_migrations.schema_migrations, so a future
+-- `db push` will replay it. Every other statement here is IF NOT EXISTS /
+-- OR REPLACE; without this drop, the bare CREATE POLICY would abort the push.
+DROP POLICY IF EXISTS "service_role manages rental_sync_locks" ON public.rental_sync_locks;
 CREATE POLICY "service_role manages rental_sync_locks"
   ON public.rental_sync_locks
   FOR ALL

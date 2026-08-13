@@ -56,13 +56,13 @@ Deno.serve(async (req) => {
     const cutoff = new Date(Date.now() + REFRESH_WINDOW_SECONDS * 1000).toISOString();
     const { data: candidatesRaw } = await supabase
       .from("accounting_connections")
-      .select("id, tenant_id, provider, external_region, token_expires_at, last_error")
+      .select("id, tenant_id, provider, external_region, token_expires_at, last_error, refresh_failure_count")
       .eq("status", "active")
       .or(`token_expires_at.is.null,token_expires_at.lt.${cutoff}`);
     const candidates = (candidatesRaw ?? []) as Array<{
       id: string; tenant_id: string; provider: "xero" | "zoho";
       external_region: string | null; token_expires_at: string | null;
-      last_error: string | null;
+      last_error: string | null; refresh_failure_count: number | null;
     }>;
     summary.connections_checked = candidates.length;
 
@@ -80,9 +80,33 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const fresh = await refreshOne(c.provider, c.external_region, tokenRow.refresh_token as string);
+        const usedRefreshToken = tokenRow.refresh_token as string;
+        const fresh = await refreshOne(c.provider, c.external_region, usedRefreshToken);
         if (!fresh.ok) {
-          await recordFailure(supabase, c.id, c.tenant_id, c.provider, fresh.error);
+          // Xero rotates the refresh token on every successful refresh and
+          // invalidates the old one immediately. So a 400 here has two very
+          // different causes:
+          //   (a) the grant really is dead → the operator must reconnect
+          //   (b) another worker (or an overlapping tick of this cron) already
+          //       refreshed, rotating the token out from under us
+          // Case (b) is a benign race and must NOT expire a healthy connection.
+          // Distinguish them by re-reading the vault: if the stored refresh
+          // token has changed since we read it, someone else succeeded.
+          const { data: recheck } = await supabase.rpc("accounting_get_tokens", {
+            p_tenant_id: c.tenant_id,
+            p_provider: c.provider,
+          });
+          const recheckRow = Array.isArray(recheck) ? recheck[0] : recheck;
+          if (recheckRow?.refresh_token && recheckRow.refresh_token !== usedRefreshToken) {
+            console.log(`refresh-accounting-tokens: ${c.provider}/${c.tenant_id} rotated concurrently — treating as fresh`);
+            await supabase
+              .from("accounting_connections")
+              .update({ last_error: null, refresh_failure_count: 0 })
+              .eq("id", c.id);
+            summary.skipped_fresh++;
+            continue;
+          }
+          await recordFailure(supabase, c.id, c.tenant_id, c.provider, fresh.error, c.refresh_failure_count ?? 0);
           if (fresh.markExpired) summary.expired++;
           summary.errors.push(`${c.provider}/${c.tenant_id}: ${fresh.error}`);
           continue;
@@ -102,10 +126,11 @@ Deno.serve(async (req) => {
           p_connected_by: null,
         });
 
-        // Clear last_error if refresh succeeded
+        // Clear last_error AND the consecutive-failure counter — the budget
+        // is for *consecutive* failures, so any success must reset it.
         await supabase
           .from("accounting_connections")
-          .update({ last_error: null })
+          .update({ last_error: null, refresh_failure_count: 0 })
           .eq("id", c.id);
 
         summary.refreshed++;
@@ -203,19 +228,31 @@ async function recordFailure(
   tenantId: string,
   provider: "xero" | "zoho",
   errorMsg: string,
+  currentFailures: number,
 ) {
-  // Append to last_error + count failures using a JSON shadow attempt counter
-  // in the column. We don't have a dedicated 'refresh_attempts' column; the
-  // simplest approach is to mark expired immediately on auth-class failures
-  // (per spec §14.2 'auth' class = no retry).
+  // Count consecutive failures and only expire once the budget is spent.
+  //
+  // This function previously expired the connection on the FIRST 4xx, which is
+  // why MAX_CONSECUTIVE_FAILURES existed as a constant but did nothing. Expiry
+  // is not recoverable without the operator re-running the full OAuth consent
+  // flow, so it is far too harsh a response to one bad response from Xero.
+  const failures = currentFailures + 1;
   await supabase
     .from("accounting_connections")
     .update({
-      last_error: errorMsg.slice(0, 500),
+      last_error: `${errorMsg.slice(0, 460)} (failure ${failures}/${MAX_CONSECUTIVE_FAILURES})`,
+      refresh_failure_count: failures,
     })
     .eq("id", connectionId);
 
-  if (errorMsg.includes("400") || errorMsg.includes("401") || errorMsg.includes("403") || errorMsg.includes("no_refresh_token")) {
+  // A missing refresh token is terminal on the first hit — there is nothing to
+  // retry with, so counting further attempts would just delay telling the
+  // operator. Everything else gets the full budget.
+  const terminal = errorMsg.includes("no_refresh_token");
+  const authClass =
+    errorMsg.includes("400") || errorMsg.includes("401") || errorMsg.includes("403");
+
+  if (terminal || (authClass && failures >= MAX_CONSECUTIVE_FAILURES)) {
     await markExpired(supabase, tenantId, provider, errorMsg);
   }
 }

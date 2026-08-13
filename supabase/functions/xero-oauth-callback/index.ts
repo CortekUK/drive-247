@@ -151,6 +151,31 @@ Deno.serve(async (req) => {
       console.warn("xero-oauth-callback: seed_default_accounting_mappings failed (non-fatal):", err);
     }
 
+    // 5c. Retro-enqueue events that were recorded while this tenant had no
+    // active connection.
+    //
+    // enqueue_financial_event fans out sync rows only to connections that are
+    // 'active' at the moment the event is inserted. Every charge, payment and
+    // refund booked while the connection was expired therefore got no sync row
+    // at all — and nothing later goes looking for them, so reconnecting alone
+    // left those events permanently invisible to the queue. Production reached
+    // 6,544 ledger events against 53 sync rows this way, with no error surfaced
+    // anywhere: the operator's books would simply have been short.
+    //
+    // Idempotent via the (financial_event_id, provider) unique index, so a
+    // reconnect that changes nothing inserts nothing.
+    try {
+      const { data: backfilled } = await supabase.rpc("backfill_missing_sync_rows", {
+        p_tenant_id: stateRow.tenant_id,
+        p_provider: "xero",
+      });
+      if (backfilled) {
+        console.log(`xero-oauth-callback: enqueued ${backfilled} event(s) missed while disconnected`);
+      }
+    } catch (err) {
+      console.warn("xero-oauth-callback: backfill_missing_sync_rows failed (non-fatal):", err);
+    }
+
     // 6. Consume the nonce
     await supabase.from("accounting_oauth_state").delete().eq("nonce", state);
 

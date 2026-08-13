@@ -163,6 +163,23 @@ Deno.serve(async (req) => {
       console.warn("zoho-oauth-callback: seed_default_accounting_mappings failed (non-fatal):", err);
     }
 
+    // 6b. Retro-enqueue events recorded while this tenant had no active
+    // connection. enqueue_financial_event only fans out to connections that are
+    // 'active' at insert time, so anything booked while disconnected has no
+    // sync row and would stay invisible forever. Idempotent — see the matching
+    // comment in xero-oauth-callback for the full rationale.
+    try {
+      const { data: backfilled } = await supabase.rpc("backfill_missing_sync_rows", {
+        p_tenant_id: stateRow.tenant_id,
+        p_provider: "zoho",
+      });
+      if (backfilled) {
+        console.log(`zoho-oauth-callback: enqueued ${backfilled} event(s) missed while disconnected`);
+      }
+    } catch (err) {
+      console.warn("zoho-oauth-callback: backfill_missing_sync_rows failed (non-fatal):", err);
+    }
+
     // 7. Consume the nonce
     await supabase.from("accounting_oauth_state").delete().eq("nonce", state);
 
