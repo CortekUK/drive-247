@@ -5944,7 +5944,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-callback/index.ts": {
-    "sha": "83b880fb7c97e07803241362711522f842f56a977f2f337332e3c4bbcfd876a3",
+    "sha": "b4a2fff76c9f26181e281c92d6269393adc5d7bc31afd4a0dca918fa9269cf19",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fetch-payment-intent/index.ts": {
