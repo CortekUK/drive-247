@@ -39,11 +39,8 @@ const nextConfig: NextConfig = {
   },
   // Standalone output for Vercel deployment
   output: 'standalone',
-  // Locally this app lives inside the monorepo, while the linked Vercel project
-  // uploads apps/booking as its build root. Pointing two levels up in that
-  // environment resolves outside the deployment and produces a duplicated
-  // /vercel/path0/vercel/path0 trace path.
-  outputFileTracingRoot: process.env.VERCEL ? __dirname : path.join(__dirname, '../../'),
+  // Set workspace root to fix monorepo lockfile detection
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   webpack: (config, { isServer }) => {
     // Fix for Supabase module resolution in Next.js 15
     config.resolve.extensionAlias = {
