@@ -1856,7 +1856,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/accounting-mappings.tsx": {
-    "sha": "39f1189409a07edbb294c1f5d17c35a4898da6588dde6163df9b1e4fbfca8593",
+    "sha": "ee9afbb45999626f5082e88b890abdb15a7784410aaae094fa8087930c5b448b",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/bonzah-settings.tsx": {
@@ -6508,7 +6508,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/oauth-constants.ts": {
-    "sha": "efdae6fc2ff970cadbe80b83e64b2c9d3556bbdc6c4a4c400cef0aca052998b8",
+    "sha": "2782a7454989efcd879eb14274d87d679aa6f3ce3656a6d1eb8507715f413ffe",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-webhook-live/index.ts": {
@@ -7036,7 +7036,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/retry-accounting-sync/index.ts": {
-    "sha": "5fe7e8b7cafeab1be10e7ab18a0027577a8765864cb3549aabe77549a2c04258",
+    "sha": "bbdfe0cb0ce53872f89ab15588cfb57737fdde5caed99541842190d911594262",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/adjust-customer-balance/index.ts": {
@@ -7188,7 +7188,7 @@
     "unit": "docs"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md": {
-    "sha": "5b8381a4ff0c84d634d974634fa148ea08ac34818864dc5839b8cff430c9ac10",
+    "sha": "8a3ab1d4fa892f92facf2e065efa4ec6ff1b2ed498ed5e225f73b31c981d32bb",
     "unit": "docs"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/GMT_AUTH_HOLD_90DAY_PLAN.md": {

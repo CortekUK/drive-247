@@ -1,16 +1,12 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/edge-error.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/leads/convert-to-rental-dialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-sync.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-profitability.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-connection.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-backfill.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-automations.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-start/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-start/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/accounting-mappings.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/oauth-constants.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/retry-accounting-sync/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.md"
   ],
   "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/docs-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
