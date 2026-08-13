@@ -1955,6 +1955,37 @@ const Settings = () => {
 
         {/* Branding Tab */}
         <TabsContent value="branding" className="space-y-6">
+          {/*
+            Portal appearance lives on its own page. Everything else in this tab
+            styles the customer-facing booking site — keeping the two apart is
+            what the Alert below used to have to explain in prose.
+          */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5 text-primary" />
+                Portal Appearance
+              </CardTitle>
+              <CardDescription>
+                Theme, brand colour, logo and favicon for the portal your team uses
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Pick a ready-made theme or set your own brand colour, with a live
+                preview before anything is saved. The settings further down this
+                page style your customer-facing booking site instead.
+              </p>
+              <Button
+                onClick={() => router.push('/settings/appearance')}
+                className="flex items-center gap-2 w-full sm:w-auto"
+              >
+                <Palette className="h-4 w-4" />
+                Open Appearance
+              </Button>
+            </CardContent>
+          </Card>
+
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
