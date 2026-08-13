@@ -1,24 +1,5 @@
 {
-  "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/resolve-tenant.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-sync.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-profitability.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-connection.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-accounting-backfill.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-vehicle-profitability/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/list-accounting-tax-rates/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-start/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/disconnect-accounting/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-accounting-sync/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-accounting-sync-status/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/list-accounting-accounts/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-start/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/retry-accounting-sync/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/save-accounting-mappings/index.ts"
-  ],
-  "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
-  ],
+  "files": [],
+  "specs": [],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }
