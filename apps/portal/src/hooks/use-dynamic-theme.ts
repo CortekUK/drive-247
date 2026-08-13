@@ -97,6 +97,46 @@ function formatHSL(hsl: { h: number; s: number; l: number }): string {
   return `${hsl.h} ${hsl.s}% ${hsl.l}%`;
 }
 
+/**
+ * Build the five-step chart ramp from the tenant's brand colour.
+ *
+ * `--chart-1..5` shipped as a fixed indigo ramp, so a tenant on any other
+ * colour got a green sidebar next to purple graphs — the single most visible
+ * theme inconsistency in the portal.
+ *
+ * The lightness steps below are the original ramp's, kept deliberately: they
+ * were chosen so adjacent series stay distinguishable, and only the hue and
+ * saturation need to follow the brand. Saturation is floored so a near-grey
+ * brand colour still yields readable, separable series rather than five
+ * indistinguishable smudges.
+ */
+function chartRampFromHue(h: number, s: number): string[] {
+  const saturation = Math.max(45, Math.min(100, s));
+  return [82, 69, 60, 51, 42].map((l) => `${h} ${saturation}% ${l}%`);
+}
+
+function generateChartRamp(hex: string): string[] | null {
+  const hsl = hexToHSL(hex);
+  return hsl ? chartRampFromHue(hsl.h, hsl.s) : null;
+}
+
+/**
+ * Same ramp, built from an `"h s% l%"` triplet — used for the no-branding path,
+ * where the defaults are already stored in that form. Without this a tenant who
+ * never set a brand colour got the gold default in the sidebar and the stock
+ * indigo ramp in their charts, which is the same mismatch one layer down.
+ */
+function chartRampFromTriplet(triplet: string): string[] | null {
+  const match = triplet.match(/^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)%/);
+  if (!match) return null;
+  return chartRampFromHue(Number(match[1]), Number(match[2]));
+}
+
+function applyChartRamp(root: HTMLElement, ramp: string[] | null) {
+  if (!ramp) return;
+  ramp.forEach((value, i) => root.style.setProperty(`--chart-${i + 1}`, value));
+}
+
 // Generate color variants from hex
 function generateColorVariants(hex: string) {
   const hsl = hexToHSL(hex);
@@ -166,6 +206,10 @@ export function useDynamicTheme() {
             `linear-gradient(135deg, hsl(${hsl.h} ${hsl.s}% ${hsl.l}%) 0%, hsl(${hsl.h} ${hsl.s}% ${Math.max(0, hsl.l - 10)}%) 100%)`
           );
         }
+
+        // Charts follow the brand too, otherwise a tenant gets their own colour
+        // in the sidebar and stock indigo in every graph beside it.
+        applyChartRamp(root, generateChartRamp(primaryColorHex));
       }
     } else {
       // Use defaults
@@ -177,6 +221,7 @@ export function useDynamicTheme() {
       root.style.removeProperty('--primary-hover');
       root.style.removeProperty('--primary-light');
       root.style.removeProperty('--gradient-primary');
+      applyChartRamp(root, chartRampFromTriplet(defaults.primary));
     }
 
     // Apply secondary color
