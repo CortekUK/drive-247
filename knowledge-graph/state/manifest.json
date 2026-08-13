@@ -5944,7 +5944,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-callback/index.ts": {
-    "sha": "463e9806776ca8a3dac7ffa6c7cfd2e73e13421ea1d38ce8c14b67fa86b497a3",
+    "sha": "7a16d5a5f26dd2be332169533853021fb925086ac9543ffe1ffbf14fb128a971",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fetch-payment-intent/index.ts": {
@@ -5984,7 +5984,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/refresh-accounting-tokens/index.ts": {
-    "sha": "bcbc5f2f5f6a585834bd88566fdb5c8e2d076ae64af78c6c35289ed8f79d8e50",
+    "sha": "1324d0019f88065534cfd15fd2f7b6f9a7762460a5ff7f082afbea4f190d8d36",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/lead-document-presign/index.ts": {
