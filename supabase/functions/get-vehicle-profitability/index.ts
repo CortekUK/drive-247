@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
     const tenantResolution = await resolveTenantId(
       supabase, req, appUser,
       (typeof body === "object" && body !== null ? (body as { tenantSlug?: string }).tenantSlug : null) ?? null,
+      (typeof body === "object" && body !== null ? (body as { redirectBack?: string }).redirectBack : null) ?? null,
     );
     if (!tenantResolution.tenantId) {
       return errorResponse(tenantResolution.errorMessage ?? "No tenant context", tenantResolution.errorStatus);
