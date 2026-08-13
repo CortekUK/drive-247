@@ -3,63 +3,108 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle } from "lucide-react";
-import { EarthIcon } from "@/components/ui/earth";
-import { CarIcon } from "@/components/ui/car";
-import { BlocksIcon } from "@/components/ui/blocks";
-import { FileTextIcon } from "@/components/ui/file-text";
-import { CalendarDaysIcon } from "@/components/ui/calendar-days";
-import { UsersIcon } from "@/components/ui/users";
-import { BanIcon } from "@/components/ui/ban";
-import { MessageSquareIcon } from "@/components/ui/message-square";
-import { BadgeAlertIcon } from "@/components/ui/badge-alert";
-import { FolderOpenIcon } from "@/components/ui/folder-open";
-import { BellIcon } from "@/components/ui/bell";
-import { ChartBarIncreasingIcon } from "@/components/ui/chart-bar-increasing";
-import { TrendingUpIcon } from "@/components/ui/trending-up";
-import { HistoryIcon } from "@/components/ui/history";
-import { SettingsIcon } from "@/components/ui/settings";
-import { CreditCardIcon } from "@/components/ui/credit-card-icon";
-import { ReceiptIcon } from "@/components/ui/receipt";
-import { wrapAnimatedIcon } from "@/components/ui/animated-icon-wrapper";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
+// Phosphor icons (aliased to the previous lucide names so all usages below keep working)
+import {
+  Clock,
+  DotsThree as MoreHorizontal,
+  CurrencyCircleDollar as CircleDollarSign,
+  Stack as Layers,
+  Timer,
+  Lightning as Zap,
+  Lightning as Bolt,
+  ShieldCheck,
+  Signature as FileSignature,
+  ArrowLeft,
+  CaretRight as ChevronRight,
+  Buildings as Building2,
+  MapPin,
+  Palette,
+  Car,
+  TrendUp as TrendingUp,
+  Package,
+  CreditCard,
+  Bell,
+  FileText,
+  Shield,
+  Crown,
+  Lock,
+  Receipt,
+  Money as Banknote,
+  ChatCircle as MessageSquare,
+  ShieldSlash as ShieldX,
+  MagnifyingGlass as Search,
+  X,
+  Tray as Inbox,
+  Wallet,
+  UserPlus,
+  FlowArrow as Workflow,
+  // animated-icon replacements
+  SquaresFour,
+  CalendarDots,
+  Users,
+  Prohibit,
+  WarningCircle,
+  FolderOpen,
+  ChartBar,
+  ClockCounterClockwise,
+  Gear,
+  Globe,
+  Sparkle,
+  House,
+  Info,
+  Star,
+  Megaphone,
+  EnvelopeSimple,
+  Article,
+  Plugs,
+} from "@phosphor-icons/react";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, SidebarRail, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
-import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
-import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
+import { useFeedbackStore } from "@/stores/feedback-store";
+import { useFeedbackSettings } from "@/hooks/use-feedback-settings";
+// Kept on lucide: the dunning chip and feedback control are carried over from
+// main verbatim, and re-drawing them in Phosphor would be a silent visual
+// change to the one badge that must stay unmistakable.
+import { AlertTriangle, MessageSquarePlus } from "lucide-react";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useFeedbackStore } from "@/stores/feedback-store";
-import { useFeedbackSettings } from "@/hooks/use-feedback-settings";
+import { UserMenu } from "@/components/shared/layout/user-menu";
+import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
+import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
+import { GlobalSearch } from "@/components/shared/layout/global-search";
+import { TraxAIDialogInner } from "@/components/chat";
 
-const AnimatedBlocks = wrapAnimatedIcon(BlocksIcon);
-const AnimatedFileText = wrapAnimatedIcon(FileTextIcon);
-const AnimatedCalendarDays = wrapAnimatedIcon(CalendarDaysIcon);
-const AnimatedUsers = wrapAnimatedIcon(UsersIcon);
-const AnimatedBan = wrapAnimatedIcon(BanIcon);
-const AnimatedMessageSquare = wrapAnimatedIcon(MessageSquareIcon);
-const AnimatedBadgeAlert = wrapAnimatedIcon(BadgeAlertIcon);
-const AnimatedFolderOpen = wrapAnimatedIcon(FolderOpenIcon);
-const AnimatedBell = wrapAnimatedIcon(BellIcon);
-const AnimatedChartBar = wrapAnimatedIcon(ChartBarIncreasingIcon);
-const AnimatedTrendingUp = wrapAnimatedIcon(TrendingUpIcon);
-const AnimatedHistory = wrapAnimatedIcon(HistoryIcon);
-const AnimatedSettings = wrapAnimatedIcon(SettingsIcon);
-const AnimatedCreditCard = wrapAnimatedIcon(CreditCardIcon);
-const AnimatedReceipt = wrapAnimatedIcon(ReceiptIcon);
-const AnimatedCar = wrapAnimatedIcon(CarIcon);
-const AnimatedEarth = wrapAnimatedIcon(EarthIcon);
+// Map the former animated-icon names to Phosphor equivalents
+const AnimatedBlocks = SquaresFour;
+const AnimatedFileText = FileText;
+const AnimatedCalendarDays = CalendarDots;
+const AnimatedUsers = Users;
+const AnimatedBan = Prohibit;
+const AnimatedMessageSquare = MessageSquare;
+const AnimatedBadgeAlert = WarningCircle;
+const AnimatedFolderOpen = FolderOpen;
+const AnimatedBell = Bell;
+const AnimatedChartBar = ChartBar;
+const AnimatedTrendingUp = TrendingUp;
+const AnimatedHistory = ClockCounterClockwise;
+const AnimatedSettings = Gear;
+const AnimatedCreditCard = CreditCard;
+const AnimatedReceipt = Receipt;
+const AnimatedCar = Car;
+const AnimatedEarth = Globe;
 
 interface NavItem {
   name: string;
@@ -74,6 +119,92 @@ interface NavGroup {
   label: string;
   icon: any;
   items: NavItem[];
+}
+
+// Second-level group: heading opens its sub-tabs as a flyout on CLICK.
+// Keeps the main rail to the fingertip items only.
+function HoverNavGroup({
+  group,
+  collapsed,
+  isActive,
+  onNav,
+}: {
+  group: NavGroup;
+  collapsed: boolean;
+  isActive: (path: string) => boolean;
+  onNav: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const GroupIcon = group.icon;
+  const hasActive = group.items.some((item) => isActive(item.href));
+  const totalBadge = group.items.reduce((sum, item) => sum + (item.badge || 0), 0);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <SidebarMenuItem className="relative">
+        <PopoverTrigger asChild>
+          <SidebarMenuButton
+            isActive={hasActive}
+            className="h-8 w-full transition-colors"
+          >
+            {collapsed ? (
+              <GroupIcon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
+            ) : (
+              <>
+                <div className="flex items-center gap-2 min-w-0">
+                  <GroupIcon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
+                  <span className="text-[13px] truncate">{group.label}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {totalBadge > 0 && <span className="w-1.5 h-1.5 rounded-full bg-destructive" />}
+                  <MoreHorizontal className="h-4 w-4 text-muted-foreground/60" />
+                </div>
+              </>
+            )}
+          </SidebarMenuButton>
+        </PopoverTrigger>
+        {collapsed && totalBadge > 0 && (
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full pointer-events-none">
+            {totalBadge > 9 ? "9+" : totalBadge}
+          </span>
+        )}
+      </SidebarMenuItem>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="w-52 p-1.5"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.label}</p>
+        <div className="space-y-0.5">
+          {group.items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => {
+                setOpen(false);
+                onNav();
+              }}
+              className={`flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-accent ${
+                isActive(item.href) ? "bg-accent text-accent-foreground font-medium" : "text-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <item.icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{item.name}</span>
+              </div>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // Settings sidebar tab definitions
@@ -160,6 +291,8 @@ export function AppSidebar() {
     graceDaysRemaining,
     graceSeverity,
   } = useTenantSubscription();
+  const { isLive } = useSetupStatus();
+  const { isManager, canView, canViewSettings } = useManagerPermissions();
 
   // A failed payment outranks trial/live in the footer badge: it is the only
   // one of the three that needs the operator to DO something, and it escalates
@@ -179,13 +312,10 @@ export function AppSidebar() {
   const paymentDueClass = paymentDueCritical
     ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
-  const { isLive } = useSetupStatus();
-  const { isManager, canView, canViewSettings } = useManagerPermissions();
 
   // Feedback entry point. Available to every role — a `viewer` hits the same
   // bugs as a head admin, so gating this on permissions would silence exactly
-  // the people who use the software most. It opens a dialog rather than
-  // navigating, so it has no route and never highlights as "current page".
+  // the people who use the software most.
   const openFeedback = useFeedbackStore((s) => s.open);
   const { formEnabled: feedbackEnabled } = useFeedbackSettings();
 
@@ -193,7 +323,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
 
   // Shared by both sidebar modes (settings + main) so the control can never
-  // drift between them.
+  // drift between them. Declared after `collapsed`, which it closes over.
   const renderFeedbackButton = () =>
     feedbackEnabled ? (
       <SidebarMenuItem>
@@ -209,6 +339,32 @@ export function AppSidebar() {
         </SidebarMenuButton>
       </SidebarMenuItem>
     ) : null;
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [traxOpen, setTraxOpen] = useState(false);
+  const [activeView, setActiveView] = useState<"admin" | "cms">(
+    pathname?.startsWith("/cms") ? "cms" : "admin"
+  );
+  const [drillGroup, setDrillGroup] = useState<NavGroup | null>(null);
+
+  // Keyboard shortcuts to switch sidebar tabs (Alt+1 / Alt+2 — avoids the
+  // browser's Cmd/Ctrl+number tab switching).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey) return;
+      if (e.code === "Digit1") {
+        e.preventDefault();
+        setActiveView("admin");
+      } else if (e.code === "Digit2") {
+        e.preventDefault();
+        setActiveView("cms");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Mock avatar placeholder until the user uploads a real profile photo
+  const mockAvatarUrl = "https://i.pravatar.cc/120?img=13";
 
   // Settings mode: when on /settings path, show settings sidebar
   const isSettingsPage = pathname?.startsWith("/settings") || false;
@@ -225,55 +381,35 @@ export function AppSidebar() {
     return pathname?.startsWith(path) || false;
   };
 
-  const groupHasActiveItem = (items: NavItem[]) =>
-    items.some(item => isActive(item.href));
+  // Role + manager visibility filter applied to every nav item
+  const filterItem = (item: NavItem) => {
+    if (item.superAdminOnly && !appUser?.is_super_admin) return false;
+    if (item.headAdminOnly && appUser?.role !== "head_admin") return false;
+    if (isManager) {
+      const tabKey = ROUTE_TO_TAB[item.href];
+      if (tabKey && !canView(tabKey)) return false;
+    }
+    return true;
+  };
 
-  const getTotalBadge = (items: NavItem[]) =>
-    items.reduce((sum, item) => sum + (item.badge || 0), 0);
+  // --- Top-level "fingertip" items (always visible, no children) ---
+  const topLevel: NavItem[] = [
+    { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
+    { name: "Vehicles", href: "/vehicles", icon: AnimatedCar },
+    { name: "Customers", href: "/customers", icon: AnimatedUsers },
+  ].filter(filterItem);
 
-  // --- Navigation Groups ---
-
+  // --- Second-level groups (revealed on hover / tap) ---
   const groups: NavGroup[] = [
-    {
-      label: "Fleet & Bookings",
-      icon: AnimatedCar,
-      items: [
-        { name: "Vehicles", href: "/vehicles", icon: AnimatedCar },
-        ...(vehicleOwnersEnabled ? [
-          { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
-          { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
-        ] : []),
-        { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
-        { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
-        ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
-        { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
-      ],
-    },
-    {
-      label: "Customers",
-      icon: AnimatedUsers,
-      items: [
-        { name: "Customers", href: "/customers", icon: AnimatedUsers },
-        { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
-        ...(leadManagementEnabled
-          ? []
-          : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
-        { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
-      ],
-    },
-    ...(leadManagementEnabled
-      ? [
-          {
-            label: "Pipeline",
-            icon: AnimatedUsers,
-            items: [
-              { name: "Leads", href: "/leads", icon: UserPlus },
-              ...(automationsEnabled
-                ? [{ name: "Automations", href: "/automations", icon: Workflow }]
-                : []),
-            ],
-          } as NavGroup,
-        ]
+    ...(vehicleOwnersEnabled
+      ? [{
+          label: "Owners",
+          icon: AnimatedUsers,
+          items: [
+            { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
+            { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
+          ],
+        } as NavGroup]
       : []),
     {
       label: "Finance",
@@ -287,7 +423,7 @@ export function AppSidebar() {
       ],
     },
     {
-      label: "Insights",
+      label: "Records",
       icon: AnimatedChartBar,
       items: [
         { name: "Insurances", href: "/insurances", icon: ShieldCheck },
@@ -297,77 +433,34 @@ export function AppSidebar() {
         { name: "P&L Dashboard", href: "/pl-dashboard", icon: AnimatedTrendingUp },
       ],
     },
-    {
-      label: "Administration",
-      icon: AnimatedEarth,
-      items: [
-        { name: "Website Content", href: "/cms", icon: AnimatedEarth },
-        { name: "Audit Logs", href: "/audit-logs", icon: AnimatedHistory },
-        { name: "Manage Users", href: "/users", icon: AnimatedUsers, headAdminOnly: true },
-      ].filter(item => {
-        if (item.superAdminOnly && !appUser?.is_super_admin) return false;
-        if (item.headAdminOnly && appUser?.role !== 'head_admin') return false;
-        return true;
-      }),
-    },
-  ].filter(g => g.items.length > 0)
-   .map(g => isManager ? { ...g, items: g.items.filter(item => {
-     const tabKey = ROUTE_TO_TAB[item.href];
-     return tabKey ? canView(tabKey) : true;
-   })} : g)
-   .filter(g => g.items.length > 0);
+  ]
+    .map((g) => ({ ...g, items: g.items.filter(filterItem) }))
+    .filter((g) => g.items.length > 0);
 
-  // Groups are always expanded (no collapse/expand toggle)
-
-  // --- Render helpers ---
-
-  const renderNavItem = (item: NavItem, index: number, items: NavItem[]) => {
-    const isLast = index === items.length - 1;
-    return (
-      <SidebarMenuItem key={item.name} className="relative">
-        {/* Vertical tree line */}
-        {!isLast && (
-          <span className="absolute left-[18px] top-0 bottom-0 w-px bg-border/50" />
-        )}
-        {/* Horizontal branch line */}
-        <span className="absolute left-[18px] top-1/2 w-2.5 h-px bg-border/50" />
-        {/* Vertical line to this item (connects from above) */}
-        <span className="absolute left-[18px] top-0 h-1/2 w-px bg-border/50" />
-        <SidebarMenuButton
-          asChild
-          isActive={isActive(item.href)}
-          tooltip={collapsed ? item.name : undefined}
-          className="h-8 pl-9 transition-all duration-200 ease-in-out"
-        >
-          <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-2 min-w-0">
-              <item.icon className="h-3.5 w-3.5 shrink-0" />
-              <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
-                {item.name}
-              </span>
-            </div>
-            {!collapsed && item.badge !== undefined && item.badge > 0 && (
-              <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0 animate-in fade-in">
-                {item.badge}
-              </span>
-            )}
-            {collapsed && item.badge !== undefined && item.badge > 0 && (
-              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full animate-in fade-in">
-                {item.badge > 9 ? '9+' : item.badge}
-              </span>
-            )}
-          </Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    );
-  };
+  // --- CMS view: website content pages become the nav ---
+  const cmsNav: NavItem[] = [
+    { name: "Overview", href: "/cms", icon: Globe },
+    { name: "Home", href: "/cms/home", icon: House },
+    { name: "About", href: "/cms/about", icon: Info },
+    { name: "Fleet", href: "/cms/fleet", icon: Car },
+    { name: "Reviews", href: "/cms/reviews", icon: Star },
+    { name: "Promotions", href: "/cms/promotions", icon: Megaphone },
+    { name: "Contact", href: "/cms/contact", icon: EnvelopeSimple },
+    { name: "Blog", href: "/cms/blog", icon: Article },
+    { name: "Privacy", href: "/cms/privacy", icon: Shield },
+    { name: "Terms", href: "/cms/terms", icon: FileText },
+    { name: "Branding", href: "/cms/branding", icon: Palette },
+    { name: "Info", href: "/cms/info", icon: Building2 },
+  ];
+  const isCmsActive = (href: string) =>
+    href === "/cms" ? pathname === "/cms" : (pathname?.startsWith(href) ?? false);
 
   // --- Settings Sidebar Mode ---
   if (isSettingsPage) {
     return (
       <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
         {/* Settings Header with Back Button */}
-        <SidebarHeader className="h-16 border-b">
+        <SidebarHeader className="h-16">
           <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
             {collapsed ? (
               <Tooltip>
@@ -407,14 +500,16 @@ export function AppSidebar() {
                 className="h-8 pl-8 pr-7 text-[12px]"
               />
               {settingsSearch && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   onClick={() => setSettingsSearch("")}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   aria-label="Clear search"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -519,7 +614,7 @@ export function AppSidebar() {
         </SidebarContent>
 
         {/* Footer — trial/live status */}
-        <SidebarFooter className="border-t p-1.5">
+        <SidebarFooter className="p-1.5">
           <SidebarMenu>
             {(paymentDue || isTrialing || isLive) && (
               <SidebarMenuItem>
@@ -585,198 +680,315 @@ export function AppSidebar() {
   // --- Main Sidebar Mode ---
   return (
     <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
-      {/* Branding Header */}
-      <SidebarHeader className="h-16 border-b">
-        <div className="flex items-center justify-center w-full h-full transition-all duration-300 ease-in-out">
-          <BrandLogo collapsed={collapsed} />
-        </div>
+      {/* Organization switcher at the very top */}
+      <SidebarHeader className="p-1.5 pt-4">
+        <OrgSwitcher collapsed={collapsed} />
       </SidebarHeader>
 
+      {/* Navigation — fingertip items + hover-reveal groups */}
+      <SidebarContent className="gap-0 pt-1 transition-all duration-300 ease-in-out">
+        {/* Search — prominent field at the very top */}
+        <SidebarGroup className="p-1.5 pb-1">
+          <SidebarGroupContent>
+            {collapsed ? (
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setSearchOpen(true)}
+                    tooltip="Search"
+                    className="h-8 transition-colors"
+                  >
+                    <Search className="h-4 w-4 shrink-0" />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            ) : (
+              <button
+                onClick={() => setSearchOpen(true)}
+                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg bg-muted/50 px-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted/70"
+              >
+                <Search className="h-4 w-4 shrink-0" />
+                <span className="flex-1 text-left">Search</span>
+                <kbd className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground/70">⌘K</kbd>
+              </button>
+            )}
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-      {/* Navigation with collapsible groups */}
-      <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
-        {/* Dashboard — always visible at top */}
+        {/* Section tabs: Main / Admin / CMS */}
+        {!collapsed && (
+          <div className="px-1.5 pb-1 pt-0.5">
+            <div className="relative grid grid-cols-2 rounded-lg bg-muted/50 p-1">
+              {/* Sliding active pill */}
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm transition-transform duration-300 ease-out"
+                style={{ transform: activeView === "cms" ? "translateX(100%)" : "translateX(0)" }}
+              />
+              {([
+                { key: "admin", label: "Admin", kbd: "⌥1" },
+                { key: "cms", label: "CMS", kbd: "⌥2" },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveView(tab.key)}
+                  className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
+                    activeView === tab.key ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <kbd className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground/70">{tab.kbd}</kbd>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Quick-action dialogs (portal out) — always mounted */}
+        <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+        <TraxAIDialogInner isOpen={traxOpen} setIsOpen={setTraxOpen} />
+
+        {activeView === "cms" ? (
+          /* CMS — website content pages become the nav */
+          <SidebarGroup className="p-1.5 pb-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {cmsNav.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isCmsActive(item.href)}
+                      tooltip={collapsed ? item.name : undefined}
+                      className="h-8 transition-colors"
+                    >
+                      <Link href={item.href} onClick={closeMobileOnNav}>
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                          {item.name}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+        <>
+        {/* Dashboard + utilities: Ask AI / Notifications / Credits */}
         <SidebarGroup className="p-1.5 pb-0">
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
+              {/* Dashboard */}
+              <SidebarMenuItem className="relative">
                 <SidebarMenuButton
                   asChild
                   isActive={isActive("/")}
                   tooltip={collapsed ? "Dashboard" : undefined}
-                  className="h-8 transition-all duration-200 ease-in-out"
+                  className="h-8 transition-colors"
                 >
-                  <Link href="/" className="flex items-center gap-2">
+                  <Link href="/" onClick={closeMobileOnNav}>
                     <AnimatedBlocks className="h-4 w-4 shrink-0" />
-                    <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-                      Dashboard
-                    </span>
+                    <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Dashboard</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {/* Ask AI */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setTraxOpen(true)}
+                  tooltip={collapsed ? "Ask AI" : undefined}
+                  className="h-8 transition-colors"
+                >
+                  <Sparkle className="h-4 w-4 shrink-0" />
+                  <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Ask AI</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Integrations */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/integrations")}
+                  tooltip={collapsed ? "Integrations" : undefined}
+                  className="h-8 transition-colors"
+                >
+                  <Link href="/integrations" onClick={closeMobileOnNav}>
+                    <Plugs className="h-4 w-4 shrink-0" />
+                    <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Collapsible Groups */}
-        {groups.map((group, groupIdx) => {
-          const hasActive = groupHasActiveItem(group.items);
-          const totalBadge = getTotalBadge(group.items);
+        {/* Separator — divides quick actions from the main navigation */}
+        <div className="mx-3 my-1.5 h-px bg-sidebar-border/60" />
 
-          return (
-            <SidebarGroup key={group.label} className={`p-1.5 pb-0 ${groupIdx === groups.length - 1 ? 'pb-16' : ''}`}>
-              {collapsed ? (
-                /* Collapsed: popover flyout with sub-items */
-                <Popover>
-                  <SidebarMenu>
-                    <SidebarMenuItem className="relative">
-                      <PopoverTrigger asChild>
-                        <SidebarMenuButton
-                          className={`h-8 w-full transition-all duration-200 ease-in-out ${hasActive ? "text-primary" : ""}`}
-                        >
-                          <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
-                        </SidebarMenuButton>
-                      </PopoverTrigger>
-                      {totalBadge > 0 && (
-                        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full">
-                          {totalBadge > 9 ? '9+' : totalBadge}
+        {drillGroup ? (
+          /* Drill-in view — replaces the nav with the selected section */
+          <SidebarGroup className="p-1.5 pb-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setDrillGroup(null)}
+                    tooltip={collapsed ? "Back" : undefined}
+                    className="h-8 transition-colors"
+                  >
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                    <span className={`text-[13px] font-medium ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                      {drillGroup.label}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {drillGroup.items.map((item) => (
+                  <SidebarMenuItem key={item.href} className="relative">
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.href)}
+                      tooltip={collapsed ? item.name : undefined}
+                      className="h-8 transition-colors"
+                    >
+                      <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                            {item.name}
+                          </span>
+                        </div>
+                        {!collapsed && item.badge !== undefined && item.badge > 0 && (
+                          <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+        <>
+        {/* Top-level fingertip items — always visible */}
+        <SidebarGroup className="p-1.5 pb-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {topLevel.map((item) => (
+                <SidebarMenuItem key={item.href} className="relative">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.href)}
+                    tooltip={collapsed ? item.name : undefined}
+                    className="h-8 transition-colors"
+                  >
+                    <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                          {item.name}
+                        </span>
+                      </div>
+                      {!collapsed && item.badge !== undefined && item.badge > 0 && (
+                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0 animate-in fade-in">
+                          {item.badge}
+                        </span>
+                      )}
+                      {collapsed && item.badge !== undefined && item.badge > 0 && (
+                        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full animate-in fade-in">
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Second-level groups — drill into the section on click */}
+        {groups.length > 0 && (
+          <SidebarGroup className="p-1.5 pt-1 pb-2">
+            {!collapsed && (
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pb-1">
+                More
+              </p>
+            )}
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {groups.map((group) => {
+                  const GroupIcon = group.icon;
+                  const hasActive = group.items.some((i) => isActive(i.href));
+                  const totalBadge = group.items.reduce((s, i) => s + (i.badge || 0), 0);
+                  return (
+                    <SidebarMenuItem key={group.label} className="relative">
+                      <SidebarMenuButton
+                        onClick={() => setDrillGroup(group)}
+                        isActive={hasActive}
+                        tooltip={collapsed ? group.label : undefined}
+                        className="h-8 w-full transition-colors"
+                      >
+                        {collapsed ? (
+                          <GroupIcon className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <GroupIcon className="h-4 w-4 shrink-0" />
+                              <span className="text-[13px] truncate">{group.label}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {totalBadge > 0 && <span className="w-1.5 h-1.5 rounded-full bg-destructive" />}
+                              <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
+                            </div>
+                          </>
+                        )}
+                      </SidebarMenuButton>
+                      {collapsed && totalBadge > 0 && (
+                        <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold leading-none text-white bg-destructive rounded-full pointer-events-none">
+                          {totalBadge > 9 ? "9+" : totalBadge}
                         </span>
                       )}
                     </SidebarMenuItem>
-                  </SidebarMenu>
-                  <PopoverContent side="right" align="start" sideOffset={8} className="w-52 p-1.5">
-                    <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.label}</p>
-                    <div className="space-y-0.5">
-                      {group.items.map(item => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={`flex items-center justify-between gap-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-accent ${
-                            isActive(item.href) ? "bg-accent text-accent-foreground font-medium" : "text-foreground"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <item.icon className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">{item.name}</span>
-                          </div>
-                          {item.badge !== undefined && item.badge > 0 && (
-                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
-                              {item.badge}
-                            </span>
-                          )}
-                        </Link>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                /* Expanded: always-open groups */
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        className="h-8 w-full pointer-events-none"
-                      >
-                        <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
-                        <span className="flex-1 text-left text-[13.5px] font-semibold">
-                          {group.label}
-                        </span>
-                        {totalBadge > 0 && (
-                          <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white bg-destructive rounded-full shrink-0">
-                            {totalBadge > 9 ? '9+' : totalBadge}
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                  <SidebarMenu className="relative ml-1">
-                    {group.items.map((item, i) => renderNavItem(item, i, group.items))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              )}
-            </SidebarGroup>
-          );
-        })}
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+        </>
+        )}
+        </>
+        )}
       </SidebarContent>
 
       {/* Pinned Footer */}
-      <SidebarFooter className="border-t p-1.5">
+      <SidebarFooter className="p-1.5">
+        {/* Promo / announcement slot (feature releases, training, promotions) */}
+        {!collapsed && (
+          <div className="px-0.5 pb-1.5">
+            <SidebarPromo />
+          </div>
+        )}
         <SidebarMenu>
-          {/* Trial/Live Status Badge */}
-          {(paymentDue || isTrialing || isLive) && (
-            <SidebarMenuItem>
-              {collapsed ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center justify-center h-8">
-                      {paymentDue ? (
-                        <AlertTriangle
-                          className={`h-4 w-4 ${paymentDueCritical ? "text-red-500" : "text-amber-500"}`}
-                        />
-                      ) : isTrialing ? (
-                        <Timer className="h-4 w-4 text-blue-500" />
-                      ) : (
-                        <Zap className="h-4 w-4 text-green-500" />
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    {paymentDue
-                      ? `${paymentDueLabel} ${paymentDueDetail}`
-                      : isTrialing
-                      ? `Setup Mode · ${trialDaysRemaining}d left`
-                      : "Live"}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${
-                  paymentDue
-                    ? paymentDueClass
-                    : isTrialing
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
-                    : "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400"
-                }`}>
-                  {paymentDue ? (
-                    <>
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      <span>{paymentDueLabel}</span>
-                        <span className="opacity-70">{paymentDueDetail}</span>
-                    </>
-                  ) : isTrialing ? (
-                    <>
-                      <Timer className="h-3.5 w-3.5" />
-                      <span>Setup Mode · {trialDaysRemaining}d left</span>
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="h-3.5 w-3.5" />
-                      <span>Live</span>
-                    </>
-                  )}
-                </div>
-              )}
-            </SidebarMenuItem>
-          )}
           {renderFeedbackButton()}
-          {(!isManager || canView('settings')) && (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={isActive("/settings")}
-                tooltip={collapsed ? "Settings" : undefined}
-                className="h-8 transition-all duration-200 ease-in-out"
-              >
-                <Link href="/settings">
-                  <AnimatedSettings className="h-4 w-4 shrink-0" />
-                  <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-                    Settings
-                  </span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
+          {/* Profile row — whole row opens the user menu (Settings/Profile/etc.) */}
+          <SidebarMenuItem>
+            {collapsed ? (
+              <div className="flex justify-center py-1">
+                <UserMenu mockAvatarUrl={mockAvatarUrl} />
+              </div>
+            ) : (
+              <UserMenu variant="row" mockAvatarUrl={mockAvatarUrl} />
+            )}
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }
