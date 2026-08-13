@@ -25,7 +25,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,8 +38,6 @@ import {
 } from '@/components/ui/alert-dialog';
 
 import { FaviconUpload } from '@/components/settings/favicon-upload';
-import { ThemePresetGrid } from '@/components/settings/appearance/theme-preset-grid';
-import { LivePortalPreview } from '@/components/settings/appearance/live-portal-preview';
 import { BrandSwatches } from '@/components/settings/appearance/brand-swatches';
 import { BrandColorField } from '@/components/settings/appearance/brand-color-field';
 import { LogoStudio } from '@/components/settings/appearance/logo-studio';
@@ -48,15 +45,14 @@ import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { useThemePreview } from '@/hooks/use-theme-preview';
 import { toast } from '@/hooks/use-toast';
 import {
   DEFAULT_PRESET_ID,
   getPreset,
-  matchPreset,
   type ThemePalette,
-  type ThemePreset,
 } from '@/lib/appearance/presets';
-import { readableForegroundOn, shade } from '@/lib/appearance/color';
+import { shade } from '@/lib/appearance/color';
 
 /** The shape this screen edits — a palette plus the identity fields. */
 interface AppearanceForm extends ThemePalette {
@@ -108,9 +104,14 @@ export default function AppearanceSettingsPage() {
 
   const [form, setForm] = useState<AppearanceForm>(EMPTY_FORM);
   const [loaded, setLoaded] = useState(false);
-  const [mode, setMode] = useState<'light' | 'dark'>('light');
-  /** Preset currently hovered in the grid — previewed but not committed. */
-  const [peeked, setPeeked] = useState<ThemePreset | null>(null);
+
+  /**
+   * Try-on mode. The portal itself is the preview — a candidate palette is
+   * pushed through the same engine a saved change uses, so the tenant is
+   * looking at the real thing rather than a mock-up that can drift.
+   */
+  const { preview: previewTheme, restore: restoreTheme, commit: commitTheme } =
+    useThemePreview();
 
   // Hydrate once branding arrives. Re-runs if the tenant is switched.
   useEffect(() => {
@@ -136,25 +137,6 @@ export default function AppearanceSettingsPage() {
     setLoaded(true);
   }, [branding, tenant?.company_name]);
 
-  const activePresetId = useMemo(() => matchPreset(form)?.id ?? null, [form]);
-
-  /** What the preview paints: the hovered preset if any, otherwise the form. */
-  const previewPalette: ThemePalette = peeked?.palette ?? form;
-  const preview =
-    mode === 'dark'
-      ? {
-          primary: previewPalette.dark_primary_color,
-          secondary: previewPalette.dark_secondary_color,
-          accent: previewPalette.dark_accent_color,
-          background: previewPalette.dark_background_color,
-        }
-      : {
-          primary: previewPalette.light_primary_color,
-          secondary: previewPalette.light_secondary_color,
-          accent: previewPalette.light_accent_color,
-          background: previewPalette.light_background_color,
-        };
-
   const dirty = useMemo(() => {
     if (!branding || !loaded) return false;
     return (
@@ -170,17 +152,46 @@ export default function AppearanceSettingsPage() {
     );
   }, [form, branding, loaded, tenant?.company_name]);
 
-  const applyPreset = (preset: ThemePreset) => {
-    setForm((prev) => ({ ...prev, ...preset.palette }));
+  /**
+   * Apply a palette to the form *and* to the running portal, so the tenant sees
+   * the consequence of the tap immediately rather than imagining it.
+   */
+  const applyPalette = (palette: ThemePalette) => {
+    setForm((prev) => ({ ...prev, ...palette }));
+    previewTheme(palette);
   };
 
   const applyCustomColor = (hex: string) => {
-    setForm((prev) => ({ ...prev, ...paletteFromBrandColor(hex) }));
+    applyPalette(paletteFromBrandColor(hex));
   };
 
   const resetToDefault = () => {
     const preset = getPreset(DEFAULT_PRESET_ID);
-    if (preset) applyPreset(preset);
+    if (preset) applyPalette(preset.palette);
+  };
+
+  /** Drop the previewed colours and put the live portal back to what's saved. */
+  const discardChanges = () => {
+    restoreTheme();
+    if (!branding) return;
+    setForm((prev) => ({
+      ...prev,
+      primary_color: branding.primary_color || prev.primary_color,
+      secondary_color: branding.secondary_color || prev.secondary_color,
+      accent_color: branding.accent_color || prev.accent_color,
+      light_primary_color: branding.light_primary_color || prev.light_primary_color,
+      light_secondary_color: branding.light_secondary_color || prev.light_secondary_color,
+      light_accent_color: branding.light_accent_color || prev.light_accent_color,
+      light_background_color: branding.light_background_color || prev.light_background_color,
+      dark_primary_color: branding.dark_primary_color || prev.dark_primary_color,
+      dark_secondary_color: branding.dark_secondary_color || prev.dark_secondary_color,
+      dark_accent_color: branding.dark_accent_color || prev.dark_accent_color,
+      dark_background_color: branding.dark_background_color || prev.dark_background_color,
+      app_name: branding.app_name || tenant?.company_name || '',
+      logo_url: branding.logo_url,
+      dark_logo_url: branding.dark_logo_url,
+      favicon_url: branding.favicon_url,
+    }));
   };
 
   const handleSave = async () => {
@@ -202,6 +213,9 @@ export default function AppearanceSettingsPage() {
         dark_logo_url: form.dark_logo_url,
         favicon_url: form.favicon_url,
       });
+      // The previewed palette is server truth now — drop the revert baseline or
+      // a later Discard would resurrect the colours we just replaced.
+      commitTheme();
       toast({
         title: 'Appearance saved',
         description: 'Your portal has been updated for everyone on your team.',
@@ -296,65 +310,13 @@ export default function AppearanceSettingsPage() {
 
       <Separator />
 
-      {/* Theme + live preview */}
-      <section className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-base font-medium">Theme</h2>
-            <p className="text-sm text-muted-foreground">
-              Pick a ready-made look. Hover to try one before you choose.
-            </p>
-          </div>
-          <ThemePresetGrid
-            selectedId={activePresetId}
-            onSelect={applyPreset}
-            onPeek={setPeeked}
-            mode={mode}
-            disabled={readOnly}
-          />
-        </div>
-
-        {/* Preview column sticks so it stays visible while scrolling the options */}
-        <div className="space-y-3 lg:sticky lg:top-4 lg:self-start">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">Preview</span>
-            <Tabs value={mode} onValueChange={(v) => setMode(v as 'light' | 'dark')}>
-              <TabsList className="h-7">
-                <TabsTrigger value="light" className="h-5 px-2 text-xs">
-                  Light
-                </TabsTrigger>
-                <TabsTrigger value="dark" className="h-5 px-2 text-xs">
-                  Dark
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          <LivePortalPreview
-            primary={preview.primary}
-            secondary={preview.secondary}
-            accent={preview.accent}
-            background={preview.background}
-            mode={mode}
-            logoUrl={mode === 'dark' ? form.dark_logo_url || form.logo_url : form.logo_url}
-            appName={form.app_name || tenant?.company_name}
-          />
-          <p className="text-xs text-muted-foreground">
-            {peeked
-              ? `Previewing ${peeked.name} — click the card to keep it.`
-              : 'This is roughly how your portal will look.'}
-          </p>
-        </div>
-      </section>
-
-      <Separator />
-
-      {/* Custom colour */}
+      {/* Brand colour — the whole theme, in one decision */}
       <section className="grid gap-8 lg:grid-cols-[304px_minmax(0,1fr)]">
         <div>
           <h2 className="text-base font-medium">Brand colour</h2>
           <p className="text-sm text-muted-foreground">
-            Prefer your own? Pick a colour and we&apos;ll build the rest of the
-            theme around it.
+            Pick a colour and your portal updates around you straight away.
+            Nothing is saved until you press Save changes.
           </p>
         </div>
         <div className="max-w-xl space-y-6">
@@ -428,16 +390,26 @@ export default function AppearanceSettingsPage() {
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">
-              You have unsaved changes.
+              You&apos;re trying this out — nobody else sees it until you save.
             </span>
-            <Button size="sm" onClick={handleSave} disabled={isUpdating} className="gap-1.5">
-              {isUpdating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
-              Save changes
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={discardChanges}
+                disabled={isUpdating}
+              >
+                Discard
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={isUpdating} className="gap-1.5">
+                {isUpdating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                Save changes
+              </Button>
+            </div>
           </div>
         </div>
       )}
