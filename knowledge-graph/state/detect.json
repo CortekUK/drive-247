@@ -899,7 +899,7 @@
       "video": []
     },
     "total_files": 890,
-    "total_words": 838695,
+    "total_words": 838828,
     "counts": {
       "code": 890
     },
@@ -3153,6 +3153,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/zoho-client.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/xero-client.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/backoff.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/resolve-tenant.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/types.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/rental-status.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/oauth-constants.ts",
@@ -3307,10 +3308,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 349,
-    "total_words": 461420,
+    "total_files": 350,
+    "total_words": 462806,
     "counts": {
-      "code": 343,
+      "code": 344,
       "document": 6
     },
     "semantic_candidates": [
@@ -3516,6 +3517,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/zoho-client.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/xero-client.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/backoff.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/resolve-tenant.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/types.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/rental-status.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/oauth-constants.ts",
