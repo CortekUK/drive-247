@@ -32,7 +32,7 @@ function timeToMinutes(time: string): number {
 /**
  * Check if a time (in 24-hour format) is within business hours
  */
-function isTimeWithinBusinessHours(time: string, openTime: string, closeTime: string): boolean {
+export function isTimeWithinBusinessHours(time: string, openTime: string, closeTime: string): boolean {
   const timeMinutes = timeToMinutes(time)
   const openMinutes = timeToMinutes(openTime)
   const closeMinutes = timeToMinutes(closeTime)
@@ -45,6 +45,8 @@ function isTimeWithinBusinessHours(time: string, openTime: string, closeTime: st
   if (closeMinutes < openMinutes) {
     return timeMinutes >= openMinutes || timeMinutes <= closeMinutes
   }
+  // Both boundaries are inclusive: if a business advertises 8:15 AM–7:00 PM,
+  // customers may select exactly 8:15 AM and exactly 7:00 PM.
   return timeMinutes >= openMinutes && timeMinutes <= closeMinutes
 }
 

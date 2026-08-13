@@ -3292,9 +3292,7 @@ const MultiStepBookingWidget = () => {
           pickup_location: formData.pickupLocation,
           return_location: formData.dropoffLocation,
           rental_days: duration?.days || 0,
-          driver_age: driverAge,
           has_promo: !!formData.promoCode,
-          young_driver: isYoungDriver
         });
       }
       transitionToStep(2);
