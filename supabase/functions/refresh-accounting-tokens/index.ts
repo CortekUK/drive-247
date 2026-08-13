@@ -112,7 +112,14 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const newExpiresAt = new Date(Date.now() + (fresh.expiresInSeconds - 30) * 1000).toISOString();
+        // Belt and braces: refreshOne already rejects a non-numeric expires_in,
+        // but a NaN reaching here throws inside toISOString() and the throw is
+        // swallowed by the catch below — the connection would then silently stop
+        // refreshing. Fall back to Zoho/Xero's standard one-hour token life.
+        const expiresInSeconds = Number.isFinite(fresh.expiresInSeconds) && fresh.expiresInSeconds > 0
+          ? fresh.expiresInSeconds
+          : 3600;
+        const newExpiresAt = new Date(Date.now() + (expiresInSeconds - 30) * 1000).toISOString();
         await supabase.rpc("accounting_store_tokens", {
           p_tenant_id: c.tenant_id,
           p_provider: c.provider,
@@ -213,7 +220,32 @@ async function refreshOne(
     const isAuth = status === 400 || status === 401 || status === 403;
     return { ok: false, accessToken: "", newRefreshToken: null, expiresInSeconds: 0, error: `zoho_refresh_${status}: ${text.slice(0, 200)}`, markExpired: isAuth };
   }
-  const json = await res.json() as { access_token: string; expires_in: number };
+  // Zoho signals failure with HTTP 200 and an error in the BODY — verified live
+  // against accounts.zoho.com, which answers a bad refresh token with
+  // `HTTP 200 {"error":"general_error"}`. The `!res.ok` check above therefore
+  // never fires for the most common failures.
+  //
+  // Left unguarded this is not a soft failure, it is a wedge: access_token and
+  // expires_in come back undefined, the caller computes
+  // `new Date(Date.now() + (undefined - 30) * 1000)` → Invalid Date, and
+  // .toISOString() THROWS. The throw is swallowed by the per-connection catch,
+  // so the connection is never refreshed, never marked expired, and simply dies
+  // when its one-hour token lapses — with nothing actionable in the log.
+  const json = await res.json().catch(() => null) as
+    { access_token?: string; expires_in?: number; error?: string } | null;
+
+  if (!json || json.error || !json.access_token || typeof json.expires_in !== "number") {
+    const reason = json?.error ?? (json ? "missing access_token/expires_in" : "unparseable response");
+    // `invalid_client` means the app credentials are wrong — that is terminal and
+    // worth expiring. Anything else may be transient, so let the consecutive
+    // failure budget decide rather than killing the connection on one bad reply.
+    const isAuth = reason === "invalid_client" || reason === "invalid_grant";
+    return {
+      ok: false, accessToken: "", newRefreshToken: null, expiresInSeconds: 0,
+      error: `zoho_refresh_200_body_error: ${reason}`, markExpired: isAuth,
+    };
+  }
+
   // Zoho doesn't rotate; we pass null upward so store_tokens keeps the existing one.
   return { ok: true, accessToken: json.access_token, newRefreshToken: null, expiresInSeconds: json.expires_in, error: "", markExpired: false };
 }

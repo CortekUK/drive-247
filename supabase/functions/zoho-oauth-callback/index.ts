@@ -87,25 +87,44 @@ Deno.serve(async (req) => {
       console.error("zoho-oauth-callback: token exchange failed", tokenRes.status, errText);
       return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=token_exchange_failed");
     }
-    const tokenJson = await tokenRes.json() as {
-      access_token: string;
+    const tokenJson = await tokenRes.json().catch(() => null) as {
+      access_token?: string;
       refresh_token?: string;
-      expires_in: number;
+      expires_in?: number;
       api_domain?: string;
       token_type?: string;
-    };
+      error?: string;
+    } | null;
+
+    // Zoho reports failure as HTTP 200 with an error in the BODY, so the
+    // `!tokenRes.ok` branch above does not catch the common cases (verified
+    // live: a bad grant returns `200 {"error":"invalid_code"}`). Without this
+    // the only symptom was a generic no_access_token redirect and nothing in the
+    // logs, which is indistinguishable from a dozen unrelated failures.
+    if (!tokenJson || tokenJson.error || !tokenJson.access_token) {
+      const reason = tokenJson?.error ?? (tokenJson ? "no_access_token" : "unparseable_token_response");
+      console.error("zoho-oauth-callback: token exchange rejected", tokenRes.status, reason);
+      return redirect(
+        `/settings?tab=accounting&status=error&provider=zoho&reason=${encodeURIComponent(reason)}`,
+      );
+    }
+
     const accessToken = tokenJson.access_token;
     const refreshToken = tokenJson.refresh_token;
-    if (!accessToken) {
-      return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=no_access_token");
-    }
     if (!refreshToken) {
       // Likely the user already authorised this app before and we forgot to
       // pass prompt=consent. The start fn DOES pass prompt=consent so this
       // should be rare — surface it loudly if it happens.
       return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=no_refresh_token");
     }
-    const expiresAt = new Date(Date.now() + (tokenJson.expires_in - 30) * 1000).toISOString();
+    // Guard the arithmetic: a missing expires_in yields NaN, and .toISOString()
+    // on an Invalid Date throws — which here would abort the callback AFTER the
+    // operator had already granted consent, losing the one-time code. Zoho's
+    // access tokens are one hour, so that is the safe fallback.
+    const expiresInSeconds = Number.isFinite(tokenJson.expires_in) && (tokenJson.expires_in as number) > 0
+      ? (tokenJson.expires_in as number)
+      : 3600;
+    const expiresAt = new Date(Date.now() + (expiresInSeconds - 30) * 1000).toISOString();
 
     // 3. Fetch the user's Zoho organisations
     const orgRes = await fetch(`${ZOHO.organizationsUrl(region)}`, {
