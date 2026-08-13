@@ -123,6 +123,7 @@ export type Database = {
           last_error: string | null
           last_synced_at: string | null
           provider: Database["public"]["Enums"]["accounting_provider"]
+          refresh_failure_count: number
           refresh_token_secret_id: string | null
           status: Database["public"]["Enums"]["accounting_connection_status"]
           tenant_id: string
@@ -142,6 +143,7 @@ export type Database = {
           last_error?: string | null
           last_synced_at?: string | null
           provider: Database["public"]["Enums"]["accounting_provider"]
+          refresh_failure_count?: number
           refresh_token_secret_id?: string | null
           status?: Database["public"]["Enums"]["accounting_connection_status"]
           tenant_id: string
@@ -161,6 +163,7 @@ export type Database = {
           last_error?: string | null
           last_synced_at?: string | null
           provider?: Database["public"]["Enums"]["accounting_provider"]
+          refresh_failure_count?: number
           refresh_token_secret_id?: string | null
           status?: Database["public"]["Enums"]["accounting_connection_status"]
           tenant_id?: string
@@ -5474,7 +5477,9 @@ export type Database = {
       financial_event_sync_state: {
         Row: {
           attempts: number
+          claimed_at: string | null
           created_at: string
+          dead_lettered_at: string | null
           external_contact_id: string | null
           external_credit_note_id: string | null
           external_invoice_id: string | null
@@ -5495,7 +5500,9 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
+          dead_lettered_at?: string | null
           external_contact_id?: string | null
           external_credit_note_id?: string | null
           external_invoice_id?: string | null
@@ -5516,7 +5523,9 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
+          dead_lettered_at?: string | null
           external_contact_id?: string | null
           external_credit_note_id?: string | null
           external_invoice_id?: string | null
@@ -18206,6 +18215,13 @@ export type Database = {
             }
             Returns: Json
           }
+      admin_find_auth_user_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          email: string
+          id: string
+        }[]
+      }
       admin_revoke_user_sessions: {
         Args: { p_user_ids: string[] }
         Returns: number
@@ -18237,6 +18253,14 @@ export type Database = {
         Returns: Json
       }
       attach_payments_to_rentals: { Args: never; Returns: undefined }
+      backfill_missing_sync_rows: {
+        Args: {
+          p_provider: Database["public"]["Enums"]["accounting_provider"]
+          p_since?: string
+          p_tenant_id: string
+        }
+        Returns: number
+      }
       backfill_payment_rental_ids: {
         Args: never
         Returns: {
@@ -18687,6 +18711,29 @@ export type Database = {
       payment_auto_apply_due_credit: { Args: never; Returns: undefined }
       platform_verify_secret: { Args: { p_secret: string }; Returns: boolean }
       pnl_post_acquisition: { Args: { v_id: string }; Returns: undefined }
+      process_accounting_sync_claim_batch: {
+        Args: { p_batch_size?: number; p_claim_timeout_minutes?: number }
+        Returns: {
+          amount_cents: number
+          attempts: number
+          currency: string
+          customer_id: string
+          description: string
+          event_type: string
+          external_invoice_id: string
+          financial_event_id: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          provider: Database["public"]["Enums"]["accounting_provider"]
+          rental_id: string
+          state: Database["public"]["Enums"]["sync_state"]
+          sync_id: string
+          tax_cents: number
+          tenant_id: string
+          vehicle_id: string
+        }[]
+      }
       process_payment_transaction:
         | { Args: { p_payment_id: string }; Returns: Json }
         | {
