@@ -61,7 +61,7 @@ export function useVehicleProfitability(period: ProfitabilityPeriod) {
     queryKey: ["vehicle-profitability", tenant?.id, dateFrom, dateTo],
     queryFn: async (): Promise<ProfitabilityResponse> => {
       const { data, error } = await supabase.functions.invoke("get-vehicle-profitability", {
-        body: { periodStart: dateFrom, periodEnd: dateTo },
+        body: { periodStart: dateFrom, periodEnd: dateTo, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;

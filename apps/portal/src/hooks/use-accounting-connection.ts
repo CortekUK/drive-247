@@ -93,10 +93,13 @@ export function useActiveAccountingConnection(provider: AccountingProvider) {
 }
 
 export function useConnectXero() {
+  // Super admins have app_users.tenant_id = NULL, so the edge function cannot
+  // infer which tenant to connect. Send the slug of the portal we are in.
+  const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (args?: { redirectBack?: string }) => {
       const { data, error } = await supabase.functions.invoke("xero-oauth-start", {
-        body: { redirectBack: args?.redirectBack ?? null },
+        body: { redirectBack: args?.redirectBack ?? null, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
@@ -122,10 +125,11 @@ export function useConnectXero() {
 export type ZohoRegion = "com" | "eu" | "in" | "com.au" | "jp" | "sa";
 
 export function useConnectZoho() {
+  const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (args: { region: ZohoRegion; redirectBack?: string }) => {
       const { data, error } = await supabase.functions.invoke("zoho-oauth-start", {
-        body: { region: args.region, redirectBack: args.redirectBack ?? null },
+        body: { region: args.region, redirectBack: args.redirectBack ?? null, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
@@ -152,7 +156,7 @@ export function useDisconnectAccounting() {
   return useMutation({
     mutationFn: async (provider: AccountingProvider) => {
       const { data, error } = await supabase.functions.invoke("disconnect-accounting", {
-        body: { provider },
+        body: { provider, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;

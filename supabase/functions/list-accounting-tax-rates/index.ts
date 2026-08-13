@@ -6,6 +6,7 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { resolveTenantId } from "../_shared/accounting/resolve-tenant.ts";
 import { getProvider } from "../_shared/accounting/factory.ts";
 import { ProviderError, ProviderName } from "../_shared/accounting/types.ts";
 
@@ -48,8 +49,17 @@ Deno.serve(async (req) => {
     if (!appUser.is_super_admin && !["admin", "head_admin"].includes(appUser.role ?? "")) {
       return errorResponse("Only admin or head_admin can read tax rates", 403);
     }
-    const tenantId = appUser.tenant_id;
-    if (!tenantId) return errorResponse("No tenant context", 403);
+    // Resolve the acting tenant. Scoped users are pinned to their own tenant;
+    // only super admins (tenant_id = NULL by design) may name one, via the
+    // tenantSlug body field or the x-tenant-slug header. See resolve-tenant.ts.
+    const tenantResolution = await resolveTenantId(
+      supabase, req, appUser,
+      (typeof body === "object" && body !== null ? (body as { tenantSlug?: string }).tenantSlug : null) ?? null,
+    );
+    if (!tenantResolution.tenantId) {
+      return errorResponse(tenantResolution.errorMessage ?? "No tenant context", tenantResolution.errorStatus);
+    }
+    const tenantId = tenantResolution.tenantId;
 
     try {
       const provider = await getProvider(supabase, tenantId, body.provider);

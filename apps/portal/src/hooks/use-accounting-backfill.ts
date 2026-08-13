@@ -47,7 +47,7 @@ export function useStartBackfill() {
   const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (args: { provider: AccountingProvider; dateFrom: string | null; dateTo: string }): Promise<StartBackfillResponse> => {
-      const { data, error } = await supabase.functions.invoke("backfill-accounting-sync", { body: args });
+      const { data, error } = await supabase.functions.invoke("backfill-accounting-sync", { body: { ...args, tenantSlug: tenant?.slug ?? null } });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
         if (ctx?.response) {
@@ -69,12 +69,13 @@ export function useStartBackfill() {
 
 /** Polls every 5s while the job is pending/running. Stops polling once complete. */
 export function useBackfillJob(jobId: string | null | undefined) {
+  const { tenant } = useTenant();
   return useQuery({
-    queryKey: ["backfill-job", jobId],
+    queryKey: ["backfill-job", tenant?.id, jobId],
     queryFn: async (): Promise<BackfillJobRow | null> => {
       if (!jobId) return null;
       const { data, error } = await supabase.functions.invoke("get-accounting-sync-status", {
-        body: { backfillJobId: jobId },
+        body: { backfillJobId: jobId, tenantSlug: tenant?.slug ?? null },
       });
       if (error) throw error;
       const job = (data as { ok: boolean; job: BackfillJobRow }).job;

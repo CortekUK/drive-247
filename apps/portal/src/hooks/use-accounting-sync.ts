@@ -109,12 +109,15 @@ export function useAccountingMappings(provider: AccountingProvider | null) {
 }
 
 export function useAccountingAccounts(provider: AccountingProvider | null) {
+  const { tenant } = useTenant();
   return useQuery({
-    queryKey: ["accounting-accounts", provider],
+    // tenant?.id belongs in the key: a super admin can view several tenants in
+    // one session and would otherwise be served another tenant's chart of accounts.
+    queryKey: ["accounting-accounts", tenant?.id, provider],
     queryFn: async (): Promise<ExternalAccount[]> => {
       if (!provider) return [];
       const { data, error } = await supabase.functions.invoke("list-accounting-accounts", {
-        body: { provider },
+        body: { provider, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
@@ -134,12 +137,13 @@ export function useAccountingAccounts(provider: AccountingProvider | null) {
 }
 
 export function useAccountingTaxRates(provider: AccountingProvider | null) {
+  const { tenant } = useTenant();
   return useQuery({
-    queryKey: ["accounting-tax-rates", provider],
+    queryKey: ["accounting-tax-rates", tenant?.id, provider],
     queryFn: async (): Promise<ExternalTaxRate[]> => {
       if (!provider) return [];
       const { data, error } = await supabase.functions.invoke("list-accounting-tax-rates", {
-        body: { provider },
+        body: { provider, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
@@ -173,7 +177,7 @@ export function useSaveAccountingMappings() {
   return useMutation({
     mutationFn: async (args: { provider: AccountingProvider; mappings: MappingSavePayload[] }) => {
       const { data, error } = await supabase.functions.invoke("save-accounting-mappings", {
-        body: args,
+        body: { ...args, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
@@ -319,7 +323,7 @@ export function useRetryAccountingSync() {
   const { tenant } = useTenant();
   return useMutation({
     mutationFn: async (args: { syncStateId?: string; allFailed?: boolean; skip?: boolean }) => {
-      const { data, error } = await supabase.functions.invoke("retry-accounting-sync", { body: args });
+      const { data, error } = await supabase.functions.invoke("retry-accounting-sync", { body: { ...args, tenantSlug: tenant?.slug ?? null } });
       if (error) {
         const ctx = (error as { context?: { response?: Response } }).context;
         if (ctx?.response) {
