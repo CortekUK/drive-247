@@ -14,7 +14,7 @@
  * authenticates the round-trip.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { handleCors, errorResponse } from "../_shared/cors.ts";
+import { handleCors, errorResponse, jsonResponse } from "../_shared/cors.ts";
 import { XERO, getRedirectUri } from "../_shared/accounting/oauth-constants.ts";
 
 Deno.serve(async (req) => {
@@ -49,6 +49,10 @@ Deno.serve(async (req) => {
     if (!stateRow) {
       return redirect("/settings?tab=accounting&status=error&provider=xero&reason=invalid_state");
     }
+    // Learn the portal origin BEFORE any further early-return, so the error
+    // paths below redirect back to the tenant's portal rather than emitting a
+    // relative path the browser resolves against the Supabase host.
+    rememberPortalBase(stateRow.redirect_back as string | null);
     if (stateRow.provider !== "xero") {
       return redirect("/settings?tab=accounting&status=error&provider=xero&reason=state_provider_mismatch");
     }
@@ -195,12 +199,55 @@ Deno.serve(async (req) => {
  * resolve against the Supabase function host (yields "requested path is
  * invalid").
  */
+/**
+ * Remembered for the lifetime of this request once the oauth_state row is read.
+ *
+ * The state row carries `redirect_back` — the absolute portal URL the operator
+ * started from, e.g. https://test.portal.drive-247.com/settings?tab=accounting.
+ * Its ORIGIN is the only reliable way to get back to the right place, because
+ * the portal is per-tenant: a single PORTAL_BASE_URL env var cannot serve
+ * test.portal…, acme.portal… and everyone else.
+ */
+let requestPortalBase: string | null = null;
+
+/** Record the portal origin from the state row's redirect_back, if usable. */
+function rememberPortalBase(redirectBack: string | null | undefined): void {
+  if (!redirectBack) return;
+  try {
+    requestPortalBase = new URL(redirectBack).origin;
+  } catch {
+    // Not an absolute URL — leave the fallbacks to handle it.
+  }
+}
+
+/**
+ * Send the operator back to the portal.
+ *
+ * Relative paths used to be emitted as-is whenever PORTAL_BASE_URL was unset —
+ * which it is — so the browser resolved "/settings?…" against the SUPABASE
+ * function host and landed on {"error":"requested path is invalid"}. Every
+ * error path did this; only the success path worked, because it passes the
+ * absolute redirect_back straight through.
+ *
+ * Order of preference: the origin from this request's redirect_back, then
+ * PORTAL_BASE_URL, then give up on redirecting and render the reason instead —
+ * a readable message beats a 302 to a page that cannot exist.
+ */
 function redirect(location: string): Response {
   let resolved = location;
   if (resolved.startsWith("/")) {
-    const portalBase = (Deno.env.get("PORTAL_BASE_URL") ?? "").replace(/\/$/, "");
-    if (portalBase) {
-      resolved = `${portalBase}${location}`;
+    const base = (requestPortalBase ?? Deno.env.get("PORTAL_BASE_URL") ?? "").replace(/\/$/, "");
+    if (base) {
+      resolved = `${base}${location}`;
+    } else {
+      const reason = new URLSearchParams(location.split("?")[1] ?? "").get("reason") ?? "unknown";
+      return jsonResponse({
+        error: `Could not complete the connection: ${reason}`,
+        detail:
+          "The portal URL for this tenant could not be determined, so you were not redirected back. " +
+          "Return to Settings → Accounting and try again.",
+        reason,
+      }, 400);
     }
   }
   return new Response(null, {
