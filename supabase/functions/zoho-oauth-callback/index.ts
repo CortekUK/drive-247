@@ -61,10 +61,38 @@ Deno.serve(async (req) => {
       return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=state_expired");
     }
 
-    // The region the user picked at start time. Zoho also passes `location`
-    // back on the redirect — if those disagree, trust ours (the user's pick).
+    // Which Zoho data centre actually holds this account?
+    //
+    // This used to read `meta?.region ?? location ?? "com"` — the operator's
+    // dropdown pick first, with a comment saying to trust it over Zoho. That is
+    // backwards, and it is what broke the connect flow in production:
+    //
+    //   operator picked ....... eu   (the modal's default, not a real choice)
+    //   Zoho redirected with .. location=us, accounts-server=accounts.zoho.com
+    //   we redeemed the code at accounts.zoho.eu  →  invalid_code
+    //
+    // Zoho bounces the authorize request to whichever DC owns the account and
+    // then TELLS us which one that was. An authorization code is only valid at
+    // the DC that issued it, so Zoho's answer is authoritative and the dropdown
+    // is only ever a hint for building the initial URL.
+    //
+    // The second bug in that line: `location` is a DC code (us/eu/in/au/jp/ca),
+    // not the suffix our URL templates take (com/eu/in/com.au/jp/sa). Falling
+    // back to it directly would have produced accounts.zoho.us, which does not
+    // exist. It has to be mapped.
     const meta = (stateRow.metadata as { region?: string } | null) ?? null;
-    const region = meta?.region ?? location ?? "com";
+    const accountsServer = url.searchParams.get("accounts-server");
+    const regionFromServer: string | null = regionFromAccountsServer(accountsServer);
+    const regionFromLocation: string | null =
+      location ? (LOCATION_TO_REGION[location.toLowerCase()] ?? null) : null;
+    const region: string = regionFromServer ?? regionFromLocation ?? meta?.region ?? "com";
+
+    if (meta?.region && meta.region !== region) {
+      console.log(
+        `zoho-oauth-callback: operator picked region '${meta.region}' but Zoho reports '${region}' ` +
+        `(location=${location ?? "—"}, accounts-server=${accountsServer ?? "—"}); using Zoho's.`,
+      );
+    }
 
     // 2. Exchange code for tokens — region-specific endpoint
     const clientId = Deno.env.get("ZOHO_CLIENT_ID");
@@ -81,7 +109,15 @@ Deno.serve(async (req) => {
       client_secret: clientSecret,
       redirect_uri: redirectUri,
     });
-    const tokenRes = await fetch(ZOHO.tokenUrl(region), {
+    // Redeem at the server Zoho named, falling back to the templated URL.
+    // Using its own URL verbatim is both more accurate and more durable: it
+    // covers data centres whose host does not follow the `zoho.<suffix>`
+    // pattern (Canada is zohocloud.ca), which the template cannot express.
+    const tokenEndpoint = accountsServer
+      ? `${accountsServer.replace(/\/+$/, "")}/oauth/v2/token`
+      : ZOHO.tokenUrl(region);
+
+    const tokenRes = await fetch(tokenEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: form.toString(),
@@ -225,6 +261,42 @@ Deno.serve(async (req) => {
  * the portal is per-tenant: a single PORTAL_BASE_URL env var cannot serve
  * test.portal…, acme.portal… and everyone else.
  */
+/**
+ * Zoho's DC code (the `?location=` param) → the suffix our URL templates use.
+ * These are NOT the same vocabulary: Zoho says "us" where our templates want
+ * "com", and "au" where they want "com.au".
+ */
+const LOCATION_TO_REGION: Record<string, string> = {
+  us: "com",
+  eu: "eu",
+  in: "in",
+  au: "com.au",
+  jp: "jp",
+  sa: "sa",
+  uk: "uk",
+  ca: "ca",
+};
+
+/**
+ * Derive our region suffix from the `accounts-server` URL Zoho hands back.
+ * Preferred over `location` because it is a real URL rather than a code, so it
+ * stays correct even if Zoho adds a DC we have not mapped.
+ *
+ * Canada is deliberately special-cased: it is served from zohocloud.ca, not
+ * zoho.ca, so the generic `zoho.<suffix>` pattern does not match it.
+ */
+function regionFromAccountsServer(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    if (host === "accounts.zohocloud.ca") return "ca";
+    const m = host.match(/^accounts\.zoho\.(.+)$/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 let requestPortalBase: string | null = null;
 
 /** Record the portal origin from the state row's redirect_back, if usable. */
