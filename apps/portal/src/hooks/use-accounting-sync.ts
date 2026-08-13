@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import type { AccountingProvider } from "@/hooks/use-accounting-connection";
+import { throwEdgeError } from "@/lib/edge-error";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -120,14 +121,7 @@ export function useAccountingAccounts(provider: AccountingProvider | null) {
         body: { provider, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return (data as { ok: boolean; accounts: ExternalAccount[] }).accounts ?? [];
     },
@@ -146,14 +140,7 @@ export function useAccountingTaxRates(provider: AccountingProvider | null) {
         body: { provider, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return (data as { ok: boolean; taxRates: ExternalTaxRate[] }).taxRates ?? [];
     },
@@ -180,14 +167,7 @@ export function useSaveAccountingMappings() {
         body: { ...args, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return data as { ok: boolean; upserted_event_mappings: number; upserted_payment_account: number; errors: string[] };
     },
@@ -325,14 +305,7 @@ export function useRetryAccountingSync() {
     mutationFn: async (args: { syncStateId?: string; allFailed?: boolean; skip?: boolean }) => {
       const { data, error } = await supabase.functions.invoke("retry-accounting-sync", { body: { ...args, tenantSlug: tenant?.slug ?? null } });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return data as { ok: boolean; reset: number; newState: string };
     },

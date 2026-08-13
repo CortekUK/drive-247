@@ -72,6 +72,27 @@ Deno.serve(async (req) => {
       return errorResponse("Only admin or head_admin can connect Xero", 403);
     }
 
+    // Check server configuration BEFORE writing anything — see the matching
+    // comment in zoho-oauth-start. Persisting a nonce we already know cannot be
+    // redeemed just leaves an orphan row behind on every failed click.
+    //
+    // The secret is checked here too even though only the callback uses it: a
+    // half-configured server would otherwise pass this step, redirect the
+    // operator all the way to Xero, and only fail on the way back.
+    const clientId = Deno.env.get("XERO_CLIENT_ID");
+    const clientSecret = Deno.env.get("XERO_CLIENT_SECRET");
+    const missing = [
+      !clientId ? "XERO_CLIENT_ID" : null,
+      !clientSecret ? "XERO_CLIENT_SECRET" : null,
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      return errorResponse(
+        `Xero is not configured on the server yet — ${missing.join(" and ")} ` +
+        `${missing.length > 1 ? "are" : "is"} missing.`,
+        503,
+      );
+    }
+
     // Persist nonce
     const { data: stateRow, error: stateErr } = await supabase
       .from("accounting_oauth_state")
@@ -86,11 +107,6 @@ Deno.serve(async (req) => {
     if (stateErr || !stateRow) {
       console.error("xero-oauth-start: failed to persist oauth_state", stateErr);
       return errorResponse("Failed to initiate OAuth", 500);
-    }
-
-    const clientId = Deno.env.get("XERO_CLIENT_ID");
-    if (!clientId) {
-      return errorResponse("Xero is not configured — XERO_CLIENT_ID missing on server", 500);
     }
 
     const redirectUri = getRedirectUri("xero");

@@ -76,6 +76,33 @@ Deno.serve(async (req) => {
       return errorResponse("Only admin or head_admin can connect Zoho", 403);
     }
 
+    // Check server configuration BEFORE writing anything.
+    //
+    // This used to sit after the oauth_state insert, so every click on a
+    // misconfigured server persisted a nonce row that could never be redeemed —
+    // the operator got a 500 and the table collected an orphan each time. The
+    // hourly reaper cleared them eventually, but there is no reason to write a
+    // row we already know we cannot use.
+    //
+    // Both values are required: the id builds the authorize URL, and the secret
+    // is needed by the callback moments later. Failing here rather than midway
+    // through the round-trip means the operator is told what is wrong while they
+    // are still on the settings page, instead of after a redirect to Zoho.
+    const clientId = Deno.env.get("ZOHO_CLIENT_ID");
+    const clientSecret = Deno.env.get("ZOHO_CLIENT_SECRET");
+    const missing = [
+      !clientId ? "ZOHO_CLIENT_ID" : null,
+      !clientSecret ? "ZOHO_CLIENT_SECRET" : null,
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      return errorResponse(
+        `Zoho Books is not configured on the server yet — ${missing.join(" and ")} ` +
+        `${missing.length > 1 ? "are" : "is"} missing. Register a Server-based ` +
+        `Application at api-console.zoho.com and set the secrets, then try again.`,
+        503,
+      );
+    }
+
     // Persist nonce + the picked region so the callback can find the right data centre.
     const { data: stateRow, error: stateErr } = await supabase
       .from("accounting_oauth_state")
@@ -91,11 +118,6 @@ Deno.serve(async (req) => {
     if (stateErr || !stateRow) {
       console.error("zoho-oauth-start: failed to persist oauth_state", stateErr);
       return errorResponse("Failed to initiate OAuth", 500);
-    }
-
-    const clientId = Deno.env.get("ZOHO_CLIENT_ID");
-    if (!clientId) {
-      return errorResponse("Zoho is not configured — ZOHO_CLIENT_ID missing on server", 500);
     }
 
     const redirectUri = getRedirectUri("zoho");

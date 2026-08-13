@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { LeadRow } from "@/hooks/use-leads";
+import { throwEdgeError } from "@/lib/edge-error";
 
 interface Props {
   open: boolean;
@@ -54,15 +55,7 @@ export function ConvertToRentalDialog({ open, onOpenChange, lead }: Props) {
       if (error) {
         // Surface the real edge-function error body (e.g. "Failed to create
         // rental: null value in column ...") instead of "non-2xx status code".
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error)
-            : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       // The function is idempotent. Read the actual outcome instead of always
       // claiming success — the old "Rental created!" toast lied when the lead

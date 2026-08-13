@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { throwEdgeError } from "@/lib/edge-error";
 
 export type AccountingProvider = "xero" | "zoho";
 export type AccountingConnectionStatus = "active" | "expired" | "revoked" | "error";
@@ -102,14 +103,7 @@ export function useConnectXero() {
         body: { redirectBack: args?.redirectBack ?? null, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       const { authorizeUrl } = data as { ok: boolean; authorizeUrl: string };
       if (!authorizeUrl) throw new Error("No authorize URL returned");
@@ -132,14 +126,7 @@ export function useConnectZoho() {
         body: { region: args.region, redirectBack: args.redirectBack ?? null, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       const { authorizeUrl } = data as { ok: boolean; authorizeUrl: string };
       if (!authorizeUrl) throw new Error("No authorize URL returned");
@@ -159,14 +146,7 @@ export function useDisconnectAccounting() {
         body: { provider, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return data as { ok: boolean; provider: AccountingProvider };
     },

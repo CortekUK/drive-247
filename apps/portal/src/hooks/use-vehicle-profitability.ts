@@ -12,6 +12,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { throwEdgeError } from "@/lib/edge-error";
 
 export interface ProfitabilityVehicleRow {
   vehicle_id: string;
@@ -64,14 +65,7 @@ export function useVehicleProfitability(period: ProfitabilityPeriod) {
         body: { periodStart: dateFrom, periodEnd: dateTo, tenantSlug: tenant?.slug ?? null },
       });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return data as ProfitabilityResponse;
     },

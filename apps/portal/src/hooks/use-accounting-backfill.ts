@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import type { AccountingProvider } from "@/hooks/use-accounting-connection";
+import { throwEdgeError } from "@/lib/edge-error";
 
 export type BackfillJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
@@ -49,14 +50,7 @@ export function useStartBackfill() {
     mutationFn: async (args: { provider: AccountingProvider; dateFrom: string | null; dateTo: string }): Promise<StartBackfillResponse> => {
       const { data, error } = await supabase.functions.invoke("backfill-accounting-sync", { body: { ...args, tenantSlug: tenant?.slug ?? null } });
       if (error) {
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error) : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return data as StartBackfillResponse;
     },

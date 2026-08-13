@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRealtimeInvalidate } from "./use-realtime-invalidate";
 import { useAuthStore } from "@/stores/auth-store";
+import { throwEdgeError } from "@/lib/edge-error";
 
 /** Format any error (Error, PostgrestError, plain object, string) into a useful string. */
 function fmtError(err: unknown, fallback: string): string {
@@ -227,15 +228,7 @@ export function usePublishAutomation() {
         // FunctionsHttpError keeps the original Response on .context. Without
         // this read, every 4xx/5xx shows "non-2xx status code" instead of the
         // actual edge-fn reason (e.g. "Only admin / head_admin can publish").
-        const ctx = (error as { context?: { response?: Response } }).context;
-        if (ctx?.response) {
-          const parsed = await ctx.response.clone().json().catch(() => null);
-          const msg = parsed && typeof parsed === "object" && "error" in parsed
-            ? String((parsed as { error: string }).error)
-            : null;
-          if (msg) throw new Error(msg);
-        }
-        throw error;
+        await throwEdgeError(error);
       }
       return data;
     },
