@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -30,7 +30,12 @@ import {
   ShieldAlert,
   BarChart3,
   Clock,
+  ArrowRight,
+  Search,
+  SlidersHorizontal,
+  Loader2,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 // Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
 // notation ("10:30 AM"). Returns null when the value is missing so callers
@@ -49,7 +54,7 @@ const formatTimeOfDay = (value: string | null | undefined): string | null => {
 import Link from "next/link";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
-import { RentalsFilters } from "@/components/rentals/rentals-filters";
+import { RentalsFilterPanel } from "@/components/rentals/rentals-filter-panel";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
@@ -58,14 +63,41 @@ import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+
+// ── overview charts ──────────────────────────────────────────────────────────
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { Area, AreaChart, Bar, BarChart, Cell, Label as RLabel, Pie, PieChart } from "recharts";
+
+const trendData = [
+  { m: "Jan", rentals: 4 },
+  { m: "Feb", rentals: 6 },
+  { m: "Mar", rentals: 5 },
+  { m: "Apr", rentals: 8 },
+  { m: "May", rentals: 7 },
+  { m: "Jun", rentals: 10 },
+];
+const trendConfig = { rentals: { label: "Rentals", color: "hsl(var(--chart-3))" } } satisfies ChartConfig;
+
+const revenueData = [
+  { m: "Jan", rev: 4200 },
+  { m: "Feb", rev: 5100 },
+  { m: "Mar", rev: 4800 },
+  { m: "Apr", rev: 6400 },
+  { m: "May", rev: 7200 },
+  { m: "Jun", rev: 8300 },
+];
+const revenueConfig = { rev: { label: "Revenue", color: "hsl(var(--chart-1))" } } satisfies ChartConfig;
+
+const statusConfig = {
+  active: { label: "Active", color: "hsl(var(--chart-3))" },
+  completed: { label: "Completed", color: "hsl(var(--chart-1))" },
+  pending: { label: "Pending", color: "hsl(var(--chart-5))" },
+} satisfies ChartConfig;
 
 const RentalsList = () => {
   const router = useRouter();
@@ -135,6 +167,65 @@ const RentalsList = () => {
     if (currentView !== "list") params.set("view", currentView);
     router.push(params.toString() ? `?${params.toString()}` : "?");
   };
+
+  // Overview row toggles between charts and the comprehensive filter panel
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Header search — debounced into the URL-driven filters
+  const [searchInput, setSearchInput] = useState(filters.search || "");
+  useEffect(() => {
+    setSearchInput(filters.search || "");
+  }, [filters.search]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (searchInput !== (filters.search || "")) {
+        handleFiltersChange({ ...filters, search: searchInput, page: 1 });
+      }
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
+  // Infinite scroll — render a growing slice of the full filtered set
+  const PAGE_STEP = 25;
+  const [visibleCount, setVisibleCount] = useState(PAGE_STEP);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const filterKey = JSON.stringify({
+    search: filters.search,
+    status: filters.status,
+    paymentType: filters.paymentType,
+    bonzahStatus: filters.bonzahStatus,
+    startDateFrom: filters.startDateFrom,
+    startDateTo: filters.startDateTo,
+    extensionRequested: filters.extensionRequested,
+    cancellationRequested: filters.cancellationRequested,
+  });
+  // Reset the window whenever filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_STEP);
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [filterKey]);
+
+  const visibleRentals = useMemo(() => allRentals.slice(0, visibleCount), [allRentals, visibleCount]);
+  const hasMore = visibleCount < allRentals.length;
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((c) => Math.min(c + PAGE_STEP, allRentals.length));
+        }
+      },
+      { root: scrollRef.current, rootMargin: "240px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMore, allRentals.length]);
 
   const handleViewChange = (view: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -208,9 +299,9 @@ const RentalsList = () => {
   }
 
   return (
-    <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
+    <div className={currentView === "calendar" ? "px-4 pb-4 md:px-6 md:pb-6 space-y-6" : "container mx-auto flex h-[calc(100svh-2rem)] flex-col gap-6 px-4 md:px-6"}>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0 flex items-start justify-between gap-3 sm:block">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
@@ -218,62 +309,30 @@ const RentalsList = () => {
               Manage rental agreements and contracts
             </p>
           </div>
-          {/* Mobile-only icon cluster next to title */}
-          <div className="flex items-center gap-2 shrink-0 sm:hidden">
-            <div className="flex rounded-md border overflow-hidden">
-              <Button
-                variant={currentView === "list" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-none h-8 px-2.5"
-                onClick={() => handleViewChange("list")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={currentView === "calendar" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-none h-8 px-2.5 border-l"
-                onClick={() => handleViewChange("calendar")}
-              >
-                <CalendarDays className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* View Toggle — sm+ only (mobile shows it next to title) */}
-          <div className="hidden sm:flex rounded-md border overflow-hidden">
-            <Button
-              variant={currentView === "list" ? "default" : "ghost"}
-              size="sm"
-              className="rounded-none h-8 px-2.5"
-              onClick={() => handleViewChange("list")}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={currentView === "calendar" ? "default" : "ghost"}
-              size="sm"
-              className="rounded-none h-8 px-2.5 border-l"
-              onClick={() => handleViewChange("calendar")}
-            >
-              <CalendarDays className="h-4 w-4" />
-            </Button>
-          </div>
-          <Link href="/rentals/analytics" className="shrink-0">
-            <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleExportCSV}
-            disabled={!rentals.length}
-            className="border-primary/20 hover:border-primary/40 hover:bg-primary/5 shrink-0"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+          {currentView !== "calendar" && (
+            <div className="group relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
+              <Input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search rentals…"
+                className="rounded-xl border-border/60 bg-card pl-9 pr-11 shadow-sm transition-all placeholder:text-muted-foreground/70 hover:border-primary/30 focus-visible:border-primary focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/20"
+              />
+              <button
+                type="button"
+                aria-label="Filters"
+                aria-pressed={showFilters}
+                onClick={() => setShowFilters((v) => !v)}
+                className={`absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                  showFilters ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary/20"
+                }`}
+              >
+                <SlidersHorizontal className="size-4" />
+              </button>
+            </div>
+          )}
           {canEdit('rentals') && (
             <Button
               onClick={() => router.push("/rentals/new")}
@@ -286,59 +345,172 @@ const RentalsList = () => {
         </div>
       </div>
 
-      {/* Quick Stats — list view only */}
-      {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Total Rentals</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-success">
-                {stats.active}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
-                {stats.closed}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-amber-500">
-                {stats.pending}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Filters — list view only */}
+      {/* Overview — charts; the filter panel overlays the exact same box */}
       {currentView !== "calendar" && (
-        <RentalsFilters
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          onClearFilters={handleClearFilters}
-        />
+        <div className="relative shrink-0">
+          {/* Charts define the box; fade/scale out when filters open */}
+          <div
+            className={`transition-all duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[opacity,transform] ${
+              showFilters ? "pointer-events-none scale-[0.985] opacity-0 blur-[1px]" : "scale-100 opacity-100 blur-0"
+            }`}
+          >
+            {stats && (() => {
+        const statusData = [
+          { key: "active", label: "Active", value: stats.active, fill: "hsl(var(--chart-3))" },
+          { key: "completed", label: "Completed", value: stats.closed, fill: "hsl(var(--chart-1))" },
+          { key: "pending", label: "Pending", value: stats.pending, fill: "hsl(var(--chart-5))" },
+        ];
+        return (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* 1 — Status donut */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-0">
+              <CardTitle className="text-sm font-medium text-muted-foreground">By status</CardTitle>
+            </CardHeader>
+            <CardContent className="flex justify-center pt-0">
+              <ChartContainer config={statusConfig} className="aspect-square h-[112px]">
+                <PieChart>
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent nameKey="label" hideLabel />} />
+                  <Pie data={statusData} dataKey="value" nameKey="label" innerRadius={36} outerRadius={52} cornerRadius={4} strokeWidth={3} paddingAngle={4}>
+                    {statusData.map((d) => (
+                      <Cell key={d.key} fill={d.fill} className="stroke-card" />
+                    ))}
+                    <RLabel
+                      content={({ viewBox }) => {
+                        if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                          return (
+                            <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                              <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-xl font-bold">{stats.total}</tspan>
+                              <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 15} className="fill-muted-foreground text-[10px]">rentals</tspan>
+                            </text>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* 2 — New rentals (area) */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-sm font-medium text-muted-foreground">New rentals</CardTitle>
+              <p className="text-xl font-bold">{stats.total}</p>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ChartContainer config={trendConfig} className="h-[78px] w-full">
+                <AreaChart data={trendData} margin={{ left: 0, right: 0, top: 6, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="fillTrend" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-rentals)" stopOpacity={0.5} />
+                      <stop offset="100%" stopColor="var(--color-rentals)" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                  <Area dataKey="rentals" type="natural" stroke="var(--color-rentals)" strokeWidth={2.5} fill="url(#fillTrend)" dot={false} activeDot={{ r: 4 }} />
+                </AreaChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* 3 — Revenue (bars) */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Revenue</CardTitle>
+              <p className="text-xl font-bold">${(revenueData.reduce((s, d) => s + d.rev, 0) / 1000).toFixed(0)}k</p>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ChartContainer config={revenueConfig} className="h-[78px] w-full">
+                <BarChart data={revenueData} margin={{ left: 0, right: 0, top: 6, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="fillRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-rev)" stopOpacity={1} />
+                      <stop offset="100%" stopColor="var(--color-rev)" stopOpacity={0.45} />
+                    </linearGradient>
+                  </defs>
+                  <ChartTooltip cursor={{ fillOpacity: 0.1 }} content={<ChartTooltipContent hideLabel />} />
+                  <Bar dataKey="rev" fill="url(#fillRev)" radius={6} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* 4 — Calendar view nav */}
+          <button
+            type="button"
+            onClick={() => handleViewChange("calendar")}
+            className="group relative flex cursor-pointer flex-col justify-end overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 text-left text-foreground shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/15"
+          >
+            <span className="pointer-events-none absolute -right-8 -top-8 size-28 rounded-full bg-primary/15 blur-2xl transition-all duration-300 group-hover:bg-primary/25" />
+            <span className="pointer-events-none absolute -bottom-10 -left-6 size-24 rounded-full bg-primary/10 blur-2xl" />
+            {/* Faint fleet-timeline preview — fills the body, echoes the Gantt view */}
+            <div className="pointer-events-none absolute inset-x-5 top-[38%] -translate-y-1/2 opacity-80 transition-opacity duration-300 group-hover:opacity-100">
+              {/* scanning "now" playhead */}
+              <span
+                className="absolute -top-2 bottom-[-0.5rem] w-px bg-primary/60 shadow-[0_0_8px_hsl(var(--primary)/0.5)]"
+                style={{ animation: "playhead-scan 4s ease-in-out infinite" }}
+              >
+                <span className="absolute -left-[3px] -top-1 size-[7px] rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.7)]" />
+              </span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-7 rounded-full bg-primary/20" />
+                  <span className="h-1.5 flex-[3] origin-left rounded-full bg-primary/60" style={{ animation: "timeline-grow 3.6s ease-in-out infinite" }} />
+                  <span className="h-1.5 flex-1 rounded-full bg-primary/15" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-12 rounded-full bg-primary/20" />
+                  <span className="h-1.5 flex-1 origin-left rounded-full bg-primary/45" style={{ animation: "timeline-grow 3.6s ease-in-out infinite", animationDelay: "0.45s" }} />
+                  <span className="h-1.5 flex-[2] rounded-full bg-primary/15" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 flex-[2] origin-left rounded-full bg-primary/50" style={{ animation: "timeline-grow 3.6s ease-in-out infinite", animationDelay: "0.9s" }} />
+                  <span className="h-1.5 flex-[3] rounded-full bg-primary/15" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-5 rounded-full bg-primary/20" />
+                  <span className="h-1.5 flex-[2] origin-left rounded-full bg-primary/40" style={{ animation: "timeline-grow 3.6s ease-in-out infinite", animationDelay: "1.35s" }} />
+                  <span className="h-1.5 flex-1 rounded-full bg-primary/15" />
+                </div>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="mt-3 text-lg font-bold tracking-tight">Calendar View</div>
+              <div className="text-sm text-muted-foreground">See your fleet on a timeline</div>
+            </div>
+            <ArrowRight className="absolute right-4 top-4 size-5 text-primary" style={{ animation: "arrow-nudge 4s ease-in-out infinite" }} />
+          </button>
+        </div>
+        );
+      })()}
+          </div>
+
+          {/* Filter panel — fills the exact same box as the charts */}
+          <div
+            className={`absolute inset-0 transition-all duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[opacity,transform] ${
+              showFilters ? "scale-100 opacity-100 blur-0" : "pointer-events-none scale-[0.985] opacity-0 blur-[1px]"
+            }`}
+          >
+            <RentalsFilterPanel
+              filters={filters}
+              onChange={handleFiltersChange}
+              onClear={handleClearFilters}
+              onClose={() => setShowFilters(false)}
+            />
+          </div>
+        </div>
       )}
 
       {/* Calendar View */}
       {currentView === "calendar" ? (
         <CalendarView filters={filters} />
       ) : /* Rentals Table */
-      rentals.length > 0 ? (
-        <>
-          <Card>
-            <CardContent className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative">
+      allRentals.length > 0 ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/70 bg-card shadow-none">
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-auto relative p-0">
               <Table className="min-w-[700px]">
                   <TableHeader className="sticky top-0 z-10 bg-card">
                     <TableRow>
@@ -353,7 +525,7 @@ const RentalsList = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rentals.map((rental) => (
+                    {visibleRentals.map((rental) => (
                       <TableRow
                         key={rental.id}
                         className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
@@ -363,17 +535,18 @@ const RentalsList = () => {
                           {rental.is_extended ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
-                              <button
-                                className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
+                              <Button
+                                variant="ghost"
+                                className="h-auto border-0 p-0 rounded-none justify-start hover:bg-transparent text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedRental(rental);
                                   setShowExtensionDialog(true);
                                 }}
                               >
-                                <CalendarPlus className="h-3 w-3" />
+                                <CalendarPlus className="size-3" />
                                 Extension Requested
-                              </button>
+                              </Button>
                             </div>
                           ) : rental.cancellation_requested ? (
                             <div className="flex flex-col">
@@ -478,6 +651,10 @@ const RentalsList = () => {
                                 Auto-Extend
                               </Badge>
                             )}
+                            {/* Added on main after this page's redesign was
+                                written — an auto-extending rental that has been
+                                paused otherwise looks identical to one still
+                                renewing. */}
                             {(rental as any).auto_extend_status === 'paused' && (
                               <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:bg-amber-950/30 text-[10px]">
                                 Paused
@@ -500,79 +677,16 @@ const RentalsList = () => {
                     ))}
                   </TableBody>
                 </Table>
-            </CardContent>
-          </Card>
 
-          {/* Pagination */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="text-sm text-muted-foreground">
-              Showing {rentals.length} of {totalCount} rentals
-            </div>
-            <div className="flex items-center">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() =>
-                        handlePageChange(Math.max(1, filters.page! - 1))
-                      }
-                      className={
-                        filters.page === 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-
-                  {totalPages > 1 ? (
-                    Array.from(
-                      { length: Math.min(5, totalPages) },
-                      (_, i) => {
-                        const pageNum =
-                          Math.max(
-                            1,
-                            Math.min(totalPages - 4, filters.page! - 2)
-                          ) + i;
-                        return (
-                          <PaginationItem key={pageNum}>
-                            <PaginationLink
-                              onClick={() => handlePageChange(pageNum)}
-                              isActive={pageNum === filters.page}
-                              className="cursor-pointer"
-                            >
-                              {pageNum}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      }
-                    )
-                  ) : (
-                    <PaginationItem>
-                      <PaginationLink isActive className="cursor-default">
-                        1
-                      </PaginationLink>
-                    </PaginationItem>
-                  )}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() =>
-                        handlePageChange(
-                          Math.min(totalPages, filters.page! + 1)
-                        )
-                      }
-                      className={
-                        filters.page === totalPages || totalPages <= 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
+                {/* Infinite-scroll sentinel + loader */}
+                {hasMore && (
+                  <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    Loading more…
+                  </div>
+                )}
           </div>
-        </>
+        </div>
       ) : (
         <div className="text-center py-8">
           <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -606,6 +720,11 @@ const RentalsList = () => {
           }}
           rental={{
             id: selectedRental.id,
+            // The dialog divides by (end_date - start_date) to work out the
+            // current rental length before pricing an extension. This was never
+            // passed, so that subtraction ran against undefined and produced
+            // NaN days on every extension quote.
+            start_date: selectedRental.start_date || '',
             end_date: selectedRental.end_date || '',
             previous_end_date: selectedRental.previous_end_date || null,
             customers: {
