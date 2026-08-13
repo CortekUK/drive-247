@@ -167,20 +167,48 @@ Deno.serve(async (req) => {
     const expiresAt = new Date(Date.now() + (expiresInSeconds - 30) * 1000).toISOString();
 
     // 3. Fetch the user's Zoho organisations
-    const orgRes = await fetch(`${ZOHO.organizationsUrl(region)}`, {
+    const orgsEndpoint = ZOHO.organizationsUrl(region);
+    const orgRes = await fetch(orgsEndpoint, {
       headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, Accept: "application/json" },
     });
-    if (!orgRes.ok) {
-      return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=organisations_lookup_failed");
-    }
-    const orgJson = await orgRes.json() as {
-      code: number;
+    const orgJson = await orgRes.json().catch(() => null) as {
+      code?: number;
+      message?: string;
       organizations?: Array<{ organization_id: string; name: string; country_code?: string }>;
-    };
+    } | null;
+
+    // Zoho Books answers with HTTP 200 and a `code` field: 0 means success,
+    // anything else is an error (bad scope, wrong DC, expired token...).
+    // Checking only `organizations.length === 0` therefore reported every one of
+    // those as "this account has no organisations", which sent the operator off
+    // to create an org they may well already have. Distinguish them, and log the
+    // response either way — previously nothing was recorded at all, so a failure
+    // here could not be diagnosed from the logs afterwards.
+    const apiFailed = !orgRes.ok || !orgJson || (typeof orgJson.code === "number" && orgJson.code !== 0);
+    if (apiFailed) {
+      console.error(
+        "zoho-oauth-callback: organizations lookup failed",
+        `http=${orgRes.status}`,
+        `endpoint=${orgsEndpoint}`,
+        `code=${orgJson?.code ?? "—"}`,
+        `message=${orgJson?.message ?? "—"}`,
+      );
+      return redirect(
+        `/settings?tab=accounting&status=error&provider=zoho&reason=organisations_lookup_failed`,
+      );
+    }
+
     const orgs = orgJson.organizations ?? [];
     if (orgs.length === 0) {
+      // Genuinely empty — the API said success and returned no organisations.
+      console.warn(
+        `zoho-oauth-callback: account has no Zoho Books organisations (region=${region}, endpoint=${orgsEndpoint})`,
+      );
       return redirect("/settings?tab=accounting&status=error&provider=zoho&reason=no_organisations");
     }
+    console.log(
+      `zoho-oauth-callback: found ${orgs.length} organisation(s) in region ${region}; using ${orgs[0].organization_id} (${orgs[0].name})`,
+    );
     if (orgs.length > 1) {
       // V1 limitation per master plan: pick the first one. V2 will surface
       // an org-picker UI. Logged so we know when this triggers.

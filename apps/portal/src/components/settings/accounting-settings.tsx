@@ -62,8 +62,10 @@ const OAUTH_REASONS: Record<string, string> = {
   no_refresh_token:
     "The provider did not return a refresh token, so the connection could not be kept alive. Revoke the app in the provider's console and reconnect.",
   connections_lookup_failed: "Connected, but we could not read your organisation list.",
-  organisations_lookup_failed: "Connected, but we could not read your organisation list.",
-  no_organisations: "That account has no organisations we can sync to.",
+  organisations_lookup_failed:
+    "You authorised successfully, but the provider rejected our request for your organisation list. This usually means a missing permission — reconnect, and if it repeats check the server logs.",
+  no_organisations:
+    "You authorised successfully, but that account has no Zoho Books organisation yet. Create one at books.zoho.com — signed in as the same account you just authorised with — then reconnect.",
   persist_failed: "The connection succeeded but could not be saved. Please try again.",
 };
 
