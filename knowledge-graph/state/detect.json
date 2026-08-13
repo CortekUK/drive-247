@@ -899,7 +899,7 @@
       "video": []
     },
     "total_files": 890,
-    "total_words": 838365,
+    "total_words": 838473,
     "counts": {
       "code": 890
     },
@@ -2150,7 +2150,7 @@
       "video": []
     },
     "total_files": 341,
-    "total_words": 428424,
+    "total_words": 428532,
     "counts": {
       "code": 326,
       "image": 15
@@ -2603,7 +2603,7 @@
       "video": []
     },
     "total_files": 92,
-    "total_words": 126126,
+    "total_words": 126234,
     "counts": {
       "code": 92
     },
@@ -3308,7 +3308,7 @@
       "video": []
     },
     "total_files": 349,
-    "total_words": 460679,
+    "total_words": 461420,
     "counts": {
       "code": 343,
       "document": 6
@@ -4182,6 +4182,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260806120000_add_platform_tos_acceptance.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260806190000_fix_pnl_entries_tenant_id.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260807120000_cascade_vehicle_delete_blockers.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260812190000_add_admin_find_auth_user_by_email.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
@@ -4189,10 +4190,10 @@
         "/home/haseeb-raza/Desktop/drive-247/MANUAL_MIGRATION.sql"
       ]
     },
-    "total_files": 360,
-    "total_words": 140385,
+    "total_files": 361,
+    "total_words": 140958,
     "counts": {
-      "code": 360
+      "code": 361
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20251219083413_remote_schema.sql",
@@ -4550,6 +4551,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260806120000_add_platform_tos_acceptance.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260806190000_fix_pnl_entries_tenant_id.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260807120000_cascade_vehicle_delete_blockers.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260812190000_add_admin_find_auth_user_by_email.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",

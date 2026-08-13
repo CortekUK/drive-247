@@ -1,15 +1,5 @@
 {
-  "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-accounting-sync/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/zoho-oauth-callback/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/refresh-accounting-tokens/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/xero-oauth-callback/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260526130200_create_rental_sync_locks.sql"
-  ],
-  "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/database-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
-  ],
+  "files": [],
+  "specs": [],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

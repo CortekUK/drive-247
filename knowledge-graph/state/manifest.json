@@ -852,7 +852,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/types.ts": {
-    "sha": "ecc47d241ec812f5c2dce3c4e2a88bd5f727d3cf9e6aa695f00cc68214c94d65",
+    "sha": "6d9a5eff28e1224eff260d565ce14d6dfb7884625259c6453b45fbddeeaad97a",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/client.ts": {
@@ -3952,7 +3952,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/types.ts": {
-    "sha": "ecc47d241ec812f5c2dce3c4e2a88bd5f727d3cf9e6aa695f00cc68214c94d65",
+    "sha": "6d9a5eff28e1224eff260d565ce14d6dfb7884625259c6453b45fbddeeaad97a",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/client.ts": {
@@ -5288,7 +5288,7 @@
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/src/integrations/supabase/types.ts": {
-    "sha": "ecc47d241ec812f5c2dce3c4e2a88bd5f727d3cf9e6aa695f00cc68214c94d65",
+    "sha": "6d9a5eff28e1224eff260d565ce14d6dfb7884625259c6453b45fbddeeaad97a",
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/eslint.config.mjs": {
@@ -5768,7 +5768,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-booking-email/index.ts": {
-    "sha": "bcc8b116cc60aadc0765e88ddfe9866b7f1e638e921a0a1171a330721affef5f",
+    "sha": "11091db946962b955c185b2d995f6f432262480c1fd3b69151db9721c0006855",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/finalize-payg-rental/index.ts": {
@@ -5956,7 +5956,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-cp-enquiry/index.ts": {
-    "sha": "a45aa5ab9e415a7cda6873c8da6662b9ab158f6cb863031ccc13e0bd54f657a9",
+    "sha": "2f4f22675f3b20945257a5d8596acb8d01d6a63c43abd5684701bb9c9629eb23",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/simulate-payg-timelapse/index.ts": {
@@ -6188,7 +6188,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-create-user/index.ts": {
-    "sha": "87823653fe10fcb870f655db914057a671b88b2815e44ac6e2f367ec6918e239",
+    "sha": "af223f80346e2fccdd283e143365e6085f0123baee89ff8dc1561a4e6cdd66ea",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/platform-rental-notify/index.ts": {
@@ -6772,7 +6772,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/hyper-api/index.ts": {
-    "sha": "a6a2fff158ce46f3d11eb5f6945511149ba681f25bfc84d1bb242a2cebb6e186",
+    "sha": "c1134f899c9ff9ebea1028fcef02fc0a911d2c5c3a5874b81e39d6e78697f3c8",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-operator-email/index.ts": {
@@ -6840,7 +6840,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-user-welcome-email/index.ts": {
-    "sha": "d85a14624d873c0a830d90cbb41d9fea44b045791fa8e93b9939c599cc556561",
+    "sha": "ff0efaf707626163e9c1c1b625f886da2e08f5ce2fd50114f29d804256baf850",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-call-recording/index.ts": {
@@ -8739,8 +8739,12 @@
     "sha": "d8cdef23eaa45679bc88173243602414f2739944b6495cf1578efc44220ea452",
     "unit": "database"
   },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260812190000_add_admin_find_auth_user_by_email.sql": {
+    "sha": "1042f21af790bb0b04a74362cf693bf5fed0cfa2b66842169809ade85cdc825e",
+    "unit": "database"
+  },
   "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_fix_accounting_sync_claim_and_deadletter.sql": {
-    "sha": "fd0ff78845202be4cb360ba19141bfd561201aef2e4f09bf5693b3d170c98153",
+    "sha": "5686a63f70fa8e1ba8b1f6bd130bad7303b554425bd908d005f394af76afe66c",
     "unit": "database"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql": {
