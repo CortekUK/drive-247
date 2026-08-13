@@ -155,6 +155,32 @@ export async function syncTeslaChargesForTenant(
               .from('tesla_supercharger_charges')
               .update({ ledger_entry_id: ledgerEntry.id })
               .eq('id', newCharge.id);
+
+            // Finance Sync — enqueue charging_cost for the accounting layer.
+            // Tesla supercharger costs flow through as invoice lines so the
+            // customer's bill matches what they actually consumed. Non-fatal.
+            try {
+              const { data: tenantRow } = await supabase
+                .from('tenants')
+                .select('currency_code')
+                .eq('id', tenantId)
+                .maybeSingle();
+              await supabase.rpc('enqueue_financial_event', {
+                p_tenant_id: tenantId,
+                p_event_type: 'charging_cost',
+                p_amount_cents: Math.round(Number(amount) * 100),
+                p_currency: (tenantRow?.currency_code as string) ?? 'USD',
+                p_rental_id: matchedRental.id,
+                p_customer_id: matchedRental.customer_id ?? null,
+                p_vehicle_id: vehicle.id ?? null,
+                p_source_table: 'ledger_entries',
+                p_source_id: ledgerEntry.id,
+                p_description: `Supercharger: ${location}`,
+                p_metadata: { tesla_charge_id: teslaChargeId, location, charge_date: chargeDate },
+              });
+            } catch (err) {
+              console.error('[finance-sync] enqueue charging_cost failed (non-fatal):', err);
+            }
           }
 
           await supabase

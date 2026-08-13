@@ -207,6 +207,32 @@ async function chargeFineToAccount(supabase: any, fineId: string): Promise<FineC
 
     chargeEntry = newEntry;
     getChargeError = refetchError;
+
+    // Finance Sync — enqueue a damage_charge event for the accounting sync layer.
+    // Wrapped: a sync failure must never break the operational fine-application path.
+    if (chargeEntry && fine.tenant_id) {
+      try {
+        const { data: tenantRow } = await supabase
+          .from("tenants")
+          .select("currency_code")
+          .eq("id", fine.tenant_id)
+          .maybeSingle();
+        await supabase.rpc("enqueue_financial_event", {
+          p_tenant_id: fine.tenant_id,
+          p_event_type: "damage_charge",
+          p_amount_cents: Math.round(Number(fine.amount) * 100),
+          p_currency: (tenantRow?.currency_code as string) ?? "USD",
+          p_rental_id: fine.rental_id ?? null,
+          p_customer_id: fine.customer_id ?? null,
+          p_vehicle_id: fine.vehicle_id ?? null,
+          p_source_table: "ledger_entries",
+          p_source_id: chargeEntry.id,
+          p_description: `Fine ${fineId}: ${fine.reason ?? ""}`.trim(),
+        });
+      } catch (err) {
+        console.error("[finance-sync] enqueue damage_charge failed (non-fatal):", err);
+      }
+    }
   } else {
     console.log(`Found existing charge entry ${chargeEntry.id} for fine ${fineId}`);
   }
