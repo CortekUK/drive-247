@@ -95,13 +95,28 @@ Deno.serve(async (req) => {
           next_attempt_at: null,
           last_error: body.skip ? "Marked skipped by operator" : null,
           last_error_code: body.skip ? "SKIPPED" : null,
+          // Manual retry is the ONLY way out of dead-letter, so it must clear the
+          // marker. Migration 20260813120000 made the claim RPC skip any row with
+          // dead_lettered_at set; without clearing it here the row flips to
+          // 'pending' and is then never claimed — the button looks like it worked
+          // and silently does nothing.
+          dead_lettered_at: null,
+          // Give the row its full retry budget back. attempts is what drives the
+          // backoff schedule and the dead-letter threshold, so leaving it at its
+          // old value means the very next failure dead-letters it again instantly.
+          attempts: 0,
+          // Drop any stale in-flight lease so the reaper does not have to wait it out.
+          claimed_at: null,
         })
         .eq("id", body.syncStateId);
       if (error) return errorResponse(error.message, 500);
       return jsonResponse({ ok: true, reset: 1, newState });
     }
 
-    // Bulk: reset all failed rows for this tenant
+    // Bulk: reset all failed rows for this tenant.
+    // Same three fields as the single-row path above — see the comment there for
+    // why each one matters. "Retry all failed" is the operator's recovery route
+    // after reconnecting a provider, and it has to actually re-arm the rows.
     const { count, error } = await supabase
       .from("financial_event_sync_state")
       .update({
@@ -109,6 +124,9 @@ Deno.serve(async (req) => {
         next_attempt_at: null,
         last_error: null,
         last_error_code: null,
+        dead_lettered_at: null,
+        attempts: 0,
+        claimed_at: null,
       }, { count: "exact" })
       .eq("tenant_id", tenantId)
       .eq("state", "failed");

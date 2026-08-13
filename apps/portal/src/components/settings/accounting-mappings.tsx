@@ -12,7 +12,7 @@
  */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Loader2, Save, Sparkles, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,10 +58,21 @@ export function AccountingMappings({ provider, onBack }: Props) {
   const [draft, setDraft] = useState<Record<string, DraftRow>>({});
   const [paymentDraft, setPaymentDraft] = useState<{ external_account_code: string } | null>(null);
 
-  // Seed draft once mappings load
+  // Seed the draft once, per provider.
+  //
+  // The guard used to be `if (Object.keys(draft).length > 0) return;` with
+  // `draft` in the dependency array. That works only while the tenant HAS
+  // mappings. With zero rows — a provider that has never been configured, which
+  // is every tenant's starting state and Zoho's today — `seeded` is `{}`, so
+  // setDraft({}) hands React a brand-new object identity on every pass, `draft`
+  // changes by reference, the effect re-runs, and the component spins forever.
+  //
+  // Tracking "have I seeded yet" explicitly makes the empty case behave like any
+  // other, and lets `draft` leave the dependency array entirely.
+  const seededForProvider = useRef<string | null>(null);
   useEffect(() => {
     if (!mappingsQuery.data) return;
-    if (Object.keys(draft).length > 0) return;
+    if (seededForProvider.current === provider) return;
     const seeded: Record<string, DraftRow> = {};
     let payment: { external_account_code: string } | null = null;
     for (const row of mappingsQuery.data) {
@@ -74,9 +85,10 @@ export function AccountingMappings({ provider, onBack }: Props) {
         };
       }
     }
+    seededForProvider.current = provider;
     setDraft(seeded);
     setPaymentDraft(payment);
-  }, [mappingsQuery.data, draft]);
+  }, [mappingsQuery.data, provider]);
 
   // Dirty check — compare draft against fetched mappings.
   // We MUST apply the same "skip empty" filter that onSave applies, otherwise

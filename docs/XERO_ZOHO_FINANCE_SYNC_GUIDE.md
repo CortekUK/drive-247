@@ -191,6 +191,11 @@ Every OAuth token, every sync job, every log entry is namespaced by `tenant_id`.
    - `ZohoBooks.customerpayments.ALL`
    - `ZohoBooks.creditnotes.ALL`
    - `ZohoBooks.settings.READ`
+   - `ZohoBooks.accountants.READ` — **required**, and missing from earlier revisions of
+     this guide. Chart of Accounts sits under the Accountant module, so `GET /chartofaccounts`
+     (which backs the account dropdowns on the mapping screen) 401s without it. Scopes are
+     fixed at consent time, so a connection made without this scope must be disconnected
+     and re-authorised — adding it later does not upgrade an existing grant.
 6. Confirm you can complete a manual OAuth round-trip using `accounts.zoho.com/oauth/v2/auth?...`.
 
 ### 4.3 Provided test accounts (use at OAuth login screen)

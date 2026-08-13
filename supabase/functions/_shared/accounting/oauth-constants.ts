@@ -47,6 +47,18 @@ export const ZOHO = {
     "ZohoBooks.customerpayments.ALL",
     "ZohoBooks.creditnotes.ALL",
     "ZohoBooks.settings.READ",
+    // Chart of Accounts lives under the Accountant module, NOT under settings.
+    // zoho-client.ts listAccounts() calls GET /chartofaccounts, which Zoho
+    // documents as requiring ZohoBooks.accountants.READ; settings.READ covers
+    // items, taxes, currencies and opening balances only. Without this the call
+    // 401s, the account dropdowns on Settings → Accounting → Configure mappings
+    // stay empty, and there is no manual-entry fallback — so no mapping can be
+    // saved and nothing can ever sync.
+    //
+    // Scopes are baked into the consent grant, so adding this only takes effect
+    // for connections made AFTER the change. It must also be added to the app's
+    // scope list in the Zoho API console.
+    "ZohoBooks.accountants.READ",
   ].join(","),
 } as const;
 
