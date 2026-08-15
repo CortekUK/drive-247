@@ -34,7 +34,7 @@ export const CONFIRMATION_VIDEOS = [
       "Build a rental operation that still exists outside any single marketplace.",
     src: "/strategy-call/videos/01-marketplace-dependency.mp4",
     poster: "/strategy-call/posters/01-marketplace-dependency.webp",
-    captions: null,
+    captions: "/strategy-call/captions/01-marketplace-dependency.en.vtt",
     transcript: null,
   },
   {
@@ -46,7 +46,7 @@ export const CONFIRMATION_VIDEOS = [
     takeaway: "Picture how your rental business could run through Drive247.",
     src: "/strategy-call/videos/02-drive247-system-walkthrough.mp4",
     poster: "/strategy-call/posters/02-drive247-system-walkthrough.webp",
-    captions: null,
+    captions: "/strategy-call/captions/02-drive247-system-walkthrough.en.vtt",
     transcript: null,
   },
   {
@@ -59,7 +59,7 @@ export const CONFIRMATION_VIDEOS = [
       "Use the strategy call for questions specific to your operation, not the basics.",
     src: "/strategy-call/videos/03-frequently-asked-questions.mp4",
     poster: "/strategy-call/posters/03-frequently-asked-questions.webp",
-    captions: null,
+    captions: "/strategy-call/captions/03-frequently-asked-questions.en.vtt",
     transcript: null,
   },
   {
@@ -72,7 +72,7 @@ export const CONFIRMATION_VIDEOS = [
       "Know whether this fits—and what fleet details, blockers and launch goal to bring to the call.",
     src: "/strategy-call/videos/04-who-this-is-for.mp4",
     poster: "/strategy-call/posters/04-who-this-is-for.webp",
-    captions: null,
+    captions: "/strategy-call/captions/04-who-this-is-for.en.vtt",
     transcript: null,
   },
 ] as const satisfies readonly [

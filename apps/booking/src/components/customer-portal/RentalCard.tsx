@@ -120,9 +120,12 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
       : vehicle.reg
     : 'Vehicle';
 
+  // Gallery photo first: it is the only image the operator can redact, so
+  // putting the legacy vehicles.photo_url ahead of it served the unblurred
+  // plate to the very tenants who asked us to hide it.
   const vehicleImage =
-    vehicle?.photo_url ||
     customerPhotoUrl(vehicle?.vehicle_photos?.[0], tenant) ||
+    vehicle?.photo_url ||
     '/placeholder.svg';
 
   const durationDays = differenceInDays(

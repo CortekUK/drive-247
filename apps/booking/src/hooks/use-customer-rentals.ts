@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+// Selecting photo_url alone left customerPhotoUrl() with no redaction_status to
+// test, so a plate the operator had blurred was served unredacted anyway.
+import { VEHICLE_PHOTO_COLUMNS } from '@/lib/vehicle-identity';
 
 export interface CustomerRentalInstallmentPlan {
   id: string;
@@ -60,7 +63,12 @@ export interface CustomerRental {
     weekly_mileage: number | null;
     monthly_mileage: number | null;
     excess_mileage_rate: number | null;
-    vehicle_photos: { photo_url: string }[];
+    vehicle_photos: {
+      photo_url: string;
+      redacted_url: string | null;
+      redaction_status: string | null;
+      display_order: number | null;
+    }[];
   } | null;
   installment_plans: CustomerRentalInstallmentPlan[] | null;
 }
@@ -115,7 +123,7 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
             weekly_mileage,
             monthly_mileage,
             excess_mileage_rate,
-            vehicle_photos (photo_url)
+            ${VEHICLE_PHOTO_COLUMNS}
           ),
           installment_plans!installment_plans_rental_id_fkey (
             id,

@@ -99,11 +99,57 @@ Deno.serve(async (req) => {
       category: string | null;
     }> = [];
     if (vehicleIds.length > 0) {
-      const { data: rows } = await supabase
+      // The rate columns are daily_rent/weekly_rent/monthly_rent. Selecting
+      // daily_rate (and rate_daily) asked for columns that do not exist, so
+      // PostgREST failed the whole query with 42703 and the destructure
+      // discarded the error — every offer page silently rendered with no
+      // vehicle details at all. Aliased so the response shape is unchanged for
+      // offer-page.tsx, which reads detail.weekly_rate.
+      const { data: rows, error: vehicleError } = await supabase
         .from("vehicles")
-        .select("id, make, model, photo_url, daily_rate, weekly_rate, monthly_rate, category, rate_daily, rate_weekly, rate_monthly")
+        .select(
+          "id, make, model, photo_url, category, daily_rate:daily_rent, weekly_rate:weekly_rent, monthly_rate:monthly_rent",
+        )
         .in("id", vehicleIds);
+      if (vehicleError) {
+        console.error("view-offer: vehicle lookup failed", { code: vehicleError.code });
+      }
       vehicleDetails = (rows ?? []) as typeof vehicleDetails;
+
+      // An offer link is public and unauthenticated, so the plate rule the
+      // booking site enforces has to hold here too: for a tenant that hides
+      // plates, a photo the operator blurred must not be handed to a lead in
+      // its original form. `vehicles.photo_url` has no redacted twin of its
+      // own, so the redacted gallery copy stands in for it. Deliberately not
+      // deny-by-default — matching customerPhotoUrl(), an unreviewed photo
+      // still serves as-is rather than blanking the offer page.
+      if (vehicleDetails.length > 0) {
+        const { data: tenantRow } = await supabase
+          .from("tenants")
+          .select("hide_vehicle_registration")
+          .eq("id", offer.tenant_id)
+          .maybeSingle();
+
+        if (tenantRow?.hide_vehicle_registration === true) {
+          const { data: photos } = await supabase
+            .from("vehicle_photos")
+            .select("vehicle_id, redacted_url, redaction_status, display_order")
+            .in("vehicle_id", vehicleIds)
+            .eq("redaction_status", "redacted")
+            .order("display_order", { ascending: true });
+
+          const redactedByVehicle = new Map<string, string>();
+          for (const p of (photos ?? []) as { vehicle_id: string; redacted_url: string | null }[]) {
+            if (p.redacted_url && !redactedByVehicle.has(p.vehicle_id)) {
+              redactedByVehicle.set(p.vehicle_id, p.redacted_url);
+            }
+          }
+
+          vehicleDetails = vehicleDetails.map((v) =>
+            redactedByVehicle.has(v.id) ? { ...v, photo_url: redactedByVehicle.get(v.id)! } : v,
+          );
+        }
+      }
     }
 
     return jsonResponse({

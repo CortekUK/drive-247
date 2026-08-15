@@ -1,10 +1,38 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CONFIRMATION_VIDEOS } from "./confirmation-content";
 
 const PUBLIC_DIR = join(__dirname, "..", "..", "..", "public");
 const asset = (publicPath: string) => join(PUBLIC_DIR, publicPath);
+
+const CUE_TIMING = /^(\d{2}):(\d{2}):(\d{2}\.\d{3}) --> (\d{2}):(\d{2}):(\d{2}\.\d{3})$/;
+const toSeconds = (h: string, m: string, s: string) =>
+  Number(h) * 3600 + Number(m) * 60 + Number(s);
+
+type Cue = { start: number; end: number; lines: string[] };
+
+function parseVtt(source: string): Cue[] {
+  const lines = source.split("\n");
+  const cues: Cue[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = CUE_TIMING.exec(lines[i] ?? "");
+    if (!match) continue;
+    const body: string[] = [];
+    let j = i + 1;
+    while (j < lines.length && lines[j].trim() !== "") {
+      body.push(lines[j]);
+      j += 1;
+    }
+    cues.push({
+      start: toSeconds(match[1], match[2], match[3]),
+      end: toSeconds(match[4], match[5], match[6]),
+      lines: body,
+    });
+    i = j;
+  }
+  return cues;
+}
 
 describe("confirmation funnel video configuration", () => {
   it("contains exactly four uniquely ordered videos", () => {
@@ -48,4 +76,46 @@ describe("confirmation funnel video configuration", () => {
       expect(video.src.endsWith(".mp4")).toBe(true);
     }
   });
+});
+
+// The captions are machine-transcribed, so the risk is not a missing file (the
+// test above covers that) but a malformed or unreadable one. A caption that
+// overflows two lines covers the video; a reversed or out-of-order timing makes
+// the track unusable. An earlier generator silently truncated every cue past 84
+// characters, dropping whole words mid-sentence — these assertions exist so that
+// class of mistake cannot reach a viewer again.
+describe("confirmation funnel captions", () => {
+  const withCaptions = CONFIRMATION_VIDEOS.filter(
+    (video): video is (typeof CONFIRMATION_VIDEOS)[number] & { captions: string } =>
+      video.captions !== null,
+  );
+
+  it("has a caption track for every video", () => {
+    expect(withCaptions).toHaveLength(CONFIRMATION_VIDEOS.length);
+  });
+
+  it.each(withCaptions.map((video) => [video.slug, video] as const))(
+    "%s is well-formed WebVTT",
+    (_slug, video) => {
+      const source = readFileSync(asset(video.captions), "utf8");
+      expect(source.startsWith("WEBVTT")).toBe(true);
+
+      const cues = parseVtt(source);
+      expect(cues.length).toBeGreaterThan(0);
+
+      let previousStart = -1;
+      for (const cue of cues) {
+        expect(cue.end).toBeGreaterThan(cue.start);
+        expect(cue.start).toBeGreaterThanOrEqual(previousStart);
+        previousStart = cue.start;
+
+        expect(cue.lines.length).toBeGreaterThan(0);
+        expect(cue.lines.length).toBeLessThanOrEqual(2);
+        for (const line of cue.lines) {
+          expect(line.trim()).not.toBe("");
+          expect(line.length).toBeLessThanOrEqual(42);
+        }
+      }
+    },
+  );
 });

@@ -5,6 +5,9 @@ import { resolveStrategyCallSessionToken } from "@/lib/strategy-call/session";
 import { STRATEGY_CALL_SESSION_COOKIE } from "@/lib/strategy-call/session-token";
 import { CONTENT_VERSION } from "@/lib/strategy-call/confirmation-content";
 
+/** Hard cap on the request body, in bytes — not UTF-16 code units. */
+const MAX_BODY_BYTES = 4096;
+
 /** Every code the player can emit. See getMediaErrorCode + playWithSound. */
 const ERROR_CODES = new Set([
   "aborted",
@@ -172,10 +175,38 @@ function clientIp(request: NextRequest): string {
 
 export async function POST(request: NextRequest) {
   const declaredLength = Number(request.headers.get("content-length") || "0");
-  if (declaredLength > 4096) return json({ error: "Invalid event" }, 413);
+  if (declaredLength > MAX_BODY_BYTES) return json({ error: "Invalid event" }, 413);
 
-  const rawBody = await request.text();
-  if (rawBody.length === 0 || rawBody.length > 4096) {
+  // The header above is only a hint: it is absent on HTTP/2 and chunked
+  // uploads, where Number("0") sails past the check and the old code then
+  // buffered the whole body before measuring it. Count bytes as they arrive
+  // and stop at the cap instead.
+  //
+  // The old measurement was wrong twice over: String.length counts UTF-16 code
+  // units, so ~2k emoji (8 KB on the wire) passed a 4 KB limit.
+  const chunks: Uint8Array[] = [];
+  let bodyLength = 0;
+  const reader = request.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bodyLength += value.byteLength;
+    if (bodyLength > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      return json({ error: "Invalid event" }, 413);
+    }
+    chunks.push(value);
+  }
+  const bodyBytes = new Uint8Array(bodyLength);
+  let bodyOffset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, bodyOffset);
+    bodyOffset += chunk.byteLength;
+  }
+  // Decode once over the assembled bytes — decoding chunk by chunk would
+  // corrupt any multi-byte character split across a chunk boundary.
+  const rawBody = new TextDecoder().decode(bodyBytes);
+  if (rawBody.length === 0) {
     return json({ error: "Invalid event" }, 400);
   }
 

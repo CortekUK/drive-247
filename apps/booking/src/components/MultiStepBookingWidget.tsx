@@ -6445,8 +6445,12 @@ const MultiStepBookingWidget = () => {
     {(() => {
       const lbVehicle = vehicles.find(v => v.id === lightboxVehicleId);
       if (!lbVehicle) return null;
+      // Route the lightbox through customerPhotoUrl exactly as the thumbnail
+      // does. Mapping p.photo_url directly served the ORIGINAL image for a
+      // tenant that hides plates — so a card whose thumbnail was correctly
+      // blurred opened full-screen, at higher resolution, with the plate legible.
       const lbImages = (lbVehicle.vehicle_photos && lbVehicle.vehicle_photos.length > 0)
-        ? lbVehicle.vehicle_photos.map(p => p.photo_url).filter(Boolean)
+        ? lbVehicle.vehicle_photos.map(p => customerPhotoUrl(p, tenant)).filter(Boolean) as string[]
         : (lbVehicle.photo_url ? [lbVehicle.photo_url] : []);
       if (lbImages.length === 0) return null;
       const lbName = [lbVehicle.make, lbVehicle.model].filter(Boolean).join(" ") || "Vehicle";

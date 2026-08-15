@@ -72,7 +72,7 @@ import { CustomerInstallmentsView } from '@/components/installments/CustomerInst
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration,
-  customerPhotoUrl,
+  customerPhotoUrl, VEHICLE_PHOTO_COLUMNS,
 } from "@/lib/vehicle-identity";
 
 // ---------------------------------------------------------------------------
@@ -482,7 +482,7 @@ export default function BookingDetailPage() {
           payg_accrual_day_count,
           is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total,
           auto_extend_enabled,
-          vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, vehicle_photos (photo_url)),
+          vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, ${VEHICLE_PHOTO_COLUMNS}),
           installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
         `)
         .eq('id', id)
@@ -696,9 +696,13 @@ export default function BookingDetailPage() {
     [extensionTotals]
   );
 
+  // Gallery photo first: it is the only image the operator can redact, and
+  // putting the legacy vehicles.photo_url ahead of it silently served the
+  // unblurred plate to the very tenants who asked us to hide it. Matches the
+  // ordering the fleet page and the booking widget already use.
   const vehiclePhotoUrl =
-    vehicle?.photo_url ||
     customerPhotoUrl(vehicle?.vehicle_photos?.[0], tenant) ||
+    vehicle?.photo_url ||
     null;
 
   const mileageAllowance = (() => {

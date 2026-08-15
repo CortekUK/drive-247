@@ -28,24 +28,43 @@ Videos and posters are **supplied and live**. They were transcoded from the
 talking-head parts and 1080p30 for the screen-share walkthrough, all H.264
 high@4.0 with `+faststart` so playback starts before the file is downloaded.
 
-Captions are **not** supplied. `captions` is `null` for all four entries in
-`src/lib/strategy-call/confirmation-content.ts`, and the player renders no
-`<track>` when it is null. This is deliberate: a `<track>` whose `.vtt` is
-missing does not fire the media error event, so the player would advertise an
-"English" caption menu containing zero cues — worse for a deaf viewer than an
-honestly absent option. Do not point `captions` at a file until that file
-exists.
+Captions are supplied but are **machine-transcribed and not yet human-checked**.
+They were produced locally with faster-whisper `small.en` (word-level timings,
+VAD, domain vocabulary primed so "Turo" and "Drive247" are not mangled), then
+validated: every cue is at most two lines of ≤42 characters, timings are
+monotonic and inside the media duration, and no cue is empty.
 
-The videos do carry burned-in on-screen subtitles, which is **not** a
-substitute: burned-in text cannot be read by a screen reader, resized, or
-restyled.
+Eight cues were spot-checked against the videos' own burned-in subtitles, which
+are the producer's wording and therefore ground truth. Seven matched; one did
+not — the video says "there's **genuinely** no risk", ASR heard "generally" —
+and that one was corrected by hand. **Assume other single-word errors of that
+kind remain.** A human proofread against the burned-in text is still owed
+before this counts as compliant with the spec's "human-checked" requirement.
+
+The burned-in on-screen subtitles are **not** a substitute for the caption
+track: burned-in text cannot be read by a screen reader, resized, or restyled.
+
+If a caption file is ever removed, set that entry's `captions` back to `null`
+rather than leaving a dangling path. A `<track>` whose `.vtt` 404s does not fire
+the media error event, so the player would advertise an "English" caption menu
+containing zero cues — worse for a deaf viewer than an honestly absent option.
+`confirmation-content.test.ts` fails the build if a referenced file is missing.
+
+## Regenerating the captions
+
+```bash
+uv venv /tmp/asr && VIRTUAL_ENV=/tmp/asr uv pip install faster-whisper
+# extract 16 kHz mono wav per video, then transcribe with word_timestamps=True
+# and initial_prompt priming Turo / Getaround / Drive247. Never truncate a cue
+# to fit a line budget — split it into another cue instead.
+```
 
 ## Before enabling `STRATEGY_CALL_CONFIRMATION_V2=true`
 
 - [x] Four approved H.264, 16:9, web-optimized MP4 files.
 - [x] Four meaningful 1280×720-or-larger WebP posters.
-- [ ] Synchronized, human-checked English WebVTT captions, then set the four
-      `captions` fields back to their paths.
+- [x] Synchronized English WebVTT captions, structurally validated.
+- [ ] **Human proofread of those captions** against the burned-in subtitles.
 - [ ] Approved verbatim transcripts in `confirmation-content.ts`.
 - [ ] Confirm every title, claim, pricing reference and CTA with the funnel owner.
 - [ ] Keyboard, mobile, slow-network and real GHL booking checks in staging.

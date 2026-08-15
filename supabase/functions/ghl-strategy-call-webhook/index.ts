@@ -435,10 +435,32 @@ Deno.serve(async (request) => {
 
   const declaredLength = Number(request.headers.get("content-length") || "0");
   if (declaredLength > MAX_BODY_BYTES) return response({ error: "Payload too large" }, 413);
-  const rawBody = await request.text();
-  if (!rawBody || new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-    return response({ error: "Invalid payload" }, 400);
+  // content-length is absent on HTTP/2 and chunked uploads, so the header above is only a hint:
+  // this endpoint is unauthenticated, so count bytes as they arrive and abort before an
+  // oversized body is ever fully buffered.
+  const chunks: Uint8Array[] = [];
+  let bodyLength = 0;
+  const reader = request.body?.getReader();
+  while (reader) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bodyLength += value.byteLength;
+    if (bodyLength > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      return response({ error: "Payload too large" }, 413);
+    }
+    chunks.push(value);
   }
+  const bodyBytes = new Uint8Array(bodyLength);
+  let bodyOffset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, bodyOffset);
+    bodyOffset += chunk.byteLength;
+  }
+  // Decoded once over the assembled bytes: decoding chunk by chunk would corrupt a multi-byte
+  // character split across a chunk boundary and break Ed25519 verification of the raw body.
+  const rawBody = new TextDecoder().decode(bodyBytes);
+  if (!rawBody) return response({ error: "Invalid payload" }, 400);
 
   const configuredMode =
     Deno.env.get("GHL_STRATEGY_CALL_WEBHOOK_MODE") ?? "marketplace";
