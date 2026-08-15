@@ -35,6 +35,7 @@ import { AccountingConnectionExpiredBanner } from "@/components/dashboard/accoun
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
+import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 
 function LoadingSkeleton() {
   return (
@@ -393,6 +394,13 @@ export default function DashboardLayout({
             unable to act on either. */}
         <FeedbackDialog />
         <FeedbackForcePrompt suppressed={showGate} />
+
+        {/* First-login nudge toward the welcome pack. Dismissible, and
+            suppressed while the paywall owns the screen — this is the fifth
+            dialog mounted here, and a new operator can already meet the
+            subscription gate, the policy gate and the setup reminder before
+            seeing a single screen. Same rule as FeedbackForcePrompt above. */}
+        <WelcomePackPrompt suppressed={showGate} />
       </SidebarProvider>
     </DynamicThemeProvider>
   );
