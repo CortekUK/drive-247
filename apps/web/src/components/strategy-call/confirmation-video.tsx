@@ -33,7 +33,16 @@ type ConfirmationVideoProps = {
   storedRanges: readonly WatchedRange[];
   resumeAt: number;
   storedComplete: boolean;
+  /**
+   * Duration persisted from a previous visit. Videos 2-4 carry preload="none",
+   * so `loadedmetadata` does not fire until the viewer presses play — without
+   * this the resumed coverage label would read "0% actually watched" beside the
+   * "Watched" tick it was restored from.
+   */
+  storedDuration: number;
   onPlay: (slug: ConfirmationVideoSlug) => void;
+  /** Releases the active slot when a claimed play attempt never started. */
+  onPlayFailed: (slug: ConfirmationVideoSlug) => void;
   onStarted: (slug: ConfirmationVideoSlug, positionSeconds: number) => void;
   onCoverageChange: (
     slug: ConfirmationVideoSlug,
@@ -69,7 +78,9 @@ export function ConfirmationVideo({
   storedRanges,
   resumeAt,
   storedComplete,
+  storedDuration,
   onPlay,
+  onPlayFailed,
   onStarted,
   onCoverageChange,
   onError,
@@ -157,8 +168,13 @@ export function ConfirmationVideo({
     } catch {
       setMediaError("playback_blocked");
       onError(video.slug, "playback_blocked");
+      // This video claimed the active slot above but never started. Release it
+      // so the slot reflects reality. Note this does not resume whichever video
+      // was playing before — that one stays paused; it only prevents a dead
+      // video from holding the slot and blocking the next play.
+      onPlayFailed(video.slug);
     }
-  }, [onError, onPlay, sourceActive, video.slug]);
+  }, [onError, onPlay, onPlayFailed, sourceActive, video.slug]);
 
   useEffect(() => {
     if (!sourceActive || !pendingPlayRef.current) return;
@@ -170,8 +186,12 @@ export function ConfirmationVideo({
     void element.play().catch(() => {
       setMediaError("playback_blocked");
       onError(video.slug, "playback_blocked");
+      // Same release as the direct path. playWithSound claimed the slot before
+      // deferring to this effect, so without this the page can be left with a
+      // permanently "active" video that never started.
+      onPlayFailed(video.slug);
     });
-  }, [onError, sourceActive, video.slug]);
+  }, [onError, onPlayFailed, sourceActive, video.slug]);
 
   const recordPlaybackSample = useCallback(
     (ended: boolean) => {
@@ -263,9 +283,13 @@ export function ConfirmationVideo({
     element.load();
   };
 
+  // Prefer the live metadata duration, but fall back to the persisted one so a
+  // resumed video reports the coverage it actually has before it is loaded.
+  const effectiveDuration =
+    duration > 0 ? duration : storedDuration > 0 ? storedDuration : 0;
   const displayCoveragePercent =
-    duration > 0
-      ? Math.max(coveragePercent, watchedPercent(storedRanges, duration))
+    effectiveDuration > 0
+      ? Math.max(coveragePercent, watchedPercent(storedRanges, effectiveDuration))
       : coveragePercent;
   const displayComplete = storedComplete || displayCoveragePercent >= 90;
 
@@ -338,7 +362,14 @@ export function ConfirmationVideo({
             }}
           >
             {sourceActive ? <source src={video.src} type="video/mp4" /> : null}
-            {sourceActive ? (
+            {/*
+              Only render the track when a caption file actually exists. A
+              <track> pointing at a missing .vtt does not raise the media error
+              event, so the player would silently advertise an "English" caption
+              menu containing zero cues — worse for a deaf viewer than an
+              honestly absent option.
+            */}
+            {sourceActive && video.captions ? (
               <track
                 default
                 kind="captions"

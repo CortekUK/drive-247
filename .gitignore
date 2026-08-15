@@ -52,3 +52,8 @@ testing-qa.env
 
 # local env backups — NEVER commit (contain secrets)
 .env*.bak
+
+# Strategy-call video masters. 2.9 GB of 1080p60 ~38 Mbps exports that the
+# web-optimized files in apps/web/public/strategy-call/videos/ are derived from.
+# Keep the masters out of git; re-encode from the originals if they change.
+/funnel_videos/

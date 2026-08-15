@@ -563,7 +563,11 @@ export function ConfirmationClient({
             storedRanges={progress[video.slug].ranges}
             resumeAt={progress[video.slug].resumeAt}
             storedComplete={progress[video.slug].completed}
+            storedDuration={progress[video.slug].duration}
             onPlay={setActiveSlug}
+            onPlayFailed={(slug) =>
+              setActiveSlug((current) => (current === slug ? null : current))
+            }
             onStarted={handleStarted}
             onCoverageChange={handleCoverageChange}
             onError={(slug, errorCode) =>

@@ -14,7 +14,11 @@ export type ConfirmationVideo = {
   takeaway: string;
   src: string;
   poster: string;
-  captions: string;
+  /**
+   * WebVTT caption file, or null when none has been supplied yet. Null renders
+   * no <track> at all; it must never point at a file that does not exist.
+   */
+  captions: string | null;
   /** Approved verbatim transcript. Null until final media copy is supplied. */
   transcript: readonly string[] | null;
 };
@@ -30,7 +34,7 @@ export const CONFIRMATION_VIDEOS = [
       "Build a rental operation that still exists outside any single marketplace.",
     src: "/strategy-call/videos/01-marketplace-dependency.mp4",
     poster: "/strategy-call/posters/01-marketplace-dependency.webp",
-    captions: "/strategy-call/captions/01-marketplace-dependency.en.vtt",
+    captions: null,
     transcript: null,
   },
   {
@@ -42,7 +46,7 @@ export const CONFIRMATION_VIDEOS = [
     takeaway: "Picture how your rental business could run through Drive247.",
     src: "/strategy-call/videos/02-drive247-system-walkthrough.mp4",
     poster: "/strategy-call/posters/02-drive247-system-walkthrough.webp",
-    captions: "/strategy-call/captions/02-drive247-system-walkthrough.en.vtt",
+    captions: null,
     transcript: null,
   },
   {
@@ -55,7 +59,7 @@ export const CONFIRMATION_VIDEOS = [
       "Use the strategy call for questions specific to your operation, not the basics.",
     src: "/strategy-call/videos/03-frequently-asked-questions.mp4",
     poster: "/strategy-call/posters/03-frequently-asked-questions.webp",
-    captions: "/strategy-call/captions/03-frequently-asked-questions.en.vtt",
+    captions: null,
     transcript: null,
   },
   {
@@ -68,7 +72,7 @@ export const CONFIRMATION_VIDEOS = [
       "Know whether this fits—and what fleet details, blockers and launch goal to bring to the call.",
     src: "/strategy-call/videos/04-who-this-is-for.mp4",
     poster: "/strategy-call/posters/04-who-this-is-for.webp",
-    captions: "/strategy-call/captions/04-who-this-is-for.en.vtt",
+    captions: null,
     transcript: null,
   },
 ] as const satisfies readonly [

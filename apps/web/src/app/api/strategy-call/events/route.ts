@@ -3,6 +3,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStrategyCallAdminClient } from "@/lib/strategy-call/supabase-admin";
 import { resolveStrategyCallSessionToken } from "@/lib/strategy-call/session";
 import { STRATEGY_CALL_SESSION_COOKIE } from "@/lib/strategy-call/session-token";
+import { CONTENT_VERSION } from "@/lib/strategy-call/confirmation-content";
+
+/** Every code the player can emit. See getMediaErrorCode + playWithSound. */
+const ERROR_CODES = new Set([
+  "aborted",
+  "network",
+  "decode",
+  "source_not_supported",
+  "unknown",
+  "offline",
+  "playback_blocked",
+]);
 
 export const dynamic = "force-dynamic";
 
@@ -71,10 +83,11 @@ function parseEvent(value: unknown): ValidEvent | null {
   const contentVersion = body.contentVersion;
   const eventId = body.eventId;
   if (typeof eventName !== "string" || !EVENT_NAMES.has(eventName)) return null;
-  if (
-    typeof contentVersion !== "string" ||
-    !/^[a-zA-Z0-9._-]{1,64}$/.test(contentVersion)
-  ) {
+  // Pin to the deployed constant rather than a shape check. A 64-character
+  // free-text field on an authenticated endpoint is an arbitrary-string sink,
+  // and this table is documented as carrying no lead PII. Anything else is
+  // either a stale tab or a hand-crafted request; neither should be stored.
+  if (typeof contentVersion !== "string" || contentVersion !== CONTENT_VERSION) {
     return null;
   }
   if (typeof eventId !== "string" || !UUID_PATTERN.test(eventId)) return null;
@@ -130,7 +143,9 @@ function parseEvent(value: unknown): ValidEvent | null {
     errorCode !== undefined &&
     (eventName !== "video_error" ||
       typeof errorCode !== "string" ||
-      !/^[a-zA-Z0-9._-]{1,64}$/.test(errorCode))
+      // Allow-list, not a shape check — this value lands in `metadata`, and a
+      // 64-char free-text field there is the same PII sink as contentVersion.
+      !ERROR_CODES.has(errorCode))
   ) {
     return null;
   }
