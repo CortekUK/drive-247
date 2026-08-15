@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { addWeeks, addMonths, subWeeks, subMonths, isToday, format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { CalendarIcon, Loader2, Rows2, Rows3 } from "lucide-react";
+import { CalendarIcon, Loader2, Rows2, Rows3, Sparkles } from "lucide-react";
 import { useCalendarDensity } from "@/hooks/use-calendar-density";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useCalendarBlocks } from "@/hooks/use-calendar-blocks";
@@ -54,6 +54,31 @@ export function CalendarView({ filters }: CalendarViewProps) {
   const [pricingCell, setPricingCell] = useState<{ vehicleId: string; date: string } | null>(null);
   // Row height preference — persisted per browser, see use-calendar-density.
   const { density, setDensity, metrics } = useCalendarDensity();
+
+  // The Trax insights strip costs ~72px including its gap — on a 1366x768
+  // laptop that is more than one vehicle row, permanently, for a panel most
+  // operators read once a day. Let it be collapsed, and remember the choice.
+  // Read in an effect (not initial state) so server and first client render
+  // agree and hydration does not mismatch.
+  const [showInsights, setShowInsights] = useState(true);
+  useEffect(() => {
+    try {
+      setShowInsights(window.localStorage.getItem("rentals-calendar-insights") !== "0");
+    } catch {
+      /* storage blocked — default stands */
+    }
+  }, []);
+  const toggleInsights = () => {
+    setShowInsights((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem("rentals-calendar-insights", next ? "1" : "0");
+      } catch {
+        /* preference just will not persist */
+      }
+      return next;
+    });
+  };
   const { tenant } = useTenant();
   const currency = tenant?.currency_code || "USD";
 
@@ -201,6 +226,65 @@ export function CalendarView({ filters }: CalendarViewProps) {
   const totalDays = dates.length;
   const todayIndex = dates.findIndex((d) => isToday(d));
 
+  // --- Grid height: measured, never guessed -------------------------------
+  //
+  // Give the grid exactly the viewport that is left below whatever chrome
+  // happens to sit above it. A hardcoded reserve cannot work here: the page
+  // title, the Trax insights strip, the app header and a controls row that
+  // wraps on narrow screens all change that number, and guessing LOW is the
+  // worst case — the grid overflows the viewport, the page itself starts
+  // scrolling, and the operator sees fewer rows than the grid was sized for.
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [gridMaxH, setGridMaxH] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (isFullscreen) {
+      setGridMaxH(null);
+      return;
+    }
+
+    const measure = () => {
+      const el = gridRef.current;
+      if (!el) return;
+      // DOCUMENT-space top, not viewport-space. Using rect.top alone would
+      // feed back on itself: scrolling the page down shrinks rect.top, which
+      // would grow the grid, which changes how far the page can scroll. Adding
+      // scrollY makes the measurement independent of scroll position.
+      const docTop = el.getBoundingClientRect().top + window.scrollY;
+      const BOTTOM_GAP = 16;
+      // Floor guards the pathological case (very short window, or the grid
+      // pushed below the fold) — better a small scrollable grid than a
+      // negative height that collapses the calendar entirely.
+      setGridMaxH(Math.max(280, Math.round(window.innerHeight - docTop - BOTTOM_GAP)));
+    };
+
+    measure();
+    // A second pass after paint catches late layout shifts — web fonts
+    // settling and the insights strip populating both move the grid's top.
+    const raf = requestAnimationFrame(measure);
+
+    window.addEventListener("resize", measure);
+
+    // Watch the chrome above for height changes (controls wrapping, the
+    // insights strip appearing or resolving). Observing the PARENT rather than
+    // the grid itself avoids an observe -> resize -> observe loop, since the
+    // parent's height is driven by its content, not by the grid's max-height.
+    const parent = gridRef.current?.parentElement?.parentElement ?? null;
+    const ro =
+      typeof ResizeObserver !== "undefined" && parent
+        ? new ResizeObserver(() => measure())
+        : null;
+    if (ro && parent) ro.observe(parent);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+      ro?.disconnect();
+    };
+    // `mode` is in here because switching Bookings <-> Pricing swaps the
+    // controls row contents and can change its height.
+  }, [isFullscreen, mode, isLoading]);
+
   // Break out of parent container to go full-width
   // Parent has `container mx-auto p-4 md:p-6`, so we use negative margins + full viewport width
   const fullWidthClass = isFullscreen
@@ -223,8 +307,9 @@ export function CalendarView({ filters }: CalendarViewProps) {
           onToggleFullscreen={() => setIsFullscreen((f) => !f)}
         />
 
-        {/* AI Insights — above calendar, hidden in fullscreen */}
-        {!isFullscreen && (
+        {/* AI Insights — above calendar, hidden in fullscreen or when the
+            operator has collapsed it to reclaim the vertical space. */}
+        {!isFullscreen && showInsights && (
           <AIInsightsPanel grouped={data?.grouped || []} />
         )}
 
@@ -297,9 +382,27 @@ export function CalendarView({ filters }: CalendarViewProps) {
           </div>
           )}
 
+          {/* Insights show/hide — sits next to density because both controls
+              answer the same question: how much of the screen do the cars get? */}
+          <button
+            type="button"
+            onClick={toggleInsights}
+            aria-pressed={showInsights}
+            title={showInsights ? "Hide insights (frees a row)" : "Show insights"}
+            className={cn(
+              "ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors shrink-0",
+              showInsights
+                ? "bg-muted/30 text-foreground"
+                : "bg-background text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">Insights</span>
+          </button>
+
           {/* Row density. Operators with a handful of cars want the roomy view;
               operators with a real fleet want to see all of it at once. */}
-          <div className="ml-auto inline-flex rounded-md border p-0.5 bg-muted/30 shrink-0">
+          <div className="inline-flex rounded-md border p-0.5 bg-muted/30 shrink-0">
             {([
               { value: "comfortable" as const, label: "Comfortable", Icon: Rows2 },
               { value: "compact" as const, label: "Compact", Icon: Rows3 },
@@ -355,16 +458,20 @@ export function CalendarView({ filters }: CalendarViewProps) {
               // while everything scrolls together, so columns always align.
               // pointer-events-auto also guards against a Radix body pointer-events
               // lock leaking from the header's jump picker and swallowing cell clicks.
-              // The subtracted figure is the chrome above the grid (page header,
-              // calendar header, insights, controls) plus a bottom gap. It came
-              // down from 380px when the status filters moved onto the controls
-              // line — that reclaimed row is now grid space. If more chrome is
-              // ever added above, raise it again or rows get clipped by the
-              // viewport instead of scrolling within the grid.
+              // Height is MEASURED, not guessed. This used to be a hardcoded
+              // `calc(100vh - 334px)` standing in for the chrome above the grid.
+              // That figure was always wrong for somebody: the page title, the
+              // Trax insights strip, a wrapped controls row and the app header
+              // all vary, and when the guess came in UNDER the real chrome the
+              // grid overran the viewport, the whole page scrolled, and the
+              // operator saw FEWER rows than the grid was sized for — the exact
+              // "I still only see 6" report this replaces.
+              ref={gridRef}
               className={cn(
                 "overflow-auto pointer-events-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]",
-                isFullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[calc(100vh-334px)]"
+                isFullscreen && "max-h-[calc(100vh-120px)]"
               )}
+              style={!isFullscreen && gridMaxH ? { maxHeight: gridMaxH } : undefined}
             >
               {/* Date header row — solid bg + subtle bottom shadow so it stays
                   clearly visible (not see-through) as rows scroll underneath it. */}
@@ -384,7 +491,8 @@ export function CalendarView({ filters }: CalendarViewProps) {
                       <div
                         key={i}
                         className={cn(
-                          "flex-1 min-w-[40px] text-center py-1.5 border-r last:border-r-0 text-[10px]",
+                          "flex-1 min-w-[40px] text-center border-r last:border-r-0 text-[10px]",
+                          density === "compact" ? "py-1" : "py-1.5",
                           isWeekend && "bg-muted/40",
                           isToday(date) && "bg-primary/10 font-semibold"
                         )}
@@ -396,15 +504,31 @@ export function CalendarView({ filters }: CalendarViewProps) {
                             : undefined
                         }
                       >
-                        <div className="text-muted-foreground">
-                          {format(date, "EEE")}
-                        </div>
-                        <div className={cn(
-                          "font-medium",
-                          isToday(date) && "text-primary"
-                        )}>
-                          {format(date, "d")}
-                        </div>
+                        {/* Compact puts the weekday and date on ONE line. The
+                            two-line form costs ~14px of header, and the header
+                            is subtracted from every operator's row budget — at
+                            1366x768 that alone is the difference between seven
+                            vehicles and eight. */}
+                        {density === "compact" ? (
+                          <div className={cn("font-medium", isToday(date) && "text-primary")}>
+                            <span className="text-muted-foreground font-normal">
+                              {format(date, "EEE")}
+                            </span>{" "}
+                            {format(date, "d")}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-muted-foreground">
+                              {format(date, "EEE")}
+                            </div>
+                            <div className={cn(
+                              "font-medium",
+                              isToday(date) && "text-primary"
+                            )}>
+                              {format(date, "d")}
+                            </div>
+                          </>
+                        )}
                         {/* Surcharge marker — fleet-wide per-day pricing signal */}
                         <div className="h-3.5 mt-0.5 flex items-center justify-center">
                           {hasSurcharge && (

@@ -31,8 +31,11 @@ export const DENSITY_METRICS = {
     thumb: "sm" as const,
     barHeight: 22,
     barGap: 3,
-    rowPadding: 4,
-    minRow: 56,
+    // 2px, not 4 — on a 1366x768 laptop the difference between a 56px and a
+    // 52px row is literally one more vehicle on screen, and the 48px photo
+    // still sets the real floor so nothing is cramped.
+    rowPadding: 2,
+    minRow: 52,
   },
 } satisfies Record<CalendarDensity, unknown>;
 
