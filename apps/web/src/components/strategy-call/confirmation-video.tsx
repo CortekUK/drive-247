@@ -470,9 +470,8 @@ export function ConfirmationVideo({
             ))
           ) : (
             <p role="status">
-              The approved verbatim transcript is not available yet. It must be
-              added and checked against the final video before this funnel is
-              enabled in production. For help in the meantime, email{" "}
+              The transcript for this video is not available yet. For help in
+              the meantime, email{" "}
               <a
                 href="mailto:support@drive-247.com"
                 className="font-semibold text-foreground underline underline-offset-4"

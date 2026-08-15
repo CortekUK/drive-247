@@ -1,5 +1,11 @@
 {
-  "files": [],
-  "specs": [],
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/api/strategy-call/events/route.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/strategy-call/session.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/actions/strategy-call.ts"
+  ],
+  "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/web-inc-001.json"
+  ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

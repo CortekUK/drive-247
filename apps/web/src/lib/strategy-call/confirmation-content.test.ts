@@ -50,9 +50,38 @@ describe("confirmation funnel video configuration", () => {
     ]);
   });
 
-  it("does not label provisional copy as an approved transcript", () => {
-    expect(CONFIRMATION_VIDEOS.every((video) => video.transcript === null)).toBe(true);
+  it("ships a non-empty transcript for every video", () => {
+    for (const video of CONFIRMATION_VIDEOS) {
+      expect(video.transcript, `${video.slug} has no transcript`).not.toBeNull();
+      expect(video.transcript!.length).toBeGreaterThan(0);
+      for (const paragraph of video.transcript!) {
+        expect(paragraph.trim()).not.toBe("");
+      }
+    }
   });
+
+  // The transcript is the accessible equivalent of the audio, so it has to be
+  // the whole audio. It is derived from the caption cues, and the generator
+  // that produced it once dropped every word past a length budget — so assert
+  // the two still carry the same words rather than trusting that they do.
+  it.each(CONFIRMATION_VIDEOS.map((video) => [video.slug, video] as const))(
+    "%s transcript covers the same words as its captions",
+    (_slug, video) => {
+      const words = (text: string) =>
+        text.toLowerCase().replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+
+      const captionText = readFileSync(asset(video.captions!), "utf8")
+        .split("\n")
+        .filter((line) => line && line !== "WEBVTT" && !line.includes("-->"))
+        .join(" ");
+
+      const fromCaptions = words(captionText);
+      const fromTranscript = words(video.transcript!.join(" "));
+
+      expect(fromTranscript.length).toBe(fromCaptions.length);
+      expect(fromTranscript.join(" ")).toBe(fromCaptions.join(" "));
+    },
+  );
 
   // Every referenced asset must exist. A missing .mp4 or poster is a visible
   // break, but a missing .vtt is worse: a <track> whose file 404s does not fire
