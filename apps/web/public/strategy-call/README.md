@@ -14,7 +14,7 @@ strategy-call/
 │   ├── 02-drive247-system-walkthrough.webp
 │   ├── 03-frequently-asked-questions.webp
 │   └── 04-who-this-is-for.webp
-└── captions/            ← still empty, see below
+└── captions/            ← supplied, machine-transcribed, unproofread
     ├── 01-marketplace-dependency.en.vtt
     ├── 02-drive247-system-walkthrough.en.vtt
     ├── 03-frequently-asked-questions.en.vtt
@@ -61,13 +61,44 @@ uv venv /tmp/asr && VIRTUAL_ENV=/tmp/asr uv pip install faster-whisper
 
 ## Before enabling `STRATEGY_CALL_CONFIRMATION_V2=true`
 
-- [x] Four approved H.264, 16:9, web-optimized MP4 files.
+- [x] Four H.264, 16:9, web-optimized MP4 files.
 - [x] Four meaningful 1280×720-or-larger WebP posters.
 - [x] Synchronized English WebVTT captions, structurally validated.
-- [ ] **Human proofread of those captions** against the burned-in subtitles.
-- [ ] Approved verbatim transcripts in `confirmation-content.ts`.
+- [x] Four transcripts in `confirmation-content.ts`, word-for-word equal to the
+      captions and enforced by `confirmation-content.test.ts`.
+- [x] Corrected the 23 meaning-changing transcription errors found by sampling
+      each video's burned-in subtitles (see "Known state" below).
+- [ ] **Human proofread of captions + transcripts** against the burned-in
+      subtitles. Sampling found errors at a high enough rate that the
+      unsampled remainder almost certainly holds more.
+- [ ] **Two contradictions the funnel owner must resolve — these look like they
+      are in the videos themselves, not the transcription:**
+      the launch guarantee is "seven days" in video 3 but "2 weeks" in video 4,
+      and the same $18k fee recovery is credited to "Douglas in Atlanta" in
+      video 1 but to "Marcus" in video 3.
 - [ ] Confirm every title, claim, pricing reference and CTA with the funnel owner.
 - [ ] Keyboard, mobile, slow-network and real GHL booking checks in staging.
+
+## Known state of the text (2026-08-15)
+
+Four independent passes sampled the videos' burned-in subtitles — the
+producer's own wording, and therefore ground truth — against our text: 380
+frames for video 1, and 33/32/59 sample points for videos 2/3/4. They found 23
+meaning-changing errors and 21 cosmetic ones. All 44 are corrected, including:
+
+- "back from **our** platform" → "**a** platform". The original inverted the
+  pitch: it read as the operator escaping Drive247.
+- "having to **fap** about" → "**faff** about". Vulgar slang, in marketing copy.
+- "**Bonsa**" → "**Bonzah**" (×2). The insurance partner's actual name.
+- "you're actually **putting** in" → "**pulling** in". Reversed the direction of
+  money in a profitability claim.
+- "**You've** got one car and you're starting out" → "**If you've** got one car
+  and you're just starting out". Lost conditional; asserted it about the reader.
+- "booking on **our** own site" → "**her** own site". It is Sarah's testimonial.
+- "So just **some irritates**" → "So just **send me a text**".
+
+The page discloses that the transcript is auto-generated, and no UI string
+calls it "approved" — the funnel owner has not approved it.
 
 For larger files, use the approved public media CDN instead and update only the
 typed URLs in `confirmation-content.ts`. Do not commit huge uncompressed masters
