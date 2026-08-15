@@ -6,6 +6,7 @@ import {
   createStrategyCallSessionToken,
   hashStrategyCallSubmissionSource,
   hashStrategyCallSessionToken,
+  resolveStrategyCallPepper,
   STRATEGY_CALL_SESSION_COOKIE,
   STRATEGY_CALL_SESSION_TTL_SECONDS,
 } from "@/lib/strategy-call/session-token";
@@ -25,9 +26,15 @@ export async function submitStrategyCallAction(
     return { success: false, message: validation.message };
   }
 
-  const pepper = process.env.STRATEGY_CALL_SESSION_PEPPER;
+  const pepper = resolveStrategyCallPepper();
   if (!pepper) {
-    console.error("Strategy-call capture unavailable: session pepper is missing");
+    // Name both variables: this failure took a production outage to diagnose
+    // precisely because the log said "pepper" while the deploy was in fact
+    // missing the service-role key the whole feature depends on.
+    console.error(
+      "Strategy-call capture unavailable: set STRATEGY_CALL_SESSION_PEPPER, " +
+        "or SUPABASE_SERVICE_ROLE_KEY which it is derived from",
+    );
     return {
       success: false,
       message: "Something went wrong. Please try again.",

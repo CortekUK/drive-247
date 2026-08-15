@@ -2,7 +2,10 @@ import { createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getStrategyCallAdminClient } from "@/lib/strategy-call/supabase-admin";
 import { resolveStrategyCallSessionToken } from "@/lib/strategy-call/session";
-import { STRATEGY_CALL_SESSION_COOKIE } from "@/lib/strategy-call/session-token";
+import {
+  resolveStrategyCallPepper,
+  STRATEGY_CALL_SESSION_COOKIE,
+} from "@/lib/strategy-call/session-token";
 import { CONTENT_VERSION } from "@/lib/strategy-call/confirmation-content";
 
 /** Hard cap on the request body, in bytes — not UTF-16 code units. */
@@ -227,7 +230,7 @@ export async function POST(request: NextRequest) {
   // education page, but cannot write unattributed rows into the reporting table.
   if (!session) return json({ accepted: false }, 202);
 
-  const pepper = process.env.STRATEGY_CALL_SESSION_PEPPER;
+  const pepper = resolveStrategyCallPepper();
   if (!pepper) return json({ accepted: false }, 202);
 
   const dateBucket = new Date().toISOString().slice(0, 10);

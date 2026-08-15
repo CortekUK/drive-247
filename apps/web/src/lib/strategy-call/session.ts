@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { getStrategyCallAdminClient } from "./supabase-admin";
 import {
   hashStrategyCallSessionToken,
+  resolveStrategyCallPepper,
   STRATEGY_CALL_SESSION_COOKIE,
 } from "./session-token";
 
@@ -18,7 +19,7 @@ export async function resolveStrategyCallSessionToken(
 ): Promise<StrategyCallSession | null> {
   if (!token || token.length > 256) return null;
 
-  const pepper = process.env.STRATEGY_CALL_SESSION_PEPPER;
+  const pepper = resolveStrategyCallPepper();
   if (!pepper) return null;
 
   let tokenHash: string;
