@@ -2620,7 +2620,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/calendar-view.tsx": {
-    "sha": "8710469275812baec4a085bee41e90c2c5413216a0f939f0ae3a3c6c98e87206",
+    "sha": "a1edd743b153256b5cecc221ca84c2f492ee30632e129a5edf86a1309c9ed94a",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/block-bar.tsx": {
@@ -2628,7 +2628,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/vehicle-row.tsx": {
-    "sha": "85734f19857c6d90e2f5c65b0d44afc09c0d0cb2ffa53ed193aea92339b4ff62",
+    "sha": "dfa416cab177c43691f824a91605cad77e1ed4c86933e1506ba53f69e16591b5",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/rental-bar.tsx": {
@@ -2636,7 +2636,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/pricing-row.tsx": {
-    "sha": "5f54fae3f2c345bcf2a7feec0e75ff6127fc260c2a432a5b8a7f54112a9617af",
+    "sha": "7bc953e3bdec057ed6dbb273bace369786bb1af7621514a6a26b31c0ddc19798",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/ai-insights-panel.tsx": {
@@ -5416,7 +5416,7 @@
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/strategy-call/confirmation-content.test.ts": {
-    "sha": "d5de975037f71c2563e376fd879e764b9db87d5d37b258edff923ef13e523a9c",
+    "sha": "a3b0dec4be85856163abb8bee26740ed22bd36c57ffe98d2c4066b9da7daf99a",
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/strategy-call/booking.ts": {
@@ -5448,7 +5448,7 @@
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/strategy-call/confirmation-content.ts": {
-    "sha": "459cafb75afc7e3b8d8e1b9a9bfe5c1f6aa2cd26f4e994a0a2c5ee4aa35c9d28",
+    "sha": "9f39fa955fa5cb4e07badb296cec61f5525d131290eabd184bcb7540a3ffd47e",
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/supabase/server.ts": {
@@ -5592,7 +5592,7 @@
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/strategy-call/confirmation-video.tsx": {
-    "sha": "71b034b941b0ef5828c114659efbed48800514251bf4ab47964464dcbceb72c1",
+    "sha": "2ed9882d4ad215ef835bcb0b93730c5c076a10e35a11fcba948c5e63b9d216c0",
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/hooks/use-fade-in.ts": {
