@@ -504,12 +504,16 @@ export function ConfirmationClient({
             <p className="mt-5 rounded-full bg-amber-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.13em] text-amber-950 sm:text-xs">
               {hero.badge}
             </p>
+            {/*
+              No sub-head under the headline — funnel owner's call. The badge
+              plus the headline carry the instruction, and getting the viewer to
+              the first video sooner is the whole point of the page. hero.description
+              is kept in getHeroCopy for the page metadata and for anyone who
+              wants it back.
+            */}
             <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight text-balance sm:text-5xl">
               {hero.title}
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              {hero.description}
-            </p>
           </div>
         </div>
       </section>

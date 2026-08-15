@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   CalendarCheck2,
-  CalendarClock,
   CalendarX2,
   Clock3,
   ExternalLink,
@@ -123,36 +122,19 @@ export function BookingSummary({
     );
   }
 
+  // Nothing to show, so show nothing. This used to render a "Looking for your
+  // booking details?" card, which only ever appeared for someone who had NOT
+  // booked — it pushed the first video down the page to tell a visitor
+  // something they already knew. Funnel owner asked for it gone.
+  //
+  // Note this is deliberately only the empty state: a prospect who HAS booked
+  // still gets their date, time and timezone below.
   if (
     booking.status === "missing" ||
     processingTimedOut ||
     !booking.canShowDetails
   ) {
-    return (
-      <section
-        aria-labelledby="booking-summary-heading"
-        className="rounded-2xl border bg-card p-5 sm:p-6"
-      >
-        <div className="flex items-start gap-3">
-          <CalendarClock
-            aria-hidden="true"
-            className="mt-0.5 size-5 shrink-0 text-indigo-600 dark:text-indigo-400"
-          />
-          <div>
-            <h2 id="booking-summary-heading" className="font-bold">
-              Looking for your booking details?
-            </h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-              Use the link in your calendar invite. You can still watch all
-              four preparation videos on this page.
-            </p>
-            <Button asChild variant="outline" className="mt-4 min-h-11">
-              <Link href="/strategy-call">Return to the booking page</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-    );
+    return null;
   }
 
   const display = getDisplayDate(booking);
