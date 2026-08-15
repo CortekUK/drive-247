@@ -4,7 +4,8 @@ import { useState, useMemo } from "react";
 import { addWeeks, addMonths, subWeeks, subMonths, isToday, format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, Rows2, Rows3 } from "lucide-react";
+import { useCalendarDensity } from "@/hooks/use-calendar-density";
 import { useCalendarRentals } from "@/hooks/use-calendar-rentals";
 import { useCalendarBlocks } from "@/hooks/use-calendar-blocks";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
@@ -51,6 +52,8 @@ export function CalendarView({ filters }: CalendarViewProps) {
   // Bookings (bar timeline) vs Pricing (Turo-style per-day price grid).
   const [mode, setMode] = useState<"bookings" | "pricing">("bookings");
   const [pricingCell, setPricingCell] = useState<{ vehicleId: string; date: string } | null>(null);
+  // Row height preference — persisted per browser, see use-calendar-density.
+  const { density, setDensity, metrics } = useCalendarDensity();
   const { tenant } = useTenant();
   const currency = tenant?.currency_code || "USD";
 
@@ -225,9 +228,14 @@ export function CalendarView({ filters }: CalendarViewProps) {
           <AIInsightsPanel grouped={data?.grouped || []} />
         )}
 
-        {/* Mode toggle — Bookings (bar timeline) vs Pricing (per-day price grid) */}
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="inline-flex rounded-md border p-0.5 bg-muted/30">
+        {/* Controls — mode, status filters and row density on ONE line.
+            Mode and status were two stacked rows; collapsing them reclaims a
+            ~30px row plus its 16px gap, which is most of a compact vehicle row
+            spent on chrome before a single car appeared. They wrap back onto
+            separate lines on narrow screens, where the reclaimed space matters
+            less than the controls staying legible. */}
+        <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
+          <div className="inline-flex rounded-md border p-0.5 bg-muted/30 shrink-0">
             {(["bookings", "pricing"] as const).map((m) => (
               <button
                 key={m}
@@ -243,6 +251,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
               </button>
             ))}
           </div>
+
           {mode === "pricing" && (
             <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
@@ -251,41 +260,68 @@ export function CalendarView({ filters }: CalendarViewProps) {
               <span>Click a day to set a price</span>
             </div>
           )}
-        </div>
 
-        {/* Status filter buttons (bookings mode only) */}
-        {mode === "bookings" && (
-        <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-thin">
-          <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">Status:</span>
-          {[
+          {/* Status filters (bookings mode only). `min-w-0` lets this shrink and
+              scroll horizontally inside the shared row instead of forcing the
+              density control onto a line of its own. */}
+          {mode === "bookings" && (
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin min-w-0 py-0.5">
+            <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">Status:</span>
+            {[
             { label: "Active", bg: "bg-emerald-500", border: "border-emerald-300 dark:border-emerald-500/40", text: "text-emerald-700 dark:text-emerald-400", activeBg: "bg-emerald-100 dark:bg-emerald-500/30" },
             { label: "Upcoming", bg: "bg-cyan-500", border: "border-cyan-300 dark:border-cyan-500/30", text: "text-cyan-700 dark:text-cyan-400", activeBg: "bg-cyan-100 dark:bg-cyan-500/25" },
             { label: "Pending", bg: "bg-amber-400", border: "border-amber-300 dark:border-amber-400/30", text: "text-amber-700 dark:text-amber-300", activeBg: "bg-amber-100 dark:bg-amber-400/25" },
             { label: "Completed", bg: "bg-violet-500", border: "border-violet-300 dark:border-violet-500/30", text: "text-violet-700 dark:text-violet-400", activeBg: "bg-violet-100 dark:bg-violet-500/25" },
             { label: "Cancelled", bg: "bg-rose-500", border: "border-rose-300 dark:border-rose-500/30", text: "text-rose-700 dark:text-rose-400", activeBg: "bg-rose-100 dark:bg-rose-500/25" },
-          ].map((s) => {
-            const isActive = activeStatuses.has(s.label);
-            return (
+            ].map((s) => {
+              const isActive = activeStatuses.has(s.label);
+              return (
+                <button
+                  key={s.label}
+                  onClick={() => toggleStatus(s.label)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-all shrink-0",
+                    isActive
+                      ? cn(s.activeBg, s.border, s.text)
+                      : "border-muted bg-muted/30 text-muted-foreground/50 opacity-50"
+                  )}
+                >
+                  <div className={cn(
+                    "w-2 h-2 rounded-full",
+                    isActive ? s.bg.replace("/20", "").replace("/15", "") : "bg-muted-foreground/30"
+                  )} />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+          )}
+
+          {/* Row density. Operators with a handful of cars want the roomy view;
+              operators with a real fleet want to see all of it at once. */}
+          <div className="ml-auto inline-flex rounded-md border p-0.5 bg-muted/30 shrink-0">
+            {([
+              { value: "comfortable" as const, label: "Comfortable", Icon: Rows2 },
+              { value: "compact" as const, label: "Compact", Icon: Rows3 },
+            ]).map(({ value, label, Icon }) => (
               <button
-                key={s.label}
-                onClick={() => toggleStatus(s.label)}
+                key={value}
+                onClick={() => setDensity(value)}
+                aria-pressed={density === value}
+                title={`${label} rows`}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-all shrink-0",
-                  isActive
-                    ? cn(s.activeBg, s.border, s.text)
-                    : "border-muted bg-muted/30 text-muted-foreground/50 opacity-50"
+                  "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors",
+                  density === value
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  isActive ? s.bg.replace("/20", "").replace("/15", "") : "bg-muted-foreground/30"
-                )} />
-                {s.label}
+                <Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{label}</span>
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
-        )}
 
         {/* Calendar grid */}
         <div className={cn(
@@ -319,9 +355,15 @@ export function CalendarView({ filters }: CalendarViewProps) {
               // while everything scrolls together, so columns always align.
               // pointer-events-auto also guards against a Radix body pointer-events
               // lock leaking from the header's jump picker and swallowing cell clicks.
+              // The subtracted figure is the chrome above the grid (page header,
+              // calendar header, insights, controls) plus a bottom gap. It came
+              // down from 380px when the status filters moved onto the controls
+              // line — that reclaimed row is now grid space. If more chrome is
+              // ever added above, raise it again or rows get clipped by the
+              // viewport instead of scrolling within the grid.
               className={cn(
                 "overflow-auto pointer-events-auto [--vehicle-col:160px] sm:[--vehicle-col:240px]",
-                isFullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[calc(100vh-380px)]"
+                isFullscreen ? "max-h-[calc(100vh-120px)]" : "max-h-[calc(100vh-334px)]"
               )}
             >
               {/* Date header row — solid bg + subtle bottom shadow so it stays
@@ -407,6 +449,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
                         baseRate={baseRateMap[vehicleData.vehicle.id] ?? 0}
                         currency={currency}
                         index={index}
+                        metrics={metrics}
                         getManual={getManualFor(vehicleData.vehicle.id)}
                         onCellClick={(vehicleId, date) => setPricingCell({ vehicleId, date })}
                       />
@@ -417,6 +460,7 @@ export function CalendarView({ filters }: CalendarViewProps) {
                         rangeStart={rangeStart}
                         rangeEnd={rangeEnd}
                         index={index}
+                        metrics={metrics}
                         dates={dates}
                         onCreateBlock={handleCreateBlock}
                         onAddBlock={handleAddBlockForVehicle}

@@ -3,6 +3,7 @@
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
+import { DENSITY_METRICS, type DensityMetrics } from "@/hooks/use-calendar-density";
 
 export interface PricingDateMeta {
   dateStr: string; // YYYY-MM-DD
@@ -22,22 +23,44 @@ interface Props {
   /** Manual price for a date for THIS vehicle (undefined if none). */
   getManual: (date: string) => number | undefined;
   onCellClick: (vehicleId: string, date: string) => void;
+  /** Row metrics for the current density. Defaults to comfortable. */
+  metrics?: DensityMetrics;
 }
 
-export function PricingRow({ vehicle, dateMeta, baseRate, currency, index, getManual, onCellClick }: Props) {
+export function PricingRow({
+  vehicle,
+  dateMeta,
+  baseRate,
+  currency,
+  index,
+  getManual,
+  onCellClick,
+  metrics = DENSITY_METRICS.comfortable,
+}: Props) {
+  const { minRow, rowPadding, thumb } = metrics;
+  const isCompact = thumb === "sm";
+
   return (
-    <div className={cn("flex border-b", index % 2 === 0 ? "bg-background" : "bg-muted/20")} style={{ minHeight: "56px" }}>
+    <div
+      className={cn("flex border-b", index % 2 === 0 ? "bg-background" : "bg-muted/20")}
+      style={{ minHeight: `${minRow}px` }}
+    >
       {/* Vehicle info — sticky left (mirrors the bookings row) */}
-      <div className="sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
+      <div
+        className="sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-2 sm:px-3 flex items-center gap-2 sm:gap-3 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]"
+        style={{ paddingTop: rowPadding, paddingBottom: rowPadding }}
+      >
         <VehiclePhotoThumbnail
           photoUrl={vehicle.photo_url}
           vehicleReg={vehicle.reg}
-          size="md"
+          size={thumb}
           className="rounded-lg shrink-0 border-muted-foreground/10 shadow-sm"
         />
         <div className="min-w-0">
-          <div className="text-sm font-semibold truncate">{vehicle.reg}</div>
-          <div className="text-xs text-muted-foreground truncate">
+          <div className={cn("font-semibold truncate", isCompact ? "text-[13px] leading-tight" : "text-sm")}>
+            {vehicle.reg}
+          </div>
+          <div className={cn("text-muted-foreground truncate", isCompact ? "text-[11px] leading-tight" : "text-xs")}>
             {vehicle.make} {vehicle.model}
           </div>
         </div>

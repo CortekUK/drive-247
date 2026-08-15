@@ -16,15 +16,15 @@ import { addMinutes, format } from "date-fns";
 import { CalendarPlus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const BAR_HEIGHT = 28;
-const BAR_GAP = 4;
-const ROW_PADDING = 8;
+import { DENSITY_METRICS, type DensityMetrics } from "@/hooks/use-calendar-density";
 
 interface VehicleRowProps {
   data: VehicleTimelineData;
   rangeStart: Date;
   rangeEnd: Date;
   index: number;
+  /** Row metrics for the current density. Defaults to comfortable. */
+  metrics?: DensityMetrics;
   /** Phase 2 inline editing — invoked when the user click-drags an empty span. */
   onCreateBlock?: (vehicleId: string, startDate: string, endDate: string) => void;
   onRemoveBlock?: (block: CalendarBlock) => void;
@@ -40,6 +40,7 @@ export function VehicleRow({
   rangeStart,
   rangeEnd,
   index,
+  metrics = DENSITY_METRICS.comfortable,
   onCreateBlock,
   onRemoveBlock,
   onAddBlock,
@@ -51,10 +52,20 @@ export function VehicleRow({
   const { vehicle, rentals, blocks } = data;
   const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
 
-  // Calculate row height based on rentals + blocks (stacked)
+  const {
+    barHeight: BAR_HEIGHT,
+    barGap: BAR_GAP,
+    rowPadding: ROW_PADDING,
+    minRow,
+    thumb,
+  } = metrics;
+
+  // Calculate row height based on rentals + blocks (stacked). A vehicle with
+  // several overlapping bars still grows past the floor — density lowers the
+  // floor, it does not clip content.
   const barCount = Math.max(1, rentals.length + blocks.length);
   const contentHeight = barCount * BAR_HEIGHT + (barCount - 1) * BAR_GAP + ROW_PADDING * 2;
-  const rowHeight = Math.max(80, contentHeight);
+  const rowHeight = Math.max(minRow, contentHeight);
 
   // Phase 2 — drag-to-block. Selection is tracked as start/end column indices.
   const canEdit = !!onCreateBlock && !!dates && dates.length > 0;
@@ -105,7 +116,10 @@ export function VehicleRow({
       style={{ minHeight: `${rowHeight}px` }}
     >
       {/* Vehicle info — sticky left */}
-      <div className="group/veh sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-2 sm:px-3 py-2 flex items-center gap-2 sm:gap-3 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]">
+      <div
+        className="group/veh sticky left-0 z-10 w-[160px] min-w-[160px] sm:w-[240px] sm:min-w-[240px] border-r bg-background px-2 sm:px-3 flex items-center gap-2 sm:gap-3 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.08)]"
+        style={{ paddingTop: ROW_PADDING, paddingBottom: ROW_PADDING }}
+      >
         <div
           className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={() => router.push(`/vehicles/${vehicle.id}`)}
@@ -113,12 +127,14 @@ export function VehicleRow({
           <VehiclePhotoThumbnail
             photoUrl={vehicle.photo_url}
             vehicleReg={vehicle.reg}
-            size="md"
+            size={thumb}
             className="rounded-lg shrink-0 border-muted-foreground/10 shadow-sm"
           />
           <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">{vehicle.reg}</div>
-            <div className="text-xs text-muted-foreground truncate">
+            <div className={cn("font-semibold truncate", thumb === "sm" ? "text-[13px] leading-tight" : "text-sm")}>
+              {vehicle.reg}
+            </div>
+            <div className={cn("text-muted-foreground truncate", thumb === "sm" ? "text-[11px] leading-tight" : "text-xs")}>
               {vehicle.make} {vehicle.model}
             </div>
           </div>
@@ -212,7 +228,10 @@ export function VehicleRow({
                         height: `${BAR_HEIGHT}px`,
                       }}
                     >
-                      <span className="text-[10px] text-orange-600 dark:text-orange-400 px-1.5 leading-[28px] truncate block">
+                      <span
+                        className="text-[10px] text-orange-600 dark:text-orange-400 px-1.5 truncate block"
+                        style={{ lineHeight: `${BAR_HEIGHT}px` }}
+                      >
                         Buffer
                       </span>
                     </div>
