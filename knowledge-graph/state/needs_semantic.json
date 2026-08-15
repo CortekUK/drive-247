@@ -1,13 +1,13 @@
 {
   "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-calendar-density.ts",
+    "/home/haseeb-raza/Desktop/drive-247/docs/fleet-health-spec.html",
     "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/calendar-view.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/vehicle-row.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/pricing-row.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/strategy-call/confirmation-content.test.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/lib/strategy-call/confirmation-content.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/strategy-call/confirmation-video.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/confirmation/confirmation-client.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/strategy-call/booking-summary.tsx"
   ],
   "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/docs-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/web-inc-001.json"
   ],

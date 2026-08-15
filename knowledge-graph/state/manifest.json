@@ -2620,7 +2620,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/calendar-view.tsx": {
-    "sha": "a1edd743b153256b5cecc221ca84c2f492ee30632e129a5edf86a1309c9ed94a",
+    "sha": "8d02ec8dcb54f02f5d276ca2c6370955c80bb76184784f56f2b76a899abf9e9a",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/block-bar.tsx": {
@@ -2837,6 +2837,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-vehicle-files.ts": {
     "sha": "b89946307c3b9dbae460b5d3e1945c7d823540e98b69f5828171ad3439c15eec",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-calendar-density.ts": {
+    "sha": "faadbdc3ab389c102802c10ff35023f3e950597e8882b00a528eecea75e1ca76",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-unread-count.ts": {
@@ -5372,7 +5376,7 @@
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/confirmation/confirmation-client.tsx": {
-    "sha": "715a229fee8b02ec913d3fc0921e6461087ea56c273e43e64f20c666c2fcfb25",
+    "sha": "5d80680b5d3aa9fbe03a9675a6281f7f90a40aad948aa3be7a691af9a91de036",
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/page.tsx": {
@@ -5588,7 +5592,7 @@
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/strategy-call/booking-summary.tsx": {
-    "sha": "d5b885f19c46b7bde0fb188537b8a13cf7b5b0a45265689b25191d5538512b81",
+    "sha": "c15ac64d15f20c6d01d2a55b859692306a340edaa65200e329900ed572a3a66a",
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/strategy-call/confirmation-video.tsx": {
@@ -7265,6 +7269,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/strategy-call-confirmation-funnel.md": {
     "sha": "304ec1bccad9f34aba7638176cdea76ccf73e3d3593a06bdb14447b4baf297fc",
+    "unit": "docs"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/docs/fleet-health-spec.html": {
+    "sha": "77f45b945e112320379fdcdd3bd0f3afa61856f611b16362e1060944e4b06f51",
     "unit": "docs"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/PLATFORM_MONITORING_PLAN.md": {
