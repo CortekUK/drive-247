@@ -13,24 +13,22 @@ import {
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useAuth } from "@/stores/auth-store";
+import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { BrandMark } from "@/components/shared/layout/brand-logo";
 
 // Top-of-sidebar organization switcher — mirrors the user footer row, but
 // represents the current tenant/workspace.
 export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
   const { branding } = useTenantBranding();
   const { appUser } = useAuth();
+  // Audit Logs is a manager-gated tab in the sidebar's own filter. These links
+  // sit outside that filter, so the gate has to be repeated here or a manager
+  // without the permission would see an entry main hides from them.
+  const { isManager, canView } = useManagerPermissions();
   const { isSubscribed, isTrialing, hasExpiredSubscription, trialDaysRemaining, subscription } =
     useTenantSubscription();
 
   const orgName = branding?.app_name || "Organization";
-  const orgInitials =
-    orgName
-      .trim()
-      .split(/\s+/)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "O";
 
   const planName = subscription?.plan_name
     ? subscription.plan_name.charAt(0).toUpperCase() + subscription.plan_name.slice(1)
@@ -43,11 +41,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
     ? "Expired"
     : "Free plan";
 
-  const Logo = (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-[12px] font-semibold text-primary-foreground">
-      {orgInitials}
-    </div>
-  );
+  const Logo = <BrandMark />;
 
   return (
     <DropdownMenu>
@@ -91,12 +85,14 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/audit-logs">
-            <History className="mr-2 h-4 w-4 text-muted-foreground" />
-            Audit Logs
-          </Link>
-        </DropdownMenuItem>
+        {(!isManager || canView("audit_logs")) && (
+          <DropdownMenuItem asChild>
+            <Link href="/audit-logs">
+              <History className="mr-2 h-4 w-4 text-muted-foreground" />
+              Audit Logs
+            </Link>
+          </DropdownMenuItem>
+        )}
         {appUser?.role === "head_admin" && (
           <DropdownMenuItem asChild>
             <Link href="/users">

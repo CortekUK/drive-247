@@ -26,6 +26,48 @@ interface BrandLogoProps {
 }
 
 /**
+ * Square tenant mark for avatar-sized slots (the sidebar org switcher).
+ *
+ * Shares `BrandLogo`'s theme-aware source rule rather than re-deriving it —
+ * `dark_logo_url` wins in dark mode, and a tenant with no logo gets a chip of
+ * their own initials, never the platform's brand.
+ */
+export function BrandMark({ className }: { className?: string }) {
+  const { resolvedTheme } = useTheme();
+  const { branding, brandName } = useTenantBranding();
+
+  const logoUrl =
+    resolvedTheme === "dark" && branding?.dark_logo_url
+      ? branding.dark_logo_url
+      : branding?.logo_url;
+
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={brandName}
+        className={cn(
+          "h-8 w-8 shrink-0 rounded-md bg-sidebar-accent object-contain p-0.5",
+          className
+        )}
+      />
+    );
+  }
+
+  return (
+    <div
+      title={brandName}
+      className={cn(
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-[12px] font-semibold text-primary-foreground",
+        className
+      )}
+    >
+      {getBrandInitials(brandName) || "O"}
+    </div>
+  );
+}
+
+/**
  * Tenant logo for portal chrome.
  *
  * Renders the uploaded logo when the tenant has one (theme-aware: `dark_logo_url`

@@ -84,6 +84,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { UserMenu } from "@/components/shared/layout/user-menu";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
+import { BonzahBalance } from "@/components/shared/layout/bonzah-balance";
+import { CreditBalance } from "@/components/shared/layout/credit-balance";
 import { GlobalSearch } from "@/components/shared/layout/global-search";
 import { TraxAIDialogInner } from "@/components/chat";
 
@@ -363,9 +365,6 @@ export function AppSidebar() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Mock avatar placeholder until the user uploads a real profile photo
-  const mockAvatarUrl = "https://i.pravatar.cc/120?img=13";
-
   // Settings mode: when on /settings path, show settings sidebar
   const isSettingsPage = pathname?.startsWith("/settings") || false;
   const activeSettingsTab = searchParams.get('tab') || 'general';
@@ -400,7 +399,49 @@ export function AppSidebar() {
   ].filter(filterItem);
 
   // --- Second-level groups (revealed on hover / tap) ---
+  //
+  // Bookings / Customers / Pipeline carry the ten routes v2's sidebar dropped.
+  // Every gate and badge below is main's, unchanged: the pages are still live,
+  // and without an entry here they were reachable only by typing the URL —
+  // Pending Bookings especially, where an unseen queue means bookings nobody
+  // approves. Rentals, Vehicles and Customers stay top-level, so these groups
+  // hold what main nested under "Fleet & Bookings" and "Customers".
   const groups: NavGroup[] = [
+    {
+      label: "Bookings",
+      icon: AnimatedCalendarDays,
+      items: [
+        { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
+        ...(showPendingBookings
+          ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }]
+          : []),
+        { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
+      ],
+    },
+    {
+      label: "Customers",
+      icon: AnimatedUsers,
+      items: [
+        { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
+        // Enquiries folds into Leads once lead management is on — same as main.
+        ...(leadManagementEnabled
+          ? []
+          : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
+        { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
+      ],
+    },
+    ...(leadManagementEnabled
+      ? [{
+          label: "Pipeline",
+          icon: AnimatedUsers,
+          items: [
+            { name: "Leads", href: "/leads", icon: UserPlus },
+            ...(automationsEnabled
+              ? [{ name: "Automations", href: "/automations", icon: Workflow }]
+              : []),
+          ],
+        } as NavGroup]
+      : []),
     ...(vehicleOwnersEnabled
       ? [{
           label: "Owners",
@@ -968,6 +1009,16 @@ export function AppSidebar() {
 
       {/* Pinned Footer */}
       <SidebarFooter className="p-1.5">
+        {/* Bonzah + credit balances. These lived in the top bar the dock
+            replaced; without a home here they would simply disappear, and a
+            tenant running dry on either only finds out when a booking fails.
+            Both components self-hide when they don't apply. */}
+        {!collapsed && (
+          <div className="flex flex-wrap items-center gap-1 px-0.5 pb-1">
+            <BonzahBalance />
+            <CreditBalance />
+          </div>
+        )}
         {/* Promo / announcement slot (feature releases, training, promotions) */}
         {!collapsed && (
           <div className="px-0.5 pb-1.5">
@@ -980,10 +1031,10 @@ export function AppSidebar() {
           <SidebarMenuItem>
             {collapsed ? (
               <div className="flex justify-center py-1">
-                <UserMenu mockAvatarUrl={mockAvatarUrl} />
+                <UserMenu />
               </div>
             ) : (
-              <UserMenu variant="row" mockAvatarUrl={mockAvatarUrl} />
+              <UserMenu variant="row" />
             )}
           </SidebarMenuItem>
         </SidebarMenu>

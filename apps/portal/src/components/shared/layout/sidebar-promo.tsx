@@ -1,14 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Sparkles, X, ArrowRight } from "lucide-react";
 
-// Bump this key when you ship a new banner so it re-appears for users who
-// dismissed the previous one.
-const DISMISS_KEY = "sidebar-promo:fleet-calendar-v3";
+/**
+ * The banner currently on air. Only ever advertise something that exists on
+ * this branch — the slot is seen by every live tenant, and a card pointing at
+ * a feature they cannot open reads as a broken portal, not a teaser.
+ *
+ * To retire a banner, swap this object; bump `dismissKey` at the same time so
+ * the new one re-appears for people who dismissed the previous one.
+ */
+const PROMO = {
+  dismissKey: "sidebar-promo:appearance-v1",
+  title: "Portal Appearance",
+  body: "Pick your brand colour and logo, and watch the portal change as you do.",
+  href: "/settings/appearance",
+  cta: "Try it",
+};
 
 /**
- * Mock promo / announcement banner for the bottom of the sidebar — a glossy,
+ * Promo / announcement banner for the bottom of the sidebar — a glossy,
  * 3D "liquid glass" card (sculpted depth via layered highlights + shadows,
  * a single soft light source, minimal movement). Use this slot for feature
  * releases, training, or promotions. Dismissal persists via localStorage.
@@ -24,13 +37,13 @@ export function SidebarPromo() {
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
+    setDismissed(localStorage.getItem(PROMO.dismissKey) === "1");
   }, []);
 
   if (dismissed) return null;
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, "1");
+    localStorage.setItem(PROMO.dismissKey, "1");
     setDismissed(true);
   };
 
@@ -64,16 +77,17 @@ export function SidebarPromo() {
           <span className="rounded-full bg-white/25 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide ring-1 ring-inset ring-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
             New
           </span>
-          <p className="text-[12px] font-semibold leading-tight drop-shadow-sm">Fleet Calendar</p>
+          <p className="text-[12px] font-semibold leading-tight drop-shadow-sm">{PROMO.title}</p>
         </div>
 
-        <p className="mt-0.5 text-[10.5px] leading-snug text-white/85">
-          Drag-to-block dates and see your entire fleet at a glance.
-        </p>
+        <p className="mt-0.5 text-[10.5px] leading-snug text-white/85">{PROMO.body}</p>
 
-        <button className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-white/20 px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ring-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_3px_8px_-2px_rgba(0,0,0,0.4)] transition-all hover:bg-white/30 active:translate-y-px">
-          Explore <ArrowRight className="h-3 w-3" />
-        </button>
+        <Link
+          href={PROMO.href}
+          className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-white/20 px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ring-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_3px_8px_-2px_rgba(0,0,0,0.4)] transition-all hover:bg-white/30 active:translate-y-px"
+        >
+          {PROMO.cta} <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
     </div>
   );
