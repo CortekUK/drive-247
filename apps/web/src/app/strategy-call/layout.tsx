@@ -54,7 +54,9 @@ export default function StrategyCallLayout({
         </div>
       </header>
 
-      <main>{children}</main>
+      <main id="main" tabIndex={-1}>
+        {children}
+      </main>
 
       {/* Minimal footer */}
       <footer className="border-t border-border/40 py-6">

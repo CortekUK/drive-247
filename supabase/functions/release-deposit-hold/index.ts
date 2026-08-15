@@ -54,7 +54,10 @@ Deno.serve(async (req) => {
       .from("rentals")
       .select(
         "deposit_hold_payment_intent_id, deposit_hold_status, deposit_hold_amount, tenant_id, platform_account, " +
-          "deposit_hold_stripe_mode, deposit_hold_connect_account_id, deposit_hold_platform_account"
+          "deposit_hold_stripe_mode, deposit_hold_connect_account_id, deposit_hold_platform_account, " +
+          // For the audit row below — without it the ledger records attempt_seq 0
+          // for every release and the link cannot be tied to the chain link it ended.
+          "deposit_hold_attempt_seq, deposit_hold_currency"
       )
       .eq("id", rentalId)
       .single();
@@ -245,6 +248,48 @@ Deno.serve(async (req) => {
     }
 
     console.log("[DEPOSIT-RELEASE] Hold released. Amount was:", rental.deposit_hold_amount);
+
+    // ── AUDIT ────────────────────────────────────────────────────────────────
+    // Release was the ONLY operation in this subsystem that left no trace:
+    // no `deposit_hold_links` row, no `audit_logs` entry. When an operator asks
+    // "who released this customer's deposit, and when?", there was no answer —
+    // the release button, the key-handover flow and a cancelled rental are
+    // indistinguishable after the fact. That happened for real on R-161fe1 and
+    // could not be answered.
+    //
+    // `auth.caller.actor` is purpose-built for this column: the app_user UUID
+    // for a human, a plain word for a machine.
+    //
+    // NON-FATAL: the money has already moved and the row is already written.
+    // An audit failure must never turn a successful release into an error.
+    try {
+      await supabase.from("deposit_hold_links").insert({
+        rental_id: rentalId,
+        tenant_id: rental.tenant_id,
+        attempt_seq: rental.deposit_hold_attempt_seq ?? 0,
+        action: "release",
+        // The authorization that was cancelled — recorded as superseded rather
+        // than as the current PI, because after this it no longer holds funds.
+        superseded_pi_id: rental.deposit_hold_payment_intent_id,
+        payment_intent_id: null,
+        platform_account: platformAccount,
+        connect_account_id: connectAccountId,
+        stripe_mode: stripeMode,
+        amount_cents:
+          rental.deposit_hold_amount != null
+            ? Math.round(Number(rental.deposit_hold_amount) * 100)
+            : null,
+        currency: rental.deposit_hold_currency ?? null,
+        outcome: "succeeded",
+        error_message: `Released by ${auth.caller.kind}${
+          auth.caller.appUserId ? ` (app_user ${auth.caller.appUserId})` : ""
+        }`,
+        actor: auth.caller.actor,
+        completed_at: new Date().toISOString(),
+      });
+    } catch (auditErr) {
+      console.error("[DEPOSIT-RELEASE] Audit row failed (release itself succeeded):", auditErr);
+    }
 
     return jsonResponse({
       success: true,

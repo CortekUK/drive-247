@@ -215,6 +215,20 @@ verify_jwt = false
 [functions.evaluate-health-scores]
 verify_jwt = false
 
+# GHL is an external provider and cannot present a Supabase JWT. The handler
+# verifies the raw-body X-GHL-Signature with Ed25519 before parsing/persisting.
+[functions.ghl-strategy-call-webhook]
+verify_jwt = false
+
+# Booking lifecycle email endpoints are server-to-server only. The gateway
+# requires the service-role JWT and both handlers also compare that credential
+# in constant time before touching a job.
+[functions.send-strategy-call-email]
+verify_jwt = true
+
+[functions.dispatch-strategy-call-emails]
+verify_jwt = true
+
 # Automations engine support functions.
 [functions.automation-test-run]
 verify_jwt = true

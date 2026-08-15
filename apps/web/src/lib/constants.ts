@@ -1,5 +1,21 @@
-export const SITE_URL = "https://drive247.co";
-export const GHL_BOOKING_URL = "https://api.leadconnectorhq.com/widget/booking/5IaMFcRJ2O4R589QF89C";
+function configuredHttpsUrl(value: string | undefined, fallback: string): string {
+  try {
+    const url = new URL(value || fallback);
+    return url.protocol === "https:" ? url.toString().replace(/\/$/, "") : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export const SITE_URL = configuredHttpsUrl(
+  process.env.NEXT_PUBLIC_SITE_URL,
+  "https://drive-247.com",
+);
+
+export const GHL_BOOKING_URL = configuredHttpsUrl(
+  process.env.NEXT_PUBLIC_GHL_BOOKING_URL,
+  "https://api.leadconnectorhq.com/widget/booking/5IaMFcRJ2O4R589QF89C",
+);
 
 export const SITE_META = {
   title: "Drive247 — Direct Booking Platform for Independent Car Rental Operators",

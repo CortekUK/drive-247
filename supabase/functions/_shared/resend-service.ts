@@ -12,6 +12,8 @@ interface EmailOptions {
   fromName?: string;
   replyTo?: string;
   tenantId?: string;
+  /** Resend keeps a successful result for this key for 24 hours. */
+  idempotencyKey?: string;
 }
 
 interface EmailResult {
@@ -303,12 +305,7 @@ export async function sendResendEmail(
       Deno.env.get('EMAIL_SIMULATION_ALLOWED') === 'true';
 
     if (!isLocalDev) {
-      console.error(
-        'RESEND_API_KEY is not configured — email NOT sent to',
-        options.to,
-        '| subject:',
-        options.subject,
-      );
+      console.error('RESEND_API_KEY is not configured — email was not sent');
       return {
         success: false,
         error: 'Email service is not configured (RESEND_API_KEY missing) — no email was delivered',
@@ -316,8 +313,6 @@ export async function sendResendEmail(
     }
 
     console.log('RESEND_API_KEY not configured (local dev), simulating email send');
-    console.log('To:', options.to);
-    console.log('Subject:', options.subject);
     return {
       success: true,
       simulated: true,
@@ -370,6 +365,9 @@ export async function sendResendEmail(
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        ...(options.idempotencyKey
+          ? { 'Idempotency-Key': options.idempotencyKey.slice(0, 256) }
+          : {}),
       },
       body: JSON.stringify(emailData),
     });
@@ -378,21 +376,21 @@ export async function sendResendEmail(
     console.log('Resend API Response Status:', response.status);
 
     if (!response.ok) {
-      console.error('Resend API Error:', responseData);
+      console.error('Resend API rejected an email request', { status: response.status });
       return {
         success: false,
         error: responseData.message || 'Unknown error from Resend',
       };
     }
 
-    console.log('Email sent successfully via Resend, ID:', responseData.id);
+    console.log('Email sent successfully via Resend');
 
     return {
       success: true,
       messageId: responseData.id,
     };
   } catch (error) {
-    console.error('Resend API request error:', error);
+    console.error('Resend API request failed');
     return {
       success: false,
       error: error.message,

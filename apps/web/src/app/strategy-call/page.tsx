@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -18,6 +18,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GHL_BOOKING_URL } from "@/lib/constants";
+import {
+  getAllowedGhlOrigins,
+  getGhlSessionQueryParam,
+  isTrustedGhlCompletionMessage,
+} from "@/lib/strategy-call/ghl-message";
 import {
   submitStrategyCallAction,
   type StrategyCallState,
@@ -137,45 +142,94 @@ const MINI_FAQ = [
 function CalendarEmbed({
   prefillName,
   prefillEmail,
+  sessionId,
 }: {
   prefillName: string;
   prefillEmail: string;
+  sessionId?: string;
 }) {
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [calendarSlow, setCalendarSlow] = useState(false);
   const router = useRouter();
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hasRedirectedRef = useRef(false);
 
-  // Listen for GHL booking completion and redirect to confirmation page
+  // The browser event is only a fast handoff. The verified webhook and the
+  // persisted booking remain the source of truth for confirmation details.
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (Array.isArray(event.data) && event.data[0] === "msgsndr-booking-complete") {
-        router.push("/strategy-call/confirmation");
-      }
+      const allowedOrigins = getAllowedGhlOrigins(
+        process.env.NEXT_PUBLIC_GHL_ALLOWED_ORIGINS,
+        GHL_BOOKING_URL,
+      );
+      if (
+        hasRedirectedRef.current ||
+        !isTrustedGhlCompletionMessage(
+          event,
+          iframeRef.current?.contentWindow,
+          allowedOrigins,
+        )
+      ) return;
+
+      hasRedirectedRef.current = true;
+      router.replace("/strategy-call/confirmation");
     }
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [router]);
 
+  useEffect(() => {
+    if (iframeLoaded) return;
+    const timeout = window.setTimeout(() => setCalendarSlow(true), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [iframeLoaded]);
+
   const src = (() => {
-    const params = new URLSearchParams();
-    if (prefillName) params.set("name", prefillName);
-    if (prefillEmail) params.set("email", prefillEmail);
-    const qs = params.toString();
-    return qs ? `${GHL_BOOKING_URL}?${qs}` : GHL_BOOKING_URL;
+    const url = new URL(GHL_BOOKING_URL);
+    if (prefillName) url.searchParams.set("name", prefillName);
+    if (prefillEmail) url.searchParams.set("email", prefillEmail);
+
+    // GHL custom tracking/query support must be confirmed by its admin. We
+    // only attach the non-secret session UUID when the parameter is explicitly
+    // configured; the opaque raw session token never leaves its HttpOnly cookie.
+    const sessionParam = getGhlSessionQueryParam(
+      process.env.NEXT_PUBLIC_GHL_SESSION_QUERY_PARAM,
+    );
+    if (sessionId && sessionParam) url.searchParams.set(sessionParam, sessionId);
+    return url.toString();
   })();
 
   return (
     <div className="relative">
       {!iframeLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl border bg-card">
-          <div className="text-sm text-muted-foreground">Loading calendar...</div>
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl border bg-card p-6 text-center">
+          <div className="text-sm text-muted-foreground">
+            <p>{calendarSlow ? "The calendar is taking longer than expected." : "Loading calendar..."}</p>
+            {calendarSlow && (
+              <a
+                href={src}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex min-h-11 items-center font-medium text-indigo-600 underline underline-offset-4 dark:text-indigo-400"
+              >
+                Open the secure calendar in a new tab
+              </a>
+            )}
+          </div>
         </div>
       )}
       <iframe
+        ref={iframeRef}
         src={src}
         title="Book a strategy call"
         className="w-full rounded-xl border-0"
         style={{ height: 800 }}
-        onLoad={() => setIframeLoaded(true)}
+        onLoad={() => {
+          setIframeLoaded(true);
+          setCalendarSlow(false);
+        }}
+        referrerPolicy="strict-origin-when-cross-origin"
+        allow="payment; fullscreen"
       />
       <div className="mt-3 text-center">
         <a
@@ -248,6 +302,19 @@ function QualifierSection({
               }}
               className="space-y-3"
             >
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -left-[10000px] top-auto size-px overflow-hidden"
+              >
+                <label htmlFor="sc-website">Website</label>
+                <input
+                  id="sc-website"
+                  name="website"
+                  type="text"
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label
@@ -377,7 +444,7 @@ function QualifierSection({
                   </label>
                   <input
                     type="hidden"
-                    name="challenge"
+                    name="main_booking_source"
                     value={bookingSource}
                   />
                   <Select
@@ -488,6 +555,11 @@ function QualifierSection({
           <CalendarEmbed
             prefillName={prefillName}
             prefillEmail={prefillEmail}
+            sessionId={
+              state && "sessionId" in state && typeof state.sessionId === "string"
+                ? state.sessionId
+                : undefined
+            }
           />
         </div>
       )}

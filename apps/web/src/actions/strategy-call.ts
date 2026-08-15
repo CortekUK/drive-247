@@ -1,116 +1,120 @@
 "use server";
 
-import { getSupabase } from "@/lib/supabase/server";
+import { cookies, headers } from "next/headers";
+import { getStrategyCallAdminClient } from "@/lib/strategy-call/supabase-admin";
+import {
+  createStrategyCallSessionToken,
+  hashStrategyCallSubmissionSource,
+  hashStrategyCallSessionToken,
+  STRATEGY_CALL_SESSION_COOKIE,
+  STRATEGY_CALL_SESSION_TTL_SECONDS,
+} from "@/lib/strategy-call/session-token";
+import { validateStrategyCallSubmission } from "@/lib/strategy-call/validation";
 
-export type StrategyCallState = {
-  success: boolean;
-  message: string;
-} | null;
+export type StrategyCallState =
+  | { success: false; message: string }
+  | { success: true; message: string; sessionId: string }
+  | null;
 
 export async function submitStrategyCallAction(
   _prev: StrategyCallState,
   formData: FormData
 ): Promise<StrategyCallState> {
-  const name = formData.get("name");
-  const email = formData.get("email");
-  const phone = formData.get("phone");
-  const fleetSize = formData.get("fleet_size");
-  const currentPlatform = formData.get("current_platform");
-  const challenge = formData.get("challenge");
-  const budget = formData.get("budget");
-  const readiness = formData.get("readiness");
-
-  if (!name || typeof name !== "string" || !name.trim()) {
-    return { success: false, message: "Please enter your name." };
+  const validation = validateStrategyCallSubmission(formData);
+  if (!validation.ok) {
+    return { success: false, message: validation.message };
   }
 
-  if (!email || typeof email !== "string") {
-    return { success: false, message: "Please enter your email." };
-  }
-
-  const trimmedEmail = email.trim().toLowerCase();
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-    return { success: false, message: "Please enter a valid email address." };
-  }
-
-  if (!fleetSize || typeof fleetSize !== "string" || !fleetSize.trim()) {
-    return { success: false, message: "Please select your fleet size." };
-  }
-
-  if (
-    !currentPlatform ||
-    typeof currentPlatform !== "string" ||
-    !currentPlatform.trim()
-  ) {
-    return { success: false, message: "Please select your current platform." };
-  }
-
-  if (!budget || typeof budget !== "string" || !budget.trim()) {
-    return { success: false, message: "Please select your launch budget." };
-  }
-
-  if (!readiness || typeof readiness !== "string" || !readiness.trim()) {
-    return { success: false, message: "Please select your launch readiness." };
-  }
-
-  const trimmedPhone =
-    typeof phone === "string" ? phone.trim() : undefined;
-  const trimmedChallenge =
-    typeof challenge === "string" ? challenge.trim() : undefined;
-
-  // Insert contact request
-  const { error } = await getSupabase().from("contact_requests").insert({
-    contact_name: name.trim(),
-    company_name: "Unknown",
-    email: trimmedEmail,
-    phone: trimmedPhone || null,
-    fleet_size: fleetSize.trim(),
-    current_platform: currentPlatform.trim(),
-    challenge: trimmedChallenge || null,
-    budget: budget.trim(),
-    readiness: readiness.trim(),
-    source: "strategy-call",
-    status: "pending",
-  });
-
-  if (error) {
-    if (process.env.NODE_ENV === "development")
-      console.error("Strategy call capture error:", error);
+  const pepper = process.env.STRATEGY_CALL_SESSION_PEPPER;
+  if (!pepper) {
+    console.error("Strategy-call capture unavailable: session pepper is missing");
     return {
       success: false,
       message: "Something went wrong. Please try again.",
     };
   }
 
-  // Fire-and-forget confirmation email via edge function
+  const input = validation.value;
+  const rawToken = createStrategyCallSessionToken();
+  let tokenHash: string;
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (supabaseUrl && supabaseAnonKey) {
-      fetch(`${supabaseUrl}/functions/v1/send-strategy-call-email`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${supabaseAnonKey}`,
-        },
-        body: JSON.stringify({
-          email_type: "confirmation",
-          contact_name: name.trim(),
-          email: trimmedEmail,
-          fleet_size: fleetSize.trim(),
-          current_platform: currentPlatform.trim(),
-        }),
-      }).catch(() => {
-        // Fire and forget — don't block on email failure
-      });
-    }
+    tokenHash = hashStrategyCallSessionToken(rawToken, pepper);
   } catch {
-    // Silently fail — email is non-blocking
+    console.error("Strategy-call capture unavailable: invalid session security config");
+    return {
+      success: false,
+      message: "Something went wrong. Please try again.",
+    };
   }
 
-  return {
-    success: true,
-    message: "You're in — pick a time that works.",
-  };
+  try {
+    const supabase = getStrategyCallAdminClient();
+    const requestHeaders = await headers();
+    const networkSource =
+      requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      requestHeaders.get("x-real-ip")?.trim() ||
+      `unknown:${(requestHeaders.get("user-agent") || "unknown").slice(0, 120)}`;
+    const submissionRateKey = hashStrategyCallSubmissionSource(
+      networkSource,
+      pepper
+    );
+    const expiresAt = new Date(
+      Date.now() + STRATEGY_CALL_SESSION_TTL_SECONDS * 1000
+    ).toISOString();
+    const { data: createdRows, error: createError } = await supabase.rpc(
+      "create_strategy_call_session",
+      {
+        p_contact_name: input.name,
+        p_email: input.email,
+        p_phone: input.phone,
+        p_fleet_size: input.fleetSize,
+        p_current_platform: input.currentPlatform,
+        p_main_booking_source: input.mainBookingSource,
+        p_budget: input.budget,
+        p_readiness: input.readiness,
+        p_token_hash: tokenHash,
+        p_submission_rate_key: submissionRateKey,
+        p_expires_at: expiresAt,
+      }
+    );
+    const created = createdRows?.[0];
+
+    if (createError || !created?.session_id) {
+      console.error("Strategy-call transactional persistence failed", {
+        code: createError?.code ?? "missing_row",
+      });
+      return {
+        success: false,
+        message: "Something went wrong. Please try again.",
+      };
+    }
+
+    const cookieStore = await cookies();
+    cookieStore.set(STRATEGY_CALL_SESSION_COOKIE, rawToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: STRATEGY_CALL_SESSION_TTL_SECONDS,
+      priority: "high",
+    });
+
+    // Deliberately no email here. A verified persisted booking is the only
+    // event that can trigger the confirmation lifecycle.
+    return {
+      success: true,
+      message: "You're in — pick a time that works.",
+      // This UUID is non-secret and can be forwarded as GHL custom tracking.
+      // The raw bearer token remains cookie-only.
+      sessionId: created.session_id,
+    };
+  } catch (error) {
+    console.error("Strategy-call capture failed", {
+      name: error instanceof Error ? error.name : "unknown",
+    });
+    return {
+      success: false,
+      message: "Something went wrong. Please try again.",
+    };
+  }
 }

@@ -1,5 +1,29 @@
 {
-  "files": [],
-  "specs": [],
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/health-score/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/health-score-filters.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/health-score-filters.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/evaluate-health-scores/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813120000_add_tenant_health_scores.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813130000_fix_health_score_edge_cases.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813140000_fix_health_score_preview_data_issue_alert.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813150000_fix_health_score_recipient_safe_delete.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813160000_fix_health_score_recipient_insert_alias.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260813170000_add_audit_log_health_trend.sql",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(auth)/login/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/stores/auth-store.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/audit-logs/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/login/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/supabase-test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Sidebar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Header.tsx"
+  ],
+  "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/admin-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/database-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+  ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

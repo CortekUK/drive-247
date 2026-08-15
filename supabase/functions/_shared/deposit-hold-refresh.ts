@@ -117,6 +117,7 @@ export const HOLD_REFRESH_COLUMNS = `
   deposit_hold_stripe_mode,
   deposit_hold_platform_account,
   deposit_hold_currency,
+  deposit_hold_expiry_source,
   deposit_hold_chain_expires_at
 `;
 
@@ -208,6 +209,38 @@ const HOLD_HISTORY_PREDICATE = [
 
 /** How far ahead of the REAL Stripe deadline we re-authorize. */
 export const DEFAULT_LOOKAHEAD_DAYS = 2;
+
+/**
+ * How much verified life an incumbent authorisation must have left before we
+ * are willing to DESTROY it in order to renew.
+ *
+ * A renewal cancels the incumbent and then places a replacement. If the
+ * replacement is declined, the renter is left with no deposit at all — and the
+ * perfectly good authorisation we cancelled to get there is not recoverable.
+ * That happened on 14 Aug 2026 (GMT, R-161fe1, $100): the incumbent still had
+ * 38 hours of Stripe-verified life, the renewal fired anyway on the 2-day
+ * lookahead, the card came back insufficient_funds, and an active rental sat
+ * unsecured for over a day.
+ *
+ * The lookahead decides when a hold is worth LOOKING at. This decides when it is
+ * worth ACTING on. Set just above the 24h cron interval (plus jitter) so a
+ * deferral always gets at least one more pass before the deadline — deferring is
+ * only safe if we are certain we will be back in time.
+ *
+ * Reordering the cancel and the create was considered and rejected: it would not
+ * have prevented the incident (a second authorisation competes with the first
+ * for the same available credit, so a funds decline gets MORE likely, not less),
+ * and it breaks the "never authorize a renter twice" invariant this subsystem is
+ * built on.
+ */
+export const RENEWAL_COMMIT_WINDOW_HOURS = 30;
+//                                          ^^ 24h cron interval + 6h of slack.
+// Deferring is only safe if we are certain of another pass before the deadline,
+// so this must stay comfortably ABOVE the interval of whatever schedule drives
+// the production driver. At 26h a single late or failed run left ~2h of margin;
+// 30h leaves ~6h and changes nothing about which renewals defer in practice
+// (the incident's 38h incumbent defers either way, then commits at ~14h).
+// If the cron is ever moved to twice daily this can safely come back down.
 
 /** Max rentals one invocation will touch. See the batch note in the drivers. */
 export const DEFAULT_BATCH_LIMIT = 25;
@@ -1147,6 +1180,53 @@ export async function refreshOneHold(
         "skipped",
         `incumbent authorisation already runs to ${storedExpiresAt}, past the chain bound ` +
           `${chain.effective} — not cancelling a live hold to place one that would outlive the rental`
+      );
+    }
+  }
+
+  // ── RENEWAL COMMIT WINDOW: don't destroy a healthy hold this early. ────────
+  //
+  // Same principle as the block above — do not cancel a live authorisation just
+  // because the calendar says it is our turn — applied to the incumbent's own
+  // remaining life rather than to the chain bound.
+  //
+  // The 2-day lookahead decides when a hold is worth LOOKING at. It was also,
+  // accidentally, deciding when to ACT: the renewal cancelled the incumbent
+  // before it knew whether a replacement was obtainable, so a decline threw away
+  // up to two days of perfectly good cover. Deferring to the last pass before
+  // expiry means a decline costs hours instead of days, and on the success path
+  // each link runs closer to its full length — fewer links, fewer chances to
+  // fail.
+  //
+  // Every conjunct is load-bearing:
+  //  * 'held' only — a 'failed' row is mid-recovery and is governed by its own
+  //    next_retry_at; deferring it would fight the backoff ladder.
+  //  * an actual incumbent — nothing to preserve otherwise.
+  //  * NOT auto-extend — those rentals take the RELEASE branch below, and
+  //    deferring a release needlessly freezes the renter's money another day.
+  //  * Stripe-verified expiry ONLY. A 'fallback' expiry is an admitted guess
+  //    that can sit LATER than the real deadline, so deferring against one could
+  //    push the commit past the point of no return. Guessing is exactly what we
+  //    must not do here.
+  //
+  // Safe because deferring writes nothing, calls no Stripe API, burns no
+  // attempt_seq and cancels nothing — the row stays exactly as it was and is
+  // re-selected next pass (its expiry is still inside the lookahead). The window
+  // sits above the cron interval so there is always another pass in hand.
+  if (
+    startingStatus === "held" &&
+    incumbentPi &&
+    rental.auto_extend_enabled !== true &&
+    rental.deposit_hold_expiry_source === "stripe_capture_before" &&
+    storedExpiresAt
+  ) {
+    const remainingMs = new Date(storedExpiresAt).getTime() - now.getTime();
+    if (Number.isFinite(remainingMs) && remainingMs > RENEWAL_COMMIT_WINDOW_HOURS * 3_600_000) {
+      return untouched(
+        "skipped",
+        `incumbent is capturable for another ${Math.round(remainingMs / 3_600_000)}h ` +
+          `(Stripe-verified until ${storedExpiresAt}) — deferring the renewal to the last pass ` +
+          `before expiry rather than cancelling a live hold this early`
       );
     }
   }
