@@ -379,7 +379,7 @@ export function ConfirmationVideo({
               />
             ) : null}
             {video.transcript
-              ? "Your browser does not support HTML video. Read the approved transcript below."
+              ? "Your browser does not support HTML video. Read the transcript below."
               : "Your browser does not support HTML video. Contact Drive247 support for help."}
           </video>
 
@@ -416,7 +416,7 @@ export function ConfirmationVideo({
               <p className="mt-3 font-bold">This video could not be loaded.</p>
               <p className="mt-1 max-w-md text-sm text-slate-300">
                 {video.transcript
-                  ? "Check your connection and try again. The approved transcript and the rest of your booking page are still available."
+                  ? "Check your connection and try again. The transcript and the rest of your booking page are still available."
                   : "Check your connection and try again. The rest of your booking page remains available, or you can contact support for help."}
               </p>
               <Button
@@ -458,16 +458,34 @@ export function ConfirmationVideo({
       </div>
 
       <details className="mt-3 rounded-xl border bg-card open:shadow-sm">
-        <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          {video.transcript ? "Read accessible transcript" : "Transcript status"}
+        {/*
+          The label names the video. All four summaries read identically
+          otherwise, and a screen reader's element list strips the surrounding
+          section, so the user would hear "Read transcript" four times with no
+          way to tell which video each belongs to.
+        */}
+        <summary className="min-h-11 cursor-pointer px-4 py-3 text-sm font-semibold outline-none focus-visible:outline-1 focus-visible:ring-2 focus-visible:ring-ring">
+          {video.transcript
+            ? `Read transcript — ${video.order}. ${video.title}`
+            : `Transcript status — ${video.order}. ${video.title}`}
         </summary>
         <div className="border-t px-4 py-4 text-sm leading-relaxed text-muted-foreground">
           {video.transcript ? (
-            video.transcript.map((paragraph) => (
-              <p key={paragraph} className="not-first:mt-3">
-                {paragraph}
+            <>
+              {/*
+                For a deaf viewer this text is the only channel. Saying where it
+                came from is the difference between an aid and a false record.
+              */}
+              <p className="mb-3 text-xs font-medium">
+                Auto-generated from the audio and lightly checked. It may contain
+                small wording errors — the video is the source of truth.
               </p>
-            ))
+              {video.transcript.map((paragraph, index) => (
+                <p key={index} className="not-first:mt-3">
+                  {paragraph}
+                </p>
+              ))}
+            </>
           ) : (
             <p role="status">
               The transcript for this video is not available yet. For help in
