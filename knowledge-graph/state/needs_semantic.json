@@ -1,15 +1,5 @@
 {
-  "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-calendar-density.ts",
-    "/home/haseeb-raza/Desktop/drive-247/docs/fleet-health-spec.html",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/calendar-view.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/confirmation/confirmation-client.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/components/strategy-call/booking-summary.tsx"
-  ],
-  "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/docs-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/web-inc-001.json"
-  ],
+  "files": [],
+  "specs": [],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }
