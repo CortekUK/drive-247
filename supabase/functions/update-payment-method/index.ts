@@ -1,7 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, validateStripeCustomerId, type StripeMode } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type PlatformAccount, type StripeMode } from '../_shared/stripe-client.ts'
+import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,7 +46,7 @@ serve(async (req) => {
       // Get customer's Stripe customer ID
       const { data: customer, error: customerError } = await supabase
         .from('customers')
-        .select('stripe_customer_id, tenant_id')
+        .select(`${CUSTOMER_ACCOUNT_COLUMNS}, tenant_id`)
         .eq('id', body.customerId)
         .single()
 
@@ -71,14 +72,22 @@ serve(async (req) => {
         }
       }
 
-      const stripe = getStripeClientForAccount(tenantData ? getChargePlatformAccount(tenantData) : 'uk', stripeMode)
+      const platformAccount: PlatformAccount = tenantData ? getChargePlatformAccount(tenantData) : 'uk'
+      const stripe = getStripeClientForAccount(platformAccount, stripeMode)
       const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
       const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
-      // Create or verify Stripe customer. Validate a stored id before reuse:
-      // Stripe customers are scoped per account+mode, so a stale (e.g.
-      // test-era) id would fail setupIntents.create with "No such customer".
-      let stripeCustomerId = await validateStripeCustomerId(stripe, customer.stripe_customer_id, stripeOptions)
+      // Resolve the per-account Stripe customer (validated live), self-healing
+      // from the legacy shared id. Per-account so this never clobbers the id on
+      // the account the customer's existing rentals live on.
+      let stripeCustomerId = await getCustomerIdForAccount({
+        supabase,
+        stripe,
+        account: platformAccount,
+        stripeAccount: stripeAccountId,
+        customerRowId: body.customerId,
+        customer,
+      })
 
       if (!stripeCustomerId) {
         // Get customer details for creating Stripe customer
@@ -100,11 +109,8 @@ serve(async (req) => {
 
         stripeCustomerId = stripeCustomer.id
 
-        // Save to database
-        await supabase
-          .from('customers')
-          .update({ stripe_customer_id: stripeCustomerId })
-          .eq('id', body.customerId)
+        // Save to the per-account column (never the shared legacy column)
+        await setCustomerIdForAccount(supabase, body.customerId, platformAccount, stripeCustomerId)
       }
 
       // Create SetupIntent
@@ -141,11 +147,11 @@ serve(async (req) => {
       // Get customer and tenant info
       const { data: customer } = await supabase
         .from('customers')
-        .select('stripe_customer_id, tenant_id')
+        .select(`${CUSTOMER_ACCOUNT_COLUMNS}, tenant_id`)
         .eq('id', body.customerId)
         .single()
 
-      if (!customer?.stripe_customer_id) {
+      if (!customer) {
         throw new Error('Customer not found or no Stripe customer')
       }
 
@@ -166,9 +172,25 @@ serve(async (req) => {
         }
       }
 
-      const stripe = getStripeClientForAccount(tenantData ? getChargePlatformAccount(tenantData) : 'uk', stripeMode)
+      const platformAccount: PlatformAccount = tenantData ? getChargePlatformAccount(tenantData) : 'uk'
+      const stripe = getStripeClientForAccount(platformAccount, stripeMode)
       const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
       const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+
+      // Per-account customer id (the SetupIntent from create-setup was made on
+      // this same per-account customer). Validated live.
+      const stripeCustomerId = await getCustomerIdForAccount({
+        supabase,
+        stripe,
+        account: platformAccount,
+        stripeAccount: stripeAccountId,
+        customerRowId: body.customerId,
+        customer,
+      })
+
+      if (!stripeCustomerId) {
+        throw new Error('Customer not found or no Stripe customer')
+      }
 
       // Verify the payment method belongs to this customer
       const paymentMethod = await stripe.paymentMethods.retrieve(
@@ -176,13 +198,13 @@ serve(async (req) => {
         stripeOptions
       )
 
-      if (paymentMethod.customer !== customer.stripe_customer_id) {
+      if (paymentMethod.customer !== stripeCustomerId) {
         throw new Error('Payment method does not belong to this customer')
       }
 
       // Set as default payment method for the customer
       await stripe.customers.update(
-        customer.stripe_customer_id,
+        stripeCustomerId,
         { invoice_settings: { default_payment_method: body.paymentMethodId } },
         stripeOptions
       )
@@ -270,11 +292,11 @@ serve(async (req) => {
         // Try to get from customer's default
         const { data: customer } = await supabase
           .from('customers')
-          .select('stripe_customer_id, tenant_id')
+          .select(`${CUSTOMER_ACCOUNT_COLUMNS}, tenant_id`)
           .eq('id', customerId)
           .single()
 
-        if (customer?.stripe_customer_id) {
+        if (customer && (customer.stripe_customer_id || customer.stripe_customer_id_uk || customer.stripe_customer_id_uae)) {
           tenantId = customer.tenant_id
 
           let stripeMode: StripeMode = 'test'
@@ -293,17 +315,30 @@ serve(async (req) => {
             }
           }
 
-          const stripe = getStripeClientForAccount(tenantData ? getChargePlatformAccount(tenantData) : 'uk', stripeMode)
+          const platformAccount: PlatformAccount = tenantData ? getChargePlatformAccount(tenantData) : 'uk'
+          const stripe = getStripeClientForAccount(platformAccount, stripeMode)
           const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
           const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
 
-          // Get customer's default payment method
-          const stripeCustomer = await stripe.customers.retrieve(
-            customer.stripe_customer_id,
-            stripeOptions
-          ) as Stripe.Customer
+          // Per-account customer id (validated live), self-healing from legacy.
+          const stripeCustomerId = await getCustomerIdForAccount({
+            supabase,
+            stripe,
+            account: platformAccount,
+            stripeAccount: stripeAccountId,
+            customerRowId: customerId,
+            customer,
+          })
 
-          paymentMethodId = stripeCustomer.invoice_settings?.default_payment_method as string || null
+          if (stripeCustomerId) {
+            // Get customer's default payment method
+            const stripeCustomer = await stripe.customers.retrieve(
+              stripeCustomerId,
+              stripeOptions
+            ) as Stripe.Customer
+
+            paymentMethodId = stripeCustomer.invoice_settings?.default_payment_method as string || null
+          }
         }
       }
 

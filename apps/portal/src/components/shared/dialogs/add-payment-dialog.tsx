@@ -461,11 +461,17 @@ export const AddPaymentDialog = ({
     queryKey: ["customer-card-on-file", selectedCustomerId, tenant?.id],
     queryFn: async () => {
       if (!selectedCustomerId) return null;
-      let query = supabase.from("customers").select("stripe_customer_id").eq("id", selectedCustomerId);
+      // Per-account customer ids (uk/uae) plus the legacy shared column — a card
+      // on EITHER platform account counts as "on file". The edge function does
+      // the authoritative per-account validation.
+      let query = supabase
+        .from("customers")
+        .select("stripe_customer_id, stripe_customer_id_uk, stripe_customer_id_uae")
+        .eq("id", selectedCustomerId);
       if (tenant?.id) query = query.eq("tenant_id", tenant.id);
       const { data, error } = await query.maybeSingle();
       if (error) return null;
-      return data?.stripe_customer_id ?? null;
+      return data?.stripe_customer_id ?? data?.stripe_customer_id_uk ?? data?.stripe_customer_id_uae ?? null;
     },
     enabled: !!selectedCustomerId && open,
   });

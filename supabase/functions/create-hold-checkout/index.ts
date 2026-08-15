@@ -14,11 +14,11 @@ import {
   getStripeClientForAccount,
   getStripeClientForRecord,
   getStripeOptions,
-  validateStripeCustomerId,
   DEPOSIT_HOLD_CARD_VARIANTS,
   isCardFeatureIneligibleError,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
+import { getCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import {
   resolveDepositAmount,
   DEPOSIT_AMOUNT_TENANT_COLUMNS,
@@ -238,13 +238,15 @@ Deno.serve(async (req) => {
 
     const { data: customer } = await supabase
       .from('customers')
-      .select('email, name, stripe_customer_id')
+      .select(`email, name, ${CUSTOMER_ACCOUNT_COLUMNS}`)
       .eq('id', rental.customer_id)
       .single()
 
     const stripeMode: StripeMode = (tenant.stripe_mode as StripeMode) || 'test'
-    const stripe = getStripeClientForAccount(getChargePlatformAccount(tenant as any), stripeMode)
-    const stripeOptions = getStripeOptions(getConnectAccountId(tenant as any))
+    const holdPlatformAccount = getChargePlatformAccount(tenant as any)
+    const stripe = getStripeClientForAccount(holdPlatformAccount, stripeMode)
+    const holdConnectAccountId = getConnectAccountId(tenant as any)
+    const stripeOptions = getStripeOptions(holdConnectAccountId)
 
     const currency = (tenant.currency_code || 'usd').toLowerCase()
     const origin = req.headers.get('origin') || ''
@@ -289,11 +291,19 @@ Deno.serve(async (req) => {
       cancel_url: cancelUrl || `${origin}/rentals/${rentalId}?hold=cancelled`,
     }
 
-    // Validate the stored id before reuse (scoped per Stripe account+mode; a
-    // stale test-era id would fail sessions.create with "No such customer").
-    // On stale, fall back to customer_email — the hold flow has no mint step;
-    // sync-deposit-hold backfills the fresh id after checkout completes.
-    const validHoldCustomerId = await validateStripeCustomerId(stripe, customer?.stripe_customer_id, stripeOptions)
+    // Per-account customer id (validated live), self-healing from the legacy
+    // shared id. On a miss, fall back to customer_email — the hold flow has no
+    // mint step; sync-deposit-hold backfills the fresh id after checkout.
+    const validHoldCustomerId = customer
+      ? await getCustomerIdForAccount({
+          supabase,
+          stripe,
+          account: holdPlatformAccount,
+          stripeAccount: holdConnectAccountId,
+          customerRowId: rental.customer_id,
+          customer,
+        })
+      : null
     if (validHoldCustomerId) {
       sessionParams.customer = validHoldCustomerId
     } else if (customer?.email) {

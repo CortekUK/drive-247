@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForRecord } from '../_shared/stripe-client.ts'
+import { CUSTOMER_ID_COLUMN, CUSTOMER_ACCOUNT_COLUMNS, type CustomerAccountFields } from '../_shared/customer-account.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,16 +105,18 @@ serve(async (req) => {
     const installmentPlan = installmentPlans[0]
     console.log('[ACTIVATE] Found pending plan:', installmentPlan.id)
 
-    // Fetch customer's stripe_customer_id for the plan
+    // Fetch the customer row (all per-account ids). The authoritative id for the
+    // plan is pi.customer (captured below, on the payment's platform); this row
+    // is only a fallback, resolved per-account once paymentPlatform is known.
     let customerStripeId: string | null = null
+    let customerRow: CustomerAccountFields | null = null
     if (installmentPlan.customer_id) {
       const { data: cust } = await supabase
         .from('customers')
-        .select('stripe_customer_id')
+        .select(CUSTOMER_ACCOUNT_COLUMNS)
         .eq('id', installmentPlan.customer_id)
         .single()
-      customerStripeId = cust?.stripe_customer_id || null
-      console.log('[ACTIVATE] Customer Stripe ID:', customerStripeId)
+      customerRow = (cust as CustomerAccountFields) ?? null
     }
 
     // Find the upfront payment record
@@ -272,6 +275,11 @@ serve(async (req) => {
             const stripeOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : undefined
             const pi = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions)
             paymentMethodId = pi.payment_method as string
+            // Authoritative customer id for the plan: the one the upfront PI
+            // actually used, on the payment's own platform account.
+            if (pi.customer) {
+              customerStripeId = typeof pi.customer === 'string' ? pi.customer : pi.customer.id
+            }
             console.log('[ACTIVATE] Retrieved payment method:', paymentMethodId)
           }
         }
@@ -310,6 +318,13 @@ serve(async (req) => {
         paidInstallments = 1
         totalPaidAmount = firstInstallment.amount
       }
+    }
+
+    // Fallback when pi.customer was unavailable: use the customer row's id for
+    // the platform account the payment lives on (never the wrong account's id).
+    if (!customerStripeId && customerRow) {
+      const acct = paymentPlatform === 'uae' ? 'uae' : 'uk'
+      customerStripeId = customerRow[CUSTOMER_ID_COLUMN[acct]] ?? customerRow.stripe_customer_id ?? null
     }
 
     // Activate the plan

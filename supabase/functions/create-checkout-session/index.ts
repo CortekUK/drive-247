@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, validateStripeCustomerId, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
@@ -198,27 +199,32 @@ serve(async (req) => {
     }
 
     if (resolvedCustomerId) {
-      // Check if customer already has a Stripe customer ID
+      // Check if customer already has a Stripe customer ID for THIS platform
+      // account. Per-account resolution (validated live) so a UAE re-mint can
+      // never clobber the UK id and vice-versa; self-heals from the legacy
+      // shared id when it belongs to this account.
       const { data: existingCustomer } = await supabaseClient
         .from('customers')
-        .select('stripe_customer_id')
+        .select(CUSTOMER_ACCOUNT_COLUMNS)
         .eq('id', resolvedCustomerId)
         .single();
 
-      // Stripe Customer objects are scoped to one account + one mode: a stored
-      // id minted in a different context (e.g. while the tenant was in test
-      // mode) does not exist on the current account, and reusing it blindly
-      // makes sessions.create fail with "No such customer" before any payment
-      // row is written. Validate first; on a stale id fall through and re-mint.
-      if (existingCustomer?.stripe_customer_id) {
-        stripeCustomerId = await validateStripeCustomerId(stripe, existingCustomer.stripe_customer_id, stripeOptions);
+      if (existingCustomer) {
+        stripeCustomerId = await getCustomerIdForAccount({
+          supabase: supabaseClient,
+          stripe,
+          account: platformAccount,
+          stripeAccount: stripeAccountId,
+          customerRowId: resolvedCustomerId,
+          customer: existingCustomer,
+        });
         if (stripeCustomerId) {
           console.log('Using existing Stripe customer:', stripeCustomerId);
         }
       }
 
       if (!stripeCustomerId) {
-        // Create new Stripe customer (also replaces a stale/foreign-mode id)
+        // Create new Stripe customer for this platform account
         const customer = await stripe.customers.create({
           email: customerEmail,
           name: customerName,
@@ -231,11 +237,8 @@ serve(async (req) => {
         stripeCustomerId = customer.id;
         console.log('Created new Stripe customer:', stripeCustomerId);
 
-        // Save Stripe customer ID to our database
-        await supabaseClient
-          .from('customers')
-          .update({ stripe_customer_id: stripeCustomerId })
-          .eq('id', resolvedCustomerId);
+        // Save to the per-account column (never the shared legacy column)
+        await setCustomerIdForAccount(supabaseClient, resolvedCustomerId, platformAccount, stripeCustomerId);
       }
     }
 

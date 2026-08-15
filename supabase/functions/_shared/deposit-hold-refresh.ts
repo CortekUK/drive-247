@@ -72,7 +72,9 @@ import {
   CHAIN_GRACE_DAYS_AFTER_END,
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
+  type PlatformAccount,
 } from "./stripe-client.ts";
+import { getCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from "./customer-account.ts";
 import {
   notifyDepositHoldFailure,
   notifyDepositHoldOrphanedAuthorization,
@@ -1912,16 +1914,25 @@ export async function refreshOneHold(
       stripeOptions
     );
     if (!customerId) {
-      // EC-73: five separate call sites re-mint customers.stripe_customer_id and
-      // leave the rental pointing at a dead object. Prefer the customer row's
-      // current id before declaring the chain unrecoverable.
+      // EC-73: the rental's hold customer id can point at a dead object. Fall
+      // back to the customer row's id FOR THE ANCHORED PLATFORM ACCOUNT
+      // (resolvedPlatform) before declaring the chain unrecoverable. Per-account
+      // resolution self-heals from the legacy shared id when it belongs here.
       const { data: customerRow } = await supabase
         .from("customers")
-        .select("stripe_customer_id")
+        .select(CUSTOMER_ACCOUNT_COLUMNS)
         .eq("id", rental.customer_id)
         .maybeSingle();
-      const candidate = (customerRow?.stripe_customer_id as string | null) ?? null;
-      customerId = candidate ? await validateStripeCustomerId(stripe, candidate, stripeOptions) : null;
+      customerId = customerRow
+        ? await getCustomerIdForAccount({
+            supabase,
+            stripe,
+            account: resolvedPlatform as PlatformAccount,
+            stripeAccount: connectAccountId,
+            customerRowId: rental.customer_id as string,
+            customer: customerRow,
+          })
+        : null;
     }
     if (!customerId) {
       return await finish(

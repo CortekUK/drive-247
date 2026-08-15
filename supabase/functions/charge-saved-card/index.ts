@@ -55,10 +55,10 @@ import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import {
   getConnectAccountId,
   getStripeClientForRecord,
-  validateStripeCustomerId,
   TENANT_STRIPE_COLUMNS,
   type StripeMode,
 } from '../_shared/stripe-client.ts';
+import { getCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CLIENT_REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -340,7 +340,7 @@ Deno.serve(async (req) => {
   // ---------------------------------------------------------------------
   const { data: customer, error: customerError } = await supabase
     .from('customers')
-    .select('id, name, email, stripe_customer_id')
+    .select(`id, name, email, ${CUSTOMER_ACCOUNT_COLUMNS}`)
     .eq('id', rental.customer_id)
     .maybeSingle();
 
@@ -350,13 +350,19 @@ Deno.serve(async (req) => {
 
   let stripeCustomerId: string | null;
   try {
-    // Validated against the ACCOUNT AND MODE we are about to charge on. A test-era
-    // id is not a live id; charging it fails with "No such customer" forever.
-    stripeCustomerId = await validateStripeCustomerId(
+    // RECORD-ANCHORED customer id: resolved for the platform account this rental
+    // lives on (platformAccount), validated against the account+mode we are about
+    // to charge on. A test-era or wrong-account id would otherwise fail with
+    // "No such customer" forever. Per-account column so a UAE re-mint elsewhere
+    // can never have clobbered this rental's UK customer id.
+    stripeCustomerId = await getCustomerIdForAccount({
+      supabase,
       stripe,
-      customer.stripe_customer_id,
-      stripeOptions,
-    );
+      account: platformAccount,
+      stripeAccount: connectAccountId,
+      customerRowId: customer.id,
+      customer,
+    });
   } catch (err) {
     console.error('[CHARGE-CARD] Stripe customer lookup failed:', err);
     return fail('stripe_unavailable', 'Could not reach Stripe to verify the saved card', 502);

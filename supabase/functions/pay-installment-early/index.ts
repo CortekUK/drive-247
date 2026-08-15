@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,7 +41,7 @@ serve(async (req) => {
     // Get customer info
     const { data: customer, error: customerError } = await supabase
       .from('customers')
-      .select('stripe_customer_id, tenant_id, email, name')
+      .select(`${CUSTOMER_ACCOUNT_COLUMNS}, tenant_id, email, name`)
       .eq('id', body.customerId)
       .single()
 
@@ -48,7 +49,7 @@ serve(async (req) => {
       throw new Error('Customer not found')
     }
 
-    if (!customer.stripe_customer_id) {
+    if (!customer.stripe_customer_id && !customer.stripe_customer_id_uk && !customer.stripe_customer_id_uae) {
       throw new Error('No payment method on file. Please add a card first.')
     }
 
@@ -76,6 +77,18 @@ serve(async (req) => {
     const stripe = getStripeClientForAccount(platformAccount, stripeMode)
     const stripeAccountId = tenantData ? getConnectAccountId(tenantData) : null
     const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined
+
+    // Per-account customer id (validated live) used only as a fallback when the
+    // plan itself has no stripe_customer_id. The plan's own id (record-anchored)
+    // remains the primary. Self-heals from the legacy shared column.
+    const fallbackCustomerId = await getCustomerIdForAccount({
+      supabase,
+      stripe,
+      account: platformAccount,
+      stripeAccount: stripeAccountId,
+      customerRowId: body.customerId,
+      customer,
+    })
 
     if (action === 'pay-single') {
       // Pay a single installment early
@@ -112,18 +125,18 @@ serve(async (req) => {
 
       const plan = installment.installment_plans as any
 
-      // Use plan's stripe_customer_id, fall back to customer table
-      const stripeCustomerId = plan.stripe_customer_id || customer.stripe_customer_id
+      // Use plan's stripe_customer_id, fall back to the per-account customer id
+      const stripeCustomerId = plan.stripe_customer_id || fallbackCustomerId
 
       if (!stripeCustomerId) {
         throw new Error('No Stripe customer record found. Please add a card first.')
       }
 
       // Backfill plan if missing
-      if (!plan.stripe_customer_id && customer.stripe_customer_id) {
+      if (!plan.stripe_customer_id && fallbackCustomerId) {
         await supabase
           .from('installment_plans')
-          .update({ stripe_customer_id: customer.stripe_customer_id })
+          .update({ stripe_customer_id: fallbackCustomerId })
           .eq('id', installment.installment_plan_id)
         console.log('Backfilled stripe_customer_id on plan:', installment.installment_plan_id)
       }
@@ -362,18 +375,18 @@ serve(async (req) => {
         throw new Error('Installment plan not found or already completed')
       }
 
-      // Use plan's stripe_customer_id, fall back to customer table
-      const remainingStripeCustomerId = plan.stripe_customer_id || customer.stripe_customer_id
+      // Use plan's stripe_customer_id, fall back to the per-account customer id
+      const remainingStripeCustomerId = plan.stripe_customer_id || fallbackCustomerId
 
       if (!remainingStripeCustomerId) {
         throw new Error('No Stripe customer record found. Please add a card first.')
       }
 
       // Backfill plan if missing
-      if (!plan.stripe_customer_id && customer.stripe_customer_id) {
+      if (!plan.stripe_customer_id && fallbackCustomerId) {
         await supabase
           .from('installment_plans')
-          .update({ stripe_customer_id: customer.stripe_customer_id })
+          .update({ stripe_customer_id: fallbackCustomerId })
           .eq('id', installmentPlanId)
         console.log('Backfilled stripe_customer_id on plan:', installmentPlanId)
       }

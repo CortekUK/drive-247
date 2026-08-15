@@ -17,7 +17,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
-import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, validateStripeCustomerId, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
+import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
 
 const corsHeaders = {
@@ -187,12 +188,19 @@ serve(async (req) => {
     let stripeCustomerId: string | null = null
     const { data: existingCustomer } = await supabase
       .from('customers')
-      .select('stripe_customer_id')
+      .select(CUSTOMER_ACCOUNT_COLUMNS)
       .eq('id', body.customerId)
       .single()
 
-    if (existingCustomer?.stripe_customer_id) {
-      stripeCustomerId = await validateStripeCustomerId(stripe, existingCustomer.stripe_customer_id, stripeOptions)
+    if (existingCustomer) {
+      stripeCustomerId = await getCustomerIdForAccount({
+        supabase,
+        stripe,
+        account: platformAccount,
+        stripeAccount: stripeAccountId,
+        customerRowId: body.customerId,
+        customer: existingCustomer,
+      })
     }
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
@@ -205,10 +213,7 @@ serve(async (req) => {
         },
       }, stripeOptions)
       stripeCustomerId = customer.id
-      await supabase
-        .from('customers')
-        .update({ stripe_customer_id: stripeCustomerId })
-        .eq('id', body.customerId)
+      await setCustomerIdForAccount(supabase, body.customerId, platformAccount, stripeCustomerId)
     }
 
     // ── installment_plan row (create FIRST so we have its id) ────

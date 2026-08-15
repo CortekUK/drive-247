@@ -14,6 +14,7 @@ import {
   CHAIN_GRACE_DAYS_AFTER_END,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+import { getCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from "../_shared/customer-account.ts";
 import { authorizeDepositHoldRequest } from "../_shared/deposit-hold-auth.ts";
 
 // Stripe PaymentIntent status -> the deposit_hold_status that is conclusively
@@ -365,16 +366,12 @@ Deno.serve(async (req) => {
     // Fetch customer's Stripe customer ID
     const { data: customer, error: customerError } = await supabase
       .from("customers")
-      .select("stripe_customer_id, name, email")
+      .select(`${CUSTOMER_ACCOUNT_COLUMNS}, name, email`)
       .eq("id", rental.customer_id)
       .single();
 
     if (customerError || !customer) {
       return errorResponse("Customer not found", 404);
-    }
-
-    if (!customer.stripe_customer_id) {
-      return errorResponse("Customer has no saved payment method. Card must be saved during booking.", 400);
     }
 
     // Set up Stripe — NEW hold, so it belongs to the tenant's current
@@ -387,9 +384,25 @@ Deno.serve(async (req) => {
 
     console.log("[DEPOSIT-HOLD] Stripe mode:", stripeMode, "Connect:", connectAccountId);
 
+    // Per-account customer id (validated live), self-healing from the legacy
+    // shared id. Per-account so a hold on one platform can never reference a
+    // customer that lives on the other.
+    const holdCustomerId = await getCustomerIdForAccount({
+      supabase,
+      stripe,
+      account: platformAccount,
+      stripeAccount: connectAccountId,
+      customerRowId: rental.customer_id,
+      customer,
+    });
+
+    if (!holdCustomerId) {
+      return errorResponse("Customer has no saved payment method. Card must be saved during booking.", 400);
+    }
+
     // Get the customer's default payment method
     const stripeCustomer = await stripe.customers.retrieve(
-      customer.stripe_customer_id,
+      holdCustomerId,
       { expand: ["invoice_settings.default_payment_method"] },
       stripeOptions
     );
@@ -410,7 +423,7 @@ Deno.serve(async (req) => {
     if (!paymentMethod?.id) {
       // List payment methods and use the most recent one
       const paymentMethods = await stripe.paymentMethods.list(
-        { customer: customer.stripe_customer_id, type: "card", limit: 1 },
+        { customer: holdCustomerId, type: "card", limit: 1 },
         stripeOptions
       );
 
@@ -511,7 +524,7 @@ Deno.serve(async (req) => {
     const basePayload = {
       amount: amountInCents,
       currency: currencyCode,
-      customer: customer.stripe_customer_id,
+      customer: holdCustomerId,
       payment_method: paymentMethodId,
       capture_method: "manual" as const,
       confirm: true,
@@ -775,7 +788,7 @@ Deno.serve(async (req) => {
         deposit_hold_placed_at: new Date().toISOString(),
         deposit_hold_expires_at: expiresAtIso,
         deposit_hold_payment_method_id: paymentMethodId,
-        deposit_hold_stripe_customer_id: customer.stripe_customer_id,
+        deposit_hold_stripe_customer_id: holdCustomerId,
         // Record which platform account this hold lives on so capture/release/
         // sync target the right keys even if the tenant's model flips later.
         platform_account: platformAccount,

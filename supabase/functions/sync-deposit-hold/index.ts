@@ -14,6 +14,7 @@ import {
   resolveHoldExpiryDetailed,
   type StripeMode,
 } from '../_shared/stripe-client.ts'
+import { setCustomerIdForAccount } from '../_shared/customer-account.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
 
 Deno.serve(async (req) => {
@@ -315,17 +316,12 @@ Deno.serve(async (req) => {
     })
 
     if (stripeCustomerId) {
-      // Overwrite unconditionally (not just when NULL): a stored id that
-      // differs from the one Stripe just used is stale — e.g. minted in a
-      // different mode/account era — and keeping it would strand the row on a
-      // dead id (Kedic incident) while orphaning a fresh Checkout-created
-      // customer on every subsequent hold. NOTE: no .neq() filter here — in
-      // Postgres NULL != x is NULL, so .neq would skip the backfill-when-NULL
-      // case; an unconditional idempotent write covers both.
-      await supabase
-        .from('customers')
-        .update({ stripe_customer_id: stripeCustomerId })
-        .eq('id', rental.customer_id)
+      // Backfill the PER-ACCOUNT customer id for the platform this hold was
+      // created on (create-hold-checkout uses the tenant's current charge
+      // platform = `platformAccount`). Writing the per-account column — never
+      // the shared legacy column — means a UAE hold can never clobber the UK
+      // customer id (or vice-versa) for a customer with live rentals on both.
+      await setCustomerIdForAccount(supabase, rental.customer_id, platformAccount, stripeCustomerId)
     }
 
     return jsonResponse({

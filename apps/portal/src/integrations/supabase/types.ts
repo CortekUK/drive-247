@@ -783,6 +783,7 @@ export type Database = {
       audit_logs: {
         Row: {
           action: string
+          activity_source: string
           actor_id: string | null
           created_at: string
           details: Json | null
@@ -795,6 +796,7 @@ export type Database = {
         }
         Insert: {
           action: string
+          activity_source?: string
           actor_id?: string | null
           created_at?: string
           details?: Json | null
@@ -807,6 +809,7 @@ export type Database = {
         }
         Update: {
           action?: string
+          activity_source?: string
           actor_id?: string | null
           created_at?: string
           details?: Json | null
@@ -3346,6 +3349,7 @@ export type Database = {
           email: string
           fleet_size: string | null
           id: string
+          main_booking_source: string | null
           message: string | null
           notes: string | null
           phone: string | null
@@ -3364,6 +3368,7 @@ export type Database = {
           email: string
           fleet_size?: string | null
           id?: string
+          main_booking_source?: string | null
           message?: string | null
           notes?: string | null
           phone?: string | null
@@ -3382,6 +3387,7 @@ export type Database = {
           email?: string
           fleet_size?: string | null
           id?: string
+          main_booking_source?: string | null
           message?: string | null
           notes?: string | null
           phone?: string | null
@@ -4460,6 +4466,8 @@ export type Database = {
           sms_consent_at: string | null
           status: string | null
           stripe_customer_id: string | null
+          stripe_customer_id_uae: string | null
+          stripe_customer_id_uk: string | null
           tenant_id: string | null
           timezone: string | null
           type: string
@@ -4502,6 +4510,8 @@ export type Database = {
           sms_consent_at?: string | null
           status?: string | null
           stripe_customer_id?: string | null
+          stripe_customer_id_uae?: string | null
+          stripe_customer_id_uk?: string | null
           tenant_id?: string | null
           timezone?: string | null
           type: string
@@ -4544,6 +4554,8 @@ export type Database = {
           sms_consent_at?: string | null
           status?: string | null
           stripe_customer_id?: string | null
+          stripe_customer_id_uae?: string | null
+          stripe_customer_id_uk?: string | null
           tenant_id?: string | null
           timezone?: string | null
           type?: string
@@ -6202,6 +6214,254 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      health_alert_deliveries: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          id: string
+          last_error: string | null
+          outbox_id: string
+          provider_message_id: string | null
+          recipient_email: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          outbox_id: string
+          provider_message_id?: string | null
+          recipient_email: string
+          sent_at?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          outbox_id?: string
+          provider_message_id?: string | null
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_alert_deliveries_outbox_id_fkey"
+            columns: ["outbox_id"]
+            isOneToOne: false
+            referencedRelation: "health_alert_outbox"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_alert_outbox: {
+        Row: {
+          created_at: string
+          id: string
+          incident_id: string
+          kind: string
+          recipient_emails: string[]
+          run_id: string
+          sent_at: string | null
+          snapshot_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          incident_id: string
+          kind: string
+          recipient_emails?: string[]
+          run_id: string
+          sent_at?: string | null
+          snapshot_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          incident_id?: string
+          kind?: string
+          recipient_emails?: string[]
+          run_id?: string
+          sent_at?: string | null
+          snapshot_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_alert_outbox_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_health_incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_alert_outbox_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "health_score_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_alert_outbox_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_health_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_alert_outbox_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "v_latest_tenant_health"
+            referencedColumns: ["snapshot_id"]
+          },
+        ]
+      }
+      health_score_recipients: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          enabled: boolean
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          enabled?: boolean
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          enabled?: boolean
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_score_recipients_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_score_runs: {
+        Row: {
+          at_risk_count: number
+          completed_at: string | null
+          error_message: string | null
+          evaluated_at: string
+          id: string
+          new_incident_count: number
+          run_key: string | null
+          settings_version: number
+          started_at: string
+          status: string
+          tenant_count: number
+          trigger_type: string
+        }
+        Insert: {
+          at_risk_count?: number
+          completed_at?: string | null
+          error_message?: string | null
+          evaluated_at: string
+          id?: string
+          new_incident_count?: number
+          run_key?: string | null
+          settings_version: number
+          started_at?: string
+          status?: string
+          tenant_count?: number
+          trigger_type: string
+        }
+        Update: {
+          at_risk_count?: number
+          completed_at?: string | null
+          error_message?: string | null
+          evaluated_at?: string
+          id?: string
+          new_incident_count?: number
+          run_key?: string | null
+          settings_version?: number
+          started_at?: string
+          status?: string
+          tenant_count?: number
+          trigger_type?: string
+        }
+        Relationships: []
+      }
+      health_score_settings: {
+        Row: {
+          config_version: number
+          created_at: string
+          enabled: boolean
+          id: string
+          include_test_tenants: boolean
+          minimum_baseline_events: number
+          new_tenant_grace_days: number
+          period_days: number
+          recovery_notifications_enabled: boolean
+          repeat_alert_after_days: number
+          singleton: boolean
+          threshold_percent: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          config_version?: number
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          include_test_tenants?: boolean
+          minimum_baseline_events?: number
+          new_tenant_grace_days?: number
+          period_days?: number
+          recovery_notifications_enabled?: boolean
+          repeat_alert_after_days?: number
+          singleton?: boolean
+          threshold_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          config_version?: number
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          include_test_tenants?: boolean
+          minimum_baseline_events?: number
+          new_tenant_grace_days?: number
+          period_days?: number
+          recovery_notifications_enabled?: boolean
+          repeat_alert_after_days?: number
+          singleton?: boolean
+          threshold_percent?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_score_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -14209,43 +14469,321 @@ export type Database = {
           },
         ]
       }
+      strategy_call_bookings: {
+        Row: {
+          booked_at: string
+          booking_timezone: string | null
+          cancel_url: string | null
+          contact_request_id: string
+          created_at: string
+          external_booking_id: string
+          external_calendar_id: string | null
+          external_contact_id: string | null
+          id: string
+          last_provider_event_at: string
+          last_provider_event_id: string | null
+          last_provider_event_was_schedule_change: boolean
+          meeting_url: string | null
+          provider: string
+          reschedule_url: string | null
+          scheduled_end_at: string
+          scheduled_start_at: string
+          session_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          booked_at?: string
+          booking_timezone?: string | null
+          cancel_url?: string | null
+          contact_request_id: string
+          created_at?: string
+          external_booking_id: string
+          external_calendar_id?: string | null
+          external_contact_id?: string | null
+          id?: string
+          last_provider_event_at: string
+          last_provider_event_id?: string | null
+          last_provider_event_was_schedule_change?: boolean
+          meeting_url?: string | null
+          provider?: string
+          reschedule_url?: string | null
+          scheduled_end_at: string
+          scheduled_start_at: string
+          session_id?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          booked_at?: string
+          booking_timezone?: string | null
+          cancel_url?: string | null
+          contact_request_id?: string
+          created_at?: string
+          external_booking_id?: string
+          external_calendar_id?: string | null
+          external_contact_id?: string | null
+          id?: string
+          last_provider_event_at?: string
+          last_provider_event_id?: string | null
+          last_provider_event_was_schedule_change?: boolean
+          meeting_url?: string | null
+          provider?: string
+          reschedule_url?: string | null
+          scheduled_end_at?: string
+          scheduled_start_at?: string
+          session_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_call_bookings_contact_request_id_fkey"
+            columns: ["contact_request_id"]
+            isOneToOne: false
+            referencedRelation: "contact_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "strategy_call_bookings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_call_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       strategy_call_emails: {
         Row: {
+          attempt_count: number
+          booking_id: string | null
           call_status: string | null
           call_time: string | null
           contact_request_id: string
           created_at: string | null
+          delivery_status: string
           email_type: string
           id: string
+          idempotency_key: string
+          last_attempt_at: string | null
+          last_error: string | null
+          provider_message_id: string | null
           scheduled_at: string
           sent_at: string | null
+          suppressed_at: string | null
         }
         Insert: {
+          attempt_count?: number
+          booking_id?: string | null
           call_status?: string | null
           call_time?: string | null
           contact_request_id: string
           created_at?: string | null
+          delivery_status?: string
           email_type: string
           id?: string
+          idempotency_key: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          provider_message_id?: string | null
           scheduled_at: string
           sent_at?: string | null
+          suppressed_at?: string | null
         }
         Update: {
+          attempt_count?: number
+          booking_id?: string | null
           call_status?: string | null
           call_time?: string | null
           contact_request_id?: string
           created_at?: string | null
+          delivery_status?: string
           email_type?: string
           id?: string
+          idempotency_key?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          provider_message_id?: string | null
           scheduled_at?: string
           sent_at?: string | null
+          suppressed_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "strategy_call_emails_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_call_bookings"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "strategy_call_emails_contact_request_id_fkey"
             columns: ["contact_request_id"]
             isOneToOne: false
             referencedRelation: "contact_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategy_call_funnel_events: {
+        Row: {
+          booking_id: string | null
+          content_version: string
+          created_at: string
+          dedupe_key: string
+          event_name: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          position_seconds: number | null
+          progress_percent: number | null
+          rate_limit_key: string
+          session_id: string | null
+          video_slug: string | null
+        }
+        Insert: {
+          booking_id?: string | null
+          content_version: string
+          created_at?: string
+          dedupe_key: string
+          event_name: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          position_seconds?: number | null
+          progress_percent?: number | null
+          rate_limit_key: string
+          session_id?: string | null
+          video_slug?: string | null
+        }
+        Update: {
+          booking_id?: string | null
+          content_version?: string
+          created_at?: string
+          dedupe_key?: string
+          event_name?: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          position_seconds?: number | null
+          progress_percent?: number | null
+          rate_limit_key?: string
+          session_id?: string | null
+          video_slug?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_call_funnel_events_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_call_bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "strategy_call_funnel_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_call_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategy_call_sessions: {
+        Row: {
+          contact_request_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          last_seen_at: string | null
+          status: string
+          submission_rate_key: string
+          token_hash: string
+          updated_at: string
+        }
+        Insert: {
+          contact_request_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_seen_at?: string | null
+          status?: string
+          submission_rate_key: string
+          token_hash: string
+          updated_at?: string
+        }
+        Update: {
+          contact_request_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_seen_at?: string | null
+          status?: string
+          submission_rate_key?: string
+          token_hash?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_call_sessions_contact_request_id_fkey"
+            columns: ["contact_request_id"]
+            isOneToOne: true
+            referencedRelation: "contact_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategy_call_webhook_events: {
+        Row: {
+          attempt_count: number
+          booking_id: string | null
+          event_type: string
+          external_booking_id: string
+          failure_code: string | null
+          id: string
+          processed_at: string | null
+          processing_status: string
+          provider: string
+          provider_event_id: string
+          provider_occurred_at: string
+          received_at: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          booking_id?: string | null
+          event_type: string
+          external_booking_id: string
+          failure_code?: string | null
+          id?: string
+          processed_at?: string | null
+          processing_status?: string
+          provider?: string
+          provider_event_id: string
+          provider_occurred_at: string
+          received_at?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          booking_id?: string | null
+          event_type?: string
+          external_booking_id?: string
+          failure_code?: string | null
+          id?: string
+          processed_at?: string | null
+          processing_status?: string
+          provider?: string
+          provider_event_id?: string
+          provider_occurred_at?: string
+          received_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategy_call_webhook_events_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "strategy_call_bookings"
             referencedColumns: ["id"]
           },
         ]
@@ -14596,6 +15134,234 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tenant_health_incidents: {
+        Row: {
+          acknowledged_at: string | null
+          assigned_to: string | null
+          contacted_at: string | null
+          created_at: string
+          id: string
+          last_notified_at: string | null
+          latest_snapshot_id: string
+          notes: string | null
+          opened_at: string
+          opened_snapshot_id: string
+          reason: string
+          recovery_streak: number
+          resolved_at: string | null
+          snoozed_until: string | null
+          state: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          assigned_to?: string | null
+          contacted_at?: string | null
+          created_at?: string
+          id?: string
+          last_notified_at?: string | null
+          latest_snapshot_id: string
+          notes?: string | null
+          opened_at?: string
+          opened_snapshot_id: string
+          reason: string
+          recovery_streak?: number
+          resolved_at?: string | null
+          snoozed_until?: string | null
+          state?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          assigned_to?: string | null
+          contacted_at?: string | null
+          created_at?: string
+          id?: string
+          last_notified_at?: string | null
+          latest_snapshot_id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_snapshot_id?: string
+          reason?: string
+          recovery_streak?: number
+          resolved_at?: string | null
+          snoozed_until?: string | null
+          state?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_health_incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_latest_snapshot_id_fkey"
+            columns: ["latest_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_health_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_latest_snapshot_id_fkey"
+            columns: ["latest_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "v_latest_tenant_health"
+            referencedColumns: ["snapshot_id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_opened_snapshot_id_fkey"
+            columns: ["opened_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_health_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_opened_snapshot_id_fkey"
+            columns: ["opened_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "v_latest_tenant_health"
+            referencedColumns: ["snapshot_id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      tenant_health_snapshots: {
+        Row: {
+          activity_change_percent: number | null
+          baseline_count: number
+          baseline_period_end: string
+          baseline_period_start: string
+          confidence: string
+          created_at: string
+          current_count: number
+          current_period_end: string
+          current_period_start: string
+          data_quality_details: Json
+          evaluated_at: string
+          health_score: number | null
+          id: string
+          incident_id: string | null
+          last_activity_at: string | null
+          last_login_at: string | null
+          run_id: string
+          settings_version: number
+          status: string
+          subscription_cancel_at: string | null
+          subscription_status: string | null
+          tenant_id: string
+        }
+        Insert: {
+          activity_change_percent?: number | null
+          baseline_count?: number
+          baseline_period_end: string
+          baseline_period_start: string
+          confidence: string
+          created_at?: string
+          current_count?: number
+          current_period_end: string
+          current_period_start: string
+          data_quality_details?: Json
+          evaluated_at: string
+          health_score?: number | null
+          id?: string
+          incident_id?: string | null
+          last_activity_at?: string | null
+          last_login_at?: string | null
+          run_id: string
+          settings_version: number
+          status: string
+          subscription_cancel_at?: string | null
+          subscription_status?: string | null
+          tenant_id: string
+        }
+        Update: {
+          activity_change_percent?: number | null
+          baseline_count?: number
+          baseline_period_end?: string
+          baseline_period_start?: string
+          confidence?: string
+          created_at?: string
+          current_count?: number
+          current_period_end?: string
+          current_period_start?: string
+          data_quality_details?: Json
+          evaluated_at?: string
+          health_score?: number | null
+          id?: string
+          incident_id?: string | null
+          last_activity_at?: string | null
+          last_login_at?: string | null
+          run_id?: string
+          settings_version?: number
+          status?: string
+          subscription_cancel_at?: string | null
+          subscription_status?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_health_snapshots_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_health_incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "health_score_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
       }
       tenant_holidays: {
         Row: {
@@ -17401,6 +18167,82 @@ export type Database = {
           },
         ]
       }
+      v_latest_tenant_health: {
+        Row: {
+          acknowledged_at: string | null
+          activity_change_percent: number | null
+          assigned_to: string | null
+          baseline_count: number | null
+          baseline_period_end: string | null
+          baseline_period_start: string | null
+          company_name: string | null
+          confidence: string | null
+          contacted_at: string | null
+          current_count: number | null
+          current_period_end: string | null
+          current_period_start: string | null
+          data_quality_details: Json | null
+          evaluated_at: string | null
+          health_score: number | null
+          incident_id: string | null
+          incident_reason: string | null
+          incident_state: string | null
+          last_activity_at: string | null
+          last_login_at: string | null
+          last_notified_at: string | null
+          notes: string | null
+          resolved_at: string | null
+          risk_since: string | null
+          settings_version: number | null
+          slug: string | null
+          snapshot_id: string | null
+          snoozed_until: string | null
+          status: string | null
+          subscription_cancel_at: string | null
+          subscription_plan: string | null
+          subscription_status: string | null
+          tenant_id: string | null
+          tenant_status: string | null
+          tenant_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_health_incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_health_incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_health_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       v_payment_remaining: {
         Row: {
           customer_id: string | null
@@ -18244,6 +19086,32 @@ export type Database = {
         Args: { p_rental_id?: string }
         Returns: undefined
       }
+      apply_strategy_call_booking_event: {
+        Args: {
+          p_booking_timezone: string
+          p_cancel_url: string
+          p_contact_request_id: string
+          p_external_booking_id: string
+          p_external_calendar_id: string
+          p_external_contact_id: string
+          p_meeting_url: string
+          p_provider_event_at: string
+          p_provider_event_id: string
+          p_reschedule_url: string
+          p_scheduled_end_at: string
+          p_scheduled_start_at: string
+          p_session_id: string
+          p_status: string
+        }
+        Returns: {
+          booking_created: boolean
+          booking_id: string
+          booking_status: string
+          event_applied: boolean
+          event_disposition: string
+          schedule_changed: boolean
+        }[]
+      }
       approve_booking_payment: {
         Args: { p_approved_by: string; p_payment_id: string }
         Returns: Json
@@ -18348,6 +19216,25 @@ export type Database = {
             }
             Returns: string
           }
+      create_strategy_call_session: {
+        Args: {
+          p_budget: string
+          p_contact_name: string
+          p_current_platform: string
+          p_email: string
+          p_expires_at: string
+          p_fleet_size: string
+          p_main_booking_source: string
+          p_phone: string
+          p_readiness: string
+          p_submission_rate_key: string
+          p_token_hash: string
+        }
+        Returns: {
+          contact_request_id: string
+          session_id: string
+        }[]
+      }
       deduct_credits: {
         Args: {
           p_category: string
@@ -18390,6 +19277,10 @@ export type Database = {
           p_vehicle_id?: string
         }
         Returns: string
+      }
+      evaluate_tenant_health: {
+        Args: { p_evaluated_at?: string; p_force?: boolean; p_trigger?: string }
+        Returns: Json
       }
       exec_sql: { Args: { query: string }; Returns: undefined }
       finalize_credit_covered_extension: {
@@ -18513,6 +19404,10 @@ export type Database = {
           vehicle_reg: string
         }[]
       }
+      get_health_score_dashboard: {
+        Args: { p_history_days?: number }
+        Returns: Json
+      }
       get_installment_plan_summary: {
         Args: { p_rental_id: string }
         Returns: Json
@@ -18616,6 +19511,10 @@ export type Database = {
           uploaded_at: string
         }[]
       }
+      get_tenant_health_activity: {
+        Args: { p_anchor?: string; p_period_days?: number; p_tenant_id: string }
+        Returns: Json
+      }
       get_user_role: { Args: { user_id: string }; Returns: string }
       get_user_tenant_id: { Args: never; Returns: string }
       has_any_role: {
@@ -18711,6 +19610,17 @@ export type Database = {
       payment_auto_apply_due_credit: { Args: never; Returns: undefined }
       platform_verify_secret: { Args: { p_secret: string }; Returns: boolean }
       pnl_post_acquisition: { Args: { v_id: string }; Returns: undefined }
+      preview_tenant_health_settings: {
+        Args: {
+          p_evaluated_at?: string
+          p_include_test_tenants?: boolean
+          p_minimum_baseline_events: number
+          p_new_tenant_grace_days: number
+          p_period_days: number
+          p_threshold_percent: number
+        }
+        Returns: Json
+      }
       process_accounting_sync_claim_batch: {
         Args: { p_batch_size?: number; p_claim_timeout_minutes?: number }
         Returns: {
@@ -18790,6 +19700,21 @@ export type Database = {
           p_rental: string
           p_type: string
           p_vehicle: string
+        }
+        Returns: string
+      }
+      record_strategy_call_funnel_event: {
+        Args: {
+          p_booking_id: string
+          p_content_version: string
+          p_dedupe_key: string
+          p_event_name: string
+          p_metadata: Json
+          p_position_seconds: number
+          p_progress_percent: number
+          p_rate_limit_key: string
+          p_session_id: string
+          p_video_slug: string
         }
         Returns: string
       }
@@ -18888,6 +19813,21 @@ export type Database = {
       update_customer_balance: {
         Args: { customer_id: string }
         Returns: undefined
+      }
+      update_health_score_config: {
+        Args: {
+          p_enabled: boolean
+          p_expected_version: number
+          p_include_test_tenants: boolean
+          p_minimum_baseline_events: number
+          p_new_tenant_grace_days: number
+          p_period_days: number
+          p_recipient_emails: string[]
+          p_recovery_notifications_enabled: boolean
+          p_repeat_alert_after_days: number
+          p_threshold_percent: number
+        }
+        Returns: Json
       }
       update_refund_status: {
         Args: {
