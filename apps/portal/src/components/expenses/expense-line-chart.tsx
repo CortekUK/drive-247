@@ -14,7 +14,7 @@ import { formatCurrency } from "@/lib/format-utils";
 import type { MonthlyPoint } from "@/lib/expense-utils";
 
 const config: ChartConfig = {
-  total: { label: "Spend", color: "hsl(var(--chart-1))" },
+  total: { label: "Spend", color: "hsl(var(--chart-3))" },
 };
 
 interface Props {
@@ -49,8 +49,8 @@ export function ExpenseLineChart({ data, currencyCode, title = "Spending over ti
             <AreaChart data={data} margin={{ top: 10, right: 12, left: 4, bottom: 0 }}>
               <defs>
                 <linearGradient id="expense-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="hsl(var(--chart-3))" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="hsl(var(--chart-3))" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -87,10 +87,10 @@ export function ExpenseLineChart({ data, currencyCode, title = "Spending over ti
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="hsl(var(--chart-1))"
+                stroke="hsl(var(--chart-3))"
                 strokeWidth={2.5}
                 fill="url(#expense-area)"
-                dot={{ r: 3, fill: "hsl(var(--chart-1))", strokeWidth: 0 }}
+                dot={{ r: 3, fill: "hsl(var(--chart-3))", strokeWidth: 0 }}
                 activeDot={{ r: 5 }}
                 animationDuration={600}
               />

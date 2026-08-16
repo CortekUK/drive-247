@@ -17,7 +17,7 @@ const PALETTE = [
   "#10b981", "#06b6d4", "#f43f5e", "#84cc16",
 ];
 
-const config: ChartConfig = { value: { label: "Amount", color: "hsl(var(--chart-1))" } };
+const config: ChartConfig = { value: { label: "Amount", color: "hsl(var(--chart-3))" } };
 
 interface Props {
   data: DistributionSlice[];
