@@ -39,6 +39,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  addDays,
   eachDayOfInterval,
   endOfDay,
   format,
@@ -332,7 +333,6 @@ export default function DashboardPage() {
       };
 
       const curBuckets = orderedBuckets(bounds.from, bounds.to);
-      const prevBuckets = orderedBuckets(bounds.prevFrom, subDays(bounds.from, 1));
 
       const labelFor = (key: string) =>
         granularity === "day" && spanDays <= 7
@@ -352,8 +352,19 @@ export default function DashboardPage() {
         if (!row.created_at) continue;
         const at = new Date(row.created_at);
         const amount = Number(row.monthly_amount) || 0;
-        const key = bucketOf(at);
         const isCurrent = at >= bounds.from;
+        /**
+         * A previous-period row is bucketed by its date shifted FORWARD one full
+         * span, so it lands on the same key as the current-period bucket it is
+         * being compared against.
+         *
+         * The obvious alternative — build a second bucket list for the previous
+         * window and pair the two by index — is wrong once the buckets are
+         * weeks. 90 mod 7 is 6, so the previous window starts on a different
+         * weekday and can span 13 weeks where the current one spans 14; the
+         * comparison series then silently slides by a week.
+         */
+        const key = bucketOf(isCurrent ? at : addDays(at, spanDays));
 
         if (isCurrent) {
           curRevenue.set(key, (curRevenue.get(key) || 0) + amount);
@@ -379,10 +390,10 @@ export default function DashboardPage() {
         }
       }
 
-      const revenueSeries = curBuckets.map((key, i) => ({
+      const revenueSeries = curBuckets.map((key) => ({
         label: labelFor(key),
         current: curRevenue.get(key) || 0,
-        previous: prevRevenue.get(prevBuckets[i]) || 0,
+        previous: prevRevenue.get(key) || 0,
       }));
 
       const bookingsSeries = curBuckets.map((key) => ({
