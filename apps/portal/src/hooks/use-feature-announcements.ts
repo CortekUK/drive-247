@@ -62,6 +62,97 @@ function isForPortal(filter: unknown): boolean {
   return apps.includes('portal');
 }
 
+/* ─── Dev-only preview rows ───────────────────────────────────────────────────
+ *
+ * There is one real announcement in the table, so the stack has nothing to fan.
+ * These exist purely so the component can be looked at with a full deck.
+ *
+ * They are NOT written to the database — this branch is read-only against
+ * Supabase, and seeding fake announcements would put invented product news in
+ * front of real operators. `process.env.NODE_ENV` is inlined by Next at build
+ * time, so in a production bundle `PREVIEW_ENABLED` is a literal `false` and the
+ * branch that reads this array can never run. The array itself should also be
+ * tree-shaken out, being referenced only from that dead branch, but the
+ * guarantee that matters is the first one: these never reach a tenant.
+ *
+ * Delete this block once there are real rows worth fanning.
+ */
+const PREVIEW_ENABLED = process.env.NODE_ENV !== 'production';
+
+/** Flat SVG gradients, inline — no network request and no stock photography. */
+const previewImage = (from: string, to: string) =>
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500">` +
+      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+      `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>` +
+      `</linearGradient></defs>` +
+      `<rect width="400" height="500" fill="url(#g)"/></svg>`
+  );
+
+const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
+  {
+    id: 'preview-fleet-calendar',
+    title: 'Fleet Calendar',
+    summary:
+      'Every vehicle against every date on one timeline. Drag across a row to block dates, and see surcharges as you go.',
+    body_html: null,
+    image_url: previewImage('#0ea5e9', '#1e3a8a'),
+    cta_label: 'Open the calendar',
+    cta_url: '/blocked-dates',
+    severity: 'major',
+    published_at: null,
+    expires_at: null,
+    sort_priority: 100,
+    audience_filter: null,
+  },
+  {
+    id: 'preview-auto-extension',
+    title: 'Auto-extending rentals',
+    summary:
+      'Weekly renters renew themselves — charged upfront each period from a saved card, with a pay-link fallback.',
+    body_html: null,
+    image_url: previewImage('#f59e0b', '#be123c'),
+    cta_label: 'See how it works',
+    cta_url: '/rentals',
+    severity: 'major',
+    published_at: null,
+    expires_at: null,
+    sort_priority: 90,
+    audience_filter: null,
+  },
+  {
+    id: 'preview-deposit-holds',
+    title: 'Deposit holds now refresh themselves',
+    summary:
+      'Holds used to lapse at seven days. They now extend automatically before Stripe expires them, so a deposit is still there at return.',
+    body_html: null,
+    image_url: previewImage('#dc2626', '#7f1d1d'),
+    cta_label: 'Review your holds',
+    cta_url: '/payments',
+    severity: 'critical',
+    published_at: null,
+    expires_at: null,
+    sort_priority: 80,
+    audience_filter: null,
+  },
+  {
+    id: 'preview-whatsapp',
+    title: 'WhatsApp handovers',
+    summary:
+      'Send collection details, lockbox codes and photos over WhatsApp instead of SMS.',
+    body_html: null,
+    image_url: previewImage('#10b981', '#0f766e'),
+    cta_label: null,
+    cta_url: null,
+    severity: 'minor',
+    published_at: null,
+    expires_at: null,
+    sort_priority: 70,
+    audience_filter: null,
+  },
+];
+
 function readDismissed(): string[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -113,9 +204,15 @@ export function useFeatureAnnouncements() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Preview rows lead, so the deck is visible without dismissing the real one.
+  const pool = useMemo(
+    () => (PREVIEW_ENABLED ? [...PREVIEW_ANNOUNCEMENTS, ...data] : data),
+    [data]
+  );
+
   const visible = useMemo(
-    () => (hydrated ? data.filter((a) => !dismissed.includes(a.id)) : []),
-    [data, dismissed, hydrated]
+    () => (hydrated ? pool.filter((a) => !dismissed.includes(a.id)) : []),
+    [pool, dismissed, hydrated]
   );
 
   const dismiss = useCallback((id: string) => {
@@ -143,7 +240,7 @@ export function useFeatureAnnouncements() {
 
   return {
     announcements: visible,
-    hasDismissed: hydrated && dismissed.length > 0 && data.length > 0,
+    hasDismissed: hydrated && dismissed.length > 0 && pool.length > 0,
     isLoading: isLoading || !hydrated,
     dismiss,
     restore,
