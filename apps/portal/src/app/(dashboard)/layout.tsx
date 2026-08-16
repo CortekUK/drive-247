@@ -313,7 +313,10 @@ export default function DashboardLayout({
   return (
     <DynamicThemeProvider>
       <SidebarProvider className="bg-background bg-app-gradient">
-        <AppSidebar />
+        {/* Both entry points — the sidebar's Ask AI button and the dock —
+            drive the one Trax instance below, so the conversation survives
+            whichever one you opened it from. */}
+        <AppSidebar onAskAI={() => setTraxOpen(true)} />
         <SidebarInset className="overflow-x-hidden bg-transparent">
           <MaintenanceBanner />
 

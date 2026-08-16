@@ -25,7 +25,7 @@ import { useTenantSubscription } from '@/hooks/use-tenant-subscription';
 import { toast } from '@/hooks/use-toast';
 import { AvatarCropDialog } from './avatar-crop-dialog';
 
-export const UserMenu = ({ mockAvatarUrl, variant = 'icon' }: { mockAvatarUrl?: string; variant?: 'icon' | 'row' } = {}) => {
+export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}) => {
   const { appUser, signOut, updatePassword } = useAuth();
   const { tenant, refetchTenant } = useTenant();
   const { resolvedTheme, setTheme } = useTheme();
@@ -287,7 +287,7 @@ export const UserMenu = ({ mockAvatarUrl, variant = 'icon' }: { mockAvatarUrl?: 
           {variant === 'row' ? (
             <button className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent">
               <Avatar className="h-8 w-8 rounded-full overflow-hidden shrink-0">
-                <AvatarImage src={appUser.avatar_url || mockAvatarUrl || undefined} alt={appUser.name || 'User'} className="object-cover" />
+                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                   {userInitials}
                 </AvatarFallback>
@@ -304,7 +304,7 @@ export const UserMenu = ({ mockAvatarUrl, variant = 'icon' }: { mockAvatarUrl?: 
           ) : (
             <Button variant="ghost" size="icon" className="relative hover:bg-accent transition-colors cursor-pointer">
               <Avatar className="h-8 w-8 rounded-full overflow-hidden">
-                <AvatarImage src={appUser.avatar_url || mockAvatarUrl || undefined} alt={appUser.name || 'User'} className="object-cover" />
+                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                   {userInitials}
                 </AvatarFallback>
@@ -320,7 +320,7 @@ export const UserMenu = ({ mockAvatarUrl, variant = 'icon' }: { mockAvatarUrl?: 
           <div className="p-2.5 pb-2">
             <div className="flex items-center gap-2.5">
               <Avatar className="h-9 w-9 ring-2 ring-border/50 rounded-full overflow-hidden">
-                <AvatarImage src={appUser.avatar_url || mockAvatarUrl || undefined} alt={appUser.name || 'User'} className="object-cover" />
+                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                   {userInitials}
                 </AvatarFallback>
@@ -482,7 +482,7 @@ export const UserMenu = ({ mockAvatarUrl, variant = 'icon' }: { mockAvatarUrl?: 
             {/* Avatar */}
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16 ring-2 ring-border/50 rounded-full overflow-hidden">
-                <AvatarImage src={appUser.avatar_url || mockAvatarUrl || undefined} alt={appUser.name || 'User'} className="object-cover" />
+                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary text-base font-semibold">{userInitials}</AvatarFallback>
               </Avatar>
               <Button
