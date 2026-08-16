@@ -610,7 +610,7 @@ export default function DashboardPage() {
           right slot already carries the day's primary action. Renders nothing at
           all when there is no live announcement, so the dashboard does not keep
           a hole open for it. */}
-      <AnnouncementStack className="ml-auto w-full max-w-[400px]" />
+      <AnnouncementStack className="ml-auto w-fit" />
 
       {/* Analytics */}
       {showAnalyticsCard && (
