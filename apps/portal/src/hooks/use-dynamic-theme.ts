@@ -137,6 +137,31 @@ function applyChartRamp(root: HTMLElement, ramp: string[] | null) {
   ramp.forEach((value, i) => root.style.setProperty(`--chart-${i + 1}`, value));
 }
 
+function hueFromTriplet(triplet: string): number | null {
+  const match = triplet.match(/^(\d+(?:\.\d+)?)\s/);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * The sidebar's divider and focus ring. Both ship indigo-hued in the stylesheet
+ * and nothing overrode them, so they stayed indigo on every other brand — a
+ * faint purple line down the whole sidebar, and a purple focus ring.
+ *
+ * Only the hue is taken from the brand. Saturation and lightness are the stock
+ * palette's own numbers, so neither changes weight: the border stays a hairline
+ * and the ring stays as loud as it was.
+ */
+function applySidebarChrome(root: HTMLElement, hue: number, isDarkMode: boolean) {
+  root.style.setProperty(
+    '--sidebar-border',
+    isDarkMode ? `${hue} 30% 100% / 10%` : `${hue} 25% 92%`
+  );
+  root.style.setProperty(
+    '--sidebar-ring',
+    isDarkMode ? `${hue} 20% 45%` : `${hue} 40% 70%`
+  );
+}
+
 // Generate color variants from hex
 function generateColorVariants(hex: string) {
   const hsl = hexToHSL(hex);
@@ -205,6 +230,8 @@ export function useDynamicTheme() {
             '--gradient-primary',
             `linear-gradient(135deg, hsl(${hsl.h} ${hsl.s}% ${hsl.l}%) 0%, hsl(${hsl.h} ${hsl.s}% ${Math.max(0, hsl.l - 10)}%) 100%)`
           );
+
+          applySidebarChrome(root, hsl.h, isDarkMode);
         }
 
         // Charts follow the brand too, otherwise a tenant gets their own colour
@@ -222,6 +249,11 @@ export function useDynamicTheme() {
       root.style.removeProperty('--primary-light');
       root.style.removeProperty('--gradient-primary');
       applyChartRamp(root, chartRampFromTriplet(defaults.primary));
+      // Same reason as the ramp above: an unbranded tenant gets the gold
+      // default everywhere else, so leaving the stylesheet's indigo border and
+      // ring in place would mismatch by one layer.
+      const defaultHue = hueFromTriplet(defaults.primary);
+      if (defaultHue !== null) applySidebarChrome(root, defaultHue, isDarkMode);
     }
 
     // Apply secondary color

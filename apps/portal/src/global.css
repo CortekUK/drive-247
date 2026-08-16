@@ -524,9 +524,14 @@
 
   /* Soft ambient page background — faint indigo glow, adapts to light/dark */
   .bg-app-gradient {
+    /* Every layer must be brand-derived. The top-left wash was a literal
+       `hsl(247 92% 60%)`, so a tenant on green got a purple corner — the one
+       gradient stop in the shell that ignored their colour. `--chart-3` is
+       that exact value by default and follows the brand once themed, so this
+       looks identical on the stock palette and correct on every other. */
     background-image:
       radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.20), transparent 55%),
-      radial-gradient(60rem 48rem at -8% -6%, hsl(247 92% 60% / 0.16), transparent 52%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.16), transparent 52%),
       radial-gradient(55rem 45rem at 50% 115%, hsl(var(--primary) / 0.12), transparent 55%),
       linear-gradient(180deg, hsl(var(--primary) / 0.07) 0%, transparent 45%);
     background-repeat: no-repeat;
