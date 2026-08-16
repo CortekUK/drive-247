@@ -60,8 +60,9 @@ import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner"
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
 import { SetupGuide } from "@/components/dashboard/setup-guide";
 import { useSetupGuide } from "@/hooks/use-setup-guide";
-import { AnnouncementStack } from "@/components/dashboard/announcement-stack";
-import { NeedsYouToday } from "@/components/dashboard/needs-you-today";
+import { AnnouncementCarousel } from "@/components/dashboard/announcement-carousel";
+import { MoneyAtRisk } from "@/components/dashboard/money-at-risk";
+import { OnTheMoveToday } from "@/components/dashboard/on-the-move-today";
 
 // ─── Greeting ────────────────────────────────────────────────────────────────
 
@@ -607,14 +608,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Announcements left, the day's work right. Both sit below the hero
-          rather than in it, because the hero's right slot already carries the
-          primary action. The stack renders nothing when there is no live
-          announcement, and the grid collapses to one column, so the row never
-          holds an empty slot open. */}
-      <div className="grid items-stretch gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
-        <AnnouncementStack className="mr-auto w-fit" />
-        <NeedsYouToday />
+      {/* One band of cards under the hero: what is new, what is owed, what has
+          to move. Each renders null when it has nothing to say or the manager
+          cannot see it, and the grid reflows, so the row never holds an empty
+          slot open. */}
+      <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <AnnouncementCarousel />
+        <MoneyAtRisk />
+        <OnTheMoveToday />
       </div>
 
       {/* Analytics */}
