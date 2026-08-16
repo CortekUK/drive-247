@@ -1,22 +1,19 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/welcome/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-pack-prompt.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-markdown.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-icon.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-pack-view.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-welcome-pack.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/welcome-pack/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150000_add_welcome_pack.sql",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150100_seed_welcome_pack_content.sql",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/permissions.ts",
     "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/app-sidebar.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Sidebar.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-key-handover.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/confirmation/confirmation-client.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/chat/index.ts"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/admin-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/database-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/web-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

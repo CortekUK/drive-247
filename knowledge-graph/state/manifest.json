@@ -364,7 +364,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx": {
-    "sha": "9d311e8a7297699032dca1d78719e5c8b808c18206ec132deb9b8d4f990de3a1",
+    "sha": "92d9b01abf882f4ff721fd62dd05409581aa273131006752d6e45c604ec3e32b",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/analytics/page.tsx": {
@@ -3472,7 +3472,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-row.test.ts": {
-    "sha": "93a1b0cde0edb084cb01bd8d096b29a5dfc3ae83196a97946ca92a5a057bcc14",
+    "sha": "25de3626bbea296dc957535c0fe4549f48de1899ee57eba2daf58c9fcb7da198",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-commit-window.test.ts": {
@@ -3536,7 +3536,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-driver-predicate.test.ts": {
-    "sha": "186c398637f8ab737bca52bb7ff12cf8db4ad7d9e4f03b061f51bfdd033d4ac4",
+    "sha": "5f577a302b0e75a114ec8662361929239f864c4e0ca71a3ff0ca47c941bb6a51",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/inshur-transforms.test.ts": {
@@ -5404,7 +5404,7 @@
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/confirmation/confirmation-client.tsx": {
-    "sha": "0a052f51c213b7dcd79145fd067ef01b95b07fd0376fcd2a546d342367f5c061",
+    "sha": "3aba49de2855f397389fa43134ec0645b5a49d0408ab175e05362ed17a81519b",
     "unit": "web"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/(marketing)/page.tsx": {
@@ -6536,7 +6536,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts": {
-    "sha": "49baa1ed97b84a0f294eca626d644c0b060402587ed8552f778e1b379b0febb4",
+    "sha": "989dfdfc76ce79a071e75e016ecf6895012926fff3db9b0e68404f5f64281f59",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts": {
