@@ -22,6 +22,7 @@ import { User, Settings, LogOut, Key, Shield, Pencil, Camera, Loader2, Moon, Sun
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui/switch';
 import { useTenantSubscription } from '@/hooks/use-tenant-subscription';
+import { useFeedbackStore } from '@/stores/feedback-store';
 import { toast } from '@/hooks/use-toast';
 import { AvatarCropDialog } from './avatar-crop-dialog';
 
@@ -31,6 +32,7 @@ export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const { isSubscribed, isTrialing, hasExpiredSubscription } = useTenantSubscription();
+  const openFeedback = useFeedbackStore((s) => s.open);
 
   // Dynamic plan action: pay (expired) → manage (active premium) → upgrade (free/trial)
   const planAction = hasExpiredSubscription
@@ -396,11 +398,17 @@ export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}
                 <span>Support</span>
               </a>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="mailto:feedback@drive-247.com" className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
-                <Send className="mr-2.5 h-4 w-4 text-muted-foreground" />
-                <span>Feedback</span>
-              </a>
+            {/* The in-app dialog, not a mailto — this is the sidebar's old
+                "Send Feedback" button rehomed here, so the feedback still
+                lands in `tenant_feedback` rather than someone's inbox.
+                `source` stays "sidebar": the values are persisted behind a
+                CHECK constraint, and this menu does live in the sidebar. */}
+            <DropdownMenuItem
+              onSelect={() => openFeedback({ source: "sidebar" })}
+              className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]"
+            >
+              <Send className="mr-2.5 h-4 w-4 text-muted-foreground" />
+              <span>Feedback</span>
             </DropdownMenuItem>
           </div>
 

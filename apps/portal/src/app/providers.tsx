@@ -10,7 +10,6 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
-import DevPanel from "@/components/shared/DevPanel";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((state) => state.initialize);
@@ -69,7 +68,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     <Toaster />
                     <Sonner />
                     {children}
-                    <DevPanel />
+                    {/* DevPanel is unmounted — it was a dev-only floating
+                        button, and it is no longer wanted on screen. The
+                        component and its Time Machine / test-call sections
+                        are still on disk; re-add this line to bring it back. */}
                   </GlobalKeyboardShortcuts>
                 </TooltipProvider>
               </ThemeProvider>

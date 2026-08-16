@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { forwardRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Sparkle, ChatCircleDots, Tray, Bell, CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
@@ -15,6 +15,14 @@ const ICON = "h-[18px] w-[18px]";
 const PANEL =
   "rounded-l-2xl border border-r-0 border-border/70 bg-card shadow-[-6px_0_20px_-12px_rgba(0,0,0,0.18)]";
 
+/**
+ * Tooltip surface — deliberately not the default dark blob. It borrows the
+ * dock's own card and hairline border so a label reads as part of the dock
+ * rather than a system tooltip floating over it.
+ */
+const TIP =
+  "gap-2 rounded-xl border border-border/70 bg-card px-3 py-1.5 text-[12px] text-foreground shadow-[-8px_0_24px_-14px_rgba(0,0,0,0.25)]";
+
 function DockBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
@@ -23,6 +31,47 @@ function DockBadge({ count }: { count: number }) {
     </span>
   );
 }
+
+/**
+ * A dock icon and its tooltip.
+ *
+ * forwardRef is load-bearing, not ceremony: three of these are handed to a
+ * `<SheetTrigger asChild>`, which needs a ref on the real button to anchor and
+ * toggle its sheet. Wrapping the *sheet component* in a TooltipTrigger instead
+ * — as this dock first did — hands the ref to a plain function component,
+ * where it lands nowhere and the tooltip never opens.
+ *
+ * The tooltip also spells out the count, because the badge caps at "9+" and
+ * that is exactly when the real number is worth knowing.
+ */
+const DockButton = forwardRef<
+  HTMLButtonElement,
+  {
+    label: string;
+    count?: number;
+    /** What the count means here — "unread" for messages, "pending" for enquiries. */
+    countLabel?: string;
+    icon: ReactNode;
+  } & ComponentProps<"button">
+>(({ label, count = 0, countLabel = "unread", icon, ...props }, ref) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <button ref={ref} type="button" aria-label={label} className={BTN} {...props}>
+        {icon}
+        <DockBadge count={count} />
+      </button>
+    </TooltipTrigger>
+    <TooltipContent side="left" sideOffset={10} className={TIP}>
+      <span className="font-medium">{label}</span>
+      {count > 0 && (
+        <span className="font-semibold text-primary">
+          {count} {countLabel}
+        </span>
+      )}
+    </TooltipContent>
+  </Tooltip>
+));
+DockButton.displayName = "DockButton";
 
 /**
  * Persistent quick-access dock pinned to the right edge. Sits at a low opacity
@@ -40,18 +89,28 @@ export function QuickDock({ onAskAI }: { onAskAI: () => void }) {
   // Collapsed: a thin handle with a pull-out arrow + the collective count.
   if (tucked) {
     return (
-      <button
-        onClick={() => setTucked(false)}
-        aria-label="Show quick actions"
-        className={`fixed right-0 top-1/2 z-40 flex -translate-y-1/2 cursor-pointer items-center justify-center px-1.5 py-2.5 text-muted-foreground transition-colors hover:text-foreground ${PANEL}`}
-      >
-        <CaretLeft className="h-4 w-4" />
-        {collective > 0 && (
-          <span className="absolute -top-2 right-3 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
-            {collective > 9 ? "9+" : collective}
-          </span>
-        )}
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={() => setTucked(false)}
+            aria-label="Show quick actions"
+            className={`fixed right-0 top-1/2 z-40 flex -translate-y-1/2 cursor-pointer items-center justify-center px-1.5 py-2.5 text-muted-foreground transition-colors hover:text-foreground ${PANEL}`}
+          >
+            <CaretLeft className="h-4 w-4" />
+            {collective > 0 && (
+              <span className="absolute -top-2 right-3 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
+                {collective > 9 ? "9+" : collective}
+              </span>
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left" sideOffset={10} className={TIP}>
+          <span className="font-medium">Quick actions</span>
+          {collective > 0 && (
+            <span className="font-semibold text-primary">{collective} waiting</span>
+          )}
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -69,60 +128,34 @@ export function QuickDock({ onAskAI }: { onAskAI: () => void }) {
         <div className="my-1.5 w-0 self-stretch bg-border/60 opacity-0 transition-all duration-200 group-hover:w-px group-hover:opacity-100" />
 
         <div className="flex flex-col items-center gap-0.5 p-1">
-          {/* Ask AI */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button onClick={onAskAI} className={BTN} aria-label="Ask AI">
-                <Sparkle className={ICON} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Ask AI</TooltipContent>
-          </Tooltip>
+          <DockButton label="Ask AI" onClick={onAskAI} icon={<Sparkle className={ICON} />} />
 
-          {/* Messages */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <MessagesSheet
-                trigger={
-                  <button className={BTN} aria-label="Messages">
-                    <ChatCircleDots className={ICON} />
-                    <DockBadge count={chatUnread || 0} />
-                  </button>
-                }
+          <MessagesSheet
+            trigger={
+              <DockButton
+                label="Messages"
+                count={chatUnread || 0}
+                icon={<ChatCircleDots className={ICON} />}
               />
-            </TooltipTrigger>
-            <TooltipContent side="left">Messages</TooltipContent>
-          </Tooltip>
+            }
+          />
 
-          {/* Enquiries */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <EnquiriesSheet
-                trigger={
-                  <button className={BTN} aria-label="Enquiries">
-                    <Tray className={ICON} />
-                    <DockBadge count={enquiryPending} />
-                  </button>
-                }
+          <EnquiriesSheet
+            trigger={
+              <DockButton
+                label="Enquiries"
+                count={enquiryPending}
+                countLabel="pending"
+                icon={<Tray className={ICON} />}
               />
-            </TooltipTrigger>
-            <TooltipContent side="left">Enquiries</TooltipContent>
-          </Tooltip>
+            }
+          />
 
-          {/* Notifications */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <NotificationBell
-                trigger={(unread) => (
-                  <button className={BTN} aria-label="Notifications">
-                    <Bell className={ICON} />
-                    <DockBadge count={unread} />
-                  </button>
-                )}
-              />
-            </TooltipTrigger>
-            <TooltipContent side="left">Notifications</TooltipContent>
-          </Tooltip>
+          <NotificationBell
+            trigger={(unread) => (
+              <DockButton label="Notifications" count={unread} icon={<Bell className={ICON} />} />
+            )}
+          />
         </div>
       </div>
     </div>
