@@ -600,21 +600,18 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       if (error) throw error;
 
-      // Update the vehicle's current_mileage on both giving and receiving handovers
-      if (mileage) {
-        const { data: rental } = await supabase
-          .from("rentals")
-          .select("vehicle_id")
-          .eq("id", rentalId)
-          .maybeSingle();
-
-        if (rental?.vehicle_id) {
-          await supabase
-            .from("vehicles")
-            .update({ current_mileage: mileage })
-            .eq("id", rental.vehicle_id);
-        }
-
+      // Update the vehicle's current_mileage on both giving and receiving handovers.
+      //
+      // Guard is an explicit null check, NOT a truthiness test: a literal 0 is a
+      // legitimate reading on a brand-new vehicle, and `if (mileage)` silently
+      // dropped both this write and the excess-mileage calculation below.
+      //
+      // The vehicles row itself is now maintained by the DB trigger on
+      // rental_key_handovers (handover_to_odometer_reading -> vehicle_odometer_apply),
+      // which applies GREATEST() so a reading can never move the odometer backwards.
+      // We no longer write vehicles.current_mileage from the client — an
+      // unconditional overwrite here is what let readings regress.
+      if (mileage !== null && mileage !== undefined) {
         // Auto-calculate excess mileage charge on return
         if (type === "receiving") {
           try {
@@ -666,7 +663,10 @@ export function useKeyHandover(rentalId: string | undefined) {
     const pickupMileage = ho?.find((h) => h.handover_type === "giving")?.mileage;
     const returnMileage = ho?.find((h) => h.handover_type === "receiving")?.mileage;
 
-    if (!pickupMileage || !returnMileage) return null;
+    // Explicit null check, not truthiness: a pickup reading of 0 is legitimate on a
+    // brand-new vehicle, and `!pickupMileage` would discard the whole summary — so
+    // the excess-mileage popup never appears and the charge is silently never raised.
+    if (pickupMileage == null || returnMileage == null) return null;
 
     // Fetch rental dates + mileage overrides
     const { data: rental } = await supabase
