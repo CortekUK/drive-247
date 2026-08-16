@@ -55,10 +55,12 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useDashboardKPIs } from "@/hooks/use-dashboard-kpis";
 import { buildAvailabilitySummary } from "@/hooks/use-working-hours-summary";
 import { formatCurrency } from "@/lib/format-utils";
-import { CreditBalance } from "@/components/shared/layout/credit-balance";
 import { LowCreditsBanner } from "@/components/dashboard/low-credits-banner";
 import { BonzahStatusBanner } from "@/components/dashboard/bonzah-status-banner";
 import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert";
+import { SetupGuide } from "@/components/dashboard/setup-guide";
+import { useSetupGuide } from "@/hooks/use-setup-guide";
+import { AnnouncementStack } from "@/components/dashboard/announcement-stack";
 
 // ─── Greeting ────────────────────────────────────────────────────────────────
 
@@ -219,6 +221,12 @@ export default function DashboardPage() {
   const { tenant } = useTenant();
   const { canView, canEdit } = useManagerPermissions();
   const currencyCode = tenant?.currency_code || "USD";
+
+  // The guide is a call to action, so it only goes to someone who can act on
+  // it: `canEdit` is false for viewers and for managers without an editor
+  // grant on Settings, and true for every other role.
+  const { isVisible: setupGuideIsVisible } = useSetupGuide();
+  const setupGuideVisible = setupGuideIsVisible && canEdit("settings.general");
 
   /** First name only — "Good morning, Michael" reads better than the full name. */
   const firstName = (appUser?.name || "").trim().split(/\s+/)[0];
@@ -578,18 +586,31 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <CreditBalance />
-          {canEdit("rentals") && (
-            <Button
-              size="lg"
-              className="gap-2 rounded-full"
-              onClick={() => router.push("/rentals/new")}
-            >
-              <Plus className="size-4" /> New Rental
-            </Button>
+          {/* One slot, two states. While setup is unfinished the guide holds
+              the primary position; the moment the operator finishes it the
+              guide disappears and New Rental — the button they'll press every
+              day from then on — takes the slot back. */}
+          {setupGuideVisible ? (
+            <SetupGuide />
+          ) : (
+            canEdit("rentals") && (
+              <Button
+                size="lg"
+                className="gap-2 rounded-full"
+                onClick={() => router.push("/rentals/new")}
+              >
+                <Plus className="size-4" /> New Rental
+              </Button>
+            )
           )}
         </div>
       </div>
+
+      {/* What's new — sits below the hero rather than in it, because the hero's
+          right slot already carries the day's primary action. Renders nothing at
+          all when there is no live announcement, so the dashboard does not keep
+          a hole open for it. */}
+      <AnnouncementStack className="ml-auto w-full max-w-[400px]" />
 
       {/* Analytics */}
       {showAnalyticsCard && (
