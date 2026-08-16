@@ -221,14 +221,27 @@ function parseBookingSummary(value: unknown): BookingSummaryDTO | null {
   };
 }
 
+/**
+ * Funnel owner's headline, his wording, requested 2026-08-15.
+ *
+ * Worth knowing if you are asked to change it back: the booking IS confirmed by
+ * the time anyone reads this. GoHighLevel has already emailed the prospect
+ * ("your demo is locked in for 6:00 PM"), and nothing on this page or anywhere
+ * else releases the slot if the videos go unwatched. So this line contradicts an
+ * email the reader already has, and a prospect who believes it may simply not
+ * turn up. Kept as a single constant so reverting it is one edit.
+ */
+const HERO_HEADLINE =
+  "Your call is not yet confirmed, watch the videos to lock it in";
+
 function getHeroCopy(
   status: BookingSummaryDTO["status"],
   processingTimedOut: boolean,
 ) {
   if (status === "missing" || processingTimedOut) {
     return {
-      badge: "STRATEGY CALL PREPARATION",
-      title: "Prepare for your Drive247 strategy call.",
+      badge: "ACTION REQUIRED",
+      title: HERO_HEADLINE,
       description:
         "Watch these four short videos to understand the system, the shift toward control, and what to bring to a future call.",
     };
@@ -250,9 +263,8 @@ function getHeroCopy(
     };
   }
   return {
-    badge: "CALL BOOKED — PLEASE WATCH BEFORE WE MEET",
-    title:
-      "Your strategy call is booked. Complete these 4 short videos before we meet.",
+    badge: "ACTION REQUIRED",
+    title: HERO_HEADLINE,
     description:
       "In the next few minutes, you'll see why control matters more than another marketplace tactic, how Drive247 works, and whether it fits your operation.",
   };
