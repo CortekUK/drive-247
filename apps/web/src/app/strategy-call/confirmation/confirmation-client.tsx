@@ -237,7 +237,20 @@ const HERO_HEADLINE =
 function getHeroCopy(
   status: BookingSummaryDTO["status"],
   processingTimedOut: boolean,
+  allVideosWatched: boolean,
 ) {
+  // The headline asks the viewer to watch the videos to lock the call in, so
+  // finishing them has to visibly do that. Without this the page kept saying
+  // "not yet confirmed" after all four were watched — it made a promise and
+  // never kept it, which is worse than not making it.
+  if (allVideosWatched && status !== "cancelled") {
+    return {
+      badge: "ALL FOUR WATCHED",
+      title: "You're all set. Your call is confirmed.",
+      description:
+        "Bring your fleet details, your current process and your biggest blocker, and we'll use the whole call on your operation.",
+    };
+  }
   if (status === "missing" || processingTimedOut) {
     return {
       badge: "ACTION REQUIRED",
@@ -502,18 +515,49 @@ export function ConfirmationClient({
     [],
   );
 
-  const hero = getHeroCopy(booking.status, processingTimedOut);
+  const allVideosWatched = completedCount === CONFIRMATION_VIDEOS.length;
+  const hero = getHeroCopy(booking.status, processingTimedOut, allVideosWatched);
   const pageProgress = completedCount * 25;
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-16 sm:px-6 sm:pb-24">
       <section className="pb-8 pt-8 sm:pb-10 sm:pt-12">
-        <div className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-5 shadow-[0_16px_50px_-28px_rgba(217,119,6,0.7)] dark:border-amber-300/40 dark:bg-amber-300/[0.08] sm:p-8">
+        {/*
+          Amber while there is something left to do, emerald once there is not.
+          A warning triangle next to "You're all set" would undo the reassurance
+          the headline is trying to give.
+        */}
+        <div
+          className={
+            allVideosWatched
+              ? "rounded-3xl border-2 border-emerald-300 bg-emerald-50 p-5 shadow-[0_16px_50px_-28px_rgba(5,150,105,0.7)] dark:border-emerald-300/40 dark:bg-emerald-300/[0.08] sm:p-8"
+              : "rounded-3xl border-2 border-amber-300 bg-amber-50 p-5 shadow-[0_16px_50px_-28px_rgba(217,119,6,0.7)] dark:border-amber-300/40 dark:bg-amber-300/[0.08] sm:p-8"
+          }
+        >
           <div className="flex flex-col items-center text-center">
-            <div className="flex size-14 items-center justify-center rounded-2xl bg-amber-400 text-amber-950 shadow-sm">
-              <AlertTriangle aria-hidden="true" className="size-8" strokeWidth={2.5} />
+            <div
+              className={
+                allVideosWatched
+                  ? "flex size-14 items-center justify-center rounded-2xl bg-emerald-500 text-emerald-950 shadow-sm"
+                  : "flex size-14 items-center justify-center rounded-2xl bg-amber-400 text-amber-950 shadow-sm"
+              }
+            >
+              {allVideosWatched ? (
+                <CheckCircle2 aria-hidden="true" className="size-8" strokeWidth={2.5} />
+              ) : (
+                <AlertTriangle aria-hidden="true" className="size-8" strokeWidth={2.5} />
+              )}
             </div>
-            <p className="mt-5 rounded-full bg-amber-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.13em] text-amber-950 sm:text-xs">
+            <p
+              className={
+                allVideosWatched
+                  ? "mt-5 rounded-full bg-emerald-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.13em] text-emerald-950 sm:text-xs"
+                  : "mt-5 rounded-full bg-amber-300 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.13em] text-amber-950 sm:text-xs"
+              }
+              // Announced politely so a screen-reader user learns the state
+              // flipped without being interrupted mid-video.
+              aria-live="polite"
+            >
               {hero.badge}
             </p>
             {/*
