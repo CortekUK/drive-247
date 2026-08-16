@@ -4177,6 +4177,44 @@ const RentalDetail = () => {
                               </>
                             )}
 
+                            {depositHoldStatus === 'released' &&
+                              rental.status !== 'Closed' &&
+                              rental.status !== 'Cancelled' &&
+                              canEdit('rentals') && (
+                              // A RELEASED hold on a rental that is still running is not
+                              // a finished story — it is an uncovered vehicle.
+                              //
+                              // Gated on the rental still being open. A deposit released
+                              // at the end of a completed rental is the correct outcome
+                              // and must not sprout an "Add Hold" button — that is the
+                              // normal, finished path and offering to re-authorise a
+                              // returned customer would be worse than useless.
+                              //
+                              // 'released' was the one non-terminal-in-practice status
+                              // with no placement entry point at all: 'expired', null,
+                              // 'failed', 'requires_action' and 'needs_review' each offer
+                              // one, so a released hold rendered a green "Released" badge
+                              // and no way forward. Observed live on GMT R-161fe1 — an
+                              // Active rental whose deposit had been released, with the
+                              // car still out and the operator unable to re-secure it
+                              // from this screen.
+                              //
+                              // Safe to offer: place-deposit-hold probes Stripe before
+                              // refusing and only blocks when an authorisation is
+                              // genuinely ALIVE, so a released (cancelled) PaymentIntent
+                              // cannot produce a double hold.
+                              <button
+                                className="text-xs font-medium text-amber-500 hover:text-amber-400 hover:underline"
+                                title="The previous deposit was released. Place a new hold on the card."
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowAddHoldDialog(true);
+                                }}
+                              >
+                                Add Hold
+                              </button>
+                            )}
+
                             {!depositHoldStatus && (
                               // No usable hold — open the Add Hold dialog which offers
                               // "Place via Stripe" (new tab) and "Send email link".

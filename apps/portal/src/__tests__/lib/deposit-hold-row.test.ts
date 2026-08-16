@@ -252,13 +252,38 @@ describe('Security Deposit row — actions', () => {
     expect(placementConditions).not.toContain('refreshing');
   });
 
-  it('leaves captured and released on their original ladder', () => {
-    // These fall outside every new branch — no reconcile button, no Add Hold,
-    // no behaviour change for tenants who never hit the stale-hold bug.
-    for (const status of ['captured', 'released']) {
-      expect(stripComments(holdBranch)).not.toContain(`'${status}'`);
-      expect(stripComments(inFlightExtras)).not.toContain(`'${status}'`);
-    }
+  it('leaves captured on its original ladder', () => {
+    // 'captured' means the money has been taken. It falls outside every
+    // placement branch — no reconcile button, no Add Hold.
+    expect(stripComments(holdBranch)).not.toContain("'captured'");
+    expect(stripComments(inFlightExtras)).not.toContain("'captured'");
+  });
+
+  it('offers Add Hold on a RELEASED hold, but only while the rental is still open', () => {
+    // This assertion used to bracket 'released' with 'captured' and require it
+    // to appear in no branch at all. That was the conservative scope of an
+    // earlier change, not a product decision — and it left a real gap.
+    //
+    // THE INCIDENT: GMT rental R-161fe1, status Active, car still out, deposit
+    // hold 'released' after a failed renewal. 'expired', null, 'failed',
+    // 'requires_action' and 'needs_review' each offer a placement action;
+    // 'released' offered none. The operator saw a green "Released" badge and had
+    // no way to re-secure the vehicle from the rental screen.
+    //
+    // Safe because place-deposit-hold probes Stripe before refusing and only
+    // blocks when an authorisation is genuinely ALIVE, so a released (cancelled)
+    // PaymentIntent cannot produce a double hold.
+    const releasedBranch = stripComments(holdBranch).slice(
+      stripComments(holdBranch).indexOf("depositHoldStatus === 'released'"),
+    );
+    expect(releasedBranch).toContain('Add Hold');
+
+    // ...but a deposit released at the end of a finished rental is the CORRECT
+    // outcome. Offering to re-authorise a customer who has returned the car and
+    // been given their money back would be worse than useless, so the branch is
+    // gated on the rental still being open.
+    expect(releasedBranch.slice(0, 400)).toMatch(/rental\.status !== 'Closed'/);
+    expect(releasedBranch.slice(0, 400)).toMatch(/rental\.status !== 'Cancelled'/);
   });
 });
 

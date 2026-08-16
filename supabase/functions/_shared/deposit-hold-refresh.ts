@@ -235,6 +235,17 @@ export const DEFAULT_LOOKAHEAD_DAYS = 2;
  * and it breaks the "never authorize a renter twice" invariant this subsystem is
  * built on.
  */
+/**
+ * Slack allowed when testing whether a scheduled retry is due yet.
+ *
+ * A backoff timestamp is written a few seconds into a cron run; the next run
+ * starts at the same wall-clock second the following day. Comparing exactly
+ * therefore misses the retry by those few seconds and silently doubles every
+ * ladder rung. Five minutes is orders of magnitude larger than the jitter and
+ * orders of magnitude smaller than the shortest rung (6h).
+ */
+export const RETRY_ELIGIBILITY_GRACE_MS = 5 * 60_000;
+
 export const RENEWAL_COMMIT_WINDOW_HOURS = 30;
 //                                          ^^ 24h cron interval + 6h of slack.
 // Deferring is only safe if we are certain of another pass before the deadline,
@@ -450,7 +461,28 @@ export function applyDueHoldFilters<T>(
     // prior authorization. See HOLD_HISTORY_PREDICATE.
     .or(HOLD_HISTORY_PREDICATE)
     .or(`deposit_hold_expires_at.is.null,deposit_hold_expires_at.lt.${threshold}`)
-    .or(`deposit_hold_next_retry_at.is.null,deposit_hold_next_retry_at.lte.${nowIso}`)
+    // RETRY ELIGIBILITY, with tolerance for scheduling jitter.
+    //
+    // This compared against `now` exactly, and that quietly DOUBLED every
+    // backoff. computeRetryAt anchors on the moment the failure was recorded —
+    // a few seconds INTO a cron run — so a 24h ladder rung lands a few seconds
+    // AFTER the same wall-clock time tomorrow. The next run then reads
+    // next_retry_at > now by those few seconds, skips the row, and the retry
+    // waits another whole day.
+    //
+    // Observed in production: R-f3f21f had next_retry_at 03:00:16.439; the cron
+    // ran at 03:00:07 and reported total_due 0. Missed by NINE SECONDS, turning
+    // a 24h backoff into 48h on a rental that had no deposit held at all.
+    //
+    // The tolerance is deliberately much larger than the jitter it absorbs and
+    // much smaller than the shortest ladder rung (6h), so it can never cause a
+    // retry to fire a meaningful amount early — it only stops one being missed
+    // by seconds.
+    .or(
+      `deposit_hold_next_retry_at.is.null,deposit_hold_next_retry_at.lte.${
+        new Date(now.getTime() + RETRY_ELIGIBILITY_GRACE_MS).toISOString()
+      }`
+    )
     // I9 / EC-25: never re-authorize past the end of the chain. Enforced here so
     // a chain-expired rental cannot sit at the head of the queue (it has the
     // oldest expiry) and starve the batch, and again — authoritatively — inside

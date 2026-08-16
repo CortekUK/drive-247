@@ -34,8 +34,8 @@
   td { padding: 5px 7px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
   tbody tr:nth-child(even) td { background: #fafbff; }
   .cover {
-    height: 246mm; display: flex; flex-direction: column; justify-content: center;
-    break-after: page; border-left: 5px solid #6366f1; padding-left: 14mm;
+    height: 254mm; display: flex; flex-direction: column; justify-content: center;
+    break-after: page; border-left: 5px solid #6366f1; padding-left: 13mm;
   }
   .cover .eyebrow { font-size: 10pt; letter-spacing: 2.4pt; text-transform: uppercase; color: #6366f1; font-weight: 600; }
   .cover .sub { font-size: 13pt; color: #404040; margin-top: .4em; font-weight: 400; line-height: 1.45; }
@@ -58,13 +58,18 @@
     background: #6366f1; color: #fff; width: 16px; height: 16px; border-radius: 50%;
     font-size: 7pt; font-weight: 700; display: flex; align-items: center; justify-content: center;
   }
-  .pill { display: inline-block; padding: 1px 6px; border-radius: 9px; font-size: 7.2pt; font-weight: 700; text-transform: uppercase; letter-spacing: .4pt; }
+  .pill {
+    display: inline-block; padding: 1px 6px; border-radius: 9px; font-size: 7.2pt;
+    font-weight: 700; text-transform: uppercase; letter-spacing: .4pt; white-space: nowrap;
+  }
   .p-new { background:#dcfce7; color:#15803d; } .p-fix { background:#fee2e2; color:#b91c1c; }
   .p-reuse { background:#e0e7ff; color:#4338ca; } .p-dec { background:#fef3c7; color:#b45309; }
   .toc { columns: 2; column-gap: 22px; font-size: 8.6pt; }
   .toc div { break-inside: avoid; margin-bottom: .2em; }
   .toc .n { color: #6366f1; font-weight: 700; display: inline-block; width: 24px; }
-  .pb { break-before: page; }
+  h2 + p, h3 + p, h2 + table, h3 + table { break-before: avoid; }
+  tr { break-inside: avoid; }
+  .flow, .box, .kpi { break-inside: avoid; }
   .kpi { display: flex; gap: 8px; flex-wrap: wrap; margin: .7em 0; }
   .kpi div { flex: 1; min-width: 88px; border: 1px solid #e2e8f0; border-radius: 5px; padding: 7px 9px; break-inside: avoid; }
   .kpi .v { font-size: 15pt; font-weight: 700; color: #080812; line-height: 1.1; }
@@ -108,7 +113,7 @@
   <div><span class="n">12</span> Decisions required from you</div>
 </div>
 
-<h2 class="pb">1 · Verdict &amp; strategy</h2>
+<h2>1 · Verdict &amp; strategy</h2>
 
 <p><b>Brandon is right that maintenance is the correct next feature</b>, and right about why: it is the only thing that gives an operator a reason to open Drive247 on a day with no bookings. But the version described in his message — health scores, work orders, parts/labour, predictive maintenance, telematics — is a Fleetio clone that would take months and would land on a data substrate that cannot support it.</p>
 
@@ -150,14 +155,14 @@
 <tr><td><b>9. Maintenance cost per vehicle</b></td><td>The infrastructure exists (<code>pnl_entries</code>, <code>view_pl_by_vehicle</code>, <code>get-vehicle-profitability</code>) and service costs already flow into it automatically. <b>But</b> the ledger books collected sales tax and security deposits as <i>Revenue</i>, has no currency column, and expenses the full purchase price with no depreciation. Cost figures are sound; <b>profitability ratios are not</b>.</td><td>Low for cost. Not safely deliverable for ratios.</td><td><span class="pill p-dec">Cost yes, ratios no</span> — see §5.6.</td></tr>
 <tr><td><b>10. Trax AI maintenance queries</b></td><td>Very achievable and cheaper than expected. Trax answers aggregate questions from an authoritative live SQL blob (<code>get_rag_metrics</code>), <b>not</b> from the vector store — so adding maintenance means extending one SQL function. Caveat: the vector corpus is frozen (80,565 unprocessed sync rows, no cron) and must not be relied on.</td><td>Low via the metrics channel.</td><td><span class="pill p-new">Build</span> — metrics channel only.</td></tr>
 <tr><td><b>11. Predictive maintenance / telematics</b></td><td>Correct to defer. Worth knowing: the Tesla integration is the only telematics in the product, it never reads odometer, and it is <b>dead in production</b> — every call 404s and all 6 rows are mock seeds. <code>has_tracker</code> (291 vehicles) is a checkbox no logic reads.</td><td>High, and currently blocked on a broken integration.</td><td><span class="pill p-dec">P3+</span></td></tr>
-<tr><td><b>12. Renter damage → claim connection</b></td><td>The most commercially interesting idea and the most legally dangerous. There is <b>no claim artefact anywhere</b> in the product. More seriously, the evidence chain will not survive a dispute: photos sit in a public bucket the renter can write to and delete, and no handover records who performed it (<code>handed_by</code> NULL on all 160).</td><td>Evidence hardening is a prerequisite, not a nice-to-have.</td><td><span class="pill p-fix">Harden first</span>, then P3.</td></tr>
+<tr><td><b>12. Renter damage → claim connection</b></td><td>The most commercially interesting idea and the most legally dangerous. There is <b>no claim artefact anywhere</b> in the product. More seriously, the evidence chain will not survive a dispute: photos sit in a public bucket the renter can write to and delete, and no handover records who performed it (<code>handed_by</code> NULL on all 160).</td><td>Evidence hardening is a prerequisite, not a nice-to-have.</td><td><span class="pill p-fix">Harden first</span><br><small>then P3</small></td></tr>
 </tbody>
 </table>
 
-<h2 class="pb">3 · What already exists</h2>
+<h2>3 · What already exists</h2>
 <p>Reusable today. Building parallel versions of any of these is the main risk to the project.</p>
 
-<h3>3.1 The service + cost spine <span class="pill p-ok" style="background:#dcfce7;color:#15803d">works well</span></h3>
+<h3>3.1 The service + cost spine <span class="pill" style="background:#dcfce7;color:#15803d">works well</span></h3>
 <p><code>service_records</code> is already the canonical completed-work log, and it is wired far better than anyone expects. A single trigger does three jobs:</p>
 <ul>
   <li><code>update_vehicle_last_service()</code> re-derives <code>vehicles.last_service_date</code> and <code>last_service_mileage</code> from the newest record.</li>
@@ -212,7 +217,7 @@
 </tbody>
 </table>
 
-<h2 class="pb">4 · Day-one data reality</h2>
+<h2>4 · Day-one data reality</h2>
 <p>These numbers decide what can ship. <b>Demo data must be excluded</b> — the <code>test</code> tenant alone holds 242 vehicles and inflates every naïve count by roughly 6×.</p>
 
 <div class="kpi">
@@ -244,7 +249,7 @@
   An operator with 22 vehicles who opens Fleet Health on day one sees 22 rows of "Unknown". That reads as broken software, not as missing input — and they cannot fix it, because <b>no screen in the product lets a human enter an odometer reading</b>. A bulk setup flow and a manual odometer control are therefore <b>gating requirements</b>, not enhancements. When coverage is below threshold, the module must render a setup screen, never an all-unknown table.
 </div>
 
-<h2 class="pb">5 · Defects that must be fixed first</h2>
+<h2>5 · Defects that must be fixed first</h2>
 <p>Each of these breaks a promise Fleet Health would make. They are ordered by severity.</p>
 
 <h3>5.1 A maintenance hold is bypassable <span class="pill p-fix">blocker</span></h3>
@@ -327,7 +332,7 @@
   <li><code>vehicle_events</code> has <code>tenant_id</code> NULL on all 84 rows, so its hook returns zero rows for everyone. Needs a writer fix plus backfill before the timeline works.</li>
 </ul>
 
-<h2 class="pb">6 · Core architecture</h2>
+<h2>6 · Core architecture</h2>
 
 <h3>6.1 Five principles</h3>
 <ol>
@@ -374,7 +379,7 @@
 </div>
 <p class="sig">Excluded from any burn calculation: rentals with a swap (the delta spans vehicles), readings older than 180 days, and any vehicle whose readings regress.</p>
 
-<h2 class="pb">7 · Data model</h2>
+<h2>7 · Data model</h2>
 <p>Four new tables, all namespaced <code>vehicle_*</code>, all <code>tenant_id NOT NULL</code> with the canonical four-policy RLS template <code>((tenant_id = get_user_tenant_id()) OR is_super_admin())</code> — even though neighbouring tables have RLS off, new tables should be correct.</p>
 
 <table>
@@ -408,7 +413,7 @@
   The existing unique index is <code>(rule_code, object_type, object_id, due_on, remind_on)</code>. Because <code>remind_on</code> is in the tuple, any generator anchoring it to today creates a fresh row nightly — which is what the MOT/TAX generators already do. For a <b>mileage</b> rule there is no meaningful date at all, so the index gives no protection. Key mileage alerts on the interval <b>ordinal</b> — <code>floor((current − baseline) ÷ interval)</code> — and resolve against the <b>maximum ordinal ever reached</b>, so a downward odometer correction cannot re-fire a closed alert.
 </div>
 
-<h2 class="pb">8 · The end-to-end flows</h2>
+<h2>8 · The end-to-end flows</h2>
 
 <h3>F1 · Establish the baseline <span class="pill p-new">gating requirement</span></h3>
 <p>Nothing works without this, and it is the flow most likely to be skipped.</p>
@@ -566,7 +571,7 @@
   </ol>
 </div>
 
-<h2 class="pb">9 · Edge-case register</h2>
+<h2>9 · Edge-case register</h2>
 <table>
 <thead><tr><th style="width:30%">Scenario</th><th style="width:34%">Why it breaks</th><th>Handling</th></tr></thead>
 <tbody>
@@ -593,7 +598,7 @@
 </tbody>
 </table>
 
-<h2 class="pb">10 · Non-functional requirements</h2>
+<h2>10 · Non-functional requirements</h2>
 
 <h3>10.1 The interaction budget <span class="pill p-new">treat as a requirement</span></h3>
 <p>This is the most likely cause of abandonment and it is measurable, not speculative. To log one service today an operator must open the portal on a phone, load a <b>1,673-line</b> client page, scroll past twelve unrelated cards, open a dialog, and type a date, a type from 14 options, a mileage they do not have, and a cost. Recording an odometer means loading a <b>7,756-line</b> page. There is <b>no PWA</b> (no manifest, no service worker), <b>no camera capture attribute anywhere</b> in the portal, and no offline buffer. The evidence that this already fails: 41 service records across 8 tenants, 27 of them from a single tenant.</p>
@@ -621,7 +626,7 @@
   <li>Design tokens: indigo <code>#6366f1</code> accent, <code>#eef2ff</code> table headers, 1px <code>#f1f5f9</code> borders, no shadows, DM Sans.</li>
 </ul>
 
-<h2 class="pb">11 · Phasing</h2>
+<h2>11 · Phasing</h2>
 
 <table>
 <thead><tr><th style="width:8%">Phase</th><th style="width:30%">Contents</th><th style="width:32%">Why this order</th><th>Exit criteria</th></tr></thead>

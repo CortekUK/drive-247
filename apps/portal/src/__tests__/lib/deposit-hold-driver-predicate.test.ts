@@ -55,6 +55,7 @@ const applyDueHoldFilters = compile<
     liftDeclaration(engine, 'TERMINAL_RENTAL_STATUS_LIST'),
     liftDeclaration(engine, 'HOLD_HISTORY_PREDICATE'),
     liftDeclaration(engine, 'DEFAULT_LOOKAHEAD_DAYS'),
+    liftDeclaration(engine, 'RETRY_ELIGIBILITY_GRACE_MS'),
     // chainCutoffDate closes over CHAIN_GRACE_DAYS_AFTER_END, which lives in
     // _shared/stripe-client.ts. Its value (3 days) is asserted separately below
     // against that file, so this cannot drift silently.
@@ -276,6 +277,52 @@ describe('driver predicate — the rest of the disjunctions', () => {
   it('honours a pending backoff, and picks the row up once it has elapsed', () => {
     expect(isSelected({ ...dueHeldRow(), deposit_hold_next_retry_at: iso(0.5) }, NOW)).toBe(false);
     expect(isSelected({ ...dueHeldRow(), deposit_hold_next_retry_at: iso(-0.5) }, NOW)).toBe(true);
+  });
+
+  describe('a retry must not be missed by seconds of cron jitter', () => {
+    /**
+     * THE INCIDENT: a backoff timestamp is written a few seconds INTO a cron
+     * run, so a 24h rung lands a few seconds after the same wall-clock time the
+     * next day. Compared exactly, the next run skips it and the retry waits
+     * another FULL DAY.
+     *
+     * Observed in production 2026-08-16: R-f3f21f carried next_retry_at
+     * 03:00:16.439, the cron ran at 03:00:07, and the run reported total_due 0.
+     * Nine seconds turned a 24h backoff into 48h — on a rental that had no
+     * deposit held at all.
+     */
+    const seconds = (n: number) => new Date(NOW.getTime() + n * 1000).toISOString();
+
+    it('selects a retry that came due 9 seconds after the cron tick', () => {
+      expect(isSelected({ ...dueHeldRow(), deposit_hold_next_retry_at: seconds(9) }, NOW)).toBe(true);
+    });
+
+    it('selects one due a minute out — still just scheduling jitter', () => {
+      expect(isSelected({ ...dueHeldRow(), deposit_hold_next_retry_at: seconds(60) }, NOW)).toBe(true);
+    });
+
+    it('does NOT fire a retry meaningfully early', () => {
+      // The grace absorbs jitter; it must never shortcut a real ladder rung.
+      // The shortest rung is 6h, so an hour out must still be refused.
+      expect(isSelected({ ...dueHeldRow(), deposit_hold_next_retry_at: seconds(3600) }, NOW)).toBe(false);
+    });
+
+    it('keeps the grace far below the shortest backoff rung', () => {
+      const graceMs = Number(
+        /export const RETRY_ELIGIBILITY_GRACE_MS = ([\d *_]+);/.exec(engine)![1]
+          .split('*')
+          .map((p) => Number(p.replace(/_/g, '').trim()))
+          .reduce((a, b) => a * b, 1),
+      );
+      const shortestRungMs =
+        Math.min(
+          ...JSON.parse(
+            /const TRANSIENT_BACKOFF_HOURS = (\[[^\]]+\])/.exec(engine)![1],
+          ),
+        ) * 3_600_000;
+      expect(graceMs).toBeGreaterThan(60_000);
+      expect(graceMs).toBeLessThan(shortestRungMs / 10);
+    });
   });
 
   it('stops chaining once the rental is unambiguously finished', () => {

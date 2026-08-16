@@ -90,6 +90,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/fines/analytics/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/insurance/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/users/page.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/welcome/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
@@ -590,6 +591,10 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/generate-insurance-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/users/manager-permissions-selector.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/users/add-user-dialog.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-pack-prompt.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-markdown.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-icon.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-pack-view.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/LinkUnknownThreadDialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/CustomerChatInput.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/TypingIndicator.tsx",
@@ -815,6 +820,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-installment-plan.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-email-notification-prefs.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-tenant-feedback.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-welcome-pack.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-cms-pages.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-rental-settings.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-lead-documents.ts",
@@ -900,10 +906,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 892,
-    "total_words": 843439,
+    "total_files": 898,
+    "total_words": 847486,
     "counts": {
-      "code": 892
+      "code": 898
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -994,6 +1000,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/fines/analytics/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/insurance/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/users/page.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/welcome/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
@@ -1416,6 +1423,10 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/generate-insurance-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/users/manager-permissions-selector.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/users/add-user-dialog.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-pack-prompt.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-markdown.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-icon.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/welcome/welcome-pack-view.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/LinkUnknownThreadDialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/CustomerChatInput.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/TypingIndicator.tsx",
@@ -1641,6 +1652,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-installment-plan.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-email-notification-prefs.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-tenant-feedback.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-welcome-pack.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-cms-pages.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-rental-settings.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-lead-documents.ts",
@@ -2535,6 +2547,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/[id]/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/audit-logs/page.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/welcome-pack/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/login/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/health-score-filters.test.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/utils.ts",
@@ -2611,10 +2624,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 95,
-    "total_words": 133381,
+    "total_files": 96,
+    "total_words": 135695,
     "counts": {
-      "code": 95
+      "code": 96
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/next.config.mjs",
@@ -2642,6 +2655,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/[id]/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/audit-logs/page.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/welcome-pack/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/login/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/health-score-filters.test.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/admin/lib/utils.ts",
@@ -2805,7 +2819,7 @@
       "video": []
     },
     "total_files": 77,
-    "total_words": 33213,
+    "total_words": 33304,
     "counts": {
       "code": 75,
       "document": 1,
@@ -3776,6 +3790,7 @@
         "/home/haseeb-raza/Desktop/drive-247/docs/sam-round2-fixes.pdf",
         "/home/haseeb-raza/Desktop/drive-247/docs/jangram-action-items.pdf",
         "/home/haseeb-raza/Desktop/drive-247/docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.pdf",
+        "/home/haseeb-raza/Desktop/drive-247/docs/Drive247-Fleet-Health-Spec.pdf",
         "/home/haseeb-raza/Desktop/drive-247/docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.pdf",
         "/home/haseeb-raza/Desktop/drive-247/docs/sam-status-todo.pdf",
         "/home/haseeb-raza/Desktop/drive-247/docs/openbay-technical-response.pdf",
@@ -3784,11 +3799,11 @@
       "image": [],
       "video": []
     },
-    "total_files": 42,
-    "total_words": 97307,
+    "total_files": 43,
+    "total_words": 97320,
     "counts": {
       "document": 33,
-      "paper": 9
+      "paper": 10
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/docs/A2P_10DLC_SUBMISSION_GUIDE.md",
@@ -3829,6 +3844,7 @@
       "/home/haseeb-raza/Desktop/drive-247/docs/sam-round2-fixes.pdf",
       "/home/haseeb-raza/Desktop/drive-247/docs/jangram-action-items.pdf",
       "/home/haseeb-raza/Desktop/drive-247/docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.pdf",
+      "/home/haseeb-raza/Desktop/drive-247/docs/Drive247-Fleet-Health-Spec.pdf",
       "/home/haseeb-raza/Desktop/drive-247/docs/XERO_ZOHO_FINANCE_SYNC_GUIDE.pdf",
       "/home/haseeb-raza/Desktop/drive-247/docs/sam-status-todo.pdf",
       "/home/haseeb-raza/Desktop/drive-247/docs/openbay-technical-response.pdf",
@@ -4264,16 +4280,18 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815120000_add_per_account_stripe_customer_id.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815120000_strategy_call_booking_funnel.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815140000_add_vehicle_plate_redaction.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150000_add_welcome_pack.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150100_seed_welcome_pack_content.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
         "/home/haseeb-raza/Desktop/drive-247/MANUAL_MIGRATION.sql"
       ]
     },
-    "total_files": 371,
-    "total_words": 150504,
+    "total_files": 373,
+    "total_words": 165123,
     "counts": {
-      "code": 371
+      "code": 373
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20251219083413_remote_schema.sql",
@@ -4643,6 +4661,8 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815120000_add_per_account_stripe_customer_id.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815120000_strategy_call_booking_funnel.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815140000_add_vehicle_plate_redaction.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150000_add_welcome_pack.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150100_seed_welcome_pack_content.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
