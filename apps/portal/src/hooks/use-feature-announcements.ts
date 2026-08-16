@@ -79,17 +79,6 @@ function isForPortal(filter: unknown): boolean {
  */
 const PREVIEW_ENABLED = process.env.NODE_ENV !== 'production';
 
-/** Flat SVG gradients, inline — no network request and no stock photography. */
-const previewImage = (from: string, to: string) =>
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="500">` +
-      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-      `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>` +
-      `</linearGradient></defs>` +
-      `<rect width="400" height="500" fill="url(#g)"/></svg>`
-  );
-
 const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
   {
     id: 'preview-fleet-calendar',
@@ -98,7 +87,7 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
       'Every vehicle against every date on one timeline — see the whole fleet at a glance.',
     body_html:
       '<p>Drag across any row to block a range of dates. Weekend and holiday surcharges show inline as a strip above the grid, so you can see what a day is actually priced at before you commit to it.</p><p>Bookings, blocks and maintenance windows all sit on the same row, which means a clash is visible rather than something you find out about at handover.</p>',
-    image_url: previewImage('#0ea5e9', '#1e3a8a'),
+    image_url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&q=70',
     cta_label: 'Open the calendar',
     cta_url: '/blocked-dates',
     severity: 'major',
@@ -114,7 +103,7 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
       'Weekly renters renew themselves, charged upfront each period.',
     body_html:
       '<p>A rental set to auto-renew charges the next period upfront from the customer\u2019s saved card. If that card fails, they get a pay-link instead and the rental pauses rather than silently lapsing.</p><p>Set the cadence per rental \u2014 weekly, fortnightly or monthly \u2014 and skip or move any single occurrence without breaking the schedule.</p>',
-    image_url: previewImage('#f59e0b', '#be123c'),
+    image_url: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=800&q=70',
     cta_label: 'See how it works',
     cta_url: '/rentals',
     severity: 'major',
@@ -130,7 +119,7 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
       'Holds now refresh themselves before Stripe expires them.',
     body_html:
       '<p>A Stripe authorisation lapses after seven days. On a longer rental that meant the deposit was quietly gone by the time the car came back.</p><p>Holds are now extended automatically ahead of that deadline, using extended authorisation where the connected account supports it. Nothing to do \u2014 but it is worth checking any rental that started before this shipped.</p>',
-    image_url: previewImage('#dc2626', '#7f1d1d'),
+    image_url: 'https://images.unsplash.com/photo-1493238792000-8113da705763?w=800&q=70',
     cta_label: 'Review your holds',
     cta_url: '/payments',
     severity: 'critical',
@@ -146,7 +135,7 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
       'Send collection details, lockbox codes and photos over WhatsApp.',
     body_html:
       '<p>Collection instructions, the lockbox code and up to ten photos go out as a single WhatsApp message instead of a chain of texts.</p><p>Falls back to SMS automatically when a number is not reachable on WhatsApp.</p>',
-    image_url: previewImage('#10b981', '#0f766e'),
+    image_url: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=800&q=70',
     cta_label: null,
     cta_url: null,
     severity: 'minor',

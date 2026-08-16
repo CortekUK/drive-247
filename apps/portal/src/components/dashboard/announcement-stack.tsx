@@ -76,23 +76,67 @@ const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
   info: 'border-white/25 bg-black/45 text-white',
 };
 
-/** Flat brand wash for a row with no image_url, so it still looks deliberate. */
+/**
+ * Depth wash, varied per card so four themed cards do not look identical. Every
+ * stop is drawn from the brand ramp, so the variety stays inside the theme.
+ */
+const DEPTH_TINTS = [
+  'from-chart-2/70',
+  'from-chart-3/70',
+  'from-chart-4/70',
+  'from-chart-5/70',
+];
+
+/** Stable per-announcement pick, so a card keeps its wash across re-renders. */
+function tintFor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return DEPTH_TINTS[h % DEPTH_TINTS.length];
+}
+
+/**
+ * Artwork is roughly 80% theme / 20% photograph.
+ *
+ * The brand hue is laid over the photo's own luminance with `mix-blend-color`
+ * at 80%, so the shape and depth of the image survive while the colour becomes
+ * the tenant's. The remaining fifth of the original colour is what stops it
+ * reading as a flat block of brand paint.
+ *
+ * A row with no image_url falls back to the ramp alone, so it still looks
+ * deliberate rather than empty.
+ */
 function CardArtwork({ announcement }: { announcement: FeatureAnnouncement }) {
-  if (announcement.image_url) {
-    return (
-      <img
-        src={announcement.image_url}
-        alt=""
-        // Without this the browser's native image drag hijacks the card drag.
-        draggable={false}
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-      />
-    );
-  }
+  const tint = tintFor(announcement.id);
+
   return (
-    <div className="absolute inset-0 bg-gradient-to-br from-chart-2 via-chart-3 to-chart-5">
-      <Megaphone className="absolute -bottom-4 -right-3 size-32 text-white/10" />
-    </div>
+    <>
+      {announcement.image_url ? (
+        <img
+          src={announcement.image_url}
+          alt=""
+          // Without this the browser's native image drag hijacks the card drag.
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-chart-2 via-chart-3 to-chart-5">
+          <Megaphone className="absolute -bottom-4 -right-3 size-32 text-white/10" />
+        </div>
+      )}
+
+      {/* 80% of the colour comes from the theme. */}
+      {announcement.image_url && (
+        <div className="pointer-events-none absolute inset-0 bg-primary opacity-80 mix-blend-color" />
+      )}
+
+      {/* Brand-ramp depth, so the card has a light corner and a dark one. */}
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent mix-blend-overlay',
+          tint
+        )}
+      />
+    </>
   );
 }
 
@@ -179,7 +223,7 @@ function DetailDialog({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg overflow-hidden p-0">
-        <div className="relative h-44 w-full overflow-hidden">
+        <div className="relative h-44 w-full isolate overflow-hidden">
           <CardArtwork announcement={announcement} />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
         </div>
@@ -306,7 +350,7 @@ export function AnnouncementStack({ className }: { className?: string }) {
                   <motion.div
                     key={announcement.id}
                     className={cn(
-                      'absolute inset-0 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg',
+                      'absolute inset-0 isolate overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg',
                       isTop ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
                     )}
                     style={{ zIndex: stack.length - depth }}
