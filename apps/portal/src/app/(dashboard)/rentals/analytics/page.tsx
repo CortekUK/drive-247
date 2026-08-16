@@ -59,15 +59,15 @@ const statusChartConfig = {
 const DURATION_COLORS = ["#818cf8", "#6366f1", "#4f46e5", "#4338ca", "#3730a3", "#312e81"];
 
 const durationChartConfig = {
-  count: { label: "Rentals", color: "#6366f1" },
+  count: { label: "Rentals", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig;
 
 const revenueByStatusConfig = {
-  revenue: { label: "Revenue", color: "#6366f1" },
+  revenue: { label: "Revenue", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig;
 
 const areaChartConfig = {
-  count: { label: "Rentals", color: "#6366f1" },
+  count: { label: "Rentals", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig;
 
 const reviewChartConfig = {
@@ -346,8 +346,8 @@ export default function RentalsAnalyticsPage() {
                   <AreaChart data={rentalsOverTimeData} margin={{ left: -10, right: 5, top: 5 }}>
                     <defs>
                       <linearGradient id="rentalsAreaFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+                        <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} />
@@ -357,7 +357,7 @@ export default function RentalsAnalyticsPage() {
                     <Area
                       type="monotone"
                       dataKey="count"
-                      stroke="#6366f1"
+                      stroke="hsl(var(--chart-3))"
                       strokeWidth={2}
                       fill="url(#rentalsAreaFill)"
                     />

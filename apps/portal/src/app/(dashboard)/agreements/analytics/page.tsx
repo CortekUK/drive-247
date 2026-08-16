@@ -32,7 +32,7 @@ const signedRadialConfig: ChartConfig = {
 };
 
 const monthlyConfig: ChartConfig = {
-  count: { label: "Agreements", color: "#6366f1" },
+  count: { label: "Agreements", color: "hsl(var(--chart-3))" },
 };
 
 const customerBarConfig: ChartConfig = {
@@ -235,7 +235,7 @@ export default function AgreementsAnalyticsPage() {
                     const d = payload[0].payload;
                     return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><p className="text-xs text-muted-foreground mb-0.5">{d.name}</p><p className="text-sm font-semibold">{d.count} agreement{d.count !== 1 ? "s" : ""}</p></div>);
                   }} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} barSize={20} />
                 </BarChart>
               </ChartContainer>
             </div>

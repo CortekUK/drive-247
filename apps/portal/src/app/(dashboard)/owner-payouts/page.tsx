@@ -114,7 +114,7 @@ export default function OwnerPayoutsPage() {
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+              <TableRow className="bg-primary/5 dark:bg-muted hover:bg-primary/5 dark:hover:bg-muted">
                 <TableHead>Owner</TableHead>
                 <TableHead>Period</TableHead>
                 <TableHead className="text-right">Gross</TableHead>
@@ -190,7 +190,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
             <p className="text-sm text-muted-foreground">{label}</p>
             <p className="text-2xl font-medium text-foreground mt-1">{value}</p>
           </div>
-          <div className="h-10 w-10 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center">{icon}</div>
+          <div className="h-10 w-10 rounded-md bg-primary/5 dark:bg-muted flex items-center justify-center">{icon}</div>
         </div>
       </CardContent>
     </Card>

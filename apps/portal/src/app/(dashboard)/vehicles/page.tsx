@@ -622,7 +622,7 @@ export default function VehiclesListEnhanced() {
       {/* INSHUR deep-link filter — set by the dashboard metric and Settings' readiness counters */}
       {inshurFilterSpec && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2 dark:border-gray-800 dark:bg-gray-900/40">
-          <ShieldCheck className="h-4 w-4 text-[#6366f1]" />
+          <ShieldCheck className="h-4 w-4 text-primary" />
           <span className="text-sm text-[#404040] dark:text-gray-300">
             Showing {filteredVehicles.length} vehicle{filteredVehicles.length === 1 ? '' : 's'} that {inshurFilterSpec.predicate}
           </span>
@@ -715,7 +715,7 @@ export default function VehiclesListEnhanced() {
                         <Link
                           href={`/vehicle-owners/${vehicle.owner_id}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-sm text-[#6366f1] hover:underline"
+                          className="text-sm text-primary hover:underline"
                         >
                           {vehicle.vehicle_owners?.full_name ?? "Owner"}
                         </Link>

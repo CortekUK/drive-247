@@ -40,7 +40,7 @@ const REPORT_COLORS: Record<string, string> = {
 };
 
 const plBarConfig: ChartConfig = {
-  amount: { label: 'Amount', color: '#6366f1' },
+  amount: { label: 'Amount', color: 'hsl(var(--chart-3))' },
 };
 
 const paymentSplitConfig: ChartConfig = {
@@ -49,7 +49,7 @@ const paymentSplitConfig: ChartConfig = {
 };
 
 const overviewConfig: ChartConfig = {
-  value: { label: 'Amount', color: '#6366f1' },
+  value: { label: 'Amount', color: 'hsl(var(--chart-3))' },
 };
 
 export interface ReportFilters {

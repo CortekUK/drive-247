@@ -30,7 +30,7 @@ const typeChartConfig = Object.fromEntries(
 ) as ChartConfig;
 
 const monthlyConfig: ChartConfig = {
-  count: { label: "Documents", color: "#6366f1" },
+  count: { label: "Documents", color: "hsl(var(--chart-3))" },
 };
 
 const verifiedRadialConfig: ChartConfig = {
@@ -192,7 +192,7 @@ export default function DocumentsAnalyticsPage() {
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={28} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
                 <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload;
@@ -225,12 +225,12 @@ export default function DocumentsAnalyticsPage() {
               <Tooltip><TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent>Customers with most documents</TooltipContent></Tooltip>
             </div>
             {topCustomersData.length > 0 ? (
-              <ChartContainer config={{ count: { label: "Documents", color: "#6366f1" } }} className="h-[180px] w-full">
+              <ChartContainer config={{ count: { label: "Documents", color: "hsl(var(--chart-3))" } }} className="h-[180px] w-full">
                 <BarChart data={topCustomersData} layout="vertical" margin={{ left: 0, right: 8 }}>
                   <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={80} />
-                  <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[0, 4, 4, 0]} />
                   <ChartTooltip cursor={{ fill: "hsl(var(--muted-foreground))", opacity: 0.08 }} content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload;

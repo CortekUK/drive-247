@@ -33,10 +33,10 @@ const typeChartConfig = {
 
 const TYPE_COLORS: Record<string, string> = { Individual: "#6366f1", Company: "#3b82f6" };
 
-const authChartConfig = { count: { label: "Customers", color: "#6366f1" } } satisfies ChartConfig;
+const authChartConfig = { count: { label: "Customers", color: "hsl(var(--chart-3))" } } satisfies ChartConfig;
 const AUTH_COLORS: Record<string, string> = { Authenticated: "#10b981", Guest: "#9ca3af" };
 
-const areaChartConfig = { count: { label: "Customers", color: "#6366f1" } } satisfies ChartConfig;
+const areaChartConfig = { count: { label: "Customers", color: "hsl(var(--chart-3))" } } satisfies ChartConfig;
 
 const balanceChartConfig = {
   "In Credit": { label: "In Credit", color: "#10b981" },
@@ -202,8 +202,8 @@ export default function CustomersAnalyticsPage() {
               {customersOverTimeData.length > 0 ? (
                 <ChartContainer config={areaChartConfig} className="h-[200px] w-full">
                   <AreaChart data={customersOverTimeData} margin={{ left: -10, right: 5, top: 5 }}>
-                    <defs><linearGradient id="customersAreaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} /><stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} /></linearGradient></defs>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} /><XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval="preserveStartEnd" /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} /><ChartTooltip content={<ChartTooltipContent />} /><Area type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2} fill="url(#customersAreaFill)" />
+                    <defs><linearGradient id="customersAreaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} /><stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0.02} /></linearGradient></defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.3} /><XAxis dataKey="week" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval="preserveStartEnd" /><YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} /><ChartTooltip content={<ChartTooltipContent />} /><Area type="monotone" dataKey="count" stroke="hsl(var(--chart-3))" strokeWidth={2} fill="url(#customersAreaFill)" />
                   </AreaChart>
                 </ChartContainer>
               ) : (<div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">No data</div>)}

@@ -43,7 +43,7 @@ const criticalRadialConfig: ChartConfig = {
 };
 
 const monthlyConfig: ChartConfig = {
-  count: { label: 'Reminders', color: '#6366f1' },
+  count: { label: 'Reminders', color: 'hsl(var(--chart-3))' },
 };
 
 export default function RemindersAnalyticsPage() {
@@ -174,7 +174,7 @@ export default function RemindersAnalyticsPage() {
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11 }} width={28} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
                 <ChartTooltip cursor={{ fill: 'hsl(var(--muted-foreground))', opacity: 0.08 }} content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload;

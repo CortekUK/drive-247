@@ -41,11 +41,11 @@ const verificationChartConfig: ChartConfig = {
 };
 
 const amountDistConfig: ChartConfig = {
-  count: { label: "Payments", color: "#6366f1" },
+  count: { label: "Payments", color: "hsl(var(--chart-3))" },
 };
 
 const areaChartConfig: ChartConfig = {
-  amount: { label: "Amount", color: "#6366f1" },
+  amount: { label: "Amount", color: "hsl(var(--chart-3))" },
 };
 
 export default function PaymentsAnalyticsPage() {
@@ -170,7 +170,7 @@ export default function PaymentsAnalyticsPage() {
                     const d = payload[0].payload;
                     return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><p className="text-xs text-muted-foreground mb-0.5">{d.date}</p><p className="text-sm font-semibold">{formatCurrency(d.amount, tenant?.currency_code || 'USD')}</p></div>);
                   }} />
-                  <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="amount" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>
             </div>
@@ -220,7 +220,7 @@ export default function PaymentsAnalyticsPage() {
                       const d = payload[0].payload;
                       return (<div className="rounded-lg border bg-background px-3 py-2 shadow-md"><p className="text-xs text-muted-foreground mb-0.5">{d.name}</p><p className="text-sm font-semibold">{d.count} payment{d.count !== 1 ? 's' : ''}</p></div>);
                     }} />
-                    <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={24} />
+                    <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} barSize={24} />
                   </BarChart>
                 </ChartContainer>
               </div>

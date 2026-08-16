@@ -129,7 +129,7 @@ export default function VehicleOwnerDetailPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                  <TableRow className="bg-primary/5 dark:bg-muted hover:bg-primary/5 dark:hover:bg-muted">
                     <TableHead>Reg</TableHead>
                     <TableHead>Make / Model</TableHead>
                     <TableHead>Year</TableHead>
@@ -162,7 +162,7 @@ export default function VehicleOwnerDetailPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                  <TableRow className="bg-primary/5 dark:bg-muted hover:bg-primary/5 dark:hover:bg-muted">
                     <TableHead>Period</TableHead>
                     <TableHead className="text-right">Gross</TableHead>
                     <TableHead className="text-right">Commission</TableHead>
@@ -307,7 +307,7 @@ function RevenueTab({ ownerId, currency }: { ownerId: string; currency: string }
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+              <TableRow className="bg-primary/5 dark:bg-muted hover:bg-primary/5 dark:hover:bg-muted">
                 <TableHead>Date</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead className="text-right">Paid Amount</TableHead>
