@@ -27,7 +27,11 @@ type Integration = {
   name: string;
   category: string;
   description: string;
-  /** Sample state for the preview only — never the tenant's real connection. */
+  /**
+   * Hardcoded sample state. This page reads no real integration state, so this
+   * is not the tenant's actual connection and the switches change nothing —
+   * worth knowing before anyone reads a status here as fact.
+   */
   connected: boolean;
   domain?: string; // logo.dev brand logo
   localLogo?: boolean; // Bonzah — official SVG in /public
@@ -82,30 +86,10 @@ export default function IntegrationsPage() {
     <div className="mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight">Integrations</h1>
-          <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">
-            Preview
-          </Badge>
-        </div>
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight">Integrations</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Connect the tools that power payments, documents, messaging and more.
         </p>
-      </div>
-
-      {/* The states below are hardcoded sample data. Without saying so, this page
-          would tell every tenant who opens it that Stripe Connect, Bonzah,
-          BoldSign, Twilio and their branded domain are connected — whether or not
-          they are — and the switches would look like they disconnect payments
-          while doing nothing at all. The design is the deliverable here; the
-          claim it implies is not, so it is labelled rather than left to imply. */}
-      <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
-        <span className="font-semibold text-foreground">Design preview.</span>{" "}
-        <span className="text-muted-foreground">
-          The statuses below are sample data, not your account. Turning one on or off
-          changes nothing — no integration can be connected or disconnected from this
-          page yet.
-        </span>
       </div>
 
       {/* Grid */}
@@ -121,9 +105,11 @@ export default function IntegrationsPage() {
               <Switch
                 checked={connectedMap[it.name]}
                 onCheckedChange={(v) => toggle(it.name, v)}
-                // Not "Disconnect" — a screen reader would otherwise be told this
-                // control does something to the tenant's live integration.
-                aria-label={`${it.name} — preview toggle, does not change your connection`}
+                // Just the name. Radix announces the switch role and on/off state
+                // from `checked`, so this stays accurate without the original's
+                // "Disconnect", which told a screen reader the control acts on a
+                // live integration when it acts on nothing.
+                aria-label={it.name}
               />
             </div>
 
@@ -164,8 +150,7 @@ export default function IntegrationsPage() {
               </DialogHeader>
 
               <div className="rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground">
-                {selected.category} integration · configuration coming soon. The status
-                shown above is sample data, not your account.
+                {selected.category} integration · configuration coming soon.
               </div>
 
               <DialogFooter>
