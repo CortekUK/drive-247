@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
-import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useAuth } from "@/stores/auth-store";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { BrandMark } from "@/components/shared/layout/brand-logo";
@@ -25,38 +24,33 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
   // sit outside that filter, so the gate has to be repeated here or a manager
   // without the permission would see an entry main hides from them.
   const { isManager, canView } = useManagerPermissions();
-  const { isSubscribed, isTrialing, hasExpiredSubscription, trialDaysRemaining, subscription } =
-    useTenantSubscription();
 
   const orgName = branding?.app_name || "Organization";
 
-  const planName = subscription?.plan_name
-    ? subscription.plan_name.charAt(0).toUpperCase() + subscription.plan_name.slice(1)
-    : null;
-  const subtitle = isTrialing
-    ? `Trial · ${trialDaysRemaining}d left`
-    : isSubscribed
-    ? planName || "Premium"
-    : hasExpiredSubscription
-    ? "Expired"
-    : "Free plan";
+  // No billing subtitle here by request — no trial countdown, no plan name.
+  // Billing state still reaches the tenant where it has to: the payment-due
+  // chip in the sidebar footer for dunning, and the subscription gate for an
+  // expired plan. This row is identity, not billing.
 
   const Logo = <BrandMark />;
 
   return (
+    <div className={`flex items-center gap-1 ${collapsed ? "justify-center" : ""}`}>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* Hover and open states are neutral. They were `bg-sidebar-accent`,
+            which the theme hook drives from the tenant's accent colour, so on a
+            warm brand this row went solid orange as soon as the menu opened. */}
         <button
-          className={`flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left outline-none cursor-pointer transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent ${
+          className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-left outline-none cursor-pointer transition-colors hover:bg-foreground/5 data-[state=open]:bg-foreground/5 ${
             collapsed ? "justify-center" : ""
           }`}
         >
           {Logo}
           {!collapsed && (
             <>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold leading-tight">{orgName}</span>
-                <span className="block truncate text-[11px] leading-tight text-muted-foreground">{subtitle}</span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+                {orgName}
               </span>
               <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
             </>
@@ -66,10 +60,7 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
       <DropdownMenuContent align="start" side="bottom" sideOffset={6} className="w-64">
         <DropdownMenuLabel className="flex items-center gap-2.5 p-2 font-normal">
           {Logo}
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold">{orgName}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{subtitle}</p>
-          </div>
+          <p className="min-w-0 truncate text-[13px] font-semibold">{orgName}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
@@ -103,5 +94,20 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+      {/* Settings, rehomed from the user menu. It sits beside the trigger
+          rather than inside it — a button nested in a button is invalid markup
+          and the outer trigger would swallow the click. Hidden when collapsed,
+          where the rail has no room for a second target. */}
+      {!collapsed && (
+        <Link
+          href="/settings"
+          aria-label="Settings"
+          title="Settings"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+        >
+          <Settings className="h-4 w-4" />
+        </Link>
+      )}
+    </div>
   );
 }

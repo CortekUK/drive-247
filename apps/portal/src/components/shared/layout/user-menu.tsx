@@ -18,10 +18,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Settings, LogOut, Key, Shield, Pencil, Camera, Loader2, Moon, Sun, Sparkles, Crown, CreditCard, ChevronsUpDown, LifeBuoy, Send } from 'lucide-react';
+import { User, LogOut, Key, Shield, Pencil, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui/switch';
-import { useTenantSubscription } from '@/hooks/use-tenant-subscription';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { toast } from '@/hooks/use-toast';
 import { AvatarCropDialog } from './avatar-crop-dialog';
@@ -31,16 +30,8 @@ export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}
   const { tenant, refetchTenant } = useTenant();
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const { isSubscribed, isTrialing, hasExpiredSubscription } = useTenantSubscription();
   const openFeedback = useFeedbackStore((s) => s.open);
 
-  // Dynamic plan action: pay (expired) → manage (active premium) → upgrade (free/trial)
-  const planAction = hasExpiredSubscription
-    ? { label: 'Pay now', icon: CreditCard, danger: true }
-    : isSubscribed && !isTrialing
-    ? { label: 'Manage Plan', icon: Crown, danger: false }
-    : { label: 'Upgrade', icon: Sparkles, danger: false };
-  const PlanIcon = planAction.icon;
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -287,7 +278,12 @@ export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           {variant === 'row' ? (
-            <button className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent">
+            // Neutral hover and open states. These were `bg-sidebar-accent`,
+            // which the theme hook drives from the tenant's accent colour, so on
+            // a warm brand the whole row turned solid orange the moment the menu
+            // opened. A row that is only a trigger should not be the loudest
+            // thing on screen.
+            <button className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer transition-colors hover:bg-foreground/5 data-[state=open]:bg-foreground/5">
               <Avatar className="h-8 w-8 rounded-full overflow-hidden shrink-0">
                 <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
@@ -336,7 +332,7 @@ export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}
 
           <DropdownMenuSeparator className="m-0" />
 
-          {/* Menu items — Subscription · Settings · Profile · Dark Mode */}
+          {/* Menu items — Profile · Dark Mode */}
           <div className="p-1.5">
             <input
               ref={avatarInputRef}
@@ -349,21 +345,10 @@ export const UserMenu = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = {}
                 e.target.value = '';
               }}
             />
-            <DropdownMenuItem asChild>
-              <a
-                href="/subscription"
-                className={`cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px] ${planAction.danger ? 'text-destructive focus:text-destructive focus:bg-destructive/10' : ''}`}
-              >
-                <PlanIcon className={`mr-2.5 h-4 w-4 ${planAction.danger ? '' : 'text-muted-foreground'}`} />
-                <span>{planAction.label}</span>
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href="/settings" className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
-                <Settings className="mr-2.5 h-4 w-4 text-muted-foreground" />
-                <span>Settings</span>
-              </a>
-            </DropdownMenuItem>
+            {/* Billing and Settings are not here by request. Both belong to the
+                organisation rather than the person, and both live on the org
+                switcher — billing in its dropdown, settings as the gear beside
+                it — so nothing became unreachable. */}
             <DropdownMenuItem onClick={handleOpenProfile} className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]">
               <User className="mr-2.5 h-4 w-4 text-muted-foreground" />
               <span>Profile</span>
