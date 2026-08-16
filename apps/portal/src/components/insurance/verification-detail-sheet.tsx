@@ -117,7 +117,7 @@ export function VerificationDetailSheet({
           {findings && (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-indigo-600" />
+                <Sparkles className="h-4 w-4 text-primary" />
                 AI Analysis
               </h3>
               {findings.reasoning && (
@@ -186,7 +186,7 @@ export function VerificationDetailSheet({
                 <div className="min-w-0">
                   <Link
                     href={`/rentals/${verification.rental_id}`}
-                    className="text-indigo-600 hover:underline font-medium"
+                    className="text-primary hover:underline font-medium"
                   >
                     {verification.rentals?.rental_number ||
                       verification.rental_id.slice(0, 8)}

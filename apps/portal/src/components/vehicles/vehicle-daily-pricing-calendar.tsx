@@ -161,14 +161,14 @@ export function VehicleDailyPricingCalendar({ vehicleId, dailyRent }: Props) {
                     !selectable && inMonth ? 'opacity-40 cursor-not-allowed bg-muted/30' : '',
                     selectable ? 'cursor-pointer hover:border-primary/50' : '',
                     isSelected ? 'border-primary ring-1 ring-primary bg-primary/10' : 'border-border',
-                    hasCustom && !isSelected ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-900' : '',
+                    hasCustom && !isSelected ? 'bg-primary/5 dark:bg-primary/30 border-primary/20 dark:border-primary/30' : '',
                   ].join(' ')}
                 >
-                  <span className={`font-medium ${hasCustom ? 'text-indigo-700 dark:text-indigo-300' : 'text-foreground'}`}>{format(day, 'd')}</span>
-                  <span className={`mt-0.5 text-[10px] ${hasCustom ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-muted-foreground'}`}>
+                  <span className={`font-medium ${hasCustom ? 'text-primary' : 'text-foreground'}`}>{format(day, 'd')}</span>
+                  <span className={`mt-0.5 text-[10px] ${hasCustom ? 'text-primary font-semibold' : 'text-muted-foreground'}`}>
                     {formatCurrency(price, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </span>
-                  {hasCustom && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-500" />}
+                  {hasCustom && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" />}
                 </button>
               );
             })}
@@ -176,7 +176,7 @@ export function VehicleDailyPricingCalendar({ vehicleId, dailyRent }: Props) {
 
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-500 inline-block" /> Custom price</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-primary inline-block" /> Custom price</span>
               <span>{customCount} custom day{customCount !== 1 ? 's' : ''} set</span>
             </div>
             <button type="button" onClick={selectAllInMonth} className="text-primary hover:underline">Select all future days</button>

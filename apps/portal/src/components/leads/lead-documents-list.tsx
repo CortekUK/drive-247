@@ -114,7 +114,7 @@ export function LeadDocumentsList({ leadId }: { leadId: string }) {
                   onClick={() => openDoc(doc)}
                   disabled={isResolving}
                   title="Open document"
-                  className="rounded p-1 text-indigo-600 hover:bg-indigo-50 disabled:cursor-wait disabled:opacity-50"
+                  className="rounded p-1 text-primary hover:bg-primary/5 disabled:cursor-wait disabled:opacity-50"
                 >
                   {isResolving ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

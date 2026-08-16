@@ -27,7 +27,7 @@ export function LeadList({ leads, emptyLabel = "No leads here" }: LeadListProps)
   return (
     <div className="overflow-hidden rounded-lg border border-[#f1f5f9] bg-white">
       <table className="w-full text-sm">
-        <thead className="bg-[#eef2ff] text-[11px] uppercase tracking-wide text-[#404040]">
+        <thead className="bg-primary/10 text-[11px] uppercase tracking-wide text-[#404040]">
           <tr>
             <th className="px-4 py-2 text-left font-semibold">Name</th>
             <th className="px-4 py-2 text-left font-semibold">Contact</th>
@@ -43,7 +43,7 @@ export function LeadList({ leads, emptyLabel = "No leads here" }: LeadListProps)
             return (
               <tr key={l.id} className="border-t border-[#f1f5f9] hover:bg-[#f8fafc]">
                 <td className="px-4 py-2">
-                  <Link href={`/leads/${l.id}`} className="font-medium text-[#080812] hover:text-indigo-600">
+                  <Link href={`/leads/${l.id}`} className="font-medium text-[#080812] hover:text-primary">
                     {l.full_name}
                   </Link>
                 </td>

@@ -31,8 +31,8 @@ export function LeadAINextAction({ lead }: { lead: LeadRow }) {
 
   if (isLoading) {
     return (
-      <section className="rounded-md border border-indigo-100 bg-indigo-50/40 p-3">
-        <div className="flex items-center gap-1.5 text-xs text-indigo-700">
+      <section className="rounded-md border border-primary/20 bg-primary/40 p-3">
+        <div className="flex items-center gap-1.5 text-xs text-primary">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Computing next action…
         </div>
       </section>
@@ -47,13 +47,13 @@ export function LeadAINextAction({ lead }: { lead: LeadRow }) {
   const confidence = Math.round((data.confidence ?? 0) * 100);
 
   return (
-    <section className="rounded-md border border-indigo-100 bg-indigo-50/40 p-3">
+    <section className="rounded-md border border-primary/20 bg-primary/40 p-3">
       <div className="mb-1.5 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-indigo-700">
+        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
           <Sparkles className="h-3.5 w-3.5" />
           Next action
         </div>
-        <span className="text-[10px] uppercase tracking-wide text-indigo-700/70">
+        <span className="text-[10px] uppercase tracking-wide text-primary/70">
           {data.source === "ai" ? `AI · ${confidence}%` : data.source === "cache" ? "Cached" : "Default"}
         </span>
       </div>

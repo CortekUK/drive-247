@@ -220,7 +220,7 @@ export function FeedbackDialog() {
           <button
             type="button"
             onClick={() => setView(view === "submit" ? "mine" : "submit")}
-            className="self-start text-[13px] font-medium text-[#6366f1] hover:underline"
+            className="self-start text-[13px] font-medium text-primary hover:underline"
           >
             {view === "submit"
               ? `Your feedback (${myFeedback!.length})`
@@ -368,8 +368,8 @@ export function FeedbackDialog() {
                 className={cn(
                   "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-6 text-center transition-colors",
                   isDragging
-                    ? "border-[#6366f1] bg-[#eef2ff] dark:bg-indigo-950/30"
-                    : "border-[#e2e8f0] dark:border-border bg-[#f8fafc] dark:bg-muted/40 hover:border-[#6366f1]"
+                    ? "border-primary bg-primary/10 dark:bg-primary/30"
+                    : "border-[#e2e8f0] dark:border-border bg-[#f8fafc] dark:bg-muted/40 hover:border-primary"
                 )}
               >
                 <ImagePlus className="h-5 w-5 text-[#737373]" />
@@ -408,7 +408,7 @@ export function FeedbackDialog() {
             <Button
               onClick={handleSubmit}
               disabled={!canSubmit}
-              className="bg-[#6366f1] text-[13px] text-white hover:bg-[#4f46e5]"
+              className="bg-primary text-[13px] text-primary-foreground hover:bg-primary/90"
             >
               {submitFeedback.isPending ? (
                 <>

@@ -356,8 +356,8 @@ export const AddHoldDialog = ({
             onClick={handlePlaceViaStripe}
             className="group flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:bg-muted/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <div className="mt-0.5 h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
-              <CreditCard className="h-4 w-4 text-indigo-500" />
+            <div className="mt-0.5 h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <CreditCard className="h-4 w-4 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium">

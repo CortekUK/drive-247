@@ -92,7 +92,7 @@ export function OwnerPayoutsExportCard() {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Wallet className="h-5 w-5 text-indigo-600" />
+          <Wallet className="h-5 w-5 text-primary" />
           <CardTitle>Owner Payouts Report</CardTitle>
         </div>
         <CardDescription>Export payouts to third-party vehicle owners as CSV.</CardDescription>

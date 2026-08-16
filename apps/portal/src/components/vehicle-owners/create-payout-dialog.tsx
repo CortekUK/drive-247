@@ -195,7 +195,7 @@ export function CreatePayoutDialog({ open, onOpenChange, defaultOwnerId, onCreat
             <div className="border rounded-md overflow-hidden mt-1">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                  <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                     <TableHead>Vehicle</TableHead>
                     <TableHead className="text-right">Rentals</TableHead>
                     <TableHead className="text-right">Paid Revenue</TableHead>

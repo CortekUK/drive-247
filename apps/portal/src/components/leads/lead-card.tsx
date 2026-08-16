@@ -90,7 +90,7 @@ export function LeadCard({ lead, staleThresholdHours = 48, draggable = true }: L
       {...listeners}
       className={cn(
         "group block touch-none rounded-md border border-[#f1f5f9] bg-white p-3 transition-shadow hover:shadow-sm",
-        isDragging && "shadow-md ring-2 ring-indigo-200",
+        isDragging && "shadow-md ring-2 ring-primary/30",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -132,7 +132,7 @@ export function LeadCard({ lead, staleThresholdHours = 48, draggable = true }: L
           In stage {timeInStage(lead.stage_updated_at)}
         </span>
         {!lead.is_read && (
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-label="Unread" />
+          <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-label="Unread" />
         )}
       </div>
     </Link>

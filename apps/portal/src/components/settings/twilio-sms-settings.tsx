@@ -103,7 +103,7 @@ export function TwilioSmsSettings() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-indigo-600" />
+              <MessageSquare className="h-5 w-5 text-primary" />
               Twilio SMS
               <Badge className="bg-green-600 hover:bg-green-700 text-xs">Connected</Badge>
             </CardTitle>
@@ -157,7 +157,7 @@ export function TwilioSmsSettings() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Send className="h-4 w-4 text-indigo-600" />
+              <Send className="h-4 w-4 text-primary" />
               Send a test message
             </CardTitle>
             <CardDescription>
@@ -210,7 +210,7 @@ export function TwilioSmsSettings() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Webhook className="h-4 w-4 text-indigo-600" />
+              <Webhook className="h-4 w-4 text-primary" />
               Webhook URLs
             </CardTitle>
             <CardDescription>
@@ -287,7 +287,7 @@ export function TwilioSmsSettings() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-indigo-600" />
+            <MessageSquare className="h-5 w-5 text-primary" />
             Connect your Twilio account
           </CardTitle>
           <CardDescription>
@@ -297,7 +297,7 @@ export function TwilioSmsSettings() {
         </CardHeader>
         <CardContent className="space-y-5">
           {/* How it works — expandable guide */}
-          <div className="rounded-xl border border-border bg-gradient-to-br from-indigo-50/60 via-background to-purple-50/40 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/20 overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-border bg-gradient-to-br from-primary/5 via-background to-primary/[0.03] dark:from-primary/10 dark:via-background dark:to-primary/5 overflow-hidden shadow-sm">
             <button
               type="button"
               onClick={() => setShowGuide((s) => !s)}
@@ -305,8 +305,8 @@ export function TwilioSmsSettings() {
             >
               <span className="flex items-center gap-2.5">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-md" />
-                  <div className="relative w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-primary/20 rounded-full blur-md" />
+                  <div className="relative w-7 h-7 rounded-full bg-gradient-to-br from-chart-3 to-chart-5 flex items-center justify-center">
                     <Sparkles className="h-3.5 w-3.5 text-white" />
                   </div>
                 </div>
@@ -712,7 +712,7 @@ function ExtLink({ href, children }: { href: string; children: React.ReactNode }
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline inline-flex items-center gap-0.5 font-medium transition-colors"
+      className="text-primary hover:text-primary/80 hover:underline inline-flex items-center gap-0.5 font-medium transition-colors"
     >
       {children}
       <ExternalLink className="h-3 w-3" />
@@ -723,7 +723,7 @@ function ExtLink({ href, children }: { href: string; children: React.ReactNode }
 function Bullet({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex gap-2">
-      <span className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0">•</span>
+      <span className="text-primary mt-0.5 shrink-0">•</span>
       <span className="text-foreground/80">{children}</span>
     </li>
   );

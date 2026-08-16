@@ -151,7 +151,7 @@ export function BlogEditor({
       Underline,
       Link.configure({
         openOnClick: false,
-        HTMLAttributes: { class: "text-indigo-600 underline cursor-pointer" },
+        HTMLAttributes: { class: "text-primary underline cursor-pointer" },
       }),
       Image.configure({
         HTMLAttributes: { class: "rounded-lg max-w-full h-auto my-4" },
@@ -344,7 +344,7 @@ export function BlogEditor({
       ref={editorWrapperRef}
       className={cn(
         "border rounded-xl overflow-hidden bg-background transition-all duration-200",
-        isDragOver && "ring-2 ring-indigo-500/40 border-indigo-400",
+        isDragOver && "ring-2 ring-primary/40 border-primary/40",
         className
       )}
       onDragOver={handleDragOver}
@@ -845,7 +845,7 @@ export function BlogEditor({
         {uploading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-sm">
             <div className="flex items-center gap-2 rounded-lg bg-background border shadow-lg px-4 py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
               <span className="text-sm font-medium">Uploading image...</span>
             </div>
           </div>
@@ -862,7 +862,7 @@ export function BlogEditor({
         </div>
         <div className="flex items-center gap-2">
           {uploading && (
-            <span className="flex items-center gap-1 text-indigo-600">
+            <span className="flex items-center gap-1 text-primary">
               <Loader2 className="h-3 w-3 animate-spin" />
               Uploading...
             </span>
@@ -952,7 +952,7 @@ export function BlogEditor({
           margin: 1.5rem 0;
         }
         .tiptap img.ProseMirror-selectednode {
-          outline: 2px solid #6366f1;
+          outline: 2px solid hsl(var(--primary));
           outline-offset: 2px;
           border-radius: 0.5rem;
         }
@@ -962,7 +962,7 @@ export function BlogEditor({
           margin: 1.5rem 0;
         }
         .tiptap a {
-          color: #6366f1;
+          color: hsl(var(--primary));
           text-decoration: underline;
           cursor: pointer;
         }
@@ -1028,7 +1028,7 @@ export function BlogEditor({
           top: 0;
           bottom: -2px;
           width: 4px;
-          background-color: #6366f1;
+          background-color: hsl(var(--primary));
           pointer-events: none;
         }
         .tiptap .tableWrapper {

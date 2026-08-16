@@ -171,7 +171,7 @@ export function AttachAutomationDropdown({ leadId, tenantId }: Props) {
                     <button
                       type="button"
                       onClick={() => setRunStatus(r.id, "paused")}
-                      className="rounded p-1 hover:bg-[#eef2ff]"
+                      className="rounded p-1 hover:bg-primary/10"
                       title="Pause"
                     >
                       <Pause className="h-3 w-3" />
@@ -180,7 +180,7 @@ export function AttachAutomationDropdown({ leadId, tenantId }: Props) {
                     <button
                       type="button"
                       onClick={() => setRunStatus(r.id, "running")}
-                      className="rounded p-1 hover:bg-[#eef2ff]"
+                      className="rounded p-1 hover:bg-primary/10"
                       title="Resume"
                     >
                       <Play className="h-3 w-3" />

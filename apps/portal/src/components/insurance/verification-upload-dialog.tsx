@@ -104,7 +104,7 @@ export function VerificationUploadDialog({
           onClick={() => fileInputRef.current?.click()}
           className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 cursor-pointer transition-colors ${
             isDragging
-              ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30"
+              ? "border-primary/50 bg-primary/5 dark:bg-primary/30"
               : "border-muted-foreground/25 hover:border-muted-foreground/50"
           }`}
         >
@@ -143,7 +143,7 @@ export function VerificationUploadDialog({
                     {(f.size / 1024).toFixed(0)} KB
                   </span>
                   {f.type === "application/pdf" && (
-                    <span className="text-[10px] text-indigo-600 shrink-0 uppercase font-semibold">
+                    <span className="text-[10px] text-primary shrink-0 uppercase font-semibold">
                       pdf
                     </span>
                   )}

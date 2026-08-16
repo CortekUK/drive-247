@@ -47,7 +47,7 @@ export function SetupHub() {
 
   return (
     <Card className="overflow-hidden border-0 shadow-lg">
-      <div className="h-1.5 bg-gradient-to-r from-primary via-blue-500 to-purple-500" />
+      <div className="h-1.5 bg-gradient-to-r from-chart-2 via-chart-3 to-chart-5" />
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

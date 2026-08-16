@@ -25,10 +25,10 @@ export function LeadBoardColumn({ id, label, leads, staleThresholdHours }: LeadB
       ref={setNodeRef}
       className={cn(
         "flex h-full min-h-[60vh] w-[280px] shrink-0 flex-col rounded-lg border border-[#f1f5f9] bg-[#f8fafc] transition-colors",
-        isOver && "border-indigo-300 bg-indigo-50/40",
+        isOver && "border-primary/30 bg-primary/40",
       )}
     >
-      <div className="flex items-center justify-between rounded-t-lg border-b border-[#f1f5f9] bg-[#eef2ff] px-3 py-2">
+      <div className="flex items-center justify-between rounded-t-lg border-b border-[#f1f5f9] bg-primary/10 px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-[#404040]">
           {label}
         </span>
@@ -44,7 +44,7 @@ export function LeadBoardColumn({ id, label, leads, staleThresholdHours }: LeadB
               <LeadCard key={lead.id} lead={lead} staleThresholdHours={staleThresholdHours} />
             ))}
             {leads.length === 0 && (
-              <div className="rounded-md border border-dashed border-[#e0e7ff] bg-white py-6 text-center text-xs text-[#737373]">
+              <div className="rounded-md border border-dashed border-primary/20 bg-white py-6 text-center text-xs text-[#737373]">
                 No leads here
               </div>
             )}

@@ -73,13 +73,13 @@ function ProgressRing({
             x2="100%"
             y2="100%"
           >
-            <stop offset="0%" stopColor="#818cf8" />
-            <stop offset="100%" stopColor="#6366f1" />
+            <stop offset="0%" stopColor="hsl(var(--chart-2))" />
+            <stop offset="100%" stopColor="hsl(var(--chart-3))" />
           </linearGradient>
         </defs>
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <Rocket className="h-4 w-4 text-indigo-400" />
+        <Rocket className="h-4 w-4 text-primary" />
       </div>
     </div>
   );
@@ -149,7 +149,7 @@ export function GettingStartedChecklist({
     <div className="rounded-xl border border-border/50 bg-card overflow-hidden relative">
       {/* Subtle top accent line */}
       <div
-        className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-indigo-500 via-indigo-400 to-violet-500 transition-all duration-700 ease-out"
+        className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-chart-2 via-chart-3 to-chart-5 transition-all duration-700 ease-out"
         style={{ width: `${checklistProgress}%` }}
       />
 

@@ -8,12 +8,16 @@ import { formatCurrency } from "@/lib/format-utils";
 import type { DistributionSlice } from "@/lib/expense-utils";
 
 // Themed palette — indigo-led, distinct and readable in light + dark.
+// Deliberately NOT converted to the brand ramp: this codes one slice per expense
+// category, and the ramp only has five stops for eight slices. Converting the
+// leading four alone put brand-derived slices next to fixed emerald/cyan/rose,
+// which collide the moment a tenant's brand lands near one of them.
 const PALETTE = [
   "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
   "#10b981", "#06b6d4", "#f43f5e", "#84cc16",
 ];
 
-const config: ChartConfig = { value: { label: "Amount", color: "#6366f1" } };
+const config: ChartConfig = { value: { label: "Amount", color: "hsl(var(--chart-1))" } };
 
 interface Props {
   data: DistributionSlice[];

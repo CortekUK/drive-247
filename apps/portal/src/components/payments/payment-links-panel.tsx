@@ -237,7 +237,7 @@ export function PaymentLinksPanel({
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+              <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                 <TableHead>Sent</TableHead>
                 <TableHead>For</TableHead>
                 <TableHead className="text-right">Amount</TableHead>

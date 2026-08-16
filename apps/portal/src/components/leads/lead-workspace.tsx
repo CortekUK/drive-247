@@ -129,7 +129,7 @@ export function LeadWorkspace({ leadId }: Props) {
       {/* Top action bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f1f5f9] bg-white px-4 py-2.5">
         <div className="flex items-center gap-2 text-sm text-[#737373]">
-          <Link href="/leads" className="flex items-center gap-1 hover:text-indigo-600">
+          <Link href="/leads" className="flex items-center gap-1 hover:text-primary">
             <ChevronLeft className="h-3.5 w-3.5" />
             Leads
           </Link>

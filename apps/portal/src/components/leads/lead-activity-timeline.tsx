@@ -57,7 +57,7 @@ export function LeadActivityTimeline({ leadId }: { leadId: string }) {
       {events.map((e) => {
         const detail = eventDetail(e);
         return (
-          <li key={e.id} className="flex items-start gap-2 border-l-2 border-[#e0e7ff] pl-3">
+          <li key={e.id} className="flex items-start gap-2 border-l-2 border-primary/20 pl-3">
             <div className="flex-1 text-xs">
               <div className="font-medium text-[#404040]">
                 {eventLabel(e)}{" "}

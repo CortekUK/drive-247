@@ -62,14 +62,14 @@ export function PricingRow({ vehicle, dateMeta, baseRate, currency, index, getMa
                 disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-primary/5",
                 d.isWeekend && !hasManual && "bg-muted/30",
                 d.isToday && "bg-primary/5",
-                hasManual && "bg-indigo-50 dark:bg-indigo-950/30",
+                hasManual && "bg-primary/5 dark:bg-primary/30",
               )}
               title={disabled ? undefined : hasManual ? "Custom price — click to edit" : "Click to set a custom price"}
             >
               <span
                 className={cn(
                   "text-[11px] font-medium tabular-nums",
-                  hasManual ? "text-indigo-700 dark:text-indigo-300" : hasRate ? "text-foreground" : "text-muted-foreground",
+                  hasManual ? "text-primary" : hasRate ? "text-foreground" : "text-muted-foreground",
                 )}
               >
                 {hasRate ? formatCurrency(displayPrice, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "—"}
@@ -87,7 +87,7 @@ export function PricingRow({ vehicle, dateMeta, baseRate, currency, index, getMa
                   +{d.surchargePercent}%
                 </span>
               )}
-              {hasManual && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-500" />}
+              {hasManual && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary" />}
             </button>
           );
         })}

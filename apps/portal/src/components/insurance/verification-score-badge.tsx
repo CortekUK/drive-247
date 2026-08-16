@@ -26,7 +26,7 @@ export function VerificationStatusChip({
   }
   if (status === "processing") {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-indigo-600">
+      <span className="inline-flex items-center gap-1 text-xs text-primary">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Analyzing
       </span>

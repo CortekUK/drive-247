@@ -226,7 +226,7 @@ export function MileageSummaryCard({ rentalId, vehicleId, startDate, endDate }: 
           {tierLabel && ` (${tier} tier — ${tierLabel})`}
         </CardDescription>
         {hasOverrides && (
-          <div className="flex items-center gap-1.5 text-xs text-indigo-600 mt-1">
+          <div className="flex items-center gap-1.5 text-xs text-primary mt-1">
             <Info className="h-3.5 w-3.5" />
             <span>Custom mileage set for this rental</span>
           </div>

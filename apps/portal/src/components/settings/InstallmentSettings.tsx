@@ -179,7 +179,7 @@ export function InstallmentSettings() {
                 <PillButton active={config.weekly_payments_per_unit === 2} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 2 })}>2× (twice weekly)</PillButton>
                 <button
                   type="button"
-                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200"
+                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary dark:hover:text-primary"
                   onClick={() => setPreviewOpen({ unit: "week", paymentsPerUnit: config.weekly_payments_per_unit })}
                 >
                   <Eye className="w-4 h-4" /> See example
@@ -214,7 +214,7 @@ export function InstallmentSettings() {
                 <PillButton active={config.monthly_payments_per_unit === 4} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 4 })}>4×</PillButton>
                 <button
                   type="button"
-                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200"
+                  className="ml-auto inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary dark:hover:text-primary"
                   onClick={() => setPreviewOpen({ unit: "month", paymentsPerUnit: config.monthly_payments_per_unit })}
                 >
                   <Eye className="w-4 h-4" /> See example
@@ -271,7 +271,7 @@ function PillButton({ active, onClick, children }: { active: boolean; onClick: (
       className={cn(
         "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
         active
-          ? "bg-primary/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300"
+          ? "bg-primary/15 border-primary/50 text-primary"
           : "bg-card border-border text-muted-foreground hover:bg-muted/40",
       )}
     >

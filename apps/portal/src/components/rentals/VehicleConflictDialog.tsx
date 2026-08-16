@@ -102,7 +102,7 @@ export function VehicleConflictDialog({
                       href={`/rentals/${conflict.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-[#6366f1] hover:bg-[#e0e7ff] transition-colors"
+                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
                     >
                       Open <ExternalLink className="h-3 w-3" />
                     </a>

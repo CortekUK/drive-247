@@ -118,7 +118,7 @@ function MatchOptionCard({
   };
 
   return (
-    <li className="rounded-md border border-[#f1f5f9] p-2.5 hover:border-indigo-200">
+    <li className="rounded-md border border-[#f1f5f9] p-2.5 hover:border-primary/20">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {/* Vehicle chain — for stitched, show all vehicles with handoff arrow */}
@@ -128,7 +128,7 @@ function MatchOptionCard({
                 <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
                   STITCHED — {option.vehicles.length} vehicles
                 </span>
-                <span className="ml-auto text-xs font-medium text-indigo-700">
+                <span className="ml-auto text-xs font-medium text-primary">
                   {option.matchScore}/100
                 </span>
               </div>
@@ -170,7 +170,7 @@ function MatchOptionCard({
                   <Calendar className="h-3 w-3" />
                   {primary.startDate.slice(5)} → {primary.endDate.slice(5)}
                 </span>
-                <span className="ml-auto text-xs font-medium text-indigo-700">
+                <span className="ml-auto text-xs font-medium text-primary">
                   {option.matchScore}/100
                 </span>
               </div>

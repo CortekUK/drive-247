@@ -152,7 +152,7 @@ export function PricingPanel({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Current price</span>
-                <span className={currentManual != null ? "font-semibold text-indigo-600 dark:text-indigo-400" : ""}>
+                <span className={currentManual != null ? "font-semibold text-primary" : ""}>
                   {formatCurrency(currentManual != null ? currentManual : baseRate, currency)}
                   {currentManual != null ? " (custom)" : " (default)"}
                 </span>

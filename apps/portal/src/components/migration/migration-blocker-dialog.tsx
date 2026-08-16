@@ -67,7 +67,7 @@ function TaskCard({
           aria-hidden="true"
           className={cn(
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-            done ? "bg-emerald-500 text-white" : "bg-indigo-100 text-indigo-600",
+            done ? "bg-emerald-500 text-white" : "bg-primary/10 text-primary",
           )}
         >
           {done ? <Check className="h-4 w-4" /> : step}
@@ -91,7 +91,7 @@ function TaskCard({
         <Button
           onClick={onAction}
           disabled={loading}
-          className="mt-auto min-h-11 w-full rounded-xl bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
+          className="mt-auto min-h-11 w-full rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
         >
           {loading ? (
             <>
@@ -195,7 +195,7 @@ export function MigrationBlockerDialog() {
       <div className="flex items-start gap-3.5 pr-10">
         <span
           aria-hidden="true"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-chart-3 to-chart-5 shadow-sm"
         >
           <Sparkles className="h-5 w-5 text-white" />
         </span>
@@ -218,12 +218,12 @@ export function MigrationBlockerDialog() {
       </p>
 
       {/* Benefits — 2×2 grid keeps it compact */}
-      <div className="mt-4 grid gap-x-5 gap-y-2.5 rounded-2xl bg-indigo-50/60 p-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-x-5 gap-y-2.5 rounded-2xl bg-primary/60 p-4 sm:grid-cols-2">
         {BENEFITS.map((b) => (
           <div key={b} className="flex items-start gap-2.5">
             <span
               aria-hidden="true"
-              className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-600"
+              className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary"
             >
               <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />
             </span>
@@ -282,7 +282,7 @@ export function MigrationBlockerDialog() {
           Need a hand?{" "}
           <a
             href="mailto:support@drive-247.com"
-            className="font-medium text-indigo-600 underline-offset-4 hover:underline"
+            className="font-medium text-primary underline-offset-4 hover:underline"
           >
             support@drive-247.com
           </a>
@@ -323,7 +323,7 @@ export function MigrationBlockerDialog() {
           type="button"
           onClick={dismiss}
           aria-label="Remind me later"
-          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>

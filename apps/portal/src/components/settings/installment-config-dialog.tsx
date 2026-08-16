@@ -380,10 +380,10 @@ export function InstallmentConfigDialog({
             {/* Customer preview */}
             <div className="space-y-3">
               <h3 className="font-medium text-sm text-foreground">What a {tenantName} customer sees</h3>
-              <div className="border-2 border-dashed border-[#6366f1]/30 rounded-lg bg-background overflow-hidden">
+              <div className="border-2 border-dashed border-primary/30 rounded-lg bg-background overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-2.5 bg-muted/50 border-b">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="w-4 h-4 text-[#6366f1]" />
+                    <CreditCard className="w-4 h-4 text-primary" />
                     <span className="text-sm font-medium text-foreground">{tenantName} — Payment Options</span>
                   </div>
                   <span className="text-xs text-muted-foreground">{previewData.days} days · {sym}{previewData.total.toLocaleString()}</span>
@@ -391,9 +391,9 @@ export function InstallmentConfigDialog({
                 <div className="p-4 space-y-3">
 
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 p-2.5 border-2 border-[#6366f1] rounded-lg bg-[#6366f1]/5">
-                    <div className="w-3.5 h-3.5 rounded-full border-2 border-[#6366f1] flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#6366f1]" />
+                  <div className="flex items-center gap-2 p-2.5 border-2 border-primary rounded-lg bg-primary/5">
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-primary flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
                     </div>
                     <span className="text-sm font-medium flex-1">Pay in Full</span>
                     <span className="text-xs text-muted-foreground">{sym}{previewData.total.toLocaleString()}</span>
@@ -416,12 +416,12 @@ export function InstallmentConfigDialog({
 
                 {previewData.options.length > 0 && (
                   <div className="border-t pt-2.5 space-y-1">
-                    <div className="flex justify-between text-xs bg-[#6366f1]/5 px-2 py-1.5 rounded">
+                    <div className="flex justify-between text-xs bg-primary/5 px-2 py-1.5 rounded">
                       <span className="font-medium flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-[#6366f1]" />
+                        <Calendar className="w-3 h-3 text-primary" />
                         Today
                       </span>
-                      <span className="font-medium text-[#6366f1]">
+                      <span className="font-medium text-primary">
                         {form.charge_first_upfront
                           ? `${sym}${previewData.options[0].amount.toFixed(2)} + deposit`
                           : 'Deposit only'

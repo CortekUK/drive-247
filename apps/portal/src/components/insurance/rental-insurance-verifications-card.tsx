@@ -27,7 +27,7 @@ export function RentalInsuranceVerificationsCard({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-indigo-600" />
+          <Sparkles className="h-5 w-5 text-primary" />
           AI-Verified Insurance Documents
           <span className="text-sm font-normal text-muted-foreground">
             ({verifications.length})

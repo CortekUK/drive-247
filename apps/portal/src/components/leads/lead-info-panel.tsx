@@ -85,7 +85,7 @@ function EditableContactRow({
             }}
             placeholder={placeholder}
             autoFocus
-            className="min-w-0 flex-1 rounded border border-[#d4d4d8] bg-white px-1.5 py-0.5 text-xs text-[#080812] outline-none focus:border-indigo-400"
+            className="min-w-0 flex-1 rounded border border-[#d4d4d8] bg-white px-1.5 py-0.5 text-xs text-[#080812] outline-none focus:border-primary/40"
           />
           <button
             type="button"
@@ -185,7 +185,7 @@ export function LeadInfoPanel({ lead, onFocusComposer }: Props) {
       {/* Header */}
       <Section title="Lead">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-700">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
             {initials || "?"}
           </div>
           <div className="min-w-0 flex-1">
@@ -307,7 +307,7 @@ export function LeadInfoPanel({ lead, onFocusComposer }: Props) {
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {lead.tags.map((t) => (
-              <span key={t} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+              <span key={t} className="rounded-full bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
                 {t}
               </span>
             ))}

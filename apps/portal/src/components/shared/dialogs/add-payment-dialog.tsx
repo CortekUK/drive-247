@@ -1476,7 +1476,7 @@ export const AddPaymentDialog = ({
                       // the same request instead of issuing a second charge.
                       setChargeCardOpen(true);
                     }}
-                    className="w-full h-10 gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                    className="w-full h-10 gap-2 border-primary/20 text-primary hover:bg-primary/5 dark:border-primary/30 dark:text-primary dark:hover:bg-primary/10"
                   >
                     {chargeLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -1608,7 +1608,7 @@ export const AddPaymentDialog = ({
             <>
               <DialogHeader>
                 <div className="flex items-start gap-2">
-                  <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                  <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <div>
                     <DialogTitle className="text-base">Charge via Stripe</DialogTitle>
                     <DialogDescription className="mt-1 text-xs">
@@ -1857,7 +1857,7 @@ export const AddPaymentDialog = ({
             <>
               <DialogHeader>
                 <div className="flex items-start gap-2">
-                  <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                  <CreditCard className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <div>
                     <DialogTitle className="text-base">Charge the saved card</DialogTitle>
                     <DialogDescription className="mt-1 text-xs">

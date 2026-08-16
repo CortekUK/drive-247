@@ -1385,7 +1385,7 @@ export function InshurSettings() {
                   href={ABI_PORTAL_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#6366f1] hover:underline"
+                  className="text-primary hover:underline"
                 >
                   portal.abiweb.com
                 </a>
@@ -1761,7 +1761,7 @@ export function InshurSettings() {
                       {statesAllowed.map((s) => (
                         <span
                           key={s}
-                          className="inline-flex items-center rounded border border-[#e0e7ff] bg-[#eef2ff] px-2 py-0.5 text-xs font-medium text-[#4338ca] dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300"
+                          className="inline-flex items-center rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
                         >
                           {s}
                         </span>

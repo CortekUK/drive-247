@@ -698,7 +698,7 @@ export function BonzahSettings() {
                 href={BONZAH_LINKS.businessPartnerTerms}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#6366f1] hover:underline"
+                className="text-primary hover:underline"
               >
                 Business Partner Terms
               </a>{' '}
@@ -707,7 +707,7 @@ export function BonzahSettings() {
                 href={BONZAH_LINKS.privacyPolicy}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#6366f1] hover:underline"
+                className="text-primary hover:underline"
               >
                 Privacy Policy
               </a>

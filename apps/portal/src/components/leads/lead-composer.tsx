@@ -228,7 +228,7 @@ export function LeadComposer({ leadId, lead, conversationId, initialChannel = "s
               }
               className={cn(
                 "flex items-center gap-1 rounded-md px-2.5 py-1 text-xs transition-colors",
-                active ? "bg-[#eef2ff] text-indigo-700" : "text-[#737373] hover:bg-[#f1f5f9]",
+                active ? "bg-primary/10 text-primary" : "text-[#737373] hover:bg-[#f1f5f9]",
                 !enabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
               )}
             >
@@ -291,7 +291,7 @@ export function LeadComposer({ leadId, lead, conversationId, initialChannel = "s
               key={v}
               type="button"
               onClick={() => setBody((b) => `${b}{{${v}}}`)}
-              className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[10px] hover:bg-indigo-50"
+              className="rounded bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[10px] hover:bg-primary/5"
             >
               {`{{${v}}}`}
             </button>

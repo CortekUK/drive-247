@@ -81,7 +81,7 @@ function StepNode({ data }: NodeProps) {
       className={cn(
         "min-w-[200px] cursor-pointer rounded-md border-2 px-3 py-2 shadow-sm",
         meta.color,
-        d.selected ? "ring-2 ring-indigo-500 ring-offset-1" : "",
+        d.selected ? "ring-2 ring-primary ring-offset-1" : "",
       )}
     >
       <Handle type="target" position={Position.Top} className="!bg-zinc-400" />

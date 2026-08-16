@@ -16,7 +16,7 @@ const CHANNEL_STYLES: Record<ConversationMessage["channel"], { Icon: typeof Phon
   sms: { Icon: Phone, bg: "bg-emerald-50" },
   email: { Icon: Mail, bg: "bg-blue-50" },
   whatsapp: { Icon: MessageSquare, bg: "bg-green-50" },
-  in_app: { Icon: MessageSquare, bg: "bg-indigo-50" },
+  in_app: { Icon: MessageSquare, bg: "bg-primary/5" },
   note: { Icon: FileText, bg: "bg-yellow-100" },
   system: { Icon: Bot, bg: "bg-zinc-100" },
   call_summary: { Icon: Phone, bg: "bg-zinc-100" },
@@ -26,7 +26,7 @@ function StatusBadge({ status }: { status: ConversationMessage["status"] }) {
   if (status === "queued") return <Clock className="h-3 w-3 text-[#737373]" aria-label="Queued" />;
   if (status === "sent") return <Check className="h-3 w-3 text-[#737373]" aria-label="Sent" />;
   if (status === "delivered") return <CheckCheck className="h-3 w-3 text-[#737373]" aria-label="Delivered" />;
-  if (status === "read") return <CheckCheck className="h-3 w-3 text-indigo-600" aria-label="Read" />;
+  if (status === "read") return <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />;
   if (status === "failed") return <AlertTriangle className="h-3 w-3 text-red-600" aria-label="Failed" />;
   return null;
 }

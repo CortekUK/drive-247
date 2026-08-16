@@ -132,7 +132,7 @@ export function VehicleOwnershipPanel({ vehicleId }: VehicleOwnershipPanelProps)
             <div>
               <div className="text-xs text-[#737373]">Owner</div>
               {vehicle?.owner_id ? (
-                <Link href={`/vehicle-owners/${vehicle.owner_id}`} className="text-[#6366f1] hover:underline inline-flex items-center gap-1">
+                <Link href={`/vehicle-owners/${vehicle.owner_id}`} className="text-primary hover:underline inline-flex items-center gap-1">
                   {currentOwner?.full_name ?? "Unknown owner"} <ExternalLink className="h-3 w-3" />
                 </Link>
               ) : (

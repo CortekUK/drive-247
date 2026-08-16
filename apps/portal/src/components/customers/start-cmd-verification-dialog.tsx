@@ -172,10 +172,10 @@ export function StartCmdVerificationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl p-0 overflow-hidden">
         {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="border-b border-border bg-gradient-to-br from-indigo-50 via-white to-indigo-50/40 dark:from-indigo-950/40 dark:via-background dark:to-indigo-950/20 px-6 py-5">
+        <div className="border-b border-border bg-gradient-to-br from-primary/5 via-background to-primary/[0.03] dark:from-primary/10 dark:via-background dark:to-primary/5 px-6 py-5">
           <DialogHeader className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary">
                 <ShieldCheck className="h-4 w-4" />
               </div>
               <div>
@@ -313,8 +313,8 @@ export function StartCmdVerificationDialog({
           {step === 'sending' && (
             <div className="py-12 flex flex-col items-center text-center">
               <div className="relative">
-                <div className="h-12 w-12 rounded-full bg-indigo-50 dark:bg-indigo-500/15 flex items-center justify-center">
-                  <Loader2 className="h-5 w-5 animate-spin text-indigo-600 dark:text-indigo-300" />
+                <div className="h-12 w-12 rounded-full bg-primary/5 dark:bg-primary/15 flex items-center justify-center">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 </div>
               </div>
               <h3 className="mt-4 text-[15px] font-medium">Creating verification</h3>
@@ -421,7 +421,7 @@ function Field({
     <div className="space-y-1.5">
       <Label className="text-[12px] font-medium text-foreground/80 flex items-center gap-1">
         {label}
-        {required && <span className="text-indigo-500">*</span>}
+        {required && <span className="text-primary">*</span>}
         {hint && <span className="text-[11px] text-muted-foreground font-normal">— {hint}</span>}
       </Label>
       {children}
@@ -452,7 +452,7 @@ function ChannelOption({
       className={cn(
         'group relative flex flex-col items-start gap-2 rounded-md border p-3 text-left transition-all',
         active
-          ? 'border-indigo-300 bg-indigo-50/50 dark:border-indigo-500/40 dark:bg-indigo-500/10 ring-1 ring-indigo-200 dark:ring-indigo-500/20'
+          ? 'border-primary/30 bg-primary/50 dark:border-primary/40 dark:bg-primary/10 ring-1 ring-primary/30 dark:ring-primary/20'
           : 'border-border bg-background hover:bg-muted/40',
         disabled && 'cursor-not-allowed opacity-50'
       )}
@@ -461,7 +461,7 @@ function ChannelOption({
         className={cn(
           'inline-flex h-6 w-6 items-center justify-center rounded-full',
           active
-            ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300'
+            ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary'
             : 'bg-muted text-foreground/70'
         )}
       >
@@ -472,7 +472,7 @@ function ChannelOption({
         <div className="text-[11px] text-muted-foreground truncate max-w-[140px]">{sublabel}</div>
       </div>
       {active && (
-        <div className="absolute right-2 top-2 h-2 w-2 rounded-full bg-indigo-500" />
+        <div className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />
       )}
     </button>
   );
@@ -484,7 +484,7 @@ function StepDot({ active, done, label }: { active: boolean; done: boolean; labe
       <div
         className={cn(
           'h-1.5 w-1.5 rounded-full transition-colors',
-          active && 'bg-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-500/30',
+          active && 'bg-primary ring-2 ring-primary/30',
           done && !active && 'bg-emerald-500',
           !active && !done && 'bg-border'
         )}
@@ -492,7 +492,7 @@ function StepDot({ active, done, label }: { active: boolean; done: boolean; labe
       <span
         className={cn(
           'text-[11px] uppercase tracking-wide',
-          active ? 'text-indigo-600 dark:text-indigo-300 font-medium' : 'text-muted-foreground'
+          active ? 'text-primary font-medium' : 'text-muted-foreground'
         )}
       >
         {label}

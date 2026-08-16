@@ -124,7 +124,7 @@ export function VerificationsTab() {
           <CardContent className="p-0">
             <div className="overflow-auto">
               <Table>
-                <TableHeader className="bg-indigo-50/60 dark:bg-indigo-950/30">
+                <TableHeader className="bg-primary/60 dark:bg-primary/30">
                   <TableRow>
                     <TableHead>File</TableHead>
                     <TableHead>Insurer / Policy</TableHead>
@@ -176,7 +176,7 @@ export function VerificationsTab() {
                             <Link
                               href={`/rentals/${v.rental_id}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="text-indigo-600 hover:underline text-sm font-medium"
+                              className="text-primary hover:underline text-sm font-medium"
                             >
                               {v.rentals?.rental_number ||
                                 v.rental_id.slice(0, 8)}
