@@ -61,6 +61,7 @@ import { BonzahPendingAlert } from "@/components/dashboard/bonzah-pending-alert"
 import { SetupGuide } from "@/components/dashboard/setup-guide";
 import { useSetupGuide } from "@/hooks/use-setup-guide";
 import { AnnouncementStack } from "@/components/dashboard/announcement-stack";
+import { NeedsYouToday } from "@/components/dashboard/needs-you-today";
 
 // ─── Greeting ────────────────────────────────────────────────────────────────
 
@@ -606,11 +607,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* What's new — sits below the hero rather than in it, because the hero's
-          right slot already carries the day's primary action. Renders nothing at
-          all when there is no live announcement, so the dashboard does not keep
-          a hole open for it. */}
-      <AnnouncementStack className="mr-auto w-fit" />
+      {/* Announcements left, the day's work right. Both sit below the hero
+          rather than in it, because the hero's right slot already carries the
+          primary action. The stack renders nothing when there is no live
+          announcement, and the grid collapses to one column, so the row never
+          holds an empty slot open. */}
+      <div className="grid items-stretch gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
+        <AnnouncementStack className="mr-auto w-fit" />
+        <NeedsYouToday />
+      </div>
 
       {/* Analytics */}
       {showAnalyticsCard && (
