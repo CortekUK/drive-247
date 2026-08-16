@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { TraxIcon } from './TraxIcon';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from './ChatMessage';
 import { ChatChart } from './ChatChart';
@@ -66,7 +67,8 @@ export function TraxHeaderButton({ onClick }: { onClick: () => void }) {
   const accentColor = branding?.accent_color || '#6366f1';
 
   return (
-    <button
+    <Button
+      variant="ghost"
       onClick={onClick}
       className={cn(
         'group relative flex items-center gap-2 rounded-lg h-8',
@@ -87,7 +89,7 @@ export function TraxHeaderButton({ onClick }: { onClick: () => void }) {
         style={{ boxShadow: '0 0 6px 1px rgba(52,211,153,0.45)' }}
       />
 
-      <TraxIcon size={18} color={accentColor} className="transition-transform duration-300 group-hover:scale-110" />
+      <TraxIcon size={18} color={accentColor} className="size-[18px] transition-transform duration-300 group-hover:scale-110" />
       <span className="hidden sm:inline text-[13px] font-medium" style={{ color: accentColor }}>
         Trax AI
       </span>
@@ -111,7 +113,7 @@ export function TraxHeaderButton({ onClick }: { onClick: () => void }) {
           J
         </kbd>
       </div>
-    </button>
+    </Button>
   );
 }
 
@@ -154,51 +156,46 @@ function EmptyState({
           : 'Navigate the portal, learn how features work, or check your business data.'}
       </p>
 
-      {/* Category grid — stacks on mobile, 3 cols on larger screens */}
-      <div className="mt-6 sm:mt-10 w-full max-w-[720px] grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Suggestions — categories stacked vertically, chips wrap to fill width */}
+      <div className="mt-6 sm:mt-8 w-full max-w-[440px] flex flex-col gap-5">
         {SUGGESTION_CATEGORIES.map((category) => {
           const Icon = category.icon;
 
           return (
-            <div
-              key={category.id}
-              className="flex flex-col rounded-xl border border-border/30 bg-secondary/10 overflow-hidden"
-            >
+            <div key={category.id} className="flex flex-col gap-2.5">
               {/* Category header */}
-              <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
+              <div className="flex items-center gap-2">
                 <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
                   style={{
                     background: `${accentColor}12`,
                     color: accentColor,
                   }}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5" />
                 </div>
-                <div>
-                  <div className="text-[13px] font-medium text-foreground">{category.label}</div>
-                  <div className="text-[11px] text-muted-foreground/70">{category.description}</div>
-                </div>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                  {category.label}
+                </span>
               </div>
 
-              {/* Divider */}
-              <div className="mx-3 h-px bg-border/20" />
-
               {/* Suggestion chips */}
-              <div className="flex flex-col gap-0.5 p-2">
+              <div className="flex flex-wrap gap-2">
                 {category.suggestions.map((suggestion) => (
                   <button
                     key={suggestion.short}
+                    type="button"
                     onClick={() => onSuggestionClick(suggestion.text)}
                     className={cn(
-                      'flex items-center justify-between gap-2 rounded-lg px-3 py-2',
-                      'text-left text-[12.5px] text-muted-foreground',
-                      'hover:text-foreground hover:bg-secondary/50',
-                      'transition-all duration-150 cursor-pointer group/chip'
+                      'group/chip inline-flex items-center gap-1.5 rounded-full',
+                      'border border-border/50 bg-secondary/20 px-3 py-1.5',
+                      'text-[12.5px] text-muted-foreground',
+                      'hover:text-foreground hover:border-border hover:bg-secondary/50',
+                      'transition-all duration-150 cursor-pointer'
                     )}
                   >
-                    <span className="truncate">{suggestion.short}</span>
-                    <ArrowRight className="h-3 w-3 shrink-0 opacity-0 group-hover/chip:opacity-60 transition-opacity" />
+                    <span>{suggestion.short}</span>
+                    <ArrowRight className="size-3 shrink-0 -ml-1 opacity-0 transition-all duration-150 group-hover/chip:ml-0 group-hover/chip:opacity-60" />
                   </button>
                 ))}
               </div>
@@ -261,7 +258,7 @@ function TraxInput({
           boxShadow: isFocused ? `0 0 0 3px ${accentColor}10` : undefined,
         }}
       >
-        <textarea
+        <Textarea
           ref={textareaRef}
           value={value}
           onChange={handleChange}
@@ -272,9 +269,9 @@ function TraxInput({
           disabled={isLoading}
           rows={1}
           className={cn(
-            'flex-1 resize-none bg-transparent px-3 py-3 sm:px-4',
+            'flex-1 field-sizing-fixed resize-none border-0 bg-transparent rounded-none px-3 py-3 sm:px-4',
             'text-sm placeholder:text-muted-foreground/50',
-            'focus:outline-none disabled:opacity-50',
+            'transition-none focus:outline-none focus-visible:border-transparent focus-visible:ring-0 disabled:opacity-50',
             'min-h-[44px] max-h-[120px]'
           )}
         />
@@ -352,7 +349,7 @@ function ThinkingIndicator({ accentColor }: { accentColor: string }) {
 }
 
 // ── Dialog inner content (reusable) ──────────────────────────────
-function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (open: boolean) => void }) {
+export function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (open: boolean) => void }) {
   const { messages, isLoading, sendMessage, confirmAction, rejectAction, clearChat } = useChat();
   const { branding } = useTenantBranding();
   const { appUser } = useAuth();
@@ -389,14 +386,12 @@ function TraxAIDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
       <div
         className={cn(
           'fixed z-[9999] flex flex-col',
-          'bg-background border border-border/50 rounded-xl sm:rounded-2xl shadow-2xl',
-          'animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-4 duration-300',
-          'w-[calc(100vw-16px)] sm:w-[calc(100vw-32px)] max-w-[960px]',
-          'h-[calc(100dvh-16px)] sm:h-[calc(100vh-32px)] max-h-[920px]',
-          'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+          'bg-background border-l border-border/50 shadow-2xl',
+          'animate-in fade-in-0 slide-in-from-right-6 duration-300',
+          'right-0 top-0 h-dvh w-[calc(100vw-16px)] sm:w-[520px] max-w-[520px]',
         )}
         style={{
-          boxShadow: `0 25px 80px -20px rgba(0,0,0,0.5), 0 0 60px -30px ${accentColor}20`,
+          boxShadow: `-24px 0 70px -24px rgba(0,0,0,0.45), 0 0 60px -30px ${accentColor}20`,
         }}
       >
         {/* Header */}
