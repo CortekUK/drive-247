@@ -185,8 +185,14 @@ const bookingsConfig = {
   bookings: { label: "Bookings", color: "hsl(var(--chart-2))" },
 } satisfies ChartConfig;
 
+/**
+ * chart-3, not chart-1. These are solid bars carrying the value on their own, and
+ * chart-1 is the lightest step of the ramp — it washes out against the card.
+ * chart-1 is right where it is the pale half of a pair (previous-vs-current,
+ * returns-vs-pickups) or one slice among several; it is wrong as a solo series.
+ */
 const topVehiclesConfig = {
-  revenue: { label: "Revenue", color: "hsl(var(--chart-1))" },
+  revenue: { label: "Revenue", color: "hsl(var(--chart-3))" },
 } satisfies ChartConfig;
 
 const opsConfig = {
