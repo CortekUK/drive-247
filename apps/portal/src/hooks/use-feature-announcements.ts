@@ -95,8 +95,9 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
     id: 'preview-fleet-calendar',
     title: 'Fleet Calendar',
     summary:
-      'Every vehicle against every date on one timeline. Drag across a row to block dates, and see surcharges as you go.',
-    body_html: null,
+      'Every vehicle against every date on one timeline — see the whole fleet at a glance.',
+    body_html:
+      '<p>Drag across any row to block a range of dates. Weekend and holiday surcharges show inline as a strip above the grid, so you can see what a day is actually priced at before you commit to it.</p><p>Bookings, blocks and maintenance windows all sit on the same row, which means a clash is visible rather than something you find out about at handover.</p>',
     image_url: previewImage('#0ea5e9', '#1e3a8a'),
     cta_label: 'Open the calendar',
     cta_url: '/blocked-dates',
@@ -108,10 +109,11 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
   },
   {
     id: 'preview-auto-extension',
-    title: 'Auto-extending rentals',
+    title: 'Auto-Renew',
     summary:
-      'Weekly renters renew themselves — charged upfront each period from a saved card, with a pay-link fallback.',
-    body_html: null,
+      'Weekly renters renew themselves, charged upfront each period.',
+    body_html:
+      '<p>A rental set to auto-renew charges the next period upfront from the customer\u2019s saved card. If that card fails, they get a pay-link instead and the rental pauses rather than silently lapsing.</p><p>Set the cadence per rental \u2014 weekly, fortnightly or monthly \u2014 and skip or move any single occurrence without breaking the schedule.</p>',
     image_url: previewImage('#f59e0b', '#be123c'),
     cta_label: 'See how it works',
     cta_url: '/rentals',
@@ -123,10 +125,11 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
   },
   {
     id: 'preview-deposit-holds',
-    title: 'Deposit holds now refresh themselves',
+    title: 'Deposit Holds',
     summary:
-      'Holds used to lapse at seven days. They now extend automatically before Stripe expires them, so a deposit is still there at return.',
-    body_html: null,
+      'Holds now refresh themselves before Stripe expires them.',
+    body_html:
+      '<p>A Stripe authorisation lapses after seven days. On a longer rental that meant the deposit was quietly gone by the time the car came back.</p><p>Holds are now extended automatically ahead of that deadline, using extended authorisation where the connected account supports it. Nothing to do \u2014 but it is worth checking any rental that started before this shipped.</p>',
     image_url: previewImage('#dc2626', '#7f1d1d'),
     cta_label: 'Review your holds',
     cta_url: '/payments',
@@ -138,10 +141,11 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
   },
   {
     id: 'preview-whatsapp',
-    title: 'WhatsApp handovers',
+    title: 'WhatsApp',
     summary:
-      'Send collection details, lockbox codes and photos over WhatsApp instead of SMS.',
-    body_html: null,
+      'Send collection details, lockbox codes and photos over WhatsApp.',
+    body_html:
+      '<p>Collection instructions, the lockbox code and up to ten photos go out as a single WhatsApp message instead of a chain of texts.</p><p>Falls back to SMS automatically when a number is not reachable on WhatsApp.</p>',
     image_url: previewImage('#10b981', '#0f766e'),
     cta_label: null,
     cta_url: null,

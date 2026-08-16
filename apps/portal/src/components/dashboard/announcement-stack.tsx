@@ -1,9 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'motion/react';
 import { ArrowRight, Megaphone, RotateCcw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
   useFeatureAnnouncements,
@@ -12,24 +20,30 @@ import {
 } from '@/hooks/use-feature-announcements';
 
 /**
- * A fanned stack of feature announcements — portrait cards rotated behind each
- * other like a pile of photos. Flick the top card away and the next comes
- * forward.
+ * A fanned stack of feature announcements — portrait cards splayed behind each
+ * other like a pile of photos.
  *
- * Drag is the flourish, not the mechanism. Every card also has a real dismiss
- * button, because a drag-only control is unreachable by keyboard, unusable with
- * a screen reader, and awkward on a trackpad. The button is what makes this
- * operable; the drag is what makes it feel good.
+ * Three separate gestures, deliberately kept distinct:
+ *   drag        → the card returns. A short drag springs back where it was; a
+ *                 real flick sends it to the BACK of the deck. Dragging never
+ *                 destroys anything, so the whole deck can be browsed and
+ *                 re-browsed without losing a card by accident.
+ *   tap         → opens the detail dialog.
+ *   dismiss (×) → the only thing that makes a card go away, on the card and
+ *                 again as "Got it" in the dialog.
  *
- * Written directly against `motion`, which was already a dependency — Aceternity
- * and Magic UI are copy-paste snippets rather than packages.
+ * That split matters because drag is the easiest gesture to trigger by accident
+ * and dismissal is the only irreversible one; they should not be the same
+ * motion.
  */
 
-/** How many cards are visible, including the top one. */
+/** How many cards are visible, including the front one. */
 const VISIBLE = 3;
-/** Past this horizontal distance, or this flick speed, the card leaves. */
-const DISTANCE_THRESHOLD = 110;
-const VELOCITY_THRESHOLD = 450;
+/** Past this distance, or this flick speed, the card goes to the back. */
+const DISTANCE_THRESHOLD = 90;
+const VELOCITY_THRESHOLD = 400;
+/** A pointer that moved more than this between down and up was a drag, not a tap. */
+const TAP_SLOP = 6;
 
 /**
  * The fan. Index is depth — 0 is the card in front, which sits square so its
@@ -62,39 +76,44 @@ const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
   info: 'border-white/25 bg-black/45 text-white',
 };
 
+/** Flat brand wash for a row with no image_url, so it still looks deliberate. */
+function CardArtwork({ announcement }: { announcement: FeatureAnnouncement }) {
+  if (announcement.image_url) {
+    return (
+      <img
+        src={announcement.image_url}
+        alt=""
+        // Without this the browser's native image drag hijacks the card drag.
+        draggable={false}
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="absolute inset-0 bg-gradient-to-br from-chart-2 via-chart-3 to-chart-5">
+      <Megaphone className="absolute -bottom-4 -right-3 size-32 text-white/10" />
+    </div>
+  );
+}
+
 function CardFace({
   announcement,
-  onDismiss,
   interactive,
+  onDismiss,
 }: {
   announcement: FeatureAnnouncement;
-  onDismiss: () => void;
   interactive: boolean;
+  onDismiss: () => void;
 }) {
   const badge = SEVERITY_LABEL[announcement.severity] ?? null;
-  const hasImage = !!announcement.image_url;
 
   return (
     <>
-      {hasImage ? (
-        <img
-          src={announcement.image_url!}
-          alt=""
-          // Without this the browser's native image drag hijacks the card drag.
-          draggable={false}
-          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        // No image on the row — fall back to a brand wash rather than an empty
-        // frame, so an untagged announcement still looks deliberate.
-        <div className="absolute inset-0 bg-gradient-to-br from-chart-2 via-chart-3 to-chart-5">
-          <Megaphone className="absolute -bottom-4 -right-3 size-32 text-white/10" />
-        </div>
-      )}
+      <CardArtwork announcement={announcement} />
 
-      {/* Scrim — the text sits on whatever image the announcement carries, so it
-          needs its own contrast rather than trusting the photo. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
+      {/* The title sits on whatever photo the announcement carries, so it needs
+          its own contrast rather than trusting the image. */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/15" />
 
       <div className="absolute inset-0 flex flex-col justify-between p-4">
         <div className="flex items-start justify-between gap-2">
@@ -115,8 +134,11 @@ function CardFace({
               variant="ghost"
               size="icon"
               className="size-7 shrink-0 rounded-full bg-black/35 text-white backdrop-blur-sm hover:bg-black/55 hover:text-white"
-              onClick={onDismiss}
               onPointerDownCapture={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
               aria-label={`Dismiss “${announcement.title}”`}
             >
               <X className="size-4" />
@@ -125,27 +147,16 @@ function CardFace({
         </div>
 
         <div className="min-w-0">
-          <h3 className="text-balance text-base font-semibold leading-snug text-white drop-shadow">
+          {/* Big and short. The detail lives in the dialog, so the face only has
+              to carry the name of the thing. */}
+          <h3 className="text-balance text-[26px] font-bold uppercase leading-[0.95] tracking-tight text-white drop-shadow-md">
             {announcement.title}
           </h3>
-          {announcement.summary && (
-            <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-white/80">
-              {announcement.summary}
-            </p>
-          )}
-          {interactive && announcement.cta_url && (
-            <a
-              href={announcement.cta_url}
-              target={announcement.cta_url.startsWith('http') ? '_blank' : undefined}
-              rel={announcement.cta_url.startsWith('http') ? 'noreferrer noopener' : undefined}
-              className="mt-3 inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-white"
-              // The card is draggable; without this a click that moves a pixel is
-              // swallowed as a drag and the link never fires.
-              onPointerDownCapture={(e) => e.stopPropagation()}
-            >
-              {announcement.cta_label || 'Find out more'}
-              <ArrowRight className="size-3.5" />
-            </a>
+          {interactive && (
+            <span className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-medium text-white/70">
+              Tap for details
+              <ArrowRight className="size-3" />
+            </span>
           )}
         </div>
       </div>
@@ -153,16 +164,100 @@ function CardFace({
   );
 }
 
+function DetailDialog({
+  announcement,
+  onOpenChange,
+  onDismiss,
+}: {
+  announcement: FeatureAnnouncement | null;
+  onOpenChange: (open: boolean) => void;
+  onDismiss: (id: string) => void;
+}) {
+  if (!announcement) return null;
+  const isExternal = !!announcement.cta_url?.startsWith('http');
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg overflow-hidden p-0">
+        <div className="relative h-44 w-full overflow-hidden">
+          <CardArtwork announcement={announcement} />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+        </div>
+
+        <div className="px-6 pb-2 pt-4">
+          <DialogHeader>
+            <DialogTitle className="text-xl">{announcement.title}</DialogTitle>
+            {announcement.summary && (
+              <DialogDescription className="text-sm leading-relaxed">
+                {announcement.summary}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          {announcement.body_html && (
+            /* Only super admins can write this table (RLS), so the HTML comes
+               from us rather than from a tenant. */
+            <div
+              // Styled with explicit child selectors rather than `prose`:
+              // @tailwindcss/typography is in package.json but never registered
+              // with `@plugin` in global.css, so under Tailwind v4 the prose
+              // classes resolve to nothing and paragraphs would run together.
+              className="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground [&_a]:text-primary [&_a]:underline [&_li]:mt-1 [&_strong]:font-semibold [&_strong]:text-foreground [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{ __html: announcement.body_html }}
+            />
+          )}
+        </div>
+
+        <DialogFooter className="gap-2 px-6 pb-5 sm:justify-between">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onDismiss(announcement.id);
+              onOpenChange(false);
+            }}
+          >
+            Got it, hide this
+          </Button>
+          {announcement.cta_url && (
+            <Button asChild>
+              <a
+                href={announcement.cta_url}
+                target={isExternal ? '_blank' : undefined}
+                rel={isExternal ? 'noreferrer noopener' : undefined}
+              >
+                {announcement.cta_label || 'Find out more'}
+                <ArrowRight className="ml-1 size-4" />
+              </a>
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AnnouncementStack({ className }: { className?: string }) {
   const { announcements, hasDismissed, isLoading, dismiss, restore } = useFeatureAnnouncements();
   const reduceMotion = useReducedMotion();
-  const [exitX, setExitX] = useState(0);
+
+  /** How many cards have been sent to the back. Rotates the deck; never shrinks it. */
+  const [cycle, setCycle] = useState(0);
+  const [detail, setDetail] = useState<FeatureAnnouncement | null>(null);
+  /** Set while a real drag is in flight, so the release does not read as a tap. */
+  const draggingRef = useRef(false);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+
+  const ordered = useMemo(() => {
+    if (announcements.length === 0) return [];
+    const offset = cycle % announcements.length;
+    return [...announcements.slice(offset), ...announcements.slice(0, offset)];
+  }, [announcements, cycle]);
 
   if (isLoading) return null;
 
-  if (announcements.length === 0) {
+  if (ordered.length === 0) {
     // Nothing to say. Offer the way back only if there is something to restore,
-    // so an operator who flicked a card away by accident is not stuck.
+    // so an operator who hid a card can get it again.
     if (!hasDismissed) return null;
     return (
       <div className={cn('flex justify-center', className)}>
@@ -179,78 +274,118 @@ export function AnnouncementStack({ className }: { className?: string }) {
     );
   }
 
-  const stack = announcements.slice(0, VISIBLE);
+  const stack = ordered.slice(0, VISIBLE);
 
-  const handleDragEnd = (id: string) => (_e: unknown, info: PanInfo) => {
+  const handleDragEnd = (_e: unknown, info: PanInfo) => {
     const { offset, velocity } = info;
-    if (Math.abs(offset.x) > DISTANCE_THRESHOLD || Math.abs(velocity.x) > VELOCITY_THRESHOLD) {
-      setExitX(offset.x >= 0 ? 360 : -360);
-      dismiss(id);
-    }
+    const flicked =
+      Math.abs(offset.x) > DISTANCE_THRESHOLD || Math.abs(velocity.x) > VELOCITY_THRESHOLD;
+    // Either way the card comes back: a flick sends it to the rear of the deck,
+    // anything smaller springs home. `dragConstraints` handles the spring, so
+    // there is nothing to do in the else branch.
+    if (flicked && announcements.length > 1) setCycle((c) => c + 1);
   };
 
   return (
-    // Extra horizontal room so the fanned corners are not clipped by the column.
-    <div className={cn('flex justify-center px-6 py-2', className)}>
-      <div className="relative h-[320px] w-[248px] select-none">
-        <AnimatePresence initial={false}>
-          {stack
-            // Paint back-to-front so the top card is last in the DOM and sits
-            // above its siblings without a z-index per layer.
-            .slice()
-            .reverse()
-            .map((announcement, reversedIndex) => {
-              const depth = stack.length - 1 - reversedIndex; // 0 = front card
-              const isTop = depth === 0;
-              const pose = FAN[Math.min(depth, FAN.length - 1)];
+    <>
+      {/* Extra horizontal room so the fanned corners are not clipped. */}
+      <div className={cn('flex justify-center px-6 py-2', className)}>
+        <div className="relative h-[320px] w-[248px] select-none">
+          <AnimatePresence initial={false}>
+            {stack
+              // Paint back-to-front so the front card is last in the DOM and sits
+              // above its siblings without a z-index per layer.
+              .slice()
+              .reverse()
+              .map((announcement, reversedIndex) => {
+                const depth = stack.length - 1 - reversedIndex; // 0 = front card
+                const isTop = depth === 0;
+                const pose = FAN[Math.min(depth, FAN.length - 1)];
 
-              return (
-                <motion.div
-                  key={announcement.id}
-                  className={cn(
-                    'absolute inset-0 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg',
-                    isTop ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
-                  )}
-                  style={{ zIndex: stack.length - depth }}
-                  initial={false}
-                  animate={{ ...pose, opacity: 1 }}
-                  exit={
-                    reduceMotion
-                      ? { opacity: 0, transition: { duration: 0.15 } }
-                      : {
-                          x: exitX,
-                          opacity: 0,
-                          rotate: exitX > 0 ? 18 : -18,
-                          transition: { duration: 0.3 },
-                        }
-                  }
-                  transition={
-                    // Reduced motion shortens the transitions; it does not take
-                    // the drag away. Dragging is direct manipulation the operator
-                    // drives themselves, which is not what the setting is about.
-                    reduceMotion
-                      ? { duration: 0.15 }
-                      : { type: 'spring', stiffness: 300, damping: 30 }
-                  }
-                  drag={isTop ? 'x' : false}
-                  dragElastic={0.7}
-                  dragConstraints={{ left: 0, right: 0 }}
-                  onDragEnd={isTop ? handleDragEnd(announcement.id) : undefined}
-                  aria-hidden={!isTop}
-                >
-                  <CardFace
-                    announcement={announcement}
-                    interactive={isTop}
-                    onDismiss={() => {
-                      setExitX(360);
-                      dismiss(announcement.id);
+                return (
+                  <motion.div
+                    key={announcement.id}
+                    className={cn(
+                      'absolute inset-0 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg',
+                      isTop ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
+                    )}
+                    style={{ zIndex: stack.length - depth }}
+                    initial={false}
+                    animate={{ ...pose, opacity: 1 }}
+                    // Only a dismissal unmounts a card, so the exit is a simple
+                    // fade-away rather than the old fling.
+                    exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                    transition={
+                      // Reduced motion shortens the transitions; it does not take
+                      // the drag away. Direct manipulation the operator drives
+                      // themselves is not what that setting is about.
+                      reduceMotion
+                        ? { duration: 0.15 }
+                        : { type: 'spring', stiffness: 300, damping: 30 }
+                    }
+                    drag={isTop ? 'x' : false}
+                    dragElastic={0.6}
+                    dragConstraints={{ left: 0, right: 0 }}
+                    onDragStart={() => {
+                      draggingRef.current = true;
                     }}
-                  />
-                </motion.div>
-              );
-            })}
-        </AnimatePresence>
+                    onDragEnd={
+                      isTop
+                        ? (e, info) => {
+                            handleDragEnd(e, info);
+                            // Cleared after the click event would have fired.
+                            window.setTimeout(() => {
+                              draggingRef.current = false;
+                            }, 0);
+                          }
+                        : undefined
+                    }
+                    onPointerDown={(e) => {
+                      pointerStart.current = { x: e.clientX, y: e.clientY };
+                    }}
+                    onClick={(e) => {
+                      if (!isTop) return;
+                      // A click that travelled was a drag. Without this, every
+                      // flick would also open the dialog.
+                      const start = pointerStart.current;
+                      const moved =
+                        start &&
+                        Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP;
+                      if (draggingRef.current || moved) return;
+                      setDetail(announcement);
+                    }}
+                    role={isTop ? 'button' : undefined}
+                    tabIndex={isTop ? 0 : undefined}
+                    onKeyDown={
+                      isTop
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setDetail(announcement);
+                            }
+                          }
+                        : undefined
+                    }
+                    aria-label={isTop ? `${announcement.title} — open details` : undefined}
+                    aria-hidden={!isTop}
+                  >
+                    <CardFace
+                      announcement={announcement}
+                      interactive={isTop}
+                      onDismiss={() => dismiss(announcement.id)}
+                    />
+                  </motion.div>
+                );
+              })}
+          </AnimatePresence>
+        </div>
       </div>
-    </div>
+
+      <DetailDialog
+        announcement={detail}
+        onOpenChange={(open) => !open && setDetail(null)}
+        onDismiss={dismiss}
+      />
+    </>
   );
 }
