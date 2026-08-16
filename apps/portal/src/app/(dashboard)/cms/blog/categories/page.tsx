@@ -183,7 +183,7 @@ export default function BlogCategoriesPage() {
         <Card>
           <Table>
             <TableHeader>
-              <TableRow className="bg-indigo-50/50 dark:bg-indigo-950/20">
+              <TableRow className="bg-primary/5">
                 <TableHead>Name</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead>Posts</TableHead>

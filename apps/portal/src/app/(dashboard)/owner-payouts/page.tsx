@@ -139,7 +139,7 @@ export default function OwnerPayoutsPage() {
                   return (
                     <TableRow key={p.id}>
                       <TableCell>
-                        <Link href={`/vehicle-owners/${p.owner_id}`} className="font-medium text-[#6366f1] dark:text-indigo-400 hover:underline">
+                        <Link href={`/vehicle-owners/${p.owner_id}`} className="font-medium text-primary hover:underline">
                           {p.owner_full_name ?? "—"}
                         </Link>
                       </TableCell>

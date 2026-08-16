@@ -185,7 +185,7 @@ function EnquiriesPageContent() {
             </div>
           ) : (
             <Table>
-              <TableHeader className="bg-indigo-50 dark:bg-indigo-950/30">
+              <TableHeader className="bg-primary/10">
                 <TableRow>
                   <TableHead>Submitted</TableHead>
                   <TableHead>Customer</TableHead>
@@ -260,7 +260,7 @@ function StatCard({ label, value, highlight }: { label: string; value: number; h
         <p className="text-xs text-muted-foreground">{label}</p>
         <p
           className={`text-2xl font-medium mt-1 ${
-            highlight ? "text-indigo-600 dark:text-indigo-400" : ""
+            highlight ? "text-primary" : ""
           }`}
         >
           {value}

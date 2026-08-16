@@ -93,10 +93,10 @@ export default function VehicleOwnersPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={<Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Active Owners" value={String(totalActive)} />
-        <StatCard icon={<Car className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />} label="Managed Vehicles" value={String(totalManagedVehicles)} />
+        <StatCard icon={<Users className="h-5 w-5 text-primary" />} label="Active Owners" value={String(totalActive)} />
+        <StatCard icon={<Car className="h-5 w-5 text-primary" />} label="Managed Vehicles" value={String(totalManagedVehicles)} />
         <StatCard
-          icon={<Wallet className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+          icon={<Wallet className="h-5 w-5 text-primary" />}
           label="Outstanding Owed"
           value={formatCurrency(totalOutstanding, currency)}
         />

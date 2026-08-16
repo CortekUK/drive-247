@@ -754,7 +754,7 @@ const CustomerDetail = () => {
                           key={i}
                           type="button"
                           onClick={() => setPreviewImage({ url, label: `License Doc ${i + 1}` })}
-                          className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border hover:border-indigo-300 transition-colors"
+                          className="relative aspect-[3/2] rounded-lg overflow-hidden border border-border hover:border-primary/40 transition-colors"
                         >
                           <BlurredImage src={url} alt={`License doc ${i + 1}`} label={`Doc ${i + 1}`} />
                           <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] py-1 text-center z-10">
@@ -774,7 +774,7 @@ const CustomerDetail = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-[11px] gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/10"
+                      className="h-7 text-[11px] gap-1 text-primary hover:text-primary hover:bg-primary/10"
                       disabled={!cmdVerification || resendCmdMutation.isPending}
                       onClick={() =>
                         cmdVerification &&
@@ -1125,7 +1125,7 @@ const CustomerDetail = () => {
                                 href={`https://dashboard.stripe.com/payments/${payment.stripe_payment_intent_id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center text-muted-foreground hover:text-indigo-600 transition-colors"
+                                className="inline-flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
                                 title={`Open in Stripe Dashboard (${payment.capture_status ?? 'captured'})`}
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />

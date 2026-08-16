@@ -255,8 +255,8 @@ function HoldActionsMenu({
             "inline-flex items-center justify-center gap-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted/60 data-[state=open]:text-foreground",
             label && "px-2 text-xs font-medium",
             emphasizeTrigger &&
-              "border border-indigo-500/40 bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 hover:text-indigo-500 data-[state=open]:bg-indigo-500/20 data-[state=open]:text-indigo-500",
-            busy && "text-indigo-500",
+              "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary data-[state=open]:bg-primary/20 data-[state=open]:text-primary",
+            busy && "text-primary",
           )}
           onClick={(e) => e.stopPropagation()}
         >
@@ -2688,7 +2688,7 @@ const RentalDetail = () => {
           {canEdit('rentals') && (
             <Button
               variant="default"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
               onClick={() => setShowAddPayment(true)}
             >
               <CreditCard className="h-4 w-4 mr-2" />
@@ -4599,7 +4599,7 @@ const RentalDetail = () => {
                               !rental.deposit_hold_payment_intent_id &&
                               canEdit('rentals') && (
                                 <button
-                                  className="text-xs font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                                  className="text-xs font-medium text-primary hover:text-primary/80 hover:underline"
                                   title="No authorisation exists on this rental — the last attempt gave up without one. Place a fresh hold."
                                   onClick={(e) => {
                                     e.stopPropagation();

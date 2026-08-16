@@ -149,7 +149,7 @@ export default function ApplyFormSettingsPage() {
                           onClick={() => toggleFieldRequired(step.key, f, !required)}
                           className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
                             required
-                              ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                              ? "border-primary/40 bg-primary/10 text-primary"
                               : "border-[#f1f5f9] text-[#737373] hover:bg-[#f8fafc]"
                           }`}
                           title={required ? "Required (operator override) — click to make optional" : "Optional — click to require"}

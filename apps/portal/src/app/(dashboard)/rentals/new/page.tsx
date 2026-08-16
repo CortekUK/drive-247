@@ -6265,7 +6265,7 @@ const CreateRental = () => {
                 e.preventDefault(); // keep the dialog open until the write resolves
                 handleManualVerify();
               }}
-              className="bg-indigo-600 hover:bg-indigo-700"
+              className="bg-primary hover:bg-primary/90"
             >
               {manualVerifying ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Recording...</>

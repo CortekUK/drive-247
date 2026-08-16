@@ -256,7 +256,7 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
         <button
           type="button"
           onClick={() => router.push("/automations")}
-          className="flex items-center gap-1 text-sm text-[#737373] hover:text-indigo-600"
+          className="flex items-center gap-1 text-sm text-[#737373] hover:text-primary"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
           Automations
@@ -351,14 +351,14 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
               <button
                 type="button"
                 onClick={() => setView("list")}
-                className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${view === "list" ? "bg-white text-indigo-700 shadow-sm" : "text-[#737373]"}`}
+                className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${view === "list" ? "bg-white text-primary shadow-sm" : "text-[#737373]"}`}
               >
                 <List className="h-3 w-3" /> List
               </button>
               <button
                 type="button"
                 onClick={() => setView("canvas")}
-                className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${view === "canvas" ? "bg-white text-indigo-700 shadow-sm" : "text-[#737373]"}`}
+                className={`flex items-center gap-1 rounded px-2 py-0.5 text-xs ${view === "canvas" ? "bg-white text-primary shadow-sm" : "text-[#737373]"}`}
               >
                 <Workflow className="h-3 w-3" /> Canvas
               </button>
