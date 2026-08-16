@@ -341,7 +341,6 @@ export default function AppearanceSettingsPage() {
           <BrandColorField
             value={form.light_primary_color}
             onChange={applyCustomColor}
-            logoUrl={form.logo_url}
             disabled={readOnly}
           />
         </div>
@@ -378,10 +377,8 @@ export default function AppearanceSettingsPage() {
             darkLogoUrl={form.dark_logo_url}
             onLogoChange={(url) => setForm((p) => ({ ...p, logo_url: url }))}
             onDarkLogoChange={(url) => setForm((p) => ({ ...p, dark_logo_url: url }))}
-            brandColor={form.light_primary_color}
             lightSidebar={form.light_secondary_color}
             darkSidebar={form.dark_secondary_color}
-            companyName={form.app_name || tenant?.company_name || ''}
             disabled={readOnly}
           />
 

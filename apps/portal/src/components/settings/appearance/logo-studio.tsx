@@ -1,25 +1,26 @@
 'use client';
 
 /**
- * Logo studio — upload, diagnose, repair, or generate.
+ * Logo upload — with the two repairs that earn their place.
  *
  * The old flow was a bare upload box and a second "dark logo" box nobody
- * understood. Three things go wrong in practice and each is handled here:
+ * understood. Two things go wrong in practice and each is handled here:
  *
  *   · A dark logo vanishes against a dark sidebar (and the reverse).
  *   · A JPG arrives welded into a white rectangle.
- *   · The tenant has no logo file at all and the sidebar looks unfinished.
  *
  * Every repair is previewed and accepted explicitly — nothing is silently
  * rewritten, because a logo is the one asset an owner is precious about.
+ *
+ * Monogram generation used to live here too; it was cut to keep the page to
+ * the minimum a tenant needs to set a theme.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Loader2, Scissors, Sparkles, Wand2 } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Scissors, Wand2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
@@ -30,13 +31,6 @@ import {
   uploadLogoBlob,
   type LogoAnalysis,
 } from '@/lib/appearance/logo';
-import {
-  MONOGRAM_STYLES,
-  buildMonogramSvg,
-  monogramToPng,
-  type MonogramStyleId,
-} from '@/lib/appearance/monogram';
-import { readableForegroundOn } from '@/lib/appearance/color';
 import { cn } from '@/lib/utils';
 
 interface LogoStudioProps {
@@ -44,12 +38,9 @@ interface LogoStudioProps {
   darkLogoUrl: string | null;
   onLogoChange: (url: string | null) => void;
   onDarkLogoChange: (url: string | null) => void;
-  /** Brand colour, used to tint generated marks. */
-  brandColor: string;
   /** Sidebar colours the logo will actually sit on, for the honest preview. */
   lightSidebar: string;
   darkSidebar: string;
-  companyName: string;
   disabled?: boolean;
 }
 
@@ -58,15 +49,13 @@ export function LogoStudio({
   darkLogoUrl,
   onLogoChange,
   onDarkLogoChange,
-  brandColor,
   lightSidebar,
   darkSidebar,
-  companyName,
   disabled,
 }: LogoStudioProps) {
   const { tenant } = useTenant();
   const [analysis, setAnalysis] = useState<LogoAnalysis | null>(null);
-  const [busy, setBusy] = useState<null | 'backdrop' | 'dark' | 'generate'>(null);
+  const [busy, setBusy] = useState<null | 'backdrop' | 'dark'>(null);
 
   // Re-diagnose whenever the logo changes.
   useEffect(() => {
@@ -181,17 +170,7 @@ export function LogoStudio({
   }, [analysis, darkLogoUrl, logoUrl, busy, disabled, run]);
 
   return (
-    <Tabs defaultValue={logoUrl ? 'upload' : 'generate'} className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="upload">Upload a logo</TabsTrigger>
-        <TabsTrigger value="generate" className="gap-1.5">
-          <Sparkles className="h-3.5 w-3.5" />
-          Create one
-        </TabsTrigger>
-      </TabsList>
-
-      {/* ---------------- Upload ---------------- */}
-      <TabsContent value="upload" className="space-y-5">
+    <div className="space-y-5">
         <LogoUploadWithResize
           currentLogoUrl={logoUrl || undefined}
           onLogoChange={onLogoChange}
@@ -270,118 +249,6 @@ export function LogoStudio({
             )}
           </>
         )}
-      </TabsContent>
-
-      {/* ---------------- Generate ---------------- */}
-      <TabsContent value="generate">
-        <MonogramPicker
-          companyName={companyName}
-          brandColor={brandColor}
-          disabled={disabled || busy !== null}
-          generating={busy === 'generate'}
-          onPick={async (styleId) => {
-            if (!tenant?.id) return;
-            setBusy('generate');
-            try {
-              const svg = buildMonogramSvg({
-                style: styleId,
-                name: companyName,
-                color: brandColor,
-                onColor: readableForegroundOn(brandColor),
-              });
-              const png = await monogramToPng(svg);
-              if (!png) throw new Error('Could not render the mark.');
-              const url = await uploadLogoBlob(png, tenant.id, `monogram-${styleId}`);
-              onLogoChange(url);
-              toast({
-                title: 'Logo created',
-                description: 'You can change it any time, or upload your own later.',
-              });
-            } catch (error) {
-              toast({
-                title: "Couldn't create that logo",
-                description: error instanceof Error ? error.message : 'Please try again.',
-                variant: 'destructive',
-              });
-            } finally {
-              setBusy(null);
-            }
-          }}
-        />
-      </TabsContent>
-    </Tabs>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-function MonogramPicker({
-  companyName,
-  brandColor,
-  disabled,
-  generating,
-  onPick,
-}: {
-  companyName: string;
-  brandColor: string;
-  disabled?: boolean;
-  generating?: boolean;
-  onPick: (style: MonogramStyleId) => void;
-}) {
-  const name = companyName.trim();
-
-  if (!name) {
-    return (
-      <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-        Add your portal name above and we&apos;ll draw some options from it.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Built from your business name in your brand colour. Pick one to use it as
-        your logo — you can always upload your own instead.
-      </p>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {MONOGRAM_STYLES.map((style) => {
-          const svg = buildMonogramSvg({
-            style: style.id,
-            name,
-            color: brandColor,
-            onColor: readableForegroundOn(brandColor),
-          });
-          return (
-            <button
-              key={style.id}
-              type="button"
-              disabled={disabled}
-              onClick={() => onPick(style.id)}
-              className={cn(
-                'group flex flex-col items-center gap-2 rounded-lg border bg-card p-3 transition-all',
-                'hover:border-primary/60 hover:shadow-sm focus-visible:outline-none',
-                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
-                disabled && 'pointer-events-none opacity-60'
-              )}
-            >
-              <div
-                className="flex h-16 w-full items-center justify-center overflow-hidden"
-                dangerouslySetInnerHTML={{
-                  __html: svg.replace(
-                    /<svg /,
-                    '<svg style="max-height:100%;max-width:100%;height:auto;width:auto" '
-                  ),
-                }}
-              />
-              <span className="text-xs text-muted-foreground group-hover:text-foreground">
-                {generating ? '…' : style.name}
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
