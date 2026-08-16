@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Sparkles, X, ArrowRight } from "lucide-react";
+import { X, ArrowRight } from "lucide-react";
 
 /**
  * The banner currently on air. Only ever advertise something that exists on
@@ -69,16 +69,7 @@ export function SidebarPromo() {
       </button>
 
       <div className="relative">
-        <div className="mb-1.5 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-white/25 ring-1 ring-inset ring-white/40 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6),0_3px_6px_-2px_rgba(0,0,0,0.4)]">
-          <Sparkles className="h-3.5 w-3.5 drop-shadow" />
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-white/25 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide ring-1 ring-inset ring-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
-            New
-          </span>
-          <p className="text-[12px] font-semibold leading-tight drop-shadow-sm">{PROMO.title}</p>
-        </div>
+        <p className="pr-5 text-[12px] font-semibold leading-tight drop-shadow-sm">{PROMO.title}</p>
 
         <p className="mt-0.5 text-[10.5px] leading-snug text-white/85">{PROMO.body}</p>
 

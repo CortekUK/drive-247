@@ -52,26 +52,54 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
         collapsed && "justify-center"
       )}
     >
+      {/* Logo and name open the menu as well, but as a plain button rather than
+          a second Radix trigger — a menu can only have one. The controlled
+          `open` state makes that trivial, and it is what lets the caret sit
+          after the gear instead of being trapped at the trigger's edge. */}
+      <button
+        onClick={() => setOpen(true)}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-left outline-none cursor-pointer",
+          collapsed && "justify-center"
+        )}
+      >
+        {Logo}
+        {!collapsed && (
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
+            {orgName}
+          </span>
+        )}
+      </button>
+
+      {/* Settings, rehomed from the user menu. Inside the pill but a sibling of
+          the trigger, never a child of it — a button nested in a button is
+          invalid markup and the trigger would swallow the click. Hidden when
+          collapsed, where the rail has no room for a second target; the
+          dropdown still carries the same link for that case. */}
+      {!collapsed && (
+        <Link
+          href="/settings"
+          aria-label="Settings"
+          title="Settings"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+        >
+          <Settings className="h-4 w-4" />
+        </Link>
+      )}
+
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
+            aria-label="Switch organization"
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-left outline-none cursor-pointer",
-              collapsed && "justify-center"
+              "mr-1 flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/10 hover:text-foreground",
+              collapsed && "hidden"
             )}
           >
-            {Logo}
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">
-                  {orgName}
-                </span>
-                <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </>
-            )}
+            <ChevronsUpDown className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="bottom" sideOffset={6} className="w-64">
+        <DropdownMenuContent align="end" side="bottom" sideOffset={6} className="w-64">
           <DropdownMenuLabel className="flex items-center gap-2.5 p-2 font-normal">
             {Logo}
             <p className="min-w-0 truncate text-[13px] font-semibold">{orgName}</p>
@@ -108,21 +136,6 @@ export function OrgSwitcher({ collapsed }: { collapsed?: boolean }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {/* Settings, rehomed from the user menu. Inside the pill but a sibling of
-          the trigger, never a child of it — a button nested in a button is
-          invalid markup and the trigger would swallow the click. Hidden when
-          collapsed, where the rail has no room for a second target; the
-          dropdown still carries the same link for that case. */}
-      {!collapsed && (
-        <Link
-          href="/settings"
-          aria-label="Settings"
-          title="Settings"
-          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-        >
-          <Settings className="h-4 w-4" />
-        </Link>
-      )}
     </div>
   );
 }

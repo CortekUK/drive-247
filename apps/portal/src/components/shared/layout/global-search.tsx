@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -90,9 +90,14 @@ export const SearchTrigger = ({ onClick }: SearchTriggerProps) => {
 interface GlobalSearchProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Text already typed elsewhere — the sidebar field — carried in so the
+   * keystrokes that triggered the dialog are not lost when focus lands here.
+   */
+  initialQuery?: string;
 }
 
-export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
+export const GlobalSearch = ({ open, onOpenChange, initialQuery }: GlobalSearchProps) => {
   const router = useRouter();
   const { tenant } = useTenant();
   const hideInsurance = isInsuranceExemptTenant(tenant?.id);
@@ -110,6 +115,20 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
     navigateDown,
     getSelectedResult,
   } = useGlobalSearch();
+
+  // Seed exactly once per open. Guarded by a ref rather than an effect
+  // dependency on `setQuery`, whose identity we do not control — if it were
+  // recreated on render this would re-run and overwrite the user mid-sentence.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      seededRef.current = false;
+      return;
+    }
+    if (seededRef.current) return;
+    seededRef.current = true;
+    if (initialQuery) setQuery(initialQuery);
+  }, [open, initialQuery, setQuery]);
 
   // Keyboard navigation
   useEffect(() => {

@@ -318,6 +318,8 @@ export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
   const collapsed = state === "collapsed";
 
   const [searchOpen, setSearchOpen] = useState(false);
+  /** What was typed into the sidebar field before the dialog took focus. */
+  const [searchSeed, setSearchSeed] = useState("");
   const [activeView, setActiveView] = useState<"admin" | "cms">(
     pathname?.startsWith("/cms") ? "cms" : "admin"
   );
@@ -338,6 +340,15 @@ export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // ⌘K. providers.tsx has always dispatched `open-global-search`, but the only
+  // listener lived in the old top header, so when the dock replaced it the
+  // shortcut went dead while the field kept advertising it.
+  useEffect(() => {
+    const openSearch = () => setSearchOpen(true);
+    window.addEventListener("open-global-search", openSearch);
+    return () => window.removeEventListener("open-global-search", openSearch);
   }, []);
 
   // Settings mode: when on /settings path, show settings sidebar
@@ -696,14 +707,26 @@ export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
                 </SidebarMenuItem>
               </SidebarMenu>
             ) : (
-              <button
-                onClick={() => setSearchOpen(true)}
-                className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg bg-muted/50 px-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted/70"
-              >
-                <Search className="h-4 w-4 shrink-0" />
-                <span className="flex-1 text-left">Search</span>
-                <kbd className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground/70">⌘K</kbd>
-              </button>
+              /* A real field, not a button that opens one. The first keystroke
+                 hands off to the dialog and is carried across as `initialQuery`,
+                 so nothing typed here is lost. */
+              <div className="flex h-10 w-full items-center gap-2 rounded-lg bg-primary/[0.07] px-3 ring-1 ring-inset ring-primary/20 transition-colors focus-within:bg-primary/10 focus-within:ring-2 focus-within:ring-primary/40 hover:bg-primary/10">
+                <Search className="h-4 w-4 shrink-0 text-primary" />
+                <input
+                  type="text"
+                  value={searchSeed}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setSearchSeed(next);
+                    if (next) setSearchOpen(true);
+                  }}
+                  onFocus={() => searchSeed && setSearchOpen(true)}
+                  placeholder="Search"
+                  aria-label="Search"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                <kbd className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">⌘K</kbd>
+              </div>
             )}
           </SidebarGroupContent>
         </SidebarGroup>
@@ -711,11 +734,11 @@ export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
         {/* Section tabs: Main / Admin / CMS */}
         {!collapsed && (
           <div className="px-1.5 pb-1 pt-0.5">
-            <div className="relative grid grid-cols-2 rounded-lg bg-muted/50 p-1">
+            <div className="relative grid grid-cols-2 rounded-lg bg-primary/[0.07] p-1 ring-1 ring-inset ring-primary/15">
               {/* Sliding active pill */}
               <span
                 aria-hidden
-                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm transition-transform duration-300 ease-out"
+                className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm ring-1 ring-primary/20 transition-transform duration-300 ease-out"
                 style={{ transform: activeView === "cms" ? "translateX(100%)" : "translateX(0)" }}
               />
               {([
@@ -726,11 +749,21 @@ export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
                   key={tab.key}
                   onClick={() => setActiveView(tab.key)}
                   className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
-                    activeView === tab.key ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    activeView === tab.key
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <span>{tab.label}</span>
-                  <kbd className="rounded bg-foreground/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground/70">{tab.kbd}</kbd>
+                  <kbd
+                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-colors ${
+                      activeView === tab.key
+                        ? "bg-primary/15 text-primary"
+                        : "bg-foreground/10 text-foreground/70"
+                    }`}
+                  >
+                    {tab.kbd}
+                  </kbd>
                 </button>
               ))}
             </div>
@@ -740,7 +773,16 @@ export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
         {/* Quick-action dialogs (portal out) — always mounted.
             Trax is not here: the layout owns the one instance, so the sidebar
             and the dock share a single conversation. */}
-        <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+        <GlobalSearch
+          open={searchOpen}
+          initialQuery={searchSeed}
+          onOpenChange={(next) => {
+            setSearchOpen(next);
+            // Clear on close so the sidebar field returns to its placeholder
+            // and the next open does not re-seed last time's query.
+            if (!next) setSearchSeed("");
+          }}
+        />
 
         {activeView === "cms" ? (
           /* CMS — website content pages become the nav */
