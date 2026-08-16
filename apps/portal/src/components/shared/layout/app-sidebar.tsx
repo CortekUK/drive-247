@@ -9,7 +9,6 @@ import {
   DotsThree as MoreHorizontal,
   CurrencyCircleDollar as CircleDollarSign,
   Stack as Layers,
-  Timer,
   Lightning as Zap,
   Lightning as Bolt,
   ShieldCheck,
@@ -71,23 +70,17 @@ import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
-import { useSetupStatus } from "@/hooks/use-setup-status";
-import { useFeedbackStore } from "@/stores/feedback-store";
-import { useFeedbackSettings } from "@/hooks/use-feedback-settings";
-// Kept on lucide: the dunning chip and feedback control are carried over from
-// main verbatim, and re-drawing them in Phosphor would be a silent visual
-// change to the one badge that must stay unmistakable.
-import { AlertTriangle, MessageSquarePlus } from "lucide-react";
+// Kept on lucide: the dunning chip is carried over from main verbatim, and
+// re-drawing it in Phosphor would be a silent visual change to the one badge
+// that must stay unmistakable.
+import { AlertTriangle } from "lucide-react";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserMenu } from "@/components/shared/layout/user-menu";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
-import { BonzahBalance } from "@/components/shared/layout/bonzah-balance";
-import { CreditBalance } from "@/components/shared/layout/credit-balance";
 import { GlobalSearch } from "@/components/shared/layout/global-search";
-import { TraxAIDialogInner } from "@/components/chat";
 
 // Map the former animated-icon names to Phosphor equivalents
 const AnimatedBlocks = SquaresFour;
@@ -265,7 +258,13 @@ const settingsTabGroups = [
   },
 ];
 
-export function AppSidebar() {
+/**
+ * `onAskAI` opens the single Trax instance the layout owns. The sidebar used to
+ * mount its own, which meant the sidebar button and the dock button each held a
+ * separate conversation — open one, close it, reopen from the other, and the
+ * thread was gone. One instance, two entry points.
+ */
+export function AppSidebar({ onAskAI }: { onAskAI?: () => void } = {}) {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -286,14 +285,11 @@ export function AppSidebar() {
   const { data: enquiryStats } = useEnquiryStats();
   const { appUser } = useAuthStore();
   const {
-    isTrialing,
-    trialDaysRemaining,
     isInGracePeriod,
     isGraceExpired,
     graceDaysRemaining,
     graceSeverity,
   } = useTenantSubscription();
-  const { isLive } = useSetupStatus();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
 
   // A failed payment outranks trial/live in the footer badge: it is the only
@@ -315,34 +311,13 @@ export function AppSidebar() {
     ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
 
-  // Feedback entry point. Available to every role — a `viewer` hits the same
-  // bugs as a head admin, so gating this on permissions would silence exactly
-  // the people who use the software most.
-  const openFeedback = useFeedbackStore((s) => s.open);
-  const { formEnabled: feedbackEnabled } = useFeedbackSettings();
+  // Feedback is no longer a sidebar row — its entry point lives in the user
+  // menu now, so the store and settings hook are read there instead.
 
   const showPendingBookings = settings?.payment_mode === 'manual';
   const collapsed = state === "collapsed";
 
-  // Shared by both sidebar modes (settings + main) so the control can never
-  // drift between them. Declared after `collapsed`, which it closes over.
-  const renderFeedbackButton = () =>
-    feedbackEnabled ? (
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          onClick={() => openFeedback({ source: "sidebar" })}
-          tooltip={collapsed ? "Send feedback" : undefined}
-          className="h-8 transition-all duration-200 ease-in-out"
-        >
-          <MessageSquarePlus className="h-4 w-4 shrink-0" />
-          <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-            Send Feedback
-          </span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    ) : null;
   const [searchOpen, setSearchOpen] = useState(false);
-  const [traxOpen, setTraxOpen] = useState(false);
   const [activeView, setActiveView] = useState<"admin" | "cms">(
     pathname?.startsWith("/cms") ? "cms" : "admin"
   );
@@ -657,61 +632,38 @@ export function AppSidebar() {
         {/* Footer — trial/live status */}
         <SidebarFooter className="p-1.5">
           <SidebarMenu>
-            {(paymentDue || isTrialing || isLive) && (
+            {/* The "Setup Mode · Nd left" and "Live" chips are gone by request.
+                What stays is the dunning warning that shared the same slot: it
+                is the only place a tenant inside the grace window is told their
+                payment is due, and grace expiry is a pure clock event nothing
+                else announces. Removing this branch would stop chasing tenants
+                who owe money, and no visual review would catch it. */}
+            {paymentDue && (
               <SidebarMenuItem>
                 {collapsed ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center justify-center h-8">
-                        {paymentDue ? (
-                          <AlertTriangle
-                            className={`h-4 w-4 ${paymentDueCritical ? "text-red-500" : "text-amber-500"}`}
-                          />
-                        ) : isTrialing ? (
-                          <Timer className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <Zap className="h-4 w-4 text-green-500" />
-                        )}
+                        <AlertTriangle
+                          className={`h-4 w-4 ${paymentDueCritical ? "text-red-500" : "text-amber-500"}`}
+                        />
                       </div>
                     </TooltipTrigger>
                     <TooltipContent side="right">
-                      {paymentDue
-                        ? `${paymentDueLabel} ${paymentDueDetail}`
-                        : isTrialing
-                        ? `Setup Mode · ${trialDaysRemaining}d left`
-                        : "Live"}
+                      {`${paymentDueLabel} ${paymentDueDetail}`}
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${
-                    paymentDue
-                      ? paymentDueClass
-                      : isTrialing
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400"
-                      : "bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-400"
-                  }`}>
-                    {paymentDue ? (
-                      <>
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        <span>{paymentDueLabel}</span>
-                        <span className="opacity-70">{paymentDueDetail}</span>
-                      </>
-                    ) : isTrialing ? (
-                      <>
-                        <Timer className="h-3.5 w-3.5" />
-                        <span>Setup Mode · {trialDaysRemaining}d left</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-3.5 w-3.5" />
-                        <span>Live</span>
-                      </>
-                    )}
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${paymentDueClass}`}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>{paymentDueLabel}</span>
+                    <span className="opacity-70">{paymentDueDetail}</span>
                   </div>
                 )}
               </SidebarMenuItem>
             )}
-            {renderFeedbackButton()}
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
@@ -785,9 +737,10 @@ export function AppSidebar() {
           </div>
         )}
 
-        {/* Quick-action dialogs (portal out) — always mounted */}
+        {/* Quick-action dialogs (portal out) — always mounted.
+            Trax is not here: the layout owns the one instance, so the sidebar
+            and the dock share a single conversation. */}
         <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
-        <TraxAIDialogInner isOpen={traxOpen} setIsOpen={setTraxOpen} />
 
         {activeView === "cms" ? (
           /* CMS — website content pages become the nav */
@@ -838,7 +791,7 @@ export function AppSidebar() {
               {/* Ask AI */}
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => setTraxOpen(true)}
+                  onClick={() => onAskAI?.()}
                   tooltip={collapsed ? "Ask AI" : undefined}
                   className="h-8 transition-colors"
                 >
@@ -1009,16 +962,6 @@ export function AppSidebar() {
 
       {/* Pinned Footer */}
       <SidebarFooter className="p-1.5">
-        {/* Bonzah + credit balances. These lived in the top bar the dock
-            replaced; without a home here they would simply disappear, and a
-            tenant running dry on either only finds out when a booking fails.
-            Both components self-hide when they don't apply. */}
-        {!collapsed && (
-          <div className="flex flex-wrap items-center gap-1 px-0.5 pb-1">
-            <BonzahBalance />
-            <CreditBalance />
-          </div>
-        )}
         {/* Promo / announcement slot (feature releases, training, promotions) */}
         {!collapsed && (
           <div className="px-0.5 pb-1.5">
@@ -1026,7 +969,6 @@ export function AppSidebar() {
           </div>
         )}
         <SidebarMenu>
-          {renderFeedbackButton()}
           {/* Profile row — whole row opens the user menu (Settings/Profile/etc.) */}
           <SidebarMenuItem>
             {collapsed ? (
