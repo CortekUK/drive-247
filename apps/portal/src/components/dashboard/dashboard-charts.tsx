@@ -23,6 +23,7 @@ import {
 } from 'date-fns';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Button } from '@/components/ui/button';
 import { CalendarIcon } from 'lucide-react';
 
 // ─── Chart color palette ────────────────────────────────────────────
@@ -200,9 +201,13 @@ export function DashboardCharts() {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 active:scale-95 transition-all cursor-pointer">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-auto w-auto p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 active:scale-95 transition-all cursor-pointer"
+                    >
                       <CalendarIcon className="h-4 w-4" />
-                    </button>
+                    </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto max-w-[95vw] p-0" align="start">
                     <div className="p-4 space-y-4">

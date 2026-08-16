@@ -154,9 +154,11 @@ export function GettingStartedChecklist({
       />
 
       {/* Collapsed header */}
-      <button
+      <Button
+        type="button"
+        variant="ghost"
         onClick={toggleCollapsed}
-        className="w-full px-5 py-3.5 flex items-center justify-between gap-4 hover:bg-muted/10 transition-colors cursor-pointer"
+        className="w-full h-auto rounded-none px-5 py-3.5 flex items-center justify-between gap-4 font-normal hover:bg-muted/10 transition-colors cursor-pointer [&_svg]:size-auto"
       >
         <div className="flex items-center gap-4 min-w-0">
           {allComplete ? (
@@ -221,7 +223,7 @@ export function GettingStartedChecklist({
             }`}
           />
         </div>
-      </button>
+      </Button>
 
       {/* Animated checklist panel */}
       <div
