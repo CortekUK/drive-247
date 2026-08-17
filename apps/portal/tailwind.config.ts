@@ -121,6 +121,25 @@ export default {
             height: "0",
           },
         },
+        /* Radix Collapsible — used by the banner stack's overflow row.
+           Mirrors the accordion pair above; Radix exposes the measured height
+           on a different custom property, hence the near-duplicate. */
+        "collapsible-down": {
+          from: {
+            height: "0",
+          },
+          to: {
+            height: "var(--radix-collapsible-content-height)",
+          },
+        },
+        "collapsible-up": {
+          from: {
+            height: "var(--radix-collapsible-content-height)",
+          },
+          to: {
+            height: "0",
+          },
+        },
         "border-rotate": {
           "0%": { transform: "rotate(0deg)" },
           "100%": { transform: "rotate(360deg)" }
@@ -158,6 +177,8 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "collapsible-down": "collapsible-down 0.2s ease-out",
+        "collapsible-up": "collapsible-up 0.2s ease-out",
         "border-rotate": "border-rotate 6s linear infinite",
         "float": "float 3s ease-in-out infinite",
         "glow": "glow 2s ease-in-out infinite",

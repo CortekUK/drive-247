@@ -102,6 +102,9 @@ const RentalsList = () => {
       sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
       page: parseInt(searchParams.get("page") || "1"),
       bonzahStatus: searchParams.get("bonzahStatus") || undefined,
+      // Set by the app-wide deposit-hold banner CTAs. Without this the banner
+      // counts N rentals and then hands the operator an unfiltered list.
+      depositHold: searchParams.get("depositHold") || undefined,
     }),
     [searchParams]
   );

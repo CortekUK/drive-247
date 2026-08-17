@@ -19,6 +19,16 @@ export interface RentalFilters {
   page?: number;
   pageSize?: number;
   bonzahStatus?: string;
+  /**
+   * Deposit-hold cohort, set by the app-wide deposit banner's CTAs
+   * (`/rentals?depositHold=unsecured`). Values match DepositCohortKey in
+   * components/banners/sources/deposit-hold-banners.tsx.
+   *
+   * Exists for the same reason `bonzahStatus` does: a banner that counts N
+   * rentals has to be able to hand the operator exactly those N rentals, or the
+   * count is unverifiable and the CTA is a dead end.
+   */
+  depositHold?: string;
   extensionRequested?: boolean;
   cancellationRequested?: boolean;
   paymentType?: 'payg' | 'regular';
@@ -92,6 +102,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     pageSize = ITEMS_PER_PAGE,
     captureStatus,
     bonzahStatus,
+    depositHold,
     extensionRequested,
     cancellationRequested
   } = filters;
@@ -115,6 +126,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     pageSize,
     captureStatus,
     bonzahStatus,
+    depositHold,
     extensionRequested,
     cancellationRequested
   ];
@@ -145,6 +157,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           auto_extend_status,
           previous_end_date,
           cancellation_requested,
+          deposit_hold_status,
           customers!rentals_customer_id_fkey(id, name),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
@@ -331,6 +344,43 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
               if (rental.bonzah_status !== 'insufficient_balance') return false;
             } else {
               if (rental.bonzah_status !== bonzahStatus) return false;
+            }
+          }
+
+          // Apply deposit-hold cohort filter.
+          //
+          // Mirrors the cohort assignment in the deposit banner. It is
+          // DELIBERATELY coarse: the banner owns the precise classification, and
+          // duplicating that logic here would let the two drift so the count in
+          // the bar stopped matching the rows in the list. Each branch is the
+          // widest predicate that still cannot include a rental from a different
+          // cohort.
+          if (depositHold) {
+            const hs = (rental as any).deposit_hold_status as string | null;
+            const finished = ['Closed', 'Completed', 'Cancelled', 'Canceled', 'Rejected']
+              .includes(String(rental.status));
+            // Every cohort describes a car that is still out. A finished rental
+            // whose deposit was correctly returned must never appear here.
+            if (finished) return false;
+
+            if (depositHold === 'disputed') {
+              if (hs !== 'disputed') return false;
+            } else if (depositHold === 'needs_customer') {
+              if (hs !== 'requires_action') return false;
+            } else if (depositHold === 'unsecured' || depositHold === 'retrying') {
+              // Both are "no money held". The banner splits them on whether a
+              // retry is already scheduled; the list shows the union so a count
+              // from either chip lands on a superset rather than an empty page.
+              if (!(hs === null || hs === 'failed' || hs === 'expired' || hs === 'released')) {
+                return false;
+              }
+            } else if (depositHold === 'unconfirmed') {
+              if (!['needs_review', 'processing', 'refreshing', 'capturing'].includes(String(hs))) {
+                return false;
+              }
+            } else if (depositHold === 'pre_handover') {
+              if (String(rental.status).toLowerCase() !== 'pending') return false;
+              if (hs === 'held') return false;
             }
           }
 
