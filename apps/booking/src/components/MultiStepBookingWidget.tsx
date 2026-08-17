@@ -647,8 +647,23 @@ const MultiStepBookingWidget = () => {
     const savedVerifiedName = localStorage.getItem('verifiedCustomerName');
     const savedLicenseNumber = localStorage.getItem('verifiedLicenseNumber');
 
-    // Check if verification data is expired (10 minutes = 600000 ms)
-    const VERIFICATION_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+    // How long a stored verification handle stays usable.
+    //
+    // A verification that has already PASSED is a result we only need long
+    // enough to carry into checkout, so ten minutes is right for it.
+    //
+    // One still in flight is different: the person has walked away to their
+    // phone, is scanning a QR, photographing both sides of a licence and
+    // taking a selfie, possibly on bad mobile data. Ten minutes routinely is
+    // not enough, and expiring early deletes verificationSessionId — the only
+    // key that connects their verification to the customer created at
+    // checkout. The server keeps the QR session valid for three hours
+    // (qr_session_expires_at, set in create-ai-verification-session), so match
+    // that: the server is the authority and rejects anything genuinely stale.
+    const VERIFICATION_EXPIRY_MS =
+      savedVerificationStatus === 'pending'
+        ? 3 * 60 * 60 * 1000   // in flight — mirrors the server's QR session TTL
+        : 10 * 60 * 1000;      // already decided
     const isExpired = savedVerificationTimestamp
       ? (Date.now() - parseInt(savedVerificationTimestamp, 10)) > VERIFICATION_EXPIRY_MS
       : true; // If no timestamp, consider it expired
@@ -1581,10 +1596,22 @@ const MultiStepBookingWidget = () => {
       });
       setFormData(prev => ({ ...prev, verificationSessionId: data.sessionId }));
 
-      // Persist to localStorage
+      // Persist to localStorage.
+      //
+      // The timestamp is the reason this whole flow used to lose people. The
+      // restore effect treats a MISSING verificationTimestamp as expired and
+      // then deletes verificationSessionId — and until now that value was only
+      // ever written once a verification had already passed. So for the entire
+      // window in which someone is scanning the QR and photographing their
+      // licence, any remount of this widget (a reload, a second tab, coming
+      // back to the page) silently destroyed the only key that ties their
+      // verification to the customer created at checkout. That is why ~76% of
+      // booking verifications ended up orphaned, and why the customer then
+      // showed as unverified — or did not appear at all.
       localStorage.setItem('verificationSessionId', data.sessionId);
       localStorage.setItem('verificationStatus', 'pending');
       localStorage.setItem('verificationMode', 'ai');
+      localStorage.setItem('verificationTimestamp', Date.now().toString());
 
       toast.success("Scan the QR code with your phone to verify your identity.");
 
@@ -1977,30 +2004,42 @@ const MultiStepBookingWidget = () => {
         customerId = newCustomer.id;
       }
 
-      // Auto-link any unlinked identity verifications by email
+      // Auto-link any unlinked identity verifications by email.
+      //
+      // Two bugs used to live here, and both made a verification permanently
+      // invisible rather than merely unlinked:
+      //
+      //  1. It nulled customer_email "after linking". That column is the only
+      //     join key the server-side linking triggers have, so wiping it left
+      //     the row unrecoverable by any later repair — 13 rows in production
+      //     are stranded that way. There is no reason to clear it: the address
+      //     is how we know whose verification this is.
+      //
+      //  2. It ended a MULTI-ROW update with .maybeSingle(). PostgREST answers
+      //     a singular request over >1 row with PGRST116 and rolls the whole
+      //     statement back, so a person who had retried their ID check — the
+      //     common case, since each attempt inserts its own row — linked
+      //     NOTHING, silently. .select("id") returns every row instead.
       if (customerId && formData.customerEmail && tenant?.id) {
         const customerEmailLower = formData.customerEmail.toLowerCase().trim();
-        const { data: unlinkedVerification, error: linkError } = await supabase
+        const { data: linkedVerifications, error: linkError } = await supabase
           .from("identity_verifications")
-          .update({
-            customer_id: customerId,
-            customer_email: null // Clear email after linking
-          })
+          .update({ customer_id: customerId })
           .eq("customer_email", customerEmailLower)
           .eq("tenant_id", tenant.id)
           .is("customer_id", null)
-          .select("id")
-          .maybeSingle();
+          .select("id, review_result");
 
-        if (unlinkedVerification && !linkError) {
-          console.log("✅ Auto-linked identity verification:", unlinkedVerification.id, "to customer:", customerId);
+        const unlinkedVerification = linkedVerifications?.[0] ?? null;
 
-          // Also update customer's verification status if verification is complete
-          const { data: verification } = await supabase
-            .from("identity_verifications")
-            .select("review_result")
-            .eq("id", unlinkedVerification.id)
-            .single();
+        if (linkedVerifications?.length && !linkError) {
+          console.log("✅ Auto-linked identity verification(s):", linkedVerifications.length, "to customer:", customerId);
+
+          // A passed check anywhere in the set is what the customer's status
+          // should reflect, not whichever row happened to come back first.
+          const verification = linkedVerifications.find(
+            (row) => row.review_result === "GREEN",
+          ) ?? unlinkedVerification;
 
           if (verification?.review_result === "GREEN") {
             await supabase
