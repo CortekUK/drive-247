@@ -198,29 +198,50 @@ export function HeroTypedHeadline({
   const subVisible =
     reduceMotion || (!erasing && revealed === headlineOf(feature).length);
 
-  return (
-    <div className={compact ? "" : "max-w-xl"}>
-      {/* Hidden from assistive tech — a screen reader following the string
-          letter by letter reads as noise. The list below carries every feature
-          in one piece. */}
-      {/* Top-aligned, and that is the whole point. Pinning the headline to the
-          bottom of its reservation kept the sub-line tight underneath, but it
-          moved the headline's *first* line: a one-line entry sat low and a
-          two-line entry sat high, so the copy jumped between features — and it
-          jumped again mid-typing, the moment a line wrapped and pushed the text
-          already on screen upward. Anchoring the top means nothing you are
-          reading ever moves; only the unwritten space below it changes.
+  const headlineSize = compact ? "text-[26px]" : "text-5xl xl:text-6xl";
+  const subSize = compact ? "mt-3 text-sm" : "mt-5 max-w-lg text-lg";
+  const baseColor = onDark ? "text-white" : "text-slate-900";
 
-          Every headline is kept to two lines at every width (measured), so the
-          slack that opens up before the sub-line is at most one line. */}
-      <div
-        className={`flex min-h-[2.2em] items-start ${
-          compact ? "text-[26px]" : "text-5xl xl:text-6xl"
-        } ${onDark ? "text-white" : "text-slate-900"}`}
-      >
+  return (
+    <div className={`grid ${compact ? "" : "max-w-xl"}`}>
+      {/* Height reservation, by example rather than by number.
+
+          Every feature is rendered once, invisibly, stacked in the same grid
+          cell as the live one. The cell ends up as tall as the tallest card, so
+          the form below never moves — and it works out that height itself, at
+          whatever width and font size it finds, from the copy that is actually
+          there. The previous approach reserved a fixed line count on the
+          headline *and* on the sub separately, which held the layout still but
+          left a whole unused line of air under any one-line headline. It also
+          had to be re-derived by hand every time the copy or the scale changed,
+          and was wrong at 320px twice.
+
+          `invisible` keeps these out of the accessibility tree as well as out
+          of sight; the live copy below is `aria-hidden` and the `sr-only` list
+          at the end is what actually gets read. */}
+      {FEATURES.map((f, i) => (
+        <div
+          key={`measure-${i}`}
+          aria-hidden="true"
+          className="invisible col-start-1 row-start-1"
+        >
+          <p className={`${headlineSize} font-extrabold leading-[1.1] tracking-tight`}>
+            {headlineOf(f)}
+          </p>
+          <p className={`${subSize} leading-relaxed`}>{f.sub}</p>
+        </div>
+      ))}
+
+      <div className="col-start-1 row-start-1">
+        {/* Top-anchored, and that is the whole point. Pinning the headline to
+            the bottom of its box moved its *first* line: a one-line entry sat
+            low and a two-line entry sat high, so the copy jumped between
+            features — and jumped again mid-typing, the moment a line wrapped
+            and pushed what was already on screen upward. Anchored at the top,
+            nothing you are reading ever moves. */}
         <p
           aria-hidden="true"
-          className="font-extrabold leading-[1.1] tracking-tight"
+          className={`${headlineSize} ${baseColor} font-extrabold leading-[1.1] tracking-tight`}
         >
           {/* Adjacent on purpose. A newline between two of these would be a
               whitespace text node inside the sentence, adding a space that is
@@ -262,29 +283,25 @@ export function HeroTypedHeadline({
             </span>
           )}
         </p>
-      </div>
 
-      {/* Rises into place rather than just fading, so it reads as the second
-          beat of one motion instead of a separate element blinking on. It
-          leaves the same way before the headline is erased, which keeps the
-          pair from ever showing two different features at once. */}
-      <p
-        aria-hidden="true"
-        className={`leading-relaxed transition-all duration-500 ease-out ${
-          // Three lines reserved at the compact scale, two at full size.
-          // `leading-relaxed` is 1.625, so those are 4.875em and 3.25em. On a
-          // 320px screen the longest sub wraps to three lines where a 375px one
-          // stops at two, and the two-line reservation let it push the form
-          // down a line every time that entry came round.
-          compact ? "mt-3 min-h-[4.875em] text-sm" : "mt-5 min-h-[3.25em] max-w-lg text-lg"
-        } ${
-          subVisible
-            ? "translate-y-0 opacity-100"
-            : "translate-y-2 opacity-0"
-        } ${onDark ? "text-white/75" : "text-slate-900/65"}`}
-      >
-        {feature.sub}
-      </p>
+        {/* Sits directly under the headline rather than in a slot of its own,
+            so a short headline no longer leaves a line of air above this. It
+            moves with the headline's line count, but it fades and rises on
+            every change anyway, so it arrives in its new position rather than
+            being seen to jump to it.
+
+            Rising rather than only fading makes it read as the second beat of
+            one motion; leaving the same way before the erase keeps the pair
+            from ever showing two different features at once. */}
+        <p
+          aria-hidden="true"
+          className={`${subSize} leading-relaxed transition-all duration-500 ease-out ${
+            subVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+          } ${onDark ? "text-white/75" : "text-slate-900/65"}`}
+        >
+          {feature.sub}
+        </p>
+      </div>
 
       <span className="sr-only">
         {appName} —{" "}
