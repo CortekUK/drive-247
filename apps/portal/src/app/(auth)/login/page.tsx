@@ -24,7 +24,7 @@ import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
-import { TraxLoginTip } from "@/components/shared/layout/trax-login-tip";
+import { TraxTypedHeadline } from "@/components/shared/layout/trax-typed-headline";
 import { brandInk, brandSurface } from "@/lib/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
@@ -454,20 +454,10 @@ function LoginPageContent() {
           )}
         </div>
 
-        <div className="relative z-10 max-w-md space-y-6">
-          <h2 className="text-4xl font-semibold leading-tight tracking-tight">
-            Manage your fleet,
-            <br />
-            your way.
-          </h2>
-          <p
-            className={`text-lg ${
-              heroOnDark ? "text-white/80" : "text-slate-900/70"
-            }`}
-          >
-            One place to run bookings, payments and your whole rental operation.
-          </p>
-          <TraxLoginTip appName={appName} onDark={heroOnDark} />
+        {/* The whole middle band is Trax talking now — the static headline and
+            the separate tip card said the same thing twice, in two voices. */}
+        <div className="relative z-10">
+          <TraxTypedHeadline appName={appName} onDark={heroOnDark} />
         </div>
 
         <p
