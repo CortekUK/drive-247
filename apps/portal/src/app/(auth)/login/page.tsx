@@ -24,7 +24,7 @@ import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
-import { TraxTypedHeadline } from "@/components/shared/layout/trax-typed-headline";
+import { HeroTypedHeadline } from "@/components/shared/layout/hero-typed-headline";
 import { brandInk, brandSurface } from "@/lib/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
@@ -462,14 +462,11 @@ function LoginPageContent() {
           )}
         </div>
 
-        {/* The whole middle band is Trax talking now — the static headline and
-            the separate tip card said the same thing twice, in two voices. */}
+        {/* The whole middle band is one line of copy. The Trax chip and the
+            greeting that used to sit around it are gone — three competing
+            voices in one column, where the big line already says it. */}
         <div className="relative z-10">
-          <TraxTypedHeadline
-            appName={appName}
-            onDark={heroOnDark}
-            accentInk={accentInk}
-          />
+          <HeroTypedHeadline appName={appName} accentInk={accentInk} />
         </div>
 
         <p
