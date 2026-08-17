@@ -37,7 +37,17 @@ function greetingFor(hour: number): string {
   return "Good evening";
 }
 
-export function TraxLoginTip({ appName }: { appName: string }) {
+interface TraxLoginTipProps {
+  appName: string;
+  /**
+   * Whether the card sits on a dark ground. Not derivable here — the hero is a
+   * pale tint in light mode and a deep one in dark, so it does not track the
+   * app theme and has to be told.
+   */
+  onDark: boolean;
+}
+
+export function TraxLoginTip({ appName, onDark }: TraxLoginTipProps) {
   const reduceMotion = useReducedMotion();
   // Resolved on the client only. The server renders in UTC, so reading the
   // clock during render would greet half the world with the wrong time of day
@@ -59,15 +69,33 @@ export function TraxLoginTip({ appName }: { appName: string }) {
   }, [reduceMotion]);
 
   return (
-    <div className="max-w-md rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
-      <div className="flex items-center gap-2 text-white/70">
-        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/15">
+    <div
+      className={`max-w-md rounded-2xl border p-4 backdrop-blur-md ${
+        onDark
+          ? "border-white/15 bg-white/10"
+          : "border-slate-900/10 bg-white/50"
+      }`}
+    >
+      <div
+        className={`flex items-center gap-2 ${
+          onDark ? "text-white/70" : "text-slate-900/60"
+        }`}
+      >
+        <span
+          className={`flex h-5 w-5 items-center justify-center rounded-md ${
+            onDark ? "bg-white/15" : "bg-slate-900/10"
+          }`}
+        >
           <Sparkle className="h-3 w-3" />
         </span>
         <span className="text-xs font-medium tracking-wide">Trax</span>
       </div>
 
-      <p className="mt-2.5 text-sm leading-relaxed text-white/90">
+      <p
+        className={`mt-2.5 text-sm leading-relaxed ${
+          onDark ? "text-white/90" : "text-slate-900/80"
+        }`}
+      >
         {/* Until the clock resolves, the sentence still reads correctly — it
             just starts a beat later, rather than flashing the wrong greeting. */}
         {greeting ? `${greeting}. ` : ""}
@@ -75,7 +103,9 @@ export function TraxLoginTip({ appName }: { appName: string }) {
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={index}
-            className="inline-block font-medium text-white"
+            className={`inline-block font-medium ${
+              onDark ? "text-white" : "text-slate-900"
+            }`}
             initial={reduceMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}

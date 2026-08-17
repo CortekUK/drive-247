@@ -1,7 +1,7 @@
 import { hexToHSL } from "@/hooks/use-dynamic-theme";
 
 /**
- * Derives a *dark, full-bleed* surface from a tenant's brand colour — the login
+ * Derives a flat, full-bleed surface from a tenant's brand colour — the login
  * hero today, and anything else that hands a whole panel over to the brand.
  *
  * The obvious source is the chart ramp `use-dynamic-theme` already generates,
@@ -14,21 +14,25 @@ import { hexToHSL } from "@/hooks/use-dynamic-theme";
  * The ramp is right for charts and wrong here; this is the "convert the whole
  * map or none of it" rule pointing the other way.
  *
- * So the split is: hue and saturation come from the brand, lightness is ours.
- * A panel that carries white text has to be dark no matter how light the brand
- * is — `#90EE90` is a pale mint, but its *hue* is the tenant's, and a deep
- * green panel is recognisably theirs where a mint one is unreadable. And a
- * brand with no hue to give gets a neutral slate rather than a fabricated one.
+ * So the split is: hue comes from the brand, lightness is ours. `#90EE90` is a
+ * pale mint and `#0B1F2A` is nearly black, but a panel has to be one specific
+ * value to be readable, and it is the *hue* that makes it theirs.
  *
- * The result is one flat colour, not a ramp. A gradient across a panel this
- * large reads as two colours however tight the stops are, which is the thing
- * the brand is least able to afford here.
+ * One flat colour, not a ramp. A gradient across a panel this large reads as
+ * two colours however tight the stops are, which is the thing the brand is
+ * least able to afford here.
  */
 
 export interface BrandSurface {
   /** A single flat colour, ready for `style={{ backgroundColor }}`. */
   color: string;
-  /** True when the brand had no usable hue, so the surface is neutral slate. */
+  /**
+   * True when the panel is light and therefore needs dark type on it. Callers
+   * must branch on this rather than assume: the surface is a pale tint in light
+   * mode and a deep one in dark, so neither text colour is safe unconditionally.
+   */
+  isLight: boolean;
+  /** True when the brand had no usable hue, so the surface is neutral. */
   isNeutral: boolean;
 }
 
@@ -36,13 +40,19 @@ export interface BrandSurface {
 const ACHROMATIC_SATURATION = 12;
 
 /**
- * One lightness, not a ramp. Low enough that white text clears 5:1 at every hue
- * in the estate — the yellows and greens are the tight ones, since they carry
- * far more luminance than a blue at the same nominal lightness.
+ * Light mode: a wash, well clear of the near-white page so the panel still
+ * reads as a panel, and light enough that dark type clears contrast at every
+ * hue — which is the point of putting the type dark rather than white. White
+ * text is what forces a *dark* panel, and it is the reason the greens and
+ * yellows were the tight cases before; dark type on a tint has no such problem.
  */
-const SURFACE_LIGHTNESS = 26;
+const TINT_LIGHTNESS = 88;
 
-const NEUTRAL_SURFACE = `hsl(222 14% ${SURFACE_LIGHTNESS}%)`;
+/** Saturation is pulled down for the tint — a hue at full strength this pale goes acid. */
+const TINT_SATURATION_CEILING = 58;
+
+/** Dark mode: the same hue, deep, carrying white type. */
+const DEEP_LIGHTNESS = 22;
 
 /**
  * A brand-hued colour safe to use as *text on a page background*.
@@ -76,11 +86,16 @@ export function brandInk(hex: string | null | undefined, isDark: boolean): strin
   return `hsl(${hsl.h} ${s}% ${l}%)`;
 }
 
-export function brandSurface(hex: string | null | undefined): BrandSurface {
+export function brandSurface(
+  hex: string | null | undefined,
+  isDark = false
+): BrandSurface {
   const hsl = hex ? hexToHSL(hex) : null;
 
   if (!hsl || hsl.s < ACHROMATIC_SATURATION) {
-    return { color: NEUTRAL_SURFACE, isNeutral: true };
+    return isDark
+      ? { color: `hsl(222 14% ${DEEP_LIGHTNESS}%)`, isLight: false, isNeutral: true }
+      : { color: `hsl(222 16% ${TINT_LIGHTNESS}%)`, isLight: true, isNeutral: true };
   }
 
   // Hue is kept exactly. Saturation is pulled into a band that is neither muddy
@@ -88,8 +103,17 @@ export function brandSurface(hex: string | null | undefined): BrandSurface {
   // 100% would be a fire alarm).
   const s = Math.round(Math.min(80, Math.max(25, hsl.s)));
 
+  if (isDark) {
+    return {
+      color: `hsl(${hsl.h} ${s}% ${DEEP_LIGHTNESS}%)`,
+      isLight: false,
+      isNeutral: false,
+    };
+  }
+
   return {
-    color: `hsl(${hsl.h} ${s}% ${SURFACE_LIGHTNESS}%)`,
+    color: `hsl(${hsl.h} ${Math.min(s, TINT_SATURATION_CEILING)}% ${TINT_LIGHTNESS}%)`,
+    isLight: true,
     isNeutral: false,
   };
 }

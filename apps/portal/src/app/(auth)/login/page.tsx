@@ -78,23 +78,40 @@ function LoginPageContent() {
   const authLogoUrl = branding?.auth_logo_url;
   const appName = branding?.app_name || "Drive247";
 
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === "dark";
+
   // ---- Hero panel ----
   //
-  // One flat colour, derived from the brand hex and never from a literal. v2
-  // built this as a gradient of `accent_color || secondary_color || "#6366f1"`,
-  // so every tenant who had left their accent unset landed on that one indigo —
-  // a purple hero on a green brand, the same bug the shell's corner wash had.
-  // See `brandSurface` for why the chart ramp is the wrong source too.
-  const hero = brandSurface(branding?.primary_color);
+  // One flat colour, taken from the accent and never from a literal. v2 built
+  // this as a gradient of `accent_color || secondary_color || "#6366f1"`, so
+  // every tenant who had left their accent unset landed on that one indigo — a
+  // purple hero on a green brand, the same bug the shell's corner wash had.
+  // Falling back to `primary_color` keeps the chain brand-derived end to end;
+  // all forty-six tenants have an accent set today, so the fallback is a guard
+  // rather than a path anyone is on. See `brandSurface` for why the chart ramp
+  // is the wrong source too.
+  const hero = brandSurface(
+    branding?.accent_color || branding?.primary_color,
+    isDarkMode
+  );
   const heroImage = branding?.hero_background_url || null;
+
+  // A photograph is always a dark ground once scrimmed; the flat panel is only
+  // dark in dark mode. Everything drawn on the hero keys off this one value.
+  const heroOnDark = !!heroImage || !hero.isLight;
+
   // Link colour for the form column. See `brandInk` — `text-primary` is
   // invisible on the pale-branded tenants.
-  const { resolvedTheme } = useTheme();
-  const ink = brandInk(branding?.primary_color, resolvedTheme === "dark");
-  // `auth_logo_url` is drawn for a dark ground; that is the whole reason the old
-  // layout sat it on a hardcoded black square. The hero panel *is* a dark
-  // ground, so the logo goes here and the square is no longer needed.
-  const heroLogo = authLogoUrl || branding?.dark_logo_url || branding?.logo_url || null;
+  const ink = brandInk(branding?.primary_color, isDarkMode);
+
+  // `auth_logo_url` and `dark_logo_url` are both drawn for a dark ground — that
+  // is the whole reason the old layout sat the logo on a hardcoded black
+  // square. On the pale panel they would be the same invisible-on-light problem
+  // one layer along, so the light-ground logo is the one that belongs there.
+  const heroLogo = heroOnDark
+    ? authLogoUrl || branding?.dark_logo_url || branding?.logo_url || null
+    : branding?.logo_url || authLogoUrl || null;
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {
@@ -359,8 +376,14 @@ function LoginPageContent() {
         )}
       </div>
 
-      {/* ---------- Left: hero content (lg and up) ---------- */}
-      <aside className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between">
+      {/* ---------- Left: hero content (lg and up) ----------
+          Type colour follows the panel, not the app theme: in light mode the
+          panel is a pale tint and white text on it would be unreadable. */}
+      <aside
+        className={`relative hidden overflow-hidden p-12 lg:flex lg:flex-col lg:justify-between ${
+          heroOnDark ? "text-white" : "text-slate-900"
+        }`}
+      >
         <div className="relative z-10">
           {heroLogo ? (
             <img
@@ -379,13 +402,21 @@ function LoginPageContent() {
             <br />
             your way.
           </h2>
-          <p className="text-lg text-white/80">
+          <p
+            className={`text-lg ${
+              heroOnDark ? "text-white/80" : "text-slate-900/70"
+            }`}
+          >
             One place to run bookings, payments and your whole rental operation.
           </p>
-          <TraxLoginTip appName={appName} />
+          <TraxLoginTip appName={appName} onDark={heroOnDark} />
         </div>
 
-        <p className="relative z-10 text-xs text-white/60">
+        <p
+          className={`relative z-10 text-xs ${
+            heroOnDark ? "text-white/60" : "text-slate-900/50"
+          }`}
+        >
           © {new Date().getFullYear()} {appName}. All rights reserved.
         </p>
       </aside>
