@@ -113,6 +113,17 @@ const PHOTO_MASK = `linear-gradient(to right,
 const FIELD_CLASS =
   "h-12 rounded-2xl border-slate-900/20 bg-white px-4 text-[15px] shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition-colors placeholder:text-slate-400 hover:border-slate-900/30";
 
+/**
+ * "Keep me signed in", same problem as the fields one size down: the shared
+ * `Checkbox` is a 16px square with a transparent border on a pale fill, which
+ * on the tint is a faint smudge rather than something that looks clickable.
+ * Given the same white fill and visible border as the inputs it belongs to, and
+ * a couple of pixels more to sit against 48px controls. The checked state is
+ * untouched — `data-checked:` already fills it with the brand.
+ */
+const CHECKBOX_CLASS =
+  "size-[18px] rounded-[6px] border-slate-900/25 bg-white transition-colors not-data-checked:hover:border-slate-900/40";
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -594,6 +605,7 @@ function LoginPageContent() {
                       <FormItem className="flex flex-row items-center space-x-2 space-y-0">
                         <FormControl>
                           <Checkbox
+                            className={CHECKBOX_CLASS}
                             checked={field.value}
                             onCheckedChange={field.onChange}
                             disabled={isSubmitting || isLocked}
@@ -625,6 +637,7 @@ function LoginPageContent() {
                       <FormItem className="flex flex-row items-start space-x-2 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
+                            className={CHECKBOX_CLASS}
                             checked={field.value}
                             onCheckedChange={field.onChange}
                             disabled={isSubmitting || isLocked}
