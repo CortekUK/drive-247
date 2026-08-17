@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 /**
  * The login hero: a feature headline typed out with its keyword in the accent,
@@ -229,9 +229,24 @@ export function HeroTypedHeadline({
               visible without letting it vote on where the text breaks. */}
           {!reduceMotion && (
             <span className="relative inline-block h-[0.8em] w-0 align-middle">
-              <span
-                className="absolute inset-y-0 left-[4px] w-[4px] animate-pulse rounded-full"
-                style={{ backgroundColor: accentInk, opacity: 0.8 }}
+              {/* `bg-current` rather than a fixed black: it inherits the
+                  headline's own colour, so the caret is near-black on the tint
+                  and turns white by itself on a photograph hero, with nothing
+                  extra to keep in sync.
+
+                  Blinks on a hard on/off. `animate-pulse` was the wrong tool —
+                  it is a soft ease between full and half opacity, which reads
+                  as a throb rather than a cursor. Holding each state flat and
+                  crossing in 10ms gives the square edge a real caret has. */}
+              <motion.span
+                className="absolute inset-y-0 left-[4px] w-[4px] rounded-full bg-current"
+                animate={{ opacity: [1, 1, 0, 0] }}
+                transition={{
+                  duration: 1.06,
+                  times: [0, 0.49, 0.5, 1],
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
               />
             </span>
           )}
