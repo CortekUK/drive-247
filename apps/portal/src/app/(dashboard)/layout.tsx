@@ -31,7 +31,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
-import { AccountingConnectionExpiredBanner } from "@/components/dashboard/accounting-connection-expired-banner";
 import { AppBannerStack } from "@/components/banners/app-banner-stack";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
@@ -342,7 +341,6 @@ export default function DashboardLayout({
             </div>
           </header>
           <MaintenanceBanner />
-          <AccountingConnectionExpiredBanner />
           {/*
             Deposit-hold alerts, and the mount point every future banner should
             move into. Kept BELOW the two legacy bars rather than replacing them:

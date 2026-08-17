@@ -548,9 +548,11 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/fine-filters.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/authority-payment-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/bulk-action-bar.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-app-banners.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-banner-dismissal.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-stack.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-types.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/app-banner-stack.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/deposit-hold-banners.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/revenue-chart.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/platform-status-banner.tsx",
@@ -912,10 +914,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 904,
-    "total_words": 863703,
+    "total_files": 906,
+    "total_words": 864264,
     "counts": {
-      "code": 904
+      "code": 906
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1386,9 +1388,11 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/fine-filters.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/authority-payment-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/fines/bulk-action-bar.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-app-banners.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-banner-dismissal.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-stack.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-types.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/app-banner-stack.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/deposit-hold-banners.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/revenue-chart.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/platform-status-banner.tsx",

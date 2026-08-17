@@ -146,48 +146,62 @@ describe("ordering", () => {
       />,
     );
 
-    expect(renderedIds()).toEqual([
-      "c-critical",
-      "b-warning-high", // higher weight wins inside the warning band
-      "a-warning-low",
-      "d-info",
-      "z-success",
-    ]);
+    // SLIDER: one slot. Ordering is asserted through what occupies it first —
+    // the most severe thing the operator has. The rest queue behind it, and the
+    // counter proves how many.
+    expect(renderedIds()).toEqual(["c-critical"]);
+    expect(text()).toContain("1 of 5");
   });
 
   it("is stable when the input array order changes", () => {
     const a = banner("alpha", "warning");
     const b = banner("beta", "warning");
-    mount(<BannerStack maxVisible={99} banners={[a, b]} />);
+    mount(<BannerStack banners={[a, b]} />);
     const first = renderedIds();
-    mount(<BannerStack maxVisible={99} banners={[b, a]} />);
+    mount(<BannerStack banners={[b, a]} />);
     expect(renderedIds()).toEqual(first);
   });
 });
 
-describe("collapse behaviour", () => {
-  it("never collapses a critical, even past maxVisible", () => {
+describe("slider behaviour", () => {
+  /**
+   * One notice occupies the slot; the rest queue. The risk this creates — a
+   * notice nobody sees because it was never on screen — is the same shape as the
+   * incident that prompted the feature, so the mitigations are what these tests
+   * actually guard.
+   */
+  it("renders exactly one banner however many are live", () => {
     mount(
       <BannerStack
-        maxVisible={2}
         banners={[
           banner("crit-1", "critical"),
           banner("crit-2", "critical"),
-          banner("crit-3", "critical"),
           banner("warn-1", "warning"),
+          banner("info-1", "info"),
         ]}
       />,
     );
-
-    // All three criticals stay expanded; the warning is what gets pushed out.
-    expect(renderedIds()).toEqual(["crit-1", "crit-2", "crit-3"]);
-    expect(text()).toContain("1 more notice");
+    expect(renderedIds()).toHaveLength(1);
   });
 
-  it("states the count AND the worst hidden severity in the summary row", () => {
+  it("puts the most severe notice in the slot with no interaction", () => {
     mount(
       <BannerStack
-        maxVisible={1}
+        banners={[
+          banner("info-1", "info"),
+          banner("warn-1", "warning"),
+          banner("crit-1", "critical"),
+        ]}
+      />,
+    );
+    expect(renderedIds()).toEqual(["crit-1"]);
+  });
+
+  it("shows the queue SIZE even though the contents are hidden", () => {
+    // The whole safety argument for a carousel: an operator must never mistake
+    // slide 1 for everything there is.
+    mount(
+      <BannerStack
         banners={[
           banner("warn-1", "warning"),
           banner("warn-2", "warning"),
@@ -195,36 +209,60 @@ describe("collapse behaviour", () => {
         ]}
       />,
     );
-
-    // The count alone would let a warning hide behind a neutral grey bar.
-    expect(text()).toContain("2 more notices");
-    expect(text()).toContain("1 needs attention");
+    expect(text()).toContain("1 of 3");
   });
 
-  it("exposes the overflow as an expandable region and reveals the rows", () => {
+  it("says in WORDS when a critical has been navigated past", () => {
+    // Severity always outranks weight, so a critical starts in the slot. It can
+    // only end up off-screen once the operator clicks past it — and that is
+    // exactly when they need telling that something urgent is still queued,
+    // because a dot cannot convey "money is leaving the building".
     mount(
       <BannerStack
-        maxVisible={1}
-        banners={[banner("warn-1", "warning"), banner("info-1", "info")]}
+        banners={[banner("crit-1", "critical"), banner("warn-1", "warning")]}
       />,
     );
+    expect(renderedIds()).toEqual(["crit-1"]);
+    expect(text()).not.toContain("urgent");
 
-    const trigger = container.querySelector("[aria-expanded]")!;
-    expect(trigger).toBeTruthy();
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    // Radix owns this wiring; asserting it catches an id override regression.
-    expect(trigger.getAttribute("aria-controls")).toBeTruthy();
+    click(container.querySelector('[aria-label^="Next notice"]')!);
+
     expect(renderedIds()).toEqual(["warn-1"]);
-
-    click(trigger);
-
-    expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(renderedIds()).toContain("info-1");
+    expect(text()).toContain("1 urgent");
   });
 
-  it("renders no summary row when everything fits", () => {
-    mount(<BannerStack maxVisible={2} banners={[banner("warn-1", "warning")]} />);
-    expect(text()).not.toContain("more notice");
+  it("advances to the next notice and wraps at the end", () => {
+    mount(
+      <BannerStack
+        banners={[banner("warn-1", "warning"), banner("warn-2", "warning")]}
+      />,
+    );
+    expect(renderedIds()).toEqual(["warn-1"]);
+
+    click(container.querySelector('[aria-label^="Next notice"]')!);
+    expect(renderedIds()).toEqual(["warn-2"]);
+    expect(text()).toContain("2 of 2");
+
+    // Wrapping matters: a dead end reads as "that is all of them".
+    click(container.querySelector('[aria-label^="Next notice"]')!);
+    expect(renderedIds()).toEqual(["warn-1"]);
+  });
+
+  it("steps backwards too", () => {
+    mount(
+      <BannerStack
+        banners={[banner("warn-1", "warning"), banner("warn-2", "warning")]}
+      />,
+    );
+    click(container.querySelector('[aria-label^="Previous notice"]')!);
+    expect(renderedIds()).toEqual(["warn-2"]);
+  });
+
+  it("renders no queue chrome for a lone notice", () => {
+    // The common case must stay as quiet as the single banner it replaced.
+    mount(<BannerStack banners={[banner("warn-1", "warning")]} />);
+    expect(text()).not.toContain("of 1");
+    expect(container.querySelector('[aria-label^="Next notice"]')).toBeNull();
   });
 });
 
@@ -250,19 +288,27 @@ describe("dismissal", () => {
     expect(window.localStorage.length).toBe(1);
   });
 
-  it("labels each control with the banner it silences, not a bare 'Dismiss'", () => {
+  it("labels the control with the banner it silences, not a bare 'Dismiss'", () => {
     mount(
       <BannerStack
-        maxVisible={99}
         banners={[
           dismissible("warn-1", "warning"),
           dismissible("warn-2", "warning"),
         ]}
       />,
     );
-    // Two identical "Dismiss" buttons would be unusable with a screen reader.
+    // A bare "Dismiss" is unusable with a screen reader when the slot's contents
+    // change under you — the label has to name what is being silenced. Asserted
+    // across a navigation, because in slider mode only one control exists at a
+    // time and a hardcoded label would pass the first assertion and lie on the
+    // second.
     expect(byLabel("Dismiss: warn-1 title")).toBeTruthy();
+    expect(byLabel("Dismiss: warn-2 title")).toBeNull();
+
+    click(container.querySelector('[aria-label^="Next notice"]')!);
+
     expect(byLabel("Dismiss: warn-2 title")).toBeTruthy();
+    expect(byLabel("Dismiss: warn-1 title")).toBeNull();
   });
 
   it("honours a custom dismiss label and tooltip (the 'Snooze 24h' case)", () => {

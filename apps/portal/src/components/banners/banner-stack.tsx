@@ -7,41 +7,32 @@
  * genuinely bespoke bodies (go-live's gradient, bonzah-pending's three buttons
  * and retry progress) can move in unchanged via the `render` escape hatch.
  *
- * ── WHY A STACK AND NOT A CAROUSEL ─────────────────────────────────────────
+ * ── WHY A CAROUSEL, AND WHAT IT COSTS ─────────────────────────────────────
  *
- * A rotating slider was considered and rejected, and the reason is the incident
- * that prompted this work: four cars went out with no deposit held and the only
- * signal was an in-app notification nobody opened. A carousel is structurally
- * the same failure — it converts information into information behind an
- * interaction.
+ * One notice occupies the slot; the rest queue behind it. This was an explicit
+ * product decision, taken after the stack-with-collapse alternative was built
+ * and reviewed: seven bars at ~44px is ~300px of chrome, an entire phone
+ * viewport, and a wall of amber is how banners get trained into invisibility.
  *
- *   · Presence is invisible. With a stack you see at a glance that there are
- *     three problems. With a carousel you see slide 1 and three dots, and dots
- *     do not convey "one of these is money leaving the building".
- *   · Auto-advance is a trap either way. Advancing can scroll a critical past
- *     an operator mid-read; not advancing means slide 2 is seen by nobody who
- *     does not click, which is most people. And `prefers-reduced-motion` must
- *     disable auto-advance, so the users least able to recover silently get the
- *     worst variant.
- *   · It breaks Ctrl+F, and the common single-slide-in-DOM implementation hides
- *     the other notices from screen readers entirely.
- *   · It is wrong for heterogeneous urgency. "Your Xero token expired" and
- *     "4 cars are out with no deposit" are not peers and must not share a
- *     rotating slot.
+ * The cost is real and worth stating plainly, because it is the same shape as
+ * the incident that prompted this work — four cars out with no deposit held,
+ * signalled only by a notification nobody opened. A carousel converts
+ * information into information behind an interaction.
  *
- * Stacking everything was also rejected: seven bars at ~44px is ~300px of
- * chrome, which is an entire phone viewport, and a wall of amber is how banners
- * get trained into invisibility.
+ * Three mitigations, all load-bearing rather than decorative:
+ *   · a permanent "N of M" counter, so the SIZE of the queue is visible even
+ *     when its contents are not;
+ *   · severity-first ordering plus a "· N urgent" flag beside the counter, so an
+ *     off-screen critical is announced in words with no click required;
+ *   · severity-coloured dots, and a live region that announces every critical in
+ *     the queue rather than only the visible one.
  *
- * So: stack-with-collapse. Nothing is ever hidden without a labelled count, and
- * the one class that must never be hidden is not.
+ * Auto-advance is deliberately NOT implemented. It can scroll a critical past an
+ * operator mid-read, and `prefers-reduced-motion` would have to disable it —
+ * handing the users least able to recover the worst variant.
  *
- * ── THE LOAD-BEARING ASYMMETRY ─────────────────────────────────────────────
- *
- * Every `critical` renders expanded, always, regardless of `maxVisible`. Only
- * warning/info/success compete for slots. A critical here means a car is out
- * with nothing held against it right now; 44px of extra chrome is strictly
- * cheaper than that fact sitting one click away and going unread.
+ * `maxVisible` is retained in the props for API compatibility but has no effect:
+ * the slot is always one.
  */
 
 "use client";
@@ -61,17 +52,13 @@ import {
   AlertOctagon,
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Info,
   Loader2,
   X,
 } from "lucide-react";
 
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -142,27 +129,6 @@ const TONE: Record<BannerSeverity, Tone> = {
   },
 };
 
-/**
- * The summary row must state the count AND the worst severity hidden inside it
- * — "2 more notices · 1 needs attention". The count alone would let a warning
- * hide behind a neutral grey bar. `critical` is unreachable by construction
- * (criticals never collapse) but is handled anyway so that a future
- * `maxVisible={0}` cannot silently produce a lie.
- */
-const hiddenSeverityLabel = (
-  severity: BannerSeverity,
-  count: number,
-): string => {
-  switch (severity) {
-    case "critical":
-      return `${count} urgent`;
-    case "warning":
-      return count === 1 ? "1 needs attention" : `${count} need attention`;
-    default:
-      return "";
-  }
-};
-
 /* -------------------------------------------------------------------------- */
 /* BannerStack                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -198,7 +164,6 @@ export function BannerStack({
   const isMobile = useIsMobile();
   const cap = maxVisible ?? (isMobile ? 1 : 2);
 
-  const [expanded, setExpanded] = useState(false);
   const dismissRefs = useRef(new Map<string, HTMLButtonElement | null>());
   const regionRef = useRef<HTMLElement | null>(null);
 
@@ -217,17 +182,50 @@ export function BannerStack({
 
   const { visible, dismiss, ready } = useBannerDismissal(scoped);
 
-  const { shown, hidden } = useMemo(() => {
-    const criticals = visible.filter((b) => b.severity === "critical");
-    const rest = visible.filter((b) => b.severity !== "critical");
-    // Criticals are exempt from the cap, so they consume slots but can never
-    // be pushed out of them.
-    const slots = Math.max(0, cap - criticals.length);
-    return {
-      shown: [...criticals, ...rest.slice(0, slots)],
-      hidden: rest.slice(slots),
-    };
-  }, [visible, cap]);
+  /**
+   * SLIDER: exactly one notice occupies the slot at a time.
+   *
+   * `visible` is already sorted by `compareBanners`, so index 0 is the most
+   * severe thing the operator has — whatever else is in the queue, the first
+   * thing they see is the worst thing.
+   *
+   * The single honest risk of a carousel is that a notice can go unread because
+   * it was never on screen. Three things offset it, and all three are load-
+   * bearing rather than decoration:
+   *   · a permanent "1 of 3" counter, so the queue's SIZE is never hidden even
+   *     when its contents are;
+   *   · severity-first ordering, so the item most likely to matter needs no
+   *     interaction to be seen;
+   *   · the screen-reader live region below still announces every critical in
+   *     the queue, not just the visible one.
+   *
+   * `maxVisible` is deliberately ignored in this mode; the slot is always one.
+   */
+  const [index, setIndex] = useState(0);
+
+  // Clamp when the queue shrinks — a dismissal or a resolved problem must never
+  // leave the index pointing past the end and render an empty bar.
+  const cursor = visible.length === 0 ? 0 : Math.min(index, visible.length - 1);
+  useEffect(() => {
+    if (index !== cursor) setIndex(cursor);
+  }, [index, cursor]);
+
+  const current = visible[cursor];
+  const criticalCount = visible.filter((b) => b.severity === "critical").length;
+
+  const go = useCallback(
+    (delta: number) => {
+      setIndex((i) => {
+        if (visible.length === 0) return 0;
+        // Wrap, so the operator can never reach a dead end and assume the queue
+        // has been exhausted when it has not.
+        return (i + delta + visible.length) % visible.length;
+      });
+    },
+    [visible.length],
+  );
+
+  void cap; // superseded by the one-at-a-time slot; kept in the API for callers.
 
   /**
    * ONE live region for the whole stack, not one per row.
@@ -242,7 +240,10 @@ export function BannerStack({
    * The 600ms delay keeps it from colliding with the route's own page-title
    * announcement on first paint.
    */
-  const criticalIds = shown
+  // Keyed on the whole QUEUE, not the visible row: in slider mode a critical
+  // sitting at index 2 must still be announced, or the one accessibility
+  // guarantee that survives a carousel is lost.
+  const criticalIds = visible
     .filter((b) => b.severity === "critical")
     .map((b) => b.id)
     .join("|");
@@ -255,7 +256,7 @@ export function BannerStack({
     }
     const titles = criticalIds
       .split("|")
-      .map((id) => shown.find((b) => b.id === id)?.plainTitle)
+      .map((id) => visible.find((b) => b.id === id)?.plainTitle)
       .filter((t): t is string => !!t);
     const timer = setTimeout(() => {
       setAnnouncement(
@@ -277,10 +278,10 @@ export function BannerStack({
    */
   const handleDismiss = useCallback(
     (banner: AppBanner) => {
-      const dismissible = shown.filter((b) => b.dismissal);
-      const index = dismissible.findIndex((b) => b.id === banner.id);
-      const nextId =
-        dismissible[index + 1]?.id ?? dismissible[index - 1]?.id ?? null;
+      // The row leaving is the one on screen. Whatever slides into the slot
+      // takes the focus, so a keyboard user is never dropped to <body>.
+      const remaining = visible.filter((b) => b.id !== banner.id);
+      const nextId = remaining[cursor]?.id ?? remaining[cursor - 1]?.id ?? null;
 
       dismiss(banner);
 
@@ -290,18 +291,10 @@ export function BannerStack({
         dismissRefs.current.delete(banner.id);
       });
     },
-    [shown, dismiss],
+    [visible, cursor, dismiss],
   );
 
   if (!ready || visible.length === 0) return null;
-
-  const worstHidden = hidden[0]?.severity;
-  const worstHiddenCount = worstHidden
-    ? hidden.filter((b) => b.severity === worstHidden).length
-    : 0;
-  const worstHiddenLabel = worstHidden
-    ? hiddenSeverityLabel(worstHidden, worstHiddenCount)
-    : "";
 
   return (
     <section
@@ -328,70 +321,109 @@ export function BannerStack({
         {announcement}
       </p>
 
-      {shown.map((banner) => (
+      {/* ── The slot: exactly one notice ─────────────────────────────────── */}
+      <div className="relative">
         <BannerRow
-          key={banner.id}
-          banner={banner}
+          key={current.id}
+          banner={current}
           ref={(el) => {
-            dismissRefs.current.set(banner.id, el);
+            dismissRefs.current.set(current.id, el);
           }}
-          onDismiss={() => handleDismiss(banner)}
+          onDismiss={() => handleDismiss(current)}
         />
-      ))}
 
-      {hidden.length > 0 && (
-        <Collapsible open={expanded} onOpenChange={setExpanded}>
-          {/*
-            Radix wires `aria-expanded` and `aria-controls` onto this trigger
-            and `hidden` onto the content, which keeps collapsed rows out of
-            both the a11y tree and the tab order. We deliberately do NOT set our
-            own `id`/`aria-controls`: overriding the content id would leave the
-            trigger pointing at an element that no longer exists.
-          */}
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "flex w-full items-center gap-2 border-b bg-muted/40 px-4 py-2",
-                "text-xs font-medium text-muted-foreground hover:bg-muted",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-              )}
-            >
-              <ChevronDown
-                className={cn(
-                  "h-3.5 w-3.5 transition-transform motion-reduce:transition-none",
-                  expanded && "rotate-180",
-                )}
-                aria-hidden
-              />
-              {expanded
-                ? "Hide extra notices"
-                : `${hidden.length} more notice${hidden.length === 1 ? "" : "s"}`}
-              {!expanded && worstHidden && worstHiddenLabel && (
-                <span className={cn("font-semibold", TONE[worstHidden].icon)}>
-                  · {worstHiddenLabel}
-                </span>
-              )}
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent
+        {/*
+          Queue controls. Rendered ONLY when there is a queue — a lone notice
+          gets no chrome, no dots and no "1 of 1", which is the common case and
+          must stay as quiet as the single-banner design it replaces.
+        */}
+        {visible.length > 1 && (
+          <div
             className={cn(
-              "overflow-hidden",
-              // The only motion in the entire design, and it is gated.
-              "motion-safe:data-[state=open]:animate-collapsible-down",
-              "motion-safe:data-[state=closed]:animate-collapsible-up",
+              "flex items-center justify-center gap-1 border-b px-4 py-1.5",
+              "bg-muted/30 text-[11px] font-medium text-muted-foreground",
             )}
           >
-            {hidden.map((banner) => (
-              <BannerRow
-                key={banner.id}
-                banner={banner}
-                onDismiss={() => dismiss(banner)}
-              />
-            ))}
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+            <button
+              type="button"
+              onClick={() => go(-1)}
+              aria-label={`Previous notice (${cursor + 1} of ${visible.length})`}
+              className={cn(
+                "grid h-5 w-5 place-items-center rounded hover:bg-muted",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+            </button>
+
+            {/*
+              The counter is the whole safety argument for a carousel: the SIZE
+              of the queue stays visible even when its contents do not, so an
+              operator can never mistake slide 1 for "everything there is".
+            */}
+            {/*
+              NO aria-live here. The stack has exactly ONE live region (for
+              criticals) so that a 5-minute refetch cannot spam a screen reader;
+              a second region announcing "1 of 3 / 2 of 3" on every navigation
+              would undo that. Position is carried on the button labels below,
+              where it is read on demand instead of shouted.
+            */}
+            <span className="px-1 tabular-nums">
+              {cursor + 1} of {visible.length}
+            </span>
+
+            {/*
+              Dots carry severity, not just position. A plain dot row says
+              "there is more"; a red dot says "and one of them is money leaving
+              the building" — which is the entire reason this slot exists.
+            */}
+            <span className="flex items-center gap-1" aria-hidden>
+              {visible.map((b, i) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setIndex(i)}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all motion-reduce:transition-none",
+                    i === cursor ? "w-4" : "w-1.5",
+                    b.severity === "critical"
+                      ? "bg-red-600 dark:bg-red-400"
+                      : b.severity === "warning"
+                        ? "bg-amber-600 dark:bg-amber-400"
+                        : "bg-muted-foreground/40",
+                    i !== cursor && "opacity-60 hover:opacity-100",
+                  )}
+                />
+              ))}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => go(1)}
+              aria-label={`Next notice (${cursor + 1} of ${visible.length})`}
+              className={cn(
+                "grid h-5 w-5 place-items-center rounded hover:bg-muted",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+            >
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            </button>
+
+            {/*
+              Urgency escapes the carousel. If a critical is sitting off-screen
+              the operator is told so in words, right next to the counter, so no
+              click is required to learn that something serious is queued.
+            */}
+            {criticalCount > 0 && current.severity !== "critical" && (
+              <span className="ml-1 font-semibold text-red-700 dark:text-red-400">
+                · {criticalCount} urgent
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
     </section>
   );
 }
