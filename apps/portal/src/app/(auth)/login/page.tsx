@@ -10,13 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Form,
@@ -26,11 +19,15 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
+import { BrandLogo } from "@/components/shared/layout/brand-logo";
+import { BrandGlobe } from "@/components/shared/layout/brand-globe";
+import { TraxLoginTip } from "@/components/shared/layout/trax-login-tip";
+import { brandInk, brandSurface } from "@/lib/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
@@ -79,11 +76,26 @@ function LoginPageContent() {
   // Show policy checkbox if tenant has policy versions configured AND hasn't accepted yet
   const requiresPolicyAcceptance = !!(tenant?.privacy_policy_version || tenant?.terms_version) && !tenant?.policies_accepted_at;
 
-  // Get logo from tenant branding or use default
-  const { resolvedTheme } = useTheme();
   const authLogoUrl = branding?.auth_logo_url;
-  const logoUrl = (resolvedTheme === 'dark' && branding?.dark_logo_url ? branding.dark_logo_url : branding?.logo_url) || "/logo.png";
   const appName = branding?.app_name || "Drive247";
+
+  // ---- Hero panel ----
+  //
+  // The gradient is derived from the brand hex, never from a literal. v2 built
+  // it as `accent_color || secondary_color || "#6366f1"`, so every tenant who
+  // had left their accent unset landed on that one indigo — a purple hero on a
+  // green brand, the same bug the shell's corner wash had. See `brandSurface`
+  // for why the chart ramp is the wrong source too.
+  const hero = brandSurface(branding?.primary_color);
+  const heroImage = branding?.hero_background_url || null;
+  // Link colour for the form column. See `brandInk` — `text-primary` is
+  // invisible on the pale-branded tenants.
+  const { resolvedTheme } = useTheme();
+  const ink = brandInk(branding?.primary_color, resolvedTheme === "dark");
+  // `auth_logo_url` is drawn for a dark ground; that is the whole reason the old
+  // layout sat it on a hardcoded black square. The hero panel *is* a dark
+  // ground, so the logo goes here and the square is no longer needed.
+  const heroLogo = authLogoUrl || branding?.dark_logo_url || branding?.logo_url || null;
 
   // Role-based redirect logic
   const getRedirectPath = (): string => {
@@ -316,47 +328,108 @@ function LoginPageContent() {
   // with a valid recovery session from the emailed link.
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      {/* Theme Toggle - positioned in top right */}
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
+    <div className="relative min-h-screen overflow-hidden bg-background lg:grid lg:grid-cols-2">
+      {/* Brand wash.
+          Deliberately NOT a background on the hero column: a column paints to
+          its own edge and that edge is a hard vertical line down the middle of
+          the screen. This layer is wider than the column it sits under and is
+          masked away before it gets there, so the dark side dissolves into the
+          light one and the two halves read as one page. */}
+      <div
+        aria-hidden
+        className="absolute inset-y-0 left-0 hidden w-[58%] lg:block"
+        style={{
+          ...(heroImage
+            ? {
+                backgroundImage: `url(${heroImage})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : { backgroundImage: hero.gradient }),
+          maskImage:
+            "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
+        }}
+      >
+        {/* Scrim. A photograph is an unknown and needs enough to carry white
+            text; the gradient is already pinned dark by `brandSurface`, so
+            there it only has to add depth. */}
+        <div
+          className={`absolute inset-0 bg-gradient-to-tr ${
+            heroImage
+              ? "from-black/75 via-black/55 to-black/35"
+              : "from-black/25 via-transparent to-transparent"
+          }`}
+        />
+        <div
+          className="absolute -left-24 -top-24 h-96 w-96 rounded-full opacity-30 blur-3xl"
+          style={{ background: "radial-gradient(circle, rgba(255,255,255,0.35), transparent 70%)" }}
+        />
       </div>
 
-      <Card className="w-full max-w-md border-primary">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center py-4">
-            <div className={`rounded-2xl p-8 border border-primary/40 transition-all duration-300 hover:border-primary/60 hover:shadow-[0_0_20px_rgba(198,162,86,0.15)] ${authLogoUrl ? 'bg-black' : 'bg-white dark:bg-[hsl(159,21%,15%)]/30'}`}>
-              {authLogoUrl ? (
-                <img
-                  src={authLogoUrl}
-                  alt={appName}
-                  className="h-64 w-64 object-contain transition-transform duration-300 hover:scale-105"
-                />
-              ) : logoUrl && logoUrl !== "/logo.png" ? (
-                <img
-                  src={logoUrl}
-                  alt={appName}
-                  className="h-48 w-auto max-w-[260px] object-contain transition-transform duration-300 hover:scale-105 invert dark:invert-0"
-                  style={{
-                    imageRendering: "crisp-edges",
-                  }}
-                />
-              ) : (
-                <div className="h-32 w-32 flex items-center justify-center">
-                  <span className="text-3xl font-bold text-primary text-center leading-tight">
-                    {appName}
-                  </span>
-                </div>
-              )}
-            </div>
+      {/* ---------- Left: hero content (lg and up) ---------- */}
+      <aside className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between">
+        {/* Globe, in the upper right — the one part of the panel no copy uses.
+            It bleeds off the top and trails into the seam, so it reads as
+            something the page is cropping rather than an object placed in a
+            box. Kept left of where the mask starts to bite, or the fade eats it
+            before it is ever legible. */}
+        <BrandGlobe
+          size={500}
+          className="absolute -top-40 -right-20 opacity-80"
+        />
+
+        <div className="relative z-10">
+          {heroLogo ? (
+            <img
+              src={heroLogo}
+              alt={appName}
+              className="h-14 w-auto max-w-[220px] object-contain"
+            />
+          ) : (
+            <span className="text-2xl font-semibold tracking-tight">{appName}</span>
+          )}
+        </div>
+
+        <div className="relative z-10 max-w-md space-y-6">
+          <h2 className="text-4xl font-semibold leading-tight tracking-tight">
+            Manage your fleet,
+            <br />
+            your way.
+          </h2>
+          <p className="text-lg text-white/80">
+            One place to run bookings, payments and your whole rental operation.
+          </p>
+          <TraxLoginTip appName={appName} />
+        </div>
+
+        <p className="relative z-10 text-xs text-white/60">
+          © {new Date().getFullYear()} {appName}. All rights reserved.
+        </p>
+      </aside>
+
+      {/* ---------- Right: sign-in form ---------- */}
+      <main className="relative flex items-center justify-center px-6 py-12 sm:px-10">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle />
+        </div>
+
+        <div className="w-full max-w-md">
+          {/* Small screens only — from lg up the hero carries the brand. */}
+          <div className="mb-8 flex justify-center lg:hidden">
+            <BrandLogo className="h-12 w-auto max-w-[200px]" />
           </div>
 
-          <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-          <CardDescription>
-            Enter your email and password to access the fleet management system
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          <div className="mb-8 space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Sign in
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Enter your email and password to access {appName}.
+            </p>
+          </div>
+
           {(
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -437,6 +510,7 @@ function LoginPageContent() {
                     type="button"
                     variant="link"
                     className="px-0 text-sm"
+                    style={{ color: ink }}
                     onClick={handleForgotPassword}
                     disabled={isSubmitting}
                   >
@@ -460,11 +534,11 @@ function LoginPageContent() {
                         <div className="space-y-1 leading-none">
                           <FormLabel className="text-sm font-normal cursor-pointer">
                             I accept the{" "}
-                            <a href={PLATFORM_PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
+                            <a href={PLATFORM_PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80" style={{ color: ink }}>
                               Privacy Policy
                             </a>{" "}
                             and{" "}
-                            <a href={PLATFORM_TERMS_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:text-primary/80">
+                            <a href={PLATFORM_TERMS_URL} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80" style={{ color: ink }}>
                               Terms &amp; Conditions
                             </a>
                           </FormLabel>
@@ -500,11 +574,11 @@ function LoginPageContent() {
             </Form>
           )}
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Need help? Contact your system administrator.</p>
-          </div>
-        </CardContent>
-      </Card>
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            Need help? Contact your system administrator.
+          </p>
+        </div>
+      </main>
     </div>
   );
 }

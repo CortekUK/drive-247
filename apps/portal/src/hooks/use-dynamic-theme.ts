@@ -51,7 +51,7 @@ const DEFAULT_COLORS = {
 };
 
 // Convert hex to HSL values (just the numbers, not the full string)
-function hexToHSL(hex: string): { h: number; s: number; l: number } | null {
+export function hexToHSL(hex: string): { h: number; s: number; l: number } | null {
   if (!hex || !hex.startsWith('#')) return null;
 
   hex = hex.replace('#', '');
