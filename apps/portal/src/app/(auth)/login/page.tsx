@@ -466,7 +466,11 @@ function LoginPageContent() {
             greeting that used to sit around it are gone — three competing
             voices in one column, where the big line already says it. */}
         <div className="relative z-10">
-          <HeroTypedHeadline appName={appName} accentInk={accentInk} />
+          <HeroTypedHeadline
+            appName={appName}
+            accentInk={accentInk}
+            onDark={heroOnDark}
+          />
         </div>
 
         <p
