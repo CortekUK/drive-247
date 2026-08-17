@@ -585,7 +585,15 @@ function LoginPageContent() {
 
           The extra top padding below `lg` reserves the pinned mark's band, so a
           centred form can never ride up into it on a short screen. */}
-      <main className="relative flex min-h-screen items-center justify-center px-6 pt-24 pb-10 sm:px-10 lg:py-12">
+      {/* Top-anchored on a phone, centred from `lg`.
+          Centring in the viewport put the block wherever the middle happened to
+          be, which on a tall phone left a large void under the pinned mark that
+          grew with the screen. Anchoring to the top makes the distance from the
+          mark a spacing decision rather than a by-product of the device height,
+          and it stays put across every phone size. Desktop keeps centring —
+          there `main` is a grid item filling a full-height row, so the middle
+          is exactly where the form belongs. */}
+      <main className="relative flex min-h-screen items-start justify-center px-6 pt-[104px] pb-10 sm:px-10 lg:items-center lg:py-12">
         {/* Between the 448px this started at, which read as a thin strip, and
             the 560px that replaced it, which ran too wide once the panel came
             back off. */}
