@@ -26,8 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { TraxLoginTip } from "@/components/shared/layout/trax-login-tip";
-import { CloudShader } from "@/components/ui/cloud-shader";
-import { brandInk, brandSky, brandSurface } from "@/lib/brand-surface";
+import { brandInk, brandSurface } from "@/lib/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
@@ -87,7 +86,6 @@ function LoginPageContent() {
   // a purple hero on a green brand, the same bug the shell's corner wash had.
   // See `brandSurface` for why the chart ramp is the wrong source too.
   const hero = brandSurface(branding?.primary_color);
-  const sky = brandSky(branding?.primary_color);
   const heroImage = branding?.hero_background_url || null;
   // Link colour for the form column. See `brandInk` — `text-primary` is
   // invisible on the pale-branded tenants.
@@ -353,31 +351,12 @@ function LoginPageContent() {
             "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
         }}
       >
-        {/* A tenant who uploaded a hero photograph gets their photograph; the
-            sky is what stands in when they have not. `hero.color` stays on the
-            wrapper underneath either way, so a machine with no WebGL — the
-            shader bails silently on a null context — lands on the flat brand
-            colour rather than a hole. */}
-        {!heroImage && (
-          <CloudShader
-            className="absolute inset-0 h-full min-h-0"
-            speed={0.7}
-            count={6}
-            {...sky}
-          />
+        {/* Scrim only over a photograph, which is an unknown and needs one to
+            carry white text. The flat colour gets nothing laid over it — a
+            scrim, a glow or a gradient would each undo the one thing it is. */}
+        {heroImage && (
+          <div className="absolute inset-0 bg-gradient-to-tr from-black/75 via-black/55 to-black/35" />
         )}
-
-        {/* Legibility scrim, weighted to the bottom-left where every line of
-            copy sits. Clouds are near-white by design, and white text over a
-            cloud is not readable at any opacity — this keeps the sky bright at
-            the top-right and hands the text a dark ground. */}
-        <div
-          className={`absolute inset-0 bg-gradient-to-tr ${
-            heroImage
-              ? "from-black/75 via-black/55 to-black/35"
-              : "from-black/70 via-black/35 to-transparent"
-          }`}
-        />
       </div>
 
       {/* ---------- Left: hero content (lg and up) ---------- */}
