@@ -1,5 +1,18 @@
 {
-  "files": [],
-  "specs": [],
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-banner-dismissal.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-stack.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-types.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/deposit-hold-banners.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-deposit-hold-alerts.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/banner-stack.test.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/vitest.config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/tailwind.config.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-enhanced-rentals.ts"
+  ],
+  "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+  ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

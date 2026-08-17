@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { AccountingConnectionExpiredBanner } from "@/components/dashboard/accounting-connection-expired-banner";
+import { AppBannerStack } from "@/components/banners/app-banner-stack";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
@@ -342,6 +343,14 @@ export default function DashboardLayout({
           </header>
           <MaintenanceBanner />
           <AccountingConnectionExpiredBanner />
+          {/*
+            Deposit-hold alerts, and the mount point every future banner should
+            move into. Kept BELOW the two legacy bars rather than replacing them:
+            those render themselves and manage their own visibility, so folding
+            them in is a separate migration. The stack emits at most one deposit
+            banner (plus a compact chip row), so this cannot become a wall.
+          */}
+          <AppBannerStack scope="app" />
 
           <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
             {children}

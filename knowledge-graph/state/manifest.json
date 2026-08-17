@@ -4,7 +4,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/vitest.config.ts": {
-    "sha": "7f1f132b827c60941b9fa2b01327b97ede32df4de302d4bbaea063f6f7fe8c6a",
+    "sha": "f63f7ba52c651c24439732036d2cefbd10adb384f5e9342f6aca355a35686c37",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/next.config.js": {
@@ -12,7 +12,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/tailwind.config.ts": {
-    "sha": "6d36c0f4ef56ba94b47cefc2d49ca1a3ee15fe0596355e30b9a53288ba408479",
+    "sha": "52761977ff07265eb38ce9fa24367f79a0107d8b51ebc959136c95a89ce3a970",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/proxy.ts": {
@@ -356,7 +356,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/page.tsx": {
-    "sha": "99759e53c03831c726b6251906ab40daa24203c588c48189b800ee1670afdf6f",
+    "sha": "54aa08d1f427211f924220201642a6de8f55ae637f1449f28ef6e684d1703e0e",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx": {
@@ -2183,6 +2183,22 @@
     "sha": "e4308e3c490c9c7216508fcd24cf9ea60a560f37efbfdf6413b51f7c8b48ceed",
     "unit": "portal"
   },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-banner-dismissal.ts": {
+    "sha": "7cdaec1a0f85793a67f3ea0afe30ef157ecbc1cd53dcba94609a74bfc101e840",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-stack.tsx": {
+    "sha": "0d425677c8da221d87203ea4015f2536db0c7696380d8a8f60991551773abea6",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-types.ts": {
+    "sha": "b32d028681e2fdd21cc6ee9e8ac7e7f168bd4e8dff08b8554c701a2691145394",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/deposit-hold-banners.tsx": {
+    "sha": "609e7771a708512de51b5dc9d0e18151403351cb71704367aa132ebaaf8da691",
+    "unit": "portal"
+  },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/revenue-chart.tsx": {
     "sha": "6e21b5895c8f1deadeebc0011d6e1c405b4e9c1c713f45ee3a14915a723ecdbf",
     "unit": "portal"
@@ -2787,6 +2803,10 @@
     "sha": "0f527f3afb4f04c79b9f96b215dc90e1637a0240b028f786cf2857303b78c4a0",
     "unit": "portal"
   },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-deposit-hold-alerts.ts": {
+    "sha": "2fa08b91dbd22c61f094133b2114c3758be61635be5dbbf7b70d782f7a368ed5",
+    "unit": "portal"
+  },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-dashboard-kpis.ts": {
     "sha": "f0dee538c45d935e30ca98c6da391ec54b78672b0c06af963290b0d29f3f1032",
     "unit": "portal"
@@ -3140,7 +3160,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-enhanced-rentals.ts": {
-    "sha": "45a4b24d7fb46d50511cfce1a9286b8f1fafb09170d7222aabda7024b4642360",
+    "sha": "bee9c9d4ca1c5cca142810dab68b8d161f4eb7da8df6c391a28f551d6957d8ec",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-customer-rentals.ts": {
@@ -3553,6 +3573,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/deposit-hold-verify-permissions.test.ts": {
     "sha": "742785c840911e5c65f012ebd48ccc6214d52d987b8c76446a1a517453f201fa",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/banner-stack.test.tsx": {
+    "sha": "4c3d480523b260c6a178b904a2412132f7a8a1a26dfff119c8f44af849839f61",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/charge-deposit-dialog.test.ts": {
