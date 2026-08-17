@@ -23,13 +23,11 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
-import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { TraxLoginTip } from "@/components/shared/layout/trax-login-tip";
 import { brandInk, brandSurface } from "@/lib/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
-import { useTheme } from "next-themes";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
@@ -130,8 +128,12 @@ function LoginPageContent() {
   const authLogoUrl = branding?.auth_logo_url;
   const appName = branding?.app_name || "Drive247";
 
-  const { resolvedTheme } = useTheme();
-  const isDarkMode = resolvedTheme === "dark";
+  // The route is forced to light in `providers.tsx`, so this screen does not
+  // ask what the theme is — it states it. Reading `resolvedTheme` here would
+  // report the operator's *stored* preference, which `forcedTheme` does not
+  // change, and a dark-mode operator would get the deep panel and white type
+  // painted onto the light page.
+  const isDarkMode = false;
 
   // ---- Hero panel ----
   //
@@ -477,12 +479,10 @@ function LoginPageContent() {
         </p>
       </aside>
 
-      {/* ---------- Right: sign-in form ---------- */}
+      {/* ---------- Right: sign-in form ----------
+          No theme toggle. The route is forced to light in `providers.tsx`, so
+          a control here would have had nothing to switch. */}
       <main className="relative flex items-center justify-center px-6 py-12 sm:px-10">
-        <div className="absolute right-4 top-4">
-          <ThemeToggle />
-        </div>
-
         <div className="w-full max-w-md">
           {/* Small screens only — from lg up the hero carries the brand. */}
           <div className="mb-8 flex justify-center lg:hidden">

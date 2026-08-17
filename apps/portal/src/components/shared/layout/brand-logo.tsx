@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "next-themes";
+import { useEffectiveTheme } from "@/hooks/use-effective-theme";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { cn } from "@/lib/utils";
 
@@ -33,11 +33,13 @@ interface BrandLogoProps {
  * their own initials, never the platform's brand.
  */
 export function BrandMark({ className }: { className?: string }) {
-  const { resolvedTheme } = useTheme();
+  // Not `resolvedTheme` — see `useEffectiveTheme`: on a forced-light route
+  // it still reports "dark", which picks the dark logo onto a light page.
+  const { isDark } = useEffectiveTheme();
   const { branding, brandName } = useTenantBranding();
 
   const logoUrl =
-    resolvedTheme === "dark" && branding?.dark_logo_url
+    isDark && branding?.dark_logo_url
       ? branding.dark_logo_url
       : branding?.logo_url;
 
@@ -76,11 +78,13 @@ export function BrandMark({ className }: { className?: string }) {
  * the platform's default brand for a tenant that hasn't uploaded a logo.
  */
 export function BrandLogo({ collapsed = false, className }: BrandLogoProps) {
-  const { resolvedTheme } = useTheme();
+  // Not `resolvedTheme` — see `useEffectiveTheme`: on a forced-light route
+  // it still reports "dark", which picks the dark logo onto a light page.
+  const { isDark } = useEffectiveTheme();
   const { branding, brandName } = useTenantBranding();
 
   const logoUrl =
-    resolvedTheme === "dark" && branding?.dark_logo_url
+    isDark && branding?.dark_logo_url
       ? branding.dark_logo_url
       : branding?.logo_url;
 

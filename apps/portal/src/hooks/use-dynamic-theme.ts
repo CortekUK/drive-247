@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useTheme } from 'next-themes';
+import { useEffectiveTheme } from '@/hooks/use-effective-theme';
 import { useTenantBranding } from './use-tenant-branding';
 
 // Default theme colors - must match index.css
@@ -179,7 +179,9 @@ function generateColorVariants(hex: string) {
 
 export function useDynamicTheme() {
   const { branding } = useTenantBranding();
-  const { resolvedTheme } = useTheme();
+  // Not `resolvedTheme` — see `useEffectiveTheme`. A forced-light route would
+  // otherwise get the tenant's *dark* brand variables written onto a light page.
+  const { theme: effectiveTheme, isDark } = useEffectiveTheme();
   const [mounted, setMounted] = useState(false);
 
   // Wait for client-side mount to avoid hydration mismatch
@@ -192,7 +194,7 @@ export function useDynamicTheme() {
     if (!mounted || !branding) return;
 
     const root = document.documentElement;
-    const isDarkMode = resolvedTheme === 'dark';
+    const isDarkMode = isDark;
     const defaults = isDarkMode ? DEFAULT_COLORS.dark : DEFAULT_COLORS.light;
 
     // Get the appropriate colors for current theme
@@ -393,7 +395,7 @@ export function useDynamicTheme() {
       // localStorage might not be available
     }
 
-  }, [branding, resolvedTheme, mounted]);
+  }, [branding, effectiveTheme, isDark, mounted]);
 
   return { branding, mounted };
 }

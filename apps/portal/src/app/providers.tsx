@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
@@ -37,7 +38,23 @@ function GlobalKeyboardShortcuts({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Routes that render in light only. Signing in happens before there is a user
+ * whose preference we could honour, and the screen carries no toggle, so there
+ * is nothing for a theme to mean here.
+ *
+ * `forcedTheme` rather than `setTheme("light")`: setting it would overwrite the
+ * stored preference, and an operator who runs the dashboard in dark would find
+ * it had been reset for them by the act of logging in.
+ */
+const LIGHT_ONLY_ROUTES = ["/login", "/reset-password"];
+
 export function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const forcedTheme = LIGHT_ONLY_ROUTES.includes(pathname ?? "")
+    ? "light"
+    : undefined;
+
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -62,6 +79,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 defaultTheme="system"
                 enableSystem
                 disableTransitionOnChange
+                forcedTheme={forcedTheme}
               >
                 <TooltipProvider>
                   <GlobalKeyboardShortcuts>
