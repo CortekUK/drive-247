@@ -44,6 +44,58 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+/**
+ * How the brand wash dissolves into the page.
+ *
+ * Two things make a blend read as a blend rather than as an edge, and the
+ * first attempt at this had neither.
+ *
+ * Length: the fade is measured against the viewport, not against the wash's
+ * own box. A percentage of a 58%-wide layer is a different number of pixels at
+ * every window size, so the transition tightened as the window narrowed —
+ * exactly when it could least afford to. Spanning the viewport keeps it
+ * proportional, and it runs well past the halfway line so the seam has no
+ * fixed place to be.
+ *
+ * Curve: a two-stop mask is linear in alpha, and the eye finds the corners
+ * where it starts and stops. The intermediate stops approximate a smoothstep,
+ * so the rate of change itself eases in and out and there is no kink to catch.
+ */
+const WASH_MASK = `linear-gradient(to right,
+  rgb(0 0 0) 0%,
+  rgb(0 0 0) 34%,
+  rgb(0 0 0 / 0.96) 42%,
+  rgb(0 0 0 / 0.88) 49%,
+  rgb(0 0 0 / 0.74) 56%,
+  rgb(0 0 0 / 0.56) 63%,
+  rgb(0 0 0 / 0.38) 70%,
+  rgb(0 0 0 / 0.22) 77%,
+  rgb(0 0 0 / 0.10) 84%,
+  rgb(0 0 0 / 0.03) 92%,
+  rgb(0 0 0 / 0) 100%)`;
+
+/**
+ * The same dissolve for a tenant who uploaded a hero photograph, compressed
+ * into a half-width layer.
+ *
+ * A photograph cannot take the page-wide treatment. A flat tint at a tenth of
+ * its opacity is still a flat tint, but a photograph at a tenth is legible
+ * imagery sitting underneath the password field, and it arrives with a dark
+ * scrim that would drag the form's background down with it. So the picture
+ * stays on its own side and only its trailing edge is dissolved.
+ *
+ * No tenant has set `hero_background_url` today — this is the path staying
+ * correct rather than the path anyone is on.
+ */
+const PHOTO_MASK = `linear-gradient(to right,
+  rgb(0 0 0) 0%,
+  rgb(0 0 0) 55%,
+  rgb(0 0 0 / 0.86) 66%,
+  rgb(0 0 0 / 0.60) 76%,
+  rgb(0 0 0 / 0.32) 86%,
+  rgb(0 0 0 / 0.10) 94%,
+  rgb(0 0 0 / 0) 100%)`;
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -347,25 +399,29 @@ function LoginPageContent() {
     <div className="relative min-h-screen overflow-hidden bg-background lg:grid lg:grid-cols-2">
       {/* Brand wash.
           Deliberately NOT a background on the hero column: a column paints to
-          its own edge and that edge is a hard vertical line down the middle of
-          the screen. This layer is wider than the column it sits under and is
-          masked away before it gets there, so the dark side dissolves into the
-          light one and the two halves read as one page. */}
+          its own edge, and that edge is a hard vertical line down the middle of
+          the screen. This layer spans the whole page and is dissolved by
+          `WASH_MASK` instead, so there is no boundary anywhere for the eye to
+          land on and the two halves read as one surface. */}
       <div
         aria-hidden
-        className="absolute inset-y-0 left-0 hidden w-[58%] overflow-hidden lg:block"
+        className={`absolute inset-y-0 left-0 hidden overflow-hidden lg:block ${
+          heroImage ? "w-[58%]" : "w-full"
+        }`}
         style={{
           ...(heroImage
             ? {
                 backgroundImage: `url(${heroImage})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
+                maskImage: PHOTO_MASK,
+                WebkitMaskImage: PHOTO_MASK,
               }
-            : { backgroundColor: hero.color }),
-          maskImage:
-            "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
-          WebkitMaskImage:
-            "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
+            : {
+                backgroundColor: hero.color,
+                maskImage: WASH_MASK,
+                WebkitMaskImage: WASH_MASK,
+              }),
         }}
       >
         {/* Scrim only over a photograph, which is an unknown and needs one to
