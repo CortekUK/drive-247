@@ -505,7 +505,10 @@ function LoginPageContent() {
           No theme toggle. The route is forced to light in `providers.tsx`, so
           a control here would have had nothing to switch. */}
       <main className="relative flex items-center justify-center px-6 py-12 sm:px-10">
-        <div className="w-full max-w-[560px]">
+        {/* Between the 448px this started at, which read as a thin strip, and
+            the 560px that replaced it, which ran too wide once the panel came
+            back off. */}
+        <div className="w-full max-w-[480px]">
           {/* Small screens only — from lg up the hero carries the brand. */}
           <div className="mb-8 flex justify-center lg:hidden">
             <BrandLogo className="h-12 w-auto max-w-[200px]" />
