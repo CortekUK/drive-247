@@ -19,11 +19,11 @@ import { useReducedMotion } from "motion/react";
  * boundary has to be known by index. Searching for the keyword in the visible
  * substring would also colour the wrong copy whenever a word appears twice.
  *
- * Headlines are kept under ~34 characters and `sub` under ~92: at the `lg`
- * breakpoint the hero column is about 416px, which is roughly sixteen headline
- * characters and forty-six sub characters to a line. Both reservations below
- * are three lines, and the whole group is centred between the logo and the
- * footer — so anything that overruns does not just clip, it slides the block.
+ * Headlines are kept to ~30 characters and `sub` to ~92: at the `lg` breakpoint
+ * the hero column is about 416px, which is roughly sixteen headline characters
+ * and forty-six sub characters to a line. Both must stay within two lines —
+ * the reservations below are sized for exactly that, and a third line would
+ * push past them and shift the block rather than simply clip.
  */
 interface Feature {
   before: string;
@@ -78,7 +78,7 @@ const FEATURES: Feature[] = [
   {
     before: "Your whole ",
     key: "fleet",
-    after: ", on one screen.",
+    after: ", one screen.",
     sub: "Availability, blocked dates and every booking laid out across a single calendar.",
   },
   {
@@ -96,7 +96,7 @@ const FEATURES: Feature[] = [
   {
     before: "",
     key: "Follow-ups",
-    after: " that send themselves.",
+    after: " send themselves.",
     sub: "Turn enquiries into quotes, and let automations chase the ones going cold.",
   },
   {
@@ -192,15 +192,18 @@ export function HeroTypedHeadline({
       {/* Hidden from assistive tech — a screen reader following the string
           letter by letter reads as noise. The list below carries every feature
           in one piece. */}
-      {/* The reservation lives on this wrapper, and the headline is pinned to
-          its *bottom*. Reserving three lines on the text itself left a
-          one-line headline sitting at the top of a tall box with the sub-line
-          stranded 150px underneath, visibly detached from the sentence it
-          belongs to. Growing upward instead keeps the two together and puts the
-          slack above, between the logo and the headline, where the block is
-          already centred and nobody reads it as a gap. */}
+      {/* Top-aligned, and that is the whole point. Pinning the headline to the
+          bottom of its reservation kept the sub-line tight underneath, but it
+          moved the headline's *first* line: a one-line entry sat low and a
+          two-line entry sat high, so the copy jumped between features — and it
+          jumped again mid-typing, the moment a line wrapped and pushed the text
+          already on screen upward. Anchoring the top means nothing you are
+          reading ever moves; only the unwritten space below it changes.
+
+          Every headline is kept to two lines at every width (measured), so the
+          slack that opens up before the sub-line is at most one line. */}
       <div
-        className={`flex min-h-[3.3em] items-end text-5xl xl:text-6xl ${
+        className={`flex min-h-[2.2em] items-start text-5xl xl:text-6xl ${
           onDark ? "text-white" : "text-slate-900"
         }`}
       >
@@ -214,19 +217,37 @@ export function HeroTypedHeadline({
           {beforeShown}
           <span style={{ color: accentInk }}>{keyShown}</span>
           {afterShown}
+          {/* The caret takes no width in the layout, and that is load-bearing
+              rather than tidy. As a 4px inline-block with a 4px margin it added
+              8px of advance to the end of the line, which was enough to push
+              the last word onto a third line on the longer headlines — a line
+              past the reservation, so the whole block moved. Measuring the
+              strings alone had said they fit; the caret was the difference
+              between that and what actually rendered.
+
+              A zero-width wrapper with the bar positioned out of flow keeps it
+              visible without letting it vote on where the text breaks. */}
           {!reduceMotion && (
-            <span
-              className="ml-1 inline-block h-[0.8em] w-[4px] translate-y-[0.06em] animate-pulse rounded-full align-middle"
-              style={{ backgroundColor: accentInk, opacity: 0.8 }}
-            />
+            <span className="relative inline-block h-[0.8em] w-0 align-middle">
+              <span
+                className="absolute inset-y-0 left-[4px] w-[4px] animate-pulse rounded-full"
+                style={{ backgroundColor: accentInk, opacity: 0.8 }}
+              />
+            </span>
           )}
         </p>
       </div>
 
+      {/* Rises into place rather than just fading, so it reads as the second
+          beat of one motion instead of a separate element blinking on. It
+          leaves the same way before the headline is erased, which keeps the
+          pair from ever showing two different features at once. */}
       <p
         aria-hidden="true"
-        className={`mt-5 min-h-[4.5em] max-w-lg text-lg leading-relaxed transition-opacity duration-500 ${
-          subVisible ? "opacity-100" : "opacity-0"
+        className={`mt-5 min-h-[3.25em] max-w-lg text-lg leading-relaxed transition-all duration-500 ease-out ${
+          subVisible
+            ? "translate-y-0 opacity-100"
+            : "translate-y-2 opacity-0"
         } ${onDark ? "text-white/75" : "text-slate-900/65"}`}
       >
         {feature.sub}
