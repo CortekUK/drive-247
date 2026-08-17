@@ -95,6 +95,21 @@ const PHOTO_MASK = `linear-gradient(to right,
   rgb(0 0 0 / 0) 100%)`;
 
 /**
+ * The mobile wash runs top-to-bottom instead of left-to-right, and eases the
+ * same way — the eye finds the corners of a two-stop fade whichever axis it is
+ * on.
+ */
+const MOBILE_WASH_MASK = `linear-gradient(to bottom,
+  rgb(0 0 0) 0%,
+  rgb(0 0 0) 18%,
+  rgb(0 0 0 / 0.88) 34%,
+  rgb(0 0 0 / 0.68) 48%,
+  rgb(0 0 0 / 0.44) 62%,
+  rgb(0 0 0 / 0.22) 76%,
+  rgb(0 0 0 / 0.08) 88%,
+  rgb(0 0 0 / 0) 100%)`;
+
+/**
  * The sign-in fields.
  *
  * The shared `Input` is built for dense dashboard forms: 36px tall, a
@@ -165,20 +180,32 @@ function LoginPageContent() {
   // painted onto the light page.
   const isDarkMode = false;
 
+  // ---- Brand colours ----
+  //
+  // Resolved exactly the way `use-dynamic-theme` resolves them in light mode:
+  // the `light_*` override first, the base column second. Settings → Appearance
+  // writes both, and they are not always the same value — `amgroadside` has a
+  // blue `accent_color` and a dark red `light_accent_color`, so reading the
+  // base here would paint their login screen a colour the rest of their portal
+  // never shows. This route is pinned light, so the light branch is the only
+  // one that applies.
+  const accentSource =
+    branding?.light_accent_color ||
+    branding?.accent_color ||
+    branding?.light_primary_color ||
+    branding?.primary_color;
+  const primarySource =
+    branding?.light_primary_color || branding?.primary_color;
+
   // ---- Hero panel ----
   //
   // One flat colour, taken from the accent and never from a literal. v2 built
   // this as a gradient of `accent_color || secondary_color || "#6366f1"`, so
   // every tenant who had left their accent unset landed on that one indigo — a
   // purple hero on a green brand, the same bug the shell's corner wash had.
-  // Falling back to `primary_color` keeps the chain brand-derived end to end;
-  // all forty-six tenants have an accent set today, so the fallback is a guard
-  // rather than a path anyone is on. See `brandSurface` for why the chart ramp
-  // is the wrong source too.
-  const hero = brandSurface(
-    branding?.accent_color || branding?.primary_color,
-    isDarkMode
-  );
+  // Falling back through to primary keeps the chain brand-derived end to end.
+  // See `brandSurface` for why the chart ramp is the wrong source too.
+  const hero = brandSurface(accentSource, isDarkMode);
   const heroImage = branding?.hero_background_url || null;
 
   // A photograph is always a dark ground once scrimmed; the flat panel is only
@@ -187,13 +214,13 @@ function LoginPageContent() {
 
   // Link colour for the form column. See `brandInk` — `text-primary` is
   // invisible on the pale-branded tenants.
-  const ink = brandInk(branding?.primary_color, isDarkMode);
+  const ink = brandInk(primarySource, isDarkMode);
 
   // The hero headline, in the accent. Run through `brandInk` for the same
   // reason: the panel behind it is a pale tint of this very colour, so the raw
   // accent would sit roughly 2.5:1 against its own background.
   const accentInk = brandInk(
-    branding?.accent_color || branding?.primary_color,
+    accentSource,
     heroOnDark
   );
 
@@ -472,6 +499,27 @@ function LoginPageContent() {
         )}
       </div>
 
+      {/* Brand wash, phones and small tablets.
+          The hero column is hidden below `lg`, and it was taking every trace of
+          the tenant's colour with it — a green-branded operator and an indigo
+          one opened the same near-white page, with the logo the only thing
+          telling them apart. This brings the colour down from the top edge and
+          fades it out above the fields, so the brand is present without sitting
+          behind anything that has to stay readable.
+
+          Always the flat tint, never the photograph: a scrimmed picture behind
+          a form on a 390px screen is the legibility problem the desktop layout
+          keeps at arm's length by giving it its own column. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[42vh] lg:hidden"
+        style={{
+          backgroundColor: hero.color,
+          maskImage: MOBILE_WASH_MASK,
+          WebkitMaskImage: MOBILE_WASH_MASK,
+        }}
+      />
+
       {/* ---------- Left: hero content (lg and up) ----------
           Type colour follows the panel, not the app theme: in light mode the
           panel is a pale tint and white text on it would be unreadable. */}
@@ -515,7 +563,11 @@ function LoginPageContent() {
       {/* ---------- Right: sign-in form ----------
           No theme toggle. The route is forced to light in `providers.tsx`, so
           a control here would have had nothing to switch. */}
-      <main className="relative flex items-center justify-center px-6 py-12 sm:px-10">
+      {/* `min-h-screen` so the form centres on a phone too. Below `lg` the
+          parent stops being a grid, so this is an ordinary block that shrank to
+          its content — `items-center` had nothing to centre within, and the
+          form sat against the top edge with the dead space all below it. */}
+      <main className="relative flex min-h-screen items-center justify-center px-6 py-12 sm:px-10">
         {/* Between the 448px this started at, which read as a thin strip, and
             the 560px that replaced it, which ran too wide once the panel came
             back off. */}
