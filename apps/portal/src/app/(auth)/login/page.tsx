@@ -159,6 +159,14 @@ function LoginPageContent() {
   // invisible on the pale-branded tenants.
   const ink = brandInk(branding?.primary_color, isDarkMode);
 
+  // The hero headline, in the accent. Run through `brandInk` for the same
+  // reason: the panel behind it is a pale tint of this very colour, so the raw
+  // accent would sit roughly 2.5:1 against its own background.
+  const accentInk = brandInk(
+    branding?.accent_color || branding?.primary_color,
+    heroOnDark
+  );
+
   // `auth_logo_url` and `dark_logo_url` are both drawn for a dark ground — that
   // is the whole reason the old layout sat the logo on a hardcoded black
   // square. On the pale panel they would be the same invisible-on-light problem
@@ -457,7 +465,11 @@ function LoginPageContent() {
         {/* The whole middle band is Trax talking now — the static headline and
             the separate tip card said the same thing twice, in two voices. */}
         <div className="relative z-10">
-          <TraxTypedHeadline appName={appName} onDark={heroOnDark} />
+          <TraxTypedHeadline
+            appName={appName}
+            onDark={heroOnDark}
+            accentInk={accentInk}
+          />
         </div>
 
         <p

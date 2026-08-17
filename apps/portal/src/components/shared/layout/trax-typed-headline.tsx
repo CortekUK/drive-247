@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useReducedMotion } from "motion/react";
-import { Nunito } from "next/font/google";
 import { Sparkle } from "lucide-react";
 
 /**
@@ -12,28 +11,30 @@ import { Sparkle } from "lucide-react";
  * The rule from the smaller tip it replaces still holds — Trax must not appear
  * to know anything it cannot know. Nobody is signed in, so there is no fleet to
  * look at, and a line like "you have 3 rentals due back" would be invented and
- * disproved the moment they got inside. Every line here is an *invitation* to
- * ask, which is a promise the product actually keeps.
+ * disproved the moment they got inside.
  *
- * Nunito is a deliberate departure: BRAND_GUIDELINES.md says DM Sans for
- * everything and Inter for buttons, and neither is a rounded face. It is scoped
- * to this one headline rather than raised to a global token, so it stays easy
- * to pull back out. (Worth knowing separately: the portal actually loads
- * Manrope, not the DM Sans the guidelines describe — that drift predates this.)
+ * What is left once that is honoured is still worth saying, as long as it names
+ * a real job rather than gesturing at one. Each line below is a thing an
+ * operator actually does on a Monday — chasing a car that has not come back,
+ * working out who has not paid, finding a booking from half a plate — and each
+ * is something Trax genuinely answers, phrased the way a colleague would offer
+ * rather than the way a demo would boast.
  */
-const rounded = Nunito({
-  subsets: ["latin"],
-  weight: ["700", "800"],
-  display: "swap",
-});
 
+/**
+ * Kept short on purpose, and the limit is measured rather than guessed: at the
+ * `lg` breakpoint the hero column gives this about 416px, which is two lines of
+ * roughly 34 characters at 36px extrabold. Anything longer wraps to a third
+ * line, overflows the reservation below and shunts the greeting down a whole
+ * line every time that string comes round. An earlier set ran to 50 characters
+ * and did exactly that.
+ */
 const LINES = [
-  "Ask me what's overdue today.",
-  "Ask me which cars are idle.",
-  "Ask me who's late paying.",
-  "Ask me for a fleet overview.",
-  "Ask me which cars need service.",
-  "Ask me how deposits work.",
+  "Ask me what's due back today.",
+  "I'll find any booking in seconds.",
+  "Who's late paying? Just ask.",
+  "I'll tell you which cars sit idle.",
+  "Need last month's numbers? Ask me.",
 ];
 
 const TYPE_MS = 42;
@@ -50,9 +51,20 @@ interface TraxTypedHeadlineProps {
   appName: string;
   /** Whether the hero is a dark ground. The panel is a pale tint in light mode. */
   onDark: boolean;
+  /**
+   * The accent, already pushed to a lightness that reads against the panel —
+   * see `brandInk`. The raw accent cannot be used: the panel behind this *is*
+   * a pale tint of that same accent, so at full strength the two sit about
+   * 2.5:1 apart and the headline goes muddy on its own background.
+   */
+  accentInk: string;
 }
 
-export function TraxTypedHeadline({ appName, onDark }: TraxTypedHeadlineProps) {
+export function TraxTypedHeadline({
+  appName,
+  onDark,
+  accentInk,
+}: TraxTypedHeadlineProps) {
   const reduceMotion = useReducedMotion();
   const [lineIndex, setLineIndex] = useState(0);
   const [charCount, setCharCount] = useState(0);
@@ -122,16 +134,14 @@ export function TraxTypedHeadline({ appName, onDark }: TraxTypedHeadlineProps) {
           twitch every time a long string wrapped. */}
       <p
         aria-hidden="true"
-        className={`${rounded.className} mt-4 min-h-[2.5em] text-4xl font-extrabold leading-tight tracking-tight xl:text-5xl ${
-          onDark ? "text-white" : "text-slate-900"
-        }`}
+        className="mt-4 min-h-[2.5em] text-4xl font-extrabold leading-tight tracking-tight xl:text-5xl"
+        style={{ color: accentInk }}
       >
         {shown}
         {!reduceMotion && (
           <span
-            className={`ml-1 inline-block h-[0.85em] w-[3px] translate-y-[0.08em] animate-pulse rounded-full align-middle ${
-              onDark ? "bg-white/80" : "bg-slate-900/70"
-            }`}
+            className="ml-1 inline-block h-[0.85em] w-[3px] translate-y-[0.08em] animate-pulse rounded-full align-middle"
+            style={{ backgroundColor: accentInk, opacity: 0.8 }}
           />
         )}
       </p>
