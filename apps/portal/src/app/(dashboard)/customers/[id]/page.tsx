@@ -134,6 +134,22 @@ const CustomerDetail = () => {
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
 
+  // Whether an identity check passed or failed lives in `review_result`, not in
+  // `status`. `status` only says how far the flow got — the AI provider writes
+  // 'completed' for both a pass and a rejection, and the query below explicitly
+  // prefers those rows.
+  //
+  // This page used to read `status === 'approved'`, a value only one row on the
+  // platform has ever carried. Every other passed check — 227 of them — showed
+  // as "Pending" beside the customer's own approved licence photos. That is why
+  // operators reported verified customers as unverified.
+  //
+  // 'approved' / 'declined' are still honoured for whatever wrote them.
+  const isVerificationPassed = (v?: { status?: string | null; review_result?: string | null } | null) =>
+    v?.review_result === 'GREEN' || v?.status === 'approved';
+  const isVerificationDeclined = (v?: { status?: string | null; review_result?: string | null } | null) =>
+    v?.review_result === 'RED' || v?.status === 'declined';
+
   // Fetch latest identity verification for this customer (DOB fallback + photos)
   const { data: latestVerification } = useQuery({
     queryKey: ["customer-verification", id],
@@ -142,7 +158,7 @@ const CustomerDetail = () => {
       // Scope to AI/Veriff only — CMD has its own dedicated tab + query.
       const { data: completedData } = await (supabase as any)
         .from("identity_verifications")
-        .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")
+        .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, review_result, provider, verification_completed_at")
         .eq("customer_id", id)
         .eq("status", "completed")
         .in("provider", ["ai", "veriff"])
@@ -153,7 +169,7 @@ const CustomerDetail = () => {
       // Fallback to latest AI/Veriff record if no completed one exists.
       const { data, error } = await (supabase as any)
         .from("identity_verifications")
-        .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, provider, verification_completed_at")
+        .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, review_result, provider, verification_completed_at")
         .eq("customer_id", id)
         .in("provider", ["ai", "veriff"])
         .order("created_at", { ascending: false })
@@ -168,6 +184,7 @@ const CustomerDetail = () => {
         document_front_url: string | null;
         document_back_url: string | null;
         status: string | null;
+        review_result: string | null;
         provider: string | null;
         verification_completed_at: string | null;
       } | null;
@@ -659,14 +676,14 @@ const CustomerDetail = () => {
                   <Badge
                     variant="outline"
                     className={
-                      latestVerification.status === 'approved'
+                      isVerificationPassed(latestVerification)
                         ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
-                        : latestVerification.status === 'declined'
+                        : isVerificationDeclined(latestVerification)
                         ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
                         : 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800'
                     }
                   >
-                    {latestVerification.status === 'approved' ? 'Verified' : latestVerification.status === 'declined' ? 'Declined' : 'Pending'}
+                    {isVerificationPassed(latestVerification) ? 'Verified' : isVerificationDeclined(latestVerification) ? 'Declined' : 'Pending'}
                   </Badge>
                 )}
                 <Button
@@ -675,7 +692,7 @@ const CustomerDetail = () => {
                   className="h-7 text-xs gap-1"
                   onClick={() => setVerificationDialogOpen(true)}
                 >
-                  {latestVerification?.status === 'approved' ? (
+                  {isVerificationPassed(latestVerification) ? (
                     <>
                       <RefreshCw className="h-3 w-3" />
                       Re-verify
@@ -707,7 +724,7 @@ const CustomerDetail = () => {
                   <TabsTrigger value="ai" className="text-xs gap-1.5 h-7">
                     <Shield className="h-3 w-3" />
                     AI
-                    {latestVerification?.status === 'approved' && (
+                    {isVerificationPassed(latestVerification) && (
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     )}
                   </TabsTrigger>
