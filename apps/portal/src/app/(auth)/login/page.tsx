@@ -25,9 +25,9 @@ import { useRateLimiting } from "@/hooks/use-rate-limiting";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
-import { BrandGlobe } from "@/components/shared/layout/brand-globe";
 import { TraxLoginTip } from "@/components/shared/layout/trax-login-tip";
-import { brandInk, brandSurface } from "@/lib/brand-surface";
+import { CloudShader } from "@/components/ui/cloud-shader";
+import { brandInk, brandSky, brandSurface } from "@/lib/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
@@ -81,12 +81,13 @@ function LoginPageContent() {
 
   // ---- Hero panel ----
   //
-  // The gradient is derived from the brand hex, never from a literal. v2 built
-  // it as `accent_color || secondary_color || "#6366f1"`, so every tenant who
-  // had left their accent unset landed on that one indigo — a purple hero on a
-  // green brand, the same bug the shell's corner wash had. See `brandSurface`
-  // for why the chart ramp is the wrong source too.
+  // One flat colour, derived from the brand hex and never from a literal. v2
+  // built this as a gradient of `accent_color || secondary_color || "#6366f1"`,
+  // so every tenant who had left their accent unset landed on that one indigo —
+  // a purple hero on a green brand, the same bug the shell's corner wash had.
+  // See `brandSurface` for why the chart ramp is the wrong source too.
   const hero = brandSurface(branding?.primary_color);
+  const sky = brandSky(branding?.primary_color);
   const heroImage = branding?.hero_background_url || null;
   // Link colour for the form column. See `brandInk` — `text-primary` is
   // invisible on the pale-branded tenants.
@@ -337,7 +338,7 @@ function LoginPageContent() {
           light one and the two halves read as one page. */}
       <div
         aria-hidden
-        className="absolute inset-y-0 left-0 hidden w-[58%] lg:block"
+        className="absolute inset-y-0 left-0 hidden w-[58%] overflow-hidden lg:block"
         style={{
           ...(heroImage
             ? {
@@ -345,41 +346,42 @@ function LoginPageContent() {
                 backgroundSize: "cover",
                 backgroundPosition: "center",
               }
-            : { backgroundImage: hero.gradient }),
+            : { backgroundColor: hero.color }),
           maskImage:
             "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
           WebkitMaskImage:
             "linear-gradient(to right, #000 0%, #000 74%, transparent 100%)",
         }}
       >
-        {/* Scrim. A photograph is an unknown and needs enough to carry white
-            text; the gradient is already pinned dark by `brandSurface`, so
-            there it only has to add depth. */}
+        {/* A tenant who uploaded a hero photograph gets their photograph; the
+            sky is what stands in when they have not. `hero.color` stays on the
+            wrapper underneath either way, so a machine with no WebGL — the
+            shader bails silently on a null context — lands on the flat brand
+            colour rather than a hole. */}
+        {!heroImage && (
+          <CloudShader
+            className="absolute inset-0 h-full min-h-0"
+            speed={0.7}
+            count={6}
+            {...sky}
+          />
+        )}
+
+        {/* Legibility scrim, weighted to the bottom-left where every line of
+            copy sits. Clouds are near-white by design, and white text over a
+            cloud is not readable at any opacity — this keeps the sky bright at
+            the top-right and hands the text a dark ground. */}
         <div
           className={`absolute inset-0 bg-gradient-to-tr ${
             heroImage
               ? "from-black/75 via-black/55 to-black/35"
-              : "from-black/25 via-transparent to-transparent"
+              : "from-black/70 via-black/35 to-transparent"
           }`}
-        />
-        <div
-          className="absolute -left-24 -top-24 h-96 w-96 rounded-full opacity-30 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(255,255,255,0.35), transparent 70%)" }}
         />
       </div>
 
       {/* ---------- Left: hero content (lg and up) ---------- */}
       <aside className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        {/* Globe, in the upper right — the one part of the panel no copy uses.
-            It bleeds off the top and trails into the seam, so it reads as
-            something the page is cropping rather than an object placed in a
-            box. Kept left of where the mask starts to bite, or the fade eats it
-            before it is ever legible. */}
-        <BrandGlobe
-          size={500}
-          className="absolute -top-40 -right-20 opacity-80"
-        />
-
         <div className="relative z-10">
           {heroLogo ? (
             <img

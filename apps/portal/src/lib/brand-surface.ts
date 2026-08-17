@@ -19,11 +19,15 @@ import { hexToHSL } from "@/hooks/use-dynamic-theme";
  * is — `#90EE90` is a pale mint, but its *hue* is the tenant's, and a deep
  * green panel is recognisably theirs where a mint one is unreadable. And a
  * brand with no hue to give gets a neutral slate rather than a fabricated one.
+ *
+ * The result is one flat colour, not a ramp. A gradient across a panel this
+ * large reads as two colours however tight the stops are, which is the thing
+ * the brand is least able to afford here.
  */
 
 export interface BrandSurface {
-  /** Ready for `style={{ backgroundImage }}`. */
-  gradient: string;
+  /** A single flat colour, ready for `style={{ backgroundColor }}`. */
+  color: string;
   /** True when the brand had no usable hue, so the surface is neutral slate. */
   isNeutral: boolean;
 }
@@ -31,10 +35,14 @@ export interface BrandSurface {
 /** Below this saturation a colour reads as grey, and its hue is just noise. */
 const ACHROMATIC_SATURATION = 12;
 
-/** Lightness stops for the panel. Dark enough that white text holds at any hue. */
-const STOPS = [20, 29, 38] as const;
+/**
+ * One lightness, not a ramp. Low enough that white text clears 5:1 at every hue
+ * in the estate — the yellows and greens are the tight ones, since they carry
+ * far more luminance than a blue at the same nominal lightness.
+ */
+const SURFACE_LIGHTNESS = 26;
 
-const NEUTRAL_GRADIENT = `linear-gradient(150deg, hsl(222 18% ${STOPS[0]}%) 0%, hsl(222 15% ${STOPS[1]}%) 55%, hsl(222 13% ${STOPS[2]}%) 100%)`;
+const NEUTRAL_SURFACE = `hsl(222 14% ${SURFACE_LIGHTNESS}%)`;
 
 /**
  * A brand-hued colour safe to use as *text on a page background*.
@@ -68,21 +76,76 @@ export function brandInk(hex: string | null | undefined, isDark: boolean): strin
   return `hsl(${hsl.h} ${s}% ${l}%)`;
 }
 
+/** HSL → hex. See `brandSky` for why nothing here may emit an `hsl()` string. */
+function hslToHex(h: number, s: number, l: number): string {
+  const sat = s / 100;
+  const lig = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sat * Math.min(lig, 1 - lig);
+  const f = (n: number) =>
+    lig - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toByte = (x: number) =>
+    Math.round(255 * x)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toByte(f(0))}${toByte(f(8))}${toByte(f(4))}`;
+}
+
+export interface BrandSky {
+  skyTopColor: string;
+  skyBottomColor: string;
+  cloudColor: string;
+}
+
+/**
+ * The tenant's brand as a sky for `CloudShader`.
+ *
+ * Every value is **hex**, and that is not a style preference. The shader's
+ * `parseHex` falls through to `value.match(/[\d.]+/g)` for anything not
+ * starting with `#`, so an `hsl(244 76% 26%)` string parses as rgb(244, 76, 26)
+ * — a bright orange — with no error thrown and nothing in the console. A brand
+ * colour would silently become someone else's. This is the canvas boundary:
+ * CSS variables and CSS colour syntax both stop at the edge of `gl`.
+ *
+ * Sky runs deep at the top to light at the horizon, which is what gives the
+ * clouds something to sit against. Clouds stay near-white with only a trace of
+ * the brand — a fully brand-tinted cloud stops reading as a cloud.
+ */
+export function brandSky(hex: string | null | undefined): BrandSky {
+  const hsl = hex ? hexToHSL(hex) : null;
+
+  if (!hsl || hsl.s < ACHROMATIC_SATURATION) {
+    // Same reasoning as `brandSurface`: a brand with no hue must not be given
+    // one, and hue 0 at a fabricated saturation is red.
+    return {
+      skyTopColor: hslToHex(222, 16, 20),
+      skyBottomColor: hslToHex(222, 12, 44),
+      cloudColor: hslToHex(222, 8, 95),
+    };
+  }
+
+  const s = Math.round(Math.min(80, Math.max(25, hsl.s)));
+  return {
+    skyTopColor: hslToHex(hsl.h, s, 18),
+    skyBottomColor: hslToHex(hsl.h, Math.round(s * 0.8), 46),
+    cloudColor: hslToHex(hsl.h, 14, 95),
+  };
+}
+
 export function brandSurface(hex: string | null | undefined): BrandSurface {
   const hsl = hex ? hexToHSL(hex) : null;
 
   if (!hsl || hsl.s < ACHROMATIC_SATURATION) {
-    return { gradient: NEUTRAL_GRADIENT, isNeutral: true };
+    return { color: NEUTRAL_SURFACE, isNeutral: true };
   }
 
   // Hue is kept exactly. Saturation is pulled into a band that is neither muddy
   // (a near-grey brand shouldn't produce a dead panel) nor garish (`#FF0000` at
   // 100% would be a fire alarm).
   const s = Math.round(Math.min(80, Math.max(25, hsl.s)));
-  const stop = (l: number) => `hsl(${hsl.h} ${s}% ${l}%)`;
 
   return {
-    gradient: `linear-gradient(150deg, ${stop(STOPS[0])} 0%, ${stop(STOPS[1])} 55%, ${stop(STOPS[2])} 100%)`,
+    color: `hsl(${hsl.h} ${s}% ${SURFACE_LIGHTNESS}%)`,
     isNeutral: false,
   };
 }
