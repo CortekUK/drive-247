@@ -590,6 +590,22 @@ function LoginPageContent() {
             the 560px that replaced it, which ran too wide once the panel came
             back off. */}
         <div className="w-full max-w-[480px]">
+          {/* Below `lg` the hero column is gone and with it the product story,
+              leaving a band of empty tint between the pinned mark and the form.
+              The same copy runs here at a phone-sized scale, so the two layouts
+              say the same thing rather than the small one saying nothing.
+
+              `onDark` is false unconditionally: the mobile wash is always the
+              flat tint, never a tenant's hero photograph, so unlike the desktop
+              panel this ground cannot go dark. */}
+          <div className="mb-10 lg:hidden">
+            <HeroTypedHeadline
+              appName={appName}
+              accentInk={accentInk}
+              onDark={false}
+              compact
+            />
+          </div>
 
           {/* No panel — the form sits directly on the wash. The width that
               fixed the "thin strip" problem is on the column above, so it does

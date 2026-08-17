@@ -129,12 +129,23 @@ interface HeroTypedHeadlineProps {
    * non-keyword copy is near-black on the tint and has to invert there.
    */
   onDark: boolean;
+  /**
+   * Small-screen scale. The type drops from 48/60px to 26px and the sub-line
+   * from 18 to 14, but nothing else changes — both reservations are expressed
+   * in `em`, so they follow the font size down and keep holding exactly two
+   * lines. That is the reason `leading` stays at 1.1 and 1.625 here rather than
+   * being tuned per size: the reservations are 2.2em and 3.25em, which are two
+   * lines *of those leadings*, and changing one without the other silently
+   * reintroduces the shift.
+   */
+  compact?: boolean;
 }
 
 export function HeroTypedHeadline({
   appName,
   accentInk,
   onDark,
+  compact = false,
 }: HeroTypedHeadlineProps) {
   const reduceMotion = useReducedMotion();
   const [index, setIndex] = useState(0);
@@ -188,7 +199,7 @@ export function HeroTypedHeadline({
     reduceMotion || (!erasing && revealed === headlineOf(feature).length);
 
   return (
-    <div className="max-w-xl">
+    <div className={compact ? "" : "max-w-xl"}>
       {/* Hidden from assistive tech — a screen reader following the string
           letter by letter reads as noise. The list below carries every feature
           in one piece. */}
@@ -203,9 +214,9 @@ export function HeroTypedHeadline({
           Every headline is kept to two lines at every width (measured), so the
           slack that opens up before the sub-line is at most one line. */}
       <div
-        className={`flex min-h-[2.2em] items-start text-5xl xl:text-6xl ${
-          onDark ? "text-white" : "text-slate-900"
-        }`}
+        className={`flex min-h-[2.2em] items-start ${
+          compact ? "text-[26px]" : "text-5xl xl:text-6xl"
+        } ${onDark ? "text-white" : "text-slate-900"}`}
       >
         <p
           aria-hidden="true"
@@ -259,7 +270,14 @@ export function HeroTypedHeadline({
           pair from ever showing two different features at once. */}
       <p
         aria-hidden="true"
-        className={`mt-5 min-h-[3.25em] max-w-lg text-lg leading-relaxed transition-all duration-500 ease-out ${
+        className={`leading-relaxed transition-all duration-500 ease-out ${
+          // Three lines reserved at the compact scale, two at full size.
+          // `leading-relaxed` is 1.625, so those are 4.875em and 3.25em. On a
+          // 320px screen the longest sub wraps to three lines where a 375px one
+          // stops at two, and the two-line reservation let it push the form
+          // down a line every time that entry came round.
+          compact ? "mt-3 min-h-[4.875em] text-sm" : "mt-5 min-h-[3.25em] max-w-lg text-lg"
+        } ${
           subVisible
             ? "translate-y-0 opacity-100"
             : "translate-y-2 opacity-0"
