@@ -42,7 +42,7 @@ This is not one website. It is three connected products, and knowing which is wh
 
 ### 1. Your booking website
 
-The public site your customers see. Your logo, your colours, your fleet, your prices, your terms. Customers browse cars, pick dates, pay, verify their identity and sign the rental agreement here.
+The public site your customers see. Your logo, your colors, your fleet, your prices, your terms. Customers browse cars, pick dates, pay, verify their identity and sign the rental agreement here.
 
 You never edit this site by writing code. Everything on it is controlled from the portal.
 
@@ -68,13 +68,13 @@ $md$
 ### Day one — make it yours
 
 1. **Business details.** Settings → General. Name, address, contact email, phone, hours. This appears on your website, your invoices and your rental agreements, so get it right once.
-2. **Logo and colours.** Settings → Branding. Your site and your customer emails pick these up immediately.
+2. **Logo and colors.** Settings → Branding. Your site and your customer emails pick these up immediately.
 3. **Locations.** Settings → Locations. Where customers collect and return.
 
 ### Day two — put cars on the site
 
 4. **Add your vehicles.** Photos, specification, daily/weekly/monthly rates.
-5. **Booking rules.** Settings → Requirements and Duration. Minimum age, licence period, rental length, how far ahead people can book.
+5. **Booking rules.** Settings → Requirements and Duration. Minimum age, license period, rental length, how far ahead people can book.
 
 ### Day three — get paid
 
@@ -103,8 +103,8 @@ $md$
 The single most useful thing to understand. Everything else hangs off this sequence.
 
 1. **The customer books** — chooses a vehicle and dates, sees a price built from your rates, any weekend or holiday surcharge, your fees and tax, and any extras.
-2. **They pay** — in full, as a first instalment, or they submit for your approval. A deposit is *held* on their card separately — held, not taken.
-3. **They prove who they are** — licence upload and an identity check. You see the result before handing over anything.
+2. **They pay** — in full, as a first installment, or they submit for your approval. A deposit is *held* on their card separately — held, not taken.
+3. **They prove who they are** — license upload and an identity check. You see the result before handing over anything.
 4. **They buy protection** — if you offer Bonzah, coverage options appear during checkout.
 5. **They sign** — the agreement is generated with their details, your terms and any insurance addendum, then sent for electronic signature.
 6. **They collect** — in person, or by lockbox, in which case the access code is sent automatically at the right time.
@@ -153,7 +153,7 @@ Your booking site is generated from your settings. There is no separate website 
 
 | To change | Go to |
 |---|---|
-| Logo, colours | Settings → Branding |
+| Logo, colors | Settings → Branding |
 | Page text, images | Website Content |
 | Which cars appear | Fleet → Vehicles |
 | Prices | On each vehicle |
@@ -171,7 +171,7 @@ $md$
 Settings → Branding controls how your business looks everywhere a customer sees it: your site, every customer email, your invoices, your rental agreements and the signing experience.
 
 - **Logo** — upload the highest quality version you have; it is resized automatically.
-- **Primary colour** — take it from your existing brand rather than inventing one.
+- **Primary color** — take it from your existing brand rather than inventing one.
 - **Light and dark variants** — your site adapts to whichever the customer prefers. Set both.
 - **Hero imagery** — the large picture on your home page.
 
@@ -270,7 +270,7 @@ $md$),
  'plates', 'Plates',
  'Managing registration plates as their own records', 'Hash', NULL, 40,
 $md$
-Tracks registration plates separately from vehicles. This matters if you move plates between cars, run personalised plates, or operate where plates are assets with their own renewal dates and costs.
+Tracks registration plates separately from vehicles. This matters if you move plates between cars, run personalized plates, or operate where plates are assets with their own renewal dates and costs.
 
 If you simply have one fixed plate per car, you can ignore this page — the registration on the vehicle record is enough.
 $md$),
@@ -363,7 +363,7 @@ $md$),
  'agreements-esign', 'Rental agreements and signing',
  'The contract, generated and signed electronically', 'FileSignature', NULL, 50,
 $md$
-Every rental produces a legally binding agreement carrying your terms, the customer's details and licence information, the vehicle, dates and prices, any insurance addendum, and your mileage, fuel, deposit and damage policies.
+Every rental produces a legally binding agreement carrying your terms, the customer's details and license information, the vehicle, dates and prices, any insurance addendum, and your mileage, fuel, deposit and damage policies.
 
 1. Generated when the booking is confirmed.
 2. Sent by email, and by WhatsApp if you use it.
@@ -420,7 +420,7 @@ INSERT INTO public.welcome_pack_sections (group_id, slug, title, summary, icon, 
 $md$
 Every person who books gets a customer record and their own login to your customer portal.
 
-**You see:** contact details and address, licence and identity documents, verification status, every booking past and present, every payment and invoice, your whole message history, and your team's private ratings and notes.
+**You see:** contact details and address, license and identity documents, verification status, every booking past and present, every payment and invoice, your whole message history, and your team's private ratings and notes.
 
 **They see:** their own bookings, documents, invoices and messages. Nothing about your business, your other customers, or your notes on them.
 
@@ -431,15 +431,15 @@ $md$),
  'verification', 'Identity verification',
  'Knowing your customer is who they say they are', 'ScanFace', NULL, 20,
 $md$
-The customer photographs their licence and takes a selfie. The system reads the licence, checks it is genuine, and compares the face to the photograph on it. You see a clear result in the portal.
+The customer photographs their license and takes a selfie. The system reads the license, checks it is genuine, and compares the face to the photograph on it. You see a clear result in the portal.
 
 ### What you still do yourself
 
-- **Look at the licence.** Check for anything expired, restricted or endorsed.
-- **Check the name matches the payment card.** A licence in one name and a card in another is the oldest problem in this business.
+- **Look at the license.** Check for anything expired, restricted or endorsed.
+- **Check the name matches the payment card.** A license in one name and a card in another is the oldest problem in this business.
 - **Trust your instincts.** If something feels wrong, ask more questions. You are allowed to decline.
 
-**When verification fails** it is often innocent — a bad photograph, poor light, a damaged licence. Ask them to retry in daylight before assuming the worst. If it fails repeatedly, ask for documents in person.
+**When verification fails** it is often innocent — a bad photograph, poor light, a damaged license. Ask them to retry in daylight before assuming the worst. If it fails repeatedly, ask for documents in person.
 $md$),
 
 ((SELECT id FROM public.welcome_pack_groups WHERE key='customers'),
@@ -461,7 +461,7 @@ $md$
 
 **The platform blacklist** covers the serious cases across all operators — proven fraud, stolen vehicles, identity theft. If someone on it tries to book with you, you are warned.
 
-**Use it fairly.** Block for behaviour, never for anything else. Write the reason factually, as if the person will one day read it — because that is the standard the record should meet.
+**Use it fairly.** Block for behavior, never for anything else. Write the reason factually, as if the person will one day read it — because that is the standard the record should meet.
 $md$),
 
 ((SELECT id FROM public.welcome_pack_groups WHERE key='customers'),
@@ -531,7 +531,7 @@ $md$),
  'deposits', 'Security deposits',
  'Holding money without taking it', 'ShieldCheck', NULL, 30,
 $md$
-A pre-authorisation places a hold on the customer's card: reserved, not taken. You capture what you need and release the rest.
+A pre-authorization places a hold on the customer's card: reserved, not taken. You capture what you need and release the rest.
 
 Set the amount in Settings → Pre-Authorization — flat, or per vehicle so your luxury cars carry a higher hold.
 
@@ -545,14 +545,14 @@ Set the amount in Settings → Pre-Authorization — flat, or per vehicle so you
 $md$),
 
 ((SELECT id FROM public.welcome_pack_groups WHERE key='money'),
- 'instalments', 'Instalments',
+ 'installments', 'Installments',
  'Letting customers pay over time', 'Banknote', NULL, 40,
 $md$
 For longer or higher-value rentals, customers can pay on a schedule instead of all at once. You set how many payments and when; the first is taken at booking and the rest charged automatically to the same card. The schedule and its status show on the rental.
 
 **If one fails** you are notified, the system retries, and the customer is prompted to update their card. Decide your policy in advance: how many failures before you recover the vehicle, and what you tell the customer.
 
-Instalments increase conversion on long rentals significantly. They also increase your exposure, because you are extending credit. Use them for monthly rentals and corporate accounts; think harder about weekend hires.
+Installments increase conversion on long rentals significantly. They also increase your exposure, because you are extending credit. Use them for monthly rentals and corporate accounts; think harder about weekend hires.
 $md$),
 
 ((SELECT id FROM public.welcome_pack_groups WHERE key='money'),
@@ -808,7 +808,7 @@ Everyone on your team gets their own login. **Never share one account** — you 
 
 Your business partner → admin. Someone running one part of the business → manager, with specific areas granted. Counter and yard staff → ops. Your accountant → viewer.
 
-**When somebody leaves, deactivate their account the same day.** Not next week. Their account can see your customers' addresses, licence images and payment history.
+**When somebody leaves, deactivate their account the same day.** Not next week. Their account can see your customers' addresses, license images and payment history.
 $md$),
 
 ((SELECT id FROM public.welcome_pack_groups WHERE key='team'),
@@ -955,7 +955,7 @@ You have neither. You have a fleet, a phone that rings, and a business that has 
 
 ### The operators around you
 
-There are businesses here running three cars and businesses running three hundred. Almost every feature described in this document exists because one of them asked for it — the lockbox handover, the instalment plans, the vehicle owner payouts, the fine tracking.
+There are businesses here running three cars and businesses running three hundred. Almost every feature described in this document exists because one of them asked for it — the lockbox handover, the installment plans, the vehicle owner payouts, the fine tracking.
 
 When you hit something awkward, or want something that is not here, tell us. That is not politeness. It is genuinely how this gets built.
 
@@ -1043,7 +1043,7 @@ INSERT INTO public.welcome_pack_faqs (group_id, question, answer_md, required_fl
  $md$Yes. You get a platform address immediately, and we can point your own domain at it. Tell us the domain — usually a day, most of it waiting for the internet to update.$md$, NULL, 10),
 ((SELECT id FROM public.welcome_pack_groups WHERE key='website'),
  'Can I change the layout of my booking site, not just the text?',
- $md$Text, images, colours, logo and fleet are all yours. The underlying layout is standard because it is continuously tested for booking conversion across every operator here. If there is a specific change you need, tell us — layout changes that help one operator usually help all of them.$md$, NULL, 20),
+ $md$Text, images, colors, logo and fleet are all yours. The underlying layout is standard because it is continuously tested for booking conversion across every operator here. If there is a specific change you need, tell us — layout changes that help one operator usually help all of them.$md$, NULL, 20),
 ((SELECT id FROM public.welcome_pack_groups WHERE key='website'),
  'Why is a vehicle not showing on my website?',
  $md$Almost always one of four things: it is not published, it has no price for the duration searched, that duration is switched off for the vehicle, or it is blocked on the calendar for those dates. Check in that order.$md$, NULL, 30),
@@ -1085,10 +1085,10 @@ INSERT INTO public.welcome_pack_faqs (group_id, question, answer_md, required_fl
 
 ((SELECT id FROM public.welcome_pack_groups WHERE key='customers'),
  'A customer failed identity verification. What now?',
- $md$Usually a bad photograph rather than anything sinister. Ask them to retry in good light with the licence flat and no glare. If it fails repeatedly, ask to see the documents in person before releasing anything.$md$, NULL, 10),
+ $md$Usually a bad photograph rather than anything sinister. Ask them to retry in good light with the license flat and no glare. If it fails repeatedly, ask to see the documents in person before releasing anything.$md$, NULL, 10),
 ((SELECT id FROM public.welcome_pack_groups WHERE key='customers'),
  'Can I refuse a booking?',
- $md$Yes. It is your business and your vehicles. Decline for genuine reasons — failed verification, a poor previous rental, a licence that does not meet your policy. Never for anything discriminatory, and record the reason you gave.$md$, NULL, 20),
+ $md$Yes. It is your business and your vehicles. Decline for genuine reasons — failed verification, a poor previous rental, a license that does not meet your policy. Never for anything discriminatory, and record the reason you gave.$md$, NULL, 20),
 ((SELECT id FROM public.welcome_pack_groups WHERE key='customers'),
  'Do customers see the rating I give them?',
  $md$Never. Internal ratings and notes are private to your team and are not visible to the customer under any circumstances.$md$, NULL, 30),
@@ -1184,7 +1184,7 @@ INSERT INTO public.welcome_pack_faqs (group_id, question, answer_md, required_fl
  $md$Ops for day-to-day work on bookings, customers and vehicles. Use manager instead when someone needs a specific extra area, such as pricing or reports, and grant only that area.$md$, NULL, 20),
 ((SELECT id FROM public.welcome_pack_groups WHERE key='team'),
  'A member of staff has left. What do I do?',
- $md$Deactivate their account the same day. Their login can see customer addresses, licence images and payment history.$md$, NULL, 30),
+ $md$Deactivate their account the same day. Their login can see customer addresses, license images and payment history.$md$, NULL, 30),
 ((SELECT id FROM public.welcome_pack_groups WHERE key='team'),
  'Can I see who changed a price or issued a refund?',
  $md$Yes. The Audit Logs page records who did what and when, including bookings, prices, refunds, blocked customers, settings and user changes.$md$, NULL, 40),
