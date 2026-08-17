@@ -199,11 +199,15 @@ export function HeroTypedHeadline({
     reduceMotion || (!erasing && revealed === headlineOf(feature).length);
 
   const headlineSize = compact ? "text-[26px]" : "text-5xl xl:text-6xl";
-  const subSize = compact ? "mt-3 text-sm" : "mt-5 max-w-lg text-lg";
+  const subSize = compact ? "mt-2 text-sm" : "mt-4 max-w-lg text-lg";
   const baseColor = onDark ? "text-white" : "text-slate-900";
 
+  // Centred at the compact scale: on a phone the brand mark above this is
+  // centred too, and a left-aligned block under a centred mark reads as two
+  // different columns. The desktop hero stays left — there it lines up with the
+  // logo and the footer down the same edge.
   return (
-    <div className={`grid ${compact ? "" : "max-w-xl"}`}>
+    <div className={`grid ${compact ? "text-center" : "max-w-xl"}`}>
       {/* Height reservation, by example rather than by number.
 
           Every feature is rendered once, invisibly, stacked in the same grid

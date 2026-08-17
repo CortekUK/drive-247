@@ -574,7 +574,7 @@ function LoginPageContent() {
           from wide wordmarks to square marks, so height is what keeps them
           optically equal and `max-w` stops the widest ones running to the
           screen edges. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-9 lg:hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-8 lg:hidden">
         <BrandLogo className="h-9 w-auto max-w-[168px]" />
       </div>
 
@@ -585,7 +585,7 @@ function LoginPageContent() {
 
           The extra top padding below `lg` reserves the pinned mark's band, so a
           centred form can never ride up into it on a short screen. */}
-      <main className="relative flex min-h-screen items-center justify-center px-6 pt-28 pb-12 sm:px-10 lg:pt-12">
+      <main className="relative flex min-h-screen items-center justify-center px-6 pt-24 pb-10 sm:px-10 lg:py-12">
         {/* Between the 448px this started at, which read as a thin strip, and
             the 560px that replaced it, which ran too wide once the panel came
             back off. */}
@@ -598,7 +598,7 @@ function LoginPageContent() {
               `onDark` is false unconditionally: the mobile wash is always the
               flat tint, never a tenant's hero photograph, so unlike the desktop
               panel this ground cannot go dark. */}
-          <div className="mb-10 lg:hidden">
+          <div className="mb-7 lg:hidden">
             <HeroTypedHeadline
               appName={appName}
               accentInk={accentInk}
@@ -611,7 +611,7 @@ function LoginPageContent() {
               fixed the "thin strip" problem is on the column above, so it does
               not depend on a card to hold it; the fields carry their own edge
               instead. */}
-          <div className="mb-8 space-y-2">
+          <div className="mb-6 space-y-1.5">
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
               Sign in
             </h1>
@@ -622,7 +622,7 @@ function LoginPageContent() {
 
           {(
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 {error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
@@ -768,7 +768,7 @@ function LoginPageContent() {
             </Form>
           )}
 
-          <p className="mt-8 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Need help? Contact your system administrator.
           </p>
         </div>
