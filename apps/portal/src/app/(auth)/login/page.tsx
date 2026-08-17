@@ -94,6 +94,18 @@ const PHOTO_MASK = `linear-gradient(to right,
   rgb(0 0 0 / 0.10) 94%,
   rgb(0 0 0 / 0) 100%)`;
 
+/**
+ * The sign-in fields.
+ *
+ * The shared `Input` is built for dense dashboard forms: 36px tall, a
+ * transparent border and a half-opacity fill. On a page where the controls are
+ * the only thing to do, that reads as pale strips floating on the background
+ * with no edge. Overridden here rather than in `ui/input.tsx`, which the rest
+ * of the portal depends on staying compact.
+ */
+const FIELD_CLASS =
+  "h-12 rounded-2xl border-slate-900/10 bg-white px-4 text-[15px] placeholder:text-slate-400";
+
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -486,24 +498,34 @@ function LoginPageContent() {
           No theme toggle. The route is forced to light in `providers.tsx`, so
           a control here would have had nothing to switch. */}
       <main className="relative flex items-center justify-center px-6 py-12 sm:px-10">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-[560px]">
           {/* Small screens only — from lg up the hero carries the brand. */}
           <div className="mb-8 flex justify-center lg:hidden">
             <BrandLogo className="h-12 w-auto max-w-[200px]" />
           </div>
 
-          <div className="mb-8 space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Sign in
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Enter your email and password to access {appName}.
-            </p>
-          </div>
+          {/* The form sits on a surface of its own rather than directly on the
+              wash. Loose on the background it had nothing to set its width, so
+              a 448px column of controls read as a thin strip down the middle of
+              a very wide page. A panel gives the fields an edge to align to and
+              a reason to be the width they are.
 
-          {(
+              Translucent, not solid: the wash runs under this whole column and
+              fades as it goes right, so an opaque white card would punch a hard
+              rectangle out of the gradient. */}
+          <div className="rounded-[28px] border border-slate-900/[0.07] bg-white/80 p-8 backdrop-blur-sm sm:p-10">
+            <div className="mb-8 space-y-2">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                Sign in
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Enter your email and password to access {appName}.
+              </p>
+            </div>
+
+            {(
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                 {error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
@@ -527,6 +549,7 @@ function LoginPageContent() {
                       <FormControl>
                         <Input
                           type="email"
+                          className={FIELD_CLASS}
                           placeholder="Enter your email"
                           disabled={isSubmitting || isLocked}
                           autoComplete="email"
@@ -547,6 +570,7 @@ function LoginPageContent() {
                       <FormLabel>Password</FormLabel>
                       <FormControl>
                         <PasswordInput
+                          className={FIELD_CLASS}
                           placeholder="Enter your password"
                           disabled={isSubmitting || isLocked}
                           autoComplete="current-password"
@@ -621,7 +645,7 @@ function LoginPageContent() {
 
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="h-12 w-full rounded-2xl text-base"
                   disabled={isSubmitting || !form.formState.isValid || (requiresPolicyAcceptance && !form.watch("acceptPolicies"))}
                 >
                   {isSubmitting ? (
@@ -643,9 +667,12 @@ function LoginPageContent() {
                   )}
               </form>
             </Form>
-          )}
+            )}
+          </div>
 
-          <p className="mt-8 text-center text-sm text-muted-foreground">
+          {/* Outside the panel: it is a footnote about the page, not a control
+              on the form. */}
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Need help? Contact your system administrator.
           </p>
         </div>
