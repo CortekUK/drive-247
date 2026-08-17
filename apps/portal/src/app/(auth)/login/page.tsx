@@ -102,9 +102,16 @@ const PHOTO_MASK = `linear-gradient(to right,
  * the only thing to do, that reads as pale strips floating on the background
  * with no edge. Overridden here rather than in `ui/input.tsx`, which the rest
  * of the portal depends on staying compact.
+ *
+ * The border does all the defining, because there is no panel behind these to
+ * do it — and it has to hold at both ends of the column: over the tint on the
+ * left, and over near-white where the wash has faded out on the right. A
+ * hairline that reads on the tint disappears against the white, so it is set
+ * for the harder of the two. `hover` and the existing focus ring take it
+ * further on contact rather than shouting at rest.
  */
 const FIELD_CLASS =
-  "h-12 rounded-2xl border-slate-900/10 bg-white px-4 text-[15px] placeholder:text-slate-400";
+  "h-12 rounded-2xl border-slate-900/20 bg-white px-4 text-[15px] shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition-colors placeholder:text-slate-400 hover:border-slate-900/30";
 
 function LoginPageContent() {
   const router = useRouter();
