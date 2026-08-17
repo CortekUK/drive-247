@@ -563,19 +563,33 @@ function LoginPageContent() {
       {/* ---------- Right: sign-in form ----------
           No theme toggle. The route is forced to light in `providers.tsx`, so
           a control here would have had nothing to switch. */}
+      {/* Mobile brand mark, pinned near the top edge rather than riding on the
+          form. In the flow it was the first thing in a vertically centred
+          column, which put it a third of the way down the screen — floating,
+          and low in the brand wash it is supposed to sit in. Lifting it out
+          lets the form centre on its own and gives the page the same shape the
+          desktop layout has: mark at the top, content in the middle.
+
+          `h-9` with a width cap rather than a fixed box: tenant logos range
+          from wide wordmarks to square marks, so height is what keeps them
+          optically equal and `max-w` stops the widest ones running to the
+          screen edges. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-9 lg:hidden">
+        <BrandLogo className="h-9 w-auto max-w-[168px]" />
+      </div>
+
       {/* `min-h-screen` so the form centres on a phone too. Below `lg` the
           parent stops being a grid, so this is an ordinary block that shrank to
           its content — `items-center` had nothing to centre within, and the
-          form sat against the top edge with the dead space all below it. */}
-      <main className="relative flex min-h-screen items-center justify-center px-6 py-12 sm:px-10">
+          form sat against the top edge with the dead space all below it.
+
+          The extra top padding below `lg` reserves the pinned mark's band, so a
+          centred form can never ride up into it on a short screen. */}
+      <main className="relative flex min-h-screen items-center justify-center px-6 pt-28 pb-12 sm:px-10 lg:pt-12">
         {/* Between the 448px this started at, which read as a thin strip, and
             the 560px that replaced it, which ran too wide once the panel came
             back off. */}
         <div className="w-full max-w-[480px]">
-          {/* Small screens only — from lg up the hero carries the brand. */}
-          <div className="mb-8 flex justify-center lg:hidden">
-            <BrandLogo className="h-12 w-auto max-w-[200px]" />
-          </div>
 
           {/* No panel — the form sits directly on the wash. The width that
               fixed the "thin strip" problem is on the column above, so it does
