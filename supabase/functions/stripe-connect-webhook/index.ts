@@ -135,9 +135,44 @@ serve(async (req) => {
           .eq('own_stripe_account_id', account.id)
 
         for (const t of ownTenants ?? []) {
-          const patch: Record<string, unknown> = {
-            stripe_account_status: status,
-            stripe_onboarding_complete: onboardingComplete,
+          const patch: Record<string, unknown> = {}
+
+          // NEVER write `stripe_account_status` / `stripe_onboarding_complete`
+          // from here for a tenant that is not yet routing through this account.
+          //
+          // Those two columns describe the LEGACY Express account, and
+          // `stripe_onboarding_complete` is not a display flag — it is a routing
+          // decision. getConnectAccountId (_shared/stripe-client.ts) reads it on
+          // the managed path:
+          //
+          //     if (stripe_mode === 'live' && stripe_onboarding_complete)
+          //         return tenant.stripe_account_id
+          //     return null   // ← "no routing - payment goes to platform"
+          //
+          // A tenant mid-migration still charges on their working legacy account
+          // while the new one finishes onboarding. Stamping this account's
+          // (false) onboarding state onto them would send that `null` into
+          // getStripeOptions, dropping `stripeAccount` from the call — so the
+          // Checkout Session is created on the Drive247 PLATFORM balance. The
+          // customer pays successfully, the operator receives nothing, and
+          // nothing throws. That is silent, and strictly worse than the 17 Aug
+          // outage, which at least failed loudly.
+          //
+          // It would also blind the detector: sync-connect-status selects its
+          // sweep with .eq('stripe_onboarding_complete', true), so writing false
+          // drops the tenant out of the daily health check that exists to catch
+          // exactly this.
+          if (t.payment_model === 'own') {
+            // This account IS the tenant's charge account, so its health is
+            // theirs. Record it in the columns sync-connect-status owns rather
+            // than the legacy pair — same writer, same meaning, no collision.
+            patch.stripe_charges_enabled = account.charges_enabled ?? null
+            patch.stripe_payouts_enabled = account.payouts_enabled ?? null
+            patch.stripe_account_disabled_reason = account.requirements?.disabled_reason ?? null
+            patch.stripe_requirements_due = Array.isArray(account.requirements?.currently_due)
+              ? account.requirements.currently_due
+              : []
+            patch.stripe_status_synced_at = new Date().toISOString()
           }
 
           // COMPLETE A DEFERRED SWITCH.
@@ -147,10 +182,50 @@ serve(async (req) => {
           // enabled. This is where that promise is kept: the moment the operator
           // finishes onboarding, routing follows automatically and they do not
           // have to come back and reconnect.
-          if (account.charges_enabled && t.payment_model !== 'own') {
+          //
+          // Gate on "not yet fully switched", NOT on `payment_model !== 'own'`.
+          // Tenants are born on payment_model='own' + stripe_mode='test' and only
+          // connect a real account at go-live; for them the old gate was
+          // permanently false, so once they DID connect, their switch could never
+          // complete and they would have kept trading on the SHARED TEST Connect
+          // account. (13 such tenants have no account connected yet and so are
+          // not matched here at all; the gate matters from the moment they are.)
+          //
+          // AMBIGUOUS OWNERSHIP.
+          //
+          // `own_stripe_account_id` carries no unique index, and this loop runs
+          // over every tenant matching the id. `test` and `delta-force` both hold
+          // acct_1SqMDfB2eFJBbbzi today, so one account.updated would flip BOTH
+          // to live on an account at most one of them owns — and `test` is not
+          // idle (242 vehicles, live rentals, a public booking site).
+          //
+          // The old gate hid this by never firing for payment_model='own' at all.
+          // Widening it exposed it, so it has to be closed here: if we cannot say
+          // whose account this is, we must not route anyone's live money onto it.
+          // Health columns are still recorded for each — only the flip is held.
+          const ambiguousOwner = (ownTenants?.length ?? 0) > 1
+          const fullySwitched = t.payment_model === 'own' && t.stripe_mode === 'live'
+          if (account.charges_enabled && !fullySwitched && ambiguousOwner) {
+            console.warn(
+              `[connect-webhook] ${account.id} is claimed by ${ownTenants!.length} tenants ` +
+              `(${ownTenants!.map((x: { id: string }) => x.id).join(', ')}) — NOT completing any switch. ` +
+              `Resolve the duplicate before this account can route live money.`
+            )
+          }
+          if (account.charges_enabled && !fullySwitched && !ambiguousOwner) {
             patch.payment_model = 'own'
             patch.stripe_mode = 'live'
             console.log(`[connect-webhook] ${account.id}: charges enabled — completing deferred switch for tenant ${t.id}`)
+          }
+
+          // Nothing to say about this tenant (deferred, still not chargeable).
+          // Skip the write entirely rather than issuing an empty UPDATE.
+          if (Object.keys(patch).length === 0) {
+            console.log(
+              `[connect-webhook] own account ${account.id} tenant ${t.id}: no change ` +
+              `(charges_enabled=${account.charges_enabled}, still deferred)`
+            )
+            continue
           }
 
           const { error: ownErr } = await supabaseClient
@@ -161,9 +236,14 @@ serve(async (req) => {
           if (ownErr) {
             console.error(`[connect-webhook] Failed updating own-Stripe tenant ${t.id}:`, ownErr)
           } else {
+            // Log the keys actually written — `status`/`onboardingComplete` are
+            // deliberately NOT among them for own accounts, and printing them
+            // here would send the next person debugging this down a false trail.
             console.log(
-              `[connect-webhook] own account ${account.id} tenant ${t.id}: status=${status} ` +
-              `onboarding=${onboardingComplete} charges_enabled=${account.charges_enabled}`
+              `[connect-webhook] own account ${account.id} tenant ${t.id}: ` +
+              `wrote [${Object.keys(patch).join(', ')}] ` +
+              `charges_enabled=${account.charges_enabled} ` +
+              `disabled_reason=${account.requirements?.disabled_reason ?? 'none'}`
             )
           }
         }

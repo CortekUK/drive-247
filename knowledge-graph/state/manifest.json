@@ -1784,7 +1784,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/own-stripe-settings.tsx": {
-    "sha": "ae8bc201de157374686b35302a54e04dd574fc2247118e0d853bf9f42dbb3f96",
+    "sha": "986daf4fc30a99f13b31628ff5f1b8585f0fe1a0efbc92e89e884cc9f544c200",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/color-picker.tsx": {
@@ -5864,7 +5864,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-connect-webhook/index.ts": {
-    "sha": "0179f874bee3ce71172c6fde9f7267cd7cca76ef2410cd76ffea06b3dd90a9cd",
+    "sha": "5779d960fba8cc1c2f449dfd028625b8405b1410d4b10d9b13adc5649bad4cfa",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-grade-quiz/index.ts": {
@@ -6740,7 +6740,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-oauth-callback/index.ts": {
-    "sha": "603c91c14bdb6970c8040a2f7f11c5faebf4b57b09abeb737cba4da3fcf98c35",
+    "sha": "ffef190c6cf56fce1e907708d3ce02b9af9dfdd92d2fe3aa24476c0d7135b59f",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/deduct-from-deposit/index.ts": {

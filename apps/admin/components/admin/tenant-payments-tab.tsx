@@ -553,7 +553,19 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
     try {
       const { error } = await supabase
         .from('tenants')
-        .update({ payment_model: next })
+        .update({
+          payment_model: next,
+          // Reverting to managed must also RELEASE the connected account, the
+          // way `account.application.deauthorized` does. stripe-connect-webhook
+          // completes a deferred switch for any tenant matching
+          // own_stripe_account_id that is not yet fully switched — so leaving the
+          // id behind means the very next `account.updated` from Stripe silently
+          // flips this tenant straight back to 'own' (and forces stripe_mode to
+          // 'live'), undoing a deliberate incident-response rollback with no
+          // human involved. Going back to Own Stripe is then a fresh OAuth,
+          // which is the right amount of deliberate.
+          ...(next === 'managed' ? { own_stripe_account_id: null, own_stripe_connected_at: null } : {}),
+        })
         .eq('id', tenantId);
       if (error) throw error;
 
@@ -602,6 +614,18 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
   const flipBlocked =
     tenant.payment_model === 'managed' &&
     (!oauthConnected || ukHolds.length > 0 || !!ukHoldsError);
+
+  // "Flip anyway" is a deliberate override and stays available for the hold
+  // checks — a super admin who has reviewed the legacy holds may proceed.
+  //
+  // Flipping to Own with NO connected account is different: it is not a risk
+  // the admin is accepting, it is a state with no working outcome.
+  // getConnectAccountId THROWS on payment_model='own' + live + no account, so
+  // every booking, deposit hold and refund fails until someone edits the DB.
+  // Three tenants sit in that state already. Reverting now also releases the
+  // account id, so revert → "Flip anyway" would be a one-click route back into
+  // it; this closes that.
+  const flipHardBlocked = tenant.payment_model === 'managed' && !oauthConnected;
   const flipBlockReason = !oauthConnected
     ? `OAuth not connected for ${tenant.stripe_mode} mode yet.`
     : ukHoldsError
@@ -1032,8 +1056,18 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFlipDialogOpen(false)}>Cancel</Button>
-            <Button onClick={flipPaymentModel} disabled={flipping} variant={flipBlocked ? 'destructive' : 'default'}>
-              {flipping ? 'Flipping…' : flipBlocked ? 'Flip anyway' : 'Confirm flip'}
+            <Button
+              onClick={flipPaymentModel}
+              disabled={flipping || flipHardBlocked}
+              variant={flipBlocked ? 'destructive' : 'default'}
+            >
+              {flipping
+                ? 'Flipping…'
+                : flipHardBlocked
+                  ? 'Connect Stripe first'
+                  : flipBlocked
+                    ? 'Flip anyway'
+                    : 'Confirm flip'}
             </Button>
           </DialogFooter>
         </DialogContent>

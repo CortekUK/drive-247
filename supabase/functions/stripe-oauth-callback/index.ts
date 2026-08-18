@@ -192,7 +192,33 @@ Deno.serve(async (req) => {
     // tenant keeps taking money on their existing account — which is working —
     // until Stripe confirms the new one can. stripe-connect-webhook completes
     // the flip on `account.updated` the moment charges_enabled turns true.
-    const update = state.mode === 'live'
+    // One more thing the guard has to protect, separate from the flip.
+    //
+    // For a tenant already on payment_model='own' + live, `own_stripe_account_id`
+    // is not a record of the connection — it IS the routing decision.
+    // getConnectAccountId returns it directly, with no chargeability check:
+    //
+    //     if (!tenant.own_stripe_account_id) throw ...
+    //     return tenant.own_stripe_account_id
+    //
+    // So storing an unproven account id there takes a WORKING tenant off-line,
+    // flip or no flip. Gating only the flip would have left that door open.
+    const { data: current } = await supabase
+      .from('tenants')
+      .select('own_stripe_account_id, payment_model, stripe_mode')
+      .eq('id', state.tenantId)
+      .maybeSingle();
+
+    const liveOnADifferentOwnAccount =
+      current?.payment_model === 'own' &&
+      current?.stripe_mode === 'live' &&
+      !!current?.own_stripe_account_id &&
+      current.own_stripe_account_id !== connectedAccountId;
+
+    // null = deliberately store nothing. Re-authorising the SAME id is a no-op
+    // rewrite and stays allowed; swapping in a different, unproven account while
+    // live is the case we refuse.
+    const update: Record<string, unknown> | null = state.mode === 'live'
       ? (usable
           ? {
               own_stripe_account_id: connectedAccountId,
@@ -200,11 +226,22 @@ Deno.serve(async (req) => {
               stripe_mode: 'live',
               payment_model: 'own',
             }
-          : {
-              own_stripe_account_id: connectedAccountId,
-              own_stripe_connected_at: now,
-            })
+          : (liveOnADifferentOwnAccount
+              ? null
+              : {
+                  own_stripe_account_id: connectedAccountId,
+                  own_stripe_connected_at: now,
+                }))
       : { own_stripe_test_account_id: connectedAccountId, own_stripe_test_connected_at: now };
+
+    if (update === null) {
+      console.warn(
+        `[stripe-oauth-callback] REFUSED to store ${connectedAccountId} for tenant ${state.tenantId}: ` +
+        `Stripe reports charges_enabled=false and the tenant is live on ${current?.own_stripe_account_id}. ` +
+        `Overwriting a working routing account with an unusable one would cause an outage.`
+      );
+      return redirectBack(state, 'incomplete');
+    }
 
     const { data: updatedRows, error: updateError } = await supabase
       .from('tenants')
