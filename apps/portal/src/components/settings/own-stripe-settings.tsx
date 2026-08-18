@@ -29,12 +29,33 @@ export function OwnStripeSettings() {
   const { tenant: tenantContext } = useTenant();
   const [connecting, setConnecting] = useState(false);
 
-  // Surface the OAuth redirect result (?oauth=ok|error) once on mount
+  // Surface the OAuth redirect result (?oauth=ok|incomplete|error) once on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const result = params.get('oauth');
     if (result === 'ok') {
       toast({ title: 'Stripe connected', description: 'Your Stripe account is now linked. You can accept payments.' });
+    } else if (result === 'incomplete') {
+      // THE MESSAGE THAT WAS MISSING ON 17 AUG 2026.
+      //
+      // The connection worked; Stripe simply has not enabled charges yet
+      // because the operator has not finished Stripe's own onboarding. Global
+      // Motion saw "Stripe connected — you can accept payments" in this exact
+      // spot, believed it, and then could not collect a penny for two days
+      // across 10 live rentals.
+      //
+      // Deliberately NOT destructive: nothing failed, and red here would push
+      // the operator to redo a step they have already completed correctly.
+      // Long duration because it carries an instruction, not an
+      // acknowledgement.
+      toast({
+        title: 'One more step in Stripe',
+        description:
+          'Your account is linked, but Stripe still needs a few details before it will accept payments. ' +
+          'Open your Stripe dashboard and finish the setup prompt — payments switch over automatically once it is done. ' +
+          'Until then you will keep taking payments as normal.',
+        duration: 15000,
+      });
     } else if (result === 'error') {
       toast({
         title: 'Stripe connection failed',

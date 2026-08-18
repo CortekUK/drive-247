@@ -104,7 +104,7 @@ serve(async (req) => {
           onboardingComplete = true
         }
 
-        // Update tenant in database
+        // Update tenant in database — LEGACY Express/managed accounts.
         const { error: updateError } = await supabaseClient
           .from('tenants')
           .update({
@@ -117,6 +117,55 @@ serve(async (req) => {
           console.error('Error updating tenant Stripe status:', updateError)
         } else {
           console.log(`Updated tenant with Stripe account ${account.id}: status=${status}, onboarding=${onboardingComplete}`)
+        }
+
+        // ── OWN Stripe accounts (OAuth-connected Standard) ──────────────────
+        //
+        // This handler only ever matched `stripe_account_id`. An OAuth-connected
+        // account lives in `own_stripe_account_id`, so for every tenant on the
+        // Own model NO account.updated event has ever been applied — their
+        // status columns describe the OLD managed account and never change.
+        //
+        // That is why, on 17 Aug 2026, Global Motion's portal reported Stripe
+        // "connected, onboarding complete" while Stripe had the new account
+        // paused and the tenant collected nothing for two days.
+        const { data: ownTenants } = await supabaseClient
+          .from('tenants')
+          .select('id, payment_model, stripe_mode, own_stripe_account_id')
+          .eq('own_stripe_account_id', account.id)
+
+        for (const t of ownTenants ?? []) {
+          const patch: Record<string, unknown> = {
+            stripe_account_status: status,
+            stripe_onboarding_complete: onboardingComplete,
+          }
+
+          // COMPLETE A DEFERRED SWITCH.
+          //
+          // stripe-oauth-callback stores the account but deliberately does NOT
+          // move a tenant's live money onto it until Stripe says charges are
+          // enabled. This is where that promise is kept: the moment the operator
+          // finishes onboarding, routing follows automatically and they do not
+          // have to come back and reconnect.
+          if (account.charges_enabled && t.payment_model !== 'own') {
+            patch.payment_model = 'own'
+            patch.stripe_mode = 'live'
+            console.log(`[connect-webhook] ${account.id}: charges enabled — completing deferred switch for tenant ${t.id}`)
+          }
+
+          const { error: ownErr } = await supabaseClient
+            .from('tenants')
+            .update(patch)
+            .eq('id', t.id)
+
+          if (ownErr) {
+            console.error(`[connect-webhook] Failed updating own-Stripe tenant ${t.id}:`, ownErr)
+          } else {
+            console.log(
+              `[connect-webhook] own account ${account.id} tenant ${t.id}: status=${status} ` +
+              `onboarding=${onboardingComplete} charges_enabled=${account.charges_enabled}`
+            )
+          }
         }
         break
       }

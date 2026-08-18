@@ -1,10 +1,17 @@
 {
   "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/accounting-banners.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/customers/[id]/page.tsx",
     "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/use-app-banners.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/app-banner-stack.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/layout.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-stack.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/components/banner-stack.test.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/MultiStepBookingWidget.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150100_seed_welcome_pack_content.sql"
   ],
   "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/database-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."

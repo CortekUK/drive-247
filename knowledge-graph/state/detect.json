@@ -554,6 +554,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-types.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/app-banner-stack.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/deposit-hold-banners.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/accounting-banners.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/revenue-chart.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/platform-status-banner.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/dashboard-stats.tsx",
@@ -914,10 +915,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 906,
-    "total_words": 864264,
+    "total_files": 907,
+    "total_words": 865450,
     "counts": {
-      "code": 906
+      "code": 907
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1394,6 +1395,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/banner-types.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/app-banner-stack.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/deposit-hold-banners.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/banners/sources/accounting-banners.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/revenue-chart.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/platform-status-banner.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/dashboard-stats.tsx",
@@ -2183,7 +2185,7 @@
       "video": []
     },
     "total_files": 342,
-    "total_words": 431218,
+    "total_words": 431636,
     "counts": {
       "code": 327,
       "image": 15

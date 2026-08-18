@@ -7,9 +7,13 @@
 // authorization code exchange itself which only succeeds against our UAE
 // platform's client secret.
 //
-// On success we store the connected Standard account id on the tenant. We do
-// NOT flip tenants.payment_model — the super admin flips that manually once
-// everything is verified.
+// We store the connected Standard account id on the tenant, and flip
+// tenants.payment_model to 'own' ONLY once Stripe confirms the account can
+// actually accept charges. An operator who abandons Stripe's onboarding form
+// still produces a valid account id, and routing live money onto that account
+// took Global Motion offline for two days on 17 Aug 2026. Until Stripe says
+// charges_enabled, the tenant keeps collecting on their existing account and
+// stripe-connect-webhook completes the switch on `account.updated`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
@@ -74,7 +78,17 @@ async function verifyState(state: string): Promise<OAuthState | null> {
   }
 }
 
-function redirectBack(state: OAuthState, outcome: 'ok' | 'error'): Response {
+/**
+ * `incomplete` is a THIRD outcome, distinct from both success and failure.
+ *
+ * The OAuth handshake genuinely succeeded — we hold the operator's account id —
+ * but Stripe has not enabled charges on it yet. Reporting that as 'ok' is what
+ * caused the 17 Aug Global Motion outage: the operator was told he was finished,
+ * we routed his live payments onto an account Stripe had paused, and he could
+ * not take a penny for two days. Reporting it as 'error' would be just as wrong
+ * — nothing failed, and it would push him to redo a step he has already done.
+ */
+function redirectBack(state: OAuthState, outcome: 'ok' | 'error' | 'incomplete'): Response {
   const target = state.returnTo === 'admin'
     ? `${state.origin}/admin/rentals/${state.tenantId}?tab=payments&oauth=${outcome}`
     : `${state.origin}/settings?tab=payments&oauth=${outcome}`;
@@ -122,6 +136,43 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // ── DOES THIS ACCOUNT ACTUALLY WORK? ────────────────────────────────────
+    //
+    // OAuth returning an account id means the operator AUTHORISED us. It does
+    // NOT mean Stripe will accept payments on that account: an operator who
+    // closes Stripe's onboarding form early still yields a perfectly valid
+    // stripe_user_id for an account with `charges_enabled: false`.
+    //
+    // This block did not exist on 17 Aug 2026. Global Motion connected, we
+    // flipped `payment_model` to 'own' and `stripe_mode` to 'live' on the spot,
+    // marked the migration complete, and redirected 'ok'. Stripe had the account
+    // paused pending details and an unaccepted service agreement. Every Checkout
+    // session, payment link, deposit hold and invoice for that tenant failed for
+    // ~2 days across 10 live rentals, and the portal reported the connection
+    // healthy throughout because it was describing the OLD account.
+    //
+    // So: ask Stripe first, and never move a tenant's live money onto an account
+    // that cannot receive it.
+    let chargesEnabled = false;
+    let detailsSubmitted = false;
+    let disabledReason: string | null = null;
+    try {
+      const account = await stripe.accounts.retrieve(connectedAccountId);
+      chargesEnabled = account.charges_enabled === true;
+      detailsSubmitted = account.details_submitted === true;
+      disabledReason = account.requirements?.disabled_reason ?? null;
+    } catch (probeErr) {
+      // Could not ask. Treat exactly as "not proven usable" — the whole point of
+      // this guard is that we never flip on an assumption.
+      console.error('[stripe-oauth-callback] Could not retrieve account', connectedAccountId, probeErr);
+    }
+
+    const usable = chargesEnabled;
+    console.log(
+      `[stripe-oauth-callback] account=${connectedAccountId} charges_enabled=${chargesEnabled} ` +
+      `details_submitted=${detailsSubmitted} disabled_reason=${disabledReason ?? 'none'}`
+    );
+
     const now = new Date().toISOString();
     // Connecting the operator's REAL Stripe account is itself the go-live
     // moment for payments: from here every booking settles directly into their
@@ -136,13 +187,23 @@ Deno.serve(async (req) => {
     // (Express) account, so an un-flipped connected tenant would silently keep
     // paying into the old account. Test connections are admin rehearsals and do
     // NOT change routing.
+    // Live + usable: the full flip, exactly as before.
+    // Live + NOT usable: REMEMBER the account, but leave routing alone. The
+    // tenant keeps taking money on their existing account — which is working —
+    // until Stripe confirms the new one can. stripe-connect-webhook completes
+    // the flip on `account.updated` the moment charges_enabled turns true.
     const update = state.mode === 'live'
-      ? {
-          own_stripe_account_id: connectedAccountId,
-          own_stripe_connected_at: now,
-          stripe_mode: 'live',
-          payment_model: 'own',
-        }
+      ? (usable
+          ? {
+              own_stripe_account_id: connectedAccountId,
+              own_stripe_connected_at: now,
+              stripe_mode: 'live',
+              payment_model: 'own',
+            }
+          : {
+              own_stripe_account_id: connectedAccountId,
+              own_stripe_connected_at: now,
+            })
       : { own_stripe_test_account_id: connectedAccountId, own_stripe_test_connected_at: now };
 
     const { data: updatedRows, error: updateError } = await supabase
@@ -160,9 +221,23 @@ Deno.serve(async (req) => {
       throw new Error(`No tenant matched id ${state.tenantId} — connected account not stored`);
     }
 
-    // Task 1 done: notify the admin and grant the reward if both tasks are now
-    // complete. Best-effort — never let this break the redirect back.
-    await onMigrationTaskComplete(supabase, state.tenantId, "stripe");
+    // The migration task is only DONE when the account can actually take money.
+    // Marking it complete on a paused account is what let the 17 Aug outage go
+    // unnoticed: every dashboard said finished while nothing could be collected.
+    // A test-mode connection is an admin rehearsal and completes as before.
+    if (state.mode !== 'live' || usable) {
+      // Best-effort — never let this break the redirect back.
+      await onMigrationTaskComplete(supabase, state.tenantId, "stripe");
+    }
+
+    if (state.mode === 'live' && !usable) {
+      console.warn(
+        `[stripe-oauth-callback] Stored ${connectedAccountId} for tenant ${state.tenantId} but did NOT ` +
+        `switch payment routing: Stripe reports charges_enabled=false` +
+        `${disabledReason ? ` (${disabledReason})` : ''}. Payments continue on the existing account.`
+      );
+      return redirectBack(state, 'incomplete');
+    }
 
     console.log(`[stripe-oauth-callback] Connected ${state.mode} account ${connectedAccountId} for tenant ${state.tenantId}`);
     return redirectBack(state, 'ok');
