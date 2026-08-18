@@ -2576,7 +2576,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/ExtensionRequestDialog.tsx": {
-    "sha": "ee7fbeb214259e8abfc4395e2221e2ddf98175edf9ad4acafe04bcc91b9efd5f",
+    "sha": "d0b54c66d4af3e8084bfb1a7e35bd71482665b1f476bf72cfa3fd183fd675126",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/delete-rental-dialog.tsx": {
@@ -2632,7 +2632,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx": {
-    "sha": "3ab72d0e180324155daf86651e3f0c2deaab5400db6506a8fd0c4d9d15fae19e",
+    "sha": "ea71a9d47815f38515a4077d8a1350fda16521b7c708b4e2e13ecb2595b68275",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/VehicleConflictDialog.tsx": {
@@ -2808,7 +2808,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-customer-balance.ts": {
-    "sha": "ab0cdd553a0923f804396350f706413eb33f5174b22be3b676823ab197d876f2",
+    "sha": "d0310e200aa03c7442ec13cb71d08a1ca8a5375ab3a6716d4747ce2f6d1b0055",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-voice-call.ts": {
@@ -5284,7 +5284,7 @@
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/tenant-payments-tab.tsx": {
-    "sha": "f2b12e2f5c7976090e2d2e77ae7af14810d1ec953aaa5f01cc446a813812009e",
+    "sha": "c97ede779b6aec518d1a3d6a725465dcbd87ccb85bfefadc89287d6f0a150e8d",
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Sidebar.tsx": {
@@ -5864,7 +5864,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-connect-webhook/index.ts": {
-    "sha": "26150c38fb0f4b2e894fe52b70fddf3bcdf17588f4cb4eceecf46c9c7afa6d23",
+    "sha": "9d7817ea6a14959615ba253fb21c5989ecc7abef0829e2c77251da731436bde6",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-grade-quiz/index.ts": {
@@ -6296,7 +6296,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-extension-checkout/index.ts": {
-    "sha": "c3690288256696ac23c154c702a7761ddeef9601f6cc511d394defc6350e42b8",
+    "sha": "165e982b954a3707f5e26150a006fedc2fd9138fb4ee50b07a0c86d2ae7f969b",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-webhook/index.ts": {

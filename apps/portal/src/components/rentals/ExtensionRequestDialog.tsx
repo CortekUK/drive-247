@@ -310,9 +310,13 @@ export function ExtensionRequestDialog({
           );
           if (res.ok) {
             const result = await res.json();
-            checkoutUrl = result.checkoutUrl;
+            checkoutUrl = result.checkoutUrl ?? undefined;
             createdExtensionId = result.extensionId;
             createdSequenceNumber = result.sequenceNumber;
+            // A 200 can now carry a null checkoutUrl: the extension exists but
+            // Stripe refused the payment link. Without reading this the toast
+            // below would promise a link was "sent to customer" when none was.
+            checkoutError = result.checkoutError ?? undefined;
 
             // Save checkout URL to rental for customer portal visibility
             if (checkoutUrl) {
@@ -344,6 +348,14 @@ export function ExtensionRequestDialog({
             .update({
               end_date: rental.end_date,
               previous_end_date: rental.previous_end_date,
+              // `is_extended` MUST go back to true. The approval above set it
+              // false, and it is the flag every entry point uses to find a
+              // pending request (rentals/page.tsx, rentals/[id]/page.tsx in two
+              // places). Restoring the dates but not this flag leaves the
+              // customer's request alive in the data and invisible in the UI —
+              // nobody can approve it, and the error below would be lying when
+              // it says the request was left pending.
+              is_extended: true,
               ...(isFirstExtension ? { original_end_date: null } : {}),
               updated_at: new Date().toISOString(),
             })
@@ -574,10 +586,19 @@ export function ExtensionRequestDialog({
       if (insuranceWarning && insurancePremium > 0) {
         insuranceWarning += ` The payment link was created for ${currencySymbol}${extensionTotalAmount.toFixed(2)} and still includes the ${currencySymbol}${insurancePremium.toFixed(2)} premium — refund or adjust if the customer pays it.`;
       }
+      // No link was issued — say so instead of claiming one was sent. The charge
+      // is on the balance and correctly linked; only the customer's way to pay
+      // is missing, and that is recoverable by resending once Stripe is healthy.
+      const paymentLinkWarning = checkoutError || (extensionTotalAmount > 0 && !checkoutUrl)
+        ? ` ⚠ No payment link was created${checkoutError ? ` (${checkoutError})` : ''} — the charge is on the balance but the customer cannot pay it yet. Check the Stripe connection, then resend the link from the rental page.`
+        : '';
+
       toast({
-        title: insuranceWarning ? 'Extension Approved — WITHOUT Insurance' : 'Extension Approved',
-        description: `Rental extended to ${format(requestedEndDate, 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencySymbol}${chargedTotal.toFixed(2)} created with payment link sent to customer.` : ' Customer has been notified.'} An extension agreement has been sent for signing.${insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}`,
-        variant: insuranceWarning ? 'destructive' : 'default',
+        title: paymentLinkWarning
+          ? 'Extension Approved — NO PAYMENT LINK'
+          : insuranceWarning ? 'Extension Approved — WITHOUT Insurance' : 'Extension Approved',
+        description: `Rental extended to ${format(requestedEndDate, 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencySymbol}${chargedTotal.toFixed(2)} created${paymentLinkWarning ? '' : ' with payment link sent to customer'}.` : ' Customer has been notified.'} An extension agreement has been sent for signing.${insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}${paymentLinkWarning}`,
+        variant: insuranceWarning || paymentLinkWarning ? 'destructive' : 'default',
       });
 
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });

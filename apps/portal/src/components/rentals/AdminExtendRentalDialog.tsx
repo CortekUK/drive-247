@@ -504,14 +504,25 @@ export function AdminExtendRentalDialog({
         // the worse outcome, and a visible error is recoverable — the operator
         // simply tries again.
         if (!createdExtensionId) {
+          // Restore ONLY what we actually read. `priorDates` comes from a
+          // .maybeSingle() that can legitimately return null (read failure, row
+          // gone) — and `?? null` on that would blank previous_end_date and
+          // original_end_date rather than restore them, destroying history this
+          // rollback never saw. When the read failed, put back the one value we
+          // hold independently (the snapshot) and leave the rest untouched.
+          const revert: Record<string, unknown> = {
+            end_date: priorDates?.end_date ?? snapshotEndDate,
+            updated_at: new Date().toISOString(),
+          };
+          if (priorDates) {
+            revert.previous_end_date = priorDates.previous_end_date;
+            // Only ever un-set original_end_date if THIS call was the one that
+            // set it; on a later extension it holds the true original date.
+            if (isFirstExtension) revert.original_end_date = priorDates.original_end_date;
+          }
           await supabase
             .from('rentals')
-            .update({
-              end_date: priorDates?.end_date ?? snapshotEndDate,
-              previous_end_date: priorDates?.previous_end_date ?? null,
-              original_end_date: priorDates?.original_end_date ?? null,
-              updated_at: new Date().toISOString(),
-            })
+            .update(revert)
             .eq('id', rental.id)
             .eq('tenant_id', tenant.id);
 

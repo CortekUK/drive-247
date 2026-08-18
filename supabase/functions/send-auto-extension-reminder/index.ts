@@ -101,7 +101,15 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
   const needFresh = !url || opts.customAmount != null;
   if (needFresh) {
     const o = origin(tenant.slug || "app");
-    const session = await ctx.stripe.checkout.sessions.create({
+    // This throw is what an operator on a not-yet-chargeable Stripe account
+    // actually hits when they press "send reminder" — getConnectAccountId
+    // returns their connected account and Stripe refuses. Unwrapped, it escapes
+    // to the 500 handler and the portal shows a raw Stripe string with no hint
+    // that the fix is in their own Stripe dashboard. Every other failure in this
+    // function returns { ok, reason }; this one has to as well.
+    let session: { id: string; url: string | null };
+    try {
+      session = await ctx.stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [{ price_data: { currency: ctx.currency, product_data: { name: "Rental payment", description: ext ? `Renew ${ext.previous_end_date} → ${ext.new_end_date}` : "Rental payment" }, unit_amount: Math.round(amount * 100) }, quantity: 1 }],
       mode: "payment",
@@ -116,20 +124,46 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
         source: "auto_extend_reminder",
         target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"]),
       },
-    }, ctx.options);
+      }, ctx.options);
+    } catch (stripeErr) {
+      const raw = (stripeErr as { message?: string })?.message || String(stripeErr);
+      console.error(`[auto-ext-reminder] rental ${rental.id}: Stripe refused a checkout session: ${raw}`);
+      return {
+        ok: false,
+        reason:
+          `Stripe would not create a payment link (${raw}). ` +
+          `If your Stripe account setup is not finished, complete it in your Stripe dashboard — ` +
+          `the reminder will send as soon as Stripe accepts charges.`,
+      };
+    }
     url = session.url || url;
     sessionId = session.id;
     if (ext) {
       await supabase.from("rental_extensions").update({ checkout_url: url, stripe_checkout_session_id: sessionId }).eq("id", ext.id);
-      // Pre-create a Pending payment so the webhook can settle it (mirrors create-extension-checkout).
+      // NOTE: this insert has NEVER succeeded. `booking_source: "auto_extend"`
+      // violates payments_booking_source_check, which allows only 'admin' and
+      // 'website' — 0 rows with 'auto_extend' exist in production. The error was
+      // discarded, so the comment below has always described something that did
+      // not happen; payments settle through the webhook's 'website' path instead.
+      // Surfacing it rather than changing the value: making the row appear for
+      // the first time could double up with the row the webhook creates, and
+      // that is a money-path decision, not a cleanup.
       const today = new Date().toISOString().split("T")[0];
-      await supabase.from("payments").insert({
+      const { error: pendingErr } = await supabase.from("payments").insert({
         rental_id: rental.id, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id, tenant_id: rental.tenant_id,
         extension_id: ext.id, amount, remaining_amount: amount, payment_date: today, method: "Card", payment_type: "Payment",
         status: "Pending", verification_status: "pending", capture_status: "requires_capture",
         stripe_checkout_session_id: sessionId, booking_source: "auto_extend", platform_account: ctx.platformAccount,
         target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
       });
+      if (pendingErr) {
+        // Expected today (the CHECK rejects 'auto_extend'). Logged loudly so it
+        // stops being invisible — the reminder itself still sends, because the
+        // customer pays through the Stripe link, not through this row.
+        console.error(
+          `[auto-ext-reminder] pending payment row NOT created for extension ${ext.id}: ${pendingErr.message}`
+        );
+      }
     }
   }
 

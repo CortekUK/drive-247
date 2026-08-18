@@ -364,10 +364,27 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
       // uses this same source for its Balance Due tile — we mirror it here so
       // the dialog never tells the operator "No outstanding balance" while
       // an extension is unpaid.
-      const { data: extensionTotals } = await supabase
+      // `total_amount`, NOT `total_charged` — the latter has never existed on
+      // this view (its columns are total_amount / paid_amount / refunded_amount
+      // / outstanding_amount). PostgREST rejects the whole select with a 400, so
+      // `extensionTotals` came back undefined, `?? []` turned it into an empty
+      // list, and EVERY unpaid extension was silently valued at zero here —
+      // exactly the "no outstanding balance while an extension is unpaid" the
+      // comment above says this block exists to prevent.
+      //
+      // The error is surfaced rather than discarded: a balance that quietly
+      // under-reports is worse than one that fails visibly, because it is used
+      // to decide what to charge a customer.
+      const { data: extensionTotals, error: extensionTotalsError } = await supabase
         .from("rental_extension_totals")
-        .select("display_status, outstanding_amount, total_charged")
+        .select("display_status, outstanding_amount, total_amount")
         .eq("rental_id", rentalId);
+
+      if (extensionTotalsError) {
+        throw new Error(
+          `Could not read extension totals for rental ${rentalId}: ${extensionTotalsError.message}`,
+        );
+      }
 
       const billableExtensions = (extensionTotals ?? []).filter((re: any) =>
         re.display_status !== 'pending_approval' &&
@@ -379,7 +396,7 @@ export const useRentalChargesAndPayments = (rentalId: string | undefined) => {
         0,
       );
       const extensionCharges = billableExtensions.reduce(
-        (sum: number, re: any) => sum + Number(re.total_charged || 0),
+        (sum: number, re: any) => sum + Number(re.total_amount || 0),
         0,
       );
 

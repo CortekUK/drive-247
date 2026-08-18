@@ -15,6 +15,12 @@ Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
+  // Set the moment a rental_extensions row is confirmed to exist. The outer
+  // catch is outside the try's scope, so without this a throw AFTER the INSERT
+  // would 500 and strand the extension's charges unlinked — the exact failure
+  // this function was changed to prevent.
+  let createdRef: { id: string; sequence_number: number } | null = null;
+
   try {
     const body = await req.json();
     const {
@@ -118,6 +124,31 @@ Deno.serve(async (req) => {
       extRow = created as any;
     }
 
+    // FROM HERE ON THE EXTENSION ROW EXISTS.
+    //
+    // Anything that returns non-2xx below would throw away its id, and the
+    // caller would then write Extension charges with extension_id NULL —
+    // invisible money. So every failure past this point returns 200 carrying
+    // the id, with a null checkoutUrl and a reason.
+    //
+    // This tracker exists because the outer catch also needs it: a throw after
+    // the INSERT is the same hazard as an explicit early return.
+    const created = { id: extRow.id, sequence_number: extRow.sequence_number };
+    createdRef = created; // visible to the outer catch, which is out of this scope
+    const createdButNoCheckout = (reason: string) => {
+      console.error(
+        `[create-extension-checkout] extension ${created.id} exists but no checkout: ${reason}`
+      );
+      return jsonResponse({
+        checkoutUrl: null,
+        sessionId: null,
+        paymentId: null,
+        extensionId: created.id,
+        sequenceNumber: created.sequence_number,
+        checkoutError: reason,
+      });
+    };
+
     // Fetch tenant details for Stripe configuration
     const { data: tenantData, error: tenantError } = await supabaseClient
       .from('tenants')
@@ -127,7 +158,8 @@ Deno.serve(async (req) => {
       .single();
 
     if (tenantError || !tenantData) {
-      return errorResponse('Tenant not found or inactive', 404);
+      // Post-INSERT: 200 with the id, not a 404 that strands the charges.
+      return createdButNoCheckout('Tenant not found or inactive');
     }
 
     // Fetch rental for customer/vehicle context (so the caller doesn't have
@@ -218,23 +250,13 @@ Deno.serve(async (req) => {
       },
       }, stripeOptions);
     } catch (stripeErr) {
-      const message = (stripeErr as { message?: string })?.message
-        || 'Stripe could not create the checkout session';
-      console.error(
-        `[create-extension-checkout] Stripe FAILED for extension ${extRow.id} ` +
-        `(rental ${extRow.rental_id}, tenant ${extRow.tenant_id}): ${message}`
+      // 200 ON PURPOSE, via the shared helper. The extension exists; the caller
+      // must be able to link its ledger rows to it. `checkoutUrl: null` tells
+      // the caller the link is missing so it warns instead of reporting success.
+      return createdButNoCheckout(
+        (stripeErr as { message?: string })?.message
+          || 'Stripe could not create the checkout session'
       );
-      // 200 ON PURPOSE. The extension exists; the caller must be able to link
-      // its ledger rows to it. `checkoutUrl: null` tells the caller the payment
-      // link is missing so it can warn the operator instead of reporting success.
-      return jsonResponse({
-        checkoutUrl: null,
-        sessionId: null,
-        paymentId: null,
-        extensionId: extRow.id,
-        sequenceNumber: extRow.sequence_number,
-        checkoutError: message,
-      });
     }
 
     console.log('Extension checkout session created:', session.id);
@@ -305,6 +327,23 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Error creating extension checkout:', error);
-    return errorResponse(error.message || 'Internal server error', 500);
+    const message = error?.message || 'Internal server error';
+    if (createdRef) {
+      // The extension row exists. A 500 here would lose its id and the caller
+      // would write its charges unlinked — invisible money. Hand the id back.
+      console.error(
+        `[create-extension-checkout] threw AFTER creating extension ${createdRef.id}: ${message}`
+      );
+      return jsonResponse({
+        checkoutUrl: null,
+        sessionId: null,
+        paymentId: null,
+        extensionId: createdRef.id,
+        sequenceNumber: createdRef.sequence_number,
+        checkoutError: message,
+      });
+    }
+    // Nothing was created — a genuine pre-insert failure, so a non-2xx is right.
+    return errorResponse(message, 500);
   }
 });
