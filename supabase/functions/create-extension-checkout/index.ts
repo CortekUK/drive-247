@@ -151,12 +151,40 @@ Deno.serve(async (req) => {
 
     console.log('Extension checkout — extensionId:', extRow.id, 'rental:', extRow.rental_id, 'mode:', stripeMode, 'total:', totalAmount);
 
-    const platformAccount = getChargePlatformAccount(tenantData);
-    const stripe = getStripeClientForAccount(platformAccount, stripeMode);
-    const stripeAccountId = getConnectAccountId(tenantData);
-    const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
+    // ── PAST THIS POINT THE rental_extensions ROW ALREADY EXISTS ────────────
+    //
+    // Either the caller passed an extensionId, or the legacy path above just
+    // INSERTed one. Both mean: a failure from here on must not lose its id.
+    //
+    // It used to. Any throw fell to the bare `catch` at the bottom and returned
+    // 500. Both portal dialogs learn `extensionId` ONLY from this response and
+    // swallow a non-2xx with a console.error, so they then wrote the extension's
+    // ledger charges with `extension_id` omitted — and an unlinked Extension
+    // charge is invisible money: `rental_extension_totals` joins on
+    // extension_id (so outstanding COALESCEs to 0), while the rental page's
+    // Balance Due excludes every `Extension*` category and takes extension money
+    // only from that view. Counted by neither half.
+    //
+    // $795.48 across 5 rentals and 2 tenants is sitting in that state, the
+    // earliest from 20 June 2026 — months before the Stripe outage that made it
+    // visible. Any 500 does it: a restricted account, a redeploy, a network blip.
+    //
+    // So Stripe failures now return 200 WITH the id and a null checkoutUrl. The
+    // caller links its ledger rows correctly and tells the operator the payment
+    // link needs retrying. Non-2xx stays reserved for genuine pre-insert
+    // failures, where there is no extension and nothing to link.
+    let session: { id: string; url: string | null };
+    let platformAccount: ReturnType<typeof getChargePlatformAccount>;
+    try {
+      platformAccount = getChargePlatformAccount(tenantData);
+      // getConnectAccountId THROWS for payment_model='own' + live with no
+      // connected account — 3 tenants are in that state, so this is a live
+      // throw path, not a hypothetical one. It must be inside the guard.
+      const stripe = getStripeClientForAccount(platformAccount, stripeMode);
+      const stripeAccountId = getConnectAccountId(tenantData);
+      const stripeOptions = stripeAccountId ? { stripeAccount: stripeAccountId } : undefined;
 
-    const session = await stripe.checkout.sessions.create({
+      session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -188,7 +216,26 @@ Deno.serve(async (req) => {
         stripe_mode: stripeMode,
         target_categories: JSON.stringify(['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Insurance']),
       },
-    }, stripeOptions);
+      }, stripeOptions);
+    } catch (stripeErr) {
+      const message = (stripeErr as { message?: string })?.message
+        || 'Stripe could not create the checkout session';
+      console.error(
+        `[create-extension-checkout] Stripe FAILED for extension ${extRow.id} ` +
+        `(rental ${extRow.rental_id}, tenant ${extRow.tenant_id}): ${message}`
+      );
+      // 200 ON PURPOSE. The extension exists; the caller must be able to link
+      // its ledger rows to it. `checkoutUrl: null` tells the caller the payment
+      // link is missing so it can warn the operator instead of reporting success.
+      return jsonResponse({
+        checkoutUrl: null,
+        sessionId: null,
+        paymentId: null,
+        extensionId: extRow.id,
+        sequenceNumber: extRow.sequence_number,
+        checkoutError: message,
+      });
+    }
 
     console.log('Extension checkout session created:', session.id);
 

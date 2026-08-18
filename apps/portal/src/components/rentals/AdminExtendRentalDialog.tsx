@@ -403,6 +403,17 @@ export function AdminExtendRentalDialog({
     try {
       // 1. Update rental dates (set original_end_date only on first extension)
       const isFirstExtension = !rental.original_end_date && (existingExtensionCount || 0) === 0;
+
+      // Capture exactly what this write is about to overwrite. If the extension
+      // cannot be created downstream we put these back — otherwise the customer
+      // keeps a day nobody can bill them for. `previous_end_date` is not on the
+      // rental prop, so it has to be read rather than reconstructed.
+      const { data: priorDates } = await supabase
+        .from('rentals')
+        .select('end_date, previous_end_date, original_end_date')
+        .eq('id', rental.id)
+        .eq('tenant_id', tenant.id)
+        .maybeSingle();
       const { error: updateError } = await supabase
         .from('rentals')
         .update({
@@ -426,6 +437,7 @@ export function AdminExtendRentalDialog({
       let checkoutUrl: string | undefined;
       let createdExtensionId: string | undefined;
       let createdSequenceNumber: number | undefined;
+      let checkoutError: string | undefined;
       if (extensionTotalAmount > 0) {
         try {
           const { data: session } = await supabase.auth.getSession();
@@ -453,9 +465,12 @@ export function AdminExtendRentalDialog({
           );
           if (res.ok) {
             const result = await res.json();
-            checkoutUrl = result.checkoutUrl;
+            checkoutUrl = result.checkoutUrl ?? undefined;
             createdExtensionId = result.extensionId;
             createdSequenceNumber = result.sequenceNumber;
+            // 200 with no checkoutUrl = the extension exists but Stripe refused
+            // the payment link. Recoverable, and the operator must be told.
+            checkoutError = result.checkoutError ?? undefined;
             console.log('Extension checkout created:', result.sessionId);
 
             // Save checkout URL to rental for customer portal visibility
@@ -466,10 +481,44 @@ export function AdminExtendRentalDialog({
                 .eq('id', rental.id);
             }
           } else {
-            console.error('Failed to create extension checkout:', await res.text());
+            checkoutError = await res.text();
+            console.error('Failed to create extension checkout:', checkoutError);
           }
         } catch (err) {
+          checkoutError = err instanceof Error ? err.message : String(err);
           console.error('Error creating extension checkout:', err);
+        }
+
+        // ── NEVER WRITE A CHARGE WE CANNOT LINK ─────────────────────────────
+        //
+        // Without an extension id, the ledger rows below are written with
+        // `extension_id` omitted — and an unlinked Extension charge is invisible
+        // money. rental_extension_totals joins on extension_id (so outstanding
+        // reads 0) and the rental page's Balance Due excludes every Extension*
+        // category, taking extension money only from that view. Counted by
+        // neither half. $795.48 across 5 rentals is in exactly that state.
+        //
+        // This used to be a bare console.error: the write went ahead, the dates
+        // stayed moved, and the operator got the success toast. So: put the
+        // dates back and fail loudly. The customer keeping a free extra day is
+        // the worse outcome, and a visible error is recoverable — the operator
+        // simply tries again.
+        if (!createdExtensionId) {
+          await supabase
+            .from('rentals')
+            .update({
+              end_date: priorDates?.end_date ?? snapshotEndDate,
+              previous_end_date: priorDates?.previous_end_date ?? null,
+              original_end_date: priorDates?.original_end_date ?? null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', rental.id)
+            .eq('tenant_id', tenant.id);
+
+          throw new Error(
+            `Could not create the extension: ${checkoutError || 'the payment service did not respond'}. ` +
+            `The rental dates have been left unchanged — nothing was charged. Please try again.`
+          );
         }
       }
 
@@ -777,15 +826,25 @@ export function AdminExtendRentalDialog({
       if (insuranceWarning && insurancePremium > 0) {
         insuranceWarning += ` The payment link was created for ${currencyLabel}${extensionTotalAmount.toFixed(2)} and still includes the ${currencyLabel}${insurancePremium.toFixed(2)} premium — refund or adjust if the customer pays it.`;
       }
+      // The extension and its ledger charges are correct, but Stripe would not
+      // issue a payment link — so the customer has no way to pay. Say so: this
+      // used to be a console.error under a success toast, which is how an
+      // unpayable extension could sit unnoticed.
+      const paymentLinkWarning = checkoutError || (extensionTotalAmount > 0 && !checkoutUrl)
+        ? ` ⚠ No payment link was created${checkoutError ? ` (${checkoutError})` : ''} — the charge is on the balance but the customer cannot pay it yet. Check the Stripe connection, then resend the link from the rental page.`
+        : '';
+
       toast({
-        title: insuranceWarning
+        title: paymentLinkWarning
+          ? 'Rental Extended — NO PAYMENT LINK'
+          : insuranceWarning
           ? 'Rental Extended — WITHOUT Insurance'
           : agreementSent ? 'Rental Extended — Agreement Sent' : 'Rental Extended — Agreement Pending',
         description: `${agreementSent
           ? `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencyLabel}${chargedTotal.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
           : `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencyLabel}${chargedTotal.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`}${
-          insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}`,
-        variant: insuranceWarning ? 'destructive' : 'default',
+          insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}${paymentLinkWarning}`,
+        variant: insuranceWarning || paymentLinkWarning ? 'destructive' : 'default',
       });
 
       queryClient.invalidateQueries({ queryKey: ['rental', rental.id, tenant.id] });

@@ -282,6 +282,7 @@ export function ExtensionRequestDialog({
       let checkoutUrl: string | undefined;
       let createdExtensionId: string | undefined;
       let createdSequenceNumber: number | undefined;
+      let checkoutError: string | undefined;
       if (extensionTotalAmount > 0) {
         try {
           const { data: session } = await supabase.auth.getSession();
@@ -321,10 +322,38 @@ export function ExtensionRequestDialog({
                 .eq('id', rental.id);
             }
           } else {
-            console.error('Failed to create extension checkout:', await res.text());
+            checkoutError = await res.text();
+            console.error('Failed to create extension checkout:', checkoutError);
           }
         } catch (err) {
+          checkoutError = err instanceof Error ? err.message : String(err);
           console.error('Error creating extension checkout:', err);
+        }
+
+        // Same invariant as AdminExtendRentalDialog: never write an Extension
+        // charge without an extension_id. Unlinked, it is invisible to both
+        // rental_extension_totals (which joins on extension_id) and Balance Due
+        // (which excludes Extension* categories and reads only that view).
+        //
+        // The approval above already swapped end_date ↔ previous_end_date, so
+        // undo that swap — otherwise the customer keeps the extra days with no
+        // extension row and no charge anyone can see.
+        if (!createdExtensionId) {
+          await supabase
+            .from('rentals')
+            .update({
+              end_date: rental.end_date,
+              previous_end_date: rental.previous_end_date,
+              ...(isFirstExtension ? { original_end_date: null } : {}),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', rental.id)
+            .eq('tenant_id', tenant.id);
+
+          throw new Error(
+            `Could not create the extension: ${checkoutError || 'the payment service did not respond'}. ` +
+            `The request has been left pending — nothing was charged. Please try again.`
+          );
         }
       }
 

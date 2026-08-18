@@ -162,19 +162,6 @@ serve(async (req) => {
           // sweep with .eq('stripe_onboarding_complete', true), so writing false
           // drops the tenant out of the daily health check that exists to catch
           // exactly this.
-          if (t.payment_model === 'own') {
-            // This account IS the tenant's charge account, so its health is
-            // theirs. Record it in the columns sync-connect-status owns rather
-            // than the legacy pair — same writer, same meaning, no collision.
-            patch.stripe_charges_enabled = account.charges_enabled ?? null
-            patch.stripe_payouts_enabled = account.payouts_enabled ?? null
-            patch.stripe_account_disabled_reason = account.requirements?.disabled_reason ?? null
-            patch.stripe_requirements_due = Array.isArray(account.requirements?.currently_due)
-              ? account.requirements.currently_due
-              : []
-            patch.stripe_status_synced_at = new Date().toISOString()
-          }
-
           // COMPLETE A DEFERRED SWITCH.
           //
           // stripe-oauth-callback stores the account but deliberately does NOT
@@ -202,7 +189,7 @@ serve(async (req) => {
           // The old gate hid this by never firing for payment_model='own' at all.
           // Widening it exposed it, so it has to be closed here: if we cannot say
           // whose account this is, we must not route anyone's live money onto it.
-          // Health columns are still recorded for each — only the flip is held.
+          // The hold has to be TOTAL — see the health block below for why.
           const ambiguousOwner = (ownTenants?.length ?? 0) > 1
           const fullySwitched = t.payment_model === 'own' && t.stripe_mode === 'live'
           if (account.charges_enabled && !fullySwitched && ambiguousOwner) {
@@ -216,6 +203,45 @@ serve(async (req) => {
             patch.payment_model = 'own'
             patch.stripe_mode = 'live'
             console.log(`[connect-webhook] ${account.id}: charges enabled — completing deferred switch for tenant ${t.id}`)
+          }
+
+          // ── ACCOUNT HEALTH — deliberately AFTER the flip decision ───────────
+          //
+          // `stripe_charges_enabled` is not a diagnostic column. subscription-
+          // webhook's resolveGoLive reads it as the FIRST disjunct of its
+          // readiness test:
+          //
+          //     const connectReady =
+          //       tenant.stripe_charges_enabled === true ||
+          //       (!!own_stripe_account_id && stripe_onboarding_complete === true)
+          //     if (connectReady) patch.stripe_mode = "live"
+          //
+          // So writing it true is itself a routing decision, taken by a
+          // different function on a later event.
+          //
+          // The first version of this block sat ABOVE the flip and was gated on
+          // payment_model === 'own' alone. That let the ambiguous pair through a
+          // side door: the flip was correctly held, but the health write still
+          // landed on BOTH duplicates, and the next subscription event then set
+          // stripe_mode='live' on both — reaching the exact outcome the guard
+          // exists to prevent, one webhook later. Neither has setup_completed_at
+          // or bonzah_username, so resolveGoLive never short-circuits and that
+          // door stays open indefinitely.
+          //
+          // Gate on the tenant ACTUALLY routing through this account: already
+          // live on it, or being switched onto it by this same event. An
+          // own+test tenant that is not switching gets nothing written, so under
+          // ambiguousOwner the patch stays empty and neither row is touched.
+          const routingHere =
+            t.payment_model === 'own' && (t.stripe_mode === 'live' || patch.stripe_mode === 'live')
+          if (routingHere) {
+            patch.stripe_charges_enabled = account.charges_enabled ?? null
+            patch.stripe_payouts_enabled = account.payouts_enabled ?? null
+            patch.stripe_account_disabled_reason = account.requirements?.disabled_reason ?? null
+            patch.stripe_requirements_due = Array.isArray(account.requirements?.currently_due)
+              ? account.requirements.currently_due
+              : []
+            patch.stripe_status_synced_at = new Date().toISOString()
           }
 
           // Nothing to say about this tenant (deferred, still not chargeable).

@@ -5284,7 +5284,7 @@
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/tenant-payments-tab.tsx": {
-    "sha": "4cc5237d43bc52cd3b07ed024546e35caf68bf49b57ec8643e066d3b06275f26",
+    "sha": "f2b12e2f5c7976090e2d2e77ae7af14810d1ec953aaa5f01cc446a813812009e",
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/Sidebar.tsx": {
@@ -5864,7 +5864,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-connect-webhook/index.ts": {
-    "sha": "5779d960fba8cc1c2f449dfd028625b8405b1410d4b10d9b13adc5649bad4cfa",
+    "sha": "26150c38fb0f4b2e894fe52b70fddf3bcdf17588f4cb4eceecf46c9c7afa6d23",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-grade-quiz/index.ts": {
@@ -6740,7 +6740,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-oauth-callback/index.ts": {
-    "sha": "ffef190c6cf56fce1e907708d3ce02b9af9dfdd92d2fe3aa24476c0d7135b59f",
+    "sha": "852f8fd68cef9049ce8cd973e8e107fee3291e43c756a84355fc1381694bff48",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/deduct-from-deposit/index.ts": {

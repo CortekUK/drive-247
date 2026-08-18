@@ -625,7 +625,16 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
   // Three tenants sit in that state already. Reverting now also releases the
   // account id, so revert → "Flip anyway" would be a one-click route back into
   // it; this closes that.
-  const flipHardBlocked = tenant.payment_model === 'managed' && !oauthConnected;
+  // Gate on the condition that actually throws, which is LIVE-ONLY. In test
+  // mode getConnectAccountId falls back to the shared test Connect account and
+  // never throws, so a test-mode flip is recoverable and keeps its override.
+  // Using the mode-dependent `oauthConnected` here was wrong: in test mode it
+  // reads own_stripe_test_account_id, which is NULL for every managed+test
+  // tenant, so it blocked 6 flips that were never at risk.
+  const flipHardBlocked =
+    tenant.payment_model === 'managed' &&
+    tenant.stripe_mode === 'live' &&
+    !tenant.own_stripe_account_id;
   const flipBlockReason = !oauthConnected
     ? `OAuth not connected for ${tenant.stripe_mode} mode yet.`
     : ukHoldsError
