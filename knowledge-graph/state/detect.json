@@ -3047,6 +3047,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/lead-inbound-sms-webhook/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-installment-payment/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-insurance-document/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-vehicle-profitability/index.ts",
@@ -3181,6 +3182,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-partner-review/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/dispatch-strategy-call-emails/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-stripe-account/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-tenant-onboarding-link/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/check-blacklist-match/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-accounting-sync/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/settings/index.ts",
@@ -3397,10 +3399,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 357,
-    "total_words": 477527,
+    "total_files": 359,
+    "total_words": 478392,
     "counts": {
-      "code": 350,
+      "code": 352,
       "document": 7
     },
     "semantic_candidates": [
@@ -3418,6 +3420,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/lead-inbound-sms-webhook/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-installment-payment/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-insurance-document/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-vehicle-profitability/index.ts",
@@ -3552,6 +3555,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-partner-review/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/dispatch-strategy-call-emails/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-stripe-account/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-tenant-onboarding-link/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/check-blacklist-match/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-accounting-sync/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/settings/index.ts",

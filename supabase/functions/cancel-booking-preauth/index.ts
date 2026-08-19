@@ -122,6 +122,8 @@ serve(async (req) => {
     }
 
     // 5. Cancel the PaymentIntent in Stripe (if exists)
+    // Nothing below may claim a release happened unless this is true.
+    let holdReleased = false;
     if (paymentIntentId) {
       console.log("Cancelling Stripe payment intent:", paymentIntentId, stripeAccountId ? `(Connect: ${stripeAccountId})` : '');
       try {
@@ -134,14 +136,36 @@ serve(async (req) => {
           "Stripe payment intent cancelled:",
           cancelledPaymentIntent.status
         );
+        holdReleased = true;
       } catch (stripeError: any) {
-        // If already cancelled or expired, that's fine
+        // These two codes mean the hold is ALREADY gone at Stripe — the end
+        // state we wanted. Anything else means the customer's money is STILL
+        // HELD, and we must not record a release that did not happen.
         if (
-          stripeError.code !== "payment_intent_unexpected_state" &&
-          stripeError.code !== "resource_missing"
+          stripeError.code === "payment_intent_unexpected_state" ||
+          stripeError.code === "resource_missing"
         ) {
-          console.error("Stripe cancel error:", stripeError);
-          // Don't fail - continue with database updates
+          holdReleased = true;
+        } else {
+          // WAS: swallowed with "Don't fail - continue with database updates".
+          // The code below then wrote status:"Refunded", capture_status:
+          // "cancelled" and set the rental to Cancelled — so a failed release
+          // produced a record saying the customer had been refunded, a freed
+          // vehicle, and a customer notification, while the funds stayed held.
+          // Harmless-looking until the platform account cannot be reached at
+          // all, at which point it becomes the guaranteed outcome for every
+          // cancellation. Fail loudly instead and change nothing.
+          console.error("Stripe cancel FAILED — not recording a release:", stripeError);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error:
+                `The deposit hold could not be released at Stripe (${stripeError?.message || stripeError?.code || "unknown error"}). ` +
+                `Nothing has been changed — the booking is still active and the customer's money is still held. ` +
+                `Do not retry until the payment account is reachable.`,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
       }
     }
@@ -227,10 +251,13 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error cancelling pre-auth:", error);
 
-    let errorMessage = "Failed to cancel pre-authorization";
-    if (error instanceof Stripe.errors.StripeError) {
-      errorMessage = error.message;
-    }
+    // `Stripe` is not imported in this file, so the previous
+    // `error instanceof Stripe.errors.StripeError` threw ReferenceError from
+    // INSIDE this catch — turning every handled failure into an unhandled
+    // crash and an opaque FunctionsHttpError for the caller. Rare enough to go
+    // unnoticed while Stripe calls succeeded; from cutoff it is every call.
+    const errorMessage =
+      (error as { message?: string })?.message || "Failed to cancel pre-authorization";
 
     return new Response(
       JSON.stringify({

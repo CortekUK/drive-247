@@ -355,13 +355,35 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       };
 
-      if (refundType === "full") {
+      // These branches used to key off `refundType` — the REQUEST parameter —
+      // so a refund that FAILED at Stripe still wrote status:"Refunded".
+      // refundResult is set to { type: "error" } in the catch above, and
+      // execution falls straight through to here. The result was: money kept,
+      // ledger says refunded, and the customer notified "Refund processed."
+      // Once the platform account is unreachable that is not an edge case, it
+      // is every cancellation. Key off what actually happened instead.
+      // `stripeRefundId` is assigned ONLY on the line after a successful
+      // stripe.refunds.create. It is the single unambiguous proof that money
+      // actually moved — unlike refundResult.type, which on success is just
+      // refundType echoed back and so cannot distinguish success from request.
+      const refundActuallyHappened = !!stripeRefundId;
+
+      if (refundType === "full" && refundActuallyHappened) {
         paymentUpdate.status = "Refunded";
         paymentUpdate.capture_status = "refunded";
-      } else if (refundType === "partial") {
+      } else if (refundType === "partial" && refundActuallyHappened) {
         paymentUpdate.status = "Partial Refund";
         paymentUpdate.capture_status = "partial_refund";
         paymentUpdate.refund_amount = refundAmount;
+      } else if (refundType !== "none" && !refundActuallyHappened) {
+        // Asked for a refund, did not get one. Leave the payment status alone
+        // so the money still reads as collected, and record why.
+        console.error(
+          `[cancel-rental-refund] refund FAILED for payment ${payment.id} — ` +
+          `NOT marking it refunded. reason: ${refundResult?.message || "unknown"}`
+        );
+        paymentUpdate.rejection_reason =
+          `Refund attempt failed: ${refundResult?.message || "unknown error"}`;
       } else if (refundResult?.type === "cancelled") {
         paymentUpdate.status = "Cancelled";
         paymentUpdate.capture_status = "cancelled";

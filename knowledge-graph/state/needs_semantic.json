@@ -1,6 +1,7 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-auto-extension-reminder/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-tenant-onboarding-link/index.ts"
   ],
   "specs": [
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"

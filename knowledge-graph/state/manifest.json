@@ -5907,6 +5907,10 @@
     "sha": "a2b5736704f5f538b5096d2c37b6a822b39269d4789bacb5e2304568bfedb624",
     "unit": "edge-functions"
   },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts": {
+    "sha": "3d07162d3e56c0ec41e112f77c5f56d9ca6be3db8ef9b10eb53d884b67aaaa48",
+    "unit": "edge-functions"
+  },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts": {
     "sha": "56c4fe62c5fbd8b046a221b8d0cca08b34a07fbb38f9c6c421967a9675b25657",
     "unit": "edge-functions"
@@ -6441,6 +6445,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-stripe-account/index.ts": {
     "sha": "49083efa64f4dd74490bb661fada0208375c9eaf4b9bc04166944ab0e7aabfaf",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-tenant-onboarding-link/index.ts": {
+    "sha": "f3d583803ef7e41f0ef2273043e2b49fd7bfe42f39da6f9859b348ecc1ee4d8d",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/check-blacklist-match/index.ts": {

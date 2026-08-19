@@ -94,11 +94,45 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
   const ctx = await stripeCtx(tenant);
   if (!ctx) return { ok: false, reason: "no stripe context" };
 
-  // Reuse the existing checkout link when one is live and the amount is unchanged;
-  // otherwise create a fresh session.
+  // Reuse the existing checkout link ONLY IF STRIPE STILL CONSIDERS IT OPEN.
+  //
+  // This used to reuse whatever `checkout_url` was stored, creating a fresh
+  // session only when the column was empty. Stripe Checkout Sessions expire 24
+  // hours after creation, and these reminders go out days apart — so the stored
+  // link was essentially always dead by the time it was emailed. Four live
+  // RevTek rentals are in exactly that state, three of them having already had
+  // three reminders each, every one carrying a link the customer could not use.
+  //
+  // A stale-but-non-null URL is also how a migrated tenant keeps mailing links
+  // for an account they no longer trade on: the rental stays anchored to the old
+  // platform while new charges follow the tenant. Retrieving the session with
+  // the tenant's CURRENT keys fails for exactly those rows, which is the right
+  // answer — it forces a fresh link on the account that actually works.
+  //
+  // Checking rather than always recreating matters: creating a second session
+  // does not invalidate the first, so a customer holding a still-valid link
+  // could be handed a second one and pay twice.
   let url = ext?.checkout_url as string | undefined;
   let sessionId = ext?.stripe_checkout_session_id as string | undefined;
-  const needFresh = !url || opts.customAmount != null;
+
+  let storedLinkStillOpen = false;
+  if (url && sessionId && opts.customAmount == null) {
+    try {
+      const existing = await ctx.stripe.checkout.sessions.retrieve(sessionId, ctx.options);
+      storedLinkStillOpen = existing?.status === "open" && !!existing?.url;
+      if (storedLinkStillOpen) url = existing.url as string;
+      else console.log(`[auto-ext-reminder] stored session ${sessionId} is ${existing?.status} — creating a fresh link`);
+    } catch (retrieveErr) {
+      // Not found on these keys (migrated tenant), or Stripe unreachable.
+      // Either way we cannot vouch for the link, so replace it.
+      console.log(
+        `[auto-ext-reminder] could not verify stored session ${sessionId} ` +
+        `(${(retrieveErr as { message?: string })?.message || "unknown"}) — creating a fresh link`
+      );
+    }
+  }
+
+  const needFresh = !storedLinkStillOpen;
   if (needFresh) {
     const o = origin(tenant.slug || "app");
     // This throw is what an operator on a not-yet-chargeable Stripe account
