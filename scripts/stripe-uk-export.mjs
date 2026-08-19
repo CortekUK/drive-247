@@ -135,7 +135,20 @@ async function get(path, params = {}, stripeAccount = null, attempt = 0) {
   if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
 
   calls++;
-  const res = await fetch(url, { headers });
+  let res;
+  try {
+    res = await fetch(url, { headers });
+  } catch (netErr) {
+    // A THROWN fetch error — connection reset, DNS blip, socket exhaustion from
+    // a long run. The status-code retry below never sees these, so without this
+    // a momentary network hiccup permanently failed that resource for the whole
+    // run. On the first pass 74 resources were lost to exactly this.
+    if (attempt >= 6) throw netErr;
+    const wait = Math.min(2 ** attempt * 500, 15000);
+    process.stdout.write(` [net retry ${wait}ms]`);
+    await sleep(wait);
+    return get(path, params, stripeAccount, attempt + 1);
+  }
 
   if (res.status === 429 || res.status >= 500) {
     if (attempt >= 6) throw new Error(`${res.status} after ${attempt} retries on ${path}`);

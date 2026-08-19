@@ -3400,7 +3400,7 @@
       "video": []
     },
     "total_files": 359,
-    "total_words": 478392,
+    "total_words": 479121,
     "counts": {
       "code": 352,
       "document": 7
@@ -3887,6 +3887,7 @@
         "/home/haseeb-raza/Desktop/drive-247/scripts/create-site-settings-page.js",
         "/home/haseeb-raza/Desktop/drive-247/scripts/seed-vehicles.ts",
         "/home/haseeb-raza/Desktop/drive-247/scripts/update-cms-content.js",
+        "/home/haseeb-raza/Desktop/drive-247/scripts/stripe-uk-export.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/seed-mock-receipts.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/seed-100-bonzah-vehicles.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/update-vehicle-images.mjs",
@@ -3903,10 +3904,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 19,
-    "total_words": 18487,
+    "total_files": 20,
+    "total_words": 19937,
     "counts": {
-      "code": 18,
+      "code": 19,
       "document": 1
     },
     "semantic_candidates": [
@@ -3920,6 +3921,7 @@
       "/home/haseeb-raza/Desktop/drive-247/scripts/create-site-settings-page.js",
       "/home/haseeb-raza/Desktop/drive-247/scripts/seed-vehicles.ts",
       "/home/haseeb-raza/Desktop/drive-247/scripts/update-cms-content.js",
+      "/home/haseeb-raza/Desktop/drive-247/scripts/stripe-uk-export.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/seed-mock-receipts.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/seed-100-bonzah-vehicles.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/update-vehicle-images.mjs",
