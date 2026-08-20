@@ -12,7 +12,9 @@ import { Magnetic } from "./d7-ui";
  * once the page scrolls — the active-link pill is a shared layout element so
  * it slides between items rather than cutting.
  */
-export function D7Nav() {
+export function D7Nav({ appName, logoUrl, phone, bookCta = "Book Now" }: {
+  appName: string; logoUrl: string | null; phone: string | null; bookCta?: string;
+}) {
   const [stuck, setStuck] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState("Home");
@@ -29,8 +31,8 @@ export function D7Nav() {
         className={`fixed inset-x-0 top-0 z-50 transition-[background,box-shadow,backdrop-filter] duration-500
                     ${stuck ? "d7-glass border-b border-[var(--line)] shadow-[0_10px_34px_-26px_rgba(23,16,72,.5)]" : "bg-transparent"}`}>
         <div className="d7-wrap flex h-[74px] items-center justify-between gap-4">
-          <a href="#top" aria-label="Drive247 home" className="shrink-0">
-            <Magnetic strength={0.18}><Logo /></Magnetic>
+          <a href="#top" aria-label={`${appName} home`} className="shrink-0">
+            <Magnetic strength={0.18}><Logo name={appName} logoUrl={logoUrl} /></Magnetic>
           </a>
 
           {/* centre links */}
@@ -54,22 +56,26 @@ export function D7Nav() {
 
           {/* right controls */}
           <div className="flex items-center gap-2.5">
-            <button className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--white)] px-4 py-2.5
-                               text-[13.5px] font-semibold text-[var(--ink)] shadow-[var(--shadow)]
-                               transition hover:-translate-y-0.5 hover:border-[var(--v)]/40 hover:text-[var(--v)] sm:flex">
+            <a href="/portal"
+              className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--white)] px-4 py-2.5
+                         text-[13.5px] font-semibold text-[var(--ink)] shadow-[var(--shadow)]
+                         transition hover:-translate-y-0.5 hover:border-[var(--v)]/40 hover:text-[var(--v)] sm:flex">
               <Icon name="user" className="h-4 w-4" /> Login
-            </button>
-            <button className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--white)] px-4 py-2.5
-                               text-[13.5px] font-semibold text-[var(--ink)] shadow-[var(--shadow)]
-                               transition hover:-translate-y-0.5 hover:border-[var(--v)]/40 hover:text-[var(--v)] md:flex">
-              <Icon name="chat" className="h-4 w-4" /> Enquiry
-            </button>
-            <ThemeToggle />
-            <a href="tel:08001234567" aria-label="Call Drive247"
-              className="d7-btn grid h-11 w-11 place-items-center rounded-[13px] text-white
-                         [background:var(--grad)] shadow-[var(--shadow-v)] transition hover:-translate-y-0.5">
-              <Icon name="phone" className="h-[18px] w-[18px]" />
             </a>
+            <a href="/contact"
+              className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--white)] px-4 py-2.5
+                         text-[13.5px] font-semibold text-[var(--ink)] shadow-[var(--shadow)]
+                         transition hover:-translate-y-0.5 hover:border-[var(--v)]/40 hover:text-[var(--v)] md:flex">
+              <Icon name="chat" className="h-4 w-4" /> Enquiry
+            </a>
+            <ThemeToggle />
+            {phone && (
+              <a href={`tel:${phone.replace(/[^+\d]/g, "")}`} aria-label={`Call ${appName}`}
+                className="d7-btn grid h-11 w-11 place-items-center rounded-[13px] text-white
+                           [background:var(--grad)] shadow-[var(--shadow-v)] transition hover:-translate-y-0.5">
+                <Icon name="phone" className="h-[18px] w-[18px]" />
+              </a>
+            )}
             <button onClick={() => setOpen(v => !v)} aria-label="Open menu" aria-expanded={open}
               className="grid h-11 w-11 place-items-center rounded-[13px] border border-[var(--line)]
                          bg-[var(--v-lt)] text-[var(--v)] transition hover:bg-[var(--white)]">
@@ -102,12 +108,14 @@ export function D7Nav() {
                 </motion.a>
               ))}
               <div className="mt-6 grid gap-2.5">
-                <button className="d7-btn rounded-full px-5 py-3 text-[14px] font-semibold text-white [background:var(--grad)]">
-                  Book Now
-                </button>
-                <button className="rounded-full border border-[var(--line)] px-5 py-3 text-[14px] font-semibold text-[var(--ink)]">
+                <a href="#booking" onClick={() => setOpen(false)}
+                  className="d7-btn rounded-full px-5 py-3 text-center text-[14px] font-semibold text-white [background:var(--grad)]">
+                  {bookCta}
+                </a>
+                <a href="/portal"
+                  className="rounded-full border border-[var(--line)] px-5 py-3 text-center text-[14px] font-semibold text-[var(--ink)]">
                   Login
-                </button>
+                </a>
               </div>
             </motion.nav>
           </>

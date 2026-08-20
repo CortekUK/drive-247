@@ -70,6 +70,65 @@
 
 .d7-wrap { width:100%; max-width:1240px; margin-inline:auto; padding-inline:clamp(16px,3.4vw,32px); }
 
+/* ==================================================== shadcn token bridge */
+/* The real booking widget (MultiStepBookingWidget) and every ui/* primitive it
+   pulls in are styled from globals.css's shadcn tokens — `hsl(var(--primary))`
+   and friends. Redefining those tokens INSIDE `.d7` re-skins the whole widget
+   to the booking-v2 palette without touching a single component, and without
+   leaking outside the namespace.
+
+   Values are the bare `H S% L%` triplets shadcn expects, matching the --v /
+   --ink / --line tokens above. */
+.d7 {
+  --background:          0 0% 100%;
+  --foreground:          228 48% 9%;
+  --card:                0 0% 100%;
+  --card-foreground:     228 48% 9%;
+  --popover:             0 0% 100%;
+  --popover-foreground:  228 48% 9%;
+  --primary:             249 82% 65%;   /* #6d5af0 */
+  --primary-foreground:  0 0% 100%;
+  --secondary:           228 60% 97%;
+  --secondary-foreground:228 30% 20%;
+  --muted:               228 60% 97%;
+  --muted-foreground:    222 15% 47%;
+  --accent:              249 100% 96%;
+  --accent-foreground:   249 60% 40%;
+  --destructive:         0 75% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border:              228 45% 93%;
+  --input:               228 45% 93%;
+  --ring:                249 82% 65%;
+  --radius:              0.75rem;
+}
+
+[data-d7-theme="dark"] .d7 {
+  --background:          230 45% 6%;
+  --foreground:          232 80% 96%;
+  --card:                231 40% 12%;
+  --card-foreground:     232 80% 96%;
+  --popover:             231 40% 12%;
+  --popover-foreground:  232 80% 96%;
+  --primary:             250 100% 74%;  /* #8b7cff */
+  --primary-foreground:  230 45% 6%;
+  --secondary:           230 32% 17%;
+  --secondary-foreground:232 60% 90%;
+  --muted:               230 32% 17%;
+  --muted-foreground:    228 20% 67%;
+  --accent:              244 42% 20%;
+  --accent-foreground:   250 100% 84%;
+  --destructive:         0 70% 58%;
+  --destructive-foreground: 0 0% 100%;
+  --border:              232 35% 24%;
+  --input:               232 35% 24%;
+  --ring:                250 100% 74%;
+}
+
+/* The widget ships its own card chrome; soften it so it reads as part of the
+   v2 page rather than a panel dropped onto it. */
+.d7-embed :is(.shadow-lg, .shadow-xl, .shadow-2xl) { box-shadow: var(--shadow) !important; }
+.d7-embed { color: var(--ink); }
+
 /* ------------------------------------------------------------ typography */
 /* globals.css applies the app's serif `font-display` to every h1-h6 inside
    @layer base. That element rule beats the font inherited from `.d7`, so

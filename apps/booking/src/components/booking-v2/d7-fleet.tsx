@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FLEET, TICKER, money, type Car } from "./d7-data";
+import { TICKER } from "./d7-data";
+import type { D7Vehicle } from "./use-d7-content";
 import { Icon } from "./d7-icons";
 import {
   BlurFade, BorderBeam, Card3D, Card3DItem, DotPattern, MagicCard, Marquee,
@@ -38,8 +39,23 @@ export function Ticker() {
  * arrows just nudge it by one card, so touch, trackpad and keyboard all
  * behave without a carousel dependency.
  */
-export function Fleet() {
+/** Formats a daily rate in the tenant's own currency. */
+function useRate(currency: string | null) {
+  return (n: number | null) => {
+    if (n == null) return null;
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency", currency: currency || "USD", maximumFractionDigits: 0,
+      }).format(n);
+    } catch {
+      return `${currency || "$"}${Math.round(n).toLocaleString("en-US")}`;
+    }
+  };
+}
+
+export function Fleet({ vehicles, currency }: { vehicles: D7Vehicle[]; currency: string | null }) {
   const rail = useRef<HTMLDivElement | null>(null);
+  const fmt = useRate(currency);
   const [edge, setEdge] = useState({ start: true, end: false });
 
   const sync = useCallback(() => {
@@ -82,7 +98,7 @@ export function Fleet() {
 
           <BlurFade delay={0.1}>
             <div className="flex items-center gap-3">
-              <a href="#fleet" className="d7-link group hidden items-center gap-1.5 text-[13.5px] font-semibold text-[var(--v)] sm:flex">
+              <a href="/fleet" className="d7-link group hidden items-center gap-1.5 text-[13.5px] font-semibold text-[var(--v)] sm:flex">
                 View all vehicles
                 <Icon name="arrow" className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </a>
@@ -98,8 +114,8 @@ export function Fleet() {
         <div ref={rail}
           className="d7-noscroll mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 pt-2
                      [scroll-padding-left:0px]">
-          {FLEET.map((car, i) => (
-            <FleetCard key={car.id} car={car} index={i} />
+          {vehicles.map((car, i) => (
+            <FleetCard key={car.id} car={car} index={i} rate={fmt(car.rate)} />
           ))}
         </div>
       </div>
@@ -122,7 +138,7 @@ function RailButton({ dir, disabled, onClick }: {
   );
 }
 
-function FleetCard({ car, index }: { car: Car; index: number }) {
+function FleetCard({ car, index, rate }: { car: D7Vehicle; index: number; rate: string | null }) {
   return (
     <motion.div
       data-card
@@ -136,43 +152,52 @@ function FleetCard({ car, index }: { car: Car; index: number }) {
           <BorderBeam duration={7} delay={index * 0.9} size={70} radius={16}
             className="opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
-          {/* photo */}
+          {/* photo — a tenant without a vehicle photo gets a branded placeholder
+              rather than a broken image frame */}
           <div className="relative m-2.5 overflow-hidden rounded-xl bg-[var(--soft-2)]">
             <Card3DItem z={26}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={car.img} alt={car.name}
-                className="d7-zoom aspect-[16/11] w-full object-cover" loading="lazy" decoding="async" />
+              {car.img ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={car.img} alt={car.name}
+                  className="d7-zoom aspect-[16/11] w-full object-cover" loading="lazy" decoding="async" />
+              ) : (
+                <span className="grid aspect-[16/11] w-full place-items-center text-[var(--v)]/35">
+                  <Icon name="car" className="h-11 w-11" />
+                </span>
+              )}
             </Card3DItem>
             <span aria-hidden className="d7-sheen absolute inset-0" />
-            {car.tag && (
-              <span className="absolute left-2.5 top-2.5 rounded-full [background:var(--grad)] px-2.5 py-1
-                               text-[10.5px] font-extrabold uppercase tracking-[.1em] text-white
-                               shadow-[var(--shadow-v)]">
-                {car.tag}
-              </span>
-            )}
           </div>
 
           {/* body */}
           <Card3DItem z={16} className="px-4 pb-4 pt-1">
-            <h3 className="d7-h3 d7-dis text-[var(--ink)] transition-colors group-hover:text-[var(--v)]">
+            <h3 className="d7-h3 d7-dis truncate text-[var(--ink)] transition-colors group-hover:text-[var(--v)]">
               {car.name}
             </h3>
-            <p className="mt-0.5 text-[12.5px] text-[var(--mute)]">{car.klass}</p>
+            {car.category && <p className="mt-0.5 text-[12.5px] capitalize text-[var(--mute)]">{car.category}</p>}
 
-            <div className="mt-3 flex items-center gap-4 border-t border-[var(--line-2)] pt-3 text-[12px] text-[var(--body)]">
-              <span className="flex items-center gap-1.5">
-                <Icon name="seat" className="h-[15px] w-[15px] text-[var(--v)]" />{car.seats} Seats
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Icon name="gear" className="h-[15px] w-[15px] text-[var(--v)]" />{car.gear}
-              </span>
-            </div>
+            {car.fuel && (
+              <div className="mt-3 flex items-center gap-4 border-t border-[var(--line-2)] pt-3 text-[12px] text-[var(--body)]">
+                <span className="flex items-center gap-1.5 capitalize">
+                  <Icon name="bolt" className="h-[15px] w-[15px] text-[var(--v)]" />{car.fuel}
+                </span>
+              </div>
+            )}
 
-            <p className="mt-3 text-[19px] font-extrabold tracking-[-.02em] text-[var(--v)]">
-              {money(car.rate)}
-              <span className="ml-1 text-[12px] font-semibold text-[var(--mute)]">/day</span>
-            </p>
+            {rate && (
+              <p className="mt-3 text-[19px] font-extrabold tracking-[-.02em] text-[var(--v)]">
+                {rate}
+                <span className="ml-1 text-[12px] font-semibold text-[var(--mute)]">/day</span>
+              </p>
+            )}
+
+            <a href="#booking"
+              className="mt-3 flex items-center justify-center gap-1.5 rounded-full border border-[var(--line)]
+                         py-2 text-[12.5px] font-bold text-[var(--ink)] transition
+                         group-hover:[background:var(--grad)] group-hover:border-transparent group-hover:text-white">
+              Book this
+              <Icon name="arrow" className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
+            </a>
           </Card3DItem>
         </MagicCard>
       </Card3D>
