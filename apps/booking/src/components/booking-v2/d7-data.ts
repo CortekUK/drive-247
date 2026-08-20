@@ -23,27 +23,34 @@ export const TICKER = [
   "Flexible rates", "Fully insured", "Fast confirmation",
 ];
 
-/** Footer columns — every entry is a route that exists in this app. */
-export const FOOTER_LINKS = [
-  { head: "Rentals", items: [
-    { label: "Our Fleet",    href: "/fleet" },
-    { label: "Book Now",     href: "#booking" },
-    { label: "Offers",       href: "/offer" },
-    { label: "Promotions",   href: "/promotions" },
-  ]},
-  { head: "Company", items: [
-    { label: "About Us",     href: "/about" },
-    { label: "Testimonials", href: "/testimonials" },
-    { label: "Blog",         href: "/blog" },
-    { label: "Contact",      href: "/contact" },
-  ]},
-  { head: "Support", items: [
-    { label: "FAQ",                href: "/faq" },
-    { label: "My Account",         href: "/portal" },
-    { label: "Terms & Conditions", href: "/terms" },
-    { label: "Privacy Policy",     href: "/privacy" },
-  ]},
-];
+/**
+ * Footer columns. Mirrors the legacy footer's link set: `/#booking` rather
+ * than a bare `#booking` (dead from every page but the home page), and no
+ * `/offer` — that route is `/offer/[code]` and 404s without one.
+ *
+ * FAQ and Blog are conditional, exactly as they are in the header.
+ */
+export function footerColumns({ hasFaqs, blogEnabled }: { hasFaqs: boolean; blogEnabled: boolean }) {
+  return [
+    { head: "Rentals", items: [
+      { label: "Our Fleet",  href: "/fleet" },
+      { label: "Book Now",   href: "/#booking" },
+      { label: "Promotions", href: "/promotions" },
+    ]},
+    { head: "Company", items: [
+      { label: "About Us",     href: "/about" },
+      { label: "Reviews",      href: "/testimonials" },
+      { label: "Contact",      href: "/contact" },
+      ...(blogEnabled ? [{ label: "Blog", href: "/blog" }] : []),
+    ]},
+    { head: "Support", items: [
+      ...(hasFaqs ? [{ label: "FAQ", href: "/faq" }] : []),
+      { label: "My Account",         href: "/portal" },
+      { label: "Terms & Conditions", href: "/terms" },
+      { label: "Privacy Policy",     href: "/privacy" },
+    ]},
+  ];
+}
 
 /** Bottom bar. */
 export const LEGAL_LINKS = [

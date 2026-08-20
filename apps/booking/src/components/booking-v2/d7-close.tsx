@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FOOTER_LINKS, LEGAL_LINKS } from "./d7-data";
+import { LEGAL_LINKS } from "./d7-data";
 import { Icon, Logo, Social } from "./d7-icons";
 import { GsapParallax } from "./d7-motion";
 import {
@@ -93,12 +93,13 @@ export function CtaBand({ cta, image, bookCta }: {
 
 /* ========================================================================== */
 
-export function Footer({ appName, logoUrl, blurb, contact, socials }: {
+export function Footer({ appName, logoUrl, blurb, contact, socials, columns }: {
   appName: string;
   logoUrl: string | null;
   blurb?: string;
   contact: { icon: string; label: string; value: string; href?: string }[];
   socials: { name: string; href: string }[];
+  columns: { head: string; items: { label: string; href: string }[] }[];
 }) {
   return (
     <footer id="contact" className="relative scroll-mt-24 overflow-hidden bg-[var(--footer)] text-white">
@@ -124,7 +125,7 @@ export function Footer({ appName, logoUrl, blurb, contact, socials }: {
         </BlurFade>
 
         {/* link columns */}
-        {FOOTER_LINKS.map((col, i) => (
+        {columns.map((col, i) => (
           <BlurFade key={col.head} delay={0.06 * (i + 1)}>
             <h3 className="text-[14px] font-bold text-white">{col.head}</h3>
             <ul className="mt-4 space-y-2.5">

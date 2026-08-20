@@ -9,6 +9,8 @@ import { D7Nav } from "./d7-nav";
 import { OffersRow } from "./d7-offers";
 import { ScrollProgress } from "./d7-ui";
 import { WhyChoose } from "./d7-why";
+import { footerColumns } from "./d7-data";
+import { useHasFaqs } from "@/hooks/useHasFaqs";
 import { useD7Content } from "./use-d7-content";
 import "./v2.css";
 
@@ -32,6 +34,7 @@ import "./v2.css";
  */
 export default function BookingV2Landing() {
   const c = useD7Content();
+  const hasFaqs = useHasFaqs();
 
   const services = (c.services.services ?? []) as { icon?: string; title: string; description?: string }[];
 
@@ -115,6 +118,7 @@ export default function BookingV2Landing() {
           blurb={c.contact.description || c.hero.subheading}
           contact={contact}
           socials={socials}
+          columns={footerColumns({ hasFaqs, blogEnabled: !!c.tenant?.blog_enabled })}
         />
       </Cursor>
     </>

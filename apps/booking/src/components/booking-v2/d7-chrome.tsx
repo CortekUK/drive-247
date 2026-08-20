@@ -1,6 +1,8 @@
 "use client";
 
 import { useTenant } from "@/contexts/TenantContext";
+import { useHasFaqs } from "@/hooks/useHasFaqs";
+import { footerColumns } from "./d7-data";
 import { Footer as D7Footer } from "./d7-close";
 import { D7Nav } from "./d7-nav";
 import { useD7Chrome } from "./use-d7-content";
@@ -30,6 +32,8 @@ export function D7NavBar() {
 /** The booking-v2 footer, for pages that mount the shared <Footer />. */
 export function D7FooterBar() {
   const c = useD7Chrome();
+  const { tenant } = useTenant();
+  const hasFaqs = useHasFaqs();
   return (
     <D7Footer
       appName={c.appName}
@@ -37,6 +41,7 @@ export function D7FooterBar() {
       blurb={c.blurb}
       contact={c.contact}
       socials={c.socials}
+      columns={footerColumns({ hasFaqs, blogEnabled: !!tenant?.blog_enabled })}
     />
   );
 }
