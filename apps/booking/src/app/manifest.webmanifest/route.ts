@@ -21,7 +21,8 @@ export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
 const FALLBACK_NAME = 'Drive 247';
-const FALLBACK_THEME = '#0a0a0e';
+// Drive247 brand purple, sampled from the mark's ring gradient.
+const FALLBACK_THEME = '#6333f7';
 
 interface ManifestIcon {
   src: string;
@@ -97,7 +98,9 @@ export async function GET() {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#0a0a0e',
+    // Matches the icon's own ground, so the PWA splash screen does not show a
+    // white icon floating on black.
+    background_color: '#ffffff',
     theme_color: themeColor,
     icons,
     categories: ['travel', 'business'],

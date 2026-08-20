@@ -16,7 +16,8 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 
 const FALLBACK_NAME = 'Drive247 Ops';
-const THEME = '#4F46E5';
+// Drive247 brand purple, sampled from the mark's ring gradient.
+const THEME = '#6333f7';
 
 export async function GET() {
   let name = FALLBACK_NAME;

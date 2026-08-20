@@ -21,8 +21,10 @@ export function GET() {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#11111b',
-    theme_color: '#a470ff',
+    // Matches the icon's own ground, so the splash screen does not show a white
+    // icon floating on black.
+    background_color: '#ffffff',
+    theme_color: '#6333f7',
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
