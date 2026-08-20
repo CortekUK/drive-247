@@ -128,5 +128,10 @@ export const config = {
      * - public folder
      */
     '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*|public).*)',
+    // Re-included explicitly: the pattern above skips any path containing a dot,
+    // so the manifest would never receive the x-tenant-slug header and every
+    // tenant would be offered an install named after the PLATFORM instead of
+    // their own brand. Same reason the favicon paths are listed.
+    '/manifest.webmanifest',
   ],
 };
