@@ -853,8 +853,10 @@ export default function TenantDetailsPage() {
   // Scoped to that one page — /fleet, /booking and the customer portal are
   // unaffected, so the booking funnel keeps working either way.
   //
-  // The booking app's TenantContext subscribes to tenant UPDATEs, so an open
-  // booking site picks this up without a reload.
+  // Which design renders is resolved server-side per request, so an already-open
+  // booking tab does NOT swap on its own — it needs a reload. (TenantContext's
+  // realtime subscription does receive the new value, but nothing on the client
+  // consumes it to switch designs.)
   const handleToggleBookingV2 = async (next: boolean) => {
     if (!tenant) return;
     setBookingV2Updating(true);
