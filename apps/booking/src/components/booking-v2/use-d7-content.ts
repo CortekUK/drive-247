@@ -66,9 +66,61 @@ function splitTrustLine(line: string | undefined): string[] {
   return line.split(/[•|]/).map(s => s.trim()).filter(Boolean);
 }
 
-export function useD7Content() {
+/**
+ * Everything the site chrome (nav + footer) needs.
+ *
+ * Kept separate from `useD7Content` because the nav and footer render on every
+ * public page — dragging the vehicle and testimonial queries onto /faq or
+ * /terms would be pure waste.
+ */
+export function useD7Chrome() {
   const { tenant } = useTenant();
   const { branding } = useBrandingSettings();
+  const { data: rawContent } = usePageContent("home");
+  const content = mergeWithDefaults(rawContent, defaultHomeContent);
+
+  const hero: Partial<HomeHeroContent> = content.home_hero ?? {};
+  const card: Partial<ContactCardContent> = content.contact_card ?? {};
+
+  const appName = branding.app_name || tenant?.app_name || tenant?.company_name || "Drive 247";
+  const phone = hero.phone_number || tenant?.phone || null;
+  const email = card.email || tenant?.contact_email || null;
+
+  /* Only the channels this tenant actually filled in. */
+  const contact = [
+    phone && {
+      icon: "phone", label: "Call us", value: phone,
+      href: `tel:${phone.replace(/[^+\d]/g, "")}`,
+    },
+    email && { icon: "mail", label: "Email us", value: email, href: `mailto:${email}` },
+    tenant?.address && { icon: "pin", label: "Visit us", value: tenant.address },
+  ].filter(Boolean) as { icon: string; label: string; value: string; href?: string }[];
+
+  const socials = [
+    tenant?.facebook_url && { name: "facebook", href: tenant.facebook_url },
+    tenant?.instagram_url && { name: "instagram", href: tenant.instagram_url },
+    tenant?.twitter_url && { name: "x", href: tenant.twitter_url },
+    tenant?.linkedin_url && { name: "linkedin", href: tenant.linkedin_url },
+  ].filter(Boolean) as { name: string; href: string }[];
+
+  return {
+    tenant,
+    appName,
+    logoUrl: tenant?.logo_url ?? null,
+    /* The footer sits on a near-black ground; a tenant's light logo disappears
+       into it, which is what dark_logo_url exists for. */
+    darkLogoUrl: tenant?.dark_logo_url ?? tenant?.logo_url ?? null,
+    phone,
+    bookCta: hero.book_cta_text || "Book Now",
+    blurb: card.description || hero.subheading,
+    contact,
+    socials,
+  };
+}
+
+export function useD7Content() {
+  const chrome = useD7Chrome();
+  const { tenant } = useTenant();
   const { data: rawContent } = usePageContent("home");
 
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
@@ -167,22 +219,15 @@ export function useD7Content() {
       ? hero.carousel_media
       : (hero.carousel_images ?? []).map((url: string) => ({ url, type: "image" as const }));
 
-  const appName = branding.app_name || tenant?.app_name || tenant?.company_name || "Drive 247";
-
   return {
-    tenant,
-    appName,
-    logoUrl: tenant?.logo_url ?? null,
-    /* The footer sits on a near-black ground; a tenant's light logo disappears
-       into it, which is what dark_logo_url exists for. */
-    darkLogoUrl: tenant?.dark_logo_url ?? tenant?.logo_url ?? null,
+    ...chrome,
 
     hero: {
       headline: hero.headline,
       subheading: hero.subheading,
-      bookCta: hero.book_cta_text || "Book Now",
+      bookCta: chrome.bookCta,
       phoneCta: hero.phone_cta_text,
-      phone: hero.phone_number || tenant?.phone || null,
+      phone: chrome.phone,
       trustPoints: splitTrustLine(hero.trust_line),
       media: carousel,
       /* The hero art falls back to the first carousel image, then the

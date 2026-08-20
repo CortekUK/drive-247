@@ -124,6 +124,32 @@
   --ring:                250 100% 74%;
 }
 
+/* The app also ships gradient/shadow utilities that hardcode a palette:
+   `.text-gradient-metal` (31 files) and `.text-gradient-silver` (8) paint text
+   with a SILVER gradient and set `color: transparent`. That reads on the
+   default dark theme and is nearly invisible on this light one — the fleet
+   cards came out as ghost text.
+
+   Both read from CSS variables, so redefining the variables here re-points
+   every one of those 39 files at this palette without editing a component. */
+.d7 {
+  --gradient-metal:  linear-gradient(135deg, hsl(249 82% 65%), hsl(258 90% 66%), hsl(280 87% 65%));
+  --gradient-silver: linear-gradient(135deg, hsl(228 48% 9%),  hsl(228 30% 22%), hsl(228 48% 9%));
+  --gradient-dark:   linear-gradient(180deg, hsl(228 60% 99%), hsl(228 55% 97%));
+  --gradient-accent: linear-gradient(135deg, hsl(249 82% 65%), hsl(280 87% 65%));
+  --shadow-metal:    0 10px 30px -18px rgba(23, 16, 72, .30);
+  --shadow-glow:     0 0 40px hsl(249 82% 65% / .22);
+}
+
+[data-d7-theme="dark"] .d7 {
+  --gradient-metal:  linear-gradient(135deg, hsl(250 100% 78%), hsl(258 95% 76%), hsl(280 90% 76%));
+  --gradient-silver: linear-gradient(135deg, hsl(232 80% 96%), hsl(228 40% 78%), hsl(232 80% 96%));
+  --gradient-dark:   linear-gradient(180deg, hsl(231 40% 12%), hsl(230 38% 15%));
+  --gradient-accent: linear-gradient(135deg, hsl(250 100% 74%), hsl(280 90% 74%));
+  --shadow-metal:    0 10px 30px -18px rgba(0, 0, 0, .75);
+  --shadow-glow:     0 0 40px hsl(250 100% 74% / .28);
+}
+
 /* The widget ships its own card chrome; soften it so it reads as part of the
    v2 page rather than a panel dropped onto it. */
 .d7-embed :is(.shadow-lg, .shadow-xl, .shadow-2xl) { box-shadow: var(--shadow) !important; }

@@ -3,12 +3,10 @@
 import { BookingSection } from "./d7-booking";
 import { CtaBand, Footer } from "./d7-close";
 import { Fleet, Ticker } from "./d7-fleet";
-import { d7Display, d7Ui } from "./d7-fonts";
 import { Hero } from "./d7-hero";
 import { Cursor, SmoothScroll } from "./d7-motion";
 import { D7Nav } from "./d7-nav";
 import { OffersRow } from "./d7-offers";
-import { D7ThemeInit } from "./d7-theme";
 import { ScrollProgress } from "./d7-ui";
 import { WhyChoose } from "./d7-why";
 import { useD7Content } from "./use-d7-content";
@@ -63,10 +61,11 @@ export default function BookingV2Landing() {
     c.tenant?.linkedin_url && { name: "linkedin", href: c.tenant.linkedin_url },
   ].filter(Boolean) as { name: string; href: string }[];
 
+  /* The `.d7` wrapper, fonts and theme restore come from D7SiteShell in the
+     root layout, which covers every page — not just this one. */
   return (
-    <div className={`d7 ${d7Display.variable} ${d7Ui.variable}`}>
+    <>
       <Cursor>
-        <D7ThemeInit />
         <SmoothScroll />
         <ScrollProgress />
 
@@ -118,6 +117,6 @@ export default function BookingV2Landing() {
           socials={socials}
         />
       </Cursor>
-    </div>
+    </>
   );
 }
