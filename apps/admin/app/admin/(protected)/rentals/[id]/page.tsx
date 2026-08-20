@@ -111,6 +111,23 @@ interface Tenant {
   booking_v2_enabled: boolean | null;
 }
 
+/**
+ * Where to actually OPEN a tenant's site from this admin.
+ *
+ * The production hostnames are not reachable from a dev machine, so in
+ * development these buttons opened the LIVE site instead of the one running on
+ * localhost. That made a local toggle look broken: you flipped a flag in one
+ * database and then looked at a different deployment reading a different one.
+ *
+ * Only the click-through buttons use this. The "Access URLs" card and anything
+ * handed to a tenant deliberately keep the real production hostnames.
+ */
+const IS_DEV = process.env.NODE_ENV === 'development';
+const tenantBookingUrl = (slug: string) =>
+  IS_DEV ? `http://${slug}.localhost:3000` : `https://${slug}.drive-247.com`;
+const tenantPortalUrl = (slug: string) =>
+  IS_DEV ? `http://${slug}.portal.localhost:3001` : `https://${slug}.portal.drive-247.com`;
+
 interface TenantSubscription {
   id: string;
   stripe_subscription_id: string;
@@ -1477,7 +1494,7 @@ export default function TenantDetailsPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button asChild size="sm">
                     <a
-                      href={`https://${tenant.slug}.portal.drive-247.com`}
+                      href={tenantPortalUrl(tenant.slug)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -1487,7 +1504,7 @@ export default function TenantDetailsPage() {
                   </Button>
                   <Button variant="outline" asChild size="sm">
                     <a
-                      href={`https://${tenant.slug}.drive-247.com`}
+                      href={tenantBookingUrl(tenant.slug)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -2040,7 +2057,7 @@ export default function TenantDetailsPage() {
                     </p>
                     {tenant.slug && (
                       <a
-                        href={`https://${tenant.slug}.drive-247.com/booking-v2`}
+                        href={`${tenantBookingUrl(tenant.slug)}/booking-v2`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"
