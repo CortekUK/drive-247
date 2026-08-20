@@ -12,9 +12,19 @@ export const dynamic = "force-dynamic";
  */
 const PLATFORM_DEFAULT_APP_NAME = "Drive 917";
 
+// Applied on EVERY metadata branch, fallbacks included. iOS reads these only at
+// "Add to Home Screen" — if the tenant lookup happens to fail on the visit where
+// an operator installs, the icon is created without them and that install can
+// never receive push.
+const PWA_METADATA = {
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "default" as const },
+};
+
 const defaultMetadata: Metadata = {
   title: "Drive247 Portal",
   description: "Multi-tenant fleet management portal",
+  ...PWA_METADATA,
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -63,6 +73,7 @@ export async function generateMetadata(): Promise<Metadata> {
       `${brandName} fleet management portal`;
 
     return {
+      ...PWA_METADATA,
       title,
       description,
       openGraph: {
@@ -78,9 +89,14 @@ export async function generateMetadata(): Promise<Metadata> {
         description,
         images: tenant.og_image_url ? [tenant.og_image_url] : undefined,
       },
-      icons: tenant.favicon_url
-        ? { icon: tenant.favicon_url, shortcut: tenant.favicon_url }
-        : undefined,
+      icons: {
+        ...(tenant.favicon_url
+          ? { icon: tenant.favicon_url, shortcut: tenant.favicon_url }
+          : {}),
+        // iOS takes the Home Screen icon from here, NOT the manifest, and it
+        // must be opaque — a transparent PNG gets flattened onto black.
+        apple: "/icons/apple-touch-icon.png",
+      },
     };
   } catch (error) {
     console.error("Error generating portal metadata:", error);

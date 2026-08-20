@@ -20,6 +20,7 @@ import DevJumpPanel from '@/components/DevJumpPanel';
 import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 import { SuspendedGate } from '@/components/SuspendedGate';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
+import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -27,9 +28,22 @@ const inter = Inter({ subsets: ['latin'] });
 export const dynamic = 'force-dynamic';
 
 // Default metadata fallback
+// `manifest` and `appleWebApp` belong on EVERY branch, including the fallbacks.
+// iOS reads them only at "Add to Home Screen"; if the tenant lookup happens to
+// fail on the visit where someone installs, the icon is created without them and
+// the install is permanently a bookmark that can never receive push.
+const PWA_METADATA = {
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent' as const,
+  },
+};
+
 const defaultMetadata: Metadata = {
   title: 'Premium Car Rentals',
   description: 'Premium car rentals with exceptional service',
+  ...PWA_METADATA,
 };
 
 // Generate metadata dynamically based on tenant
@@ -67,6 +81,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const description = tenant.meta_description || 'Premium car rentals with exceptional service';
 
     return {
+      ...PWA_METADATA,
       title,
       description,
       openGraph: {
@@ -80,10 +95,12 @@ export async function generateMetadata(): Promise<Metadata> {
         title,
         description,
       },
-      icons: tenant.favicon_url ? {
-        icon: tenant.favicon_url,
-        shortcut: tenant.favicon_url,
-      } : undefined,
+      icons: {
+        ...(tenant.favicon_url ? { icon: tenant.favicon_url, shortcut: tenant.favicon_url } : {}),
+        // iOS takes the Home Screen icon from here, NOT from the manifest, and
+        // it must be opaque — a transparent PNG is flattened onto black.
+        apple: '/icons/apple-touch-icon.png',
+      },
     };
   } catch (error) {
     console.error('Error generating metadata:', error);
@@ -142,6 +159,8 @@ export default async function RootLayout({
                 reads ga_measurement_id from TenantContext, so it must sit inside
                 TenantProvider. Renders nothing when unset. */}
             <GoogleAnalytics />
+            {/* Installs the service worker that receives push while the app is closed. */}
+            <ServiceWorkerRegistrar />
             <CustomerAuthProvider>
               <BookingPersistenceGuard>
               <ThemeProvider

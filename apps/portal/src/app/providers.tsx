@@ -11,6 +11,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
 import DevPanel from "@/components/shared/DevPanel";
+import { ServiceWorkerRegistrar } from "@/components/push/service-worker-registrar";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((state) => state.initialize);
@@ -54,6 +55,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
+      {/* Installs the worker that receives push while the portal is closed. */}
+      <ServiceWorkerRegistrar />
       <QueryClientProvider client={queryClient}>
         <TenantProvider>
           <RealtimeChatProvider>

@@ -1,0 +1,128 @@
+/**
+ * Shared Web Push client helpers.
+ *
+ * Platform reality this file exists to absorb:
+ *  - Android/Chrome: push works from a normal browser tab. No install needed.
+ *  - iOS/Safari: push works ONLY from a PWA added to the Home Screen (16.4+).
+ *    In a normal Safari tab `PushManager` is missing entirely, so a naive
+ *    "is push supported?" check reports false and the user is told their phone
+ *    cannot do it — when in fact they just have not installed it yet. That
+ *    distinction is `needsInstall`.
+ */
+
+export type PushPlatform = 'ios' | 'android' | 'desktop' | 'unknown';
+
+const DEVICE_ID_KEY = 'd247_push_device_id';
+
+/**
+ * A subscription outlives any login, so it is keyed to a device id that is
+ * generated once and never cleared on logout — that is what lets a signed-out
+ * browser stay reachable and get re-linked when the same person signs back in.
+ */
+export function getDeviceId(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    let id = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      window.localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    // Private mode / storage blocked — a per-session id still beats failing.
+    return crypto.randomUUID();
+  }
+}
+
+export function detectPlatform(): PushPlatform {
+  if (typeof navigator === 'undefined') return 'unknown';
+  const ua = navigator.userAgent || '';
+  // iPadOS 13+ reports itself as a Mac; the touch-point count is the standard
+  // way to tell a real Mac from an iPad, which needs the iOS install path.
+  const isIpadOS = /Macintosh/.test(ua) && typeof document !== 'undefined' && navigator.maxTouchPoints > 1;
+  if (/iPad|iPhone|iPod/.test(ua) || isIpadOS) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  if (/Mobile/.test(ua)) return 'unknown';
+  return 'desktop';
+}
+
+/** True when the page is running as an installed PWA rather than a browser tab. */
+export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  const iosStandalone = (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+  return iosStandalone || window.matchMedia?.('(display-mode: standalone)').matches === true;
+}
+
+export interface PushCapability {
+  /** Push can be enabled right now on this device. */
+  supported: boolean;
+  /** iOS in a browser tab — capable, but only after "Add to Home Screen". */
+  needsInstall: boolean;
+  platform: PushPlatform;
+  standalone: boolean;
+}
+
+export function getPushCapability(): PushCapability {
+  const platform = detectPlatform();
+  const standalone = isStandalone();
+
+  if (typeof window === 'undefined') {
+    return { supported: false, needsInstall: false, platform, standalone };
+  }
+
+  const hasApis =
+    'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+  // On iOS the push APIs are absent until the site is installed, so "missing
+  // APIs + iOS + not installed" means "install first", never "unsupported".
+  if (!hasApis && platform === 'ios' && !standalone) {
+    return { supported: false, needsInstall: true, platform, standalone };
+  }
+
+  return { supported: hasApis, needsInstall: false, platform, standalone };
+}
+
+/**
+ * The push service wants the VAPID key as raw bytes, not base64url text.
+ *
+ * Built over an EXPLICIT ArrayBuffer so the result types as
+ * `Uint8Array<ArrayBuffer>` rather than `Uint8Array<ArrayBufferLike>`. Since
+ * TS 5.7 the latter is not assignable to `BufferSource` (it could be backed by a
+ * SharedArrayBuffer), which `pushManager.subscribe` rejects.
+ */
+export function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const output = new Uint8Array(new ArrayBuffer(raw.length));
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
+let registrationPromise: Promise<ServiceWorkerRegistration | null> | null = null;
+
+/**
+ * Registers the service worker once per page load.
+ *
+ * `navigator.serviceWorker.ready` is deliberately awaited rather than trusting
+ * the registration object: a freshly registered worker may still be `installing`,
+ * and calling `pushManager.subscribe()` on one that is not yet active throws.
+ */
+export function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return Promise.resolve(null);
+  }
+  if (registrationPromise) return registrationPromise;
+
+  registrationPromise = navigator.serviceWorker
+    .register('/service-worker.js', { scope: '/' })
+    .then(() => navigator.serviceWorker.ready)
+    .catch((error) => {
+      console.error('[push] Service worker registration failed:', error);
+      return null;
+    });
+
+  return registrationPromise;
+}
+
+export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';

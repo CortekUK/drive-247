@@ -18,6 +18,7 @@ import {
   FileSignature,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { PushNotificationCard } from '@/components/push/push-notification-card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -117,6 +118,10 @@ export default function NotificationsPage() {
           )}
         </div>
       </div>
+
+      {/* Device-level push control. Renders nothing unless the tenant has
+          push_notifications_enabled — this is the per-tenant rollout gate. */}
+      <PushNotificationCard />
 
       {/* Notifications List */}
       {isLoading ? (

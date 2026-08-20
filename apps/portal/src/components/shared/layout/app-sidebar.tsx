@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -111,6 +111,7 @@ const settingsTabGroups = [
     label: "Communication",
     items: [
       { value: 'reminders', icon: Bell, label: 'Notifications' },
+      { value: 'push', icon: BellRing, label: 'Push Notifications' },
       { value: 'templates', icon: FileText, label: 'Templates' },
     ],
   },

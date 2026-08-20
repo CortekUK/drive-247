@@ -325,3 +325,25 @@ verify_jwt = true
 # (head_admin/admin) only runs after the gateway has established a valid JWT.
 [functions.charge-saved-card]
 verify_jwt = true
+
+# Records the Web Push subscription a browser hands us.
+#
+# verify_jwt = false because device-scoped push must work for a visitor who has
+# never signed in — that is the entire point of reaching someone who abandoned a
+# booking. The function grades its own auth instead: the STAFF audience requires
+# a valid portal JWT belonging to the tenant, while the CUSTOMER audience accepts
+# anonymous callers and opportunistically back-links the row when a token is
+# present. Anonymous writes are constrained by shape, not identity — the endpoint
+# host must be a real push service, the tenant must exist with the feature flag
+# on, and `endpoint` is UNIQUE so replays update one row instead of growing the
+# table.
+[functions.save-push-subscription]
+verify_jwt = false
+
+# Fans a notification out to enrolled devices. Listed explicitly at the default
+# verify_jwt = true: it writes to customers' lock screens, so the gateway
+# establishes a session before the function's own RBAC gate (head_admin/admin,
+# or a manager with editor on settings.reminders) runs. The tenant is taken from
+# the caller's app_users row and never from the request body.
+[functions.send-push]
+verify_jwt = true

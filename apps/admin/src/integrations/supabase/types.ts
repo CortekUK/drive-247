@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backfill_iv_link_20260817: {
+        Row: {
+          captured_at: string
+          customer_name_before: string | null
+          new_customer_id: string | null
+          prior_customer_id: string | null
+          review_result: string | null
+          tenant_id: string | null
+          verdict: string | null
+          verification_id: string
+        }
+        Insert: {
+          captured_at?: string
+          customer_name_before?: string | null
+          new_customer_id?: string | null
+          prior_customer_id?: string | null
+          review_result?: string | null
+          tenant_id?: string | null
+          verdict?: string | null
+          verification_id: string
+        }
+        Update: {
+          captured_at?: string
+          customer_name_before?: string | null
+          new_customer_id?: string | null
+          prior_customer_id?: string | null
+          review_result?: string | null
+          tenant_id?: string | null
+          verdict?: string | null
+          verification_id?: string
+        }
+        Relationships: []
+      }
       _orphaned_data_audit: {
         Row: {
           cleaned_at: string | null
@@ -35,6 +68,99 @@ export type Database = {
           orphan_type?: string
           record_id?: string
           table_name?: string
+        }
+        Relationships: []
+      }
+      _recover_orphan_customers_20260817: {
+        Row: {
+          action: string
+          created_customer_id: string | null
+          licence_omitted: boolean
+          linked_customer_id: string | null
+          name_used: string | null
+          recorded_at: string
+          tenant_id: string | null
+          verification_id: string
+        }
+        Insert: {
+          action: string
+          created_customer_id?: string | null
+          licence_omitted?: boolean
+          linked_customer_id?: string | null
+          name_used?: string | null
+          recorded_at?: string
+          tenant_id?: string | null
+          verification_id: string
+        }
+        Update: {
+          action?: string
+          created_customer_id?: string | null
+          licence_omitted?: boolean
+          linked_customer_id?: string | null
+          name_used?: string | null
+          recorded_at?: string
+          tenant_id?: string | null
+          verification_id?: string
+        }
+        Relationships: []
+      }
+      _rollback_sabrina_20260818: {
+        Row: {
+          captured: string | null
+          d1: string | null
+          d2: string | null
+          d3: string | null
+          kind: string | null
+          row_id: string | null
+          status: string | null
+        }
+        Insert: {
+          captured?: string | null
+          d1?: string | null
+          d2?: string | null
+          d3?: string | null
+          kind?: string | null
+          row_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          captured?: string | null
+          d1?: string | null
+          d2?: string | null
+          d3?: string | null
+          kind?: string | null
+          row_id?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
+      _unlinked_for_review_20260817: {
+        Row: {
+          cust: string | null
+          dob_corroborates: boolean | null
+          doc: string | null
+          new_customer_id: string | null
+          recorded_at: string | null
+          tenant: string | null
+          verification_id: string | null
+        }
+        Insert: {
+          cust?: string | null
+          dob_corroborates?: boolean | null
+          doc?: string | null
+          new_customer_id?: string | null
+          recorded_at?: string | null
+          tenant?: string | null
+          verification_id?: string | null
+        }
+        Update: {
+          cust?: string | null
+          dob_corroborates?: boolean | null
+          doc?: string | null
+          new_customer_id?: string | null
+          recorded_at?: string | null
+          tenant?: string | null
+          verification_id?: string | null
         }
         Relationships: []
       }
@@ -177,6 +303,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounting_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "accounting_connections_tenant_id_fkey"
@@ -324,6 +457,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "accounting_oauth_state_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "accounting_oauth_state_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -419,6 +559,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "admin_todo_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "admin_todo_comments_todo_id_fkey"
             columns: ["todo_id"]
             isOneToOne: false
@@ -485,11 +632,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "admin_todos_assignee_id_fkey"
+            columns: ["assignee_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "admin_todos_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_todos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "admin_todos_tenant_id_fkey"
@@ -829,11 +990,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "audit_logs_target_user_id_fkey"
             columns: ["target_user_id"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "audit_logs_tenant_id_fkey"
@@ -1024,6 +1199,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_extension_reminders_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "auto_extension_reminders_tenant_id_fkey"
@@ -1248,6 +1430,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "automation_runs_triggered_by_user_fkey"
+            columns: ["triggered_by_user"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       automation_steps: {
@@ -1359,6 +1548,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "automations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "automations_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -1385,6 +1581,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automations_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -1447,6 +1650,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "backfill_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "backfill_jobs_tenant_id_fkey"
@@ -1526,6 +1736,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "blacklist_entries_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "blacklist_entries_source_customer_id_fkey"
             columns: ["source_customer_id"]
             isOneToOne: false
@@ -1583,6 +1800,8 @@ export type Database = {
           end_date: string
           id: string
           reason: string | null
+          reason_code: string | null
+          source_type: string
           start_date: string
           tenant_id: string | null
           vehicle_id: string | null
@@ -1593,6 +1812,8 @@ export type Database = {
           end_date: string
           id?: string
           reason?: string | null
+          reason_code?: string | null
+          source_type?: string
           start_date: string
           tenant_id?: string | null
           vehicle_id?: string | null
@@ -1603,6 +1824,8 @@ export type Database = {
           end_date?: string
           id?: string
           reason?: string | null
+          reason_code?: string | null
+          source_type?: string
           start_date?: string
           tenant_id?: string | null
           vehicle_id?: string | null
@@ -1713,6 +1936,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_identities_blocked_by_fkey"
+            columns: ["blocked_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "blocked_identities_tenant_id_fkey"
@@ -1838,6 +2068,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "blog_post_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "blog_post_versions_post_id_fkey"
             columns: ["post_id"]
             isOneToOne: false
@@ -1949,6 +2186,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "blog_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "blog_posts_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
@@ -1961,6 +2205,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_posts_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "blog_posts_tenant_id_fkey"
@@ -2196,6 +2447,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bonzah_onboarding_drafts_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       bonzah_onboarding_submissions: {
@@ -2310,11 +2568,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bonzah_onboarding_submissions_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "bonzah_onboarding_submissions_submitted_by_fkey"
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_onboarding_submissions_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "bonzah_onboarding_submissions_tenant_id_fkey"
@@ -2413,6 +2685,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_submission_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "bonzah_submission_events_submission_id_fkey"
@@ -2975,6 +3254,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cmd_verifications_initiated_by_fkey"
+            columns: ["initiated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "cmd_verifications_rental_id_fkey"
             columns: ["rental_id"]
             isOneToOne: false
@@ -3134,6 +3420,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cms_media_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       cms_page_sections: {
@@ -3241,6 +3534,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cms_page_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "cms_page_versions_page_id_fkey"
             columns: ["page_id"]
             isOneToOne: false
@@ -3314,6 +3614,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cms_pages_published_by_fkey"
+            columns: ["published_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "cms_pages_tenant_id_fkey"
@@ -3737,6 +4044,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "credit_transactions_tenant_id_fkey"
@@ -4201,6 +4515,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "customer_registration_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "customer_registration_invites_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
@@ -4569,6 +4890,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "customers_tenant_id_fkey"
@@ -5071,6 +5399,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "enquiries_read_by_fkey"
+            columns: ["read_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "enquiries_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -5483,6 +5818,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -6137,6 +6479,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "global_blacklist_whitelisted_by_fkey"
+            columns: ["whitelisted_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       go_live_requests: {
@@ -6188,11 +6537,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "go_live_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "go_live_requests_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "go_live_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "go_live_requests_tenant_id_fkey"
@@ -6359,6 +6722,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "health_score_recipients_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       health_score_runs: {
@@ -6462,6 +6832,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_score_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -7677,6 +8054,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "insurance_verifications_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "insurance_verifications_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
@@ -7752,6 +8136,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurance_verifications_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -8197,6 +8588,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "lead_message_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "lead_message_templates_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -8257,6 +8655,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "lead_notes_lead_id_fkey"
@@ -8406,6 +8811,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_offers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "lead_offers_lead_id_fkey"
@@ -8561,6 +8973,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "leads_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "leads_blacklist_match_id_fkey"
             columns: ["blacklist_match_id"]
             isOneToOne: false
@@ -8622,6 +9041,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_read_by_fkey"
+            columns: ["read_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "leads_tenant_id_fkey"
@@ -9172,6 +9598,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "manager_permissions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       modives_config: {
@@ -9275,6 +9708,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -9780,6 +10220,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "owner_payouts_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "owner_payouts_tenant_id_fkey"
@@ -10303,6 +10750,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payments_refund_scheduled_by_fkey"
+            columns: ["refund_scheduled_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "payments_rental_id_fkey"
             columns: ["rental_id"]
             isOneToOne: false
@@ -10385,6 +10839,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -10746,6 +11207,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "policy_acceptances_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "policy_acceptances_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -10919,6 +11387,233 @@ export type Database = {
           },
           {
             foreignKeyName: "promotions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      push_notification_log: {
+        Row: {
+          audience: Database["public"]["Enums"]["push_audience"]
+          body: string | null
+          created_at: string
+          endpoint: string
+          error: string | null
+          http_status: number | null
+          id: string
+          sent_by: string | null
+          source: string
+          status: Database["public"]["Enums"]["push_delivery_status"]
+          subscription_id: string | null
+          tenant_id: string
+          title: string
+          url: string | null
+        }
+        Insert: {
+          audience: Database["public"]["Enums"]["push_audience"]
+          body?: string | null
+          created_at?: string
+          endpoint: string
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          sent_by?: string | null
+          source?: string
+          status: Database["public"]["Enums"]["push_delivery_status"]
+          subscription_id?: string | null
+          tenant_id: string
+          title: string
+          url?: string | null
+        }
+        Update: {
+          audience?: Database["public"]["Enums"]["push_audience"]
+          body?: string | null
+          created_at?: string
+          endpoint?: string
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          sent_by?: string | null
+          source?: string
+          status?: Database["public"]["Enums"]["push_delivery_status"]
+          subscription_id?: string | null
+          tenant_id?: string
+          title?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_notification_log_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_notification_log_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "push_notification_log_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_notification_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_notification_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "push_notification_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          app_user_id: string | null
+          audience: Database["public"]["Enums"]["push_audience"]
+          auth: string
+          created_at: string
+          customer_id: string | null
+          device_id: string
+          endpoint: string
+          failure_count: number
+          id: string
+          is_active: boolean
+          is_standalone: boolean
+          last_error: string | null
+          last_seen_at: string
+          last_success_at: string | null
+          p256dh: string
+          platform: Database["public"]["Enums"]["push_platform"]
+          revoked_at: string | null
+          tenant_id: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          app_user_id?: string | null
+          audience: Database["public"]["Enums"]["push_audience"]
+          auth: string
+          created_at?: string
+          customer_id?: string | null
+          device_id: string
+          endpoint: string
+          failure_count?: number
+          id?: string
+          is_active?: boolean
+          is_standalone?: boolean
+          last_error?: string | null
+          last_seen_at?: string
+          last_success_at?: string | null
+          p256dh: string
+          platform?: Database["public"]["Enums"]["push_platform"]
+          revoked_at?: string | null
+          tenant_id: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          app_user_id?: string | null
+          audience?: Database["public"]["Enums"]["push_audience"]
+          auth?: string
+          created_at?: string
+          customer_id?: string | null
+          device_id?: string
+          endpoint?: string
+          failure_count?: number
+          id?: string
+          is_active?: boolean
+          is_standalone?: boolean
+          last_error?: string | null
+          last_seen_at?: string
+          last_success_at?: string | null
+          p256dh?: string
+          platform?: Database["public"]["Enums"]["push_platform"]
+          revoked_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_credit"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -11776,6 +12471,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rental_agreement_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "rental_agreement_templates_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: true
@@ -12103,6 +12805,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rental_damage_reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "rental_damage_reports_rental_id_fkey"
             columns: ["rental_id"]
             isOneToOne: true
@@ -12129,6 +12838,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_damage_reports_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "rental_damage_reports_tenant_id_fkey"
@@ -12559,6 +13275,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rental_handover_photos_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       rental_insurance_verifications: {
@@ -12695,6 +13418,7 @@ export type Database = {
           rental_id: string
           tenant_id: string | null
           updated_at: string | null
+          vehicle_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -12707,6 +13431,7 @@ export type Database = {
           rental_id: string
           tenant_id?: string | null
           updated_at?: string | null
+          vehicle_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -12719,6 +13444,7 @@ export type Database = {
           rental_id?: string
           tenant_id?: string | null
           updated_at?: string | null
+          vehicle_id?: string | null
         }
         Relationships: [
           {
@@ -12727,6 +13453,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_key_handovers_handed_by_fkey"
+            columns: ["handed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "rental_key_handovers_rental_id_fkey"
@@ -12769,6 +13502,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "rental_key_handovers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "rental_key_handovers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_key_handovers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "rental_key_handovers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "rental_key_handovers_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
           },
         ]
       }
@@ -12868,6 +13636,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_reviews_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "rental_reviews_tenant_id_fkey"
@@ -13048,6 +13823,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rental_vehicle_swaps_swapped_by_fkey"
+            columns: ["swapped_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "rental_vehicle_swaps_tenant_id_fkey"
@@ -13583,6 +14365,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rentals_id_verification_waived_by_fkey"
+            columns: ["id_verification_waived_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "rentals_installment_plan_id_fkey"
             columns: ["installment_plan_id"]
             isOneToOne: false
@@ -13830,6 +14619,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_onboarding_submissions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "sales_onboarding_submissions_tenant_id_fkey"
@@ -15026,11 +15822,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tenant_feedback_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "tenant_feedback_resolved_by_fkey"
             columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "tenant_feedback_tenant_id_fkey"
@@ -15090,6 +15900,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_feedback_insights_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
         ]
       }
@@ -15200,6 +16017,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "tenant_health_incidents_latest_snapshot_id_fkey"
@@ -15790,6 +16614,7 @@ export type Database = {
           fixed_address_enabled: boolean | null
           fixed_pickup_address: string | null
           fixed_return_address: string | null
+          fleet_health_enabled: boolean
           forwarding_caller_id_mode: string
           forwarding_number: string | null
           friday_close: string | null
@@ -15894,6 +16719,7 @@ export type Database = {
           policies_accepted_at: string | null
           primary_color: string | null
           privacy_policy_version: string | null
+          push_notifications_enabled: boolean
           require_identity_verification: boolean | null
           require_insurance_upload: boolean | null
           return_area_enabled: boolean | null
@@ -16047,6 +16873,7 @@ export type Database = {
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          fleet_health_enabled?: boolean
           forwarding_caller_id_mode?: string
           forwarding_number?: string | null
           friday_close?: string | null
@@ -16151,6 +16978,7 @@ export type Database = {
           policies_accepted_at?: string | null
           primary_color?: string | null
           privacy_policy_version?: string | null
+          push_notifications_enabled?: boolean
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
           return_area_enabled?: boolean | null
@@ -16304,6 +17132,7 @@ export type Database = {
           fixed_address_enabled?: boolean | null
           fixed_pickup_address?: string | null
           fixed_return_address?: string | null
+          fleet_health_enabled?: boolean
           forwarding_caller_id_mode?: string
           forwarding_number?: string | null
           friday_close?: string | null
@@ -16408,6 +17237,7 @@ export type Database = {
           policies_accepted_at?: string | null
           primary_color?: string | null
           privacy_policy_version?: string | null
+          push_notifications_enabled?: boolean
           require_identity_verification?: boolean | null
           require_insurance_upload?: boolean | null
           return_area_enabled?: boolean | null
@@ -16694,6 +17524,69 @@ export type Database = {
           },
           {
             foreignKeyName: "testimonials_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      user_nav_preferences: {
+        Row: {
+          app_user_id: string
+          created_at: string
+          id: string
+          preferences: Json
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          app_user_id: string
+          created_at?: string
+          id?: string
+          preferences?: Json
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          app_user_id?: string
+          created_at?: string
+          id?: string
+          preferences?: Json
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_nav_preferences_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: true
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_nav_preferences_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: true
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "user_nav_preferences_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_nav_preferences_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "user_nav_preferences_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -17070,6 +17963,528 @@ export type Database = {
           },
         ]
       }
+      vehicle_health_cache: {
+        Row: {
+          computed_at: string
+          confidence: string | null
+          daily_burn: number | null
+          next_due_date: string | null
+          next_due_miles: number | null
+          open_job_count: number
+          reasons: Json
+          status: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          computed_at?: string
+          confidence?: string | null
+          daily_burn?: number | null
+          next_due_date?: string | null
+          next_due_miles?: number | null
+          open_job_count?: number
+          reasons?: Json
+          status?: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          computed_at?: string
+          confidence?: string | null
+          daily_burn?: number | null
+          next_due_date?: string | null
+          next_due_miles?: number | null
+          open_job_count?: number
+          reasons?: Json
+          status?: string
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_health_cache_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_health_cache_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      vehicle_maintenance_jobs: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          blocked_date_id: string | null
+          category: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          priority: string
+          rental_id: string | null
+          reported_by: string | null
+          rule_id: string | null
+          scheduled_end: string | null
+          scheduled_start: string | null
+          service_record_id: string | null
+          service_type: string | null
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          vehicle_id: string
+          vendor_name: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          blocked_date_id?: string | null
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          priority?: string
+          rental_id?: string | null
+          reported_by?: string | null
+          rule_id?: string | null
+          scheduled_end?: string | null
+          scheduled_start?: string | null
+          service_record_id?: string | null
+          service_type?: string | null
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+          vehicle_id: string
+          vendor_name?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          blocked_date_id?: string | null
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          priority?: string
+          rental_id?: string | null
+          reported_by?: string | null
+          rule_id?: string | null
+          scheduled_end?: string | null
+          scheduled_start?: string | null
+          service_record_id?: string | null
+          service_type?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          vehicle_id?: string
+          vendor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_blocked_date_id_fkey"
+            columns: ["blocked_date_id"]
+            isOneToOne: false
+            referencedRelation: "blocked_dates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_maintenance_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_service_record_id_fkey"
+            columns: ["service_record_id"]
+            isOneToOne: false
+            referencedRelation: "service_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_jobs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      vehicle_maintenance_rules: {
+        Row: {
+          created_at: string
+          id: string
+          interval_miles: number | null
+          interval_months: number | null
+          is_active: boolean
+          is_excluded: boolean
+          lead_days: number
+          lead_miles: number
+          name: string
+          service_type: string | null
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interval_miles?: number | null
+          interval_months?: number | null
+          is_active?: boolean
+          is_excluded?: boolean
+          lead_days?: number
+          lead_miles?: number
+          name: string
+          service_type?: string | null
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interval_miles?: number | null
+          interval_months?: number | null
+          is_active?: boolean
+          is_excluded?: boolean
+          lead_days?: number
+          lead_miles?: number
+          name?: string
+          service_type?: string | null
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_maintenance_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_rules_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      vehicle_odometer_readings: {
+        Row: {
+          created_at: string
+          id: string
+          is_suspect: boolean
+          note: string | null
+          observed_at: string
+          reading: number
+          recorded_by: string | null
+          source: string
+          source_ref: string | null
+          tenant_id: string
+          unit: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_suspect?: boolean
+          note?: string | null
+          observed_at?: string
+          reading: number
+          recorded_by?: string | null
+          source?: string
+          source_ref?: string | null
+          tenant_id: string
+          unit?: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_suspect?: boolean
+          note?: string | null
+          observed_at?: string
+          reading?: number
+          recorded_by?: string | null
+          source?: string
+          source_ref?: string | null
+          tenant_id?: string
+          unit?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_odometer_readings_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_readings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
       vehicle_owners: {
         Row: {
           address: string | null
@@ -17323,6 +18738,113 @@ export type Database = {
           },
           {
             foreignKeyName: "vehicle_pricing_overrides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      vehicle_status_history: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          reason: string | null
+          source: string
+          tenant_id: string | null
+          to_status: string
+          vehicle_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          reason?: string | null
+          source?: string
+          tenant_id?: string | null
+          to_status: string
+          vehicle_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          reason?: string | null
+          source?: string
+          tenant_id?: string | null
+          to_status?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_status_history_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "vehicle_status_history_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "view_pl_by_vehicle"
@@ -17743,6 +19265,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "voicemail_recordings_listened_by_fkey"
+            columns: ["listened_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "voicemail_recordings_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -17764,6 +19293,251 @@ export type Database = {
             referencedColumns: ["tenant_id"]
           },
         ]
+      }
+      welcome_pack_completions: {
+        Row: {
+          app_user_id: string
+          completed_at: string
+          id: string
+          version: number
+        }
+        Insert: {
+          app_user_id: string
+          completed_at?: string
+          id?: string
+          version?: number
+        }
+        Update: {
+          app_user_id?: string
+          completed_at?: string
+          id?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "welcome_pack_completions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: true
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "welcome_pack_completions_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: true
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+        ]
+      }
+      welcome_pack_faqs: {
+        Row: {
+          answer_md: string
+          created_at: string
+          group_id: string | null
+          id: string
+          is_published: boolean
+          question: string
+          required_flag: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          answer_md?: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          is_published?: boolean
+          question: string
+          required_flag?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          answer_md?: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          is_published?: boolean
+          question?: string
+          required_flag?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "welcome_pack_faqs_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "welcome_pack_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      welcome_pack_groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon: string | null
+          id: string
+          is_published: boolean
+          key: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_published?: boolean
+          key: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_published?: boolean
+          key?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      welcome_pack_reads: {
+        Row: {
+          app_user_id: string
+          id: string
+          section_id: string
+          seen_at: string
+        }
+        Insert: {
+          app_user_id: string
+          id?: string
+          section_id: string
+          seen_at?: string
+        }
+        Update: {
+          app_user_id?: string
+          id?: string
+          section_id?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "welcome_pack_reads_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "welcome_pack_reads_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "welcome_pack_reads_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "welcome_pack_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      welcome_pack_sections: {
+        Row: {
+          body_md: string
+          created_at: string
+          group_id: string
+          icon: string | null
+          id: string
+          is_published: boolean
+          required_flag: string | null
+          slug: string
+          sort_order: number
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_md?: string
+          created_at?: string
+          group_id: string
+          icon?: string | null
+          id?: string
+          is_published?: boolean
+          required_flag?: string | null
+          slug: string
+          sort_order?: number
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          group_id?: string
+          icon?: string | null
+          id?: string
+          is_published?: boolean
+          required_flag?: string | null
+          slug?: string
+          sort_order?: number
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "welcome_pack_sections_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "welcome_pack_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      welcome_pack_settings: {
+        Row: {
+          doc_subtitle: string | null
+          doc_title: string
+          id: string
+          intro_md: string | null
+          show_on_first_login: boolean
+          singleton: boolean
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          doc_subtitle?: string | null
+          doc_title?: string
+          id?: string
+          intro_md?: string | null
+          show_on_first_login?: boolean
+          singleton?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          doc_subtitle?: string | null
+          doc_title?: string
+          id?: string
+          intro_md?: string | null
+          show_on_first_login?: boolean
+          singleton?: boolean
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
       }
       whatsapp_content_templates: {
         Row: {
@@ -17988,6 +19762,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "accounting_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
             foreignKeyName: "accounting_connections_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -18165,6 +19946,13 @@ export type Database = {
             referencedRelation: "app_users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "global_blacklist_whitelisted_by_fkey"
+            columns: ["whitelisted_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
         ]
       }
       v_latest_tenant_health: {
@@ -18212,6 +20000,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_health_incidents_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "tenant_health_snapshots_incident_id_fkey"
@@ -18380,6 +20175,44 @@ export type Database = {
           tenant_type: string | null
         }
         Relationships: []
+      }
+      v_welcome_pack_readership: {
+        Row: {
+          app_user_id: string | null
+          company_name: string | null
+          completed: boolean | null
+          completed_at: string | null
+          completed_version: number | null
+          email: string | null
+          last_read_at: string | null
+          name: string | null
+          role: string | null
+          sections_read: number | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "app_users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
       }
       vehicle_pnl_rollup: {
         Row: {
@@ -19186,6 +21019,16 @@ export type Database = {
           overlapping_start_date: string
         }[]
       }
+      complete_vehicle_maintenance_job: {
+        Args: {
+          p_cost?: number
+          p_description?: string
+          p_job_id: string
+          p_mileage?: number
+          p_service_date?: string
+        }
+        Returns: Json
+      }
       create_installment_plan:
         | {
             Args: {
@@ -19278,9 +21121,14 @@ export type Database = {
         }
         Returns: string
       }
+      evaluate_fleet_health: { Args: { p_tenant_id?: string }; Returns: number }
       evaluate_tenant_health: {
         Args: { p_evaluated_at?: string; p_force?: boolean; p_trigger?: string }
         Returns: Json
+      }
+      evaluate_vehicle_health: {
+        Args: { p_vehicle_id: string }
+        Returns: undefined
       }
       exec_sql: { Args: { query: string }; Returns: undefined }
       finalize_credit_covered_extension: {
@@ -19404,6 +21252,7 @@ export type Database = {
           vehicle_reg: string
         }[]
       }
+      get_fleet_health_metrics: { Args: { p_tenant_id: string }; Returns: Json }
       get_health_score_dashboard: {
         Args: { p_history_days?: number }
         Returns: Json
@@ -19552,6 +21401,7 @@ export type Database = {
           is_blocked: boolean
         }[]
       }
+      is_portal_user: { Args: never; Returns: boolean }
       is_primary_super_admin: { Args: never; Returns: boolean }
       is_sales_agent: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
@@ -19610,6 +21460,19 @@ export type Database = {
       payment_auto_apply_due_credit: { Args: never; Returns: undefined }
       platform_verify_secret: { Args: { p_secret: string }; Returns: boolean }
       pnl_post_acquisition: { Args: { v_id: string }; Returns: undefined }
+      preview_maintenance_conflicts: {
+        Args: { p_end: string; p_start: string; p_vehicle_id: string }
+        Returns: {
+          customer_name: string
+          end_date: string
+          monthly_amount: number
+          payment_status: string
+          rental_id: string
+          rental_number: string
+          start_date: string
+          status: string
+        }[]
+      }
       preview_tenant_health_settings: {
         Args: {
           p_evaluated_at?: string
@@ -19743,6 +21606,23 @@ export type Database = {
         Args: { p_extension_id: string }
         Returns: undefined
       }
+      schedule_vehicle_maintenance: {
+        Args: {
+          p_category?: string
+          p_end: string
+          p_force?: boolean
+          p_notes?: string
+          p_priority?: string
+          p_reason_code?: string
+          p_rule_id?: string
+          p_service_type?: string
+          p_start: string
+          p_title: string
+          p_vehicle_id: string
+          p_vendor?: string
+        }
+        Returns: Json
+      }
       seed_default_accounting_mappings: {
         Args: {
           p_provider: Database["public"]["Enums"]["accounting_provider"]
@@ -19758,6 +21638,16 @@ export type Database = {
         Args: { p_session_id: string; p_user_id: string }
         Returns: boolean
       }
+      set_vehicle_status: {
+        Args: {
+          p_expect_in?: string[]
+          p_reason?: string
+          p_source?: string
+          p_to_status: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
       swap_rental_vehicle: {
         Args: {
           p_block_old_end?: string
@@ -19768,7 +21658,7 @@ export type Database = {
         }
         Returns: Json
       }
-      sync_vehicle_maintenance_status: { Args: never; Returns: undefined }
+      sync_vehicle_maintenance_status: { Args: never; Returns: number }
       tesla_clear_tokens: { Args: { p_tenant_id: string }; Returns: undefined }
       tesla_get_tokens: {
         Args: { p_tenant_id: string }
@@ -19865,6 +21755,10 @@ export type Database = {
         Args: { p_rental_id: string }
         Returns: boolean
       }
+      vehicle_daily_burn: {
+        Args: { p_vehicle_id: string; p_window_days?: number }
+        Returns: number
+      }
       verify_global_master_password: {
         Args: { p_email: string; p_password: string }
         Returns: boolean
@@ -19924,6 +21818,9 @@ export type Database = {
       ledger_status: "pending" | "applied"
       payment_status: "paid" | "due" | "overdue" | "void"
       payment_type: "initial_fee" | "monthly" | "fine" | "service" | "other"
+      push_audience: "customer" | "staff"
+      push_delivery_status: "sent" | "failed" | "expired"
+      push_platform: "ios" | "android" | "desktop" | "unknown"
       rental_status: "active" | "completed" | "cancelled"
       sync_state: "pending" | "syncing" | "synced" | "failed" | "skipped"
       vehicle_event_type:
@@ -20122,6 +22019,9 @@ export const Constants = {
       ledger_status: ["pending", "applied"],
       payment_status: ["paid", "due", "overdue", "void"],
       payment_type: ["initial_fee", "monthly", "fine", "service", "other"],
+      push_audience: ["customer", "staff"],
+      push_delivery_status: ["sent", "failed", "expired"],
+      push_platform: ["ios", "android", "desktop", "unknown"],
       rental_status: ["active", "completed", "cancelled"],
       sync_state: ["pending", "syncing", "synced", "failed", "skipped"],
       vehicle_event_type: [
