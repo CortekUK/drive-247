@@ -16579,6 +16579,7 @@ export type Database = {
           bonzah_username: string | null
           booking_lead_time_hours: number | null
           booking_lead_time_unit: string | null
+          booking_v2_enabled: boolean
           buffer_time_minutes: number
           business_hours: string | null
           call_forwarding_enabled: boolean | null
@@ -16838,6 +16839,7 @@ export type Database = {
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
+          booking_v2_enabled?: boolean
           buffer_time_minutes?: number
           business_hours?: string | null
           call_forwarding_enabled?: boolean | null
@@ -17097,6 +17099,7 @@ export type Database = {
           bonzah_username?: string | null
           booking_lead_time_hours?: number | null
           booking_lead_time_unit?: string | null
+          booking_v2_enabled?: boolean
           buffer_time_minutes?: number
           business_hours?: string | null
           call_forwarding_enabled?: boolean | null

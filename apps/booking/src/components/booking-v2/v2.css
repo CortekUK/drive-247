@@ -1,0 +1,301 @@
+/* ==========================================================================
+   Drive247 — booking-v2 landing.
+   Everything is namespaced under `.d7` so none of it leaks into the shipped
+   booking app, which ships its own globals.css.
+
+   This file holds three things only:
+     1. design tokens
+     2. keyframes (Aceternity / Magic UI effects expect these by name — we keep
+        them here rather than in tailwind.config.ts, which is shared by the
+        whole booking app)
+     3. a handful of primitives too stateful for utility classes
+   ========================================================================== */
+
+.d7 {
+  /* ---------------------------------------------------------- neutrals */
+  --white:  #ffffff;
+  --soft:   #f7f8fe;
+  --soft-2: #eef1fb;
+  --line:   #e7ebf6;
+  --line-2: #f0f3fa;
+
+  --ink:    #0b1020;
+  --ink-2:  #1c2238;
+  --body:   #64708a;
+  --mute:   #98a2b8;
+
+  /* ------------------------------------------------------------- brand */
+  --v:      #6d5af0;   /* primary indigo-violet */
+  --v-2:    #8b5cf6;   /* violet */
+  --v-3:    #a855f7;   /* light violet, gradient tail */
+  --v-dark: #4c3ad4;
+  --v-lt:   #eef0ff;
+  --blue:   #3b82f6;
+  --navy:   #141034;
+  --amber:  #f5a623;
+  --pink:   #d946ef;
+
+  --grad:   linear-gradient(135deg, var(--v) 0%, var(--v-2) 55%, var(--v-3) 100%);
+  --grad-2: linear-gradient(120deg, #1b1140 0%, #3a1e86 45%, #6d28d9 100%);
+
+  /* Surfaces that differ between themes. `--white` is the CARD surface and
+     `--bg` is the PAGE behind it; in light they happen to be the same colour,
+     in dark they must not be, or every card disappears into the page. */
+  --bg:     #ffffff;
+  --glass:  rgba(255, 255, 255, .72);
+  /* Ink for text sitting on a permanently WHITE chip — the blog "Read More"
+     pill, the CTA band's light button. These must NOT follow --ink, which
+     inverts to near-white in dark and makes them white-on-white. */
+  --ink-fixed: #0b1020;
+  --v-fixed:   #6d5af0;
+  --sky:    linear-gradient(175deg, #dbe6ff 0%, #e7e2ff 34%, #f6ecff 58%, #ffffff 88%);
+  --panel:  linear-gradient(120deg, #f4f5ff, #f8f4ff 58%, #f2f7ff);
+  --footer: #0d1130;
+
+  --r:      16px;
+  --r-lg:   22px;
+  --r-xl:   28px;
+  --shadow:    0 10px 30px -18px rgba(23, 16, 72, .30);
+  --shadow-lg: 0 28px 64px -30px rgba(23, 16, 72, .40);
+  --shadow-v:  0 18px 40px -18px rgba(109, 90, 240, .55);
+
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+.d7 ::selection { background: var(--v); color: #fff; }
+
+.d7-wrap { width:100%; max-width:1240px; margin-inline:auto; padding-inline:clamp(16px,3.4vw,32px); }
+
+/* ------------------------------------------------------------ typography */
+/* globals.css applies the app's serif `font-display` to every h1-h6 inside
+   @layer base. That element rule beats the font inherited from `.d7`, so
+   headings came out serif. Reset inside our namespace only — `.d7 .d7-dis`
+   (0,2,0) still outranks `.d7 h3` (0,1,1). */
+.d7 h1, .d7 h2, .d7 h3, .d7 h4, .d7 h5, .d7 h6 {
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif; }
+.d7 .d7-dis { font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif; }
+
+.d7-dis   { font-weight:800; letter-spacing:-.038em; line-height:1.04; text-wrap:balance; }
+.d7-hero  { font-size:clamp(2.6rem,5.6vw,4.35rem); }
+.d7-h2    { font-size:clamp(1.6rem,2.8vw,2.3rem); }
+.d7-h3    { font-size:clamp(1.05rem,1.5vw,1.28rem); }
+.d7-eyebrow { font-size:11.5px; letter-spacing:.18em; text-transform:uppercase;
+  font-weight:800; color:var(--v); }
+.d7-label { font-size:11.5px; letter-spacing:.01em; color:var(--mute); font-weight:600; }
+.d7-body  { font-size:15px; line-height:1.72; color:var(--body); }
+
+/* Gradient-filled text. */
+.d7-grad-text { background:var(--grad); -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent; }
+
+/* -------------------------------------------------------------- surfaces */
+.d7-card { background:var(--white); border:1px solid var(--line); border-radius:var(--r);
+  transition:transform .45s cubic-bezier(.16,1,.3,1), box-shadow .45s ease, border-color .45s ease; }
+.d7-card:hover { box-shadow:var(--shadow-lg); border-color:#d8dcf5; }
+.d7-card:hover .d7-zoom { transform:scale(1.08); }
+.d7-zoom { transition:transform .9s cubic-bezier(.16,1,.3,1); }
+
+.d7-float { background:var(--white); border:1px solid var(--line); border-radius:var(--r-lg);
+  box-shadow:0 26px 74px -34px rgba(23,16,72,.42); }
+
+.d7-glass { background:var(--glass); backdrop-filter:blur(14px) saturate(160%);
+  -webkit-backdrop-filter:blur(14px) saturate(160%); }
+
+/* Themed background helpers — these gradients are too long to keep inline as
+   arbitrary Tailwind values once each has a dark counterpart. */
+.d7-sky      { background:var(--sky); }
+.d7-panel-bg { background:var(--panel); }
+/* The wash that fades the hero sky into the page. */
+.d7-sky-fade { background:linear-gradient(180deg, transparent, var(--bg) 62%); }
+
+/* ------------------------------------------------------------ interaction */
+/* Sheen that rakes across a CTA on hover. */
+.d7-btn { position:relative; overflow:hidden; isolation:isolate; }
+.d7-btn::after { content:""; position:absolute; inset:0; z-index:-1;
+  background:linear-gradient(110deg,transparent 22%,rgba(255,255,255,.34) 46%,transparent 70%);
+  transform:translateX(-130%); transition:transform .8s cubic-bezier(.16,1,.3,1); }
+.d7-btn:hover::after { transform:translateX(130%); }
+.d7-btn .d7-arrow { transition:transform .35s cubic-bezier(.16,1,.3,1); }
+.d7-btn:hover .d7-arrow { transform:translateX(4px); }
+
+.d7-link { position:relative; }
+.d7-link::after { content:""; position:absolute; left:0; bottom:-6px; height:2px; width:0;
+  background:var(--v); border-radius:2px; transition:width .4s cubic-bezier(.16,1,.3,1); }
+.d7-link:hover::after, .d7-link.on::after { width:100%; }
+
+.d7-field { transition:border-color .3s ease, box-shadow .3s ease; }
+.d7-field:focus-within { border-color:var(--v); box-shadow:0 0 0 4px rgba(109,90,240,.10); }
+
+/* Accordion — grid-rows so it animates without a measured height. */
+.d7-acc { display:grid; grid-template-rows:0fr; transition:grid-template-rows .5s cubic-bezier(.16,1,.3,1); }
+.d7-acc.open { grid-template-rows:1fr; }
+.d7-acc > div { overflow:hidden; }
+
+/* Chrome reserves a wide picker indicator on date inputs, which blew the
+   search row's column widths out. Keep it clickable, just narrow. */
+.d7 input[type="date"]::-webkit-calendar-picker-indicator {
+  margin:0; padding:0; width:12px; opacity:.35; cursor:pointer; }
+.d7 input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity:.8; }
+
+/* Hide the scrollbar on the drag-scroll fleet rail. */
+.d7-noscroll { scrollbar-width:none; -ms-overflow-style:none; }
+.d7-noscroll::-webkit-scrollbar { display:none; }
+
+/* ======================================================= effect keyframes */
+/* Named to match the Aceternity / Magic UI components in d7-ui.tsx. */
+
+/* Aceternity aurora — a slow drift of the gradient's background-position. */
+@keyframes d7-aurora { from { background-position:50% 50%, 50% 50%; }
+                       to   { background-position:350% 50%, 350% 50%; } }
+.d7-aurora { animation:d7-aurora 60s linear infinite; }
+
+/* Magic UI meteors. */
+@keyframes d7-meteor { 0% { transform:rotate(var(--angle)) translateX(0); opacity:1; }
+                       70% { opacity:1; }
+                       100% { transform:rotate(var(--angle)) translateX(-500px); opacity:0; } }
+.d7-meteor { animation:d7-meteor var(--dur,5s) linear var(--delay,0s) infinite; }
+
+/* Magic UI shimmer button. */
+@keyframes d7-shimmer-slide { to { transform:translate(calc(100cqw - 100%), 0); } }
+@keyframes d7-spin-around {
+  0%   { transform:translateZ(0) rotate(0deg); }
+  15%, 35% { transform:translateZ(0) rotate(90deg); }
+  65%, 85% { transform:translateZ(0) rotate(270deg); }
+  100% { transform:translateZ(0) rotate(360deg); } }
+.d7-shimmer-slide { animation:d7-shimmer-slide var(--speed) infinite linear; }
+.d7-spin-around  { animation:d7-spin-around calc(var(--speed) * 2) infinite linear; }
+
+/* Magic UI border beam — a light travelling the card's perimeter. */
+@keyframes d7-beam { to { offset-distance:100%; } }
+.d7-beam { animation:d7-beam var(--dur) infinite linear; animation-delay:var(--delay); }
+
+/* Magic UI shine border. */
+@keyframes d7-shine { 0% { background-position:0% 0%; } 50% { background-position:100% 100%; }
+                      100% { background-position:0% 0%; } }
+.d7-shine { animation:d7-shine var(--dur,14s) infinite linear; }
+
+/* Magic UI marquee. */
+@keyframes d7-marquee { from { transform:translateX(0); } to { transform:translateX(calc(-100% - var(--gap))); } }
+.d7-marquee { animation:d7-marquee var(--dur,40s) linear infinite; animation-direction:var(--dir,normal); }
+.d7-marquee-group:hover .d7-marquee { animation-play-state:paused; }
+
+/* Magic UI ripple. */
+@keyframes d7-ripple { 0%,100% { transform:translate(-50%,-50%) scale(1); }
+                       50% { transform:translate(-50%,-50%) scale(.9); } }
+.d7-ripple { animation:d7-ripple 3.4s ease infinite; animation-delay:var(--delay,0s); }
+
+/* Animated gradient text. */
+@keyframes d7-gradient { to { background-position:var(--bg-size,300%) 0; } }
+.d7-anim-grad { background-size:var(--bg-size,300%) 100%;
+  animation:d7-gradient var(--dur,8s) linear infinite; }
+
+/* Magic UI orbit. */
+@keyframes d7-orbit { 0% { transform:rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg)); }
+                      100% { transform:rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px)) rotate(calc((var(--angle) * -1deg) - 360deg)); } }
+.d7-orbit { animation:d7-orbit calc(var(--dur) * 1s) linear infinite; }
+
+/* Gentle idle float for the hero car. */
+@keyframes d7-hover { from { transform:translateY(0); } to { transform:translateY(-16px); } }
+.d7-hover { animation:d7-hover 5s ease-in-out infinite alternate; }
+
+/* Blob glow behind the hero. */
+@keyframes d7-blob { 0%,100% { transform:translate(0,0) scale(1); }
+                     33% { transform:translate(4%,-5%) scale(1.09); }
+                     66% { transform:translate(-4%,4%) scale(.95); } }
+.d7-blob { animation:d7-blob 18s ease-in-out infinite; }
+
+/* Tyre-spray trail under the hero car. */
+@keyframes d7-trail { from { transform:translateX(-40%) skewX(-18deg); opacity:0; }
+                      30% { opacity:.6; }
+                      to  { transform:translateX(150%) skewX(-18deg); opacity:0; } }
+.d7-trail { position:absolute; height:2px; border-radius:99px; pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.95),transparent);
+  animation:d7-trail 4.6s cubic-bezier(.4,0,.2,1) infinite; }
+
+/* ------------------------------------------------------------- 3d cards */
+/* Aceternity card-3d writes --rx/--ry from the pointer; the perspective sits
+   on the outer container so children can be pushed out on Z. */
+.d7-persp { perspective:1200px; }
+.d7-3d    { transform-style:preserve-3d;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+  transition:transform .35s cubic-bezier(.16,1,.3,1); }
+.d7-persp:hover .d7-3d { transition-duration:.12s; }
+
+/* Sheen raked across a tilted card. */
+.d7-sheen::after { content:""; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+  background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.45) 50%,transparent 62%);
+  opacity:0; transform:translateX(-40%); transition:opacity .45s ease, transform .75s ease; }
+.d7-card:hover .d7-sheen::after, .d7-persp:hover .d7-sheen::after {
+  opacity:1; transform:translateX(40%); }
+
+/* Cursor follower. */
+.d7-cursor { position:fixed; left:0; top:0; z-index:100; pointer-events:none;
+  border-radius:9999px; mix-blend-mode:multiply;
+  transition:width .3s ease, height .3s ease, background-color .3s ease; }
+
+.d7 :focus-visible { outline:2px solid var(--v); outline-offset:3px; border-radius:8px; }
+
+/* ============================================================ dark theme */
+/* Only colour changes here — no geometry, type or motion differs between the
+   two themes. The attribute sits on <html> (set pre-paint by the inline
+   script in layout.tsx) but every declaration is still scoped to `.d7`. */
+[data-d7-theme="dark"] .d7 {
+  --bg:     #080a1a;
+  --white:  #12152e;   /* card / panel surface, deliberately ≠ --bg */
+  --soft:   #0d1024;
+  --soft-2: #1a1e3c;
+  --line:   #272c54;
+  --line-2: #1d2140;
+
+  --ink:    #f0f2ff;
+  --ink-2:  #dde1f8;
+  --body:   #9aa3c4;
+  --mute:   #78819f;
+
+  /* Violets lifted a step: #6d5af0 on a near-black page is muddy, and the
+     price/link text sitting on it fails contrast. */
+  --v:      #8b7cff;
+  --v-2:    #a78bfa;
+  --v-3:    #c084fc;
+  --v-dark: #6d5af0;
+  --v-lt:   #1e2049;
+  --blue:   #60a5fa;
+  --navy:   #05060f;
+
+  --glass:  rgba(18, 21, 46, .72);
+  --sky:    linear-gradient(175deg, #101433 0%, #16143a 34%, #1c1342 58%, #080a1a 88%);
+  --panel:  linear-gradient(120deg, #14183a, #191340 58%, #101c3e);
+  --footer: #050713;
+
+  /* Shadows read as nothing on a dark page unless they go properly black. */
+  --shadow:    0 10px 30px -18px rgba(0, 0, 0, .75);
+  --shadow-lg: 0 28px 64px -30px rgba(0, 0, 0, .85);
+  --shadow-v:  0 18px 40px -18px rgba(139, 124, 255, .48);
+
+  color-scheme: dark;
+}
+
+/* The aurora and blobs are tuned for a pale sky; at full strength they blow
+   out the dark one. Specificity (0,3,0) clears the Tailwind opacity class. */
+[data-d7-theme="dark"] .d7 .d7-aurora { opacity: .26; }
+[data-d7-theme="dark"] .d7 .d7-blob   { opacity: .40; }
+
+/* Card hover borders were picked against a white page. */
+[data-d7-theme="dark"] .d7 .d7-card:hover { border-color:#3a3f76; }
+
+/* The raking sheen is a white wipe — far too hot over a dark card. */
+[data-d7-theme="dark"] .d7 .d7-sheen::after {
+  background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.14) 50%,transparent 62%); }
+
+/* --------------------------------------------------------- reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .d7 *, .d7 *::before, .d7 *::after {
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important; scroll-behavior:auto !important; }
+  .d7-3d { transform:none !important; }
+  .d7-marquee, .d7-aurora, .d7-blob, .d7-hover, .d7-meteor, .d7-ripple { animation:none !important; }
+}
