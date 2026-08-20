@@ -55,10 +55,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
-      {/* Installs the worker that receives push while the portal is closed. */}
-      <ServiceWorkerRegistrar />
       <QueryClientProvider client={queryClient}>
         <TenantProvider>
+          {/* Inside TenantProvider on purpose — it must read the tenant's push
+              flag, and registers NOTHING for tenants that have push switched
+              off. A service worker intercepts navigations for the whole origin,
+              so it is not something to install on operators who get no benefit
+              from it. */}
+          <ServiceWorkerRegistrar />
           <RealtimeChatProvider>
             <AuthInitializer>
               <ThemeProvider
