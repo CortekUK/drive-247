@@ -202,6 +202,8 @@ export interface PushPayload {
   url?: string;
   icon?: string;
   badge?: string;
+  /** Large hero image shown when the notification is expanded (Android/desktop). */
+  image?: string;
   tag?: string;
   requireInteraction?: boolean;
   data?: Record<string, unknown>;

@@ -105,11 +105,14 @@ self.addEventListener('push', (event) => {
     tag: payload.tag || 'drive247',
     renotify: Boolean(payload.tag),
     requireInteraction: payload.requireInteraction === true,
+    timestamp: Date.now(),
     data: {
       url: payload.url || '/',
       ...(payload.data || {}),
     },
   };
+  // Ignored by browsers that do not support it, so it needs no feature check.
+  if (payload.image) options.image = payload.image;
 
   event.waitUntil(self.registration.showNotification(title, options));
 });

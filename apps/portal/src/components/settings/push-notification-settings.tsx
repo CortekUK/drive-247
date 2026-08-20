@@ -15,10 +15,11 @@ import {
 } from '@/components/ui/select';
 import {
   Bell, BellRing, Send, Smartphone, Monitor, AlertCircle, Loader2,
-  Share, PlusSquare, CheckCircle2, XCircle, Users, UserCog,
+  Share, PlusSquare, CheckCircle2, XCircle, Users, UserCog, Download, Check,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { usePushNotifications, usePushLog, type SendPushInput } from '@/hooks/use-push-notifications';
+import { usePwaInstall } from '@/hooks/use-pwa-install';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -43,6 +44,7 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
     staffDevices, customerDevices, devicesLoading, sendPush,
   } = usePushNotifications();
   const { data: log } = usePushLog(10);
+  const { isInstalled, canPrompt, install } = usePwaInstall();
   const { toast } = useToast();
 
   const [target, setTarget] = useState<SendPushInput['target']>('self');
@@ -155,6 +157,57 @@ export function PushNotificationSettings({ canEdit = true }: Props) {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {/* In a browser TAB, Android labels the notification with CHROME's icon
+              and the site origin, and no payload field can override that — it is
+              Chrome's anti-spoofing rule. Installing produces a WebAPK and the
+              notification then carries our own icon and name, so this control is
+              the actual fix for "why is the Google logo on my notification". */}
+          {!isInstalled && !needsInstall && (
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="flex items-center gap-2 text-sm font-medium">
+                    <Download className="h-4 w-4" />
+                    Install the app for cleaner notifications
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Right now notifications show your browser&apos;s icon and web address.
+                    Installing replaces both with your own name and logo.
+                  </p>
+                </div>
+                {canPrompt ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={async () => {
+                      const accepted = await install();
+                      if (accepted) {
+                        toast({
+                          title: 'App installed',
+                          description: 'Open it from your home screen — notifications will now use your own branding.',
+                        });
+                      }
+                    }}
+                  >
+                    <Download className="mr-2 h-4 w-4" /> Install
+                  </Button>
+                ) : (
+                  <p className="shrink-0 text-xs text-muted-foreground">
+                    Use your browser menu → <strong>Install app</strong>
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isInstalled && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Check className="h-4 w-4 text-green-600" />
+              Running as an installed app — notifications use your own branding.
+            </p>
+          )}
+
           {/* iOS is the majority of phones and push there exists ONLY inside a
               Home Screen install — a bare "Enable" switch would do nothing and
               read as broken, so that path gets the install steps instead. */}

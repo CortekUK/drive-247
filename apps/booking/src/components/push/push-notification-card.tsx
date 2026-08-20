@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Bell, BellOff, Share, PlusSquare, AlertCircle, Smartphone, Loader2 } from 'lucide-react';
+import { Bell, BellOff, Share, PlusSquare, AlertCircle, Smartphone, Loader2, Download, Check } from 'lucide-react';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
+import { usePwaInstall } from '@/hooks/use-pwa-install';
 
 /**
  * Customer-facing control for lock-screen notifications.
@@ -35,6 +36,7 @@ export function PushNotificationCard() {
     disable,
   } = usePushNotifications();
 
+  const { isInstalled, canPrompt, install } = usePwaInstall();
   const [justEnabled, setJustEnabled] = useState(false);
 
   if (!isEnabledForTenant) return null;
@@ -141,7 +143,7 @@ export function PushNotificationCard() {
         </div>
       </CardHeader>
 
-      {(error || isBlocked || justEnabled || (capability.platform === 'ios' && isSubscribed)) && (
+      {(error || isBlocked || justEnabled || (!isInstalled && isSubscribed) || (capability.platform === 'ios' && isSubscribed)) && (
         <CardContent className="space-y-3">
           {isBlocked && (
             <Alert variant="destructive">
@@ -167,6 +169,28 @@ export function PushNotificationCard() {
                 You&apos;re all set — this device will now receive notifications.
               </AlertDescription>
             </Alert>
+          )}
+
+          {/* In a browser tab, Android stamps every notification with the
+              BROWSER's icon and the site address — no payload field can change
+              that. Installing is the only way to put the operator's own branding
+              on it, so it is offered once notifications are actually on. */}
+          {!isInstalled && isSubscribed && canPrompt && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+              <p className="min-w-0 text-sm text-muted-foreground">
+                Install the app so notifications show our name instead of your browser&apos;s.
+              </p>
+              <Button size="sm" variant="outline" className="shrink-0" onClick={() => void install()}>
+                <Download className="mr-2 h-4 w-4" /> Install
+              </Button>
+            </div>
+          )}
+
+          {isInstalled && isSubscribed && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Check className="h-3.5 w-3.5 text-green-600" />
+              Installed — notifications use our branding.
+            </p>
           )}
 
           {/* Deleting the Home Screen icon silently destroys the subscription on

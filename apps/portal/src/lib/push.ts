@@ -162,4 +162,88 @@ export async function readEdgeFunctionError(
   return message || fallback;
 }
 
+// ---------------------------------------------------------------------------
+// PWA install
+//
+// Why this matters for push specifically: in a browser TAB, Android attributes
+// the notification to the browser — you get Chrome's icon and an origin line
+// ("test.por…"), and no payload field can change that; it is Chrome's
+// anti-spoofing rule. Once the site is INSTALLED, Android builds a WebAPK and
+// the notification carries our icon and app name instead. So "install" is not a
+// nice-to-have here, it is the only way to control how the notification looks.
+// ---------------------------------------------------------------------------
+
+/** Chrome's non-standard install event. */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+let deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
+const installListeners = new Set<(available: boolean) => void>();
+
+/**
+ * Must be armed at app start.
+ *
+ * Chrome fires `beforeinstallprompt` ONCE, early, and only if nothing has
+ * listened yet — if we wait until the user opens a settings screen the event has
+ * long since passed and the install button can never light up. So we capture and
+ * park it globally, then hand it to whichever component asks.
+ */
+export function capturePwaInstallPrompt(): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const onBeforeInstall = (event: Event) => {
+    // Suppress Chrome's own mini-infobar so the install happens from OUR button,
+    // in a place where we can explain why it is worth doing.
+    event.preventDefault();
+    deferredInstallPrompt = event as BeforeInstallPromptEvent;
+    installListeners.forEach((fn) => fn(true));
+  };
+
+  const onInstalled = () => {
+    deferredInstallPrompt = null;
+    installListeners.forEach((fn) => fn(false));
+  };
+
+  window.addEventListener('beforeinstallprompt', onBeforeInstall);
+  window.addEventListener('appinstalled', onInstalled);
+
+  return () => {
+    window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+    window.removeEventListener('appinstalled', onInstalled);
+  };
+}
+
+export function isInstallPromptAvailable(): boolean {
+  return deferredInstallPrompt !== null;
+}
+
+export function subscribeToInstallAvailability(fn: (available: boolean) => void): () => void {
+  installListeners.add(fn);
+  return () => installListeners.delete(fn);
+}
+
+/**
+ * Shows the native install dialog. Returns true if the user accepted.
+ *
+ * The parked event is single-use — Chrome refuses a second `prompt()` on the
+ * same event — so it is cleared either way.
+ */
+export async function promptPwaInstall(): Promise<boolean> {
+  const event = deferredInstallPrompt;
+  if (!event) return false;
+  deferredInstallPrompt = null;
+  installListeners.forEach((fn) => fn(false));
+
+  try {
+    await event.prompt();
+    const { outcome } = await event.userChoice;
+    return outcome === 'accepted';
+  } catch (error) {
+    console.error('[push] Install prompt failed:', error);
+    return false;
+  }
+}
+
 export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';

@@ -244,7 +244,12 @@ Deno.serve(async (req) => {
     title,
     body: messageBody,
     url: url ?? '/',
-    icon: tenant.logo_url ?? undefined,
+    // NOT tenant.logo_url. Operator logos are wide WORDMARKS; Android renders
+    // the notification icon in a small square, so a wordmark arrives squeezed and
+    // unreadable. A favicon is square by convention, so it is the only tenant
+    // asset safe to use here — otherwise we send nothing and each service worker
+    // falls back to its own local square icon.
+    icon: tenant.favicon_url ?? undefined,
     // A stable tag collapses repeats of the same notification on the device
     // instead of stacking duplicates in the tray.
     tag: typeof body.tag === 'string' ? body.tag.slice(0, 50) : `${source}-${tenant.slug}`,
@@ -254,6 +259,12 @@ Deno.serve(async (req) => {
       sentAt: new Date().toISOString(),
     },
   };
+
+  // Optional richer content, passed straight through to showNotification().
+  if (typeof body.image === 'string' && body.image.startsWith('https://')) {
+    payload.image = body.image;
+  }
+  if (body.requireInteraction === true) payload.requireInteraction = true;
 
   const results = await mapLimit(recipients, SEND_CONCURRENCY, async (sub) => {
     const result = await sendWebPush(
