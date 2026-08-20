@@ -1,5 +1,25 @@
 {
-  "files": [],
-  "specs": [],
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-pause-card.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/docs/FLEET_HEALTH_PROD_HOTFIX.md",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-status-badge.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/fleet-summary-cards.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-audit-log.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/fleet/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/checkout/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/vehicles/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/vehicle-identity.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/MultiStepBookingWidget.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-fleet-list.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/__tests__/lib/vehicle-identity.test.ts"
+  ],
+  "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/docs-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+  ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

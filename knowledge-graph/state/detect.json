@@ -396,6 +396,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/add-vehicle-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/service-history-table.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-ownership-panel.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-pause-card.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/service-plan-chip.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-daily-pricing-calendar.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/spare-key-chip.tsx",
@@ -915,10 +916,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 907,
-    "total_words": 866658,
+    "total_files": 908,
+    "total_words": 868018,
     "counts": {
-      "code": 907
+      "code": 908
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1237,6 +1238,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/add-vehicle-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/service-history-table.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-ownership-panel.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-pause-card.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/service-plan-chip.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/vehicle-daily-pricing-calendar.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/vehicles/spare-key-chip.tsx",
@@ -2185,7 +2187,7 @@
       "video": []
     },
     "total_files": 342,
-    "total_words": 431636,
+    "total_words": 432158,
     "counts": {
       "code": 327,
       "image": 15
@@ -2643,7 +2645,7 @@
       "video": []
     },
     "total_files": 96,
-    "total_words": 136002,
+    "total_words": 136044,
     "counts": {
       "code": 96
     },
@@ -3783,6 +3785,7 @@
         "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIM_DEVPANEL_SPEC.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/STRIPE_CONNECT_TESTING.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+        "/home/haseeb-raza/Desktop/drive-247/docs/FLEET_HEALTH_PROD_HOTFIX.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIMULATION_TESTING_DESIGN.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIM_EDGE_CASE_AUDIT.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/strategy-call-confirmation-funnel.md",
@@ -3821,10 +3824,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 43,
-    "total_words": 97320,
+    "total_files": 44,
+    "total_words": 98559,
     "counts": {
-      "document": 33,
+      "document": 34,
       "paper": 10
     },
     "semantic_candidates": [
@@ -3839,6 +3842,7 @@
       "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIM_DEVPANEL_SPEC.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/STRIPE_CONNECT_TESTING.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/LEAD_MANAGEMENT_AND_AUTOMATIONS.md",
+      "/home/haseeb-raza/Desktop/drive-247/docs/FLEET_HEALTH_PROD_HOTFIX.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIMULATION_TESTING_DESIGN.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/CRON_SIM_EDGE_CASE_AUDIT.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/strategy-call-confirmation-funnel.md",
