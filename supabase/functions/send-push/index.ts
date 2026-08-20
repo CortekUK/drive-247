@@ -139,18 +139,42 @@ Deno.serve(async (req) => {
 
   const target: Target = VALID_TARGETS.has(body.target) ? body.target : 'self';
 
-  // Caller's own tenant wins. Only a super admin (tenant_id NULL by design) may
-  // name one, and they MUST — there is no "all tenants" broadcast here.
-  const tenantId = isSuperAdmin ? (body.tenantId ?? appUser.tenant_id) : appUser.tenant_id;
-  if (!tenantId) {
-    return jsonResponse({ error: 'tenantId is required for super admin sends' }, 400);
-  }
+  // Tenant resolution, and the ONE place tenant isolation is enforced:
+  //
+  //  * A normal operator's tenant comes from their own app_users row and the
+  //    request body is IGNORED — otherwise anyone could address another
+  //    operator's customers by posting a different id.
+  //  * A super admin has `tenant_id = NULL` by design (that is what lets them
+  //    cross tenants), so they have no implicit tenant and MUST name one. The
+  //    portal always sends the tenant it is currently viewing, resolved from the
+  //    subdomain, so in practice this is transparent.
+  //
+  // Accepts a slug as well as an id: the client has both from TenantContext, and
+  // requiring the id alone was what made every super-admin send fail with a 400.
+  const bodyTenantId = typeof body.tenantId === 'string' ? body.tenantId : null;
+  const bodyTenantSlug = typeof body.tenantSlug === 'string' ? body.tenantSlug : null;
 
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('id, slug, company_name, app_name, logo_url, push_notifications_enabled')
-    .eq('id', tenantId)
-    .maybeSingle();
+  const tenantSelect = 'id, slug, company_name, app_name, logo_url, push_notifications_enabled';
+  let tenant: Record<string, any> | null = null;
+
+  if (isSuperAdmin) {
+    if (!bodyTenantId && !bodyTenantSlug) {
+      return jsonResponse({
+        error: 'You are signed in as a super admin, which is not scoped to one account. Open the portal on a tenant subdomain so it can tell us who to send as.',
+        code: 'tenant_required',
+      }, 400);
+    }
+    const { data } = bodyTenantId
+      ? await supabase.from('tenants').select(tenantSelect).eq('id', bodyTenantId).maybeSingle()
+      : await supabase.from('tenants').select(tenantSelect).eq('slug', bodyTenantSlug!).maybeSingle();
+    tenant = data;
+  } else {
+    if (!appUser.tenant_id) {
+      return jsonResponse({ error: 'Your account is not linked to an operator', code: 'no_tenant' }, 403);
+    }
+    const { data } = await supabase.from('tenants').select(tenantSelect).eq('id', appUser.tenant_id).maybeSingle();
+    tenant = data;
+  }
 
   if (!tenant) return jsonResponse({ error: 'Unknown tenant' }, 404);
   if (!tenant.push_notifications_enabled) {

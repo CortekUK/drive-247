@@ -9,6 +9,7 @@ import {
   getPushCapability,
   registerServiceWorker,
   urlBase64ToUint8Array,
+  readEdgeFunctionError,
   VAPID_PUBLIC_KEY,
   type PushCapability,
 } from '@/lib/push';
@@ -189,7 +190,7 @@ export function usePushNotifications() {
         },
       });
 
-      if (fnError) throw new Error(fnError.message || 'Could not save subscription');
+      if (fnError) throw new Error(await readEdgeFunctionError(fnError, 'Could not save subscription'));
       if (data?.error) throw new Error(data.error);
 
       if (mounted.current) setIsSubscribed(true);
@@ -239,9 +240,18 @@ export function usePushNotifications() {
   const sendPush = useMutation({
     mutationFn: async (input: SendPushInput): Promise<SendPushResult> => {
       const { data, error: fnError } = await supabase.functions.invoke('send-push', {
-        body: { ...input, source: 'manual_test' },
+        body: {
+          ...input,
+          source: 'manual_test',
+          // Always sent. A SUPER ADMIN has tenant_id = NULL by design, so the
+          // backend has no implicit tenant for them and cannot resolve one —
+          // without this every super-admin send fails. It is ignored server-side
+          // for normal operators, so it cannot be used to cross tenants.
+          tenantId: tenant?.id,
+          tenantSlug: tenant?.slug,
+        },
       });
-      if (fnError) throw new Error(fnError.message || 'Send failed');
+      if (fnError) throw new Error(await readEdgeFunctionError(fnError, 'Send failed'));
       if (data?.error) throw new Error(data.error);
       return data as SendPushResult;
     },

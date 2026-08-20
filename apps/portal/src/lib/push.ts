@@ -128,4 +128,38 @@ export function registerServiceWorker(): Promise<ServiceWorkerRegistration | nul
   return registrationPromise;
 }
 
+/**
+ * Recover the real error message from a failed `supabase.functions.invoke`.
+ *
+ * supabase-js reports ANY non-2xx from an edge function as a generic
+ * "Edge Function returned a non-2xx status code" and leaves `data` null — so the
+ * server's own explanation is discarded and a precise 400 reaches the user as
+ * "edge function error", which is unactionable. The original Response is hanging
+ * off `error.context`; this digs the message back out of it.
+ */
+export async function readEdgeFunctionError(
+  fnError: unknown,
+  fallback = 'Request failed',
+): Promise<string> {
+  const context = (fnError as { context?: unknown } | null)?.context;
+
+  if (context && typeof (context as Response).clone === 'function') {
+    try {
+      // Cloned so the caller can still read the body if it wants to.
+      const body = await (context as Response).clone().json();
+      if (body?.error) return String(body.error);
+    } catch {
+      try {
+        const text = await (context as Response).clone().text();
+        if (text) return text.slice(0, 300);
+      } catch {
+        // Body already consumed or not readable — fall through to the message.
+      }
+    }
+  }
+
+  const message = (fnError as { message?: string } | null)?.message;
+  return message || fallback;
+}
+
 export const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';

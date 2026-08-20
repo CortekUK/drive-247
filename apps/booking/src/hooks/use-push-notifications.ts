@@ -8,6 +8,7 @@ import {
   getPushCapability,
   registerServiceWorker,
   urlBase64ToUint8Array,
+  readEdgeFunctionError,
   VAPID_PUBLIC_KEY,
   type PushCapability,
 } from '@/lib/push';
@@ -82,7 +83,7 @@ export function usePushNotifications(): UsePushNotifications {
         },
       });
 
-      if (fnError) throw new Error(fnError.message || 'Could not save subscription');
+      if (fnError) throw new Error(await readEdgeFunctionError(fnError, 'Could not save subscription'));
       if (data?.error) throw new Error(data.error);
       return data;
     },
