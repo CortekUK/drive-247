@@ -168,10 +168,14 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [themeMode, bookingV2] = await Promise.all([
+  const headersList = await headers();
+  const [themeMode, flagOn] = await Promise.all([
     getTenantThemeMode(),
     isBookingV2Enabled(),
   ]);
+  // /booking-v2 is the standing preview URL — it has to render in that design
+  // even when the tenant has the flag off, otherwise it loads unstyled.
+  const bookingV2 = flagOn || (headersList.get('x-pathname') ?? '').startsWith('/booking-v2');
   // Map the tenant mode → next-themes props. `forcedTheme` (for the "-only"
   // modes) ignores localStorage/system entirely, so even a returning customer
   // with a stored 'dark' preference gets the forced theme on first paint.

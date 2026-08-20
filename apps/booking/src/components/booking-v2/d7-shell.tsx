@@ -2,7 +2,10 @@
 
 import { useEffect, useLayoutEffect, type ReactNode } from "react";
 import { d7Display, d7Ui } from "./d7-fonts";
+import { Cursor, SmoothScroll } from "./d7-motion";
+import { D7PageMotion } from "./d7-page-motion";
 import { D7ThemeInit } from "./d7-theme";
+import { ScrollProgress } from "./d7-ui";
 import "./v2.css";
 
 /**
@@ -52,7 +55,15 @@ export function D7SiteShell({ enabled, children }: { enabled: boolean; children:
   return (
     <div className={`d7 d7-site ${d7Display.variable} ${d7Ui.variable}`}>
       <D7ThemeInit />
-      {children}
+      {/* Smooth scroll, the progress rail, the cursor and scroll reveals now
+          belong to the whole site, not just the landing — otherwise clicking
+          "Fleet" dropped you into a page that moved differently. */}
+      <Cursor>
+        <SmoothScroll />
+        <ScrollProgress />
+        <D7PageMotion />
+        {children}
+      </Cursor>
     </div>
   );
 }

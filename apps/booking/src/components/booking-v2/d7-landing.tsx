@@ -4,10 +4,8 @@ import { BookingSection } from "./d7-booking";
 import { CtaBand, Footer } from "./d7-close";
 import { Fleet, Ticker } from "./d7-fleet";
 import { Hero } from "./d7-hero";
-import { Cursor, SmoothScroll } from "./d7-motion";
 import { D7Nav } from "./d7-nav";
 import { OffersRow } from "./d7-offers";
-import { ScrollProgress } from "./d7-ui";
 import { WhyChoose } from "./d7-why";
 import { footerColumns } from "./d7-data";
 import { useHasFaqs } from "@/hooks/useHasFaqs";
@@ -67,60 +65,57 @@ export default function BookingV2Landing() {
   /* The `.d7` wrapper, fonts and theme restore come from D7SiteShell in the
      root layout, which covers every page — not just this one. */
   return (
-    <>
-      <Cursor>
-        <SmoothScroll />
-        <ScrollProgress />
+    /* data-d7-landing tells D7PageMotion to stand down here — this page runs
+       its own, richer per-section reveals. */
+    <div data-d7-landing="">
+      <D7Nav
+        appName={c.appName}
+        logoUrl={c.logoUrl}
+        phone={c.hero.phone}
+        bookCta={c.hero.bookCta}
+      />
 
-        <D7Nav
-          appName={c.appName}
-          logoUrl={c.logoUrl}
-          phone={c.hero.phone}
+      <main>
+        <Hero content={c.hero} appName={c.appName} services={services} promo={c.promo} />
+
+        <Ticker />
+
+        {c.hasVehicles && (
+          <Fleet vehicles={c.vehicles} currency={c.tenant?.currency_code ?? null} />
+        )}
+
+        <WhyChoose
+          services={c.services}
+          vehicleCount={c.vehicles.length}
+          reviewCount={c.reviews.length}
+          avgRating={avgRating}
+        />
+
+        {/* the real booking flow */}
+        <BookingSection
+          title={c.bookingHeader.title}
+          subtitle={c.bookingHeader.subtitle}
+          trustPoints={c.bookingHeader.trust_points}
+        />
+
+        <OffersRow
+          promo={c.promo}
+          reviews={c.reviews}
+          reviewsTitle={c.testimonialsHeader.title}
           bookCta={c.hero.bookCta}
         />
 
-        <main>
-          <Hero content={c.hero} appName={c.appName} services={services} promo={c.promo} />
+        <CtaBand cta={c.cta} image={c.hero.still} bookCta={c.hero.bookCta} />
+      </main>
 
-          <Ticker />
-
-          {c.hasVehicles && (
-            <Fleet vehicles={c.vehicles} currency={c.tenant?.currency_code ?? null} />
-          )}
-
-          <WhyChoose
-            services={c.services}
-            vehicleCount={c.vehicles.length}
-            reviewCount={c.reviews.length}
-            avgRating={avgRating}
-          />
-
-          {/* the real booking flow */}
-          <BookingSection
-            title={c.bookingHeader.title}
-            subtitle={c.bookingHeader.subtitle}
-            trustPoints={c.bookingHeader.trust_points}
-          />
-
-          <OffersRow
-            promo={c.promo}
-            reviews={c.reviews}
-            reviewsTitle={c.testimonialsHeader.title}
-            bookCta={c.hero.bookCta}
-          />
-
-          <CtaBand cta={c.cta} image={c.hero.still} bookCta={c.hero.bookCta} />
-        </main>
-
-        <Footer
-          appName={c.appName}
-          logoUrl={c.darkLogoUrl}
-          blurb={c.contact.description || c.hero.subheading}
-          contact={contact}
-          socials={socials}
-          columns={footerColumns({ hasFaqs, blogEnabled: !!c.tenant?.blog_enabled })}
-        />
-      </Cursor>
-    </>
+      <Footer
+        appName={c.appName}
+        logoUrl={c.darkLogoUrl}
+        blurb={c.contact.description || c.hero.subheading}
+        contact={contact}
+        socials={socials}
+        columns={footerColumns({ hasFaqs, blogEnabled: !!c.tenant?.blog_enabled })}
+      />
+    </div>
   );
 }
