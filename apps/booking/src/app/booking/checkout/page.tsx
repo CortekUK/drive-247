@@ -162,7 +162,12 @@ const BookingCheckoutContent = () => {
       let vehicleQuery = supabaseUntyped
         .from("vehicles")
         .select(vehiclePublicColumns(tenant))
-        .eq("id", vehicleId);
+        .eq("id", vehicleId)
+        // Reject a paused vehicle at load, not just at submit. A direct
+        // /booking/checkout?vehicle=<paused-id> link otherwise renders the car
+        // in full and lets the customer fill the form and upload documents
+        // before being turned away.
+        .eq("is_paused", false);
 
       if (tenant?.id) {
         vehicleQuery = vehicleQuery.eq("tenant_id", tenant.id);
@@ -670,6 +675,25 @@ const BookingCheckoutContent = () => {
 
         if (blockError) throw blockError;
         if (blocks && blocks.length > 0) {
+          throw new Error(
+            "This vehicle is not available for your selected dates. Please go back and choose a different vehicle or dates."
+          );
+        }
+      }
+
+      // Step 3d-ii: Pause check — the operator may have taken this vehicle off
+      // the road after the customer opened checkout. `vehicles` is not in the
+      // supabase_realtime publication and booking uses a bare QueryClient, so a
+      // stale tab would otherwise submit against a paused car.
+      if (vehicleId) {
+        const { data: pausedRow, error: pausedError } = await supabase
+          .from("vehicles")
+          .select("is_paused")
+          .eq("id", vehicleId)
+          .maybeSingle();
+
+        if (pausedError) throw pausedError;
+        if (pausedRow?.is_paused) {
           throw new Error(
             "This vehicle is not available for your selected dates. Please go back and choose a different vehicle or dates."
           );

@@ -26,6 +26,7 @@ import { ServicePlanChip } from "@/components/vehicles/service-plan-chip";
 import { SpareKeyChip } from "@/components/vehicles/spare-key-chip";
 import { MetricCard, MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { VehicleStatusBadge } from "@/components/vehicles/vehicle-status-badge";
+import { VehiclePauseCard } from "@/components/vehicles/vehicle-pause-card";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
 import { useVehicleServices } from "@/hooks/use-vehicle-services";
@@ -831,7 +832,7 @@ export default function VehicleDetail() {
                     <Car className="h-5 w-5" />
                     Vehicle Details
                   </CardTitle>
-                  <VehicleStatusBadge status={vehicle.status} showTooltip />
+                  <VehicleStatusBadge status={vehicle.is_paused ? 'Paused' : vehicle.status} showTooltip />
                 </div>
                 <CardDescription>Basic vehicle information and specifications</CardDescription>
               </CardHeader>
@@ -1455,6 +1456,19 @@ export default function VehicleDetail() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Pause / off-the-road control. Sits above Blocked Dates because a
+              pause is the blunt "take it off the site entirely" action, whereas
+              a block is date-scoped. */}
+          <div className="mt-8">
+            <VehiclePauseCard
+              vehicleId={vehicle.id}
+              reg={vehicle.reg}
+              isPaused={vehicle.is_paused === true}
+              pausedReason={vehicle.paused_reason}
+              pausedAt={vehicle.paused_at}
+            />
           </div>
 
           {/* Blocked Dates Section */}

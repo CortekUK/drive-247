@@ -110,7 +110,10 @@ const BookingVehiclesContent = () => {
         )
         // Case-insensitive status match so rows saved as lowercase "available"/"rented"
         // aren't silently dropped (mirrors the homepage MultiStepBookingWidget query).
-        .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented");
+        .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
+        // Paused = off the road. Server-side so it holds regardless of whether
+        // the visitor has picked dates yet.
+        .eq("is_paused", false);
 
       // Filter by availability based on rental duration
       const mtd = tenant?.monthly_tier_days ?? 30;

@@ -92,6 +92,10 @@ const VEHICLE_PUBLIC_COLUMN_LIST = [
   'status',
   'photo_url',
   'is_disposed',
+  // Operator has taken this vehicle off the road (repair etc). Every public
+  // surface must exclude it. The operator's private note lives in
+  // `paused_reason` and is deliberately NOT in this allowlist.
+  'is_paused',
   'pickup_location_id',
   'tesla_fleet_enabled',
   // Pricing the customer is being quoted

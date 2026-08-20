@@ -44,6 +44,10 @@ export function useFleetList() {
           .select(canRevealRegistration(tenant) ? "id, reg, make, model, status" : "id, make, model, status")
           .eq("tenant_id", tenant.id)
           .in("status", ["Available", "Rented"])
+          // A paused vehicle is off the road. This picker reads neither
+          // blocked_dates nor available_*, so without this it stays selectable
+          // in the enquiry / apply forms no matter what the operator switches off.
+          .eq("is_paused", false)
           .order("make", { ascending: true })
           .order("model", { ascending: true });
         if (vErr) throw vErr;

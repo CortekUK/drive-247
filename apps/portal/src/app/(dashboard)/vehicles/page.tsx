@@ -320,11 +320,15 @@ export default function VehiclesListEnhanced() {
       );
     }
 
-    // Status filter
+    // Status filter. `paused` is a separate boolean column rather than a
+    // `status` value, because status is machine-owned — closing a rental
+    // unconditionally resets it to 'Available' and would silently un-pause.
     if (filters.status !== 'all') {
-      filtered = filtered.filter(vehicle =>
-        vehicle.status.toLowerCase() === filters.status.toLowerCase()
-      );
+      filtered = filters.status === 'paused'
+        ? filtered.filter(vehicle => vehicle.is_paused === true)
+        : filtered.filter(vehicle =>
+            vehicle.status.toLowerCase() === filters.status.toLowerCase()
+          );
     }
 
     // Make filter
@@ -517,7 +521,7 @@ export default function VehiclesListEnhanced() {
           { value: 'all', label: 'All Status' },
           { value: 'available', label: 'Available' },
           { value: 'rented', label: 'Rented' },
-          { value: 'maintenance', label: 'Maintenance' },
+          { value: 'paused', label: 'Paused' },
           { value: 'disposed', label: 'Disposed' },
         ];
         const performanceOptions = [
@@ -749,7 +753,7 @@ export default function VehiclesListEnhanced() {
                       </TableCell>
                     )}
                     <TableCell className="text-center">
-                      <VehicleStatusBadge status={vehicle.status} />
+                      <VehicleStatusBadge status={vehicle.is_paused ? 'Paused' : vehicle.status} />
                     </TableCell>
                      <TableCell className="text-right">
                        <Button

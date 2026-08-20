@@ -102,6 +102,16 @@ describe('vehiclePublicColumns — an allowlist, because RLS cannot hide a colum
     }
   });
 
+  it('serves is_paused but never the operator\'s private pause reason', () => {
+    const cols = vehiclePublicColumns(showing).split(',').map(c => c.trim());
+    // Every public surface filters on this, so it must be selectable.
+    expect(cols).toContain('is_paused');
+    // `paused_reason` is an internal note ("Wreak", "awaiting insurance
+    // assessor") and must never reach a browser.
+    expect(cols).not.toContain('paused_reason');
+    expect(cols).not.toContain('paused_by');
+  });
+
   it('appends related-table selections without disturbing the allowlist', () => {
     const sel = vehiclePublicColumns(hiding, 'vehicle_photos ( photo_url, display_order )');
     expect(sel).toContain('vehicle_photos ( photo_url, display_order )');

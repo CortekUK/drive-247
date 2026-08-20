@@ -999,7 +999,10 @@ const CreateRental = () => {
     queryFn: async () => {
       let query = (supabase as any)
         .from("vehicles")
-        .select("id, reg, make, model, status, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
+        // `is_paused` is selected but deliberately NOT filtered out: staff may
+        // still need to put a paused vehicle on a rental knowingly. The picker
+        // marks it instead of hiding it, so the override is never blind.
+        .select("id, reg, make, model, status, is_paused, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -3420,6 +3423,9 @@ const CreateRental = () => {
                                               )}
                                               {vehicle._inBuffer && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Buffer</span>
+                                              )}
+                                              {vehicle.is_paused && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Paused</span>
                                               )}
                                             </div>
                                             <span className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model}</span>

@@ -1126,6 +1126,10 @@ const MultiStepBookingWidget = () => {
       )
       .eq("tenant_id", tenant.id)
       .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
+      // Paused = off the road. Deliberately server-side: the blocked_dates and
+      // tier filters below both sit inside `if (pickupDate && dropoffDate)`, so
+      // a client-side check here would leave the car visible on first paint.
+      .eq("is_paused", false)
       .order("make")
       .order("model");
 
@@ -2112,6 +2116,27 @@ const MultiStepBookingWidget = () => {
           .limit(1);
 
         if (blocks && blocks.length > 0) {
+          throw new Error(
+            "This vehicle is not available for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+      }
+
+      // Pause check — mirror of checkout/page.tsx "Step 3d-ii". formData
+      // (vehicleId included) is persisted to localStorage by Zustand and
+      // survives a tab close, so a customer can return hours after the operator
+      // paused the car and submit against the selection they made earlier. The
+      // list query above filters paused vehicles, but this form renders from
+      // formData, not from that list.
+      if (formData.vehicleId) {
+        const { data: pausedRow, error: pausedError } = await supabase
+          .from("vehicles")
+          .select("is_paused")
+          .eq("id", formData.vehicleId)
+          .maybeSingle();
+
+        if (pausedError) throw pausedError;
+        if (pausedRow?.is_paused) {
           throw new Error(
             "This vehicle is not available for the selected dates. Please go back and choose different dates or a different vehicle."
           );

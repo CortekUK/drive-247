@@ -18886,6 +18886,10 @@ export type Database = {
           id: string
           initial_payment: number | null
           is_disposed: boolean | null
+          is_paused: boolean
+          paused_at: string | null
+          paused_by: string | null
+          paused_reason: string | null
           last_service_date: string | null
           last_service_mileage: number | null
           lockbox_code: string | null
@@ -18958,6 +18962,10 @@ export type Database = {
           id?: string
           initial_payment?: number | null
           is_disposed?: boolean | null
+          is_paused?: boolean
+          paused_at?: string | null
+          paused_by?: string | null
+          paused_reason?: string | null
           last_service_date?: string | null
           last_service_mileage?: number | null
           lockbox_code?: string | null
@@ -19030,6 +19038,10 @@ export type Database = {
           id?: string
           initial_payment?: number | null
           is_disposed?: boolean | null
+          is_paused?: boolean
+          paused_at?: string | null
+          paused_by?: string | null
+          paused_reason?: string | null
           last_service_date?: string | null
           last_service_mileage?: number | null
           lockbox_code?: string | null

@@ -9,6 +9,8 @@ export type AuditAction =
   | "vehicle_updated"
   | "vehicle_deleted"
   | "vehicle_status_changed"
+  | "vehicle_paused"
+  | "vehicle_unpaused"
   // Rental actions
   | "rental_created"
   | "rental_updated"

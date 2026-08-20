@@ -31,6 +31,13 @@ const getStatusConfig = (status: string) => {
         className: 'bg-amber-100 text-amber-700 hover:bg-amber-200',
         tooltip: 'Vehicle is in maintenance and unavailable for rental'
       };
+    case 'paused':
+      return {
+        variant: 'secondary' as const,
+        icon: Wrench,
+        className: 'bg-amber-100 text-amber-700 hover:bg-amber-200',
+        tooltip: 'Paused — hidden from your booking site'
+      };
     case 'disposed':
       return {
         variant: 'outline' as const,

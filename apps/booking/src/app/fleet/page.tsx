@@ -245,6 +245,13 @@ const Pricing = () => {
         return false;
       }
 
+      // Hide vehicles the operator has paused (off the road for repair etc).
+      // This page never queries blocked_dates, so a date block alone leaves a
+      // wrecked car sitting on the public Fleet & Pricing list.
+      if (vehicle.is_paused) {
+        return false;
+      }
+
       // Hide vehicles with all availability toggles off
       if (vehicle.available_daily === false && vehicle.available_weekly === false && vehicle.available_monthly === false) {
         return false;
