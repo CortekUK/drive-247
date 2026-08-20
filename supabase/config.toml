@@ -347,3 +347,13 @@ verify_jwt = false
 # the caller's app_users row and never from the request body.
 [functions.send-push]
 verify_jwt = true
+
+# Turns one audit_logs row into a push on every super admin's phone that asked
+# for that action. Driven by the trg_audit_log_platform_push trigger via pg_net,
+# which carries no user JWT — hence verify_jwt = false. It is NOT anonymously
+# callable: the caller must present x-platform-secret (validated by the
+# platform_verify_secret() RPC) or a super-admin JWT for manual dispatch. The
+# trigger passes only a row id; this function re-reads the row and never trusts
+# caller-supplied content.
+[functions.notify-platform-activity]
+verify_jwt = false

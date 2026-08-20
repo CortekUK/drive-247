@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ForceLogoutAllControl } from '@/components/admin/ForceLogoutAllControl';
+import { PlatformPushSettings } from '@/components/admin/PlatformPushSettings';
 import { X, AlertTriangle } from 'lucide-react';
 
 interface AdminSettings {
@@ -237,6 +238,10 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Mobile push for super admins — sourced from audit_logs, so it covers
+            every tenant without new plumbing per event type. */}
+        <PlatformPushSettings />
 
         {/* Maintenance Banner */}
         <Card>

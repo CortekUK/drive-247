@@ -31,8 +31,8 @@ const SEND_CONCURRENCY = 10;
 const MAX_TITLE = 100;
 const MAX_BODY = 300;
 
-type Target = 'self' | 'staff' | 'customers' | 'all' | 'subscription';
-const VALID_TARGETS = new Set<Target>(['self', 'staff', 'customers', 'all', 'subscription']);
+type Target = 'self' | 'staff' | 'customers' | 'all' | 'subscription' | 'platform';
+const VALID_TARGETS = new Set<Target>(['self', 'staff', 'customers', 'all', 'subscription', 'platform']);
 
 interface SubscriptionRow {
   id: string;
@@ -151,13 +151,23 @@ Deno.serve(async (req) => {
   //
   // Accepts a slug as well as an id: the client has both from TenantContext, and
   // requiring the id alone was what made every super-admin send fail with a 400.
+  // The platform target is not tenant-scoped at all: it addresses super admins'
+  // own devices, which deliberately carry no tenant. Everything tenant-related
+  // below is therefore skipped rather than fudged with a placeholder tenant.
+  const isPlatformTarget = target === 'platform';
+  if (isPlatformTarget && !isSuperAdmin) {
+    return jsonResponse({ error: 'Only super admins can send platform notifications' }, 403);
+  }
+
   const bodyTenantId = typeof body.tenantId === 'string' ? body.tenantId : null;
   const bodyTenantSlug = typeof body.tenantSlug === 'string' ? body.tenantSlug : null;
 
   const tenantSelect = 'id, slug, company_name, app_name, logo_url, push_notifications_enabled';
   let tenant: Record<string, any> | null = null;
 
-  if (isSuperAdmin) {
+  if (isPlatformTarget) {
+    tenant = null;
+  } else if (isSuperAdmin) {
     if (!bodyTenantId && !bodyTenantSlug) {
       return jsonResponse({
         error: 'You are signed in as a super admin, which is not scoped to one account. Open the portal on a tenant subdomain so it can tell us who to send as.',
@@ -176,12 +186,14 @@ Deno.serve(async (req) => {
     tenant = data;
   }
 
-  if (!tenant) return jsonResponse({ error: 'Unknown tenant' }, 404);
-  if (!tenant.push_notifications_enabled) {
-    return jsonResponse({
-      error: 'Push notifications are not enabled for this account',
-      code: 'push_disabled',
-    }, 403);
+  if (!isPlatformTarget) {
+    if (!tenant) return jsonResponse({ error: 'Unknown tenant' }, 404);
+    if (!tenant.push_notifications_enabled) {
+      return jsonResponse({
+        error: 'Push notifications are not enabled for this account',
+        code: 'push_disabled',
+      }, 403);
+    }
   }
 
   const title = String(body.title ?? '').trim().slice(0, MAX_TITLE);
@@ -194,8 +206,12 @@ Deno.serve(async (req) => {
   let query = supabase
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth, audience, platform, failure_count')
-    .eq('tenant_id', tenant.id)
     .eq('is_active', true);
+
+  query = isPlatformTarget
+    // A super admin's own devices only — never every super admin's.
+    ? query.eq('audience', 'platform').eq('app_user_id', appUser.id)
+    : query.eq('tenant_id', tenant!.id);
 
   switch (target) {
     case 'self':
@@ -217,6 +233,7 @@ Deno.serve(async (req) => {
       query = query.eq('id', body.subscriptionId);
       break;
     case 'all':
+    case 'platform':
       break;
   }
 
@@ -249,12 +266,12 @@ Deno.serve(async (req) => {
     // unreadable. A favicon is square by convention, so it is the only tenant
     // asset safe to use here — otherwise we send nothing and each service worker
     // falls back to its own local square icon.
-    icon: tenant.favicon_url ?? undefined,
+    icon: tenant?.favicon_url ?? undefined,
     // A stable tag collapses repeats of the same notification on the device
     // instead of stacking duplicates in the tray.
-    tag: typeof body.tag === 'string' ? body.tag.slice(0, 50) : `${source}-${tenant.slug}`,
+    tag: typeof body.tag === 'string' ? body.tag.slice(0, 50) : `${source}-${tenant?.slug ?? 'platform'}`,
     data: {
-      tenantSlug: tenant.slug,
+      tenantSlug: tenant?.slug ?? null,
       source,
       sentAt: new Date().toISOString(),
     },
@@ -283,7 +300,7 @@ Deno.serve(async (req) => {
     else if (result.expired) expiredIds.push(sub.id);
 
     return {
-      tenant_id: tenant.id,
+      tenant_id: tenant?.id ?? null,
       subscription_id: sub.id,
       endpoint: sub.endpoint,
       audience: sub.audience,
@@ -339,7 +356,7 @@ Deno.serve(async (req) => {
   }
 
   const sent = succeededIds.length;
-  console.log(`[SEND-PUSH] ${tenant.slug} target=${target} sent=${sent} failed=${failures.length} expired=${expiredIds.length}`);
+  console.log(`[SEND-PUSH] ${tenant?.slug ?? 'platform'} target=${target} sent=${sent} failed=${failures.length} expired=${expiredIds.length}`);
 
   return jsonResponse({
     success: true,

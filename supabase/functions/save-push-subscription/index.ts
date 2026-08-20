@@ -38,7 +38,7 @@ const ALLOWED_ENDPOINT_HOSTS = [
 ];
 
 const VALID_PLATFORMS = new Set(['ios', 'android', 'desktop', 'unknown']);
-const VALID_AUDIENCES = new Set(['customer', 'staff']);
+const VALID_AUDIENCES = new Set(['customer', 'staff', 'platform']);
 
 function endpointHostAllowed(endpoint: string): boolean {
   try {
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
   const endpoint = typeof body.endpoint === 'string' ? body.endpoint : body?.subscription?.endpoint;
 
   if (!VALID_AUDIENCES.has(audience)) {
-    return jsonResponse({ error: 'audience must be "customer" or "staff"' }, 400);
+    return jsonResponse({ error: 'audience must be "customer", "staff" or "platform"' }, 400);
   }
   if (typeof endpoint !== 'string' || !endpointHostAllowed(endpoint)) {
     return jsonResponse({ error: 'Unrecognised push endpoint' }, 400);
@@ -117,6 +117,66 @@ Deno.serve(async (req) => {
   const platform = VALID_PLATFORMS.has(String(body.platform)) ? String(body.platform) : 'unknown';
   const userAgent = typeof body.userAgent === 'string' ? body.userAgent.slice(0, 500) : null;
   const isStandalone = body.isStandalone === true;
+
+  // ---- Platform audience: a super admin's own device ----------------------
+  //
+  // Deliberately short-circuits everything below. A super admin has no tenant
+  // (that is what lets them see across all of them), so there is no tenant to
+  // resolve, no per-tenant feature flag to check, and anonymous enrolment is
+  // never acceptable — this device receives activity from every operator on the
+  // platform.
+  if (audience === 'platform') {
+    const platformAuth = req.headers.get('Authorization') ?? req.headers.get('authorization');
+    if (!platformAuth?.startsWith('Bearer ')) {
+      return jsonResponse({ error: 'Sign in to enable notifications on this device' }, 401);
+    }
+
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: platformAuth } },
+    });
+    const { data: authData } = await callerClient.auth.getUser();
+    if (!authData?.user) return jsonResponse({ error: 'Invalid session' }, 401);
+
+    const { data: superAdmin } = await supabase
+      .from('app_users')
+      .select('id, is_active, is_super_admin')
+      .eq('auth_user_id', authData.user.id)
+      .maybeSingle();
+
+    if (!superAdmin?.is_super_admin || !superAdmin.is_active) {
+      return jsonResponse({ error: 'Only super admins can enable platform notifications' }, 403);
+    }
+
+    const { data: saved, error: saveError } = await supabase
+      .from('push_subscriptions')
+      .upsert({
+        tenant_id: null,
+        audience: 'platform',
+        endpoint,
+        p256dh,
+        auth,
+        app_user_id: superAdmin.id,
+        device_id: deviceId,
+        platform,
+        user_agent: userAgent,
+        is_standalone: isStandalone,
+        is_active: true,
+        failure_count: 0,
+        last_error: null,
+        revoked_at: null,
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: 'endpoint' })
+      .select('id')
+      .single();
+
+    if (saveError) {
+      console.error('[PUSH-SUB] Platform upsert failed:', saveError.message);
+      return jsonResponse({ error: 'Could not save subscription' }, 500);
+    }
+
+    console.log(`[PUSH-SUB] platform device registered for super admin ${superAdmin.id} (${platform})`);
+    return jsonResponse({ success: true, action: 'subscribed', subscriptionId: saved.id, linked: true });
+  }
 
   // ---- Resolve the tenant -------------------------------------------------
   const tenantSlug = typeof body.tenantSlug === 'string' ? body.tenantSlug : null;
