@@ -33,16 +33,10 @@ interface Promotion {
   created_at: string;
 }
 
-interface Vehicle {
-  id: string;
-  name: string;
-}
-
 const Promotions = () => {
   const { tenant } = useTenant();
   const { branding } = useBrandingSettings();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -86,21 +80,6 @@ const Promotions = () => {
       if (promoError) throw promoError;
 
       setPromotions((promoData || []) as Promotion[]);
-
-      // Load vehicles with tenant filtering
-      let vehicleQuery = supabase
-        .from("vehicles")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name");
-
-      if (tenant?.id) {
-        vehicleQuery = vehicleQuery.eq("tenant_id", tenant.id);
-      }
-
-      const { data: vehicleData } = await vehicleQuery;
-
-      setVehicles(vehicleData || []);
     } catch (error) {
       console.error("Error loading promotions:", error);
     } finally {

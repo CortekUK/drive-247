@@ -107,13 +107,18 @@ const About = () => {
         .select("*", { count: "exact", head: true })
         .eq("tenant_id", tenant.id);
 
-      // Get active vehicles for this tenant
+      // Count this tenant's road-ready vehicles.
+      // `is_active` does not exist on `vehicles` — that filter made this query
+      // 400 on every visit, so the "Premium Vehicles" stat silently rendered 0.
+      // Paused and disposed vehicles are off the road, which is the same rule
+      // every other public surface applies.
       // @ts-ignore - Supabase type inference issue
       const { count: vehiclesCount } = await supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
-        .eq("is_active", true)
-        .eq("tenant_id", tenant.id);
+        .eq("tenant_id", tenant.id)
+        .eq("is_paused", false)
+        .eq("is_disposed", false);
 
       // Get average rating from testimonials for this tenant
       // The testimonials table uses 'stars' column (not 'rating')
