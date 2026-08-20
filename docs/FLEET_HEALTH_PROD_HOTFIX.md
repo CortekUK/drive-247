@@ -180,3 +180,64 @@ full `arwdDxtm` to `anon`, so `paused_reason` is readable by anyone holding the
 public anon key — as are `lockbox_code`, `lockbox_instructions` and
 `purchase_price`. The portal UI therefore does **not** promise the reason is
 private. Enabling RLS on this table is a separate ticket.
+
+---
+
+# Follow-up fixes, 2026-08-20 (four reported issues)
+
+All applied directly to production. Rollbacks in `/tmp/fleet-fix/ROLLBACK-*.sql`.
+
+### 1. `undo_vehicle_disposal` is now a true undo
+New table `public.vehicle_disposal_restore` (RLS on, no policies, grants revoked
+from anon/authenticated). `fleet_health_on_disposal` journals the maintenance
+jobs, maintenance `blocked_dates` rows and FLEET_HEALTH reminders **before**
+destroying them; `undo_vehicle_disposal` replays them.
+
+**v1 of this was wrong and was replaced.** It restored everything inside ONE
+subtransaction, so a single GiST conflict (`blocked_dates_no_overlapping_maintenance`)
+rolled back the jobs and the *other* blocks too — while still returning
+`{"success":true}`, because PL/pgSQL variables survive a subtransaction rollback.
+It then deleted the journal row regardless, destroying its own retry data.
+
+v2 restores each element in its own nested block, counts only actual successes,
+keeps the journal when anything fails, and returns `restore_failed` +
+`restore_sqlstate`. Verified on the exact failing case (two blocks, one
+conflicting):
+
+    v1: A=0 B=0 job=cancelled journal deleted  res={"success":true,"jobs":1}
+    v2: A=0 B=1 job=scheduled journal kept     res={"restore_failed":true,"sqlstate":"23P01"}
+
+`use-vehicle-disposal.ts` now reads the payload and shows a destructive toast
+instead of "Disposal Undone" when the restore failed.
+
+### 2. Negative mileage rejected at entry
+    rental_key_handovers_mileage_non_negative  CHECK (mileage IS NULL OR mileage >= 0)
+    vehicles_current_mileage_non_negative      CHECK (current_mileage IS NULL OR current_mileage >= 0)
+0 violating rows existed. `use-key-handover.ts` changed `if (mileage)` to
+`if (mileage != null && mileage >= 0)` — `-1` is truthy, so it used to propagate
+into `vehicles.current_mileage`. `key-handover-section.tsx` now tests `>= 0`.
+
+### 3. The guards are observable
+`RAISE WARNING` went nowhere: `log_min_messages` is already `warning`, but
+Supabase's `postgres_logs` surfaces only ERROR and LOG — zero WARNING rows exist.
+New table `public.fleet_health_trigger_errors` (RLS on, grants revoked). Every
+guard handler now also writes there, each INSERT itself nested-guarded.
+
+**`evaluate_fleet_health` (cron jobid 66) was also unguarded** — a bare `PERFORM`
+in the loop, so one bad vehicle aborted the whole nightly fleet pass and wrote
+nothing. Now per-vehicle guarded and recorded.
+
+### 4. `accept-offer` rejected every vehicle on the platform
+    if (vehicleRow.status && !["Active","active","available"].includes(vehicleRow.status))
+Production statuses are `Available` / `Rented` / `Disposed` — none match, so all
+451 vehicles returned `vehicle_unavailable reason=retired`. Evidence it was real
+and silent: 6 `lead_offers`, **0** with `accepted_vehicle_id`, 0 `offer_accepted`
+activity rows. Now a denylist on `disposed|sold|retired` plus `is_paused`. Also
+added the missing `blocked_dates` leg (it was the only write path in the repo
+without one) and inverted the rentals allowlist — which contained `"Confirmed"`,
+a status `rentals_status_check` does not permit.
+
+**NOT DEPLOYED.** Edge function source changes are inert until
+`supabase functions deploy`. The live bundle is v17 from 2026-05-23 and contains
+zero occurrences of `is_paused`. Same applies to `submit-enquiry` and
+`submit-application`.

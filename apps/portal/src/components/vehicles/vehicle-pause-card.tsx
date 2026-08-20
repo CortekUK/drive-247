@@ -76,7 +76,10 @@ export function VehiclePauseCard({
   // the existing blocked-dates manager omits it, which under-reports conflicts.
   const {
     data: conflicts = [],
-    isLoading: conflictsLoading,
+    // isPending, not isLoading: in react-query v5 a *disabled* query reports
+    // isLoading === false, so a null tenant would skip the conflict check
+    // entirely. isPending stays true until the query has actually resolved.
+    isPending: conflictsPending,
     isError: conflictsError,
   } = useQuery({
     queryKey: ["vehicle-pause-conflicts", tenant?.id, vehicleId],
@@ -84,7 +87,7 @@ export function VehiclePauseCard({
       const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from("rentals")
-        .select("id, booking_ref, start_date, end_date, status")
+        .select("id, rental_number, start_date, end_date, status")
         .eq("vehicle_id", vehicleId)
         // 'Confirmed' is not a permitted value — rentals_status_check allows
         // Pending/Active/Closed/Rejected/Cancelled only.
@@ -133,7 +136,7 @@ export function VehiclePauseCard({
           reg: reg ?? undefined,
           reason: nextPaused ? reason.trim() || undefined : undefined,
           conflicting_bookings:
-            nextPaused && !conflictsLoading && !conflictsError ? conflicts.length : undefined,
+            nextPaused && !conflictsPending && !conflictsError ? conflicts.length : undefined,
         },
       });
 
@@ -168,7 +171,7 @@ export function VehiclePauseCard({
     // Pausing: only skip the warning on a RESOLVED, SUCCESSFUL, empty check.
     // The `= []` default must never stand in for a verified zero, or a fast
     // click (or a failed query) silently bypasses the only safety net here.
-    if (conflictsLoading || conflictsError || conflicts.length > 0) {
+    if (conflictsPending || conflictsError || conflicts.length > 0) {
       setConfirmOpen(true);
       return;
     }
@@ -260,7 +263,7 @@ export function VehiclePauseCard({
           <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
             {conflicts.map((r: any) => (
               <div key={r.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                <span className="font-medium">{r.booking_ref || r.id.slice(0, 8)}</span>
+                <span className="font-medium">{r.rental_number || r.id.slice(0, 8)}</span>
                 <span className="text-muted-foreground text-xs">
                   {r.start_date} → {r.end_date} · {r.status}
                 </span>

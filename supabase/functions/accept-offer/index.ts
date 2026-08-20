@@ -62,14 +62,21 @@ Deno.serve(async (req) => {
     // customer can pick another from the same offer.
     const { data: vehicleRow } = await supabase
       .from("vehicles")
-      .select("id, tenant_id, status")
+      .select("id, tenant_id, status, is_paused")
       .eq("id", body.vehicleId)
       .maybeSingle();
     if (!vehicleRow || vehicleRow.tenant_id !== offer.tenant_id) {
       return jsonResponse({ status: "vehicle_unavailable", reason: "removed", availableVehicles: vehiclesArr }, 409);
     }
     // Retired / maintenance / inactive — anything not actively rentable.
-    if (vehicleRow.status && !["Active", "active", "available"].includes(vehicleRow.status)) {
+    // Production statuses are 'Available' / 'Rented' / 'Disposed'. The old
+    // allowlist was ["Active","active","available"], which matched NONE of them
+    // — every vehicle on the platform was rejected as "retired". A 'Rented'
+    // vehicle is legitimately offerable for future dates; the overlap check
+    // below is what enforces the dates. So reject only what is truly off the
+    // books: disposed/sold, or paused by the operator.
+    const vStatus = (vehicleRow.status ?? "").toLowerCase();
+    if (vehicleRow.is_paused || ["disposed", "sold", "retired"].includes(vStatus)) {
       return jsonResponse({ status: "vehicle_unavailable", reason: "retired", availableVehicles: vehiclesArr }, 409);
     }
 
@@ -87,13 +94,36 @@ Deno.serve(async (req) => {
     // Concurrency guard — re-check availability
     const overlapStart = body.startDate;
     const overlapEnd = body.endDate;
+
+    // blocked_dates leg. Every other booking path checks this (checkout Step 3d,
+    // booking/vehicles, the widget); accept-offer was the only write path that
+    // did not. It matters now that Fleet Health writes source_type='maintenance'
+    // blocks: without this the lead gets a written acceptance, and then
+    // convert-lead-to-rental hard-fails on trigger check_rental_overlap with a
+    // raw 23P02 in the operator's face. A null vehicle_id is a tenant-wide block.
+    const { data: blocks } = await supabase
+      .from("blocked_dates")
+      .select("id")
+      .eq("tenant_id", offer.tenant_id)
+      .or(`vehicle_id.eq.${body.vehicleId},vehicle_id.is.null`)
+      .lte("start_date", overlapEnd)
+      .gte("end_date", overlapStart)
+      .limit(1);
+
+    if (blocks && blocks.length > 0) {
+      return jsonResponse({ status: "vehicle_unavailable", reason: "blocked", availableVehicles: vehiclesArr }, 409);
+    }
     const { data: overlaps } = await supabase
       .from("rentals")
       .select("id, start_date, end_date, status")
       .eq("vehicle_id", body.vehicleId)
       .lte("start_date", overlapEnd)
       .gte("end_date", overlapStart);
-    const blocked = (overlaps ?? []).filter((r) => ["Active", "Pending", "Confirmed"].includes(r.status));
+    // Denylist, mirroring trigger check_rental_overlap. The previous allowlist
+    // ["Active","Pending","Confirmed"] contained "Confirmed", which is not a
+    // member of rentals_status_check — the same allowlist-drift that made this
+    // function reject every vehicle. A denylist cannot fall out of sync.
+    const blocked = (overlaps ?? []).filter((r) => !["Cancelled", "Rejected", "Closed"].includes(r.status));
     if (blocked.length > 0) {
       return jsonResponse({ status: "vehicle_unavailable", availableVehicles: vehiclesArr }, 409);
     }

@@ -341,7 +341,7 @@ export const KeyHandoverSection = ({
     // Auto-save mileage if it has a value but hasn't been saved yet
     if (confirmHandover === 'giving' && givingMileage && !givingHandover?.mileage) {
       const mileageVal = parseInt(givingMileage, 10);
-      if (!isNaN(mileageVal)) {
+      if (!isNaN(mileageVal) && mileageVal >= 0) {
         updateMileage.mutate({ type: 'giving', mileage: mileageVal });
       }
     }
@@ -350,7 +350,7 @@ export const KeyHandoverSection = ({
     if (confirmHandover === 'receiving') {
       if (receivingMileage && !receivingHandover?.mileage) {
         const mileageVal = parseInt(receivingMileage, 10);
-        if (!isNaN(mileageVal)) {
+        if (!isNaN(mileageVal) && mileageVal >= 0) {
           await updateMileage.mutateAsync({ type: 'receiving', mileage: mileageVal });
         }
       }

@@ -131,10 +131,12 @@ Deno.serve(async (req) => {
     if (vehicleId) {
       const { data: vehicle } = await supabase
         .from("vehicles")
-        .select("id, tenant_id")
+        .select("id, tenant_id, is_paused")
         .eq("id", vehicleId)
         .maybeSingle();
-      if (!vehicle || vehicle.tenant_id !== tenant.id) {
+      // A paused vehicle is off the road. Checked server-side because a stale
+      // enquiry modal can submit long after the operator paused the car.
+      if (!vehicle || vehicle.tenant_id !== tenant.id || vehicle.is_paused) {
         return errorResponse("Selected vehicle is not available", 400);
       }
     }

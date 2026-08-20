@@ -67,12 +67,31 @@ export function useVehicleDisposal(vehicleId: string) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['vehicle', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      // The list page keys on ["vehicles-list", tenant?.id]; the bare
+      // ['vehicles'] above never matches it, so the list would stay stale.
+      queryClient.invalidateQueries({ queryKey: ['vehicles-list'] });
       queryClient.invalidateQueries({ queryKey: ['vehicleEvents', vehicleId] });
       queryClient.invalidateQueries({ queryKey: ['pnlEntries'] });
-      
+
+      // The RPC un-disposes the vehicle even when it cannot put back the
+      // maintenance jobs / blocked dates / reminders that disposal removed
+      // (e.g. a newly-added block now overlaps one being restored). Saying
+      // "Disposal Undone" in that case would be a lie, and the operator would
+      // never know to retry — the journal is deliberately kept so a second
+      // Undo replays it once the conflict is cleared.
+      if (data?.restore_failed) {
+        toast({
+          title: "Vehicle restored — but not its maintenance records",
+          description:
+            "The vehicle is Available again, but its maintenance jobs, blocked dates or reminders could not be put back. Clear any conflicting blocked dates and press Undo Disposal again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Disposal Undone",
         description: "Vehicle has been returned to available status",

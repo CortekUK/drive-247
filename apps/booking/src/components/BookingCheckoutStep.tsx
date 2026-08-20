@@ -1115,6 +1115,25 @@ export default function BookingCheckoutStep({
         }
       }
 
+      // Pause guard: the operator may have taken this vehicle off the road
+      // after the customer picked it. The widget's vehicle list filters paused
+      // cars, but the selection is persisted to localStorage and survives a tab
+      // close, so a returning customer can submit against a stale choice.
+      if (rentalData.vehicle_id) {
+        const { data: pausedRow, error: pausedError } = await supabase
+          .from("vehicles")
+          .select("is_paused")
+          .eq("id", rentalData.vehicle_id)
+          .maybeSingle();
+
+        if (pausedError) throw pausedError;
+        if (pausedRow?.is_paused) {
+          throw new Error(
+            "This vehicle is no longer available for the selected dates. Please go back and choose different dates or a different vehicle."
+          );
+        }
+      }
+
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .insert(rentalData)

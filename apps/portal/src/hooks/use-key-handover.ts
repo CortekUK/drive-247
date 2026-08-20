@@ -600,8 +600,11 @@ export function useKeyHandover(rentalId: string | undefined) {
 
       if (error) throw error;
 
-      // Update the vehicle's current_mileage on both giving and receiving handovers
-      if (mileage) {
+      // Update the vehicle's current_mileage on both giving and receiving handovers.
+      // Explicit >= 0 test rather than a truthiness check: -1 is truthy, so a
+      // mistyped negative used to propagate straight into vehicles.current_mileage
+      // and then into the health projections that read it.
+      if (mileage != null && mileage >= 0) {
         const { data: rental } = await supabase
           .from("rentals")
           .select("vehicle_id")

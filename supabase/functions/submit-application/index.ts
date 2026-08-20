@@ -199,10 +199,11 @@ Deno.serve(async (req) => {
     if (body.vehicleInterestType === "specific" && body.vehicleId) {
       const { data: vehicle } = await supabase
         .from("vehicles")
-        .select("id, tenant_id")
+        .select("id, tenant_id, is_paused")
         .eq("id", body.vehicleId)
         .maybeSingle();
-      if (!vehicle || vehicle.tenant_id !== tenant.id) {
+      // A paused vehicle is off the road — reject server-side.
+      if (!vehicle || vehicle.tenant_id !== tenant.id || vehicle.is_paused) {
         return errorResponse("Selected vehicle is not available", 400);
       }
     }
