@@ -98,13 +98,18 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
 
     // Get tenant currency code
     let currencyCode = 'USD';
+    // Charged-deposit tenants collect the deposit as a real charge, so it has to
+    // take part in allocation here like any other category. Hold tenants keep the
+    // old behaviour, where a deposit is an authorisation and never a charge.
+    let depositIsCharged = false;
     if (payment.tenant_id) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('currency_code')
+        .select('currency_code, deposit_charge_enabled')
         .eq('id', payment.tenant_id)
         .single();
       if (tenant?.currency_code) currencyCode = tenant.currency_code;
+      depositIsCharged = (tenant as { deposit_charge_enabled?: boolean } | null)?.deposit_charge_enabled === true;
     }
 
     // PAYG rentals must never have upfront ledger charges materialised from an invoice.
@@ -307,6 +312,11 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Service Fee', invoiceField: 'service_fee' },
           { category: 'Tax', invoiceField: 'tax_amount' },
           { category: 'Delivery Fee', invoiceField: 'delivery_fee' },
+          // Charged deposits only. The comment above used to say deposits are
+          // "held on the card, never charged/allocated here" — true under holds,
+          // false now, and it meant a booking-site customer who paid the deposit
+          // as part of one checkout had that portion left unallocated.
+          ...(depositIsCharged ? [{ category: 'Security Deposit', invoiceField: 'security_deposit' }] : []),
         ];
 
         for (const { category, invoiceField } of feeCategories) {
@@ -474,6 +484,10 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Extension Insurance', description: 'extension insurance' },
           { category: 'Fine', description: 'fine charges' },
           { category: 'Other', description: 'other charges' },
+          // LAST, mirroring payment_apply_fifo_v2's priority 14: a deposit is
+          // refundable money we hold, so it may only absorb what is left after
+          // everything genuinely earned has been settled.
+          ...(depositIsCharged ? [{ category: 'Security Deposit', description: 'security deposit' }] : []),
         ];
         console.log('Using full category list with auto-creation from invoice');
       } else {
@@ -492,6 +506,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           { category: 'Extension Insurance', description: 'extension insurance' },
           { category: 'Fine', description: 'fine charges' },
           { category: 'Other', description: 'other charges' },
+          ...(depositIsCharged ? [{ category: 'Security Deposit', description: 'security deposit' }] : []),
         ];
         console.log('No rental_id, using all common categories');
       }
@@ -534,8 +549,8 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
         // For PAYG rentals this is a no-op: the accrual cron is the sole writer of daily
         // Rental/Tax/Service Fee charges, and there is no upfront invoice to materialise.
         if ((!outstandingCharges || outstandingCharges.length === 0) && payment.rental_id && !isPayg) {
-          // Security Deposit is intentionally omitted — deposits are held via
-          // place-deposit-hold, never auto-created as a ledger charge here.
+          // Security Deposit is present ONLY for charged-deposit tenants. Under
+          // holds it is an authorisation and must never become a ledger charge.
           const invoiceCategoryMap: Record<string, string> = {
             'Rental': 'rental_fee',
             'Insurance': 'insurance_premium',
@@ -543,6 +558,7 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
             'Delivery Fee': 'delivery_fee',
             'Tax': 'tax_amount',
             'Extras': 'extras_total',
+            ...(depositIsCharged ? { 'Security Deposit': 'security_deposit' } : {}),
           };
           const invoiceField = invoiceCategoryMap[category];
 
@@ -732,12 +748,23 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
           if (payment.tenant_id) {
             pnlData2.tenant_id = payment.tenant_id;
           }
-          const { error: pnlRevenueError } = await supabase
-            .from('pnl_entries')
-            .insert(pnlData2);
+          // A security deposit is a LIABILITY, not revenue: it is the renter's
+          // money held against damage and refundable in full or in part. Booking
+          // it as Revenue overstates earnings now and needs a negative correction
+          // at refund time — and process-refund writes no P&L reversal, so that
+          // correction would never come. chk_pnl_category_valid ALLOWS
+          // 'Security Deposit', so nothing but this guard stops it.
+          //
+          // payment_apply_fifo_v2 has the same exclusion. This is the second
+          // allocator and needs its own copy.
+          if (category !== 'Security Deposit') {
+            const { error: pnlRevenueError } = await supabase
+              .from('pnl_entries')
+              .insert(pnlData2);
 
-          if (pnlRevenueError && !pnlRevenueError.message.includes('duplicate key')) {
-            console.error('P&L revenue entry error:', pnlRevenueError);
+            if (pnlRevenueError && !pnlRevenueError.message.includes('duplicate key')) {
+              console.error('P&L revenue entry error:', pnlRevenueError);
+            }
           }
 
           totalAllocated += toApply;
