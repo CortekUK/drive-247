@@ -98,6 +98,8 @@ export interface Tenant {
   // Deposit settings
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
+  // True = deposit is a real captured charge, not a Stripe authorization hold.
+  deposit_charge_enabled: boolean | null;
 
   // Working hours settings
   working_hours_enabled: boolean | null;
@@ -450,6 +452,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           service_fee_value,
           deposit_mode,
           global_deposit_amount,
+          deposit_charge_enabled,
           working_hours_enabled,
           working_hours_open,
           working_hours_close,

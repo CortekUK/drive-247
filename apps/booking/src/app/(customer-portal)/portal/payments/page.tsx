@@ -856,7 +856,7 @@ function InvoiceDetailSheet({
             )}
             {invoice.security_deposit != null && invoice.security_deposit > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Pre-Authorization</span>
+                <span className="text-muted-foreground">{tenant?.deposit_charge_enabled ? 'Security Deposit' : 'Pre-Authorization'}</span>
                 <span>{formatCurrency(invoice.security_deposit, currencyCode)}</span>
               </div>
             )}

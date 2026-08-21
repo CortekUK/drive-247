@@ -23,6 +23,7 @@ import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog
 import { AutoExtensionSection } from "@/components/rentals/auto-extension-section";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-dialog";
+import { TakeDepositDialog } from "@/components/shared/dialogs/take-deposit-dialog";
 import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -56,7 +57,7 @@ import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/formatters";
-import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
+import { formatCurrency as formatCurrencyUtil, getCurrencySymbol } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
 import { getPacificTomorrow } from "@/lib/bonzah-dates";
@@ -530,6 +531,10 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  // Charged-deposit tenants take the deposit as real money (a 'Security Deposit'
+  // ledger Charge, refundable in full or in part). Hold tenants ring-fence it on
+  // the card instead, which is what every deposit_hold_* branch below serves.
+  const depositIsCharged = tenant?.deposit_charge_enabled === true;
   const { canEdit } = useManagerPermissions();
   // `isAdmin()` covers head_admin + admin, and super admins too — the auth
   // store rewrites a super admin's role to 'head_admin' when loading the
@@ -624,6 +629,10 @@ const RentalDetail = () => {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedExtCategories, setSelectedExtCategories] = useState<Set<string>>(new Set());
   const [showTargetedPayment, setShowTargetedPayment] = useState(false);
+  const [showTakeDeposit, setShowTakeDeposit] = useState(false);
+  // Amount agreed in TakeDepositDialog, carried into the payment dialog so it
+  // does not depend on the breakdown query having refetched yet.
+  const [depositPaymentAmount, setDepositPaymentAmount] = useState<number | null>(null);
 
   // Add reminder dialog state (from breakdown rows)
   const [showRowReminder, setShowRowReminder] = useState(false);
@@ -686,6 +695,16 @@ const RentalDetail = () => {
   });
 
   const { data: rentalTotals } = useRentalTotals(id);
+
+  // What a deposit raised on this rental should default to. A per-rental
+  // override wins when set (including an explicit 0, which means the operator
+  // opted out); otherwise the tenant's configured amount. Charged deposits are
+  // a single global amount by design — no per-vehicle variant.
+  const depositDefaultAmount = (() => {
+    const override = (rental as any)?.deposit_amount_override;
+    if (override !== null && override !== undefined) return Number(override) || 0;
+    return Number(tenant?.global_deposit_amount) || 0;
+  })();
   // Direct payments-table sum — counts received money regardless of allocation.
   // Needed for the PAYG upfront banner: a fresh PAYG rental has no charges yet
   // (cron hasn't fired), so allocation-based totals would stay at $0 even after
@@ -829,10 +848,11 @@ const RentalDetail = () => {
     if (invoiceBreakdown) {
       const insuranceCharge = (rentalCharges || []).find((c: any) => c.category === 'Insurance');
       const collectionCharge = (rentalCharges || []).find((c: any) => c.category === 'Collection Fee');
-      // Security Deposit is intentionally omitted — it's never an outstanding
-      // charge. Deposits live on rentals.deposit_hold_* and are Stripe preauth
-      // holds, not amounts owed by the customer. Including it would inflate
-      // Balance Due by the tenant's deposit amount.
+      // On the CHARGED-deposit path the deposit is genuinely money owed, so it
+      // belongs in the invoice fallback like any other category. On the HOLD path
+      // it must stay out: 12 hold-era invoices still carry a non-zero
+      // security_deposit that was only ever an instruction to Stripe about how
+      // much to ring-fence, never a debt — including it would inflate Balance Due.
       const invoiceCategoryMap: Record<string, number> = {
         'Rental': invoiceBreakdown.rentalFee,
         'Tax': invoiceBreakdown.taxAmount,
@@ -841,6 +861,9 @@ const RentalDetail = () => {
         'Delivery Fee': rental?.delivery_fee || invoiceBreakdown.deliveryFee || 0,
         'Collection Fee': collectionCharge ? Number(collectionCharge.amount) : (rental?.collection_fee ?? 0),
         'Extras': invoiceBreakdown.extrasTotal ?? 0,
+        ...(tenant?.deposit_charge_enabled === true
+          ? { 'Security Deposit': invoiceBreakdown.securityDeposit ?? 0 }
+          : {}),
       };
 
       for (const [cat, invoiceAmount] of Object.entries(invoiceCategoryMap)) {
@@ -860,7 +883,7 @@ const RentalDetail = () => {
     }
 
     return amounts;
-  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown, rentalFinesOpenAmount]);
+  }, [paymentBreakdown, invoiceBreakdown, rentalCharges, rental, refundBreakdown, rentalFinesOpenAmount, tenant?.deposit_charge_enabled]);
 
   // Auto-refresh payment data when tab regains focus (e.g. after Stripe checkout in new tab)
   useEffect(() => {
@@ -3499,7 +3522,15 @@ const RentalDetail = () => {
           { label: 'Tax', category: 'Tax', amount: invoiceBreakdown.taxAmount, detail: invoiceBreakdown.taxAmount > 0 && invoiceBreakdown.rentalFee > 0 ? `${((invoiceBreakdown.taxAmount / invoiceBreakdown.rentalFee) * 100).toFixed(1)}% rate` : 'Tax on rental', icon: Percent, color: 'text-blue-500', bg: 'bg-blue-500/10' },
           { label: 'Bonzah Insurance', category: 'Insurance', amount: insuranceAmount, detail: bonzahPolicy ? 'Bonzah Insurance' : 'Insurance coverage', icon: ShieldCheck, color: 'text-teal-500', bg: 'bg-teal-500/10' },
           { label: 'Service Fee', category: 'Service Fee', amount: invoiceBreakdown.serviceFee, detail: 'Platform fee', icon: Receipt, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-          { label: 'Pre-Auth Hold', category: 'Security Deposit', amount: (() => {
+          { label: depositIsCharged ? 'Security Deposit' : 'Pre-Auth Hold', category: 'Security Deposit', amount: (() => {
+            // Charged path: the deposit is an ordinary ledger charge, so read it
+            // the same way every other category is read. deposit_hold_* is stale
+            // history here and must not be consulted.
+            if (depositIsCharged) {
+              const led = paymentBreakdown?.['Security Deposit'];
+              if (led && led.total > 0) return led.total;
+              return Number(invoiceBreakdown.securityDeposit) || 0;
+            }
             // Deposits are never charged upfront — they live on rental.deposit_hold_*.
             // When the hold has been captured or released, show the remaining
             // deposit_hold_amount directly (0 for fully-captured/released).
@@ -3515,7 +3546,14 @@ const RentalDetail = () => {
             const depositFromTenant = tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0;
             const depositFromInvoice = Number(invoiceBreakdown.securityDeposit) || 0;
             return depositFromHold || depositFromRentalOverride || depositFromTenant || depositFromInvoice;
-          })(), depositHoldStatus: rental.deposit_hold_status || null, detail: (() => {
+          })(), depositHoldStatus: depositIsCharged ? null : (rental.deposit_hold_status || null), detail: (() => {
+            if (depositIsCharged) {
+              const led = paymentBreakdown?.['Security Deposit'];
+              if (!led || led.total <= 0) return '';
+              if (led.remaining <= 0) return 'Paid — refundable';
+              if (led.paid > 0) return 'Part paid';
+              return 'Refundable deposit';
+            }
             const depositAmount = Number(rental.deposit_hold_amount) || Number((rental as any).deposit_amount_override) || (tenant?.security_deposit_enabled ? Number(tenant?.global_deposit_amount) || 0 : 0) || Number(invoiceBreakdown.securityDeposit) || 0;
             if (depositAmount <= 0) return '';
             if (rental.deposit_hold_status === 'held') return 'On hold';
@@ -3739,6 +3777,10 @@ const RentalDetail = () => {
                   // Check if excess mileage charge is unpaid
                   const isExcessMileageUnpaid = category === 'Excess Mileage' && excessMileageCharge && excessMileageCharge.remaining_amount > 0;
                   const isSelectable = selectableCategories.includes(category);
+                  // A charged deposit is always actionable: it must stay live even
+                  // with nothing raised yet, so an operator who skipped it at
+                  // creation can still take one without unwinding the rental.
+                  const isChargedDepositRow = depositIsCharged && category === 'Security Deposit';
                   // Section grouping for PAYG: detect first PAYG row + first non-PAYG row after a PAYG block
                   // so we can add subtle "section header" + "section divider" treatment within the same table.
                   const thisIsPayg = isPayg && paygCategories.includes(category);
@@ -3769,7 +3811,7 @@ const RentalDetail = () => {
 
                   return (
                     <Fragment key={category}>
-                    <TableRow className={`${(!applied || isDepositDeducted) && !(isPayg && paygCategories.includes(category)) ? 'opacity-40' : ''} ${effectiveOnClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${isPayg && paygCategories.includes(category) ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''} ${isFirstNonPaygAfterPayg ? 'border-t-4 border-t-indigo-200 dark:border-t-indigo-800/60' : ''}`} onClick={effectiveOnClick}>
+                    <TableRow className={`${(!applied || isDepositDeducted) && !isChargedDepositRow && !(isPayg && paygCategories.includes(category)) ? 'opacity-40' : ''} ${effectiveOnClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${isPayg && paygCategories.includes(category) ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''} ${isFirstNonPaygAfterPayg ? 'border-t-4 border-t-indigo-200 dark:border-t-indigo-800/60' : ''}`} onClick={effectiveOnClick}>
                       <TableCell className="pl-6 w-10">
                         {isSelectable ? (
                           <Checkbox
@@ -4066,7 +4108,7 @@ const RentalDetail = () => {
                       </TableCell>
                       <TableCell className="text-right pr-6">
                         <div className="flex items-center gap-2 justify-end">
-                        {category === 'Security Deposit' && (depositHoldStatus === 'held' || depositHoldStatus === 'expired' || !depositHoldStatus) ? (
+                        {category === 'Security Deposit' && !depositIsCharged && (depositHoldStatus === 'held' || depositHoldStatus === 'expired' || !depositHoldStatus) ? (
                           // Deliberately the SAME three statuses this branch owned before
                           // (held / expired / no hold). It must not swallow 'processing',
                           // 'refreshing', 'failed', 'captured' or 'released': those fall
@@ -4417,7 +4459,7 @@ const RentalDetail = () => {
                             (catPayment ? catPayment.paid > 0 : false)
                             || isInstallmentVirtualPaid(category, amount);
                           // Security Deposit: disable refund if deposit was already used (deducted for excess mileage — remaining=0 and refunded)
-                          const isDepositUsed = category === 'Security Deposit' && (refundBreakdown?.['Security Deposit'] ?? 0) > 0;
+                          const isDepositUsed = !depositIsCharged && category === 'Security Deposit' && (refundBreakdown?.['Security Deposit'] ?? 0) > 0;
                           const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund && !isDepositUsed;
                           return wouldShowRefund;
                         })() ? (
@@ -4453,7 +4495,7 @@ const RentalDetail = () => {
                                 setShowRefundDialog(true);
                               }}
                             >
-                              {category === 'Security Deposit' ? (refunded > 0 ? 'Release More' : 'Release') : (refunded > 0 ? 'Refund More' : 'Refund')}
+                              {category === 'Security Deposit' && !depositIsCharged ? (refunded > 0 ? 'Release More' : 'Release') : (refunded > 0 ? 'Refund More' : 'Refund')}
                             </button>
                           </>
                         ) : applied && fullyRefunded ? (
@@ -4466,6 +4508,10 @@ const RentalDetail = () => {
                           // through to the matching Refund branch above on the next render or the dash here.
                           if (isInstallmentVirtualPaid(category, amount)) return false;
                           const catRemaining = categoryRemainingAmounts[category] ?? 0;
+                          // Nothing raised yet on a charged deposit: still offer it,
+                          // so the deposit can be taken mid-rental. Every other
+                          // category needs an outstanding amount to be payable.
+                          if (isChargedDepositRow && amount <= 0 && !isCancelledOrRejected) return true;
                           const wouldBeSelectable = (isSelectable || (applied && !fullyRefunded && catRemaining > 0)) && !isCancelledOrRejected;
                           return wouldBeSelectable;
                         })() ? (
@@ -4473,11 +4519,18 @@ const RentalDetail = () => {
                             className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
                             onClick={(e) => {
                               e.stopPropagation();
+                              // No deposit charge yet — raise one (with the amount
+                              // confirmation) before any money is taken, or the
+                              // payment would have nothing to settle against.
+                              if (isChargedDepositRow && amount <= 0) {
+                                setShowTakeDeposit(true);
+                                return;
+                              }
                               setSelectedCategories(new Set([category]));
                               setShowTargetedPayment(true);
                             }}
                           >
-                            Add Payment
+                            {isChargedDepositRow && amount <= 0 ? 'Take Deposit' : 'Add Payment'}
                           </button>
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
@@ -6813,7 +6866,7 @@ const RentalDetail = () => {
           open={showTargetedPayment}
           onOpenChange={(open) => {
             setShowTargetedPayment(open);
-            if (!open) { setSelectedCategories(new Set()); setSuperchargerPaymentCharge(null); }
+            if (!open) { setSelectedCategories(new Set()); setSuperchargerPaymentCharge(null); setDepositPaymentAmount(null); }
           }}
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
@@ -6821,6 +6874,12 @@ const RentalDetail = () => {
           defaultAmount={(() => {
             // If charging from supercharger dialog, use individual charge amount
             if (superchargerPaymentCharge) return Number(superchargerPaymentCharge.amount);
+            // A deposit just raised via TakeDepositDialog: use the agreed amount
+            // directly. categoryRemainingAmounts may not have refetched yet, and
+            // falling back to 0 would open the dialog with nothing to pay.
+            if (depositPaymentAmount !== null && selectedCategories.size === 1 && selectedCategories.has('Security Deposit')) {
+              return depositPaymentAmount;
+            }
             if (selectedCategories.size === 0) return undefined;
             const raw = Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
             return Math.round(raw * 100) / 100;
@@ -7158,6 +7217,26 @@ const RentalDetail = () => {
           holdAmount={Number(rental.deposit_hold_amount) || 0}
           holdStatus={rental.deposit_hold_status}
           holdExpiresAt={rental.deposit_hold_expires_at}
+        />
+      )}
+
+      {/* Raise a deposit charge mid-rental, then collect it. */}
+      {rental && depositIsCharged && (
+        <TakeDepositDialog
+          open={showTakeDeposit}
+          onOpenChange={setShowTakeDeposit}
+          rentalId={rental.id}
+          customerId={rental.customers?.id}
+          vehicleId={rental.vehicles?.id}
+          tenantId={tenant?.id}
+          defaultAmount={depositDefaultAmount}
+          currencyCode={tenant?.currency_code || 'USD'}
+          currencySymbol={getCurrencySymbol(tenant?.currency_code || 'USD')}
+          onReady={(amt) => {
+            setDepositPaymentAmount(amt);
+            setSelectedCategories(new Set(['Security Deposit']));
+            setShowTargetedPayment(true);
+          }}
         />
       )}
 

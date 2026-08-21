@@ -310,14 +310,22 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
   // When the extra read fails or has not landed we fall back to the status the
   // parent already had. Guidance then degrades to the cause-neutral wording
   // rather than to a confident claim about a cause we cannot see.
-  const holdStatus = (holdMeta ? holdMeta.deposit_hold_status : rental.deposit_hold_status) as
+  // Charged-deposit tenants never place a hold: the deposit is an ordinary
+  // charge on the invoice, refunded (in full or in part) at the end of the
+  // rental. Neutralising the hold inputs at this one point switches off every
+  // hold badge, status line and piece of guidance downstream, rather than
+  // special-casing each render site.
+  const depositIsCharged = tenant?.deposit_charge_enabled === true;
+  const holdStatus = (depositIsCharged
+    ? null
+    : (holdMeta ? holdMeta.deposit_hold_status : rental.deposit_hold_status)) as
     | string
     | null
     | undefined;
-  const holdLastError = holdMeta?.deposit_hold_last_error ?? null;
+  const holdLastError = depositIsCharged ? null : (holdMeta?.deposit_hold_last_error ?? null);
   // A hold that was never placed: status rolled back to NULL, error left behind.
-  const holdNotPlaced = !holdStatus && !!holdLastError;
-  const holdGuidance = holdGuidanceFor(
+  const holdNotPlaced = !depositIsCharged && !holdStatus && !!holdLastError;
+  const holdGuidance = depositIsCharged ? undefined : holdGuidanceFor(
     holdStatus,
     holdMeta?.deposit_hold_last_error_code ?? null,
     holdLastError,
@@ -522,12 +530,21 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
       bg: 'bg-purple-500/10',
     },
     {
-      label: 'Pre-Auth Hold',
+      label: depositIsCharged ? 'Security Deposit' : 'Pre-Auth Hold',
       category: 'Security Deposit',
-      amount: rental.deposit_hold_amount || invoice.securityDeposit,
-      detail: holdNotPlaced
-        ? NOT_PLACED_DETAIL
-        : HOLD_DETAIL_COPY[holdStatus || ''] || 'Refundable deposit',
+      // Charged path reads the ledger like any other category; deposit_hold_*
+      // is stale history there and must not be consulted.
+      amount: depositIsCharged
+        ? (paymentBreakdown?.['Security Deposit']?.total || invoice.securityDeposit)
+        : (rental.deposit_hold_amount || invoice.securityDeposit),
+      detail: depositIsCharged
+        ? (((paymentBreakdown?.['Security Deposit']?.total ?? 0) > 0 &&
+            (paymentBreakdown?.['Security Deposit']?.remaining ?? 0) <= 0)
+              ? 'Paid — refunded after your rental'
+              : 'Refundable deposit')
+        : (holdNotPlaced
+            ? NOT_PLACED_DETAIL
+            : HOLD_DETAIL_COPY[holdStatus || ''] || 'Refundable deposit'),
       icon: Shield,
       color: 'text-amber-500',
       bg: 'bg-amber-500/10',

@@ -286,10 +286,18 @@ export default function BookingCheckoutStep({
   // The premium actually charged: 0 once the quote attempt has failed.
   const effectiveBonzahPremium = bonzahQuoteFailed ? 0 : bonzahPremium;
 
+  // Two deposit models, per tenant (tenants.deposit_charge_enabled). On the HOLD
+  // path the deposit is ring-fenced on the card at handover and is not billed, so
+  // it stays out of the total. On the CHARGED path it is real money owed now and
+  // must be in the total AND on the invoice — the invoice value is what creates
+  // the 'Security Deposit' ledger Charge, so billing without invoicing would leave
+  // the deposit permanently outstanding.
+  const depositIsCharged = tenant?.deposit_charge_enabled === true;
+  const chargedSecurityDeposit = () => (depositIsCharged ? calculateSecurityDeposit() : 0);
+
   const calculateGrandTotal = () => {
-    // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance + unlimited mileage upgrade
-    // NOTE: Security deposit is NOT included — it's placed as a card hold at key handover, not charged at booking
-    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + effectiveBonzahPremium + unlimitedMileageTotal;
+    // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance + unlimited mileage upgrade + charged deposit (if any)
+    return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + effectiveBonzahPremium + unlimitedMileageTotal + chargedSecurityDeposit();
   };
 
   // Check if this is an enquiry-based tenant (e.g., Kedic Services)
@@ -1241,7 +1249,7 @@ export default function BookingCheckoutStep({
         protection_fee: 0,
         tax_amount: calculateTaxAmount(),
         service_fee: calculateServiceFee(),
-        security_deposit: 0, // Deposit is a card hold at pickup, not charged at booking
+        security_deposit: chargedSecurityDeposit(), // 0 on the hold path; real amount when charged
         insurance_premium: premiumCharged,
         delivery_fee: pickupDeliveryFee || 0,
         collection_fee: returnDeliveryFee || 0,
@@ -2120,11 +2128,13 @@ export default function BookingCheckoutStep({
                   {calculateSecurityDeposit() > 0 && (
                     <div className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium">Pre-Authorization hold</span>
+                        <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
                         <span className="font-semibold">{fmt(calculateSecurityDeposit())}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.
+                        {tenant?.deposit_charge_enabled
+                          ? 'Charged with your booking and included in the total above. Refunded after your rental, less any damage or unpaid charges.'
+                          : 'A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.'}
                       </p>
                     </div>
                   )}

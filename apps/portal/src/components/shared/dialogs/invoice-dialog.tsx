@@ -59,6 +59,8 @@ interface InvoiceDialogProps {
 
 // Separate printable component
 const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, selectedExtras, rentalDays, rentalBreakdown, companyName, logoUrl, accentColor, currencyCode = 'USD' }: Omit<InvoiceDialogProps, "open" | "onOpenChange"> & { companyName: string; logoUrl?: string | null; accentColor: string }) => {
+  // Deposit wording follows the tenant's collection model (hold vs real charge).
+  const { tenant } = useTenant();
   const fc = (amount: number) => formatCurrency(amount, currencyCode);
   const vehicleName = vehicle.make && vehicle.model ? `${vehicle.make} ${vehicle.model}` : vehicle.reg;
   const hasDiscount = (invoice.discount_amount ?? 0) > 0;
@@ -223,7 +225,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, protectionPlan, 
             )}
             {(invoice.security_deposit ?? 0) > 0 && (
               <tr className="border-b border-gray-300">
-                <td className="p-3 text-sm">Pre-Authorization</td>
+                <td className="p-3 text-sm">{tenant?.deposit_charge_enabled ? 'Security Deposit' : 'Pre-Authorization'}</td>
                 <td className="p-3 text-sm text-right">{fc(invoice.security_deposit ?? 0)}</td>
               </tr>
             )}
@@ -486,7 +488,7 @@ export const InvoiceDialog = ({
                   )}
                   {(invoice.security_deposit ?? 0) > 0 && (
                     <tr className="border-b">
-                      <td className="p-3 text-sm">Pre-Authorization</td>
+                      <td className="p-3 text-sm">{tenant?.deposit_charge_enabled ? 'Security Deposit' : 'Pre-Authorization'}</td>
                       <td className="p-3 text-sm text-right">{fc(invoice.security_deposit ?? 0)}</td>
                     </tr>
                   )}

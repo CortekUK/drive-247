@@ -447,6 +447,7 @@ const Settings = () => {
     service_fee_type: 'percentage' | 'fixed_amount';
     service_fee_value: number;
     security_deposit_enabled: boolean;
+    deposit_charge_enabled: boolean;
     deposit_mode: 'global' | 'per_vehicle';
     global_deposit_amount: number;
     installments_enabled: boolean;
@@ -500,6 +501,7 @@ const Settings = () => {
     service_fee_type: 'fixed_amount' as 'percentage' | 'fixed_amount',
     service_fee_value: 0,
     security_deposit_enabled: true,
+    deposit_charge_enabled: false,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
     // Installment settings
@@ -581,6 +583,7 @@ const Settings = () => {
         service_fee_type: (rentalSettings.service_fee_type as 'percentage' | 'fixed_amount') ?? 'fixed_amount',
         service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
         security_deposit_enabled: rentalSettings.security_deposit_enabled ?? true,
+        deposit_charge_enabled: rentalSettings.deposit_charge_enabled ?? false,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
         // Installment settings
@@ -3703,11 +3706,13 @@ const Settings = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary shrink-0" />
-                Pre-Authorization
+                {rentalForm.deposit_charge_enabled ? 'Security Deposit' : 'Pre-Authorization'}
               </CardTitle>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardDescription>
-                  Configure pre-authorization hold for customer bookings
+                  {rentalForm.deposit_charge_enabled
+                    ? 'Charge a refundable security deposit on customer bookings'
+                    : 'Configure pre-authorization hold for customer bookings'}
                 </CardDescription>
                 <div className="flex items-center gap-2 shrink-0">
                   <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
@@ -3724,11 +3729,54 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {!rentalForm.security_deposit_enabled && (
-                <p className="text-sm text-muted-foreground">Pre-authorization is disabled. No hold will be placed on bookings.</p>
+                <p className="text-sm text-muted-foreground">
+                  {rentalForm.deposit_charge_enabled
+                    ? 'Security deposits are disabled. No deposit will be collected on bookings.'
+                    : 'Pre-authorization is disabled. No hold will be placed on bookings.'}
+                </p>
+              )}
+
+              {/* How the deposit is collected. This is the switch between the
+                  legacy Stripe authorization hold and a real captured charge. */}
+              {rentalForm.security_deposit_enabled && (
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="deposit-charge-toggle" className="text-sm font-medium">
+                        Collect as a real charge
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {rentalForm.deposit_charge_enabled
+                          ? 'The deposit is charged with the booking and appears on the invoice. You refund it in full or in part when the vehicle comes back.'
+                          : 'The deposit is authorised on the customer\u2019s card and never charged. Card authorisations expire on the bank\u2019s schedule, so long rentals can lose their cover.'}
+                      </p>
+                    </div>
+                    <Switch
+                      id="deposit-charge-toggle"
+                      checked={rentalForm.deposit_charge_enabled}
+                      onCheckedChange={(checked) => setRentalForm(prev => ({
+                        ...prev,
+                        deposit_charge_enabled: checked,
+                        // A charged deposit is one global amount by design; per-vehicle
+                        // was dropped deliberately. Snap the mode so a tenant switching
+                        // over cannot be left on a per-vehicle setting nothing honours.
+                        deposit_mode: checked ? 'global' : prev.deposit_mode,
+                      }))}
+                      disabled={!canEditSettings('preauth')}
+                    />
+                  </div>
+                  {rentalForm.deposit_charge_enabled && (
+                    <Alert>
+                      <AlertDescription className="text-xs">
+                        Existing rentals are unaffected \u2014 this applies to bookings created from now on.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               )}
 
               {/* Deposit Mode Selection */}
-              {rentalForm.security_deposit_enabled && <RadioGroup
+              {rentalForm.security_deposit_enabled && !rentalForm.deposit_charge_enabled && <RadioGroup
                 value={rentalForm.deposit_mode}
                 onValueChange={(value) => setRentalForm(prev => ({
                   ...prev,
@@ -3759,9 +3807,9 @@ const Settings = () => {
               </RadioGroup>}
 
               {/* Global Pre-Authorization Amount (only when mode is global) */}
-              {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'global' && (
+              {rentalForm.security_deposit_enabled && (rentalForm.deposit_charge_enabled || rentalForm.deposit_mode === 'global') && (
                 <div className="space-y-2">
-                  <Label htmlFor="global_deposit_amount">Global Pre-Authorization Amount</Label>
+                  <Label htmlFor="global_deposit_amount">{rentalForm.deposit_charge_enabled ? 'Deposit Amount' : 'Global Pre-Authorization Amount'}</Label>
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -3787,12 +3835,14 @@ const Settings = () => {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    This amount will be applied to all bookings
+                    {rentalForm.deposit_charge_enabled
+                      ? 'Charged on every booking and refunded when the vehicle comes back.'
+                      : 'This amount will be applied to all bookings'}
                   </p>
                 </div>
               )}
 
-              {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
+              {rentalForm.security_deposit_enabled && !rentalForm.deposit_charge_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
                 <Alert>
                   <AlertDescription>
                     Set pre-authorization amounts when adding or editing vehicles. Vehicles without a pre-authorization will show $0.
@@ -3806,6 +3856,7 @@ const Settings = () => {
                     try {
                       await updateRentalSettings({
                         security_deposit_enabled: rentalForm.security_deposit_enabled,
+                        deposit_charge_enabled: rentalForm.deposit_charge_enabled,
                         deposit_mode: rentalForm.deposit_mode,
                         global_deposit_amount: rentalForm.global_deposit_amount,
                       });
@@ -3821,7 +3872,7 @@ const Settings = () => {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  Save Pre-Authorization Settings
+                  {rentalForm.deposit_charge_enabled ? 'Save Deposit Settings' : 'Save Pre-Authorization Settings'}
                 </Button>
               )}
             </CardContent>

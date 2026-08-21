@@ -311,7 +311,10 @@ const BookingCheckoutContent = () => {
       unlimitedMileageEffective,
       unlimitedMileageTotal,
       unlimitedMileageDays: rentalDaysForUnlimited,
-      grandTotal: subtotal + taxAmount + serviceFee, // Deposit is a hold at pickup, not charged at booking
+      // Hold tenants ring-fence the deposit on the card (not billed). Charged
+      // tenants owe it now, so it joins the total and the invoice together.
+      chargedDeposit: tenant?.deposit_charge_enabled === true ? deposit : 0,
+      grandTotal: subtotal + taxAmount + serviceFee + (tenant?.deposit_charge_enabled === true ? deposit : 0),
     };
   };
 
@@ -849,7 +852,7 @@ const BookingCheckoutContent = () => {
           rental_fee: currentTotalsForPayment.discountedVehiclePrice,
           tax_amount: currentTotalsForPayment.taxAmount,
           service_fee: currentTotalsForPayment.serviceFee,
-          security_deposit: 0, // Deposit is a card hold at pickup, not charged at booking
+          security_deposit: currentTotalsForPayment.chargedDeposit ?? 0, // 0 on the hold path
           insurance_premium: 0, // Insurance is handled separately via Bonzah
           delivery_fee: currentTotalsForPayment.deliveryFee,
           extras_total: currentTotalsForPayment.extrasTotal,
@@ -1376,11 +1379,13 @@ const BookingCheckoutContent = () => {
                   {(!selectedInstallmentPlan || selectedInstallmentPlan.type === 'full') && totals.deposit > 0 && (
                     <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium">Pre-Authorization hold</span>
+                        <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
                         <span className="font-semibold">{formatCurrency(totals.deposit)}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.
+                        {tenant?.deposit_charge_enabled
+                          ? 'Charged with your booking and included in the total above. Refunded after your rental, less any damage or unpaid charges.'
+                          : 'A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.'}
                       </p>
                     </div>
                   )}
