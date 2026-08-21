@@ -3,12 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 
 interface BonzahBalanceData {
-  /** Spendable balance — the sub-account allocation policies are paid from. */
+  /** Spendable balance — the broker/agency wallet policies are paid from. */
   balance: string;
+  /** Per-sub-user allocation. Always 0 under Bonzah's agency-level balance. */
   allocatedBalance?: string | null;
-  /** Company-level funds. NOT spendable until allocated to the sub-account. */
+  /** Broker/agency wallet — this is the spendable money. */
   brokerBalance?: string | null;
-  /** Broker funds exist but nothing is allocated — policies will fail. */
+  /** Legacy; always false under agency-level balance. */
   needsAllocation?: boolean;
   mode?: string;
   rawData?: any;
@@ -85,19 +86,17 @@ export function useBonzahBalance() {
   const testBalanceNumber = testBalanceData?.balance != null ? Number(testBalanceData.balance) : null;
   const portalUrl = getBonzahPortalUrl(bonzahMode);
 
-  // `balance` from the edge function is already the SPENDABLE figure (the
-  // sub-account allocation policies are paid from), falling back to broker only
-  // when the allocation genuinely could not be read.
-  //
-  // Do NOT reintroduce a `allocated > 0 ? allocated : broker` fallback here.
-  // That is the bug this replaces: an allocation of exactly zero fell through to
-  // the broker number, so a tenant holding $500 at broker level with $0
-  // allocated saw "Live balance: $500.00 · Accepting live insurance policies"
-  // while every policy purchase would fail for insufficient funds.
+  // `balance` from the edge function is the SPENDABLE figure. Bonzah runs this
+  // platform on agency-level balance, so that is the broker/agency wallet; the
+  // per-sub-user allocation is always 0.0000 and cannot be funded (Bonzah's own
+  // portal returns "Agency level balance feature enabled. Userwise allocation
+  // not allowed"). Treating that zero as spendable showed every live tenant
+  // "$0.00 available to issue policies" while their money sat usable at broker
+  // level.
   const balanceNumber = balanceData?.balance != null ? Number(balanceData.balance) : null;
 
-  // Funds exist at broker level but none are allocated to the policy-issuing
-  // sub-account. Only the operator can move them, inside the Bonzah portal.
+  // Nothing to allocate under agency-level balance. Kept so callers still
+  // compile; the edge function always returns false.
   const needsAllocation = balanceData?.needsAllocation === true;
 
   return {

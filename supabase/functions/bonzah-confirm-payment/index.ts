@@ -402,8 +402,8 @@ async function sendInsufficientBalanceNotifications(
     const notifications = adminUsers.map((user: any) => ({
       user_id: user.id,
       tenant_id: tenantId,
-      title: 'Insurance Pending — Insufficient Allocated Balance',
-      message: `Insurance for ${customerName} (${rentalRef}) is quoted but could not be activated — your Bonzah allocated balance is too low. Premium: $${premium}, Bonzah Balance: $${cdBalance ?? 'unknown'}. Please allocate more funds in your Bonzah portal.`,
+      title: 'Insurance Pending — Insufficient Bonzah Balance',
+      message: `Insurance for ${customerName} (${rentalRef}) is quoted but could not be activated — your Bonzah balance is too low. Premium: $${premium}, Bonzah Balance: $${cdBalance ?? 'unknown'}. Please top up your Bonzah balance.`,
       type: 'bonzah_insufficient_balance',
       is_read: false,
       link: `/rentals/${policyRecord.rental_id}`,
@@ -436,9 +436,9 @@ async function sendInsufficientBalanceNotifications(
       const emailContent = `
                     <tr>
                         <td style="padding: 30px;">
-                            <h2 style="color: #CC004A; margin: 0 0 20px;">Insurance Pending — Insufficient Allocated Balance</h2>
+                            <h2 style="color: #CC004A; margin: 0 0 20px;">Insurance Pending — Insufficient Bonzah Balance</h2>
                             <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 15px;">
-                                An insurance policy has been quoted but could not be activated because your Bonzah <strong>allocated balance</strong> is too low.
+                                An insurance policy has been quoted but could not be activated because your Bonzah <strong>balance</strong> is too low.
                             </p>
                             <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
                                 <tr>
@@ -463,7 +463,7 @@ async function sendInsufficientBalanceNotifications(
                                 </tr>
                             </table>
                             <p style="color: #333; font-size: 14px; line-height: 1.6; margin: 15px 0;">
-                                <strong>What to do:</strong> Log in to your Bonzah portal and allocate more funds from your Bonzah balance. Once allocated, you can retry the purchase from the rental detail page. The customer's booking is not affected — it has been processed normally.
+                                <strong>What to do:</strong> Top up your Bonzah balance, then retry the purchase from the rental detail page. The customer's booking is not affected — it has been processed normally.
                             </p>
                         </td>
                     </tr>`
@@ -590,7 +590,11 @@ serve(async (req) => {
         console.log('[Bonzah Payment] /deposit endpoint failed:', depErr)
       }
 
-      cdBalance = allocatedBalance ?? brokerBalance
+      // Agency-level balance: policies draw on the BROKER wallet. The
+      // per-sub-user allocation is always 0 on this platform (Bonzah: "Agency
+      // level balance feature enabled. Userwise allocation not allowed"), so
+      // only prefer it when it is genuinely non-zero.
+      cdBalance = (allocatedBalance ?? 0) > 0 ? allocatedBalance : (brokerBalance ?? allocatedBalance)
       console.log(`[Bonzah Payment] Balance: ${cdBalance} (mode: ${bonzahMode}, broker: ${brokerBalance}, allocated: ${allocatedBalance})`)
     } catch (balErr) {
       console.log('[Bonzah Payment] Could not check Bonzah balance:', balErr)
