@@ -1,18 +1,17 @@
 {
   "files": [
     "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/api/esign/route.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/refund-dialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/add-payment-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/agreement-templates/edit/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/website-content.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/agreement-injection.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/agreement-template-editor.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/occurrence-config-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/agreement-injection.test.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-row.test.ts",
     "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/esign/route.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/agreement-injection.ts",
     "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-checkout-session/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-refund-processed/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/deduct-from-deposit/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-hold-checkout/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/auto-extend-rentals/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-refund/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/daily-reminders/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts"
   ],
   "specs": [
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
