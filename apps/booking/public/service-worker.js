@@ -1,4 +1,4 @@
-const CACHE_NAME = 'supreme-drive-v4';
+const CACHE_NAME = 'supreme-drive-v5';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -33,12 +33,25 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+
+  // Only GET responses are ever cacheable.
+  if (req.method !== 'GET') return;
+
   const url = new URL(req.url);
 
+  // A service worker intercepts EVERY request the page makes, cross-origin
+  // included. Without this check the Supabase REST API fell past the guards
+  // below into the cache-first branch, so tenant settings were answered from
+  // the cache indefinitely — entries are only evicted when CACHE_NAME changes.
+  // The visible effect: an operator switched the security deposit off, and the
+  // booking site kept showing and charging the old amount on every reload,
+  // because that request never reached the network again. Never touch another
+  // origin, and never cache anybody's API.
+  if (url.origin !== self.location.origin) return;
+
   // Skip admin routes, API calls, and JavaScript files from caching
-  if (url.pathname.startsWith('/admin') || 
+  if (url.pathname.startsWith('/admin') ||
       url.pathname.includes('/api/') ||
-      url.pathname.endsWith('.js') ||
       url.pathname.includes('node_modules') ||
       url.pathname.includes('/src/')) {
     return;
@@ -60,7 +73,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets only: cache-first (images, fonts, icons)
+  // Static assets only: cache-first (images, fonts, icons). Deliberately an
+  // allow-list — the previous denylist cached everything it had not been told
+  // to skip, so any new data endpoint became cacheable by default.
+  if (!/\.(?:png|jpe?g|gif|svg|webp|avif|ico|bmp|woff2?|ttf|otf|eot|css)$/i.test(url.pathname)) return;
+
   event.respondWith(
     caches.match(req).then(
       (cached) =>
