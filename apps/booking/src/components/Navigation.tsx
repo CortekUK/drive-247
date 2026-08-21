@@ -21,11 +21,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { D7NavBar, useIsBookingV2 } from "@/components/booking-v2/d7-chrome";
 
 const Navigation = () => {
-  const isV2 = useIsBookingV2();
-
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
@@ -82,12 +79,6 @@ const Navigation = () => {
     { path: '/contact', label: 'Contact' },
     ...(blogEnabled ? [{ path: '/blog', label: 'Blog' }] : []),
   ];
-
-  // Tenants on booking-v2 get that design's chrome on every page, so the
-  // site keeps one identity instead of switching the moment you click
-  // "Fleet". Placed after every hook above — an early return before them
-  // would change hook order between renders.
-  if (isV2) return <D7NavBar />;
 
   return (
     <nav

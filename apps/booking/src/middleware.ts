@@ -61,11 +61,6 @@ export async function middleware(request: NextRequest) {
   if (tenantSlug) {
     requestHeaders.set('x-tenant-slug', tenantSlug);
   }
-  // The root layout needs the path to decide whether to mount the booking-v2
-  // shell: /booking-v2 is a preview that must render in that design even for
-  // tenants who have the flag switched off. Server components cannot read the
-  // pathname any other way.
-  requestHeaders.set('x-pathname', pathname);
 
   // Continue with the request
   return NextResponse.next({

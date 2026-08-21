@@ -65,43 +65,20 @@ export function Social({ name, className = "h-4 w-4" }: { name: string; classNam
   );
 }
 
-/**
- * Tenant wordmark.
- *
- * Uses the tenant's uploaded logo when they have one. Otherwise it falls back
- * to a lettermark built from their own app name — never a hardcoded "Drive247",
- * which would brand every tenant's site as someone else's.
- *
- * The name is split so the trailing digits (Drive"247", Cars"24") pick up the
- * accent, which is what gives the fallback its wordmark feel; a name with no
- * trailing digits simply renders whole.
- */
-export function Logo({ light = false, className = "", name = "Drive 247", logoUrl = null }: {
-  light?: boolean; className?: string; name?: string; logoUrl?: string | null;
-}) {
-  if (logoUrl) {
-    return (
-      /* eslint-disable-next-line @next/next/no-img-element */
-      <img src={logoUrl} alt={name} className={`h-9 w-auto max-w-[170px] object-contain ${className}`} />
-    );
-  }
-
-  const match = name.trim().match(/^(.*?)(\d+)$/);
-  const head = (match ? match[1] : name).trim();
-  const tail = match ? match[2] : "";
-
+/** Drive247 wordmark — gradient 'D' tile plus the name. */
+export function Logo({ light = false, className = "" }: { light?: boolean; className?: string }) {
   return (
     <span className={`flex items-center gap-2.5 ${className}`}>
       <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-[11px]
                        bg-[linear-gradient(135deg,#3b82f6,#6d5af0_55%,#a855f7)]
                        shadow-[0_8px_20px_-8px_rgba(109,90,240,.95)]">
-        <span className="d7-dis text-[17px] leading-none text-white">
-          {(head || name).charAt(0).toUpperCase()}
-        </span>
+        <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+          <path d="M6.5 4.5h5a7.5 7.5 0 0 1 0 15h-5Z" fill="none" stroke="#fff" strokeWidth="2.1" strokeLinejoin="round" />
+          <circle cx="10.2" cy="12" r="1.7" fill="#fff" />
+        </svg>
       </span>
       <span className={`d7-dis text-[20px] tracking-[-.035em] ${light ? "text-white" : "text-[var(--ink)]"}`}>
-        {head}
-        {tail && <span className={light ? "text-[#c4b5fd]" : "text-[var(--v)]"}>{tail}</span>}
+        Drive<span className={light ? "text-[#c4b5fd]" : "text-[var(--v)]"}>247</span>
       </span>
     </span>
   );

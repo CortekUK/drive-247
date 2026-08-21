@@ -21,7 +21,6 @@ import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 import { SuspendedGate } from '@/components/SuspendedGate';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
-import { D7SiteShell } from '@/components/booking-v2/d7-shell';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -135,47 +134,12 @@ async function getTenantThemeMode(): Promise<CustomerThemeMode> {
   }
 }
 
-/**
- * Is this tenant on the booking-v2 design? Resolved from the same
- * `x-tenant-slug` header the metadata and theme lookups above use, so the
- * whole site is wrapped before first paint rather than after hydration.
- */
-async function isBookingV2Enabled(): Promise<boolean> {
-  try {
-    const headersList = await headers();
-    const tenantSlug = headersList.get('x-tenant-slug');
-    if (!tenantSlug || !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      return false;
-    }
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    );
-    const { data } = await supabase
-      .from('tenants')
-      .select('booking_v2_enabled')
-      .eq('slug', tenantSlug)
-      .maybeSingle();
-    return data?.booking_v2_enabled === true;
-  } catch {
-    // Never let a flag lookup take the whole site down.
-    return false;
-  }
-}
-
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const headersList = await headers();
-  const [themeMode, flagOn] = await Promise.all([
-    getTenantThemeMode(),
-    isBookingV2Enabled(),
-  ]);
-  // /booking-v2 is the standing preview URL — it has to render in that design
-  // even when the tenant has the flag off, otherwise it loads unstyled.
-  const bookingV2 = flagOn || (headersList.get('x-pathname') ?? '').startsWith('/booking-v2');
+  const themeMode = await getTenantThemeMode();
   // Map the tenant mode → next-themes props. `forcedTheme` (for the "-only"
   // modes) ignores localStorage/system entirely, so even a returning customer
   // with a stored 'dark' preference gets the forced theme on first paint.
@@ -213,9 +177,7 @@ export default async function RootLayout({
                   <GDPRConsent />
                   <DevJumpPanel />
                   <MaintenanceBanner />
-                  <SuspendedGate>
-                    <D7SiteShell enabled={bookingV2}>{children}</D7SiteShell>
-                  </SuspendedGate>
+                  <SuspendedGate>{children}</SuspendedGate>
                 </TooltipProvider>
               </ThemeInitializer>
               </ThemeProvider>

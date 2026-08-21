@@ -11,8 +11,7 @@
      3. a handful of primitives too stateful for utility classes
    ========================================================================== */
 
-.d7,
-:root[data-d7-site] {
+.d7 {
   /* ---------------------------------------------------------- neutrals */
   --white:  #ffffff;
   --soft:   #f7f8fe;
@@ -65,184 +64,11 @@
   color: var(--ink);
   font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
 }
-
-/* Only the page wrapper clips horizontally. Putting this on <html> as well
-   would break the fixed header and Radix's positioned overlays. */
-.d7 { overflow-x: clip; }
-.d7 ::selection,
-:root[data-d7-site] ::selection { background: var(--v); color: #fff; }
+.d7 ::selection { background: var(--v); color: #fff; }
 
 .d7-wrap { width:100%; max-width:1240px; margin-inline:auto; padding-inline:clamp(16px,3.4vw,32px); }
-
-/* ==================================================== shadcn token bridge */
-/* The real booking widget (MultiStepBookingWidget) and every ui/* primitive it
-   pulls in are styled from globals.css's shadcn tokens — `hsl(var(--primary))`
-   and friends. Redefining those tokens INSIDE `.d7` re-skins the whole widget
-   to the booking-v2 palette without touching a single component, and without
-   leaking outside the namespace.
-
-   Values are the bare `H S% L%` triplets shadcn expects, matching the --v /
-   --ink / --line tokens above. */
-.d7,
-:root[data-d7-site] {
-  --background:          0 0% 100%;
-  --foreground:          228 48% 9%;
-  --card:                0 0% 100%;
-  --card-foreground:     228 48% 9%;
-  --popover:             0 0% 100%;
-  --popover-foreground:  228 48% 9%;
-  --primary:             249 82% 65%;   /* #6d5af0 */
-  --primary-foreground:  0 0% 100%;
-  --secondary:           228 60% 97%;
-  --secondary-foreground:228 30% 20%;
-  --muted:               228 60% 97%;
-  --muted-foreground:    222 15% 47%;
-  --accent:              249 82% 65%;
-  --accent-foreground:   0 0% 100%;
-  --destructive:         0 75% 55%;
-  --destructive-foreground: 0 0% 100%;
-  --border:              228 45% 93%;
-  --input:               228 45% 93%;
-  --ring:                249 82% 65%;
-  --radius:              0.75rem;
-}
-
-[data-d7-theme="dark"] .d7,
-:root[data-d7-theme="dark"][data-d7-site] {
-  --background:          230 45% 6%;
-  --foreground:          232 80% 96%;
-  --card:                231 40% 12%;
-  --card-foreground:     232 80% 96%;
-  --popover:             231 40% 12%;
-  --popover-foreground:  232 80% 96%;
-  --primary:             250 100% 74%;  /* #8b7cff */
-  --primary-foreground:  230 45% 6%;
-  --secondary:           230 32% 17%;
-  --secondary-foreground:232 60% 90%;
-  --muted:               230 32% 17%;
-  --muted-foreground:    228 20% 67%;
-  --accent:              250 100% 74%;
-  --accent-foreground:   230 45% 6%;
-  --destructive:         0 70% 58%;
-  --destructive-foreground: 0 0% 100%;
-  --border:              232 35% 24%;
-  --input:               232 35% 24%;
-  --ring:                250 100% 74%;
-}
-
-/* ---------------------------------------------------------------------------
-   Reclaiming the tenant's brand injection.
-
-   Branding writes ~27 tokens INLINE on <html> (--primary, --accent, --card…)
-   so each tenant's site carries their colours. Inline styles beat any
-   stylesheet selector, so on portalled content — dialogs, dropdowns, toasts,
-   which Radix mounts on document.body — the tenant palette won and the
-   booking-v2 login dialog came out gold on dark.
-
-   `!important` in a stylesheet does beat a non-important inline style, so this
-   block is the one place that needs it. It is scoped to [data-d7-site], which
-   only exists while a tenant is on booking-v2 — every other tenant's branding
-   is untouched.
-   --------------------------------------------------------------------------- */
-:root[data-d7-site] {
-  --background:             0 0% 100% !important;
-  --foreground:             228 48% 9% !important;
-  --card:                   0 0% 100% !important;
-  --card-foreground:        228 48% 9% !important;
-  --popover:                0 0% 100% !important;
-  --popover-foreground:     228 48% 9% !important;
-  --primary:                249 82% 65% !important;
-  --primary-foreground:     0 0% 100% !important;
-  --secondary:              228 60% 97% !important;
-  --secondary-foreground:   228 30% 20% !important;
-  --muted:                  228 60% 97% !important;
-  --muted-foreground:       222 15% 47% !important;
-  --accent:                 249 82% 65% !important;
-  --accent-foreground:      0 0% 100% !important;
-  --ring:                   249 82% 65% !important;
-
-  --nav-bg:                 0 0% 100% !important;
-  --nav-foreground:         228 48% 9% !important;
-  --sidebar-background:     0 0% 100% !important;
-  --sidebar-foreground:     228 48% 9% !important;
-  --sidebar-primary:        249 82% 65% !important;
-  --sidebar-primary-foreground: 0 0% 100% !important;
-  --sidebar-ring:           249 82% 65% !important;
-
-  --bk-bg:                  0 0% 100% !important;
-  --bk-gold:                249 82% 65% !important;
-  --bk-gold-soft:           249 100% 96% !important;
-
-  --gradient-accent: linear-gradient(135deg, hsl(249 82% 65%), hsl(280 87% 65%)) !important;
-  --shadow-glow:     0 0 40px hsl(249 82% 65% / .22) !important;
-}
-
-:root[data-d7-theme="dark"][data-d7-site] {
-  --background:             230 45% 6% !important;
-  --foreground:             232 80% 96% !important;
-  --card:                   231 40% 12% !important;
-  --card-foreground:        232 80% 96% !important;
-  --popover:                231 40% 12% !important;
-  --popover-foreground:     232 80% 96% !important;
-  --primary:                250 100% 74% !important;
-  --primary-foreground:     230 45% 6% !important;
-  --secondary:              230 32% 17% !important;
-  --secondary-foreground:   232 60% 90% !important;
-  --muted:                  230 32% 17% !important;
-  --muted-foreground:       228 20% 67% !important;
-  --accent:                 250 100% 74% !important;
-  --accent-foreground:      230 45% 6% !important;
-  --ring:                   250 100% 74% !important;
-
-  --nav-bg:                 231 40% 12% !important;
-  --nav-foreground:         232 80% 96% !important;
-  --sidebar-background:     231 40% 12% !important;
-  --sidebar-foreground:     232 80% 96% !important;
-  --sidebar-primary:        250 100% 74% !important;
-  --sidebar-primary-foreground: 230 45% 6% !important;
-  --sidebar-ring:           250 100% 74% !important;
-
-  --bk-bg:                  230 45% 6% !important;
-  --bk-gold:                250 100% 74% !important;
-  --bk-gold-soft:           244 42% 20% !important;
-
-  --gradient-accent: linear-gradient(135deg, hsl(250 100% 74%), hsl(280 90% 74%)) !important;
-  --shadow-glow:     0 0 40px hsl(250 100% 74% / .28) !important;
-}
-
-/* The app also ships gradient/shadow utilities that hardcode a palette:
-   `.text-gradient-metal` (31 files) and `.text-gradient-silver` (8) paint text
-   with a SILVER gradient and set `color: transparent`. That reads on the
-   default dark theme and is nearly invisible on this light one — the fleet
-   cards came out as ghost text.
-
-   Both read from CSS variables, so redefining the variables here re-points
-   every one of those 39 files at this palette without editing a component. */
-.d7,
-:root[data-d7-site] {
-  --gradient-metal:  linear-gradient(135deg, hsl(249 82% 65%), hsl(258 90% 66%), hsl(280 87% 65%));
-  --gradient-silver: linear-gradient(135deg, hsl(228 48% 9%),  hsl(228 30% 22%), hsl(228 48% 9%));
-  --gradient-dark:   linear-gradient(180deg, hsl(228 60% 99%), hsl(228 55% 97%));
-  --gradient-accent: linear-gradient(135deg, hsl(249 82% 65%), hsl(280 87% 65%));
-  --shadow-metal:    0 10px 30px -18px rgba(23, 16, 72, .30);
-  --shadow-glow:     0 0 40px hsl(249 82% 65% / .22);
-}
-
-[data-d7-theme="dark"] .d7,
-:root[data-d7-theme="dark"][data-d7-site] {
-  --gradient-metal:  linear-gradient(135deg, hsl(250 100% 78%), hsl(258 95% 76%), hsl(280 90% 76%));
-  --gradient-silver: linear-gradient(135deg, hsl(232 80% 96%), hsl(228 40% 78%), hsl(232 80% 96%));
-  --gradient-dark:   linear-gradient(180deg, hsl(231 40% 12%), hsl(230 38% 15%));
-  --gradient-accent: linear-gradient(135deg, hsl(250 100% 74%), hsl(280 90% 74%));
-  --shadow-metal:    0 10px 30px -18px rgba(0, 0, 0, .75);
-  --shadow-glow:     0 0 40px hsl(250 100% 74% / .28);
-}
-
-/* The widget ships its own card chrome; soften it so it reads as part of the
-   v2 page rather than a panel dropped onto it. */
-.d7-embed :is(.shadow-lg, .shadow-xl, .shadow-2xl) { box-shadow: var(--shadow) !important; }
-.d7-embed { color: var(--ink); }
 
 /* ------------------------------------------------------------ typography */
 /* globals.css applies the app's serif `font-display` to every h1-h6 inside
@@ -417,8 +243,7 @@
 /* Only colour changes here — no geometry, type or motion differs between the
    two themes. The attribute sits on <html> (set pre-paint by the inline
    script in layout.tsx) but every declaration is still scoped to `.d7`. */
-[data-d7-theme="dark"] .d7,
-:root[data-d7-theme="dark"][data-d7-site] {
+[data-d7-theme="dark"] .d7 {
   --bg:     #080a1a;
   --white:  #12152e;   /* card / panel surface, deliberately ≠ --bg */
   --soft:   #0d1024;
@@ -465,50 +290,6 @@
 /* The raking sheen is a white wipe — far too hot over a dark card. */
 [data-d7-theme="dark"] .d7 .d7-sheen::after {
   background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.14) 50%,transparent 62%); }
-
-
-/* ============================ portalled content (dialogs, toasts, popovers) */
-/* Radix renders these into document.body, so they inherit from <html>, not
-   from `.d7`. That alone is handled by mirroring the tokens onto
-   `:root[data-d7-site]` above — except the tenant branding system writes
-   --primary/--ring/etc. as INLINE styles on <html>, and an inline style beats
-   any normal stylesheet rule. That is why the login dialog stayed on the
-   tenant's gold accent while the page behind it was violet.
-   `!important` in a stylesheet does outrank a plain inline style, so these
-   few accent tokens are forced. Scoped to [data-d7-site], so a tenant on the
-   old design keeps their own branding untouched. */
-:root[data-d7-site] {
-  --primary:                249 82% 65% !important;
-  --primary-foreground:     0 0% 100%   !important;
-  --ring:                   249 82% 65% !important;
-  --accent:                 249 82% 65% !important;
-  --accent-foreground:      0 0% 100%  !important;
-  --gradient-accent:        linear-gradient(135deg, hsl(249 82% 65%), hsl(280 87% 65%)) !important;
-  --gradient-metal:         linear-gradient(135deg, hsl(249 82% 65%), hsl(258 90% 66%), hsl(280 87% 65%)) !important;
-}
-
-:root[data-d7-theme="dark"][data-d7-site] {
-  --primary:                250 100% 74% !important;
-  --primary-foreground:     230 45% 6%   !important;
-  --ring:                   250 100% 74% !important;
-  --accent:                 250 100% 74% !important;
-  --accent-foreground:      230 45% 6%   !important;
-  --gradient-accent:        linear-gradient(135deg, hsl(250 100% 74%), hsl(280 90% 74%)) !important;
-  --gradient-metal:         linear-gradient(135deg, hsl(250 100% 78%), hsl(258 95% 76%), hsl(280 90% 76%)) !important;
-}
-
-/* Give the portalled surfaces this design's shape and type, not just its hue. */
-:root[data-d7-site] [role="dialog"],
-:root[data-d7-site] [role="alertdialog"] {
-  border-radius: var(--r-lg);
-  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-}
-:root[data-d7-site] [role="dialog"] h1,
-:root[data-d7-site] [role="dialog"] h2,
-:root[data-d7-site] [role="dialog"] h3 {
-  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -.03em;
-}
 
 /* --------------------------------------------------------- reduced motion */
 @media (prefers-reduced-motion: reduce) {

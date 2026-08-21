@@ -4,11 +4,8 @@ import Link from "next/link";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useHasFaqs } from "@/hooks/useHasFaqs";
-import { D7FooterBar, useIsBookingV2 } from "@/components/booking-v2/d7-chrome";
 
 const Footer = () => {
-  const isV2 = useIsBookingV2();
-
   const { settings } = useSiteSettings();
   const hasFaqs = useHasFaqs();
 
@@ -39,12 +36,6 @@ const Footer = () => {
   const defaultTagline = taglineLocation
     ? `Reliable Car Rentals in ${taglineLocation}`
     : 'Reliable Car Rentals';
-
-  // Tenants on booking-v2 get that design's chrome on every page, so the
-  // site keeps one identity instead of switching the moment you click
-  // "Fleet". Placed after every hook above — an early return before them
-  // would change hook order between renders.
-  if (isV2) return <D7FooterBar />;
 
   return (
     <footer className="py-10 sm:py-14 md:py-20" style={{ backgroundColor: 'hsl(var(--nav-bg))' }}>
