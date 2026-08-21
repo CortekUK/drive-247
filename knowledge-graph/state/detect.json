@@ -3423,6 +3423,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/scan-insurance-document/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-verification-otp/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-refund/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-stripe-payment/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-cancelled/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/resend-email/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-voice/index.ts",
@@ -3479,10 +3480,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 363,
-    "total_words": 490146,
+    "total_files": 364,
+    "total_words": 491195,
     "counts": {
-      "code": 356,
+      "code": 357,
       "document": 7
     },
     "semantic_candidates": [
@@ -3800,6 +3801,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/scan-insurance-document/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-verification-otp/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-refund/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-stripe-payment/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-cancelled/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/resend-email/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-voice/index.ts",

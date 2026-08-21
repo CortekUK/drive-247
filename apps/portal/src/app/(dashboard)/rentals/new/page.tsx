@@ -2210,12 +2210,19 @@ const CreateRental = () => {
       try {
         const { data: liveTenant } = await supabase
           .from('tenants')
-          .select('deposit_charge_enabled')
+          .select('deposit_charge_enabled, security_deposit_enabled')
           .eq('id', tenant?.id ?? '')
           .maybeSingle();
-        if (liveTenant) depositChargedNow = (liveTenant as any).deposit_charge_enabled === true;
+        // Both flags, not just the charge flag: security_deposit_enabled is the
+        // master switch for deposits, and deposit_charge_enabled only chooses
+        // charge-vs-hold underneath it. Reading the charge flag alone billed a
+        // deposit on tenants who had deposits switched off entirely.
+        if (liveTenant) {
+          const lt = liveTenant as { deposit_charge_enabled?: boolean; security_deposit_enabled?: boolean };
+          depositChargedNow = lt.security_deposit_enabled !== false && lt.deposit_charge_enabled === true;
+        }
       } catch (flagErr) {
-        console.warn('[rental-create] could not re-read deposit_charge_enabled; using cached value', flagErr);
+        console.warn('[rental-create] could not re-read the deposit flags; using cached values', flagErr);
       }
 
       const chargedDeposit = depositChargedNow ? securityDeposit : 0;

@@ -267,7 +267,8 @@ export default function BookingCheckoutStep({
   const calculateSecurityDeposit = (): number => {
     // Master switch. Without this the booking app kept showing and charging a
     // deposit after the operator had turned deposits off in Settings — the
-    // toggle governed the portal only.
+    // toggle governed the portal only. TenantContext re-reads on focus, so a
+    // tab left open across the change picks this up rather than quoting stale.
     if (tenant?.security_deposit_enabled === false) return 0;
     // Charged deposits are a single global amount by design; per-vehicle was
     // dropped deliberately, so do not consult it on that path.

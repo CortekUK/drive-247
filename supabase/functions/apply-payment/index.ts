@@ -105,11 +105,17 @@ async function applyPayment(supabase: any, paymentId: string, targetCategories?:
     if (payment.tenant_id) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('currency_code, deposit_charge_enabled')
+        .select('currency_code, deposit_charge_enabled, security_deposit_enabled')
         .eq('id', payment.tenant_id)
         .single();
       if (tenant?.currency_code) currencyCode = tenant.currency_code;
-      depositIsCharged = (tenant as { deposit_charge_enabled?: boolean } | null)?.deposit_charge_enabled === true;
+      // Both flags have to agree. `security_deposit_enabled` is the master switch
+      // for the whole feature; `deposit_charge_enabled` only picks charge-vs-hold
+      // within it. Reading the second alone meant a tenant who had switched
+      // deposits off still had Security Deposit charges raised and allocated to,
+      // because the now-meaningless charge flag was left true.
+      const t = tenant as { deposit_charge_enabled?: boolean; security_deposit_enabled?: boolean } | null;
+      depositIsCharged = t?.security_deposit_enabled !== false && t?.deposit_charge_enabled === true;
     }
 
     // PAYG rentals must never have upfront ledger charges materialised from an invoice.
