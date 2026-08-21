@@ -184,11 +184,22 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     const depositIsChargedTenant = (tenant as any)?.deposit_charge_enabled === true;
     const depositNoun = depositIsChargedTenant ? 'deposit' : 'hold';
     const depositOverrideRaw = (rental as any)?.deposit_amount_override;
+    // The tenant default applies only while deposits are switched on.
+    // `security_deposit_enabled` is the master switch and governs the
+    // booking site; a per-rental override still wins ahead of it, which is
+    // how a deposit taken on an operator-created rental keeps its clause
+    // even while the switch is off (the portal always writes that column,
+    // explicitly 0 when no deposit is taken). Without this, a booking made
+    // with deposits OFF still had the tenant default written into a signed
+    // agreement as a deposit that was never charged.
+    const depositsSwitchedOn = (tenant as any)?.security_deposit_enabled !== false;
     const depositResolved = (depositOverrideRaw !== null && depositOverrideRaw !== undefined)
         ? Number(depositOverrideRaw)
-        : ((!depositIsChargedTenant && (tenant as any)?.deposit_mode === 'per_vehicle')
-            ? Number((vehicle as any)?.security_deposit ?? 0)
-            : Number((tenant as any)?.global_deposit_amount ?? 0));
+        : !depositsSwitchedOn
+            ? 0
+            : ((!depositIsChargedTenant && (tenant as any)?.deposit_mode === 'per_vehicle')
+                ? Number((vehicle as any)?.security_deposit ?? 0)
+                : Number((tenant as any)?.global_deposit_amount ?? 0));
     const depositDisplay = depositResolved > 0 ? formatCurrency(depositResolved, currencyCode) : '';
 
     const variables: Record<string, string> = {
@@ -1268,7 +1279,7 @@ export async function POST(request: NextRequest) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
