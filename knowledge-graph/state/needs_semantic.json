@@ -1,22 +1,5 @@
 {
-  "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/api/esign/route.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/agreement-templates/edit/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/constants/website-content.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/agreement-injection.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/agreement-template-editor.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/occurrence-config-dialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/agreement-injection.test.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/deposit-hold-row.test.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/api/esign/route.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/lib/agreement-injection.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts"
-  ],
-  "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
-  ],
+  "files": [],
+  "specs": [],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

@@ -170,7 +170,7 @@ function processTemplate(
   const depositOverrideRaw = (rental as any)?.deposit_amount_override;
   const depositResolved = (depositOverrideRaw !== null && depositOverrideRaw !== undefined)
       ? Number(depositOverrideRaw)
-      : ((tenant as any)?.deposit_mode === 'per_vehicle'
+      : ((!depositIsChargedTenant && (tenant as any)?.deposit_mode === 'per_vehicle')
           ? Number((vehicle as any)?.security_deposit ?? 0)
           : Number((tenant as any)?.global_deposit_amount ?? 0));
   const depositDisplay = depositResolved > 0 ? formatCurrency(depositResolved) : '';

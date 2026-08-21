@@ -375,7 +375,11 @@ const CreateRental = () => {
 
   // Security deposit calculation helper
   const calculateSecurityDeposit = (vehicleId?: string): number => {
-    if (rentalSettings?.deposit_mode === 'per_vehicle' && vehicleId) {
+    // Charged deposits are a single global amount by design — per-vehicle was
+    // dropped deliberately. Honour that here rather than by overwriting the
+    // tenant's stored deposit_mode, so switching back to holds restores their
+    // per-vehicle configuration intact.
+    if (tenant?.deposit_charge_enabled !== true && rentalSettings?.deposit_mode === 'per_vehicle' && vehicleId) {
       // Per-vehicle deposit mode: get deposit from the selected vehicle
       const vehicle = vehicles?.find(v => v.id === vehicleId);
       return (vehicle as any)?.security_deposit ?? 0;
@@ -4481,7 +4485,7 @@ const CreateRental = () => {
                                       ? 'No deposit on this rental'
                                       : depositIsCharged && autoDeposit <= 0
                                         ? 'No default set — enter an amount'
-                                        : `Auto: ${formatCurrency(autoDeposit, currency)}${rentalSettings?.deposit_mode === 'per_vehicle' ? ' (per-vehicle)' : ' (global)'}`}
+                                        : `Auto: ${formatCurrency(autoDeposit, currency)}${(!depositIsCharged && rentalSettings?.deposit_mode === 'per_vehicle') ? ' (per-vehicle)' : ' (global)'}`}
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">

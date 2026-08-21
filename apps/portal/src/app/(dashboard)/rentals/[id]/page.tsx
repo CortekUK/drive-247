@@ -534,7 +534,7 @@ const RentalDetail = () => {
   // Charged-deposit tenants take the deposit as real money (a 'Security Deposit'
   // ledger Charge, refundable in full or in part). Hold tenants ring-fence it on
   // the card instead, which is what every deposit_hold_* branch below serves.
-  const depositIsCharged = tenant?.deposit_charge_enabled === true;
+  const depositIsChargedTenant = tenant?.deposit_charge_enabled === true;
   const { canEdit } = useManagerPermissions();
   // `isAdmin()` covers head_admin + admin, and super admins too — the auth
   // store rewrites a super admin's role to 'head_admin' when loading the
@@ -700,6 +700,7 @@ const RentalDetail = () => {
   // override wins when set (including an explicit 0, which means the operator
   // opted out); otherwise the tenant's configured amount. Charged deposits are
   // a single global amount by design — no per-vehicle variant.
+
   const depositDefaultAmount = (() => {
     const override = (rental as any)?.deposit_amount_override;
     if (override !== null && override !== undefined) return Number(override) || 0;
@@ -730,6 +731,24 @@ const RentalDetail = () => {
   const { data: rentalCharges } = useRentalCharges(id);
   const { data: rawInvoiceBreakdown } = useRentalInvoice(id);
   const { data: paymentBreakdown, isLoading: isPaymentBreakdownLoading } = useRentalPaymentBreakdown(id);
+  // Does this rental carry a legacy authorisation? A tenant can be switched to
+  // charged deposits while rentals created under the old model still hold a LIVE
+  // hold. Treating those as "charged" hides the hold actions and leaves the
+  // authorisation unreleasable — the renter's funds stay ring-fenced with no way
+  // out from the UI.
+  const depositHoldPresent =
+    !!(rental as any)?.deposit_hold_payment_intent_id ||
+    (!!rental?.deposit_hold_status && rental.deposit_hold_status !== 'released');
+
+  // Treat the row as CHARGED when the money really was charged — i.e. a
+  // 'Security Deposit' ledger charge exists — or when the tenant is on charged
+  // deposits and there is no legacy hold to manage. Keying off the ledger as
+  // well as the flag makes this survive the flag being switched back OFF: a
+  // deposit that was already taken and part-refunded must keep its Refund
+  // action, not silently revert to hold wording with no way to return the money.
+  const depositHasLedgerCharge = Number(paymentBreakdown?.['Security Deposit']?.total ?? 0) > 0;
+  const depositIsCharged =
+    depositHasLedgerCharge || (depositIsChargedTenant && !depositHoldPresent);
   const { data: paymentLinks, isLoading: paymentLinksLoading } = useRentalPaymentLinks(id);
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;

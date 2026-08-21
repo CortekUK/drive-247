@@ -159,7 +159,12 @@ describe('Security Deposit row — actions', () => {
     expect(pageSource).toMatch(
       /category === 'Security Deposit' && !depositIsCharged &&/,
     );
-    expect(pageSource).toMatch(/const depositIsCharged = tenant\?\.deposit_charge_enabled === true;/);
+    expect(pageSource).toMatch(/const depositIsChargedTenant = tenant\?\.deposit_charge_enabled === true;/);
+    // The row's mode is derived from REALITY, not the raw flag: a rental still
+    // carrying a live authorisation keeps its hold actions even on a charged
+    // tenant, and a deposit that was actually charged keeps its Refund action
+    // even if the tenant is later switched back to holds.
+    expect(pageSource).toMatch(/depositHasLedgerCharge \|\| \(depositIsChargedTenant && !depositHoldPresent\)/);
   });
 
   it('claims only the statuses it has always claimed', () => {

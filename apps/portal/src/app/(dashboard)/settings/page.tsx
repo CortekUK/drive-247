@@ -1048,6 +1048,25 @@ const Settings = () => {
   }, [pendingTab, saveAllDirtyForms]);
 
   // Maintenance run tracking
+  // Authorisations still live on this tenant. Switching to charged deposits
+  // while any exist would strand them: place-deposit-hold refuses charged
+  // tenants, so refresh-deposit-holds can no longer renew them and they lapse
+  // on the card network's schedule — renter's funds ring-fenced, operator's
+  // cover silently gone.
+  const { data: liveHoldCount = 0 } = useQuery({
+    queryKey: ["live-deposit-holds", tenant?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("rentals")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenant!.id)
+        .in("deposit_hold_status", ["held", "processing", "refreshing", "requires_action", "needs_review"]);
+      return count || 0;
+    },
+    enabled: !!tenant?.id,
+  });
+  const [pendingDepositCharge, setPendingDepositCharge] = useState(false);
+
   const { data: maintenanceRuns } = useQuery({
     queryKey: ['maintenance-runs'],
     queryFn: async () => {
@@ -3754,21 +3773,38 @@ const Settings = () => {
                     <Switch
                       id="deposit-charge-toggle"
                       checked={rentalForm.deposit_charge_enabled}
-                      onCheckedChange={(checked) => setRentalForm(prev => ({
-                        ...prev,
-                        deposit_charge_enabled: checked,
-                        // A charged deposit is one global amount by design; per-vehicle
-                        // was dropped deliberately. Snap the mode so a tenant switching
-                        // over cannot be left on a per-vehicle setting nothing honours.
-                        deposit_mode: checked ? 'global' : prev.deposit_mode,
-                      }))}
+                      onCheckedChange={(checked) => {
+                        // Switching ON while authorisations are still live strands
+                        // them: place-deposit-hold refuses charged tenants, so the
+                        // refresh cron can no longer renew those holds and they lapse
+                        // on the card network's own schedule — the renter's funds stay
+                        // ring-fenced and the operator quietly loses their cover.
+                        // Release or capture them first.
+                        if (checked && liveHoldCount > 0) {
+                          setPendingDepositCharge(true);
+                          return;
+                        }
+                        // deposit_mode is deliberately NOT overwritten. Charged deposits
+                        // are a single global amount by design and the code treats them
+                        // that way regardless of the stored mode, so snapping it to
+                        // 'global' here bought nothing and permanently destroyed a
+                        // per-vehicle tenant's configuration — switching back OFF left
+                        // them silently on global with their per-vehicle amounts orphaned.
+                        setRentalForm(prev => ({
+                          ...prev,
+                          deposit_charge_enabled: checked,
+                        }));
+                      }}
                       disabled={!canEditSettings('preauth')}
                     />
                   </div>
                   {rentalForm.deposit_charge_enabled && (
                     <Alert>
                       <AlertDescription className="text-xs">
-                        Existing rentals are unaffected \u2014 this applies to bookings created from now on.
+                        New bookings will charge the deposit instead of holding it. Rentals that
+                        already have a deposit keep whatever was taken at the time \u2014 a live
+                        authorisation stays releasable from its rental page, and a deposit that was
+                        already charged stays refundable.
                       </AlertDescription>
                     </Alert>
                   )}
@@ -5141,6 +5177,25 @@ const Settings = () => {
         open={showDataCleanupDialog}
         onOpenChange={setShowDataCleanupDialog}
       />
+
+      <AlertDialog open={pendingDepositCharge} onOpenChange={setPendingDepositCharge}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Release the live holds first</AlertDialogTitle>
+            <AlertDialogDescription>
+              {liveHoldCount === 1
+                ? "1 rental still has a live authorisation on the customer's card."
+                : `${liveHoldCount} rentals still have live authorisations on customers' cards.`}
+              {" "}Switching to charged deposits stops those authorisations being renewed, so they
+              would lapse on the bank's own schedule &mdash; the customer's funds stay ring-fenced
+              and you lose the cover. Release or capture them from each rental first, then switch.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setPendingDepositCharge(false)}>Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

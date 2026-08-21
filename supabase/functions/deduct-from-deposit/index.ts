@@ -194,7 +194,13 @@ Deno.serve(async (req) => {
     // legacy path, which picks the newest Stripe payment on the rental with NO
     // category scoping and REFUNDS it — pushing rent revenue back to the
     // customer while also writing the excess-mileage charge off as collected.
-    if ((tenantData as { deposit_charge_enabled?: boolean } | null)?.deposit_charge_enabled === true) {
+    // Only refuse when there is genuinely no authorisation to capture from. A
+    // tenant can be flipped to charged deposits while rentals created under the
+    // old model still hold a LIVE authorisation — refusing those would leave the
+    // operator unable to capture money they legitimately secured, and unable to
+    // release it either.
+    const hasLiveHold = rental.deposit_hold_status === 'held' && !!rental.deposit_hold_payment_intent_id;
+    if (!hasLiveHold && (tenantData as { deposit_charge_enabled?: boolean } | null)?.deposit_charge_enabled === true) {
       return errorResponse(
         "This tenant collects deposits as a charge, not a hold. Deduct by refunding " +
         "less of the deposit from the rental's payment breakdown instead."
