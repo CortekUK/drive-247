@@ -277,7 +277,7 @@ async function fnErrorMessage(e: any, fallback: string): Promise<string> {
     const body = await e?.context?.json?.();
     if (body?.error) return body.error;
   } catch {
-    // ignore \u2014 fall through to the generic message
+    // ignore — fall through to the generic message
   }
   return e?.message || fallback;
 }

@@ -1701,7 +1701,7 @@ const Settings = () => {
                 { value: 'lockbox', icon: Lock, label: 'Lockbox' },
                 { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
                 { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
-                { value: 'preauth', icon: CreditCard, label: 'Pre-Auth' },
+                { value: 'preauth', icon: CreditCard, label: 'Deposit' },
                 { value: 'installments', icon: Banknote, label: 'Installments' },
                 { value: 'payg', icon: Clock, label: 'Pay As You Go' },
                 { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
@@ -3718,20 +3718,20 @@ const Settings = () => {
 
         </TabsContent>
 
-        {/* Pre-Authorization Tab */}
+        {/* Deposit Tab */}
         <TabsContent value="preauth" className="space-y-6">
-          {/* Pre-Authorization Configuration Card */}
+          {/* Deposit Configuration Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary shrink-0" />
-                {rentalForm.deposit_charge_enabled ? 'Security Deposit' : 'Pre-Authorization'}
+                Security Deposit
               </CardTitle>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardDescription>
-                  {rentalForm.deposit_charge_enabled
-                    ? 'Charge a refundable security deposit on customer bookings'
-                    : 'Configure pre-authorization hold for customer bookings'}
+                  Take a refundable security deposit on customer bookings. This switch controls
+                  the booking site &mdash; when it is off, customers are not shown or charged a
+                  deposit. You can still take one on a rental you create yourself.
                 </CardDescription>
                 <div className="flex items-center gap-2 shrink-0">
                   <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
@@ -3749,9 +3749,9 @@ const Settings = () => {
             <CardContent className="space-y-6">
               {!rentalForm.security_deposit_enabled && (
                 <p className="text-sm text-muted-foreground">
-                  {rentalForm.deposit_charge_enabled
-                    ? 'Security deposits are disabled. No deposit will be collected on bookings.'
-                    : 'Pre-authorization is disabled. No hold will be placed on bookings.'}
+                  Security deposits are off for the booking site &mdash; customers will not be
+                  shown or charged one. You can still take a deposit on a rental you create in the
+                  portal.
                 </p>
               )}
 
@@ -3802,7 +3802,7 @@ const Settings = () => {
                     <Alert>
                       <AlertDescription className="text-xs">
                         New bookings will charge the deposit instead of holding it. Rentals that
-                        already have a deposit keep whatever was taken at the time \u2014 a live
+                        already have a deposit keep whatever was taken at the time — a live
                         authorisation stays releasable from its rental page, and a deposit that was
                         already charged stays refundable.
                       </AlertDescription>
@@ -3824,9 +3824,9 @@ const Settings = () => {
                   onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'global' }))}>
                   <RadioGroupItem value="global" id="deposit-global" />
                   <Label htmlFor="deposit-global" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Global Pre-Authorization</div>
+                    <div className="font-medium">Global Deposit</div>
                     <div className="text-sm text-muted-foreground">
-                      Same pre-authorization amount for all vehicles
+                      Same deposit amount for all vehicles
                     </div>
                   </Label>
                 </div>
@@ -3834,18 +3834,18 @@ const Settings = () => {
                   onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'per_vehicle' }))}>
                   <RadioGroupItem value="per_vehicle" id="deposit-per-vehicle" />
                   <Label htmlFor="deposit-per-vehicle" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Per-Vehicle Pre-Authorization</div>
+                    <div className="font-medium">Per-Vehicle Deposit</div>
                     <div className="text-sm text-muted-foreground">
-                      Set pre-authorization amount individually for each vehicle
+                      Set the deposit amount individually for each vehicle
                     </div>
                   </Label>
                 </div>
               </RadioGroup>}
 
-              {/* Global Pre-Authorization Amount (only when mode is global) */}
+              {/* Deposit amount (shown for global mode, and always on the charged path) */}
               {rentalForm.security_deposit_enabled && (rentalForm.deposit_charge_enabled || rentalForm.deposit_mode === 'global') && (
                 <div className="space-y-2">
-                  <Label htmlFor="global_deposit_amount">{rentalForm.deposit_charge_enabled ? 'Deposit Amount' : 'Global Pre-Authorization Amount'}</Label>
+                  <Label htmlFor="global_deposit_amount">Deposit Amount</Label>
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -3873,7 +3873,7 @@ const Settings = () => {
                   <p className="text-xs text-muted-foreground">
                     {rentalForm.deposit_charge_enabled
                       ? 'Charged on every booking and refunded when the vehicle comes back.'
-                      : 'This amount will be applied to all bookings'}
+                      : 'Authorised on the customer\u2019s card at pickup and released when the vehicle comes back.'}
                   </p>
                 </div>
               )}
@@ -3881,7 +3881,7 @@ const Settings = () => {
               {rentalForm.security_deposit_enabled && !rentalForm.deposit_charge_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
                 <Alert>
                   <AlertDescription>
-                    Set pre-authorization amounts when adding or editing vehicles. Vehicles without a pre-authorization will show $0.
+                    Set deposit amounts when adding or editing vehicles. Vehicles without one will show $0.
                   </AlertDescription>
                 </Alert>
               )}
@@ -3897,7 +3897,7 @@ const Settings = () => {
                         global_deposit_amount: rentalForm.global_deposit_amount,
                       });
                     } catch (error) {
-                      console.error('Failed to update pre-authorization settings:', error);
+                      console.error('Failed to update deposit settings:', error);
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
@@ -3908,7 +3908,7 @@ const Settings = () => {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  {rentalForm.deposit_charge_enabled ? 'Save Deposit Settings' : 'Save Pre-Authorization Settings'}
+                  Save Deposit Settings
                 </Button>
               )}
             </CardContent>
@@ -3956,7 +3956,7 @@ const Settings = () => {
                   <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
                     <li>When creating a rental, admins can choose <strong>Pay As You Go</strong> instead of regular payment</li>
                     <li>Rental amount, tax, and percentage-based service fees are marked as PAYG charges and accrue daily</li>
-                    <li>Fixed-amount fees, pre-authorization, insurance, and delivery charges are handled separately upfront</li>
+                    <li>Fixed-amount fees, the security deposit, insurance, and delivery charges are handled separately upfront</li>
                     <li>Charges accrue automatically every 24 hours from the rental start time</li>
                     <li>Payment reminders are sent automatically on the configured interval if the customer has an outstanding balance</li>
                     <li>Payments are recorded manually from the rental detail page; installment plans are not available</li>
@@ -4903,7 +4903,7 @@ const Settings = () => {
                         <li>Minimum Driver Age: 21</li>
                         <li>Tax: Disabled (0%)</li>
                         <li>Service Fee: Disabled</li>
-                        <li>Pre-Authorization Mode: Global ($0)</li>
+                        <li>Deposit Mode: Global ($0)</li>
                         <li>Installments: Disabled (defaults restored)</li>
                         <li>Booking Lead Time: 24 hours</li>
                         <li>Min Rental: 0 days, 1 hour</li>

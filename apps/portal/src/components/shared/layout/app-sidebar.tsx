@@ -99,7 +99,7 @@ const settingsTabGroups = [
     items: [
       { value: 'pricing', icon: TrendingUp, label: 'Pricing Rules' },
       { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
-      { value: 'preauth', icon: CreditCard, label: 'Pre-Authorization' },
+      { value: 'preauth', icon: CreditCard, label: 'Deposit' },
       { value: 'installments', icon: Banknote, label: 'Installments' },
       { value: 'payg', icon: Clock, label: 'Pay As You Go' },
       { value: 'promos', icon: Zap, label: 'Promo Codes' },

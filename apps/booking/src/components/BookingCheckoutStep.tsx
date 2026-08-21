@@ -265,7 +265,13 @@ export default function BookingCheckoutStep({
 
   // Calculate security deposit based on tenant settings
   const calculateSecurityDeposit = (): number => {
-    if (tenant?.deposit_mode === 'per_vehicle') {
+    // Master switch. Without this the booking app kept showing and charging a
+    // deposit after the operator had turned deposits off in Settings — the
+    // toggle governed the portal only.
+    if (tenant?.security_deposit_enabled === false) return 0;
+    // Charged deposits are a single global amount by design; per-vehicle was
+    // dropped deliberately, so do not consult it on that path.
+    if (tenant?.deposit_charge_enabled !== true && tenant?.deposit_mode === 'per_vehicle') {
       // Per-vehicle deposit: use the vehicle's security_deposit field
       return selectedVehicle?.security_deposit ?? 0;
     }

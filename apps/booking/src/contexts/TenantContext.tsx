@@ -96,6 +96,9 @@ export interface Tenant {
   service_fee_value: number | null;
 
   // Deposit settings
+  // Master switch. The booking app never read this, so turning deposits OFF in
+  // Settings had no effect on the customer checkout at all.
+  security_deposit_enabled: boolean | null;
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
   // True = deposit is a real captured charge, not a Stripe authorization hold.
@@ -450,6 +453,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           service_fee_amount,
           service_fee_type,
           service_fee_value,
+          security_deposit_enabled,
           deposit_mode,
           global_deposit_amount,
           deposit_charge_enabled,

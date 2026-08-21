@@ -287,10 +287,14 @@ const BookingCheckoutContent = () => {
       ? (tenant?.service_fee_amount || 0)
       : 0;
 
-    // Security deposit
-    const deposit = tenant?.deposit_mode === 'global'
-      ? (tenant?.global_deposit_amount || 0)
-      : (vehicleDetails?.security_deposit || 0);
+    // Security deposit. Honours the master switch (this flow ignored it, so a
+    // tenant who turned deposits off still had them charged here), and treats a
+    // charged deposit as a single global amount by design.
+    const deposit = tenant?.security_deposit_enabled === false
+      ? 0
+      : (tenant?.deposit_charge_enabled === true || tenant?.deposit_mode === 'global')
+        ? (tenant?.global_deposit_amount || 0)
+        : (vehicleDetails?.security_deposit || 0);
 
     return {
       vehiclePrice,
