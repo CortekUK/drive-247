@@ -596,13 +596,6 @@ const CreateRental = () => {
   const watchedPickupLocation = form.watch("pickup_location");
   const watchedPromoCode = form.watch("promo_code");
 
-  // Deposit decision for this rental, resolved once so the pricing panel, the
-  // sidebar and the submit handler cannot disagree about it.
-  const autoDepositTop = calculateSecurityDeposit(selectedVehicleId);
-  const depositTenantEnabled = rentalSettings?.security_deposit_enabled === true;
-  const isTakingDeposit =
-    takeDeposit === null ? (depositTenantEnabled && autoDepositTop > 0) : takeDeposit;
-
   // Fetch booked dates for the selected vehicle (Pending/Active rentals + 1 buffer day)
   const { bookedDatesArray: vehicleBookedDatesArray, bookedRentals: vehicleBookedRentals, occupancyMap, occupancyModifiers } = useVehicleBookedDates(selectedVehicleId || undefined);
 
@@ -1066,6 +1059,22 @@ const CreateRental = () => {
     },
     enabled: !!tenant,
   });
+
+  // Deposit decision for this rental, resolved once so the pricing panel, the
+  // sidebar and the submit handler cannot disagree about it.
+  //
+  // MUST stay below the `vehicles` query above. In `per_vehicle` deposit mode
+  // calculateSecurityDeposit() reads `vehicles` to look the amount up, so
+  // calling it while `vehicles` is still in its temporal dead zone throws
+  // "Cannot access 'vehicles' before initialization" *during render*. That
+  // only happens once a vehicle is actually selected — which includes the
+  // draft restored from localStorage on mount — so the page worked until an
+  // operator picked a car, then died on every subsequent visit until they
+  // cleared site data. Keep this after the query, not before it.
+  const autoDepositTop = calculateSecurityDeposit(selectedVehicleId);
+  const depositTenantEnabled = rentalSettings?.security_deposit_enabled === true;
+  const isTakingDeposit =
+    takeDeposit === null ? (depositTenantEnabled && autoDepositTop > 0) : takeDeposit;
 
   // Fetch available promo codes for this tenant
   const { data: promoCodes } = useQuery({
