@@ -25,6 +25,8 @@ import { BONZAH_INSURANCE_ADDENDUM_HTML } from "@/lib/bonzah-addendum";
 import { type BonzahCustomerDetails } from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
 import { cn } from "@/lib/utils";
+const DEPOSIT_CLAUSE_SAMPLE = "<h2>Security deposit</h2><p>A refundable security deposit of <strong>$200.00</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold. It is refunded after the vehicle is returned and inspected, less any deductions.</p>";
+
 
 const EMPTY_COVERAGE: CoverageOptions = { cdw: false, rcli: false, sli: false, pai: false };
 const COVERAGE_META: { key: keyof CoverageOptions; label: string; sub: string }[] = [
@@ -151,13 +153,16 @@ export function OccurrenceConfigDialog({
       // so it has to include the render-time Bonzah addendum the send path
       // splices in — otherwise it under-reports the contract.
       const isBonzahTenant = (tenant as any)?.integration_bonzah === true;
+      // Preview mirrors what a charged-deposit tenant will actually sign.
+      const isChargedDepositTenant = (tenant as any)?.deposit_charge_enabled === true;
       return replaceVariables(
         injectAgreementClauses(agreement.template_content, {
           hasMileage: false,
           hasTerms: false,
           hasBonzahAddendum: isBonzahTenant,
+          hasDepositClause: isChargedDepositTenant,
         }),
-        { ...data, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '' },
+        { ...data, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '', deposit_terms_clause: isChargedDepositTenant ? DEPOSIT_CLAUSE_SAMPLE : '' },
       );
     } catch {
       return agreement.template_content;

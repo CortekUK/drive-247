@@ -68,7 +68,8 @@ serve(async (req) => {
         category,
         tenant_id,
         customers!inner(name, whatsapp_opt_in),
-        vehicles!inner(reg)
+        vehicles!inner(reg),
+        rentals(status)
       `)
       .eq('type', 'Charge')
       .gt('remaining_amount', 0)
@@ -87,28 +88,52 @@ serve(async (req) => {
 
     let remindersGenerated = 0;
 
+    // Terminal rentals are done. Chasing a charge on a cancelled or rejected
+    // booking is pure noise to the customer, and this query never looked at
+    // rentals.status at all — so an unpaid charge on a dead rental was dunned
+    // every week out to 28 days. Deposits made it visible (a cancelled rental
+    // kept being chased for a deposit it no longer owed), but it applies to
+    // every category. Account-level charges with no rental_id are unaffected.
+    const TERMINAL_RENTAL_STATUSES = ['Cancelled', 'Rejected', 'Closed', 'Completed'];
+
     for (const charge of charges || []) {
       const typedCharge = charge as LedgerEntry;
+      const rentalStatus = (charge as any)?.rentals?.status as string | undefined;
+      if (rentalStatus && TERMINAL_RENTAL_STATUSES.includes(rentalStatus)) {
+        continue;
+      }
       const chargeDate = new Date(typedCharge.due_date);
       const daysDiff = Math.floor((chargeDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
 
       let reminderType = null;
       let message = '';
 
+      // A security deposit is refundable money held against damage, not a
+      // service payment. Since FIFO settles it LAST, a customer who has paid
+      // everything else still shows the deposit as the outstanding remainder —
+      // and "Payment overdue by 4 weeks" for a deposit reads as debt collection
+      // for something the operator intends to give back. Same schedule, honest
+      // wording. Whether deposits should be chased at all is a policy call and
+      // is deliberately left unchanged here.
+      const isDeposit = typedCharge.category === 'Security Deposit';
+      const noun = isDeposit ? 'Security deposit' : 'Payment';
+      const detail = `$${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg}` +
+        (isDeposit ? '' : ` (${typedCharge.category})`);
+
       // Determine reminder type based on days difference
       if (daysDiff === 2) {
         reminderType = 'Upcoming';
-        message = `Payment due in 2 days: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${noun} due in 2 days: ${detail}`;
       } else if (daysDiff === 0) {
         reminderType = 'Due';
-        message = `Payment due today: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${noun} due today: ${detail}`;
       } else if (daysDiff === -1) {
         reminderType = 'Overdue1';
-        message = `Payment overdue by 1 day: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${isDeposit ? 'Security deposit outstanding since yesterday' : 'Payment overdue by 1 day'}: ${detail}`;
       } else if (daysDiff <= -7 && daysDiff >= -28 && daysDiff % 7 === 0) {
         reminderType = 'OverdueN';
         const weeksOverdue = Math.abs(daysDiff) / 7;
-        message = `Payment overdue by ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${isDeposit ? `Security deposit still outstanding after ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}` : `Payment overdue by ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}`}: ${detail}`;
       }
 
       if (!reminderType) {

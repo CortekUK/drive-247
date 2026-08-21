@@ -139,7 +139,7 @@ const stripComments = (s: string) =>
 describe('Security Deposit row — actions', () => {
   /** The hold-specific branch, which owns exactly the statuses it always owned. */
   const holdBranch = pageSource.slice(
-    pageSource.indexOf("{category === 'Security Deposit' && (depositHoldStatus === 'held'"),
+    pageSource.indexOf("{category === 'Security Deposit' && !depositIsCharged && (depositHoldStatus === 'held'"),
     pageSource.indexOf(') : isExcessMileageUnpaid && excessMileageCharge ? ('),
   );
 
@@ -149,6 +149,24 @@ describe('Security Deposit row — actions', () => {
     pageSource.indexOf('{applied && (\n                          <button\n                            className="text-muted-foreground hover:text-amber-500'),
   );
 
+  it('never intercepts the row for a charged-deposit tenant', () => {
+    // The hold ladder (Add Hold / Release / Refresh & Charge / Check with Stripe)
+    // must not appear when the tenant charges deposits instead of holding them —
+    // there is no authorisation to act on, and the row has to fall through to the
+    // ordinary Add Payment / Refund actions. The guard is a plain `!depositIsCharged`
+    // term rather than relying on depositHoldStatus being null, because `!null`
+    // is truthy and the third arm of that condition would still match.
+    expect(pageSource).toMatch(
+      /category === 'Security Deposit' && !depositIsCharged &&/,
+    );
+    expect(pageSource).toMatch(/const depositIsChargedTenant = tenant\?\.deposit_charge_enabled === true;/);
+    // The row's mode is derived from REALITY, not the raw flag: a rental still
+    // carrying a live authorisation keeps its hold actions even on a charged
+    // tenant, and a deposit that was actually charged keeps its Refund action
+    // even if the tenant is later switched back to holds.
+    expect(pageSource).toMatch(/depositHasLedgerCharge \|\| \(depositIsChargedTenant && !depositHoldPresent\)/);
+  });
+
   it('claims only the statuses it has always claimed', () => {
     // The regression that made this a `!['captured','released']` branch: it
     // swallowed 'processing', 'refreshing' and 'failed', which have always
@@ -157,7 +175,7 @@ describe('Security Deposit row — actions', () => {
     // Add Payment button (isDepositUsed, wouldShowRefund). A rental whose hold
     // failed and whose deposit was then taken manually must stay releasable.
     expect(pageSource).toMatch(
-      /category === 'Security Deposit' && \(depositHoldStatus === 'held' \|\| depositHoldStatus === 'expired' \|\| !depositHoldStatus\)/,
+      /category === 'Security Deposit' && !depositIsCharged && \(depositHoldStatus === 'held' \|\| depositHoldStatus === 'expired' \|\| !depositHoldStatus\)/,
     );
     expect(pageSource).not.toContain("!['captured', 'released'].includes(depositHoldStatus || '')");
     const code = stripComments(holdBranch);
@@ -171,8 +189,8 @@ describe('Security Deposit row — actions', () => {
     // hold actions are appended alongside rather than replacing them.
     expect(inFlightExtras).toContain("['processing', 'refreshing', 'failed'].includes(depositHoldStatus || '')");
     expect(inFlightExtras).toContain('Check with Stripe');
-    expect(pageSource).toContain("const isDepositUsed = category === 'Security Deposit'");
-    expect(pageSource).toMatch(/category === 'Security Deposit' \? \(refunded > 0 \? 'Release More' : 'Release'\)/);
+    expect(pageSource).toContain("const isDepositUsed = !depositIsCharged && category === 'Security Deposit'");
+    expect(pageSource).toMatch(/category === 'Security Deposit' && !depositIsCharged \? \(refunded > 0 \? 'Release More' : 'Release'\)/);
   });
 
   it('gates the Check-with-Stripe button on there being a hold to check', () => {
@@ -516,7 +534,7 @@ describe('the four statuses the chained-hold work added', () => {
     // lose it.
     const holdBranch = stripComments(
       pageSource.slice(
-        pageSource.indexOf("{category === 'Security Deposit' && (depositHoldStatus === 'held'"),
+        pageSource.indexOf("{category === 'Security Deposit' && !depositIsCharged && (depositHoldStatus === 'held'"),
         pageSource.indexOf(') : isExcessMileageUnpaid && excessMileageCharge ? ('),
       ),
     );

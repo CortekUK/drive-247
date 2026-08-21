@@ -44,6 +44,8 @@ export interface RentalSettings {
   security_deposit_enabled: boolean | null;
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
+  // true = take the deposit as a real captured charge; false = Stripe auth hold.
+  deposit_charge_enabled: boolean | null;
   // Working hours settings
   working_hours_enabled: boolean | null;
   working_hours_open: string | null;
@@ -104,6 +106,7 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   security_deposit_enabled: true,
   deposit_mode: 'global',
   global_deposit_amount: 0,
+  deposit_charge_enabled: false,
   // Working hours defaults
   working_hours_enabled: true,
   working_hours_open: '09:00',

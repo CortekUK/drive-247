@@ -144,6 +144,9 @@ const CreateRental = () => {
   const renewFromId = searchParams?.get("renew_from");
   const { toast } = useToast();
   const { tenant } = useTenant();
+  // Charged-deposit tenants bill the deposit with the booking; hold tenants
+  // ring-fence it on the card at handover and it never joins the total.
+  const depositIsCharged = tenant?.deposit_charge_enabled === true;
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');
   const { balanceNumber: bonzahCdBalance, isBonzahConnected, portalUrl: bonzahPortalUrl, bonzahMode } = useBonzahBalance();
   // Also skip when Bonzah can't issue real cover (test mode). Selling a sandbox
@@ -258,6 +261,11 @@ const CreateRental = () => {
   const [taxOverride, setTaxOverride] = useState<number | null>(null);
   const [serviceFeeOverride, setServiceFeeOverride] = useState<number | null>(null);
   const [depositOverride, setDepositOverride] = useState<number | null>(null);
+  // null = follow the tenant default; true/false = the operator decided for this
+  // rental. Deposits are opt-OUT: ticked by default whenever one is configured.
+  const [takeDeposit, setTakeDeposit] = useState<boolean | null>(null);
+  const [depositAmountUnlocked, setDepositAmountUnlocked] = useState(false);
+  const [depositEditConfirmOpen, setDepositEditConfirmOpen] = useState(false);
 
   // Installment plan state
   // semiweekly = 2× per week. The "monthly" type also covers monthly_payments_per_unit
@@ -367,7 +375,11 @@ const CreateRental = () => {
 
   // Security deposit calculation helper
   const calculateSecurityDeposit = (vehicleId?: string): number => {
-    if (rentalSettings?.deposit_mode === 'per_vehicle' && vehicleId) {
+    // Charged deposits are a single global amount by design — per-vehicle was
+    // dropped deliberately. Honour that here rather than by overwriting the
+    // tenant's stored deposit_mode, so switching back to holds restores their
+    // per-vehicle configuration intact.
+    if (tenant?.deposit_charge_enabled !== true && rentalSettings?.deposit_mode === 'per_vehicle' && vehicleId) {
       // Per-vehicle deposit mode: get deposit from the selected vehicle
       const vehicle = vehicles?.find(v => v.id === vehicleId);
       return (vehicle as any)?.security_deposit ?? 0;
@@ -1047,6 +1059,22 @@ const CreateRental = () => {
     },
     enabled: !!tenant,
   });
+
+  // Deposit decision for this rental, resolved once so the pricing panel, the
+  // sidebar and the submit handler cannot disagree about it.
+  //
+  // MUST stay below the `vehicles` query above. In `per_vehicle` deposit mode
+  // calculateSecurityDeposit() reads `vehicles` to look the amount up, so
+  // calling it while `vehicles` is still in its temporal dead zone throws
+  // "Cannot access 'vehicles' before initialization" *during render*. That
+  // only happens once a vehicle is actually selected — which includes the
+  // draft restored from localStorage on mount — so the page worked until an
+  // operator picked a car, then died on every subsequent visit until they
+  // cleared site data. Keep this after the query, not before it.
+  const autoDepositTop = calculateSecurityDeposit(selectedVehicleId);
+  const depositTenantEnabled = rentalSettings?.security_deposit_enabled === true;
+  const isTakingDeposit =
+    takeDeposit === null ? (depositTenantEnabled && autoDepositTop > 0) : takeDeposit;
 
   // Fetch available promo codes for this tenant
   const { data: promoCodes } = useQuery({
@@ -1763,7 +1791,10 @@ const CreateRental = () => {
         // rental only and is honoured by place-deposit-hold + the Stripe / email
         // disclosure copy. Without this, the operator's edit on the Pre-Auth
         // input was silently ignored downstream.
-        deposit_amount_override: depositOverride !== null ? depositOverride : null,
+        // An explicit 0 records "this rental takes no deposit", which
+        // resolveDepositAmount honours; null keeps the tenant default so a later
+        // settings change still applies.
+        deposit_amount_override: !isTakingDeposit ? 0 : (depositOverride !== null ? depositOverride : null),
       };
 
       // Final-pass payload guard. The Zod schema and the submit-handler validation
@@ -2149,18 +2180,62 @@ const CreateRental = () => {
       const discountedAmount = data.monthly_amount - discountAmount;
       const taxAmount = taxOverride !== null ? taxOverride : calculateTaxAmount(discountedAmount);
       const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
-      const securityDeposit = depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id);
+      const securityDeposit = isTakingDeposit
+        ? (depositOverride !== null ? depositOverride : calculateSecurityDeposit(data.vehicle_id))
+        : 0;
       const insurancePremium = bonzahPremium > 0 ? bonzahPremium : 0;
       // Per-day extras bill unit price × rental days; per-trip bill flat. PAYG (no
       // end date) has no fixed length, so per-day extras fall back to a single day.
       const extrasDays = data.end_date ? Math.max(1, differenceInDays(data.end_date, data.start_date)) : 1;
       const extrasTotal = calcExtrasTotal(selectedExtras, (activeExtras || []) as any[], extrasDays);
-      // Deposit is NOT included in the chargeable total — it's held separately
-      // via create-hold-checkout / place-deposit-hold so the customer gets a
-      // proper pre-auth on their card instead of being charged for the deposit
-      // as part of the rental invoice. The invoice still records security_deposit
-      // as a tracking field but it's not part of total_amount.
-      const totalAmount = discountedAmount + taxAmount + serviceFee + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal;
+      // Two deposit models, chosen per tenant by tenants.deposit_charge_enabled.
+      //
+      // HOLD (flag off, the legacy path): the deposit is ring-fenced on the card
+      // by place-deposit-hold / create-hold-checkout. It is never billed, so it
+      // stays out of both the invoice and total_amount, and writing 0 below keeps
+      // generate_first_charge_for_rental from materialising a 'Security Deposit'
+      // Charge the customer would appear to owe.
+      //
+      // CHARGED (flag on): the deposit is real money the customer owes up front.
+      // It must go into total_amount AND onto the invoice together — the DB
+      // function reads invoices.security_deposit to create the ledger Charge, so
+      // billing it without invoicing it (or the reverse) leaves the deposit
+      // permanently outstanding. That mismatch is exactly what the 2026-04-20
+      // migration removing this charge was written to stop.
+      // Read the flag LIVE rather than trusting the cached TenantContext.
+      //
+      // These two decisions are made by different actors at different moments:
+      // this client writes invoices.security_deposit and total_amount, then
+      // generate_first_charge_for_rental (server-side) decides whether to create
+      // the matching ledger Charge — and it reads the flag fresh. A tab opened
+      // before the setting changed billed the customer for a deposit the RPC then
+      // refused to raise a charge for, so the payment had nothing to allocate to
+      // and silently became an unapplied Credit. Observed on R-815cfc: invoice
+      // total 4.40 including a 1.00 deposit, ledger holding only the 3.40 rental.
+      //
+      // One authority, read at the moment of writing. On failure fall back to the
+      // context rather than block rental creation.
+      let depositChargedNow = depositIsCharged;
+      try {
+        const { data: liveTenant } = await supabase
+          .from('tenants')
+          .select('deposit_charge_enabled, security_deposit_enabled')
+          .eq('id', tenant?.id ?? '')
+          .maybeSingle();
+        // Both flags, not just the charge flag: security_deposit_enabled is the
+        // master switch for deposits, and deposit_charge_enabled only chooses
+        // charge-vs-hold underneath it. Reading the charge flag alone billed a
+        // deposit on tenants who had deposits switched off entirely.
+        if (liveTenant) {
+          const lt = liveTenant as { deposit_charge_enabled?: boolean; security_deposit_enabled?: boolean };
+          depositChargedNow = lt.security_deposit_enabled !== false && lt.deposit_charge_enabled === true;
+        }
+      } catch (flagErr) {
+        console.warn('[rental-create] could not re-read the deposit flags; using cached values', flagErr);
+      }
+
+      const chargedDeposit = depositChargedNow ? securityDeposit : 0;
+      const totalAmount = discountedAmount + taxAmount + serviceFee + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal + chargedDeposit;
 
       // Track if this is an installment rental (used for routing after creation)
       const isInstallmentRental = installmentPlanType !== 'full' && rentalSettings?.installments_enabled;
@@ -2182,12 +2257,9 @@ const CreateRental = () => {
           subtotal: discountedAmount,
           tax_amount: taxAmount,
           service_fee: serviceFee,
-          // Deposit is held off-session via place-deposit-hold (pre-auth on the
-          // saved card). It is NOT a ledger charge — so we don't write it onto
-          // the invoice. The hold lifecycle is tracked on rental.deposit_hold_*
-          // columns instead. Setting to 0 prevents generate_first_charge_for_rental
-          // from materialising an unpaid "Security Deposit" Charge in the ledger.
-          security_deposit: 0,
+          // 0 on the hold path, the real amount on the charged path. See the
+          // depositIsCharged comment above — this drives the ledger Charge.
+          security_deposit: chargedDeposit,
           insurance_premium: insurancePremium,
           delivery_fee: effectiveDeliveryFee,
           extras_total: extrasTotal,
@@ -2214,6 +2286,31 @@ const CreateRental = () => {
         if (chargeError) {
           console.error("Error generating charges:", chargeError);
           // Don't throw - rental is already created, charges can be created manually
+        }
+      } else if (depositChargedNow && chargedDeposit > 0) {
+        // PAYG has no invoice and never calls generate_first_charge_for_rental,
+        // and apply-payment explicitly refuses to auto-create charges for PAYG
+        // rentals (the accrual cron is the sole writer of daily Rental/Tax/
+        // Service Fee). So nothing upstream will ever create the deposit Charge.
+        // Without this insert the deposit has nothing to allocate against and a
+        // payment for it silently becomes an unapplied Credit.
+        const depositDate = format(data.start_date, 'yyyy-MM-dd');
+        const { error: depositChargeError } = await supabase.from("ledger_entries").insert({
+          customer_id: data.customer_id,
+          rental_id: rental.id,
+          vehicle_id: data.vehicle_id,
+          tenant_id: tenant?.id,
+          entry_date: depositDate,
+          due_date: depositDate,
+          type: "Charge",
+          category: "Security Deposit",
+          amount: chargedDeposit,
+          remaining_amount: chargedDeposit,
+        });
+
+        if (depositChargeError) {
+          console.error("Error creating PAYG security deposit charge:", depositChargeError);
+          // Don't throw - rental exists; the deposit can be raised manually.
         }
       }
 
@@ -3657,7 +3754,7 @@ const CreateRental = () => {
                         normalItems.push({ label: 'Service Fee (fixed)', amount: serviceFee });
                       }
                       if (rentalSettings?.security_deposit_enabled && deposit > 0) {
-                        normalItems.push({ label: 'Pre-Authorization', amount: deposit });
+                        normalItems.push({ label: depositIsCharged ? 'Security Deposit' : 'Pre-Authorization', amount: deposit });
                       }
 
                       return (
@@ -3916,7 +4013,11 @@ const CreateRental = () => {
 
                 const showTax = rentalSettings?.tax_enabled && (rentalSettings?.tax_percentage ?? 0) > 0;
                 const showServiceFee = rentalSettings?.service_fee_enabled && autoServiceFee > 0;
-                const showDeposit = autoDeposit > 0;
+                // Hold path keeps its old behaviour (only shown when an amount is
+                // configured). Charged path always shows the control, so an operator
+                // can take a deposit even when the tenant default is 0 — otherwise
+                // the only way to add one is to not create the rental.
+                const showDeposit = depositIsCharged ? true : autoDeposit > 0;
 
                 const effDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
                 const effCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
@@ -3925,7 +4026,9 @@ const CreateRental = () => {
 
                 const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
                 const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
-                const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+                const effectiveDeposit = (depositIsCharged && !isTakingDeposit)
+                  ? 0
+                  : (depositOverride !== null ? depositOverride : autoDeposit);
                 const feesTotal = (showTax ? effectiveTax : 0) + (showServiceFee ? effectiveServiceFee : 0) + (showDeposit ? effectiveDeposit : 0) + effDeliveryFee + (sameAsPickup ? 0 : effCollectionFee);
                 const grandTotal = discountedAmount + feesTotal + bonzahPremium;
                 const currency = tenant?.currency_code || 'USD';
@@ -4396,15 +4499,40 @@ const CreateRental = () => {
                             {showDeposit && (
                               <div className="flex items-center justify-between gap-4">
                                 <div className="flex-1 min-w-0">
-                                  <Label className="text-sm">Pre-Authorization</Label>
+                                  {depositIsCharged ? (
+                                    <div className="flex items-center gap-2">
+                                      <Checkbox
+                                        id="take-deposit"
+                                        checked={isTakingDeposit}
+                                        onCheckedChange={(c) => {
+                                          const on = c === true;
+                                          setTakeDeposit(on);
+                                          // Un-ticking discards any edited amount, so
+                                          // re-ticking starts from the tenant default
+                                          // rather than a figure nobody re-confirmed.
+                                          if (!on) {
+                                            setDepositOverride(null);
+                                            setDepositAmountUnlocked(false);
+                                          }
+                                        }}
+                                      />
+                                      <Label htmlFor="take-deposit" className="text-sm cursor-pointer">Security Deposit</Label>
+                                    </div>
+                                  ) : (
+                                    <Label className="text-sm">Pre-Authorization</Label>
+                                  )}
                                   <p className="text-xs text-muted-foreground mt-0.5">
-                                    Auto: {formatCurrency(autoDeposit, currency)}{rentalSettings?.deposit_mode === 'per_vehicle' ? ' (per-vehicle)' : ' (global)'}
+                                    {depositIsCharged && !isTakingDeposit
+                                      ? 'No deposit on this rental'
+                                      : depositIsCharged && autoDeposit <= 0
+                                        ? 'No default set — enter an amount'
+                                        : `Auto: ${formatCurrency(autoDeposit, currency)}${(!depositIsCharged && rentalSettings?.deposit_mode === 'per_vehicle') ? ' (per-vehicle)' : ' (global)'}`}
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <div className="w-36">
                                     <CurrencyInput
-                                      value={depositOverride !== null ? depositOverride : autoDeposit}
+                                      value={(depositIsCharged && !isTakingDeposit) ? 0 : (depositOverride !== null ? depositOverride : autoDeposit)}
                                       onChange={(val) => {
                                         const numVal = typeof val === 'string' ? parseFloat(val) : val;
                                         if (numVal === autoDeposit || (isNaN(numVal) && autoDeposit === 0)) {
@@ -4417,17 +4545,34 @@ const CreateRental = () => {
                                       min={0}
                                       step={0.01}
                                       currencySymbol={currencySymbol}
+                                      // Charged deposits are real money: the amount is
+                                      // locked until the operator deliberately unlocks it.
+                                      // No default to protect (0) means nothing to lock.
+                                      readOnly={depositIsCharged && isTakingDeposit && !depositAmountUnlocked && autoDeposit > 0}
+                                      disabled={depositIsCharged && !isTakingDeposit}
                                     />
                                   </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className={cn("text-xs px-2 h-8 w-14 shrink-0", depositOverride === null && "invisible")}
-                                    onClick={() => setDepositOverride(null)}
-                                  >
-                                    Reset
-                                  </Button>
+                                  {depositIsCharged && isTakingDeposit && !depositAmountUnlocked && autoDeposit > 0 ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-xs px-2 h-8 w-14 shrink-0"
+                                      onClick={() => setDepositEditConfirmOpen(true)}
+                                    >
+                                      Edit
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className={cn("text-xs px-2 h-8 w-14 shrink-0", depositOverride === null && "invisible")}
+                                      onClick={() => { setDepositOverride(null); setDepositAmountUnlocked(false); }}
+                                    >
+                                      Reset
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -4439,9 +4584,9 @@ const CreateRental = () => {
                               customer checkout view. */}
                           <div className="border-t pt-3 flex items-center justify-between">
                             <span className="font-semibold text-sm">Estimated Total</span>
-                            <span className="font-semibold text-base">{formatCurrency(grandTotal - (showDeposit ? effectiveDeposit : 0), currency)}</span>
+                            <span className="font-semibold text-base">{formatCurrency(grandTotal - (showDeposit && !depositIsCharged ? effectiveDeposit : 0), currency)}</span>
                           </div>
-                          {showDeposit && effectiveDeposit > 0 && (
+                          {showDeposit && effectiveDeposit > 0 && !depositIsCharged && (
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
                               <span>+ Pre-authorization hold at pickup (released after return)</span>
                               <span>{formatCurrency(effectiveDeposit, currency)}</span>
@@ -4480,7 +4625,9 @@ const CreateRental = () => {
                 const autoDeposit = calculateSecurityDeposit(form.getValues("vehicle_id"));
                 const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
                 const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
-                const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+                const effectiveDeposit = (depositIsCharged && !isTakingDeposit)
+                  ? 0
+                  : (depositOverride !== null ? depositOverride : autoDeposit);
 
                 const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
                 let installableAmount = discountedAmount;
@@ -4765,7 +4912,7 @@ const CreateRental = () => {
                           <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1.5">
                             <p className="font-medium text-sm mb-2">Payment Schedule</p>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Today (pre-auth + fees{chargeFirstUpfront ? ' + 1st installment' : ''})</span>
+                              <span className="text-muted-foreground">Today ({depositIsCharged ? 'deposit' : 'pre-auth'} + fees{chargeFirstUpfront ? ' + 1st installment' : ''})</span>
                               <span className="font-medium">
                                 {formatCurrency(
                                   chargeFirstUpfront ? upfrontOnlyAmount + effectiveInstallmentAmount : upfrontOnlyAmount,
@@ -5768,7 +5915,9 @@ const CreateRental = () => {
 
                       const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
                       const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
-                      const effectiveDeposit = depositOverride !== null ? depositOverride : autoDeposit;
+                      const effectiveDeposit = (depositIsCharged && !isTakingDeposit)
+                  ? 0
+                  : (depositOverride !== null ? depositOverride : autoDeposit);
                       const prevDeliveryFee = deliveryFeeOverride !== null ? deliveryFeeOverride : deliveryFee;
                       const prevCollectionFee = sameAsPickup ? 0 : (collectionFeeOverride !== null ? collectionFeeOverride : collectionFee);
 
@@ -5869,10 +6018,10 @@ const CreateRental = () => {
                           <div className="border-t pt-2 mt-1 flex items-center justify-between">
                             <p className="text-sm font-semibold">Total</p>
                             <p className="text-base font-bold text-primary">
-                              {subtotal > 0 ? formatCurrency(Math.max(0, subtotal), currency) : "—"}
+                              {subtotal > 0 ? formatCurrency(Math.max(0, depositIsCharged ? subtotal + effectiveDeposit : subtotal), currency) : "—"}
                             </p>
                           </div>
-                          {effectiveDeposit > 0 && subtotal > 0 && (
+                          {effectiveDeposit > 0 && subtotal > 0 && !depositIsCharged && (
                             <div className="flex items-center justify-between">
                               <p className="text-[10px] text-muted-foreground">
                                 + Pre-authorization hold at pickup (released after return)
@@ -5927,6 +6076,9 @@ const CreateRental = () => {
         // see place-deposit-hold edge function. Only true for the first-rental
         // post-creation flow; the dialog when reused elsewhere defaults to false.
         placeDepositHoldAfter={Boolean(
+          // Never on the charged path: the deposit is taken as a real payment, and
+          // a hold as well would ring-fence the same money twice.
+          !depositIsCharged &&
           tenant?.security_deposit_enabled &&
           // A per-rental override wins — including an explicit 0 (operator
           // unchecked the deposit), which must leave the box UNticked. Only use
@@ -6154,6 +6306,25 @@ const CreateRental = () => {
         }}
         isRetrying={vehicleChangeCheckLoading}
       />
+
+      {/* Deliberate friction before the deposit amount can be edited. The
+          failure this guards against is typing 20 when you meant 100 — cheap to
+          prevent here, expensive to find out at vehicle return. */}
+      <AlertDialog open={depositEditConfirmOpen} onOpenChange={setDepositEditConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change the deposit amount?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The amount is pre-filled from your deposit settings. Only change it if this rental genuinely needs a
+              different deposit — the customer is charged whatever you enter.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setDepositAmountUnlocked(true)}>Yes, edit it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Cancel/Restart verification confirmation */}
       <AlertDialog open={showCancelVerificationDialog} onOpenChange={setShowCancelVerificationDialog}>

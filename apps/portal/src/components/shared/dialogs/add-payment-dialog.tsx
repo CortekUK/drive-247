@@ -618,6 +618,10 @@ export const AddPaymentDialog = ({
   // configured deposit) — gates whether we render the operator opt-out checkbox.
   const depositHoldApplicable = !!placeDepositHoldAfter
     && !!tenant?.security_deposit_enabled
+    // Charged-deposit tenants never place a hold — the deposit is collected as a
+    // real payment. Gated here as well as at the caller so no parent can opt a
+    // charged tenant back into double-securing the same money.
+    && tenant?.deposit_charge_enabled !== true
     && effectiveDepositAmount > 0;
 
   // The hold only actually rides along when applicable AND the operator left the
@@ -833,7 +837,7 @@ export const AddPaymentDialog = ({
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.
-          ...(depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
+          ...(depositHoldApplicable && depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
         },
       });
 
@@ -1112,7 +1116,7 @@ export const AddPaymentDialog = ({
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.
-          ...(depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
+          ...(depositHoldApplicable && depositHoldEnabled ? { placeDepositHoldAfter: true } : {}),
         },
       });
 
@@ -1143,7 +1147,11 @@ export const AddPaymentDialog = ({
           // hold amount so the email template can render the transparency
           // notice for the customer alongside the Pay Now button. Uses the
           // per-rental override when set, falls back to tenant default.
-          ...(depositHoldEnabled && tenant?.security_deposit_enabled && effectiveDepositAmount > 0
+          // The charged-tenant term matches depositHoldApplicable above. Without it
+          // this one call site could still ask send-invoice-email to promise the
+          // customer a "security deposit hold" that will never be placed.
+          ...(depositHoldEnabled && tenant?.security_deposit_enabled
+              && tenant?.deposit_charge_enabled !== true && effectiveDepositAmount > 0
             ? { depositHoldAmount: effectiveDepositAmount }
             : {}),
           ...(targetCategories && targetCategories.length > 0

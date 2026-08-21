@@ -279,31 +279,36 @@ Deno.serve(async (req) => {
       return errorResponse(cdBalanceError || 'Failed to fetch balance', 400)
     }
 
-    // SPENDABLE balance = the entity/sub-user allocation, because that is what a
-    // policy purchase actually draws from ("your allocated Bonzah balance is too
-    // low. Allocate more funds, then retry.").
+    // SPENDABLE balance.
     //
-    // This used to read `allocated > 0 ? allocated : broker`, which meant an
-    // allocation of exactly ZERO silently fell back to the broker figure. A
-    // tenant with $500 sitting at broker level but $0 allocated was shown a
-    // reassuring "Live balance: $500.00 · Accepting live insurance policies"
-    // right up until a real customer's policy failed for insufficient funds.
+    // Bonzah runs this platform on AGENCY-LEVEL balance: policies are paid from
+    // the broker/agency wallet (`/Bonzah/cdBalance`), and the per-sub-user
+    // figure in `/deposit` -> users[].amount is a vestigial field that is always
+    // 0.0000. Bonzah's own portal refuses to populate it — allocating there
+    // returns "System Error Agency level balance feature enabled. Userwise
+    // allocation not allowed."
     //
-    // Only fall back to the broker number when we could not determine the
-    // allocation at all (the /deposit call failed) — never to paper over a
-    // genuine zero.
+    // Verified 2026-08-22 across every live tenant: allocated was $0.00 for all
+    // of them, including goniko (18 policies, broker last_used 2026-08-04) and
+    // averysrental (8 policies, broker last_used 2026-08-06) — both selling
+    // fine, both drawing down the BROKER wallet.
+    //
+    // So prefer the allocation only when it is actually non-zero (i.e. if
+    // Bonzah ever enables user-wise allocation for an account), and otherwise
+    // use the broker figure. Reporting a hard 0 here told every live tenant
+    // "$0.00 available to issue policies" while their money sat spendable at
+    // broker level, which is what prompted a tenant to request a top-up they
+    // did not need.
+    const allocatedNum = allocatedBalance !== null ? Number(allocatedBalance) : 0
     const balance =
-      allocatedBalance !== null
-        ? allocatedBalance
-        : brokerBalance ?? '0'
+      allocatedNum > 0
+        ? (allocatedBalance as string)
+        : brokerBalance ?? allocatedBalance ?? '0'
 
-    // True when the money exists at broker level but none of it has been
-    // allocated to the sub-account that issues policies. The operator must move
-    // funds inside the Bonzah portal; nothing on our side can do it for them.
-    const needsAllocation =
-      allocatedBalance !== null &&
-      Number(allocatedBalance) <= 0 &&
-      Number(brokerBalance ?? 0) > 0
+    // Retained for API compatibility. Under agency-level balance there is
+    // nothing for an operator to allocate, so this must never be true on the
+    // strength of a zero allocation alone.
+    const needsAllocation = false
 
     // Check threshold and create reminder/notifications if needed
     const balanceNum = Number(balance)

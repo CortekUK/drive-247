@@ -189,12 +189,30 @@ Deno.serve(async (req) => {
     // needs this row.
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
-      .select("global_deposit_amount, security_deposit_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
+      .select("global_deposit_amount, security_deposit_enabled, deposit_charge_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
       .eq("id", effectiveTenantId)
       .single();
 
     if (tenantError || !tenant) {
       return errorResponse("Tenant not found", 404);
+    }
+
+    // A tenant on CHARGED deposits collects the deposit as a real payment against
+    // a 'Security Deposit' ledger charge. Authorising the card on top of that
+    // ring-fences the same money a second time and the renter is short twice
+    // over — the exact double-hit this migration exists to remove.
+    //
+    // The refusal lives here, not in the callers, because there are six of them
+    // (the Stripe webhook's place_deposit_hold flag, charge-saved-card, key
+    // handover, the booking success page x2, and the manual portal buttons) and
+    // any one of them missed would silently double-charge a live customer.
+    if ((tenant as { deposit_charge_enabled?: boolean }).deposit_charge_enabled === true) {
+      console.log(`[place-deposit-hold] tenant ${effectiveTenantId} is on charged deposits — no authorisation placed.`);
+      return jsonResponse({
+        success: true,
+        skipped: true,
+        message: "This tenant collects deposits as a charge, not a hold — no authorisation was placed.",
+      });
     }
 
     // Remember the prior state: a re-collection after a dead hold needs a fresh

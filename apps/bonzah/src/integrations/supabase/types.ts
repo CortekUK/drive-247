@@ -14642,6 +14642,7 @@ export type Database = {
           delivery_enabled: boolean | null
           delivery_max_distance_km: number | null
           delivery_tiers_enabled: boolean
+          deposit_charge_enabled: boolean
           deposit_mode: string | null
           distance_unit: string | null
           email_notifications_enabled: boolean
@@ -14897,6 +14898,7 @@ export type Database = {
           delivery_enabled?: boolean | null
           delivery_max_distance_km?: number | null
           delivery_tiers_enabled?: boolean
+          deposit_charge_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
           email_notifications_enabled?: boolean
@@ -15152,6 +15154,7 @@ export type Database = {
           delivery_enabled?: boolean | null
           delivery_max_distance_km?: number | null
           delivery_tiers_enabled?: boolean
+          deposit_charge_enabled?: boolean
           deposit_mode?: string | null
           distance_unit?: string | null
           email_notifications_enabled?: boolean

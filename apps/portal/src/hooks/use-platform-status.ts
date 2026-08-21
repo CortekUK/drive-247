@@ -68,8 +68,6 @@ export function usePlatformStatus(): PlatformStatus {
   const {
     balanceNumber,
     testBalanceNumber,
-    brokerBalanceNumber,
-    needsAllocation,
     isBonzahConnected,
     hasOwnCredentials,
     bonzahMode,
@@ -248,12 +246,12 @@ export function usePlatformStatus(): PlatformStatus {
       label: "Bonzah Insurance",
       description: hasOwnCredentials
         ? bonzahMode === "live"
-          // Don't claim we're accepting policies when nothing is allocated to
-          // pay for them — that reassurance held right up until a real
-          // customer's purchase failed for insufficient funds.
-          ? needsAllocation
-            ? "Connected · Funds not allocated — policies will fail"
-            : "Connected · Accepting live insurance policies"
+          // Under Bonzah's agency-level balance the spendable figure IS the
+          // broker wallet, so a zero sub-user allocation is normal and must not
+          // be reported as a fault. See use-bonzah-balance for the details.
+          ? (balanceNumber ?? 0) > 0
+            ? "Connected · Accepting live insurance policies"
+            : "Connected · Top up your Bonzah balance to issue policies"
           : "Connected · Set up your account to go live"
         : "Test mode · Set up your account to go live",
       isComplete: hasOwnCredentials,
@@ -266,19 +264,15 @@ export function usePlatformStatus(): PlatformStatus {
       mode: bonzahMode as "test" | "live",
       // Show balance for the current mode — always visible (test mode works for everyone)
       metric: {
-          // Always the ALLOCATED figure — the only money a policy can draw on.
-          label: bonzahMode === "live" ? "Available to issue policies" : "Allocated balance",
+          // The spendable figure — the broker/agency wallet a policy draws on.
+          label: bonzahMode === "live" ? "Available to issue policies" : "Bonzah balance",
           value: balanceNumber != null
             ? `$${balanceNumber.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : "$0.00",
-          warning: needsAllocation
-            // Tell them the money isn't missing, it's in the wrong place —
-            // otherwise "top up" reads as wrong to someone who just paid in.
-            ? `$${(brokerBalanceNumber ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is in your Bonzah account but not allocated — allocate it to start issuing policies`
-            : (balanceNumber == null || balanceNumber === 0)
-              ? "Top up your balance in Bonzah"
-              : undefined,
-          warningUrl: (needsAllocation || balanceNumber == null || balanceNumber === 0)
+          warning: (balanceNumber == null || balanceNumber === 0)
+            ? "Top up your balance in Bonzah"
+            : undefined,
+          warningUrl: (balanceNumber == null || balanceNumber === 0)
             ? getBonzahPortalUrl(bonzahMode)
             : undefined,
         },

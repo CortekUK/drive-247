@@ -32,6 +32,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   Insurance: "Insurance",
   Extras: "Extras",
   Fines: "Fines",
+  "Security Deposit": "Security Deposit",
   Adjustment: "Adjustment",
   Other: "Other",
   "Extension Rental": "Extension · Rental",

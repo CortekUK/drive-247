@@ -161,12 +161,30 @@ Deno.serve(async (req) => {
             })
             .eq("id", payment.id);
         } else if (payment.capture_status === "captured" && paymentIntentId) {
-          // CAPTURED: Full refund via Stripe
-          console.log(`Refunding captured payment ${payment.id}: ${paymentIntentId}`);
+          // CAPTURED: refund what is actually LEFT, not the gross amount.
+          //
+          // The selection above excludes Refunded/Cancelled/Reversed but NOT
+          // 'Partial Refund', which is a real live status. So a payment that had
+          // already been partly returned — routine now that security deposits are
+          // charged and refunded in parts — was re-submitted at its FULL original
+          // amount. Stripe rejects that as exceeding the remaining balance, the
+          // catch below only records result.error, no ledger row is written, and
+          // step 6 still stamps the rental payment_status 'refunded'. The customer
+          // is told they were refunded and never was.
+          const alreadyRefunded = Number(payment.refund_amount || 0);
+          const refundableRemaining = Math.max(0, Number(payment.amount || 0) - alreadyRefunded);
+          if (refundableRemaining <= 0) {
+            console.log(`Payment ${payment.id} already fully refunded (${alreadyRefunded}); skipping`);
+            result.status = "skipped";
+            result.error = "Already fully refunded";
+            refundResults.push(result);
+            continue;
+          }
+          console.log(`Refunding captured payment ${payment.id}: ${paymentIntentId} (remaining ${refundableRemaining} of ${payment.amount})`);
           const stripeRefund = await stripe.refunds.create(
             {
               payment_intent: paymentIntentId,
-              amount: Math.round(payment.amount * 100),
+              amount: Math.round(refundableRemaining * 100),
               reason: "requested_by_customer",
               metadata: {
                 payment_id: payment.id,
@@ -314,7 +332,10 @@ Deno.serve(async (req) => {
         approval_status: "rejected",
         cancellation_reason: reason || "rejected_by_admin",
         cancellation_requested: false,
-        payment_status: "refunded",
+        // Only claim 'refunded' when money actually went back. This was
+        // unconditional, so a rejection whose Stripe refund failed still marked
+        // the rental refunded and the customer was told so.
+        ...(refundedPaymentIds.length > 0 ? { payment_status: "refunded" } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", rentalId);

@@ -96,8 +96,13 @@ export interface Tenant {
   service_fee_value: number | null;
 
   // Deposit settings
+  // Master switch. The booking app never read this, so turning deposits OFF in
+  // Settings had no effect on the customer checkout at all.
+  security_deposit_enabled: boolean | null;
   deposit_mode: 'global' | 'per_vehicle' | null;
   global_deposit_amount: number | null;
+  // True = deposit is a real captured charge, not a Stripe authorization hold.
+  deposit_charge_enabled: boolean | null;
 
   // Working hours settings
   working_hours_enabled: boolean | null;
@@ -318,11 +323,34 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     };
   }, [tenant?.id]);
 
-  const loadTenant = async () => {
+  // The subscription above delivers nothing, and that is deliberate: `tenants`
+  // is not in the `supabase_realtime` publication and must not be added to it.
+  // Realtime broadcasts whole rows and does not honour the column-level GRANTs
+  // that keep the sensitive tenant columns away from the anon key, so
+  // publishing this table would hand every visitor the entire row.
+  //
+  // Poll on re-focus instead. This matters beyond stale branding: the tenant
+  // settings drive what the checkout DISPLAYS, what it sends to Stripe, and
+  // what it writes on the invoice. A tab left open across a settings change
+  // used to quote and charge a deposit the operator had already switched off.
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') loadTenant(true);
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [tenant?.id]);
+
+  const loadTenant = async (silent = false) => {
     try {
       // Only run on client side
       if (typeof window === 'undefined') {
-        setLoading(false);
+        if (!silent) setLoading(false);
         return;
       }
 
@@ -370,8 +398,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (!slug) {
         console.log('[TenantContext] No subdomain detected, running without tenant context');
         console.log('[TenantContext] TIP: Access via subdomain (e.g., test.localhost:3000) or set NEXT_PUBLIC_DEFAULT_TENANT_SLUG in .env.local');
-        setTenant(null);
-        setLoading(false);
+        if (!silent) { setTenant(null); setLoading(false); }
         return;
       }
 
@@ -448,8 +475,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           service_fee_amount,
           service_fee_type,
           service_fee_value,
+          security_deposit_enabled,
           deposit_mode,
           global_deposit_amount,
+          deposit_charge_enabled,
           working_hours_enabled,
           working_hours_open,
           working_hours_close,
@@ -522,7 +551,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         if (queryError.code === 'PGRST116') {
           // No tenant found with this slug
           console.warn(`[TenantContext] No active tenant found for slug: ${slug}`);
-          setError(`Tenant "${slug}" not found or inactive`);
+          if (!silent) setError(`Tenant "${slug}" not found or inactive`);
         } else {
           // Log the fields explicitly. Passing the raw error straight to
           // console.error renders as an unhelpful `{}` in the dev overlay
@@ -540,10 +569,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
             hint: queryError.hint,
             code: queryError.code,
           });
-          setError(detail);
+          if (!silent) setError(detail);
         }
-        setTenant(null);
-        setLoading(false);
+        if (!silent) { setTenant(null); setLoading(false); }
         return;
       }
 
@@ -553,10 +581,14 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setError(null);
     } catch (err) {
       console.error('[TenantContext] Unexpected error:', err);
-      setError('Failed to load tenant configuration');
-      setTenant(null);
+      // A background refresh must never tear the page down. If it fails we
+      // simply keep serving the tenant we already have.
+      if (!silent) {
+        setError('Failed to load tenant configuration');
+        setTenant(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

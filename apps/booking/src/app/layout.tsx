@@ -40,10 +40,24 @@ const PWA_METADATA = {
   },
 };
 
+/**
+ * Platform-default favicons, used when a tenant has not uploaded their own.
+ *
+ * A light/dark PAIR rather than one file: the mark's D is near-black, so a
+ * single favicon disappears against the dark tab strip that most desktops now
+ * default to. The .ico stays as the untheme-able fallback for crawlers.
+ */
+const PLATFORM_FAVICONS = [
+      { url: '/icons/favicon-light.png', media: '(prefers-color-scheme: light)', type: 'image/png' },
+      { url: '/icons/favicon-dark.png', media: '(prefers-color-scheme: dark)', type: 'image/png' },
+      { url: '/icons/favicon.ico', sizes: 'any' },
+    ];
+
 const defaultMetadata: Metadata = {
   title: 'Premium Car Rentals',
   description: 'Premium car rentals with exceptional service',
   ...PWA_METADATA,
+  icons: { icon: PLATFORM_FAVICONS, apple: '/icons/apple-touch-icon.png' },
 };
 
 // Generate metadata dynamically based on tenant
@@ -96,7 +110,10 @@ export async function generateMetadata(): Promise<Metadata> {
         description,
       },
       icons: {
-        ...(tenant.favicon_url ? { icon: tenant.favicon_url, shortcut: tenant.favicon_url } : {}),
+        // The operator's own favicon wins when they have one; otherwise fall
+        // back to the theme-aware Drive247 pair rather than a single file.
+        icon: tenant.favicon_url ?? PLATFORM_FAVICONS,
+        ...(tenant.favicon_url ? { shortcut: tenant.favicon_url } : {}),
         // iOS takes the Home Screen icon from here, NOT from the manifest, and
         // it must be opaque — a transparent PNG is flattened onto black.
         apple: '/icons/apple-touch-icon.png',

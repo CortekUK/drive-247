@@ -125,20 +125,44 @@ serve(async (req) => {
         .single();
       payment = paymentData;
     } else {
-      // Find the most recent payment for this rental with a Stripe payment intent
-      const { data: paymentData } = await supabase
+      // Find the most recent payment for this rental with a Stripe payment intent.
+      //
+      // NOTE the .limit(1): a "full" refund refunds ONE payment, the newest. That
+      // was mostly harmless when a rental had a single Stripe payment, but a
+      // charged-deposit rental normally has at least two (rent, then the deposit)
+      // and the deposit is usually the newest — so "cancel and refund in full"
+      // hands back the DEPOSIT and silently keeps the rent.
+      //
+      // Deliberately not changed here: refunding every payment would alter what
+      // 46 live hold-path tenants get back on cancellation, and that is a money
+      // decision rather than a bug fix. Instead the leftovers are reported so the
+      // operator can act, and the shortfall is no longer invisible.
+      const { data: stripePayments } = await supabase
         .from("payments")
         .select("*")
         .eq("rental_id", rentalId)
         .not("stripe_payment_intent_id", "is", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-      payment = paymentData;
+        .order("created_at", { ascending: false });
+
+      payment = (stripePayments && stripePayments[0]) || null;
+      if (stripePayments && stripePayments.length > 1) {
+        unrefundedOtherPayments = stripePayments.slice(1).map((p: any) => ({
+          id: p.id,
+          amount: Number(p.amount) || 0,
+          alreadyRefunded: Number(p.refund_amount) || 0,
+        }));
+        console.warn(
+          `[cancel-rental-refund] rental ${rentalId} has ${stripePayments.length} Stripe payments; ` +
+          `only the newest (${payment?.id}) is being refunded. Others left untouched: ` +
+          JSON.stringify(unrefundedOtherPayments)
+        );
+      }
     }
 
     let refundResult = null;
     let stripeRefundId = null;
+    // Other Stripe payments on this rental that this cancellation did NOT refund.
+    let unrefundedOtherPayments: Array<{ id: string; amount: number; alreadyRefunded: number }> = [];
 
     // Process Stripe refund if applicable
     if (payment?.stripe_payment_intent_id && refundType !== "none") {
@@ -288,10 +312,16 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq("rental_id", rentalId)
-      .eq("category", "Insurance")
+      // Security Deposit joins Insurance here. A cancelled rental cannot owe a
+      // deposit: there is no vehicle going out and nothing to secure. Leaving it
+      // outstanding meant the charge survived the cancellation forever, kept
+      // inflating the customer's balance and aged receivables, and daily-reminders
+      // (which never looks at rentals.status) went on chasing "Security deposit
+      // still outstanding after 4 weeks" on a dead rental.
+      .in("category", ["Insurance", "Security Deposit"])
       .eq("type", "Charge")
       .gt("remaining_amount", 0)
-      .select("id, amount, remaining_amount");
+      .select("id, amount, remaining_amount, category");
 
     if (insuranceLedgerError) {
       console.error("Failed to cancel insurance ledger entries:", insuranceLedgerError);
@@ -368,13 +398,25 @@ serve(async (req) => {
       // refundType echoed back and so cannot distinguish success from request.
       const refundActuallyHappened = !!stripeRefundId;
 
+      // capture_status is deliberately NOT written for refunds. Its check
+      // constraint allows only requires_capture/captured/cancelled/expired/NULL,
+      // so "refunded"/"partial_refund" made this whole UPDATE throw — AFTER
+      // Stripe had already returned the money. The result was a refunded
+      // customer with refund_amount still 0, status still Paid, and no
+      // stripe_refund_id, i.e. money out with no record and the payment still
+      // reading as fully refundable. Refund state lives on status +
+      // refund_amount + stripe_refund_id.
       if (refundType === "full" && refundActuallyHappened) {
         paymentUpdate.status = "Refunded";
-        paymentUpdate.capture_status = "refunded";
+        // Was never set on the full path, so refund_amount stayed 0 and the
+        // payment still looked entirely refundable to process-refund.
+        paymentUpdate.refund_amount = Number(payment.amount) || 0;
+        paymentUpdate.refund_processed_at = new Date().toISOString();
       } else if (refundType === "partial" && refundActuallyHappened) {
         paymentUpdate.status = "Partial Refund";
-        paymentUpdate.capture_status = "partial_refund";
-        paymentUpdate.refund_amount = refundAmount;
+        paymentUpdate.refund_amount =
+          Number(payment.refund_amount || 0) + Number(refundAmount || 0);
+        paymentUpdate.refund_processed_at = new Date().toISOString();
       } else if (refundType !== "none" && !refundActuallyHappened) {
         // Asked for a refund, did not get one. Leave the payment status alone
         // so the money still reads as collected, and record why.
@@ -397,6 +439,90 @@ serve(async (req) => {
         .from("payments")
         .update(paymentUpdate)
         .eq("id", payment.id);
+
+      // Record the refund in the LEDGER. This function never did, and
+      // availableForRefund in process-refund is derived from ledger Refund rows
+      // alone — so after a cancellation refund the money still read as fully
+      // refundable and could be handed back a SECOND time through the rental
+      // page. Charged security deposits make that reachable in normal use.
+      //
+      // Split across the categories this payment actually settled, in the same
+      // proportions, so each category's refundable balance is right rather than
+      // dumping the whole amount on one. Non-fatal: the money has already moved,
+      // so a bookkeeping failure must not fail the cancellation.
+      if (refundActuallyHappened) {
+        try {
+          const refundedTotal = refundType === "full"
+            ? Number(payment.amount) || 0
+            : Number(refundAmount) || 0;
+
+          const { data: apps } = await supabase
+            .from("payment_applications")
+            .select("amount_applied, charge_entry_id, ledger_entries!inner(category, extension_id)")
+            .eq("payment_id", payment.id);
+
+          const byCategory: Record<string, { amount: number; extensionId: string | null }> = {};
+          for (const a of (apps || []) as any[]) {
+            const cat = a.ledger_entries?.category;
+            if (!cat) continue;
+            if (!byCategory[cat]) byCategory[cat] = { amount: 0, extensionId: a.ledger_entries?.extension_id ?? null };
+            byCategory[cat].amount += Number(a.amount_applied || 0);
+          }
+
+          const appliedTotal = Object.values(byCategory).reduce((s, v) => s + v.amount, 0);
+          const today = new Date().toISOString().split("T")[0];
+
+          if (appliedTotal > 0 && refundedTotal > 0) {
+            for (const [cat, info] of Object.entries(byCategory)) {
+              const share = Math.round((refundedTotal * (info.amount / appliedTotal)) * 100) / 100;
+              if (share <= 0) continue;
+              const reference = `Refund: rental cancelled (Stripe: ${stripeRefundId})`;
+
+              // Same-day refunds for a category collide on ux_rental_charge_unique,
+              // so merge like process-refund does rather than blindly inserting.
+              const { data: existing } = await supabase
+                .from("ledger_entries")
+                .select("id, amount, reference")
+                .eq("rental_id", rentalId)
+                .eq("type", "Refund")
+                .eq("category", cat)
+                .eq("due_date", today)
+                .maybeSingle();
+
+              if (existing) {
+                await supabase.from("ledger_entries").update({
+                  amount: Number(existing.amount) - share,
+                  reference: existing.reference ? `${existing.reference}; ${reference}` : reference,
+                }).eq("id", existing.id);
+              } else {
+                await supabase.from("ledger_entries").insert({
+                  rental_id: rentalId,
+                  customer_id: rental.customer_id,
+                  vehicle_id: rental.vehicle_id,
+                  tenant_id: tenantId,
+                  entry_date: today,
+                  due_date: today,
+                  type: "Refund",
+                  category: cat,
+                  amount: -Math.abs(share),
+                  remaining_amount: 0,
+                  reference,
+                  ...(info.extensionId ? { extension_id: info.extensionId } : {}),
+                });
+              }
+            }
+            console.log(`[cancel-rental-refund] recorded ${refundedTotal} across ${Object.keys(byCategory).length} categories`);
+          } else {
+            console.warn(
+              `[cancel-rental-refund] refunded ${refundedTotal} but payment ${payment.id} has no ` +
+              `payment_applications to attribute it to — NO ledger Refund row written. ` +
+              `rental=${rentalId}. Reconcile manually.`
+            );
+          }
+        } catch (ledgerErr) {
+          console.error("[cancel-rental-refund] refund ledger write failed (non-fatal):", ledgerErr);
+        }
+      }
     }
 
     // Create cancellation record in audit log or notes
@@ -438,6 +564,14 @@ serve(async (req) => {
         cancelledPolicies: cancelledPolicies?.length || 0,
         insurancePremiumCancelled: insurancePremiumTotal,
         notificationData: notificationData,
+        // Other Stripe payments on this rental that were NOT refunded by this
+        // cancellation. Empty in the ordinary single-payment case. For a
+        // charged-deposit rental this is how the operator learns the rent (or
+        // the deposit) is still sitting with them.
+        unrefundedOtherPayments,
+        unrefundedWarning: unrefundedOtherPayments.length > 0
+          ? `This rental has ${unrefundedOtherPayments.length + 1} Stripe payments and only the most recent was refunded. Review the others on the rental page and refund them individually if the customer is owed them.`
+          : undefined,
       }),
       {
         status: 200,

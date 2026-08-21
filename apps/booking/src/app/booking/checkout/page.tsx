@@ -287,10 +287,14 @@ const BookingCheckoutContent = () => {
       ? (tenant?.service_fee_amount || 0)
       : 0;
 
-    // Security deposit
-    const deposit = tenant?.deposit_mode === 'global'
-      ? (tenant?.global_deposit_amount || 0)
-      : (vehicleDetails?.security_deposit || 0);
+    // Security deposit. Honours the master switch (this flow ignored it, so a
+    // tenant who turned deposits off still had them charged here), and treats a
+    // charged deposit as a single global amount by design.
+    const deposit = tenant?.security_deposit_enabled === false
+      ? 0
+      : (tenant?.deposit_charge_enabled === true || tenant?.deposit_mode === 'global')
+        ? (tenant?.global_deposit_amount || 0)
+        : (vehicleDetails?.security_deposit || 0);
 
     return {
       vehiclePrice,
@@ -311,7 +315,10 @@ const BookingCheckoutContent = () => {
       unlimitedMileageEffective,
       unlimitedMileageTotal,
       unlimitedMileageDays: rentalDaysForUnlimited,
-      grandTotal: subtotal + taxAmount + serviceFee, // Deposit is a hold at pickup, not charged at booking
+      // Hold tenants ring-fence the deposit on the card (not billed). Charged
+      // tenants owe it now, so it joins the total and the invoice together.
+      chargedDeposit: tenant?.deposit_charge_enabled === true ? deposit : 0,
+      grandTotal: subtotal + taxAmount + serviceFee + (tenant?.deposit_charge_enabled === true ? deposit : 0),
     };
   };
 
@@ -849,7 +856,7 @@ const BookingCheckoutContent = () => {
           rental_fee: currentTotalsForPayment.discountedVehiclePrice,
           tax_amount: currentTotalsForPayment.taxAmount,
           service_fee: currentTotalsForPayment.serviceFee,
-          security_deposit: 0, // Deposit is a card hold at pickup, not charged at booking
+          security_deposit: currentTotalsForPayment.chargedDeposit ?? 0, // 0 on the hold path
           insurance_premium: 0, // Insurance is handled separately via Bonzah
           delivery_fee: currentTotalsForPayment.deliveryFee,
           extras_total: currentTotalsForPayment.extrasTotal,
@@ -1327,9 +1334,20 @@ const BookingCheckoutContent = () => {
                       <span className="font-medium">+{formatCurrency(totals.serviceFee)}</span>
                     </div>
                   )}
-                  {/* Pre-Authorization is shown separately below the Grand Total
-                      (refundable card-validation hold, not part of the total). For the
-                      installment plan it is instead folded into "Pay Today" below. */}
+                  {/* A HOLD is shown separately below the Grand Total — it is not
+                      part of the total, so putting it here would overstate what the
+                      customer pays. A CHARGED deposit is the opposite: it IS part of
+                      the total, so it belongs here beside Tax and the service fee.
+                      For an installment plan it is folded into "Pay Today" below. */}
+                  {tenant?.deposit_charge_enabled === true && totals.deposit > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Security deposit
+                        <span className="text-xs text-muted-foreground/70 ml-1">(refundable)</span>
+                      </span>
+                      <span className="font-medium">+{formatCurrency(totals.deposit)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-4 space-y-4">
@@ -1373,14 +1391,16 @@ const BookingCheckoutContent = () => {
 
                   {/* Pre-Authorization — separate refundable hold shown BELOW the total.
                       Full-payment only; for installments it is already part of "Pay Today". */}
-                  {(!selectedInstallmentPlan || selectedInstallmentPlan.type === 'full') && totals.deposit > 0 && (
+                  {tenant?.deposit_charge_enabled !== true && (!selectedInstallmentPlan || selectedInstallmentPlan.type === 'full') && totals.deposit > 0 && (
                     <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
                       <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium">Pre-Authorization hold</span>
+                        <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
                         <span className="font-semibold">{formatCurrency(totals.deposit)}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.
+                        {tenant?.deposit_charge_enabled
+                          ? 'Charged with your booking and included in the total above. Refunded after your rental, less any damage or unpaid charges.'
+                          : 'A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.'}
                       </p>
                     </div>
                   )}

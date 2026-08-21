@@ -58,12 +58,13 @@ serve(async (req) => {
     let tenantData: any = null
     let depositHoldAmount = 0
     let securityDepositEnabled = false
+    let depositChargeEnabled = false
 
     // Try to get tenant by slug first, then by ID, then from rental
     if (slug) {
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount, deposit_charge_enabled')
         .eq('slug', slug)
         .eq('status', 'active')
         .single()
@@ -75,6 +76,7 @@ serve(async (req) => {
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
         tenantData = tenant
         securityDepositEnabled = !!tenant.security_deposit_enabled
+        depositChargeEnabled = tenant.deposit_charge_enabled === true
         depositHoldAmount = Number(tenant.global_deposit_amount) || 0
         console.log('Tenant loaded from slug:', tenantId, 'mode:', stripeMode)
       }
@@ -82,7 +84,7 @@ serve(async (req) => {
       // Lookup tenant by ID if slug not provided
       const { data: tenant, error: tenantError } = await supabaseClient
         .from('tenants')
-        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount')
+        .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount, deposit_charge_enabled')
         .eq('id', tenantId)
         .eq('status', 'active')
         .single()
@@ -93,6 +95,7 @@ serve(async (req) => {
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
         tenantData = tenant
         securityDepositEnabled = !!tenant.security_deposit_enabled
+        depositChargeEnabled = tenant.deposit_charge_enabled === true
         depositHoldAmount = Number(tenant.global_deposit_amount) || 0
         console.log('Tenant loaded from ID:', tenantId, 'mode:', stripeMode)
       }
@@ -109,7 +112,7 @@ serve(async (req) => {
 
         const { data: tenant } = await supabaseClient
           .from('tenants')
-          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount')
+          .select('company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, security_deposit_enabled, global_deposit_amount, deposit_charge_enabled')
           .eq('id', tenantId)
           .single()
 
@@ -119,6 +122,7 @@ serve(async (req) => {
           stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
           tenantData = tenant
           securityDepositEnabled = !!tenant.security_deposit_enabled
+        depositChargeEnabled = tenant.deposit_charge_enabled === true
           depositHoldAmount = Number(tenant.global_deposit_amount) || 0
           console.log('Tenant loaded from rental:', tenantId, 'mode:', stripeMode)
         }
@@ -163,7 +167,11 @@ serve(async (req) => {
     // We do this when the caller signals placeDepositHoldAfter AND the tenant
     // actually has a non-zero security deposit configured. Without both being
     // true the notice would be misleading (no hold is going to be placed).
-    const shouldShowDepositNotice = !!placeDepositHoldAfter && securityDepositEnabled && depositHoldAmount > 0;
+    // A charged-deposit tenant never has a hold placed, so promising one in the
+    // Stripe checkout copy would be a false statement to the customer at the
+    // exact moment they hand over their card.
+    const shouldShowDepositNotice = !!placeDepositHoldAfter && securityDepositEnabled
+      && !depositChargeEnabled && depositHoldAmount > 0;
     // formatCurrency renders proper symbols ($3.00 / £3.00 / €3.00) per the
     // tenant's currency_code instead of the raw "USD 3.00" output.
     const formattedDeposit = shouldShowDepositNotice

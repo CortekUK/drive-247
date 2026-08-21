@@ -663,9 +663,11 @@ export default function BookingDetailPage() {
     if (invoiceBreakdown) {
       const insuranceCharge = (rentalChargesForOutstanding || []).find((c) => c.category === 'Insurance');
       const collectionCharge = (rentalChargesForOutstanding || []).find((c) => c.category === 'Collection Fee');
-      // Security Deposit is intentionally omitted — never an outstanding
-      // charge. Deposits live on rentals.deposit_hold_* and are Stripe
-      // preauth holds, not owed money.
+      // On the CHARGED-deposit path the deposit is genuinely money owed, so it
+      // belongs in the invoice fallback like any other category. On the HOLD path
+      // it must stay out: 12 hold-era invoices still carry a non-zero
+      // security_deposit that was only ever an instruction to Stripe about how
+      // much to ring-fence, never a debt — including it would inflate Balance Due.
       const invoiceCategoryMap: Record<string, number> = {
         Rental: invoiceBreakdown.rentalFee,
         Tax: invoiceBreakdown.taxAmount,
@@ -674,6 +676,9 @@ export default function BookingDetailPage() {
         'Delivery Fee': (rental as any)?.delivery_fee || invoiceBreakdown.deliveryFee || 0,
         'Collection Fee': collectionCharge ? Number(collectionCharge.amount) : ((rental as any)?.collection_fee ?? 0),
         Extras: invoiceBreakdown.extrasTotal ?? 0,
+        ...(tenant?.deposit_charge_enabled === true
+          ? { 'Security Deposit': invoiceBreakdown.securityDeposit ?? 0 }
+          : {}),
       };
 
       for (const [cat, invAmount] of Object.entries(invoiceCategoryMap)) {
@@ -684,7 +689,7 @@ export default function BookingDetailPage() {
     }
 
     return Object.values(amounts).reduce((s, v) => s + v, 0);
-  }, [paymentBreakdownByCategory, invoiceBreakdown, rentalChargesForOutstanding, rental]);
+  }, [paymentBreakdownByCategory, invoiceBreakdown, rentalChargesForOutstanding, rental, tenant?.deposit_charge_enabled]);
 
   // Phase 5: authoritative extension outstanding from the unified view.
   // Replaces the old ledger-sum which drifted when extension insurance was

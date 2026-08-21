@@ -447,6 +447,7 @@ const Settings = () => {
     service_fee_type: 'percentage' | 'fixed_amount';
     service_fee_value: number;
     security_deposit_enabled: boolean;
+    deposit_charge_enabled: boolean;
     deposit_mode: 'global' | 'per_vehicle';
     global_deposit_amount: number;
     installments_enabled: boolean;
@@ -500,6 +501,7 @@ const Settings = () => {
     service_fee_type: 'fixed_amount' as 'percentage' | 'fixed_amount',
     service_fee_value: 0,
     security_deposit_enabled: true,
+    deposit_charge_enabled: false,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
     // Installment settings
@@ -581,6 +583,7 @@ const Settings = () => {
         service_fee_type: (rentalSettings.service_fee_type as 'percentage' | 'fixed_amount') ?? 'fixed_amount',
         service_fee_value: rentalSettings.service_fee_value ?? rentalSettings.service_fee_amount ?? 0,
         security_deposit_enabled: rentalSettings.security_deposit_enabled ?? true,
+        deposit_charge_enabled: rentalSettings.deposit_charge_enabled ?? false,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
         // Installment settings
@@ -1045,6 +1048,7 @@ const Settings = () => {
   }, [pendingTab, saveAllDirtyForms]);
 
   // Maintenance run tracking
+
   const { data: maintenanceRuns } = useQuery({
     queryKey: ['maintenance-runs'],
     queryFn: async () => {
@@ -1679,7 +1683,7 @@ const Settings = () => {
                 { value: 'lockbox', icon: Lock, label: 'Lockbox' },
                 { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
                 { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
-                { value: 'preauth', icon: CreditCard, label: 'Pre-Auth' },
+                { value: 'preauth', icon: CreditCard, label: 'Deposit' },
                 { value: 'installments', icon: Banknote, label: 'Installments' },
                 { value: 'payg', icon: Clock, label: 'Pay As You Go' },
                 { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
@@ -3696,18 +3700,20 @@ const Settings = () => {
 
         </TabsContent>
 
-        {/* Pre-Authorization Tab */}
+        {/* Deposit Tab */}
         <TabsContent value="preauth" className="space-y-6">
-          {/* Pre-Authorization Configuration Card */}
+          {/* Deposit Configuration Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary shrink-0" />
-                Pre-Authorization
+                Security Deposit
               </CardTitle>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <CardDescription>
-                  Configure pre-authorization hold for customer bookings
+                  Take a refundable security deposit on customer bookings. This switch controls
+                  the booking site &mdash; when it is off, customers are not shown or charged a
+                  deposit. You can still take one on a rental you create yourself.
                 </CardDescription>
                 <div className="flex items-center gap-2 shrink-0">
                   <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
@@ -3724,44 +3730,19 @@ const Settings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               {!rentalForm.security_deposit_enabled && (
-                <p className="text-sm text-muted-foreground">Pre-authorization is disabled. No hold will be placed on bookings.</p>
+                <p className="text-sm text-muted-foreground">
+                  Security deposits are off for the booking site &mdash; customers will not be
+                  shown or charged one. You can still take a deposit on a rental you create in the
+                  portal.
+                </p>
               )}
 
-              {/* Deposit Mode Selection */}
-              {rentalForm.security_deposit_enabled && <RadioGroup
-                value={rentalForm.deposit_mode}
-                onValueChange={(value) => setRentalForm(prev => ({
-                  ...prev,
-                  deposit_mode: value as 'global' | 'per_vehicle'
-                }))}
-                className="space-y-3"
-              >
-                <div className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50"
-                  onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'global' }))}>
-                  <RadioGroupItem value="global" id="deposit-global" />
-                  <Label htmlFor="deposit-global" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Global Pre-Authorization</div>
-                    <div className="text-sm text-muted-foreground">
-                      Same pre-authorization amount for all vehicles
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50"
-                  onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'per_vehicle' }))}>
-                  <RadioGroupItem value="per_vehicle" id="deposit-per-vehicle" />
-                  <Label htmlFor="deposit-per-vehicle" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Per-Vehicle Pre-Authorization</div>
-                    <div className="text-sm text-muted-foreground">
-                      Set pre-authorization amount individually for each vehicle
-                    </div>
-                  </Label>
-                </div>
-              </RadioGroup>}
 
-              {/* Global Pre-Authorization Amount (only when mode is global) */}
-              {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'global' && (
+
+              {/* Deposit amount (shown for global mode, and always on the charged path) */}
+              {rentalForm.security_deposit_enabled && (
                 <div className="space-y-2">
-                  <Label htmlFor="global_deposit_amount">Global Pre-Authorization Amount</Label>
+                  <Label htmlFor="global_deposit_amount">Deposit Amount</Label>
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -3787,18 +3768,12 @@ const Settings = () => {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    This amount will be applied to all bookings
+                    Taken on every booking and returned when the vehicle comes back, less any
+                    damage, fines or unpaid charges.
                   </p>
                 </div>
               )}
 
-              {rentalForm.security_deposit_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
-                <Alert>
-                  <AlertDescription>
-                    Set pre-authorization amounts when adding or editing vehicles. Vehicles without a pre-authorization will show $0.
-                  </AlertDescription>
-                </Alert>
-              )}
 
               {canEditSettings('preauth') && (
                 <Button
@@ -3806,11 +3781,12 @@ const Settings = () => {
                     try {
                       await updateRentalSettings({
                         security_deposit_enabled: rentalForm.security_deposit_enabled,
+                        deposit_charge_enabled: rentalForm.deposit_charge_enabled,
                         deposit_mode: rentalForm.deposit_mode,
                         global_deposit_amount: rentalForm.global_deposit_amount,
                       });
                     } catch (error) {
-                      console.error('Failed to update pre-authorization settings:', error);
+                      console.error('Failed to update deposit settings:', error);
                     }
                   }}
                   disabled={isUpdatingRentalSettings}
@@ -3821,7 +3797,7 @@ const Settings = () => {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  Save Pre-Authorization Settings
+                  Save Deposit Settings
                 </Button>
               )}
             </CardContent>
@@ -3869,7 +3845,7 @@ const Settings = () => {
                   <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
                     <li>When creating a rental, admins can choose <strong>Pay As You Go</strong> instead of regular payment</li>
                     <li>Rental amount, tax, and percentage-based service fees are marked as PAYG charges and accrue daily</li>
-                    <li>Fixed-amount fees, pre-authorization, insurance, and delivery charges are handled separately upfront</li>
+                    <li>Fixed-amount fees, the security deposit, insurance, and delivery charges are handled separately upfront</li>
                     <li>Charges accrue automatically every 24 hours from the rental start time</li>
                     <li>Payment reminders are sent automatically on the configured interval if the customer has an outstanding balance</li>
                     <li>Payments are recorded manually from the rental detail page; installment plans are not available</li>
@@ -4816,7 +4792,7 @@ const Settings = () => {
                         <li>Minimum Driver Age: 21</li>
                         <li>Tax: Disabled (0%)</li>
                         <li>Service Fee: Disabled</li>
-                        <li>Pre-Authorization Mode: Global ($0)</li>
+                        <li>Deposit Mode: Global ($0)</li>
                         <li>Installments: Disabled (defaults restored)</li>
                         <li>Booking Lead Time: 24 hours</li>
                         <li>Min Rental: 0 days, 1 hour</li>
@@ -5090,6 +5066,7 @@ const Settings = () => {
         open={showDataCleanupDialog}
         onOpenChange={setShowDataCleanupDialog}
       />
+
     </div>
   );
 };

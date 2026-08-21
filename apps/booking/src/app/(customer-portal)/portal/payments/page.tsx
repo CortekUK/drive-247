@@ -458,7 +458,7 @@ function InstallmentPlanCard({
                     ) : (
                       <Clock className="h-4 w-4 text-muted-foreground" />
                     )}
-                    <span>Upfront (Pre-Auth + Fees)</span>
+                    <span>{tenant?.deposit_charge_enabled ? 'Upfront (Deposit + Fees)' : 'Upfront (Pre-Auth + Fees)'}</span>
                   </div>
                   <div className="text-right">
                     <span className="font-medium">{formatCurrency(plan.upfront_amount, currencyCode)}</span>
@@ -856,7 +856,7 @@ function InvoiceDetailSheet({
             )}
             {invoice.security_deposit != null && invoice.security_deposit > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Pre-Authorization</span>
+                <span className="text-muted-foreground">{tenant?.deposit_charge_enabled ? 'Security Deposit' : 'Pre-Authorization'}</span>
                 <span>{formatCurrency(invoice.security_deposit, currencyCode)}</span>
               </div>
             )}

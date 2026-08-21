@@ -224,6 +224,10 @@ export function useKeyHandover(rentalId: string | undefined) {
   // Mark key as handed (updates rental status to Active only if approved)
   const markKeyHanded = useMutation({
     mutationFn: async (type: HandoverType) => {
+      // Whether release-deposit-hold actually released something. It answers
+      // 200 { skipped: true } when there is no authorisation — every charged-
+      // deposit rental — and the closing toast must not claim otherwise.
+      let depositHoldWasReleased = false;
       if (!rentalId) throw new Error("Rental ID required");
 
       // Ensure handover record exists first
@@ -413,6 +417,14 @@ export function useKeyHandover(rentalId: string | undefined) {
           const { data: releaseData, error: releaseError } = await supabase.functions.invoke('release-deposit-hold', {
             body: { rentalId, tenantId: rental?.tenant_id || tenant?.id },
           });
+          // release-deposit-hold answers 200 { skipped: true } when there is no
+          // authorisation to release — which is EVERY charged-deposit rental,
+          // since place-deposit-hold refuses those tenants so no intent is ever
+          // created. Without this the closing toast claimed a release that never
+          // happened, on the guaranteed path rather than an edge case.
+          if (!releaseError && (releaseData as any)?.skipped !== true) {
+            depositHoldWasReleased = true;
+          }
           if (releaseError) {
             console.warn('[KEY-HANDOVER] Deposit hold release failed:', releaseError);
             // Stay non-blocking — keys are already back and the rental is closed —
@@ -447,12 +459,12 @@ export function useKeyHandover(rentalId: string | undefined) {
           console.warn('[KEY-HANDOVER] Failed to send rental completed notification:', notifyErr);
         }
 
-        return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
+        return { type, becameActive: false, depositRefunded: false, depositAmount: 0, depositHoldWasReleased };
       }
 
-      return { type, becameActive: false, depositRefunded: false, depositAmount: 0 };
+      return { type, becameActive: false, depositRefunded: false, depositAmount: 0, depositHoldWasReleased };
     },
-    onSuccess: ({ type, becameActive, depositRefunded, depositAmount, depositHoldPlaced }: any) => {
+    onSuccess: ({ type, becameActive, depositRefunded, depositAmount, depositHoldPlaced, depositHoldWasReleased }: any) => {
       queryClient.invalidateQueries({ queryKey: ["key-handovers", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-handover-status", rentalId] });
       queryClient.invalidateQueries({ queryKey: ["key-return-status", rentalId] });
@@ -480,7 +492,12 @@ export function useKeyHandover(rentalId: string | undefined) {
       } else {
         toast({
           title: "Key Received",
-          description: "Rental is now closed. Deposit hold released.",
+          description: depositHoldWasReleased
+            ? "Rental is now closed. Deposit hold released."
+            // Nothing was released, so do not claim it was. A charged-deposit
+            // rental never has an authorisation to release; the deposit is real
+            // money the operator still holds and must refund from the rental page.
+            : "Rental is now closed.",
         });
       }
     },

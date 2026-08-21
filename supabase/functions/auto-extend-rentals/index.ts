@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
         auto_extend_status, status, platform_account,
         deposit_hold_stripe_customer_id, deposit_hold_payment_method_id,
-        customers!rentals_customer_id_fkey ( id, name, email, address_state ),
+        customers!rentals_customer_id_fkey ( id, name, email, address_state, stripe_customer_id ),
         vehicles ( make, model, reg )
       `)
       .eq("auto_extend_enabled", true)
@@ -291,7 +291,7 @@ Deno.serve(async (req) => {
       .select(`id, slug, company_name, contact_email, contact_phone, currency_code,
                tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, service_fee_amount,
                stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id,
-               auto_extend_grace_hours, auto_extend_max_retries`)
+               auto_extend_grace_hours, auto_extend_max_retries, deposit_charge_enabled`)
       .in("id", tenantIds);
     const tenantMap = new Map<string, any>((tenants ?? []).map((t: any) => [t.id, t]));
 
@@ -544,17 +544,66 @@ Deno.serve(async (req) => {
         //     dueNow == chargeTotal when no credit applied.
         const dueNow = extRemaining > 0.001 && extRemaining < chargeTotal ? extRemaining : chargeTotal;
 
-        const hasSavedCard = !!(r.deposit_hold_stripe_customer_id && r.deposit_hold_payment_method_id);
         const mode = r.auto_extend_charge_mode || "pay_link";
+
+        // Card resolution. The deposit_hold_* columns are written ONLY by the
+        // hold path, and a charged-deposit tenant never gets a hold — so a card
+        // the customer saved at checkout was invisible here and every renewal
+        // silently degraded to a pay link. Fall back to the customer's Stripe
+        // customer and resolve the card at charge time, as charge-saved-card does.
+        //
+        // Everything below fails CLOSED: any problem leaves savedCard null and we
+        // take the pay-link path, which is exactly the current behaviour. This can
+        // therefore only recover renewals, never break one that works today.
+        const chargeCtx = mode === "auto_charge" ? getRecordStripeContext(tenant, r) : null;
+
+        let savedCard: { customer: string; paymentMethod: string } | null =
+          (r.deposit_hold_stripe_customer_id && r.deposit_hold_payment_method_id)
+            ? {
+                customer: r.deposit_hold_stripe_customer_id as string,
+                paymentMethod: r.deposit_hold_payment_method_id as string,
+              }
+            : null;
+
+        // Scoped to charged-deposit tenants ONLY. A hold tenant whose hold simply
+        // failed also has empty deposit_hold_* columns, and letting the fallback
+        // run for them would turn a rental that sends a pay link today into one
+        // that auto-charges — a behaviour change nobody asked for. Charged tenants
+        // are the ones for whom those columns are structurally always empty.
+        if (!savedCard && chargeCtx && tenant?.deposit_charge_enabled === true) {
+          const custId = ((r.customers as any) || {}).stripe_customer_id as string | null;
+          if (custId) {
+            try {
+              const cust: any = await chargeCtx.stripe.customers.retrieve(
+                custId,
+                { expand: ["invoice_settings.default_payment_method"] },
+                chargeCtx.options,
+              );
+              const dpm = cust?.invoice_settings?.default_payment_method;
+              let pmId: string | null = typeof dpm === "string" ? dpm : (dpm?.id ?? null);
+              if (!pmId) {
+                const pms = await chargeCtx.stripe.paymentMethods.list(
+                  { customer: custId, type: "card", limit: 1 },
+                  chargeCtx.options,
+                );
+                pmId = pms?.data?.[0]?.id ?? null;
+              }
+              if (pmId) savedCard = { customer: custId, paymentMethod: pmId };
+            } catch (cardErr: any) {
+              console.warn(
+                `[auto-extend] no saved card resolved for rental ${r.id}: ${cardErr?.message ?? cardErr}`,
+              );
+            }
+          }
+        }
+
+        const hasSavedCard = !!savedCard;
 
         // 4a. AUTO-CHARGE path — off-session on the SAVED CARD. The card/customer
         // live on the platform the RENTAL was created on (r.platform_account), so
         // resolve the client + connected account from the RECORD, not the tenant's
         // current model — otherwise a post-flip charge fails "No such customer".
-        const chargeCtx = (mode === "auto_charge" && hasSavedCard)
-          ? getRecordStripeContext(tenant, r)
-          : null;
-        if (mode === "auto_charge" && hasSavedCard && chargeCtx) {
+        if (mode === "auto_charge" && hasSavedCard && chargeCtx && savedCard) {
           let piId: string | null = null;
           let piCaptured = false;
           let payId: string | null = null;
@@ -562,8 +611,8 @@ Deno.serve(async (req) => {
             const pi = await chargeCtx.stripe.paymentIntents.create({
               amount: Math.round(dueNow * 100),
               currency: chargeCtx.currencyCode.toLowerCase(),
-              customer: r.deposit_hold_stripe_customer_id,
-              payment_method: r.deposit_hold_payment_method_id,
+              customer: savedCard.customer,
+              payment_method: savedCard.paymentMethod,
               off_session: true,
               confirm: true,
               description: `Auto-extension #${seq} for rental ${String(r.id).slice(0, 8).toUpperCase()}`,

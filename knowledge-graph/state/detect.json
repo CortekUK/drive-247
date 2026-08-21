@@ -320,6 +320,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/charge-deposit-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/cancel-rental-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/invoice-dialog.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/take-deposit-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/insurance-upload-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/refund-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/add-payment-dialog.tsx",
@@ -922,10 +923,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 914,
-    "total_words": 877190,
+    "total_files": 915,
+    "total_words": 881879,
     "counts": {
-      "code": 914
+      "code": 915
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1168,6 +1169,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/charge-deposit-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/cancel-rental-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/invoice-dialog.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/take-deposit-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/insurance-upload-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/refund-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/dialogs/add-payment-dialog.tsx",
@@ -1875,6 +1877,8 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-cancelled/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/fleet/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-success/page.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-v2/page.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-v2/layout.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/offer/[code]/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/offer/[code]/accepted/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/page.tsx",
@@ -2070,6 +2074,21 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-3-intent.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-6-documents.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/enquiry/enquiry-modal.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/home/legacy-home.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-fleet.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-ui.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-data.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-theme.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-theme-script.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-landing.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-fonts.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-nav.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-offers.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-close.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-motion.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-why.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-hero.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-icons.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentScheduleTable.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentBreakdown.tsx",
@@ -2204,10 +2223,10 @@
       ],
       "video": []
     },
-    "total_files": 348,
-    "total_words": 440444,
+    "total_files": 365,
+    "total_words": 454522,
     "counts": {
-      "code": 333,
+      "code": 350,
       "image": 15
     },
     "semantic_candidates": [
@@ -2237,6 +2256,8 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-cancelled/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/fleet/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-success/page.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-v2/page.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-v2/layout.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/offer/[code]/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/offer/[code]/accepted/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/page.tsx",
@@ -2378,6 +2399,21 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-3-intent.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/apply/step-6-documents.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/enquiry/enquiry-modal.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/home/legacy-home.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-fleet.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-ui.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-data.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-theme.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-theme-script.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-landing.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-fonts.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-nav.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-offers.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-close.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-motion.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-why.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-hero.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/booking-v2/d7-icons.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/CustomerInstallmentsView.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentScheduleTable.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/installments/InstallmentBreakdown.tsx",
@@ -2676,7 +2712,7 @@
       "video": []
     },
     "total_files": 103,
-    "total_words": 144687,
+    "total_words": 145196,
     "counts": {
       "code": 103
     },
@@ -3018,7 +3054,7 @@
       "video": []
     },
     "total_files": 41,
-    "total_words": 58392,
+    "total_words": 58398,
     "counts": {
       "code": 39,
       "document": 1,
@@ -3387,6 +3423,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/scan-insurance-document/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-verification-otp/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-refund/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-stripe-payment/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-cancelled/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/resend-email/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-voice/index.ts",
@@ -3443,10 +3480,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 363,
-    "total_words": 485011,
+    "total_files": 364,
+    "total_words": 491260,
     "counts": {
-      "code": 356,
+      "code": 357,
       "document": 7
     },
     "semantic_candidates": [
@@ -3764,6 +3801,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/scan-insurance-document/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-verification-otp/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-refund/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-stripe-payment/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-cancelled/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/resend-email/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-voice/index.ts",
@@ -4358,16 +4396,17 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150100_seed_welcome_pack_content.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820120000_add_web_push.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820140000_add_platform_activity_push.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820150000_add_booking_v2_flag.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
         "/home/haseeb-raza/Desktop/drive-247/MANUAL_MIGRATION.sql"
       ]
     },
-    "total_files": 375,
-    "total_words": 166787,
+    "total_files": 376,
+    "total_words": 167028,
     "counts": {
-      "code": 375
+      "code": 376
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20251219083413_remote_schema.sql",
@@ -4741,6 +4780,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260815150100_seed_welcome_pack_content.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820120000_add_web_push.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820140000_add_platform_activity_push.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820150000_add_booking_v2_flag.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
