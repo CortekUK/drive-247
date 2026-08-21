@@ -458,7 +458,7 @@ function InstallmentPlanCard({
                     ) : (
                       <Clock className="h-4 w-4 text-muted-foreground" />
                     )}
-                    <span>Upfront (Pre-Auth + Fees)</span>
+                    <span>{tenant?.deposit_charge_enabled ? 'Upfront (Deposit + Fees)' : 'Upfront (Pre-Auth + Fees)'}</span>
                   </div>
                   <div className="text-right">
                     <span className="font-medium">{formatCurrency(plan.upfront_amount, currencyCode)}</span>

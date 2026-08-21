@@ -1,15 +1,8 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/app-sidebar.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking/checkout/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/BookingCheckoutStep.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/contexts/TenantContext.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/[id]/page.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/admin-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."

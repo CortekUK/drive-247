@@ -812,9 +812,15 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
                   </TableCell>
                   <TableCell className="text-center">
                     {(() => {
-                      // Security Deposit = Pre-Auth Hold — show hold-specific
-                      // statuses based on deposit_hold_status, never "Paid".
-                      if (isSecurityDeposit) {
+                      // HOLD path only. An authorisation has hold states, not
+                      // payment states, so "Paid" would be wrong for it.
+                      //
+                      // A CHARGED deposit is a real debit on the customer's card
+                      // and belongs on the same Paid / Partially Paid / Refunded
+                      // ladder as every other line. Short-circuiting here showed
+                      // them "No Hold" against money that had actually left their
+                      // account — which reads as though nothing was taken.
+                      if (isSecurityDeposit && !depositIsCharged) {
                         // Every status the column can carry gets its own badge,
                         // plus the statusless-but-errored row that means the
                         // hold was attempted and never landed. Anything else

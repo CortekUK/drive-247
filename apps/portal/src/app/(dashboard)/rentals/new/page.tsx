@@ -2193,7 +2193,32 @@ const CreateRental = () => {
       // billing it without invoicing it (or the reverse) leaves the deposit
       // permanently outstanding. That mismatch is exactly what the 2026-04-20
       // migration removing this charge was written to stop.
-      const chargedDeposit = depositIsCharged ? securityDeposit : 0;
+      // Read the flag LIVE rather than trusting the cached TenantContext.
+      //
+      // These two decisions are made by different actors at different moments:
+      // this client writes invoices.security_deposit and total_amount, then
+      // generate_first_charge_for_rental (server-side) decides whether to create
+      // the matching ledger Charge — and it reads the flag fresh. A tab opened
+      // before the setting changed billed the customer for a deposit the RPC then
+      // refused to raise a charge for, so the payment had nothing to allocate to
+      // and silently became an unapplied Credit. Observed on R-815cfc: invoice
+      // total 4.40 including a 1.00 deposit, ledger holding only the 3.40 rental.
+      //
+      // One authority, read at the moment of writing. On failure fall back to the
+      // context rather than block rental creation.
+      let depositChargedNow = depositIsCharged;
+      try {
+        const { data: liveTenant } = await supabase
+          .from('tenants')
+          .select('deposit_charge_enabled')
+          .eq('id', tenant?.id ?? '')
+          .maybeSingle();
+        if (liveTenant) depositChargedNow = (liveTenant as any).deposit_charge_enabled === true;
+      } catch (flagErr) {
+        console.warn('[rental-create] could not re-read deposit_charge_enabled; using cached value', flagErr);
+      }
+
+      const chargedDeposit = depositChargedNow ? securityDeposit : 0;
       const totalAmount = discountedAmount + taxAmount + serviceFee + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal + chargedDeposit;
 
       // Track if this is an installment rental (used for routing after creation)
@@ -2246,7 +2271,7 @@ const CreateRental = () => {
           console.error("Error generating charges:", chargeError);
           // Don't throw - rental is already created, charges can be created manually
         }
-      } else if (depositIsCharged && chargedDeposit > 0) {
+      } else if (depositChargedNow && chargedDeposit > 0) {
         // PAYG has no invoice and never calls generate_first_charge_for_rental,
         // and apply-payment explicitly refuses to auto-create charges for PAYG
         // rentals (the accrual cron is the sole writer of daily Rental/Tax/

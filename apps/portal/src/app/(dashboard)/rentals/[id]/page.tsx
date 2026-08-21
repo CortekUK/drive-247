@@ -4011,9 +4011,16 @@ const RentalDetail = () => {
                             if (depositHoldStatus === 'needs_review') return <Badge variant="outline" className="text-rose-500 border-rose-500/40 bg-rose-500/10 text-[11px]">Needs Review</Badge>;
                             if (depositHoldStatus === 'disputed') return <Badge variant="outline" className="text-red-600 border-red-600/50 bg-red-600/15 text-[11px]">Disputed</Badge>;
                           }
-                          // Security Deposit without a hold (manual/cash payments, or Stripe hold
-                          // hasn't fired) — never show "Not Paid"; the deposit isn't a charge.
-                          if (category === 'Security Deposit') {
+                          // HOLD path only. A hold that never fired genuinely has no
+                          // payment state, so "Not Paid" would be wrong there.
+                          //
+                          // A CHARGED deposit is the opposite: it IS a charge, the
+                          // customer's card really was debited, and it has exactly the
+                          // same paid / partially-paid / not-paid / refunded states as
+                          // every other category. Short-circuiting to "No Hold" told the
+                          // operator a paid, refunded deposit had no hold — true but
+                          // useless, and it hid whether the money had actually arrived.
+                          if (category === 'Security Deposit' && !depositIsCharged) {
                             return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">No Hold</Badge>;
                           }
                           if (isDepositDeducted) {

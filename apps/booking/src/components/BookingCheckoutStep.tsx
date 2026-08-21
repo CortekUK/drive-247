@@ -2115,6 +2115,20 @@ export default function BookingCheckoutStep({
                     </button>
                   )}
 
+                  {/* Charged deposit is part of what the customer pays now, so it
+                      belongs in the breakdown above the total like Tax or the
+                      service fee — not in the separate note below, which exists
+                      to explain money that is NOT part of the total. */}
+                  {depositIsCharged && chargedSecurityDeposit() > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Security deposit
+                        <span className="text-xs text-muted-foreground/70 ml-1">(refundable)</span>
+                      </span>
+                      <span className="font-medium">{fmt(chargedSecurityDeposit())}</span>
+                    </div>
+                  )}
+
                   {/* Grand Total - Highlighted Section */}
                   <div className="mt-3 bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2">
                     <div className="flex justify-between items-center">
@@ -2131,7 +2145,7 @@ export default function BookingCheckoutStep({
                   {/* Pre-Authorization — shown SEPARATELY below the total. It is a
                       refundable hold placed on the card to validate it, NOT a charge,
                       so it is deliberately excluded from the Grand Total above. */}
-                  {calculateSecurityDeposit() > 0 && (
+                  {!depositIsCharged && calculateSecurityDeposit() > 0 && (
                     <div className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
                       <div className="flex justify-between items-center text-sm">
                         <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
