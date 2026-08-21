@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
-import BookingV2Landing from '@/components/booking-v2/d7-landing';
+import BookingV2Landing from '@/components/booking-v2/landing';
 import LegacyHome from '@/components/home/legacy-home';
 
 /**

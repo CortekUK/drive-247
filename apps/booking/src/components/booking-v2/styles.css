@@ -1,0 +1,169 @@
+/* ==========================================================================
+   Drive247 — booking-v2.
+   A single premium editorial landing page. Everything is namespaced under
+   `.bv2` so none of it reaches the shipped booking app, which has its own
+   globals.css and its own tenant-branded token set.
+
+   Design language: warm ivory ground, high-contrast serif headlines, quiet
+   grotesque support text, hairline warm-gray rules, one editorial red.
+   ========================================================================== */
+
+.bv2 {
+  --paper:   #f6f5f2;   /* page ground — warm off-white */
+  --card:    #ffffff;
+  --wash:    #efedea;   /* the CTA bar and other quiet fills */
+
+  --ink:     #121212;   /* headlines */
+  --ink-2:   #2a2926;
+  --body:    #6e6b67;   /* supporting copy */
+  --muted:   #9a9691;   /* labels, meta, table headers */
+
+  --line:    #e4e1dc;   /* hairline rules and card borders */
+  --line-2:  #eeece8;   /* inner dividers inside mockups */
+
+  --red:     #c8102e;   /* the single accent */
+  --red-ink: #a50d26;
+
+  /* status pills inside the product mockups */
+  --ok:      #1b7f4b;  --ok-bg:   #e9f4ed;
+  --warn:    #8a6100;  --warn-bg: #fbf1dc;
+  --stop:    #c8102e;  --stop-bg: #fbeaec;
+
+  --shadow:  0 1px 2px rgba(18,18,18,.04), 0 12px 28px -22px rgba(18,18,18,.22);
+
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+.bv2 ::selection { background: var(--red); color: #fff; }
+
+/* The booking app's globals.css sets a serif on every h1-h6 in @layer base.
+   That element rule beats an inherited font, so reset inside our namespace and
+   opt individual headings back in with .bv2-serif. */
+.bv2 h1, .bv2 h2, .bv2 h3, .bv2 h4, .bv2 h5, .bv2 h6 {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  margin: 0;
+}
+.bv2 p { margin: 0; }
+
+.bv2-wrap { width: 100%; max-width: 1160px; margin-inline: auto; padding-inline: clamp(20px, 4vw, 40px); }
+
+/* ------------------------------------------------------------- typography */
+.bv2 .bv2-serif,
+.bv2-serif {
+  font-family: var(--font-serif), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -.015em;
+  line-height: 1.04;
+  color: var(--ink);
+  text-wrap: balance;
+}
+/* "Move Better." — the one oversized moment on the page. */
+.bv2-display { font-size: clamp(3.4rem, 8.4vw, 6.6rem); line-height: .92; letter-spacing: -.03em; }
+.bv2-h2      { font-size: clamp(1.75rem, 3.2vw, 2.55rem); line-height: 1.12; }
+.bv2-h3      { font-size: clamp(1.35rem, 2.1vw, 1.7rem);  line-height: 1.15; }
+
+/* Red uppercase section label. */
+.bv2-eyebrow {
+  font-size: 10.5px; font-weight: 600; letter-spacing: .19em;
+  text-transform: uppercase; color: var(--red);
+}
+.bv2-label {
+  font-size: 10px; font-weight: 500; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+/* Field captions: sentence case and unwrapped, as in the reference. */
+.bv2-field-label {
+  font-size: 11px; font-weight: 400; color: var(--muted);
+  white-space: nowrap;
+}
+.bv2-body { color: var(--body); font-size: 14px; line-height: 1.65; }
+.bv2-num  { font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------- controls */
+.bv2-btn-red {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--red); color: #fff;
+  font-size: 13px; font-weight: 500; letter-spacing: .01em;
+  padding: 12px 22px; border: 1px solid var(--red);
+  transition: background .2s ease, transform .2s ease;
+}
+.bv2-btn-red:hover { background: var(--red-ink); }
+.bv2-btn-red:active { transform: translateY(1px); }
+
+.bv2-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: transparent; color: var(--ink);
+  font-size: 13px; font-weight: 500;
+  padding: 11px 20px; border: 1px solid var(--line);
+  transition: border-color .2s ease, background .2s ease;
+}
+.bv2-btn-ghost:hover { border-color: var(--ink); background: rgba(18,18,18,.02); }
+
+.bv2-field {
+  width: 100%; background: transparent; border: 0; outline: none;
+  font-family: inherit; font-size: 13.5px; color: var(--ink);
+  padding: 0;
+}
+.bv2-field::placeholder { color: #b6b2ad; }
+.bv2-field-wrap { border-bottom: 1px solid var(--line); padding-bottom: 9px; transition: border-color .2s ease; }
+.bv2-field-wrap:focus-within { border-color: var(--red); }
+
+/* A quiet red text link with a travelling arrow. */
+.bv2-link { display: inline-flex; align-items: center; gap: 7px; color: var(--red); font-size: 13px; font-weight: 500; }
+.bv2-link svg { transition: transform .25s ease; }
+.bv2-link:hover svg { transform: translateX(4px); }
+
+/* --------------------------------------------------------------- surfaces */
+.bv2-card { background: var(--card); border: 1px solid var(--line); }
+.bv2-rule { border-top: 1px solid var(--line); }
+
+/* Status pills used across the product mockups. */
+.bv2-pill { display: inline-flex; align-items: center; font-size: 9.5px; font-weight: 500; padding: 3px 8px; border-radius: 2px; letter-spacing: .01em; }
+.bv2-pill-ok   { color: var(--ok);   background: var(--ok-bg); }
+.bv2-pill-warn { color: var(--warn); background: var(--warn-bg); }
+.bv2-pill-stop { color: var(--stop); background: var(--stop-bg); }
+
+/* Vertical Japanese line beside the hero. */
+.bv2-vertical {
+  writing-mode: vertical-rl; text-orientation: upright;
+  letter-spacing: .32em; font-size: 11.5px; color: var(--body);
+}
+
+/* The hero car is a photograph, not a cut-out render — feather its edges into
+   the ivory ground so it reads as a floating object rather than a pasted box. */
+.bv2-car-mask {
+  -webkit-mask-image: radial-gradient(62% 66% at 50% 54%, #000 34%, rgba(0,0,0,.55) 62%, transparent 84%);
+  mask-image: radial-gradient(62% 66% at 50% 54%, #000 34%, rgba(0,0,0,.55) 62%, transparent 84%);
+}
+
+/* The fleet thumbnails are a quarter the size of the hero car; the same mask
+   erased them. Fade only the outer edge, and lift the photograph toward the
+   ivory ground so a street scene sits closer to the reference's studio cut-outs. */
+.bv2-thumb-mask {
+  -webkit-mask-image: radial-gradient(78% 88% at 50% 56%, #000 52%, transparent 96%);
+  mask-image: radial-gradient(78% 88% at 50% 56%, #000 52%, transparent 96%);
+  filter: brightness(1.05) saturate(.88) contrast(.97);
+  object-position: 50% 62%;
+}
+.bv2-car-mask { filter: brightness(1.04) saturate(.9); }
+
+/* ---------------------------------------------------------------- motion */
+@keyframes bv2-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.bv2-rise { animation: bv2-rise .7s cubic-bezier(.16,1,.3,1) both; }
+
+.bv2 :focus-visible { outline: 2px solid var(--red); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bv2 *, .bv2 *::before, .bv2 *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

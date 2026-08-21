@@ -1,4 +1,4 @@
-import BookingV2Landing from "@/components/booking-v2/d7-landing";
+import BookingV2Landing from "@/components/booking-v2/landing";
 
 /**
  * Standing preview URL for the booking-v2 design, reachable on every tenant
