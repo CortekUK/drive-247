@@ -796,7 +796,7 @@ export const DEFAULT_TERMS_OF_SERVICE: TermsOfServiceContent = {
 <p>You authorize us to charge your payment method for all amounts due under your rental agreement, including charges discovered or assessed after the vehicle is returned.</p>
 
 <h2>5. Security Deposit</h2>
-<p>A security deposit (or pre-authorization hold) is required at the start of your rental. The amount will be communicated to you in advance and held against potential damage, fines, or other charges. The deposit (or any unused portion) is released or refunded after the vehicle is returned and inspected, typically within 5–14 business days, subject to the policies of your card issuer or bank.</p>
+<p>A security deposit is required at the start of your rental. The amount will be communicated to you in advance and held against potential damage, fines, or other charges. The deposit (or any unused portion) is released or refunded after the vehicle is returned and inspected, typically within 5–14 business days, subject to the policies of your card issuer or bank.</p>
 
 <h2>6. Insurance & Liability</h2>
 <p>Basic liability coverage may be included with your rental as required by applicable law. Optional coverage products (collision damage waiver, supplemental liability, personal accident, etc.) may be available for purchase at the time of booking or pickup. You are responsible for understanding the scope and limitations of any coverage, including deductibles and exclusions.</p>

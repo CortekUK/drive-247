@@ -120,6 +120,22 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     // operator-created one.
     const _mileage = resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30);
 
+    // Deposit amount + wording, resolved ONCE so the amount variable and the
+    // clause below cannot disagree. Precedence matches resolveDepositAmount:
+    // per-rental override (an explicit 0 means the operator opted this rental
+    // out), then per-vehicle when the tenant is in that mode, then the tenant
+    // default. The noun follows the collection model — calling a real charge a
+    // "hold" in a document someone signs is wrong.
+    const depositIsChargedTenant = (tenant as any)?.deposit_charge_enabled === true;
+    const depositNoun = depositIsChargedTenant ? 'deposit' : 'hold';
+    const depositOverrideRaw = (rental as any)?.deposit_amount_override;
+    const depositResolved = (depositOverrideRaw !== null && depositOverrideRaw !== undefined)
+        ? Number(depositOverrideRaw)
+        : ((tenant as any)?.deposit_mode === 'per_vehicle'
+            ? Number((vehicle as any)?.security_deposit ?? 0)
+            : Number((tenant as any)?.global_deposit_amount ?? 0));
+    const depositDisplay = depositResolved > 0 ? formatCurrency(depositResolved, cc) : '';
+
     const variables: Record<string, string> = {
         mileage_allowance: _mileage.allowance,
         excess_mileage_rate: _mileage.excessRate,
@@ -135,18 +151,18 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         // model — calling a real charge a "hold" in a signed document is wrong.
         // Precedence matches resolveDepositAmount: per-rental override (an explicit 0
         // means opted out), then per-vehicle when in that mode, then tenant default.
-        deposit_amount: (() => {
-            const noun = (tenant as any)?.deposit_charge_enabled === true ? 'deposit' : 'hold';
-            const override = (rental as any)?.deposit_amount_override;
-            const resolved = (override !== null && override !== undefined)
-                ? Number(override)
-                : ((tenant as any)?.deposit_mode === 'per_vehicle'
-                    ? Number((vehicle as any)?.security_deposit ?? 0)
-                    : Number((tenant as any)?.global_deposit_amount ?? 0));
-            return resolved > 0
-                ? `${formatCurrency(resolved, cc)} (refundable ${noun})`
-                : `Refundable ${noun} per tenant policy`;
-        })(),
+        deposit_amount: depositDisplay
+            ? `${depositDisplay} (refundable ${depositNoun})`
+            : `Refundable ${depositNoun} per tenant policy`,
+        // Only for charged deposits. Hold tenants keep their existing wording;
+        // the placeholder is not injected for them at all. The amount is
+        // interpolated directly rather than nested as {{deposit_amount}}, because
+        // the substituter is a flat single pass over the variable map — a nested
+        // placeholder inserted after its own key was processed would survive as
+        // literal text in a signed contract.
+        deposit_terms_clause: depositIsChargedTenant && depositResolved > 0
+            ? `<h2>Security deposit</h2><p>A refundable security deposit of <strong>${depositDisplay}</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold &mdash; the funds are taken and held by the Rental Company. The deposit, less any deductions for damage, fines, unpaid charges or other amounts owed under this Agreement, is refunded to the original payment method after the vehicle is returned and inspected. Refunds are typically received within 5&ndash;10 business days, depending on the Renter&rsquo;s bank.</p>`
+            : '',
         // Customer — basic
         customer_name: customer?.name || '',
         customer_email: customer?.email || '',
@@ -475,6 +491,9 @@ export async function POST(request: NextRequest) {
                         hasTerms: !!termsBlockHtml,
                         // Tenant-level disclosure, not tied to this renter's purchase.
                         hasBonzahAddendum: (tenant as any)?.integration_bonzah === true,
+                        // Charged deposits only: stored templates predate them and
+                        // either say nothing or describe a card hold.
+                        hasDepositClause: (tenant as any)?.deposit_charge_enabled === true,
                     }),
                     rental, customer, vehicle, tenant, verification, termsBlockHtml
                 );

@@ -51,12 +51,14 @@ import { useTenant } from '@/contexts/TenantContext';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import {
+
   TEMPLATE_VARIABLES,
   getVariablesByCategory,
   getSampleData,
   replaceVariables,
   type TemplateVariable,
 } from '@/lib/template-variables';
+const DEPOSIT_CLAUSE_SAMPLE = "<h2>Security deposit</h2><p>A refundable security deposit of <strong>$200.00</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold. It is refunded after the vehicle is returned and inspected, less any deductions.</p>";
 
 interface AgreementTemplateEditorProps {
   value: string;
@@ -202,13 +204,16 @@ export const AgreementTemplateEditor: React.FC<AgreementTemplateEditorProps> = (
   // Mirrors the full-page template editor: preview what will actually be sent,
   // including the render-time Bonzah addendum. See the comment there.
   const isBonzahTenant = tenant?.integration_bonzah === true;
+  // Preview mirrors what a charged-deposit tenant will actually sign.
+  const isChargedDepositTenant = (tenant as any)?.deposit_charge_enabled === true;
   const previewContent = replaceVariables(
     injectAgreementClauses(value, {
       hasMileage: false,
       hasTerms: false,
       hasBonzahAddendum: isBonzahTenant,
+      hasDepositClause: isChargedDepositTenant,
     }),
-    { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '' },
+    { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '', deposit_terms_clause: isChargedDepositTenant ? DEPOSIT_CLAUSE_SAMPLE : '' },
   );
 
   return (

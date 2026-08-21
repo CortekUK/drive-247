@@ -45,6 +45,8 @@ import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+const DEPOSIT_CLAUSE_SAMPLE = "<h2>Security deposit</h2><p>A refundable security deposit of <strong>$200.00</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold. It is refunded after the vehicle is returned and inspected, less any deductions.</p>";
+
 
 const PLATFORM_DISCLAIMER_HTML = `<hr style="margin: 24px 0; border-color: #e5e7eb;" /><p><strong>Platform Disclaimer</strong></p><p>The parties acknowledge that Drive247 is a software platform operated by Cortek Systems Ltd, which provides technology services solely to facilitate booking, documentation, and administrative processes for vehicle rental companies.</p><p>Drive247 and Cortek Systems Ltd are not a party to this Rental Agreement and do not own, lease, manage, insure, or control any vehicles listed on the platform.</p><p>All contractual obligations, responsibilities, and liabilities relating to the rental transaction, including vehicle condition, insurance coverage, payment collection, disputes, and claims, exist solely between the Rental Company and the Renter.</p><p>Drive247 and Cortek Systems Ltd shall have no liability for any losses, damages, claims, disputes, or obligations arising from or relating to this rental transaction, the performance of either party, or any third-party services integrated into the platform.</p>`;
 
@@ -162,13 +164,16 @@ export default function EditAgreementTemplatePage() {
   // the prose. Mileage/terms stay out of the preview: those depend on a
   // specific rental, which the template editor has no concept of.
   const isBonzahTenant = tenant?.integration_bonzah === true;
+  // Preview mirrors what a charged-deposit tenant will actually sign.
+  const isChargedDepositTenant = (tenant as any)?.deposit_charge_enabled === true;
   const previewContent = replaceVariables(
     injectAgreementClauses(templateContent, {
       hasMileage: false,
       hasTerms: false,
       hasBonzahAddendum: isBonzahTenant,
+      hasDepositClause: isChargedDepositTenant,
     }),
-    { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '' },
+    { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '', deposit_terms_clause: isChargedDepositTenant ? DEPOSIT_CLAUSE_SAMPLE : '' },
   )
     .replace(
       /\{\{@sig1\}\}/g,

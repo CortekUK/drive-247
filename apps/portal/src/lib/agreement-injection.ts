@@ -88,6 +88,15 @@ export interface InjectionOptions {
    * "did this renter buy coverage" value here.
    */
   hasBonzahAddendum: boolean;
+  /**
+   * Ensure the agreement states what happens to the renter's deposit. Needed
+   * because most tenants' stored templates predate charged deposits and either
+   * say nothing or describe a card HOLD — which is the wrong legal statement
+   * once the money is actually taken. The clause TEXT is supplied by the
+   * engine via {{deposit_terms_clause}}; this module only guarantees the
+   * placeholder is present.
+   */
+  hasDepositClause: boolean;
 }
 
 function hasPlaceholder(template: string, name: string): boolean {
@@ -194,6 +203,15 @@ function injectBonzahAddendum(template: string): string {
 }
 
 /**
+ * Place the deposit clause. Injected FIRST so it ends up furthest from the
+ * signature — it is a money term belonging with the commercial body of the
+ * agreement, not a disclosure being acknowledged at the point of signing.
+ */
+function injectDepositClause(template: string): string {
+  return insertBeforeSignature(template, "\n{{deposit_terms_clause}}\n");
+}
+
+/**
  * Ensure the rendered agreement states mileage, incorporates the tenant's terms
  * and carries the Bonzah addendum, without modifying the stored template.
  *
@@ -202,10 +220,17 @@ function injectBonzahAddendum(template: string): string {
  */
 export function injectAgreementClauses(
   template: string,
-  { hasMileage, hasTerms, hasBonzahAddendum }: InjectionOptions,
+  { hasMileage, hasTerms, hasBonzahAddendum, hasDepositClause }: InjectionOptions,
 ): string {
   if (!template) return template;
   let out = template;
+
+  // First, so it reads before mileage/terms/addendum. Skipped when the template
+  // already carries the placeholder, which is what keeps re-rendering the same
+  // agreement idempotent.
+  if (hasDepositClause && !hasPlaceholder(out, "deposit_terms_clause")) {
+    out = injectDepositClause(out);
+  }
 
   // Also check the LEGACY name. A template written before the rename uses
   // {{vehicle_allowed_mileage}}; injecting on top of it would state the
