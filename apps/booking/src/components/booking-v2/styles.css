@@ -131,12 +131,6 @@
 .bv2-pill-warn { color: var(--warn); background: var(--warn-bg); }
 .bv2-pill-stop { color: var(--stop); background: var(--stop-bg); }
 
-/* Vertical Japanese line beside the hero. */
-.bv2-vertical {
-  writing-mode: vertical-rl; text-orientation: upright;
-  letter-spacing: .32em; font-size: 11.5px; color: var(--body);
-}
-
 /* The hero car is a photograph, not a cut-out render — feather its edges into
    the ivory ground so it reads as a floating object rather than a pasted box. */
 .bv2-car-mask {

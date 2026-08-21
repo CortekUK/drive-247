@@ -52,7 +52,7 @@ export function Hero() {
         </div>
 
         {/* -------------------------------------------------------- car */}
-        <div className="bv2-rise relative" style={{ animationDelay: "120ms" }}>
+        <div className="bv2-rise" style={{ animationDelay: "120ms" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={CAR_SHOTS[0]}
@@ -62,21 +62,7 @@ export function Hero() {
             fetchPriority="high"
             decoding="async"
           />
-          {/* the plate detail from the reference */}
-          <span className="pointer-events-none absolute bottom-[26%] left-1/2 -translate-x-1/2
-                           border border-[var(--ink)]/70 bg-white px-2 py-[3px]
-                           text-[9px] font-semibold tracking-[.14em] text-[var(--ink)]">
-            YARIS
-          </span>
         </div>
-      </div>
-
-      {/* vertical Japanese line, pinned to the right edge as in the reference */}
-      <div className="pointer-events-none absolute right-[clamp(20px,4vw,40px)] top-[16%] hidden flex-col items-center gap-4 xl:flex">
-        <span className="bv2-vertical">良い移動をすべての人に</span>
-        <span className="grid h-5 w-5 place-items-center border border-[var(--red)] text-[10px] leading-none text-[var(--red)]">
-          駅
-        </span>
       </div>
     </section>
   );
