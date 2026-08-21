@@ -1147,7 +1147,11 @@ export const AddPaymentDialog = ({
           // hold amount so the email template can render the transparency
           // notice for the customer alongside the Pay Now button. Uses the
           // per-rental override when set, falls back to tenant default.
-          ...(depositHoldEnabled && tenant?.security_deposit_enabled && effectiveDepositAmount > 0
+          // The charged-tenant term matches depositHoldApplicable above. Without it
+          // this one call site could still ask send-invoice-email to promise the
+          // customer a "security deposit hold" that will never be placed.
+          ...(depositHoldEnabled && tenant?.security_deposit_enabled
+              && tenant?.deposit_charge_enabled !== true && effectiveDepositAmount > 0
             ? { depositHoldAmount: effectiveDepositAmount }
             : {}),
           ...(targetCategories && targetCategories.length > 0

@@ -95,20 +95,32 @@ serve(async (req) => {
       let reminderType = null;
       let message = '';
 
+      // A security deposit is refundable money held against damage, not a
+      // service payment. Since FIFO settles it LAST, a customer who has paid
+      // everything else still shows the deposit as the outstanding remainder —
+      // and "Payment overdue by 4 weeks" for a deposit reads as debt collection
+      // for something the operator intends to give back. Same schedule, honest
+      // wording. Whether deposits should be chased at all is a policy call and
+      // is deliberately left unchanged here.
+      const isDeposit = typedCharge.category === 'Security Deposit';
+      const noun = isDeposit ? 'Security deposit' : 'Payment';
+      const detail = `$${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg}` +
+        (isDeposit ? '' : ` (${typedCharge.category})`);
+
       // Determine reminder type based on days difference
       if (daysDiff === 2) {
         reminderType = 'Upcoming';
-        message = `Payment due in 2 days: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${noun} due in 2 days: ${detail}`;
       } else if (daysDiff === 0) {
         reminderType = 'Due';
-        message = `Payment due today: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${noun} due today: ${detail}`;
       } else if (daysDiff === -1) {
         reminderType = 'Overdue1';
-        message = `Payment overdue by 1 day: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${isDeposit ? 'Security deposit outstanding since yesterday' : 'Payment overdue by 1 day'}: ${detail}`;
       } else if (daysDiff <= -7 && daysDiff >= -28 && daysDiff % 7 === 0) {
         reminderType = 'OverdueN';
         const weeksOverdue = Math.abs(daysDiff) / 7;
-        message = `Payment overdue by ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}: $${typedCharge.remaining_amount} for ${typedCharge.vehicles.reg} (${typedCharge.category})`;
+        message = `${isDeposit ? `Security deposit still outstanding after ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}` : `Payment overdue by ${weeksOverdue} week${weeksOverdue > 1 ? 's' : ''}`}: ${detail}`;
       }
 
       if (!reminderType) {

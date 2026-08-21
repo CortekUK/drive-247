@@ -364,7 +364,32 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         upfront_amount: installment ? formatCurrency(installment.upfront_amount, currencyCode) : '',
         upfront_breakdown: installment ? `${formatCurrency(installment.upfront_amount, currencyCode)} fees + ${formatCurrency(installment.installment_amount, currencyCode)} first installment` : '',
         splittable_amount: installment ? formatCurrency(installment.total_installable_amount, currencyCode) : '',
-        deposit_amount: rental?.security_deposit_amount ? `${formatCurrency(rental.security_deposit_amount, currencyCode)} (refundable hold)` : 'Refundable hold per tenant policy',
+        // Deposit clause wording + amount.
+        //
+        // Two bugs fixed here. (1) This read `rental.security_deposit_amount`,
+        // a column that does not exist on `rentals` — so the amount ALWAYS fell
+        // through to the placeholder text and no signed agreement has ever
+        // stated the actual deposit. (2) It hardcoded "hold", which is wrong in
+        // a signed document for a tenant whose card is genuinely CHARGED: a hold
+        // is ring-fenced and self-releases, a charge is money the operator took
+        // and is obliged to return.
+        //
+        // Precedence matches resolveDepositAmount: a per-rental override wins
+        // (including an explicit 0, meaning the operator opted this rental out),
+        // then the per-vehicle amount when the tenant is in that mode, then the
+        // tenant default.
+        deposit_amount: (() => {
+            const noun = (tenant as any)?.deposit_charge_enabled === true ? 'deposit' : 'hold';
+            const override = (rental as any)?.deposit_amount_override;
+            const resolved = (override !== null && override !== undefined)
+                ? Number(override)
+                : ((tenant as any)?.deposit_mode === 'per_vehicle'
+                    ? Number((vehicle as any)?.security_deposit ?? 0)
+                    : Number((tenant as any)?.global_deposit_amount ?? 0));
+            return resolved > 0
+                ? `${formatCurrency(resolved, currencyCode)} (refundable ${noun})`
+                : `Refundable ${noun} per tenant policy`;
+        })(),
         payment_schedule: installment ? buildPaymentScheduleText(installment, currencyCode) : '',
         first_payment_date: installment?.scheduled_installments?.[0]?.due_date ? formatDate(installment.scheduled_installments[0].due_date) : '',
         last_payment_date: installment?.scheduled_installments?.[installment.scheduled_installments.length - 1]?.due_date ? formatDate(installment.scheduled_installments[installment.scheduled_installments.length - 1].due_date) : '',
@@ -1227,7 +1252,7 @@ export async function POST(request: NextRequest) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah')
+                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;

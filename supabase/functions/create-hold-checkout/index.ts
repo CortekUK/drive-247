@@ -125,10 +125,24 @@ Deno.serve(async (req) => {
     // Stripe config.
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select(`stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name, ${DEPOSIT_AMOUNT_TENANT_COLUMNS}`)
+      .select(`stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name, deposit_charge_enabled, ${DEPOSIT_AMOUNT_TENANT_COLUMNS}`)
       .eq('id', rental.tenant_id)
       .single()
     if (tenantError || !tenant) return errorResponse('Tenant not found', 404)
+
+    // A tenant on CHARGED deposits takes the deposit as a real payment against a
+    // 'Security Deposit' ledger charge. Authorising the card as well ring-fences
+    // the same money twice and the renter is short twice over.
+    //
+    // place-deposit-hold already refuses these tenants, and its comment argues
+    // the refusal belongs server-side because there are six callers and any one
+    // missed would silently double-secure a live customer. The same reasoning
+    // applies here: this function is currently defended only by client-side
+    // render conditions on the rental page, which one UI refactor could undo.
+    if ((tenant as { deposit_charge_enabled?: boolean }).deposit_charge_enabled === true) {
+      console.log(`[create-hold-checkout] tenant ${rental.tenant_id} is on charged deposits — no hold checkout created.`)
+      return jsonResponse({ skipped: 'deposit_charge_enabled' })
+    }
 
     if (rental.deposit_hold_status === 'held') {
       // 'held' in the DB is NOT proof of a live authorisation — see

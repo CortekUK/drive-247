@@ -165,6 +165,24 @@ function processTemplate(
     // placeholder by hand and later disconnects Bonzah is left with nothing
     // rather than a stray literal.
     bonzah_insurance_addendum: tenant?.integration_bonzah === true ? BONZAH_INSURANCE_ADDENDUM_HTML : '',
+    // Deposit clause wording + amount. This engine had NO deposit variable at all,
+    // so a stored template containing {{deposit_amount}} emitted the literal
+    // placeholder into a signed PDF. The noun follows the tenant's collection
+    // model — calling a real charge a "hold" in a signed document is wrong.
+    // Precedence matches resolveDepositAmount: per-rental override (an explicit 0
+    // means opted out), then per-vehicle when in that mode, then tenant default.
+    deposit_amount: (() => {
+        const noun = (tenant as any)?.deposit_charge_enabled === true ? 'deposit' : 'hold';
+        const override = (rental as any)?.deposit_amount_override;
+        const resolved = (override !== null && override !== undefined)
+            ? Number(override)
+            : ((tenant as any)?.deposit_mode === 'per_vehicle'
+                ? Number((vehicle as any)?.security_deposit ?? 0)
+                : Number((tenant as any)?.global_deposit_amount ?? 0));
+        return resolved > 0
+            ? `${formatCurrency(resolved)} (refundable ${noun})`
+            : `Refundable ${noun} per tenant policy`;
+    })(),
     // Customer — basic
     customer_name: (customer?.name as string) || 'Customer',
     customer_email: (customer?.email as string) || '',
@@ -552,7 +570,7 @@ async function generateDocument(
   const { data: tenant } = await supabase
     .from('tenants')
     // integration_bonzah drives the Bonzah insurance addendum below.
-    .select('company_name, contact_email, contact_phone, monthly_tier_days, integration_bonzah')
+    .select('company_name, contact_email, contact_phone, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount')
     .eq('id', tenantId)
     .single();
 

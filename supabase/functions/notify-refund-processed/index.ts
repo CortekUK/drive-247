@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getTenantTwilioCredentials, sendTenantSMS, normalizePhoneNumber } from '../_shared/twilio-sms-client.ts';
-import { sendEmail } from "../_shared/resend-service.ts";
+import { sendEmail, getTenantBranding, wrapWithBrandedTemplate } from "../_shared/resend-service.ts";
+import { notifyOperatorsInApp } from "../_shared/notify-inapp.ts";
 import { renderEmail, resolveEmailData } from "../_shared/email-template-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
 
@@ -19,7 +20,32 @@ interface NotifyRequest {
   last4?: string;
   rentalId?: string;
   tenantId?: string;
+
+  // --- added for captured security deposits -------------------------------
+  /** Ledger category refunded, e.g. 'Security Deposit'. Drives the copy. */
+  category?: string;
+  /** What Stripe ACTUALLY sent back. May be less than refundAmount when the
+   *  PaymentIntent had less headroom left; the customer must be told the real
+   *  figure, not the requested one. */
+  stripeRefundAmount?: number;
+  stripeRefundId?: string;
+  /** Running total refunded for this category on this rental. */
+  totalRefunded?: number;
+  /** Still held / still refundable for this category. */
+  remainingHeld?: number;
+  /** True when the payments status-change trigger already raised the operator
+   *  bell for this refund. That trigger fires ONLY on the first transition into
+   *  a refunded status and dedupes forever on payment_id, so every SUBSEQUENT
+   *  partial refund is silent unless we raise the bell here. */
+  operatorBellAlreadyRaised?: boolean;
 }
+
+// Escapes into HTML text context. Refund reasons are operator free-text and go
+// straight into the customer's email.
+const escapeHtml = (s: unknown): string =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 const getEmailHtml = (data: NotifyRequest, currencyCode: string) => {
   const expectedDays = data.expectedDays || 5;
@@ -223,6 +249,57 @@ serve(async (req) => {
       }
     }
 
+    // A deposit refund cannot be expressed by the shared `refund_processed`
+    // template: it has only {{rental_number}} and {{refund_amount}}, so a
+    // partial refund reads exactly like a full one and the customer is never
+    // told how much was kept. Build it properly instead, branded per tenant.
+    const isDeposit = (data.category || '').toLowerCase() === 'security deposit';
+    // Quote what Stripe ACTUALLY returned. When the PaymentIntent had less
+    // headroom than requested, refundAmount is the recorded figure and
+    // stripeRefundAmount is the money that really moved — telling the customer
+    // the larger number would be a false promise.
+    const actualAmount = typeof data.stripeRefundAmount === 'number'
+      ? data.stripeRefundAmount
+      : data.refundAmount;
+
+    if (isDeposit && data.tenantId) {
+      try {
+        const branding = await getTenantBranding(data.tenantId, supabase);
+        const kept = typeof data.remainingHeld === 'number' ? data.remainingHeld : null;
+        const rows = `
+          <tr><td style="padding:0 0 16px 0;font-size:16px;color:#333;">
+            Hi ${escapeHtml(data.customerName || 'there')},
+          </td></tr>
+          <tr><td style="padding:0 0 16px 0;font-size:15px;color:#555;line-height:1.6;">
+            We&#39;ve returned <strong>${formatCurrency(actualAmount, currencyCode)}</strong> of your
+            security deposit for booking <strong>${escapeHtml(data.bookingRef || '')}</strong>.
+          </td></tr>
+          <tr><td style="padding:0 0 16px 0;">
+            <table width="100%" cellpadding="8" cellspacing="0" style="border:1px solid #eee;border-radius:6px;font-size:14px;color:#444;">
+              <tr><td style="color:#777;">Refunded now</td><td align="right"><strong>${formatCurrency(actualAmount, currencyCode)}</strong></td></tr>
+              ${typeof data.totalRefunded === 'number'
+                ? `<tr><td style="color:#777;">Returned in total</td><td align="right">${formatCurrency(data.totalRefunded, currencyCode)}</td></tr>`
+                : ''}
+              ${kept !== null && kept > 0
+                ? `<tr><td style="color:#777;">Still held</td><td align="right">${formatCurrency(kept, currencyCode)}</td></tr>`
+                : ''}
+            </table>
+          </td></tr>
+          ${data.refundReason ? `<tr><td style="padding:0 0 16px 0;font-size:14px;color:#555;line-height:1.6;">
+            <strong>Reason:</strong> ${escapeHtml(data.refundReason)}
+          </td></tr>` : ''}
+          <tr><td style="padding:0 0 8px 0;font-size:14px;color:#777;line-height:1.6;">
+            It usually reaches your account in ${data.expectedDays || 5}&ndash;10 business days, depending on your bank.
+            ${kept !== null && kept > 0 ? 'Any remaining balance is returned once your rental is fully settled.' : ''}
+          </td></tr>`;
+        customerHtml = wrapWithBrandedTemplate(rows, branding);
+        customerSubject = `Deposit refund of ${formatCurrency(actualAmount, currencyCode)} — ${branding.companyName}`;
+        console.log('Using deposit-specific branded email');
+      } catch (e) {
+        console.warn('Deposit email build failed, falling back to template:', e);
+      }
+    }
+
     // Send customer email
     if (resolvedEmail) {
       results.customerEmail = await sendEmail(
@@ -239,11 +316,46 @@ serve(async (req) => {
     if (resolvedPhone) {
       results.customerSMS = await sendSMS(
         resolvedPhone,
-        `DRIVE 247: Your refund of ${formatCurrency(data.refundAmount, currencyCode)} for booking ${data.bookingRef} has been processed. Please allow 5-10 business days.`,
+        `Your refund of ${formatCurrency(actualAmount, currencyCode)} for booking ${data.bookingRef} has been processed. Please allow 5-10 business days.`,
         supabase,
         data.tenantId
       );
       console.log('Customer SMS result:', results.customerSMS);
+    }
+
+    // Operator side. The bell is unconditional (never gated on a tenant toggle)
+    // and inserting it is what triggers notify-operator-email, so this single
+    // call covers both the in-app bell and the branded operator email. We do NOT
+    // also send an explicit operator email — that is the notify-fine-recorded
+    // double-send bug.
+    //
+    // dedupeKey is the STRIPE REFUND ID, not the payment id: each refund is its
+    // own event. The payments trigger dedupes on payment_id forever, which is
+    // why every partial refund after the first is otherwise silent.
+    if (data.tenantId && !data.operatorBellAlreadyRaised) {
+      const label = data.category ? `${data.category} refund` : 'Refund';
+      await notifyOperatorsInApp({
+        tenantId: data.tenantId,
+        type: 'refund_processed',
+        title: `${label} processed`,
+        message:
+          `${formatCurrency(actualAmount, currencyCode)} refunded to ${data.customerName || 'the customer'}` +
+          (data.bookingRef ? ` for booking ${data.bookingRef}` : '') +
+          (typeof data.remainingHeld === 'number' && data.remainingHeld > 0
+            ? `. ${formatCurrency(data.remainingHeld, currencyCode)} still held.`
+            : '.'),
+        link: data.rentalId ? `/rentals/${data.rentalId}` : '/payments',
+        metadata: {
+          rental_id: data.rentalId ?? null,
+          category: data.category ?? null,
+          amount: actualAmount,
+          total_refunded: data.totalRefunded ?? null,
+          remaining_held: data.remainingHeld ?? null,
+          stripe_refund_id: data.stripeRefundId ?? null,
+        },
+        dedupeKey: data.stripeRefundId || undefined,
+      });
+      (results as Record<string, unknown>).operatorBell = true;
     }
 
     return new Response(

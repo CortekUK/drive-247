@@ -180,9 +180,26 @@ Deno.serve(async (req) => {
     // Get tenant's Stripe configuration
     const { data: tenantData } = await supabase
       .from("tenants")
-      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
+      .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, deposit_charge_enabled")
       .eq("id", effectiveTenantId)
       .single();
+
+    // A CHARGED deposit is money the operator is already holding. "Deducting"
+    // from it is not a Stripe operation at all — it just means returning less at
+    // the end, which the per-category refund flow does correctly.
+    //
+    // This function must refuse, because its correct branch below requires
+    // `deposit_hold_status === 'held'` and a charged tenant never has a hold
+    // (place-deposit-hold refuses them). Control would fall through to the
+    // legacy path, which picks the newest Stripe payment on the rental with NO
+    // category scoping and REFUNDS it — pushing rent revenue back to the
+    // customer while also writing the excess-mileage charge off as collected.
+    if ((tenantData as { deposit_charge_enabled?: boolean } | null)?.deposit_charge_enabled === true) {
+      return errorResponse(
+        "This tenant collects deposits as a charge, not a hold. Deduct by refunding " +
+        "less of the deposit from the rental's payment breakdown instead."
+      );
+    }
 
     const currencyCode = tenantData?.currency_code || "USD";
     const stripeMode = (tenantData?.stripe_mode as StripeMode) || "test";
@@ -676,7 +693,12 @@ Deno.serve(async (req) => {
                 ? `${payment.refund_reason}; Security Deposit: Deducted for excess mileage`
                 : "Security Deposit: Deducted for excess mileage",
               status: newTotalRefund >= payment.amount ? "Refunded" : "Partial Refund",
-              capture_status: newTotalRefund >= payment.amount ? "refunded" : "partial_refund",
+              // capture_status deliberately NOT written: its check constraint
+              // allows only requires_capture/captured/cancelled/expired/NULL, so
+              // "refunded"/"partial_refund" made this whole UPDATE throw — AFTER
+              // the Stripe refund had already succeeded, leaving money returned
+              // with refund_amount still 0 and the payment still readable as
+              // fully refundable. Refund state lives on status + refund_amount.
               stripe_refund_id: payment.stripe_refund_id
                 ? `${payment.stripe_refund_id},${stripeRefundId}`
                 : stripeRefundId,

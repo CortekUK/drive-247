@@ -114,12 +114,25 @@ export const RefundDialog = ({
 
   const onSubmit = async (data: RefundFormData) => {
     setLoading(true);
+    // Set when Stripe moved the money but the ledger row failed to save. Never a
+    // retry signal — see the reconciliation branch below.
+    let requiresReconciliation = false;
+    let reconciliationWarning: string | null = null;
+    let shortfallWarning: string | null = null;
+    let actuallyRefunded: number | null = null;
     try {
-      const finalRefundAmount = data.refundType === "full"
+      // Round to whole cents HERE, at the source. The percentage path produced
+      // values like 16.665, which each destination then rounded independently:
+      // Stripe from Math.round(x*100), the ledger via a numeric(12,2) cast, and
+      // the Xero/Zoho credit note from its own Math.round — so one refund could
+      // be recorded as three different amounts that never reconcile. Nothing
+      // downstream can repair a sub-cent input; it can only round it its own way.
+      const rawRefundAmount = data.refundType === "full"
         ? maxRefundAmount
         : data.amountType === "percentage" && data.refundPercentage
           ? (maxRefundAmount * data.refundPercentage) / 100
           : data.refundAmount || 0;
+      const finalRefundAmount = Math.round((Number(rawRefundAmount) + Number.EPSILON) * 100) / 100;
 
       if (finalRefundAmount <= 0) {
         throw new Error("Invalid refund amount");
@@ -196,18 +209,53 @@ export const RefundDialog = ({
         });
 
         if (error) {
-          throw new Error(error.message || 'Refund processing failed');
+          // supabase.functions.invoke surfaces only "Edge Function returned a
+          // non-2xx status code"; the actual reason (e.g. "No refundable amount
+          // available", "Your role cannot issue refunds") is in the response
+          // body. Without this the operator cannot tell a permission problem
+          // from an arithmetic one, and retries blindly.
+          let detail = '';
+          try {
+            const body = await (error as any)?.context?.json?.();
+            detail = body?.error || '';
+          } catch { /* body already consumed or not JSON */ }
+          throw new Error(detail || error.message || 'Refund processing failed');
         }
 
         if (!result?.success) {
           throw new Error(result?.error || 'Refund processing failed');
         }
+
+        // The refund settled at Stripe but the ledger row did not save. This is
+        // NOT a retryable failure — the money has already left the balance, and
+        // retrying issues a second real refund. Surface it as a warning the
+        // operator must act on, not an error they will click through.
+        requiresReconciliation = !!result?.requiresReconciliation;
+        reconciliationWarning = result?.warning || null;
+        // Stripe returned less than was asked for. The shortfall is not recorded,
+        // so it remains refundable — but the operator has to know, or they will
+        // believe the customer was made whole.
+        if (result?.unrecordedRemainder > 0 && result?.shortfallWarning) {
+          shortfallWarning = result.shortfallWarning;
+          actuallyRefunded = Number(result?.recordedAmount ?? finalRefundAmount);
+        }
       }
 
-      toast({
-        title: "Refund Processed",
-        description: `${formatCurrency(finalRefundAmount, tenant?.currency_code || 'USD')} has been refunded for ${category}.`,
-      });
+      if (requiresReconciliation) {
+        toast({
+          variant: "destructive",
+          title: "Refund sent — needs reconciliation",
+          description: reconciliationWarning
+            || `The refund reached Stripe but could not be recorded. Do NOT retry it; reconcile manually.`,
+        });
+      } else {
+        toast({
+          title: shortfallWarning ? "Partly refunded" : "Refund Processed",
+          description: shortfallWarning
+            || `${formatCurrency(finalRefundAmount, tenant?.currency_code || 'USD')} has been refunded for ${category}.`,
+          ...(shortfallWarning ? { variant: "destructive" as const } : {}),
+        });
+      }
 
       logAction({ action: "payment_refunded", entityType: "payment", entityId: rentalId, details: { category, refund_amount: finalRefundAmount, reason: data.reason } });
 

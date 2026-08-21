@@ -68,6 +68,95 @@ serve(async (req) => {
 
     console.log("Processing refund:", { rentalId, refundType, refundAmount, category, reason, extensionId });
 
+    // Resolve the owning tenant BEFORE anything else — authorization has to run
+    // ahead of every read, or an unauthorized caller still learns this rental's
+    // deposit totals from the validation error below.
+    const { data: owningRental } = await supabase
+      .from("rentals")
+      .select("tenant_id")
+      .eq("id", rentalId)
+      .maybeSingle();
+    const owningTenantId = owningRental?.tenant_id ?? null;
+
+    // ---------------------------------------------------------------------
+    // Authorization. This function had NONE: `verify_jwt` only proves the
+    // caller holds *some* valid token, and there was no check that the caller's
+    // tenant owns this rental and no role check. Under authorization holds that
+    // was low-stakes — a hold cannot be refunded (Stripe rejects
+    // `requires_capture`). Now that deposits are CAPTURED, this endpoint moves
+    // real money, so any authenticated user of any tenant could have drained
+    // another operator's Stripe balance.
+    // ---------------------------------------------------------------------
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // Trusted internal callers (other edge functions, cron) present the service
+    // role key and are allowed through without a user identity.
+    const isInternalCaller = !!serviceKey && bearer === serviceKey;
+
+    if (!isInternalCaller) {
+      const callerClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: authData, error: authErr } = await callerClient.auth.getUser();
+      const authUser = authData?.user;
+      if (authErr || !authUser) {
+        return new Response(
+          JSON.stringify({ error: "Invalid session" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: appUser } = await supabase
+        .from("app_users")
+        .select("id, role, is_active, tenant_id, is_super_admin")
+        .eq("auth_user_id", authUser.id)
+        .maybeSingle();
+
+      if (!appUser || appUser.is_active === false) {
+        return new Response(
+          JSON.stringify({ error: "No active portal profile for this account" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const isSuper = appUser.is_super_admin === true;
+
+      // Tenant ownership: a refund may only be issued against a rental
+      // belonging to the caller's own tenant.
+      if (!isSuper && appUser.tenant_id !== owningTenantId) {
+        return new Response(
+          JSON.stringify({ error: "This rental belongs to another tenant" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Role: refunds move money, so mirror charge-saved-card — full-access
+      // roles, or a manager explicitly granted EDITOR on the payments tab.
+      // Mirrors FULL_ACCESS_ROLES in charge-saved-card exactly — the other
+      // money-moving endpoint. Do not widen one without the other.
+      let allowed = isSuper || ["head_admin", "admin"].includes(String(appUser.role));
+      if (!allowed && appUser.role === "manager") {
+        const { data: perm } = await supabase
+          .from("manager_permissions")
+          .select("access_level")
+          .eq("app_user_id", appUser.id)
+          .eq("tab_key", "payments")
+          .maybeSingle();
+        allowed = perm?.access_level === "editor";
+      }
+      if (!allowed) {
+        return new Response(
+          JSON.stringify({ error: "Your role cannot issue refunds" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+
     // Get tenant ID for queries
     let tenantId = requestTenantId;
 
@@ -143,7 +232,7 @@ serve(async (req) => {
     // Get rental details
     const { data: rental, error: rentalError } = await supabase
       .from("rentals")
-      .select("id, status, customer_id, vehicle_id, monthly_amount, tenant_id")
+      .select("id, status, customer_id, vehicle_id, monthly_amount, tenant_id, rental_number")
       .eq("id", rentalId)
       .single();
 
@@ -155,8 +244,11 @@ serve(async (req) => {
       );
     }
 
-    // Get tenant's Stripe mode and Connect account
-    tenantId = requestTenantId || rental.tenant_id;
+    // Get tenant's Stripe mode and Connect account.
+    // The RENTAL decides which tenant's Stripe account is used, not the request
+    // body. Preferring a caller-supplied tenantId let a caller route a refund
+    // through a different tenant's Connect account.
+    tenantId = rental.tenant_id || requestTenantId;
     let stripeAccountId: string | null = null;
     let stripeMode: StripeMode = 'test';
     let tenantData: any = null;
@@ -279,10 +371,82 @@ serve(async (req) => {
       }
     }
 
+    // Cross-category cap. A single PaymentIntent routinely settles several
+    // categories at once — 224 such payments already exist — and "what this PI
+    // has left" is NOT "what it put into THIS category". Without this clamp a
+    // Security Deposit refund can hand back money that actually paid Rental,
+    // with no Rental refund ever recorded.
+    //
+    // This became live rather than theoretical the moment the deposit joined the
+    // invoice total: one checkout PaymentIntent now covers Rental + Tax +
+    // Security Deposit for a charged tenant, and FIFO settles the deposit last.
+    //
+    // Infinity when the applications cannot account for the money (legacy rows,
+    // NULL amount_applied), so the previous behaviour is reproduced exactly
+    // rather than silently under-refunding.
+    let categoryCap = Number.POSITIVE_INFINITY;
+    if ((payment as any)?.id) {
+      try {
+        let capChargeQ = supabase
+          .from("ledger_entries")
+          .select("id")
+          .eq("rental_id", rentalId)
+          .eq("type", "Charge")
+          .eq("category", category);
+        if (extensionId) capChargeQ = capChargeQ.eq("extension_id", extensionId);
+        const { data: capCharges } = await capChargeQ;
+        const capChargeIds = (capCharges || []).map((c: any) => c.id);
+        if (capChargeIds.length > 0) {
+          const { data: capApps } = await supabase
+            .from("payment_applications")
+            .select("amount_applied")
+            .eq("payment_id", (payment as any).id)
+            .in("charge_entry_id", capChargeIds);
+          if (capApps && capApps.length > 0) {
+            const appliedToCategory = capApps.reduce(
+              (s: number, a: any) => s + Number(a.amount_applied || 0), 0);
+            if (appliedToCategory > 0) {
+              // Subtract what has already been refunded FROM THIS PAYMENT, not
+              // the category-wide total. Those are different scopes: the
+              // category total spans every payment that ever settled it, so
+              // subtracting it here under-refunds by whatever OTHER payments
+              // already gave back. Caught in live testing — a $1.50 refund was
+              // silently clamped to $1.00 because $3 refunded from an earlier
+              // payment was charged against this payment's $4 contribution.
+              //
+              // payments.refund_amount spans categories, so on a mixed payment
+              // this can still under-estimate. That is the safe direction: the
+              // operator can refund again, whereas over-refunding hands back
+              // money that belongs to another category.
+              categoryCap = Math.max(0, appliedToCategory - Number((payment as any).refund_amount || 0));
+            }
+          }
+        }
+      } catch (capErr) {
+        console.warn("[process-refund] category cap unavailable, falling back to uncapped:", capErr);
+      }
+    }
+
     let refundResult = null;
     let stripeRefundId = null;
 
+    // Non-null when the ledger write failed AFTER Stripe already moved money.
+    // The Stripe refund and the ledger row are two unbatched writes with no
+    // transaction between them, so this outcome is possible and permanent.
+    let ledgerRecordFailed: string | null = null;
+
     let ledgerOnlyFallbackReason: string | null = null;
+    // What Stripe actually returned, which can be less than requested when the
+    // PaymentIntent had little headroom left. The customer must be told this
+    // figure, not the requested one.
+    let actualStripeRefunded = 0;
+    // True when this refund pushes a payment into a refunded status for the
+    // FIRST time — that transition fires on_refund_processed_notify, which
+    // raises the operator bell. On every later partial refund the status is
+    // already 'Partial Refund', the trigger's guard blocks it, and its
+    // payment_id dedupe blocks it forever after — so the bell must come from
+    // the notifier instead, or repeat partials are completely silent.
+    let bellRaisedByTrigger = false;
 
     // Process Stripe refund if applicable. Stripe is the source of truth for
     // how much is still refundable on a PaymentIntent — our local
@@ -324,7 +488,10 @@ serve(async (req) => {
           } else {
             // Stripe has room. If admin wants more than what's left, refund
             // only what Stripe allows and mark the rest as manual.
-            const stripeRefundAmount = Math.min(refundAmount, stripeUnrefunded);
+            // Clamp by what this payment actually put into THIS category, so a
+            // refund cannot reach across into another category's money.
+            const stripeRefundAmount = Math.min(refundAmount, stripeUnrefunded, categoryCap);
+            actualStripeRefunded = stripeRefundAmount;
             const manualRemainder = refundAmount - stripeRefundAmount;
 
             const refundParams: Stripe.RefundCreateParams = {
@@ -419,7 +586,7 @@ serve(async (req) => {
 
           const { data: pRec } = await supabase
             .from("payments")
-            .select("amount, refund_amount, refund_reason, stripe_refund_id")
+            .select("amount, refund_amount, refund_reason, stripe_refund_id, status")
             .eq("id", pid)
             .single();
           if (!pRec) continue;
@@ -453,6 +620,13 @@ serve(async (req) => {
             paymentUpdate.status = "Partial Refund";
           }
 
+          // Was this payment already in a refunded state? If not, the status
+          // write below is a first transition and the DB trigger will raise the
+          // operator bell on its own.
+          if (!["Refunded", "Partial Refund", "Reversed"].includes(String(pRec.status || ""))) {
+            bellRaisedByTrigger = true;
+          }
+
           // Only stamp the Stripe refund id on the payment that owned it
           if (stripeRefundId && payment && pid === payment.id) {
             paymentUpdate.stripe_refund_id = pRec.stripe_refund_id
@@ -478,6 +652,18 @@ serve(async (req) => {
 
     // Create a ledger entry for the refund (negative charge to reduce balance)
     // Check if refund was successful (not error type)
+    // The ledger is the customer-owes ledger, and availableForRefund is derived
+    // from it — so recording a Refund row for money still sitting in the Stripe
+    // balance marks the category settled and permanently blocks the retry. That
+    // is the exact mechanism that strands a customer short.
+    //
+    // actualStripeRefunded is > 0 only on the succeeded-with-headroom path, where
+    // it IS the amount Stripe moved. Every other path (manual/ledger-only,
+    // requires_capture, skipped, exhausted PI) leaves it 0, so movedAmount ===
+    // refundAmount and those paths are byte-identical to before.
+    const movedAmount = actualStripeRefunded > 0 ? actualStripeRefunded : refundAmount;
+    const unrecordedRemainder = Math.round((refundAmount - movedAmount) * 100) / 100;
+
     const shouldCreateLedger = refundResult && refundResult.type !== "error";
     console.log("Should create ledger entry:", shouldCreateLedger, "refundResult:", JSON.stringify(refundResult));
 
@@ -505,7 +691,7 @@ serve(async (req) => {
 
       let ledgerError: any = null;
       if (existingRefund) {
-        const mergedAmount = Number(existingRefund.amount) + (-Math.abs(refundAmount));
+        const mergedAmount = Number(existingRefund.amount) + (-Math.abs(movedAmount));
         const mergedRef = existingRefund.reference
           ? `${existingRefund.reference}; ${refundReference}`
           : refundReference;
@@ -525,7 +711,7 @@ serve(async (req) => {
           due_date: today,
           type: 'Refund',
           category: category,
-          amount: -Math.abs(refundAmount),
+          amount: -Math.abs(movedAmount),
           remaining_amount: 0,
           reference: refundReference,
         };
@@ -538,20 +724,40 @@ serve(async (req) => {
 
       if (ledgerError) {
         console.error("Failed to create/update ledger entry:", JSON.stringify(ledgerError));
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: `Failed to record refund ledger entry: ${ledgerError.message}`,
-            refund: refundResult,
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+
+        if (stripeRefundId) {
+          // MONEY HAS ALREADY LEFT THE STRIPE BALANCE. Returning 500/success:false
+          // here made the operator see "Refund Failed" and click again — and
+          // because availableForRefund is derived ONLY from ledger_entries, which
+          // is exactly the write that just failed, the retry re-passed validation
+          // and issued a SECOND real Stripe refund. A ledger failure after a
+          // successful refund is a RECONCILIATION problem, never a retryable one.
+          ledgerRecordFailed = ledgerError.message || "unknown ledger error";
+          console.error(
+            `[process-refund][RECONCILE] Stripe refund ${stripeRefundId} SUCCEEDED but ledger write failed. rental=${rentalId} category=${category} extension=${extensionId ?? "-"} amount=${refundAmount} tenant=${tenantId}`
+          );
+        } else {
+          // No Stripe refund was issued — a manual / ledger-only refund that
+          // failed to write is a true no-op, so it stays a retryable 500.
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Failed to record refund ledger entry: ${ledgerError.message}`,
+              refund: refundResult,
+            }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
 
       // Finance Sync — enqueue a refund event for the accounting sync layer.
       // The sync worker will create a Credit Note in Xero/Zoho linked to the
       // original invoice. Wrapped: sync failures must never break the refund.
-      if (rental?.tenant_id) {
+      // Skipped when the ledger row never landed: enqueue_financial_event would
+      // fire with p_source_id null and Xero/Zoho would raise a Credit Note against
+      // a ledger entry that does not exist. Before the split above, the 500 return
+      // made this unreachable; now it must be guarded explicitly.
+      if (rental?.tenant_id && !ledgerRecordFailed) {
         try {
           const { data: refundLedger } = await supabase
             .from("ledger_entries")
@@ -561,7 +767,7 @@ serve(async (req) => {
           await supabase.rpc("enqueue_financial_event", {
             p_tenant_id: rental.tenant_id,
             p_event_type: "refund",
-            p_amount_cents: -Math.abs(Math.round(Number(refundAmount) * 100)),
+            p_amount_cents: -Math.abs(Math.round(Number(movedAmount) * 100)),
             p_currency: currencyCode,
             p_rental_id: rentalId,
             p_customer_id: rental.customer_id ?? null,
@@ -580,14 +786,75 @@ serve(async (req) => {
     // Get customer and vehicle details for response
     const { data: customer } = await supabase
       .from("customers")
-      .select("id, name, email")
+      .select("id, name, email, phone")
       .eq("id", rental.customer_id)
       .single();
 
+    // -------------------------------------------------------------------
+    // Tell the customer and the operator. Before this, a refund — including a
+    // partial deposit refund — notified NOBODY on this path: process-refund
+    // invoked nothing, and notify-refund-processed's only caller was itself
+    // unreachable. Verified live: two successive $1 partial refunds moved real
+    // money and produced zero new bells and zero emails.
+    //
+    // Deliberately non-fatal: the money has already moved, so a mail failure
+    // must never turn a successful refund into an error the operator retries.
+    // -------------------------------------------------------------------
+    if (refundResult && (refundResult as { type?: string }).type !== "error") {
+      try {
+        const totalRefundedForCategory = Number(totalAlreadyRefunded || 0) + Number(movedAmount || 0);
+        const remainingHeld = Math.max(0, Number(totalPaid || 0) - totalRefundedForCategory);
+
+        await supabase.functions.invoke("notify-refund-processed", {
+          body: {
+            customerName: customer?.name || "Customer",
+            customerEmail: customer?.email || "",
+            customerPhone: (customer as { phone?: string } | null)?.phone || undefined,
+            bookingRef: rental.rental_number || rentalId.slice(0, 8).toUpperCase(),
+            refundAmount: movedAmount,
+            stripeRefundAmount: actualStripeRefunded || movedAmount,
+            stripeRefundId: stripeRefundId || undefined,
+            refundType,
+            refundReason: reason,
+            category,
+            totalRefunded: totalRefundedForCategory,
+            remainingHeld,
+            rentalId,
+            tenantId: rental.tenant_id || undefined,
+            operatorBellAlreadyRaised: bellRaisedByTrigger,
+          },
+        });
+      } catch (notifyErr) {
+        console.error("[process-refund] notification failed (non-fatal):", notifyErr);
+      }
+    }
+
     return new Response(
       JSON.stringify({
+        // `success` means "the refund is settled at Stripe", NOT "everything was
+        // recorded". Callers must read requiresReconciliation to tell a clean
+        // success from money-moved-but-unrecorded, and must NEVER treat
+        // requiresReconciliation as a retry signal.
         success: true,
-        message: `${category} refund processed successfully`,
+        ledgerRecorded: !ledgerRecordFailed,
+        requiresReconciliation: !!ledgerRecordFailed,
+        // What was asked for vs what actually moved and was recorded. These
+        // differ only when the PaymentIntent had less headroom than requested;
+        // the shortfall is deliberately NOT recorded, so it stays refundable
+        // rather than leaving the customer short against a settled-looking
+        // ledger.
+        requestedAmount: refundAmount,
+        recordedAmount: movedAmount,
+        unrecordedRemainder: unrecordedRemainder > 0 ? unrecordedRemainder : 0,
+        shortfallWarning: unrecordedRemainder > 0
+          ? `Stripe could only return ${formatCurrency(movedAmount, currencyCode)} of the ${formatCurrency(refundAmount, currencyCode)} requested — that PaymentIntent had no more left. The remaining ${formatCurrency(unrecordedRemainder, currencyCode)} has NOT been refunded and has NOT been recorded, so it is still owed and still refundable.`
+          : undefined,
+        warning: ledgerRecordFailed
+          ? `Stripe refund ${stripeRefundId} of ${formatCurrency(actualStripeRefunded || refundAmount, currencyCode)} SUCCEEDED, but the ledger entry could not be saved (${ledgerRecordFailed}). The money has already left the Stripe balance — do NOT retry this refund; it must be reconciled manually.`
+          : undefined,
+        message: ledgerRecordFailed
+          ? `${category} refund sent to Stripe but NOT recorded in the ledger — reconciliation required`
+          : `${category} refund processed successfully`,
         refund: refundResult,
         details: {
           rentalId,

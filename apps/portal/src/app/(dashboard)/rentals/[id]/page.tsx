@@ -4347,8 +4347,25 @@ const RentalDetail = () => {
                             {(() => {
                               // Only show Deduct Deposit if deposit charge exists and has remaining > 0
                               const depositCharge = (rentalCharges || []).find(c => c.category === 'Security Deposit');
+                              // NOTE the sense of this test: remaining_amount > 0 means the deposit is
+                              // UNPAID. It reads correctly on the hold path, where no deposit Charge row
+                              // exists at all and depositFromInvoice does the work.
                               const depositAvailable = depositCharge && Number(depositCharge.remaining_amount) > 0;
                               const depositFromInvoice = !depositCharge && invoiceBreakdown && invoiceBreakdown.securityDeposit > 0;
+
+                              // On the CHARGED path this button is a dead end. Its edge function
+                              // (deduct-from-deposit) captures against a live authorisation, and a
+                              // charged tenant never has one — so it now refuses them outright rather
+                              // than falling through to a legacy branch that refunded an unrelated
+                              // payment. The test above is also inverted for charged deposits: it shows
+                              // when the deposit is UNPAID (nothing to take) and hides once it is PAID
+                              // (when the operator actually holds the money).
+                              //
+                              // There is no cash movement to make here anyway: the operator already
+                              // holds the deposit, so covering excess mileage means collecting the
+                              // charge and returning less of the deposit at the end. The Add Payment
+                              // button beside this one is that path.
+                              if (depositIsCharged) return null;
                               // A chargeback has been raised against the
                               // authorisation this button would draw on.
                               // deduct-from-deposit captures against that same
