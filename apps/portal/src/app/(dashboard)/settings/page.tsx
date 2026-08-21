@@ -1048,24 +1048,6 @@ const Settings = () => {
   }, [pendingTab, saveAllDirtyForms]);
 
   // Maintenance run tracking
-  // Authorisations still live on this tenant. Switching to charged deposits
-  // while any exist would strand them: place-deposit-hold refuses charged
-  // tenants, so refresh-deposit-holds can no longer renew them and they lapse
-  // on the card network's schedule — renter's funds ring-fenced, operator's
-  // cover silently gone.
-  const { data: liveHoldCount = 0 } = useQuery({
-    queryKey: ["live-deposit-holds", tenant?.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("rentals")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenant!.id)
-        .in("deposit_hold_status", ["held", "processing", "refreshing", "requires_action", "needs_review"]);
-      return count || 0;
-    },
-    enabled: !!tenant?.id,
-  });
-  const [pendingDepositCharge, setPendingDepositCharge] = useState(false);
 
   const { data: maintenanceRuns } = useQuery({
     queryKey: ['maintenance-runs'],
@@ -3755,95 +3737,10 @@ const Settings = () => {
                 </p>
               )}
 
-              {/* How the deposit is collected. This is the switch between the
-                  legacy Stripe authorization hold and a real captured charge. */}
-              {rentalForm.security_deposit_enabled && (
-                <div className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <Label htmlFor="deposit-charge-toggle" className="text-sm font-medium">
-                        Collect as a real charge
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        {rentalForm.deposit_charge_enabled
-                          ? 'The deposit is charged with the booking and appears on the invoice. You refund it in full or in part when the vehicle comes back.'
-                          : 'The deposit is authorised on the customer\u2019s card and never charged. Card authorisations expire on the bank\u2019s schedule, so long rentals can lose their cover.'}
-                      </p>
-                    </div>
-                    <Switch
-                      id="deposit-charge-toggle"
-                      checked={rentalForm.deposit_charge_enabled}
-                      onCheckedChange={(checked) => {
-                        // Switching ON while authorisations are still live strands
-                        // them: place-deposit-hold refuses charged tenants, so the
-                        // refresh cron can no longer renew those holds and they lapse
-                        // on the card network's own schedule — the renter's funds stay
-                        // ring-fenced and the operator quietly loses their cover.
-                        // Release or capture them first.
-                        if (checked && liveHoldCount > 0) {
-                          setPendingDepositCharge(true);
-                          return;
-                        }
-                        // deposit_mode is deliberately NOT overwritten. Charged deposits
-                        // are a single global amount by design and the code treats them
-                        // that way regardless of the stored mode, so snapping it to
-                        // 'global' here bought nothing and permanently destroyed a
-                        // per-vehicle tenant's configuration — switching back OFF left
-                        // them silently on global with their per-vehicle amounts orphaned.
-                        setRentalForm(prev => ({
-                          ...prev,
-                          deposit_charge_enabled: checked,
-                        }));
-                      }}
-                      disabled={!canEditSettings('preauth')}
-                    />
-                  </div>
-                  {rentalForm.deposit_charge_enabled && (
-                    <Alert>
-                      <AlertDescription className="text-xs">
-                        New bookings will charge the deposit instead of holding it. Rentals that
-                        already have a deposit keep whatever was taken at the time — a live
-                        authorisation stays releasable from its rental page, and a deposit that was
-                        already charged stays refundable.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              )}
 
-              {/* Deposit Mode Selection */}
-              {rentalForm.security_deposit_enabled && !rentalForm.deposit_charge_enabled && <RadioGroup
-                value={rentalForm.deposit_mode}
-                onValueChange={(value) => setRentalForm(prev => ({
-                  ...prev,
-                  deposit_mode: value as 'global' | 'per_vehicle'
-                }))}
-                className="space-y-3"
-              >
-                <div className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50"
-                  onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'global' }))}>
-                  <RadioGroupItem value="global" id="deposit-global" />
-                  <Label htmlFor="deposit-global" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Global Deposit</div>
-                    <div className="text-sm text-muted-foreground">
-                      Same deposit amount for all vehicles
-                    </div>
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50"
-                  onClick={() => setRentalForm(prev => ({ ...prev, deposit_mode: 'per_vehicle' }))}>
-                  <RadioGroupItem value="per_vehicle" id="deposit-per-vehicle" />
-                  <Label htmlFor="deposit-per-vehicle" className="flex-1 cursor-pointer">
-                    <div className="font-medium">Per-Vehicle Deposit</div>
-                    <div className="text-sm text-muted-foreground">
-                      Set the deposit amount individually for each vehicle
-                    </div>
-                  </Label>
-                </div>
-              </RadioGroup>}
 
               {/* Deposit amount (shown for global mode, and always on the charged path) */}
-              {rentalForm.security_deposit_enabled && (rentalForm.deposit_charge_enabled || rentalForm.deposit_mode === 'global') && (
+              {rentalForm.security_deposit_enabled && (
                 <div className="space-y-2">
                   <Label htmlFor="global_deposit_amount">Deposit Amount</Label>
                   <div className="flex items-center gap-4">
@@ -3871,20 +3768,12 @@ const Settings = () => {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {rentalForm.deposit_charge_enabled
-                      ? 'Charged on every booking and refunded when the vehicle comes back.'
-                      : 'Authorised on the customer\u2019s card at pickup and released when the vehicle comes back.'}
+                    Taken on every booking and returned when the vehicle comes back, less any
+                    damage, fines or unpaid charges.
                   </p>
                 </div>
               )}
 
-              {rentalForm.security_deposit_enabled && !rentalForm.deposit_charge_enabled && rentalForm.deposit_mode === 'per_vehicle' && (
-                <Alert>
-                  <AlertDescription>
-                    Set deposit amounts when adding or editing vehicles. Vehicles without one will show $0.
-                  </AlertDescription>
-                </Alert>
-              )}
 
               {canEditSettings('preauth') && (
                 <Button
@@ -5178,24 +5067,6 @@ const Settings = () => {
         onOpenChange={setShowDataCleanupDialog}
       />
 
-      <AlertDialog open={pendingDepositCharge} onOpenChange={setPendingDepositCharge}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Release the live holds first</AlertDialogTitle>
-            <AlertDialogDescription>
-              {liveHoldCount === 1
-                ? "1 rental still has a live authorisation on the customer's card."
-                : `${liveHoldCount} rentals still have live authorisations on customers' cards.`}
-              {" "}Switching to charged deposits stops those authorisations being renewed, so they
-              would lapse on the bank's own schedule &mdash; the customer's funds stay ring-fenced
-              and you lose the cover. Release or capture them from each rental first, then switch.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setPendingDepositCharge(false)}>Got it</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
