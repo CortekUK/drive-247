@@ -33,7 +33,8 @@ import {
   type RecordOdometerFormValues,
 } from "@/client-schemas/fleet-health/record-odometer";
 import type { DistanceUnit } from "@/lib/format-utils";
-import { getDistanceUnitLong } from "@/lib/format-utils";
+import { getDistanceUnitLong, getDistanceUnitShort } from "@/lib/format-utils";
+import { fromStoredMiles, readingToMiles } from "@/lib/fleet-health-units";
 import type { OdometerSource } from "@/types/fleet-health";
 
 const SOURCE_LABEL: Record<OdometerSource, string> = {
@@ -65,29 +66,36 @@ export function RecordOdometerDialog({
   const unit: DistanceUnit = tenant?.distance_unit ?? "miles";
   const unitLabel = getDistanceUnitLong(unit);
 
+  // `vehicles.current_mileage` is stored in miles. Everything below — the
+  // default value, the lower-than-last-reading test and every rendered figure —
+  // works in the tenant's unit, so the conversion happens once, here. Comparing
+  // a typed kilometre figure against a stored mile figure would have flagged
+  // every correct reading as a "correction" for a km tenant.
+  const displayMileage = fromStoredMiles(currentMileage, unit);
+
   const record = useRecordOdometer();
   const { data: readings = [] } = useOdometerReadings(open ? vehicleId : undefined, 5);
 
   const form = useForm<RecordOdometerFormValues>({
     resolver: zodResolver(recordOdometerSchema),
-    defaultValues: { reading: currentMileage ?? undefined, note: "" },
+    defaultValues: { reading: displayMileage ?? undefined, note: "" },
   });
 
   // Reopening for a different vehicle must not carry the previous prefill over.
   useEffect(() => {
-    if (open) form.reset({ reading: currentMileage ?? undefined, note: "" });
+    if (open) form.reset({ reading: displayMileage ?? undefined, note: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, vehicleId, currentMileage]);
+  }, [open, vehicleId, displayMileage]);
 
   const reading = form.watch("reading");
 
   // A drop below the last known reading is almost always a typo, but it is also
   // how a genuinely wrong cached value gets corrected — so it is allowed, flagged.
   const isCorrection =
-    currentMileage != null &&
+    displayMileage != null &&
     typeof reading === "number" &&
     Number.isFinite(reading) &&
-    reading < currentMileage;
+    reading < displayMileage;
 
   const onSubmit = (values: RecordOdometerFormValues) => {
     record.mutate(
@@ -112,8 +120,8 @@ export function RecordOdometerDialog({
           </DialogTitle>
           <DialogDescription>
             {vehicleLabel ? `${vehicleLabel} · ` : ""}
-            {currentMileage != null
-              ? `Last known: ${currentMileage.toLocaleString()} ${unitLabel}.`
+            {displayMileage != null
+              ? `Last known: ${displayMileage!.toLocaleString()} ${unitLabel}.`
               : `No reading has ever been recorded for this vehicle.`}
           </DialogDescription>
         </DialogHeader>
@@ -156,7 +164,7 @@ export function RecordOdometerDialog({
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
                       This is lower than the last known reading of{" "}
-                      {currentMileage!.toLocaleString()} {unitLabel} — save as a correction?
+                      {displayMileage!.toLocaleString()} {unitLabel} — save as a correction?
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-400">
                       It will be kept in the history and flagged, but it will not move the
@@ -215,7 +223,8 @@ export function RecordOdometerDialog({
                 {readings.map((r) => (
                   <li key={r.id} className="flex items-baseline justify-between gap-3 text-sm">
                     <span className="tabular-nums">
-                      {r.reading.toLocaleString()} {r.unit === "km" ? "km" : "mi"}
+                      {fromStoredMiles(readingToMiles(r.reading, r.unit), unit)!.toLocaleString()}{" "}
+                      {getDistanceUnitShort(unit)}
                       {r.is_suspect && (
                         <span className="ml-2 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">
                           Flagged

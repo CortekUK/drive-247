@@ -5,6 +5,8 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/stores/auth-store";
 import { invalidateFleetHealth } from "@/hooks/use-fleet-health";
 import type { OdometerReading, OdometerSource } from "@/types/fleet-health";
+import type { DistanceUnit } from "@/lib/format-utils";
+import { STORED_UNIT, toStoredMiles } from "@/lib/fleet-health-units";
 
 /**
  * Odometer readings.
@@ -72,12 +74,20 @@ export function useRecordOdometer() {
         throw new Error("Reading must be a positive number");
       }
 
+      // The operator types in the tenant's unit; the column stores miles. Both
+      // the unit and the conversion are explicit — leaving `unit` to its 'mi'
+      // default is what made a kilometre reading indistinguishable from a mile
+      // one, and left the platform-wide burn median averaging two unrelated
+      // scales. See lib/fleet-health-units.ts.
+      const tenantUnit: DistanceUnit = tenant.distance_unit ?? "miles";
+
       const { data, error } = await supabase
         .from("vehicle_odometer_readings")
         .insert({
           tenant_id: tenant.id,
           vehicle_id: input.vehicleId,
-          reading: Math.round(input.reading),
+          reading: toStoredMiles(input.reading, tenantUnit),
+          unit: STORED_UNIT,
           observed_at: input.observedAt ?? new Date().toISOString(),
           source: input.source ?? "manual",
           note: input.note ?? null,

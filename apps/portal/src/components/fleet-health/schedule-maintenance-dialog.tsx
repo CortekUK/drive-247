@@ -117,7 +117,21 @@ export function ScheduleMaintenanceDialog({
     start,
     end
   );
+  // `preview_maintenance_conflicts` returns BOTH 'Active' and 'Pending' rentals.
+  // They are not the same thing and must never share one acknowledgement:
+  //
+  //   Active  -> a customer is driving the car right now. The RPC raises 23P03
+  //              and that is a hard stop; the only fix is the vehicle swap flow.
+  //   Pending -> a future booking. Overridable once the operator has seen it.
+  //
+  // Collapsing the two let a single checkbox set p_force, and the RPC guard is
+  // `IF v_active > 0 AND NOT p_force`, so acknowledging a *future* booking also
+  // bypassed the active-rental stop and took a car off the road mid-rental.
+  const blockingConflicts = conflicts.filter((c) => isBlockingStatus(c.status));
+  const overridableConflicts = conflicts.filter((c) => !isBlockingStatus(c.status));
   const hasConflicts = conflicts.length > 0;
+  const hasBlocking = blockingConflicts.length > 0;
+  const hasOverridable = overridableConflicts.length > 0;
 
   // A different window is a different set of bookings — the operator has to look again.
   useEffect(() => {
@@ -140,15 +154,23 @@ export function ScheduleMaintenanceDialog({
         vendor: values.vendor?.trim() ? values.vendor.trim() : null,
         notes: values.notes?.trim() ? values.notes.trim() : null,
         ruleId: ruleId ?? null,
-        // Only ever true once the conflicts above have been seen and accepted.
-        force: hasConflicts && acknowledged,
+        // Force covers OVERRIDABLE (future) bookings only, and only once they
+        // have been seen. It is never sent while an Active rental is in the
+        // window — that case is a hard stop, not something a checkbox clears.
+        force: hasOverridable && acknowledged && !hasBlocking,
       },
       { onSuccess: () => onOpenChange(false) }
     );
   };
 
+  // An Active rental blocks submission outright — there is no acknowledgement
+  // that makes it safe, and letting the request through only to have the RPC
+  // reject it with 23P03 wastes the operator's time.
   const submitBlocked =
-    schedule.isPending || conflictsLoading || (hasConflicts && !acknowledged);
+    schedule.isPending ||
+    conflictsLoading ||
+    hasBlocking ||
+    (hasOverridable && !acknowledged);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -331,11 +353,18 @@ export function ScheduleMaintenanceDialog({
               </p>
             )}
 
-            {hasConflicts && (
+            {hasBlocking && (
+              <BlockingConflictPanel conflicts={blockingConflicts} currency={currency} />
+            )}
+
+            {hasOverridable && (
               <ConflictPanel
-                conflicts={conflicts}
+                conflicts={overridableConflicts}
                 currency={currency}
                 acknowledged={acknowledged}
+                // While a blocking rental is present nothing is overridable, so
+                // the checkbox must not be able to arm force behind it.
+                disabled={hasBlocking}
                 onAcknowledgedChange={setAcknowledged}
               />
             )}
@@ -373,9 +402,11 @@ export function ScheduleMaintenanceDialog({
               <Button type="submit" disabled={submitBlocked}>
                 {schedule.isPending
                   ? "Scheduling..."
-                  : hasConflicts
-                    ? `Schedule anyway (${conflicts.length} booking${conflicts.length === 1 ? "" : "s"} affected)`
-                    : "Schedule"}
+                  : hasBlocking
+                    ? "Swap the customer first"
+                    : hasOverridable
+                      ? `Schedule anyway (${overridableConflicts.length} booking${overridableConflicts.length === 1 ? "" : "s"} affected)`
+                      : "Schedule"}
               </Button>
             </DialogFooter>
           </form>
@@ -385,15 +416,92 @@ export function ScheduleMaintenanceDialog({
   );
 }
 
+/**
+ * A rental the operator cannot override from this dialog.
+ *
+ * Compared case-insensitively and against a trimmed value because the status
+ * arrives as free text from the RPC: 'Active' is what `rentals_status_check`
+ * permits today, but a lowercase or padded variant must not silently fall into
+ * the overridable bucket and re-open the bypass this guard exists to close.
+ */
+export function isBlockingStatus(status: string | null | undefined): boolean {
+  return (status ?? "").trim().toLowerCase() === "active";
+}
+
+/** Active rentals: shown, never acknowledgeable, with a route to the fix. */
+function BlockingConflictPanel({
+  conflicts,
+  currency,
+}: {
+  conflicts: MaintenanceConflict[];
+  currency: string;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+        <div>
+          <p className="text-sm font-medium text-red-800 dark:text-red-300">
+            {conflicts.length === 1
+              ? "A customer is driving this vehicle during that window"
+              : `${conflicts.length} rentals are already under way in that window`}
+          </p>
+          <p className="text-xs text-red-700 dark:text-red-400">
+            This cannot be overridden here. Move the customer onto another vehicle with the
+            swap flow on the rental, then schedule this window.
+          </p>
+        </div>
+      </div>
+
+      <ul className="space-y-2">
+        {conflicts.map((c) => (
+          <li
+            key={c.rental_id}
+            className="rounded border border-red-200 bg-white p-2 text-sm dark:border-red-900 dark:bg-background"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="font-medium">
+                {c.rental_number ? `#${c.rental_number}` : "Rental"}
+                {c.customer_name ? ` · ${c.customer_name}` : ""}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {formatRange(c.start_date, c.end_date)}
+              </span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span>Status: {c.status}</span>
+              {c.monthly_amount != null && (
+                <span className="font-medium text-foreground/80">
+                  {formatCurrency(Number(c.monthly_amount), currency)} / month
+                </span>
+              )}
+              {c.rental_id && (
+                <Link
+                  href={`/rentals/${c.rental_id}`}
+                  className="font-medium text-[#6366f1] hover:underline"
+                >
+                  Open the rental
+                </Link>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ConflictPanel({
   conflicts,
   currency,
   acknowledged,
+  disabled,
   onAcknowledgedChange,
 }: {
   conflicts: MaintenanceConflict[];
   currency: string;
   acknowledged: boolean;
+  disabled?: boolean;
   onAcknowledgedChange: (v: boolean) => void;
 }) {
   return (
@@ -440,7 +548,8 @@ function ConflictPanel({
 
       <label className="flex cursor-pointer items-start gap-2">
         <Checkbox
-          checked={acknowledged}
+          checked={acknowledged && !disabled}
+          disabled={disabled}
           onCheckedChange={(v) => onAcknowledgedChange(v === true)}
           className="mt-0.5"
         />

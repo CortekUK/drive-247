@@ -56,6 +56,7 @@ import { useMaintenanceRules, useMaintenanceRuleActions, type RuleFormData } fro
 import { useTenant } from "@/contexts/TenantContext";
 import { cn } from "@/lib/utils";
 import { formatDistance, type DistanceUnit } from "@/lib/format-utils";
+import { fromStoredMiles, toStoredMiles } from "@/lib/fleet-health-units";
 import { SERVICE_TYPES, type MaintenanceRule } from "@/types/fleet-health";
 import {
   maintenanceRuleSchema,
@@ -362,9 +363,14 @@ function RuleFormDialog({
     form.reset({
       name: rule?.name ?? "",
       service_type: rule?.service_type ?? NONE,
-      interval_miles: rule?.interval_miles ?? undefined,
+      // `interval_miles` and `lead_miles` are stored in miles, as the column
+      // names say. The form works in the tenant's unit, so both cross the
+      // boundary here and again in handleSubmit. Without this a km tenant was
+      // shown a mile figure under a "km" label and it round-tripped unchanged,
+      // which is how a 10,000 km service interval became a 10,000 mile one.
+      interval_miles: fromStoredMiles(rule?.interval_miles, unit) ?? undefined,
       interval_months: rule?.interval_months ?? undefined,
-      lead_miles: rule?.lead_miles ?? 500,
+      lead_miles: fromStoredMiles(rule?.lead_miles, unit) ?? 500,
       lead_days: rule?.lead_days ?? 14,
       is_active: rule?.is_active ?? true,
       is_excluded: target.mode === "override" ? false : (rule?.is_excluded ?? false),
@@ -385,9 +391,10 @@ function RuleFormDialog({
       vehicle_id: editingRule ? editingRule.vehicle_id : (vehicleId ?? null),
       name: values.name.trim(),
       service_type: values.service_type === NONE ? null : (values.service_type ?? null),
-      interval_miles: values.interval_miles ?? null,
+      interval_miles:
+        values.interval_miles == null ? null : toStoredMiles(values.interval_miles, unit),
       interval_months: values.interval_months ?? null,
-      lead_miles: values.lead_miles,
+      lead_miles: toStoredMiles(values.lead_miles, unit),
       lead_days: values.lead_days,
       is_active: values.is_active,
       is_excluded: values.is_excluded ?? false,
@@ -609,7 +616,9 @@ function ruleToForm(rule: MaintenanceRule): RuleFormData {
 
 function describeInterval(rule: MaintenanceRule, unit: DistanceUnit): string {
   const parts: string[] = [];
-  if (rule.interval_miles) parts.push(formatDistance(rule.interval_miles, unit));
+  // Stored miles -> the tenant's unit before the unit label is attached.
+  if (rule.interval_miles)
+    parts.push(formatDistance(fromStoredMiles(rule.interval_miles, unit)!, unit));
   if (rule.interval_months)
     parts.push(`${rule.interval_months} month${rule.interval_months === 1 ? "" : "s"}`);
   return parts.length ? parts.join(" or ") : "—";
@@ -617,7 +626,7 @@ function describeInterval(rule: MaintenanceRule, unit: DistanceUnit): string {
 
 function describeLead(rule: MaintenanceRule, unit: DistanceUnit): string {
   const parts: string[] = [];
-  if (rule.lead_miles) parts.push(formatDistance(rule.lead_miles, unit));
+  if (rule.lead_miles) parts.push(formatDistance(fromStoredMiles(rule.lead_miles, unit)!, unit));
   if (rule.lead_days) parts.push(`${rule.lead_days} day${rule.lead_days === 1 ? "" : "s"}`);
   return parts.length ? `${parts.join(" / ")} before` : "No warning";
 }

@@ -107,6 +107,32 @@ export function useMaintenanceRuleActions() {
 
       const { data, error } = await q.select().single();
       if (error) throw error;
+
+      // A tenant-wide default (vehicle_id null) changes the schedule for every
+      // vehicle, but the DB trigger only recomputes when it can name ONE vehicle
+      // (`IF v_vehicle IS NOT NULL`), so saving a default refreshed nothing —
+      // verified as 0 of 242 vehicles. Until the nightly pass ran, the operator
+      // saw their own change have no effect.
+      //
+      // The recompute is asked for HERE rather than fanned out from the trigger:
+      // an inline per-vehicle loop measured ~4s on a fleet this size and would
+      // sit inside the operator's save. evaluate_fleet_health is the same
+      // set-based pass the nightly cron uses, it is already flag-gated and
+      // per-vehicle guarded, and it is fired without await so a slow refresh
+      // never blocks the save that succeeded.
+      if ((form.vehicle_id ?? null) === null) {
+        void supabase
+          .rpc("evaluate_fleet_health", { p_tenant_id: tenant.id })
+          .then(({ error: evalError }) => {
+            if (evalError) {
+              // Non-fatal: the rule is saved either way and the nightly pass
+              // reconciles. Surfacing it as a failure would be a lie.
+              console.warn("[FLEET-HEALTH] default-rule recompute failed:", evalError);
+            }
+            invalidateFleetHealth(qc);
+          });
+      }
+
       return data as MaintenanceRule;
     },
     onSuccess: () => done("Schedule saved"),

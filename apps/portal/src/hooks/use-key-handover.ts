@@ -611,7 +611,12 @@ export function useKeyHandover(rentalId: string | undefined) {
       // which applies GREATEST() so a reading can never move the odometer backwards.
       // We no longer write vehicles.current_mileage from the client — an
       // unconditional overwrite here is what let readings regress.
-      if (mileage !== null && mileage !== undefined) {
+      // Explicit `>= 0`, not just a null check. `rental_key_handovers` carries
+      // CHECK (mileage IS NULL OR mileage >= 0) and vehicle_odometer_readings
+      // CHECK (reading >= 0), so a negative does not get quietly ignored — it
+      // raises 23514 and aborts the whole key handover with a raw Postgres
+      // string. A literal 0 is still a valid reading and must pass.
+      if (mileage !== null && mileage !== undefined && mileage >= 0) {
         // Auto-calculate excess mileage charge on return
         if (type === "receiving") {
           try {
