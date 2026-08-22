@@ -4,6 +4,7 @@ import {
   bonzahFetchWithCredentials,
   getTenantBonzahCredentials,
   getBonzahSellability,
+  isBonzahAuthError,
   formatDateForBonzah,
   normalizeZipForBonzah,
   type CoverageTypes,
@@ -472,6 +473,13 @@ serve(async (req) => {
         if (i === 0) {
           // Don't double-wrap "Bonzah API error:" — the shared client already adds that prefix
           const errMsg = apiError instanceof Error ? apiError.message : 'Unknown API error'
+          // A rejected login never got as far as the dates, so appending them
+          // dresses a stale-password problem up as a date problem — which is
+          // exactly how it read on screen the first time it happened. Attach the
+          // date debug tail only to errors the dates could actually explain.
+          if (isBonzahAuthError(apiError)) {
+            return errorResponse(errMsg, 502)
+          }
           // Include sent dates in error for debugging
           return errorResponse(`${errMsg} [sent: ${formatDateForBonzah(chunk.start)} 15:00:00, pacific_now: ${pacificNow.date}]`, 500)
         }

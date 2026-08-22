@@ -160,12 +160,31 @@ export async function assertBonzahSellable(
 }
 
 /**
+ * Thrown when Bonzah rejects the credentials themselves (bad password, account
+ * disabled) rather than the request. Callers check `.code` to tell "your saved
+ * Bonzah login went stale" apart from "this quote was malformed" — the two need
+ * completely different messages in front of an operator.
+ */
+export const BONZAH_AUTH_FAILED = 'BONZAH_AUTH_FAILED';
+
+export function isBonzahAuthError(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { code?: string }).code === BONZAH_AUTH_FAILED;
+}
+
+/**
  * Get Bonzah authentication token for specific credentials (cached per-username)
+ *
+ * `context` shapes the failure message only. 'saved' (the default) is every call
+ * that runs on credentials already stored on the tenant, so the remedy is to go
+ * re-enter them. 'entered' is the verify-credentials path, where the operator is
+ * looking at the credential form as they type — telling them to open that form
+ * would be nonsense.
  */
 export async function getBonzahTokenForCredentials(
   username: string,
   password: string,
-  apiUrl: string
+  apiUrl: string,
+  context: 'saved' | 'entered' = 'saved'
 ): Promise<string> {
   const cached = tenantTokenCache.get(username);
   if (cached && Date.now() < cached.expiresAt) {
@@ -183,8 +202,20 @@ export async function getBonzahTokenForCredentials(
   const responseData = await response.json();
 
   if (responseData.status !== 0) {
-    console.error('[Bonzah] Authentication failed:', responseData);
-    throw new Error(`Bonzah authentication failed: ${responseData.txt || 'Unknown error'}`);
+    // Log the raw Insillion payload (it carries fail_count, which separates a
+    // lockout from a wrong password) but never surface it: its `txt` reads
+    // "Authentication failed <email>", which tells an operator nothing about
+    // what to do and puts the account's login address on screen.
+    console.error('[Bonzah] Authentication failed:', username, responseData);
+    const err = new Error(
+      context === 'entered'
+        ? 'Bonzah rejected these credentials. Check the email and password on your Bonzah account and try again.'
+        : 'Bonzah rejected the login saved for this account, so no policy can be issued right now. ' +
+          'This usually means the Bonzah password was changed or reset on Bonzah\'s side. ' +
+          'Update it in Settings → Integrations → Bonzah, then retry.'
+    ) as Error & { code: string };
+    err.code = BONZAH_AUTH_FAILED;
+    throw err;
   }
 
   if (!responseData.data?.token) {

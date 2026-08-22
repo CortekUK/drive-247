@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     console.log('[Bonzah Verify] Verifying credentials against', mode, 'API for:', username)
 
     try {
-      const token = await getBonzahTokenForCredentials(username, password, apiUrl)
+      const token = await getBonzahTokenForCredentials(username, password, apiUrl, 'entered')
 
       return jsonResponse({
         valid: true,
