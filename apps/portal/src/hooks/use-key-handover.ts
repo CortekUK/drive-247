@@ -618,23 +618,21 @@ export function useKeyHandover(rentalId: string | undefined) {
       if (error) throw error;
 
       // Update the vehicle's current_mileage on both giving and receiving handovers.
-      // Explicit >= 0 test rather than a truthiness check: -1 is truthy, so a
-      // mistyped negative used to propagate straight into vehicles.current_mileage
-      // and then into the health projections that read it.
-      if (mileage != null && mileage >= 0) {
-        const { data: rental } = await supabase
-          .from("rentals")
-          .select("vehicle_id")
-          .eq("id", rentalId)
-          .maybeSingle();
-
-        if (rental?.vehicle_id) {
-          await supabase
-            .from("vehicles")
-            .update({ current_mileage: mileage })
-            .eq("id", rental.vehicle_id);
-        }
-
+      //
+      // GUARD: explicit `>= 0`, not a truthiness test and not a bare null check.
+      //   - `if (mileage)` drops a literal 0, which is a legitimate reading on a
+      //     brand-new vehicle, and silently skipped the excess-mileage call below.
+      //   - a negative is worse than useless: `rental_key_handovers` carries
+      //     CHECK (mileage IS NULL OR mileage >= 0) and vehicle_odometer_readings
+      //     CHECK (reading >= 0), so -1 does not get ignored — it raises 23514 and
+      //     aborts the entire key handover with a raw Postgres string.
+      //
+      // NO CLIENT WRITE to vehicles.current_mileage. That row is maintained by the
+      // DB trigger on rental_key_handovers (handover_to_odometer_reading ->
+      // vehicle_odometer_apply), which applies GREATEST() so a reading can never
+      // move the odometer backwards. The unconditional overwrite that used to live
+      // here is exactly what let readings regress.
+      if (mileage !== null && mileage !== undefined && mileage >= 0) {
         // Auto-calculate excess mileage charge on return
         if (type === "receiving") {
           try {
@@ -686,7 +684,10 @@ export function useKeyHandover(rentalId: string | undefined) {
     const pickupMileage = ho?.find((h) => h.handover_type === "giving")?.mileage;
     const returnMileage = ho?.find((h) => h.handover_type === "receiving")?.mileage;
 
-    if (!pickupMileage || !returnMileage) return null;
+    // Explicit null check, not truthiness: a pickup reading of 0 is legitimate on a
+    // brand-new vehicle, and `!pickupMileage` would discard the whole summary — so
+    // the excess-mileage popup never appears and the charge is silently never raised.
+    if (pickupMileage == null || returnMileage == null) return null;
 
     // Fetch rental dates + mileage overrides
     const { data: rental } = await supabase

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseUntyped } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -436,6 +436,66 @@ const Settings = () => {
     updateSettings: updateRentalSettings,
     isUpdating: isUpdatingRentalSettings
   } = useRentalSettings();
+
+  // Fleet Health feature toggle.
+  //
+  // Deliberately NOT part of `rentalForm`: like the other switches in the Features
+  // card it saves on flip rather than on a Save button. It reads and writes through
+  // the rental-settings row rather than TenantContext because TenantContext selects
+  // an explicit column list that does not include `fleet_health_enabled`, and the
+  // sidebar reads the same cache — so refetchTenant() would move nothing here.
+  const [pendingFleetHealth, setPendingFleetHealth] = useState<boolean | null>(null);
+  const persistedFleetHealth =
+    (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true;
+  const fleetHealthEnabled = pendingFleetHealth ?? persistedFleetHealth;
+  const [savingFleetHealth, setSavingFleetHealth] = useState(false);
+  const handleToggleFleetHealth = async (next: boolean) => {
+    if (!tenant?.id) {
+      toast({
+        title: "Tenant not loaded",
+        description: "Reload the page and try again — the portal could not resolve your tenant.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const previous = fleetHealthEnabled;
+    setPendingFleetHealth(next);
+    setSavingFleetHealth(true);
+    try {
+      // supabaseUntyped: `fleet_health_enabled` is not in the generated types yet,
+      // and the typed client rejects an unknown column inside a .select() literal.
+      // .select() at all so an RLS-blocked zero-row write cannot read as success —
+      // PostgREST returns error:null for it.
+      const { data, error } = await supabaseUntyped
+        .from("tenants")
+        .update({ fleet_health_enabled: next })
+        .eq("id", tenant.id)
+        .select("fleet_health_enabled");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You do not have permission to change this setting.");
+      }
+      // Patch the cache the sidebar reads instead of invalidating it: an invalidate
+      // refetches the whole tenant row, and the rentalSettings sync effect would
+      // then rebuild rentalForm and discard any unsaved edits on the other tabs.
+      queryClient.setQueryData(['rental-settings', tenant.id], (old: any) =>
+        old ? { ...old, fleet_health_enabled: data[0].fleet_health_enabled } : old
+      );
+      setPendingFleetHealth(null);
+      toast({
+        title: next ? "Fleet Health enabled" : "Fleet Health disabled",
+        description: next
+          ? "Your fleet is now evaluated nightly and \"Fleet Health\" has been added to your sidebar."
+          : "Nightly evaluation has stopped and the Fleet Health entry has been hidden. Your service records and odometer readings are kept.",
+      });
+    } catch (error: unknown) {
+      setPendingFleetHealth(previous === persistedFleetHealth ? null : previous);
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({ title: "Failed to update", description: msg, variant: "destructive" });
+    } finally {
+      setSavingFleetHealth(false);
+    }
+  };
 
   // Rental settings form state
   const [rentalForm, setRentalForm] = useState<{
@@ -1868,6 +1928,34 @@ const Settings = () => {
                   disabled={savingVehicleOwners}
                   className="flex-shrink-0"
                   aria-label="Toggle Vehicle Owners feature"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Fleet Health</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Adds a &quot;Fleet Health&quot; entry to the Fleet &amp; Bookings sidebar group. Every night
+                    your vehicles are checked against your service intervals and expiry dates, and anything
+                    due soon or already overdue is listed there with a count in the sidebar.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Nothing is emailed or texted — to you or to your customers. You see it when you open the
+                    portal.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Mileage-based intervals need odometer readings. A vehicle without them is listed as
+                    Unknown, with the missing input named — it is never reported as having nothing due.
+                    Fleet Health reflects the records you keep here; it is not an inspection or a
+                    roadworthiness assessment.
+                  </p>
+                </div>
+                <Switch
+                  checked={fleetHealthEnabled}
+                  onCheckedChange={handleToggleFleetHealth}
+                  disabled={savingFleetHealth || !canEditSettings('general')}
+                  className="flex-shrink-0"
+                  aria-label="Toggle Fleet Health feature"
                 />
               </div>
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">

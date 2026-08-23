@@ -559,7 +559,11 @@ export const KeyHandoverSection = ({
                 value={givingMileage}
                 onChange={(e) => setGivingMileage(e.target.value)}
                 onBlur={() => {
-                  const mileageValue = givingMileage ? parseInt(givingMileage, 10) : null;
+                  const parsed = givingMileage ? parseInt(givingMileage, 10) : null;
+                  // A negative is refused by the DB CHECK and would abort the
+                  // handover, so it never leaves the client.
+                  const mileageValue =
+                    parsed === null || isNaN(parsed) || parsed < 0 ? null : parsed;
                   const serverValue = givingHandover?.mileage ?? null;
                   if (mileageValue !== serverValue) {
                     updateMileage.mutate({ type: "giving", mileage: mileageValue });
@@ -754,7 +758,9 @@ export const KeyHandoverSection = ({
                   value={receivingMileage}
                   onChange={(e) => setReceivingMileage(e.target.value)}
                   onBlur={() => {
-                    const mileageValue = receivingMileage ? parseInt(receivingMileage, 10) : null;
+                    const parsed = receivingMileage ? parseInt(receivingMileage, 10) : null;
+                    const mileageValue =
+                      parsed === null || isNaN(parsed) || parsed < 0 ? null : parsed;
                     const serverValue = receivingHandover?.mileage ?? null;
                     if (mileageValue !== serverValue) {
                       updateMileage.mutate({ type: "receiving", mileage: mileageValue });

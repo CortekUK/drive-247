@@ -395,9 +395,13 @@ async function handleChatMessage(
   }
 
   // Step 3: Get business metrics for context
-  const [metricsResult, requestsResult] = await Promise.all([
+  const [metricsResult, requestsResult, fleetHealthResult] = await Promise.all([
     ctx.supabase.rpc('get_rag_metrics', { p_tenant_id: ctx.tenantId }),
     ctx.supabase.rpc('get_pending_rental_requests', { p_tenant_id: ctx.tenantId }),
+    // Fleet Health aggregates. Kept as a SEPARATE rpc rather than folded into
+    // get_rag_metrics so a failure here degrades this one section instead of
+    // taking out every metric the assistant answers from.
+    ctx.supabase.rpc('get_fleet_health_metrics', { p_tenant_id: ctx.tenantId }),
   ]);
 
   if (metricsResult.error) {
@@ -406,8 +410,15 @@ async function handleChatMessage(
   if (requestsResult.error) {
     console.error('Get pending requests error:', requestsResult.error);
   }
+  if (fleetHealthResult.error) {
+    console.error('Get fleet health metrics error:', fleetHealthResult.error);
+  }
 
-  const metricsJson = JSON.stringify(metricsResult.data || {}, null, 2);
+  const metricsJson = JSON.stringify(
+    { ...(metricsResult.data || {}), ...(fleetHealthResult.data || {}) },
+    null,
+    2,
+  );
   const pendingRequests = requestsResult.data || { extension_requests: [], cancellation_requests: [] };
 
   // Step 4: Get conversation history

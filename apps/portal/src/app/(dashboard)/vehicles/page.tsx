@@ -35,6 +35,9 @@ import { useTenant } from "@/contexts/TenantContext";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
+import { useFleetHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health";
+import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
+import type { VehicleHealthStatus } from "@/types/fleet-health";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -75,6 +78,8 @@ interface Vehicle {
 type SortField = 'reg' | 'make_model' | 'year' | 'status';
 type SortDirection = 'asc' | 'desc';
 type PerformanceFilter = 'all' | 'profitable' | 'loss';
+/** `needs_attention` is the roll-up (not_road_legal + overdue + attention); the rest are exact statuses. */
+type HealthFilter = 'all' | 'needs_attention' | 'not_road_legal' | 'overdue' | 'unknown';
 
 interface FiltersState {
   search: string;
@@ -85,6 +90,7 @@ interface FiltersState {
   servicePlan: string;
   spareKey: string;
   ownership: string; // 'all' | 'own' | 'managed' | <owner_id>
+  health: HealthFilter;
 }
 
 function VehicleFilterPopover({
@@ -153,6 +159,22 @@ export default function VehiclesListEnhanced() {
   );
   const hasPickupLocations = (pickupLocationsList || []).length > 0;
 
+  // Fleet Health — one cached read for the whole list, keyed by vehicle for O(1) row lookup.
+  // Gated on the tenant flag: the column defaults to off, and without this every
+  // tenant would see an "Unknown" chip on every row for a feature they never enabled.
+  const fleetHealthEnabled = useFleetHealthEnabled();
+  const { data: fleetHealth = [] } = useFleetHealth();
+  const healthByVehicle = useMemo(
+    () => new Map(fleetHealth.map((h) => [h.vehicle_id, h])),
+    [fleetHealth]
+  );
+  /**
+   * A vehicle with no cache row has never been evaluated — that is `unknown`, not `ok`.
+   * Defaulting to `ok` here would quietly assert a car is fine because we never looked.
+   */
+  const healthStatusFor = (vehicleId: string): VehicleHealthStatus =>
+    healthByVehicle.get(vehicleId)?.status ?? 'unknown';
+
   // INSHUR Period Z — cached eligibility only. The list never fires N checks.
   const inshurConfig = useInshurEligibilityConfig();
   const { byVehicleId: inshurEligibilityByVehicle } = useInshurEligibilityMap(inshurConfig.enabled);
@@ -172,6 +194,7 @@ export default function VehiclesListEnhanced() {
     servicePlan: searchParams.get('servicePlan') || 'all',
     spareKey: searchParams.get('spareKey') || 'all',
     ownership: searchParams.get('ownership') || 'all',
+    health: (searchParams.get('health') as HealthFilter) || 'all',
   });
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -378,6 +401,19 @@ export default function VehiclesListEnhanced() {
       });
     }
 
+    // Health filter. "Needs attention" is the same roll-up useFleetHealthStats reports
+    // (not_road_legal + overdue + attention) — the "what do I act on today?" question.
+    // The exact-status options sit underneath it as narrower cuts.
+    if (filters.health !== 'all') {
+      filtered = filtered.filter(vehicle => {
+        const status = healthStatusFor(vehicle.id);
+        if (filters.health === 'needs_attention') {
+          return status === 'not_road_legal' || status === 'overdue' || status === 'attention';
+        }
+        return status === filters.health;
+      });
+    }
+
     // INSHUR eligibility filter — deep-linked, not part of the filter bar
     if (inshurFilterSpec) {
       filtered = filtered.filter(vehicle => {
@@ -427,7 +463,7 @@ export default function VehiclesListEnhanced() {
 
     console.log('Filtered and sorted vehicles:', filtered.map(v => ({ reg: v.reg, status: v.status, sortField, sortDirection })));
     return filtered;
-  }, [enhancedVehicles, filters, sortField, sortDirection, searchParams, inshurFilterSpec, inshurStateByVehicle]);
+  }, [enhancedVehicles, filters, sortField, sortDirection, searchParams, inshurFilterSpec, inshurStateByVehicle, healthByVehicle]);
 
   // Pagination
   const totalPages = Math.ceil(filteredVehicles.length / pageSize);
@@ -532,7 +568,15 @@ export default function VehiclesListEnhanced() {
         const activeStatusLabel = statusOptions.find(s => s.value === filters.status)?.label;
         const activeMakeLabel = filters.make !== 'all' ? filters.make : null;
         const activeYearLabel = filters.year !== 'all' ? filters.year : null;
+        const healthOptions = [
+          { value: 'all', label: 'All health' },
+          { value: 'needs_attention', label: 'Needs attention' },
+          { value: 'not_road_legal', label: 'Not road legal' },
+          { value: 'overdue', label: 'Overdue' },
+          { value: 'unknown', label: 'Unknown' },
+        ];
         const activePerformanceLabel = performanceOptions.find(p => p.value === filters.performance)?.label;
+        const activeHealthLabel = healthOptions.find(h => h.value === filters.health)?.label;
         const hasAnyFilter = filters.search || filters.status !== 'all' || filters.make !== 'all' || filters.year !== 'all' || filters.performance !== 'all';
 
         return (
@@ -608,11 +652,23 @@ export default function VehiclesListEnhanced() {
               );
             })()}
 
-            {(hasAnyFilter || filters.ownership !== 'all') && (
+            {fleetHealthEnabled && (
+              <VehicleFilterPopover
+                label="Health"
+                active={filters.health !== 'all'}
+                activeLabel={filters.health !== 'all' ? activeHealthLabel : undefined}
+                options={healthOptions}
+                value={filters.health}
+                onChange={(v) => updateFilters({ health: v as HealthFilter })}
+                className="w-full sm:w-auto"
+              />
+            )}
+
+            {(hasAnyFilter || filters.ownership !== 'all' || filters.health !== 'all') && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all', ownership: 'all' })}
+                onClick={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all', ownership: 'all', health: 'all' })}
                 className="h-8 gap-1 text-muted-foreground hover:text-foreground self-start"
               >
                 <X className="h-3.5 w-3.5" />
@@ -675,6 +731,7 @@ export default function VehiclesListEnhanced() {
                   {hasPickupLocations && <TableHead>Location</TableHead>}
                   {inshurConfig.enabled && <TableHead>INSHUR</TableHead>}
                   <TableHead>Status</TableHead>
+                  {fleetHealthEnabled && <TableHead>Health</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -755,6 +812,11 @@ export default function VehiclesListEnhanced() {
                     <TableCell className="text-center">
                       <VehicleStatusBadge status={vehicle.is_paused ? 'Paused' : vehicle.status} />
                     </TableCell>
+                    {fleetHealthEnabled && (
+                      <TableCell>
+                        <HealthStatusChip status={healthStatusFor(vehicle.id)} compact />
+                      </TableCell>
+                    )}
                      <TableCell className="text-right">
                        <Button
                          variant="ghost"

@@ -76,6 +76,9 @@ import { calculateRentalPriceBreakdown, type DayBreakdown } from "@/lib/calculat
 import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useVehicleBookedDates } from "@/hooks/use-vehicle-booked-dates";
+import { useFleetHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health";
+import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
+import { confidenceLabel, type HealthReason, type VehicleHealthStatus } from "@/types/fleet-health";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
@@ -85,6 +88,50 @@ import {
   validateAdditionalDrivers,
   type AdditionalDriverInput,
 } from "@/components/rentals/additional-drivers-form";
+
+/**
+ * Plain-English phrasing for a single vehicle-health reason.
+ *
+ * The reason payload carries raw signed numbers: `days` is (due_date - today), so it
+ * goes negative once something has lapsed, and `miles_remaining` goes negative once a
+ * mileage-based service is passed. The chip only knows the status, so the sentence
+ * that names *why* is built here.
+ */
+function describeHealthReason(r: HealthReason, distanceUnit: DistanceUnit): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  if (r.kind === 'hold' || r.kind === 'job') return r.label;
+
+  if (r.kind === 'compliance') {
+    if (r.state === 'expired') {
+      return r.days != null && r.days < 0
+        ? `${r.label} expired ${plural(Math.abs(r.days), 'day')} ago`
+        : `${r.label} has expired`;
+    }
+    if (r.days == null) return `${r.label} due soon`;
+    return r.days <= 0 ? `${r.label} due today` : `${r.label} due in ${plural(r.days, 'day')}`;
+  }
+
+  // kind === 'service'
+  if (r.state === 'unknown') {
+    return r.hint ? `${r.label} — ${r.hint}` : `${r.label} — not enough data to tell`;
+  }
+
+  const parts: string[] = [];
+  if (r.miles_remaining != null) {
+    parts.push(
+      r.miles_remaining <= 0
+        ? `${formatDistance(Math.abs(r.miles_remaining), distanceUnit)} past due`
+        : `${formatDistance(r.miles_remaining, distanceUnit)} to go`
+    );
+  }
+  if (r.due_date) {
+    const due = format(parseISO(r.due_date), 'd MMM yyyy');
+    parts.push(r.state === 'overdue' ? `was due ${due}` : `due ${due}`);
+  }
+  if (parts.length === 0) return `${r.label} ${r.state === 'overdue' ? 'overdue' : 'due soon'}`;
+  return `${r.label} — ${parts.join(', ')}`;
+}
 
 // Base schema: end_date and return_location are optional at the schema level
 // because PAYG rentals don't have a fixed end date or a return location.
@@ -1075,6 +1122,20 @@ const CreateRental = () => {
   const depositTenantEnabled = rentalSettings?.security_deposit_enabled === true;
   const isTakingDeposit =
     takeDeposit === null ? (depositTenantEnabled && autoDepositTop > 0) : takeDeposit;
+
+  /**
+   * Fleet Health for the picker. One cached read for the tenant, indexed by vehicle so
+   * the option rows and the selected-vehicle panel can never disagree.
+   */
+  const fleetHealthEnabled = useFleetHealthEnabled();
+  const { data: fleetHealth = [] } = useFleetHealth();
+  const healthByVehicle = useMemo(
+    () => new Map(fleetHealth.map((h) => [h.vehicle_id, h])),
+    [fleetHealth]
+  );
+  /** No cache row means the vehicle was never evaluated — that is `unknown`, never `ok`. */
+  const healthStatusFor = (vehicleId: string): VehicleHealthStatus =>
+    healthByVehicle.get(vehicleId)?.status ?? 'unknown';
 
   // Fetch available promo codes for this tenant
   const { data: promoCodes } = useQuery({
@@ -3524,6 +3585,9 @@ const CreateRental = () => {
                                               {vehicle.is_paused && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Paused</span>
                                               )}
+                                              {fleetHealthEnabled && (
+                                                <HealthStatusChip status={healthStatusFor(vehicle.id)} compact />
+                                              )}
                                             </div>
                                             <span className="text-xs text-muted-foreground">{vehicle.make} {vehicle.model}</span>
                                           </div>
@@ -3546,6 +3610,105 @@ const CreateRental = () => {
                                 </AlertDescription>
                               </Alert>
                             )}
+                            {/* Fleet Health for the chosen vehicle.
+                                Deliberately advisory. A hard block on a car the operator needs to
+                                rent today just gets worked around, and the genuine unbypassable
+                                case — an active maintenance hold — is already enforced by the DB
+                                (23P02) on submit. The job here is to say it BEFORE the rest of the
+                                form is filled in. */}
+                            {fleetHealthEnabled && field.value && (() => {
+                              const health = healthByVehicle.get(field.value);
+                              const status = healthStatusFor(field.value);
+                              const distUnit: DistanceUnit = (tenant?.distance_unit as DistanceUnit) || 'miles';
+                              const reasons = health?.reasons ?? [];
+                              const issues = reasons.filter(r => r.state !== 'unknown');
+                              const missingInputs = reasons.filter(r => r.state === 'unknown');
+
+                              const tone =
+                                status === 'off_road' || status === 'not_road_legal'
+                                  ? 'red'
+                                  : status === 'overdue'
+                                    ? 'amber'
+                                    : null;
+
+                              const headline =
+                                status === 'off_road'
+                                  ? 'This vehicle is off the road for maintenance. Dates that overlap the hold will be rejected when you submit — pick another vehicle, or move the hold first.'
+                                  : status === 'not_road_legal'
+                                    ? 'Records show this vehicle is not road legal. You can still create the rental, but resolve this before it goes out.'
+                                    : 'Maintenance is overdue on this vehicle. You can still create the rental — this is a heads-up, not a block.';
+
+                              const reasonList = (r: HealthReason, i: number) => (
+                                <li key={`${r.kind}-${r.rule_id ?? r.label}-${i}`}>
+                                  {describeHealthReason(r, distUnit)}
+                                  {r.confidence && (
+                                    // Rule 3: a projection off the platform median is a weaker
+                                    // claim than one off this car's own readings — say which.
+                                    <span className="block text-[11px] opacity-75">{confidenceLabel(r.confidence)}</span>
+                                  )}
+                                </li>
+                              );
+
+                              return (
+                                <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Vehicle health</span>
+                                    <HealthStatusChip status={status} />
+                                  </div>
+
+                                  {tone && (
+                                    <Alert
+                                      variant="default"
+                                      className={cn(
+                                        tone === 'red'
+                                          ? 'border-red-300 bg-red-50 dark:bg-red-950/20'
+                                          : 'border-amber-300 bg-amber-50 dark:bg-amber-950/20'
+                                      )}
+                                    >
+                                      <AlertTriangle className={cn('h-4 w-4', tone === 'red' ? 'text-red-600' : 'text-amber-500')} />
+                                      <AlertDescription
+                                        className={cn(
+                                          'text-sm',
+                                          tone === 'red'
+                                            ? 'text-red-700 dark:text-red-400'
+                                            : 'text-amber-700 dark:text-amber-400'
+                                        )}
+                                      >
+                                        {headline}
+                                        {issues.length > 0 && (
+                                          <ul className="mt-1.5 list-disc space-y-1 pl-4">
+                                            {issues.map(reasonList)}
+                                          </ul>
+                                        )}
+                                      </AlertDescription>
+                                    </Alert>
+                                  )}
+
+                                  {/* 'attention' and 'ok' still carry detail worth reading — shown
+                                      flat rather than as an alert so it doesn't cry wolf. */}
+                                  {!tone && issues.length > 0 && (
+                                    <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                                      {issues.map(reasonList)}
+                                    </ul>
+                                  )}
+
+                                  {(status === 'unknown' || missingInputs.length > 0) && (
+                                    <div className="rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2 dark:border-gray-800 dark:bg-gray-900/40">
+                                      <p className="text-xs font-medium text-[#404040] dark:text-gray-300">
+                                        {status === 'unknown'
+                                          ? 'Health is unknown for this vehicle — that is missing input, not a clean record.'
+                                          : "Some checks can't be evaluated yet — they are missing input, not passing."}
+                                      </p>
+                                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+                                        {missingInputs.length > 0
+                                          ? missingInputs.map(reasonList)
+                                          : <li>No service history or odometer reading recorded yet.</li>}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {(() => {
                               const selectedVehicle = vehicles?.find(v => v.id === field.value);
                               if (!selectedVehicle) return null;
