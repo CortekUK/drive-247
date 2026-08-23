@@ -116,7 +116,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     captureStatus,
     bonzahStatus,
     extensionRequested,
-    cancellationRequested
+    cancellationRequested,
+    // `paymentType` is read inside the filter pass but was absent from the key,
+    // so PAYG and Regular shared one cache entry: flipping between them
+    // re-served the previous answer instead of refiltering.
+    filters.paymentType
   ];
 
   return useQuery({

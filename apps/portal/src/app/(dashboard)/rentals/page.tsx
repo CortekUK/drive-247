@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,6 +31,8 @@ import {
   ShieldAlert,
   BarChart3,
   Clock,
+  Search,
+  SlidersHorizontal,
 } from "lucide-react";
 
 // Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
@@ -49,7 +52,11 @@ const formatTimeOfDay = (value: string | null | undefined): string | null => {
 import Link from "next/link";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
-import { RentalsFilters } from "@/components/rentals/rentals-filters";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import {
+  RentalsFilterPanel,
+  countActiveRentalFilters,
+} from "@/components/rentals/rentals-filter-panel";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
@@ -102,6 +109,16 @@ const RentalsList = () => {
       sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
       page: parseInt(searchParams.get("page") || "1"),
       bonzahStatus: searchParams.get("bonzahStatus") || undefined,
+      // These three round-trip through the URL like every other filter.
+      // They were missing here while both the filter UI and the query hook
+      // already spoke them, so a click wrote the parameter and the very next
+      // render parsed it straight back out — the Extension and Cancellation
+      // filters have never once narrowed the list.
+      paymentType:
+        (searchParams.get("paymentType") as "payg" | "regular" | null) || undefined,
+      extensionRequested: searchParams.get("extensionRequested") === "true" || undefined,
+      cancellationRequested:
+        searchParams.get("cancellationRequested") === "true" || undefined,
     }),
     [searchParams]
   );
@@ -118,6 +135,9 @@ const RentalsList = () => {
 
   const handleFiltersChange = (newFilters: RentalFilters) => {
     const params = new URLSearchParams();
+    // `view` shares the query string but is not a filter. Rebuilding from
+    // the filters alone would drop it, bouncing the user out of calendar.
+    if (currentView !== "list") params.set("view", currentView);
     Object.entries(newFilters).forEach(([key, value]) => {
       if (value && value !== "all" && value !== "" && value !== 1) {
         if (value instanceof Date) {
@@ -149,6 +169,31 @@ const RentalsList = () => {
   const handlePageChange = (page: number) => {
     handleFiltersChange({ ...filters, page });
   };
+
+  // The overview slot shows the stat cards, and hands the same space over to
+  // the filter panel when it opens.
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilterCount = countActiveRentalFilters(filters);
+  const reduceMotion = useReducedMotion();
+  const swap = reduceMotion
+    ? { duration: 0 }
+    : { duration: 0.2, ease: [0.22, 1, 0.36, 1] as const };
+
+  // Search is debounced into the URL rather than pushed per keystroke: each
+  // push is a navigation, so a twenty-character term would be twenty of them.
+  const [searchInput, setSearchInput] = useState(filters.search || "");
+  useEffect(() => {
+    setSearchInput(filters.search || "");
+  }, [filters.search]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (searchInput !== (filters.search || "")) {
+        handleFiltersChange({ ...filters, search: searchInput, page: 1 });
+      }
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
 
   const handleExportCSV = () => {
     if (!data?.rentals) return;
@@ -286,49 +331,104 @@ const RentalsList = () => {
         </div>
       </div>
 
-      {/* Quick Stats — list view only */}
-      {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Total Rentals</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-success">
-                {stats.active}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
-                {stats.closed}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-amber-500">
-                {stats.pending}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
-            </CardContent>
-          </Card>
+      {/* Search + the filter toggle that owns the overview slot below */}
+      {currentView !== "calendar" && (
+        <div className="group relative w-full sm:max-w-md">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search customer, reg, rental #…"
+            className="border-border/60 bg-card pr-11 pl-9 shadow-sm transition-all placeholder:text-muted-foreground/70 hover:border-primary/30 focus-visible:border-primary focus-visible:bg-background"
+          />
+          <button
+            type="button"
+            aria-label={showFilters ? "Hide filters" : "Show filters"}
+            aria-pressed={showFilters}
+            onClick={() => setShowFilters((v) => !v)}
+            className={`absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+              showFilters
+                ? "bg-primary text-primary-foreground"
+                : "bg-primary/10 text-primary hover:bg-primary/20"
+            }`}
+          >
+            <SlidersHorizontal className="size-4" />
+            {/* Only while the panel is shut. Open, the chips say it better —
+                and closed, this is the sole thing on screen telling you the
+                list you are reading is not the whole list. */}
+            {!showFilters && activeFilterCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
         </div>
       )}
 
-      {/* Filters — list view only */}
+      {/* Overview — the stat cards, and the filter panel that takes their place.
+          One slot rather than two stacked sections: the filters are a detail of
+          the same list the cards summarise, and the page keeps its height. */}
       {currentView !== "calendar" && (
-        <RentalsFilters
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          onClearFilters={handleClearFilters}
-        />
+        <motion.div layout={!reduceMotion} className="relative">
+          <AnimatePresence mode="wait" initial={false}>
+            {showFilters ? (
+              <motion.div
+                key="filters"
+                initial={{ opacity: 0, scale: 0.985 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.985 }}
+                transition={swap}
+              >
+                <RentalsFilterPanel
+                  filters={filters}
+                  onChange={handleFiltersChange}
+                  onClear={handleClearFilters}
+                  onClose={() => setShowFilters(false)}
+                />
+              </motion.div>
+            ) : stats ? (
+              <motion.div
+                key="stats"
+                initial={{ opacity: 0, scale: 0.985 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.985 }}
+                transition={swap}
+                className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4"
+              >
+                <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Rentals</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="text-xl sm:text-2xl font-bold text-success">
+                      {stats.active}
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
+                      {stats.closed}
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="text-xl sm:text-2xl font-bold text-amber-500">
+                      {stats.pending}
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </motion.div>
       )}
 
       {/* Calendar View */}
