@@ -224,9 +224,17 @@ export function SwapVehicleDialog({ open, onOpenChange, rental }: SwapVehicleDia
                         <Badge variant="outline" className="shrink-0 border-red-200 text-red-600">
                           Booked
                         </Badge>
+                      ) : v.notRoadLegal ? (
+                        <Badge variant="outline" className="shrink-0 border-red-300 text-red-700">
+                          Not road legal
+                        </Badge>
                       ) : v.blocked ? (
                         <Badge variant="outline" className="shrink-0 border-amber-200 text-amber-600">
                           Maintenance
+                        </Badge>
+                      ) : v.healthStatus === "overdue" ? (
+                        <Badge variant="outline" className="shrink-0 border-amber-200 text-amber-600">
+                          Service overdue
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="shrink-0 border-green-200 text-green-600">
@@ -240,9 +248,23 @@ export function SwapVehicleDialog({ open, onOpenChange, rental }: SwapVehicleDia
             )}
           </ScrollArea>
 
-          {selected?.blocked && (
+          {selected?.notRoadLegal && (
+            <p className="text-xs font-medium text-red-700 dark:text-red-400">
+              {selected.reg} is not road legal — an inspection or registration date has
+              lapsed. Renting it out is the operator's liability and typically voids their
+              motor policy. Clear the compliance date before swapping into it.
+            </p>
+          )}
+
+          {selected?.blocked && !selected?.notRoadLegal && (
             <p className="text-xs text-amber-600">
               Heads up: {selected.reg} has a maintenance block overlapping these dates. You can still swap into it.
+            </p>
+          )}
+
+          {selected?.healthStatus === "overdue" && !selected?.notRoadLegal && !selected?.blocked && (
+            <p className="text-xs text-amber-600">
+              Heads up: {selected.reg} has an overdue service. You can still swap into it.
             </p>
           )}
 

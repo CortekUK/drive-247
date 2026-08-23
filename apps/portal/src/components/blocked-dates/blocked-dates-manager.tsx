@@ -109,12 +109,19 @@ export const BlockedDatesManager = ({ vehicle_id }: BlockedDatesManagerProps) =>
         }
       }
 
-      // Check for conflicting active/confirmed rentals (Fix 2)
+      // Check for conflicting rentals.
+      //
+      // This checked ['Active','Confirmed']. "Confirmed" is not a status that
+      // exists in this product's data, so that half of the list matched nothing,
+      // while "Pending" — 25 live rentals, all of them booked and many paid —
+      // was never checked at all. The net effect was a conflict check that
+      // waved through exactly the bookings a maintenance block would strand.
+      // preview_maintenance_conflicts (the RPC) already uses this pair.
       let query = supabaseUntyped
         .from('rentals')
         .select('id, start_date, end_date, customers(name), vehicles(reg)')
         .eq('tenant_id', tenant.id)
-        .in('status', ['Active', 'Confirmed'])
+        .in('status', ['Active', 'Pending'])
         .lte('start_date', endStr)
         .gte('end_date', startStr);
 

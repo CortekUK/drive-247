@@ -33,6 +33,12 @@ import {
 } from "lucide-react";
 
 import { useFleetHealth, useFleetHealthStats, useRecomputeFleetHealth } from "@/hooks/use-fleet-health";
+import { useTenant } from "@/contexts/TenantContext";
+// The column below renders vehicles.current_mileage, which Fleet Health stores
+// in miles for every tenant. It was printed raw under a unit-less "Mileage"
+// header, so a km tenant read a mile count with nothing saying so.
+import { fromStoredMiles } from "@/lib/fleet-health-units";
+import { getDistanceUnitLong, type DistanceUnit } from "@/lib/format-utils";
 import { useMaintenanceJobs } from "@/hooks/use-maintenance-jobs";
 import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
 import { HealthReasonsList } from "@/components/fleet-health/health-reasons-list";
@@ -91,6 +97,8 @@ export default function FleetHealthPage() {
   const [setupDismissed, setSetupDismissed] = useState(false);
 
   const [odometerFor, setOdometerFor] = useState<VehicleHealthRow | null>(null);
+  const { tenant } = useTenant();
+  const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const [scheduleFor, setScheduleFor] = useState<VehicleHealthRow | null>(null);
   const [completing, setCompleting] = useState<MaintenanceJob | null>(null);
 
@@ -229,7 +237,7 @@ export default function FleetHealthPage() {
                     <TableHead>Status</TableHead>
                     <TableHead>What needs attention</TableHead>
                     <TableHead>Next due</TableHead>
-                    <TableHead>Mileage</TableHead>
+                    <TableHead>Mileage ({getDistanceUnitLong(distanceUnit)})</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -284,7 +292,7 @@ export default function FleetHealthPage() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm">
                           {r.current_mileage != null
-                            ? r.current_mileage.toLocaleString()
+                            ? fromStoredMiles(r.current_mileage, distanceUnit)!.toLocaleString()
                             : <span className="text-muted-foreground">Not recorded</span>}
                         </TableCell>
                         <TableCell className="text-right">

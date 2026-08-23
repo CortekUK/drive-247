@@ -74,6 +74,11 @@ import { useMaintenanceJobs, useCompleteMaintenanceJob } from "@/hooks/use-maint
 import { confidenceLabel, JOB_PRIORITY_LABEL, JOB_STATUS_LABEL } from "@/types/fleet-health";
 import type { MaintenanceJob, VehicleHealthStatus } from "@/types/fleet-health";
 import { getDistanceUnitLong, getCurrencySymbol } from "@/lib/format-utils";
+// Fleet Health stores every distance in miles; the operator sees their own unit.
+// Anything read straight out of vehicles.current_mileage or vehicle_health_cache
+// is therefore a miles value and must be converted before it is shown under a
+// tenant-unit label — otherwise a km tenant reads 6,214 as "6,214 kilometres".
+import { fromStoredMiles } from "@/lib/fleet-health-units";
 
 interface Vehicle {
   id: string;
@@ -881,7 +886,7 @@ export default function VehicleDetail() {
                           <p className="text-xs text-muted-foreground">Current mileage</p>
                           {hasOdometer ? (
                             <p className="text-2xl font-semibold tabular-nums text-[#080812] dark:text-gray-100">
-                              {vehicle.current_mileage!.toLocaleString()}{' '}
+                              {fromStoredMiles(vehicle.current_mileage, distanceUnit)!.toLocaleString()}{' '}
                               <span className="text-sm font-normal text-muted-foreground">
                                 {getDistanceUnitLong(distanceUnit)}
                               </span>
@@ -943,7 +948,7 @@ export default function VehicleDetail() {
                             <p className="text-xs text-muted-foreground">Next due at</p>
                             <p className="text-sm font-medium tabular-nums text-[#080812] dark:text-gray-100">
                               {health?.next_due_miles != null
-                                ? `${Number(health.next_due_miles).toLocaleString()} ${getDistanceUnitLong(distanceUnit)}`
+                                ? `${fromStoredMiles(Number(health.next_due_miles), distanceUnit)!.toLocaleString()} ${getDistanceUnitLong(distanceUnit)}`
                                 : '—'}
                             </p>
                           </div>
@@ -951,7 +956,7 @@ export default function VehicleDetail() {
                             <div>
                               <p className="text-xs text-muted-foreground">Average use</p>
                               <p className="text-sm font-medium tabular-nums text-[#080812] dark:text-gray-100">
-                                {Math.round(Number(health.daily_burn)).toLocaleString()}{' '}
+                                {Math.round(fromStoredMiles(Number(health.daily_burn), distanceUnit)!).toLocaleString()}{' '}
                                 {distanceUnit === 'miles' ? 'miles' : 'km'}/day
                               </p>
                             </div>

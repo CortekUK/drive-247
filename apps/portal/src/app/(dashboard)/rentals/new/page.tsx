@@ -538,13 +538,27 @@ const CreateRental = () => {
       if (hasOverlap) {
         const isGlobal = !block.vehicle_id;
 
-        // Admin portal only enforces global blocks — vehicle-specific blocks are informational only
-        if (isGlobal) {
-          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (global block)`);
+        // A Fleet Health maintenance hold is now enforced here too.
+        //
+        // This branch used to fire only for global blocks, so a vehicle-specific
+        // block was informational on the screen operators use most — which is how
+        // a maintenance hold stayed bypassable from the portal.
+        //
+        // Scoped to maintenance/swap deliberately, to match what
+        // check_rental_overlap actually rejects (23P02). The table also holds 217
+        // vehicle-specific `manual` blocks that the trigger does NOT reject;
+        // blocking those here would refuse bookings the database would accept and
+        // would change behaviour for every operator using manual blocks today.
+        // Whether manual blocks should bind is a product decision, and it belongs
+        // in the trigger first — the client is advisory UX either way.
+        const isHold = block.source_type === "maintenance" || block.source_type === "swap";
+
+        if (isGlobal || (block.vehicle_id === vehicleId && isHold)) {
+          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (${isGlobal ? "global" : "maintenance hold"})`);
           return {
             blocked: true,
-            reason: block.reason || "General blocked period",
-            isGlobal: true
+            reason: block.reason_code || block.reason || (isGlobal ? "General blocked period" : "In service"),
+            isGlobal
           };
         }
       }

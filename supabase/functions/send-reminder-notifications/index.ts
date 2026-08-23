@@ -185,15 +185,35 @@ serve(async (req) => {
 
     console.log(`Found ${pendingReminders.length} pending reminders`);
 
-    // Get all admin users for in-app notifications
+    // Get admin users for in-app notifications, WITH their tenant.
+    //
+    // This query and the reminders query above both ran unscoped, and the loop
+    // below crossed them — every reminder against every admin on the platform.
+    // A tenant's admins were told which of ANOTHER tenant's vehicles had an
+    // inspection due, by registration, and the digest below branded all of it
+    // with whichever tenant happened to own pendingReminders[0].
+    //
+    // Scoped strictly by tenant. Users with a NULL tenant_id (super admins) are
+    // deliberately excluded from this path: they have the admin dashboard, and
+    // a NULL tenant cannot be matched to a reminder without re-opening the leak.
     const { data: adminUsers } = await supabase
       .from('app_users')
-      .select('id, email, name')
-      .in('role', ['admin', 'head_admin']);
+      .select('id, email, name, tenant_id')
+      .in('role', ['admin', 'head_admin'])
+      .not('tenant_id', 'is', null);
+
+    type AdminUser = { id: string; email: string | null; name: string | null; tenant_id: string };
+    const adminsByTenant = new Map<string, AdminUser[]>();
+    for (const admin of (adminUsers || []) as AdminUser[]) {
+      if (!admin.tenant_id) continue;
+      const list = adminsByTenant.get(admin.tenant_id) ?? [];
+      list.push(admin);
+      adminsByTenant.set(admin.tenant_id, list);
+    }
 
     // Create in-app notifications for each reminder
     for (const reminder of pendingReminders) {
-      for (const admin of adminUsers || []) {
+      for (const admin of (adminsByTenant.get(reminder.tenant_id) || [])) {
         // Check if notification already exists for this reminder
         const { data: existingNotification } = await supabase
           .from('notifications')
@@ -250,24 +270,35 @@ serve(async (req) => {
         });
     }
 
-    // Get tenant branding (use first reminder's tenant_id)
-    const emailTenantId = pendingReminders[0]?.tenant_id;
-    const branding = emailTenantId
-      ? await getTenantBranding(emailTenantId, supabase)
-      : { companyName: 'Drive 247', logoUrl: null, primaryColor: '#1a1a1a', accentColor: '#C5A572', contactEmail: 'support@drive-247.com', contactPhone: null, slug: 'drive247' };
+    // Send one digest per tenant, to that tenant's own admins.
+    //
+    // Previously: one branding lookup from pendingReminders[0], then every
+    // admin on the platform received a digest listing every tenant's reminders
+    // under that one tenant's company name and logo.
+    const remindersByTenant = new Map<string, typeof pendingReminders[number][]>();
+    for (const reminder of pendingReminders) {
+      if (!reminder.tenant_id) continue;
+      const list = remindersByTenant.get(reminder.tenant_id) || [];
+      list.push(reminder);
+      remindersByTenant.set(reminder.tenant_id, list);
+    }
 
-    // Send email digest to each admin
-    for (const admin of adminUsers || []) {
-      if (admin.email && pendingReminders.length > 0) {
-        const subject = `[${branding.companyName}] ${pendingReminders.length} Reminder${pendingReminders.length !== 1 ? 's' : ''} - ${
-          pendingReminders.filter(r => r.severity === 'critical').length > 0
-            ? `${pendingReminders.filter(r => r.severity === 'critical').length} Critical`
-            : 'Action Required'
-        }`;
+    for (const [tenantId, tenantReminders] of remindersByTenant) {
+      const admins = adminsByTenant.get(tenantId) || [];
+      if (admins.length === 0 || tenantReminders.length === 0) continue;
 
-        const emailContent = generateReminderEmailContent(pendingReminders, admin.name || 'Admin', branding);
+      const branding = await getTenantBranding(tenantId, supabase);
+      const criticalCount = tenantReminders.filter(r => r.severity === 'critical').length;
+      const subject = `[${branding.companyName}] ${tenantReminders.length} Reminder${tenantReminders.length !== 1 ? 's' : ''} - ${
+        criticalCount > 0 ? `${criticalCount} Critical` : 'Action Required'
+      }`;
+
+      for (const admin of admins) {
+        if (!admin.email) continue;
+
+        const emailContent = generateReminderEmailContent(tenantReminders, admin.name || 'Admin', branding);
         const html = wrapWithBrandedTemplate(emailContent, branding);
-        const emailResult = await sendEmail(admin.email, subject, html, supabase, emailTenantId);
+        const emailResult = await sendEmail(admin.email, subject, html, supabase, tenantId);
 
         if (emailResult?.success) {
           emailsSent++;

@@ -48,10 +48,17 @@ export const useCalendarBlocks = () => {
 
   const removeBlock = useMutation({
     mutationFn: async (blockId: string) => {
+      // The tenant predicate is not redundant. RLS is off on blocked_dates, so
+      // `id` alone lets any authenticated user delete any tenant's row — and the
+      // rows this table now holds include Fleet Health's safety holds, which is
+      // the difference between deleting a calendar note and putting an unsafe
+      // car back on sale.
+      if (!tenant?.id) throw new Error("No tenant context");
       const { error } = await supabase
         .from("blocked_dates")
         .delete()
-        .eq("id", blockId);
+        .eq("id", blockId)
+        .eq("tenant_id", tenant.id);
       if (error) throw error;
     },
     onSuccess: () => {

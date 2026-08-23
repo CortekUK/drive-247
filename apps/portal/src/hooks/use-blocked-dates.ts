@@ -11,6 +11,16 @@ export interface BlockedDate {
   start_date: string;
   end_date: string;
   reason?: string;
+  /**
+   * What placed this block: 'maintenance' and 'swap' come from Fleet Health's
+   * RPCs, 'manual' from an operator using the blocked-dates screen. It matters
+   * because check_rental_overlap only rejects a booking for maintenance/swap —
+   * the 217 live manual blocks are advisory — so any client-side check has to
+   * read this to avoid being stricter than the database.
+   */
+  source_type?: string | null;
+  /** Structured reason. blocked_dates is broadcast with RLS off, so narrative stays off it. */
+  reason_code?: string | null;
   created_at: string;
   created_by?: string;
   vehicle_id?: string;
