@@ -385,3 +385,8 @@ verify_jwt = true
 # pg_net, which carries no user JWT; protected by x-platform-secret.
 [functions.expire-link-session]
 verify_jwt = false
+
+# Push an onboarding submission to Bonzah's External API. Super admin only;
+# defaults to dry run and refuses loudly when the API key or partner id is absent.
+[functions.push-bonzah-submission]
+verify_jwt = true
