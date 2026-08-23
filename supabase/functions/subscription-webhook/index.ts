@@ -710,6 +710,14 @@ async function handleCheckoutCompleted(
           p_source: "webhook",
           p_stripe_subscription_id: subscription.id,
         });
+        // Tell both sides. Fire-and-forget and separately try/caught: the money
+        // is already correct at this point, and an email must never be able to
+        // fail a webhook Stripe would then retry for three days.
+        try {
+          await supabase.functions.invoke("notify-subscription-activated", { body: { linkId } });
+        } catch (notifyErr) {
+          console.error(`[subscription-webhook] activation notify failed for ${linkId}:`, notifyErr);
+        }
       } else {
         await supabase
           .from("subscription_links")
@@ -947,6 +955,14 @@ async function handleSubscriptionUpdated(
           p_source: "webhook",
           p_stripe_subscription_id: subscription.id,
         });
+        // Same announcement, same guarantees. notify-subscription-activated
+        // claims the row, so whichever settler arrives first sends and the
+        // others no-op — the operator is never emailed twice.
+        try {
+          await supabase.functions.invoke("notify-subscription-activated", { body: { linkId: subLinkId } });
+        } catch (notifyErr) {
+          console.error(`[subscription-webhook] activation notify failed for ${subLinkId}:`, notifyErr);
+        }
       } else if (["incomplete", "unpaid", "incomplete_expired"].includes(patch.status)) {
         // Record the failed attempt so George sees "card declined" rather than
         // an unexplained silence, and leave the link PENDING so the prospect can

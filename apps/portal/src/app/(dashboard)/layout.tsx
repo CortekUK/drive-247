@@ -12,6 +12,7 @@ import { useSessionGuard } from "@/hooks/use-session-guard";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useSubscriptionGateDisabled } from "@/hooks/use-subscription-gate-disabled";
 import { SubscriptionGateDialog } from "@/components/subscription/subscription-gate-dialog";
+import { SubscriptionActivatedDialog } from "@/components/subscription/subscription-activated-dialog";
 import { SetupReminderDialog } from "@/components/dashboard/setup-reminder-dialog";
 import { MigrationBlockerDialog } from "@/components/migration/migration-blocker-dialog";
 import { TenantSuspendedScreen } from "@/components/tenant/tenant-suspended-screen";
@@ -357,6 +358,12 @@ export default function DashboardLayout({
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
+
+        {/* Confirms a subscription that was paid OUTSIDE the portal — a sales
+            link. Purely reassurance: dismissible, blocks nothing, and renders
+            only when a live subscription exists, which is exactly when the gate
+            below does not. */}
+        <SubscriptionActivatedDialog />
 
         {/* Hard gate modal. Same component for both states — different copy
             via `variant`. Dialog stays mounted; visibility is driven by

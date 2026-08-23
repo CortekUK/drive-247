@@ -370,3 +370,8 @@ verify_jwt = false
 # carries no user JWT; protected by x-platform-secret.
 [functions.sweep-subscription-links]
 verify_jwt = false
+
+# Activation announcement (operator + sales). Invoked server-side by
+# subscription-webhook with the service role; accepts only a linkId it re-reads.
+[functions.notify-subscription-activated]
+verify_jwt = false
