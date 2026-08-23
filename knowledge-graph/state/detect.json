@@ -927,7 +927,7 @@
       "video": []
     },
     "total_files": 918,
-    "total_words": 883268,
+    "total_words": 883180,
     "counts": {
       "code": 918
     },
@@ -3253,7 +3253,6 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/disconnect-accounting/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/cmd-create-verification/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-subscription-portal-session/index.ts",
-        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/push-bonzah-submission/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/trax-price-why/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/boldsign-webhook/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-scheduled-refund/index.ts",
@@ -3315,7 +3314,6 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-sms-client.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/inshur-client.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/platform-tos.ts",
-        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-external.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-addendum.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/format-utils.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-terms.ts",
@@ -3487,10 +3485,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 375,
-    "total_words": 505276,
+    "total_files": 373,
+    "total_words": 501629,
     "counts": {
-      "code": 368,
+      "code": 366,
       "document": 7
     },
     "semantic_candidates": [
@@ -3642,7 +3640,6 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/disconnect-accounting/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/cmd-create-verification/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-subscription-portal-session/index.ts",
-      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/push-bonzah-submission/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/trax-price-why/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/boldsign-webhook/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-scheduled-refund/index.ts",
@@ -3704,7 +3701,6 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-sms-client.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/inshur-client.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/platform-tos.ts",
-      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-external.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-addendum.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/format-utils.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-terms.ts",

@@ -1896,7 +1896,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/bonzah-settings.tsx": {
-    "sha": "6e7a460801ea99f579ade89605d2eb355a9f05aff71b80a0b76f7271725a619a",
+    "sha": "e5c811645dc0fd387968b3940eb28efff76b315fe810ff43f4e27b7a41b2338f",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/favicon-upload.tsx": {
@@ -6587,10 +6587,6 @@
     "sha": "06887104a7764a22b607829d5d54557f569b7d10b0c72fef9291496b784c838a",
     "unit": "edge-functions"
   },
-  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/push-bonzah-submission/index.ts": {
-    "sha": "23eab20627ac052e3d02595349bdfed879b83e7d5fcf5965aa70fdecc87df799",
-    "unit": "edge-functions"
-  },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/trax-price-why/index.ts": {
     "sha": "6d12a6828db9e83d487730c60a42d15afa3143ae19f453ebf7b05a5b2c835eb1",
     "unit": "edge-functions"
@@ -6833,10 +6829,6 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/platform-tos.ts": {
     "sha": "423ac05a0f11e6a4d972c0fa11e808163b2c82edeca6a36624bc5a70f19c1dc1",
-    "unit": "edge-functions"
-  },
-  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-external.ts": {
-    "sha": "a43be6e9c935e793e8559a421ed0e2341935e7db61be6f548482a91804cd0d35",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-addendum.ts": {
