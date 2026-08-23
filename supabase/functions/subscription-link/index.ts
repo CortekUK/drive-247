@@ -52,6 +52,18 @@ function redirect(url: string) {
   return new Response(null, { status: 303, headers: { Location: url, "Cache-Control": "no-store" } });
 }
 
+/**
+ * Refuse a form POST by sending the browser BACK to our interstitial.
+ *
+ * The interstitial's form is a real navigation to this function, so anything we
+ * return renders in the address bar. Answering with JSON left the prospect
+ * staring at a raw blob on a supabase.co URL — for five different refusal
+ * branches. They get our page and a readable reason instead.
+ */
+function bounce(token: string, state: string) {
+  return redirect(`${siteBaseUrl()}/subscribe/${encodeURIComponent(token)}?err=${encodeURIComponent(state)}`);
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -304,20 +316,11 @@ Deno.serve(async (req) => {
     // ══════════════════════════════════════════════════════════════════════
     if (req.method !== "POST") return info("invalid", { portalUrl }, 405);
 
-    if (expiresMs - now < MIN_REMAINING_MS) {
-      return info("expired", { portalUrl, companyName: tenant.company_name, aboutToExpire: true });
-    }
+    if (expiresMs - now < MIN_REMAINING_MS) return bounce(token, "expired");
 
     const form = await req.formData().catch(() => null);
     const accepted = form?.get("accept_terms");
-    if (!accepted) {
-      return info("ready", {
-        portalUrl, companyName: tenant.company_name, planName: link.plan_name_snapshot,
-        amount: link.amount_snapshot, currency: link.currency_snapshot,
-        interval: link.interval_snapshot, expiresAt: link.expires_at,
-        error: "Please accept the terms to continue.",
-      }, 400);
-    }
+    if (!accepted) return bounce(token, "terms");
 
     const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null;
     const ua = req.headers.get("user-agent") ?? null;
@@ -330,7 +333,7 @@ Deno.serve(async (req) => {
         .select("stripe_hosted_invoice_url, status")
         .eq("id", link.invoice_url_ref)
         .maybeSingle();
-      if (!inv?.stripe_hosted_invoice_url) return info("plan_unavailable", { portalUrl });
+      if (!inv?.stripe_hosted_invoice_url) return bounce(token, "plan_unavailable");
       await supabase.from("subscription_links").update({
         mint_count: (link.mint_count ?? 0) + 1,
         first_started_at: link.first_started_at ?? nowIso,
@@ -453,10 +456,16 @@ Deno.serve(async (req) => {
       tos_accepted_user_agent: ua,
     }).eq("id", link.id);
 
-    if (!session.url) return info("invalid", { portalUrl }, 500);
+    if (!session.url) return bounce(token, "stripe");
     return redirect(session.url);
   } catch (err) {
     console.error("[subscription-link] failed:", err);
+    // A browser form submit must never end on a JSON error page.
+    try {
+      const u = new URL(req.url);
+      const t = u.searchParams.get("token");
+      if (req.method === "POST" && t) return bounce(t, "unavailable");
+    } catch { /* fall through to JSON */ }
     return jsonResponse({ state: "invalid", error: "Something went wrong. Ask for a fresh link." }, 500);
   }
 });

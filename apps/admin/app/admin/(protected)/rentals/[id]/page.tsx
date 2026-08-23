@@ -2036,7 +2036,7 @@ export default function TenantDetailsPage() {
                   </Button>
                 </div>
               </div>
-              {(subLinkUrl || subLinkLive || subLink?.status === 'paid') && (
+              {(subLinkUrl || subLink) && (
                 <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4 space-y-3">
                   {subLink?.status === 'paid' ? (
                     <p className="text-sm font-medium text-emerald-600">
@@ -2048,9 +2048,17 @@ export default function TenantDetailsPage() {
                         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                           Send this to the client
                         </p>
-                        <span className="text-xs text-muted-foreground">Expires in {subLinkRemaining}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {subLinkLive
+                            ? `Expires in ${subLinkRemaining}`
+                            : subLink?.status === 'revoked'
+                              ? 'Revoked'
+                              : subLink?.status === 'superseded'
+                                ? 'Replaced by a newer link'
+                                : 'Expired'}
+                        </span>
                       </div>
-                      {subLinkUrl ? (
+                      {subLinkUrl && subLinkLive ? (
                         <div className="flex items-center gap-2">
                           <code className="flex-1 select-all break-all rounded bg-background px-3 py-2 text-xs">
                             {subLinkUrl}
@@ -2064,8 +2072,9 @@ export default function TenantDetailsPage() {
                         // The plaintext token is never stored, so once this screen is
                         // gone the address is unrecoverable — by design.
                         <p className="text-xs text-muted-foreground">
-                          A link is live, but its address is only shown once at generation.
-                          Press Regenerate to create a fresh one you can send.
+                          {subLinkLive
+                            ? 'A link is live, but its address is only shown once at generation. Press Regenerate to create a fresh one you can send.'
+                            : 'This link can no longer be paid. Press Regenerate to send a fresh one.'}
                         </p>
                       )}
                       {subLink?.payment_attempted_at && (
@@ -2078,7 +2087,9 @@ export default function TenantDetailsPage() {
                       )}
                       <div className="flex gap-2 pt-1">
                         <Button size="sm" variant="outline" disabled={subLinkBusy} onClick={handleGenerateLink}>Regenerate</Button>
-                        <Button size="sm" variant="ghost" disabled={subLinkBusy} onClick={handleRevokeLink}>Revoke</Button>
+                        {subLinkLive && (
+                          <Button size="sm" variant="ghost" disabled={subLinkBusy} onClick={handleRevokeLink}>Revoke</Button>
+                        )}
                       </div>
                     </>
                   )}

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 interface PageProps {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ cancelled?: string }>;
+  searchParams: Promise<{ cancelled?: string; err?: string }>;
 }
 
 interface LinkInfo {
@@ -25,6 +25,7 @@ interface LinkInfo {
   chargeToday?: boolean;
   expiresAt?: string;
   portalUrl?: string;
+  linkMode?: string;
   tosUrl?: string;
   privacyUrl?: string;
   declined?: boolean;
@@ -69,6 +70,7 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
   const { token } = await params;
   const sp = await searchParams;
   const cancelled = sp?.cancelled === "1";
+  const err = sp?.err;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -157,6 +159,17 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
 
   return (
     <Shell title={`Activate ${info.companyName ?? "your subscription"}`}>
+      {err && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-900">
+          {err === "terms"
+            ? "Please tick the box to accept the terms before continuing."
+            : err === "expired"
+              ? "This link is too close to expiring to start a payment. Ask your Drive247 contact for a fresh one."
+              : err === "plan_unavailable"
+                ? "This link is out of date. Ask your Drive247 contact for a fresh one."
+                : "We couldn't start the payment just then. Please try again."}
+        </div>
+      )}
       {cancelled && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
           No charge was made. You can continue whenever you&rsquo;re ready.
@@ -171,6 +184,7 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-900">{info.error}</div>
       )}
 
+      {info.linkMode !== "invoice" && (
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex items-baseline justify-between">
           <span className="font-medium text-slate-900">{info.planName}</span>
@@ -178,11 +192,16 @@ export default async function SubscribePage({ params, searchParams }: PageProps)
         </div>
         <div className="mt-1 text-xs text-slate-500">per {per}, cancel any time</div>
       </div>
+      )}
 
       <p>
-        {chargeToday
-          ? <>You&rsquo;ll be charged <strong className="text-slate-900">{price}</strong> today, then {price} every {per}.</>
-          : <>Your card is saved today and nothing is charged yet. Your first payment of <strong className="text-slate-900">{price}</strong> comes later.</>}
+        {info.linkMode === "invoice"
+          // Stripe already priced this invoice; quoting the plan amount here
+          // would name one number and then charge another.
+          ? <>You have an outstanding invoice. The exact amount is shown on the next page.</>
+          : chargeToday
+            ? <>You&rsquo;ll be charged <strong className="text-slate-900">{price}</strong> today, then {price} every {per}.</>
+            : <>Your card is saved today and nothing is charged yet. Your first payment of <strong className="text-slate-900">{price}</strong> comes later.</>}
       </p>
       <p>Payment is handled by Stripe. We never see your card details.</p>
 
