@@ -579,10 +579,6 @@ const CreateRental = () => {
   // Insurance document state
   const [insuranceDocId, setInsuranceDocId] = useState<string | null>(null);
   const [showInsuranceUpload, setShowInsuranceUpload] = useState(false);
-  // Where the CUSTOMER came from. Manual by necessity: Turo exposes no API that
-  // would let us sync it, so the operator is the only source of this fact.
-  const [fromTuro, setFromTuro] = useState(false);
-
   const [sameAsPickup, setSameAsPickup] = useState(true);
 
   // Location ID states for 'multiple' location mode
@@ -1733,9 +1729,6 @@ const CreateRental = () => {
         status: "Pending",
         document_status: "pending",
         source: "portal",
-        // NOT the same field as `source` above: that records which app created
-        // the row, this records where the customer came from.
-        lead_source: fromTuro ? "turo" : "direct",
         tenant_id: tenant?.id,
         pickup_location: data.pickup_location || null,
         return_location: isPayAsYouGo ? null : (sameAsPickup ? data.pickup_location : data.return_location || null),
@@ -3256,28 +3249,6 @@ const CreateRental = () => {
                       )}
                     </div>
                   )}
-
-                  {/* Where the customer came from. Manual because Turo exposes no
-                      API to sync against — the operator is the only source of
-                      this fact, so it has to be asked for at the moment they
-                      would know it. */}
-                  <div className="mt-5 flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-                    <Checkbox
-                      id="fromTuro"
-                      checked={fromTuro}
-                      onCheckedChange={(checked) => setFromTuro(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <div className="space-y-0.5">
-                      <label htmlFor="fromTuro" className="cursor-pointer text-sm font-medium leading-none">
-                        This customer came from Turo
-                      </label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Tick this if the booking originated on Turo. It only tags the rental
-                        so you can tell your Turo bookings apart — nothing is sent to Turo.
-                      </p>
-                    </div>
-                  </div>
 
                   {/* Customer Reviews */}
                   {selectedCustomerId && (

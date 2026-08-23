@@ -105,10 +105,6 @@ export default function BookingCheckoutStep({
   const { pendingInsuranceFiles, clearPendingInsuranceFiles, pendingGigDriverFiles, clearPendingGigDriverFiles, context: bookingContext } = useBookingStore();
   const { locations: allDeliveryLocations } = useDeliveryLocations();
   const [agreeTerms, setAgreeTerms] = useState(false);
-  // Self-declared: the customer is the only one who knows they found this
-  // operator on Turo, and Turo exposes no API that would tell us. Optional and
-  // unverified by design — it tags the rental, it does not gate anything.
-  const [cameFromTuro, setCameFromTuro] = useState(false);
   const [agreeCharges, setAgreeCharges] = useState(false);
   // SMS opt-in (A2P 10DLC) — only surfaced when the tenant uses Twilio SMS.
   const [smsConsent, setSmsConsent] = useState(false);
@@ -1090,9 +1086,6 @@ export default function BookingCheckoutStep({
         status: "Pending", // Derived from approval_status + payment_status
         payment_mode: enquiryWithNoDeposit ? 'manual' : bookingMode, // Track payment mode
         approval_status: "pending", // Awaiting admin approval
-        // Where the customer says they came from. Distinct from rentals.source,
-        // which records which app created the row.
-        lead_source: cameFromTuro ? "turo" : "direct",
         payment_status: enquiryWithNoDeposit ? "fulfilled" : "pending", // Enquiry with no deposit: payment already satisfied
         // Location data
         pickup_location: formData.pickupLocation || null,
@@ -1780,28 +1773,6 @@ export default function BookingCheckoutStep({
                   <p className="text-sm">{formData.customerPhone}</p>
                 </div>
               </div>
-            </div>
-          </Card>
-
-          {/* Where they came from. Deliberately NOT inside the consent card —
-              this is a question, not something the customer is agreeing to, and
-              mixing the two would make an optional marker look like a condition
-              of booking. */}
-          <Card className="p-6">
-            <div className="flex items-start gap-3">
-              <Checkbox
-                id="from-turo"
-                checked={cameFromTuro}
-                onCheckedChange={(checked) => setCameFromTuro(checked as boolean)}
-                className="mt-0.5"
-              />
-              <Label htmlFor="from-turo" className="text-sm leading-relaxed cursor-pointer">
-                I found this company on Turo
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  Optional. It just helps them know where you came from &mdash; it does not
-                  change your booking or your price.
-                </span>
-              </Label>
             </div>
           </Card>
 
