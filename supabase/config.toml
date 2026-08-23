@@ -357,3 +357,16 @@ verify_jwt = true
 # caller-supplied content.
 [functions.notify-platform-activity]
 verify_jwt = false
+
+# Anonymous subscription payment link. The prospect has no Supabase session;
+# authorisation is a 256-bit token resolved against a stored sha256 hash, and
+# NOTHING about the charge is caller-supplied — amount, currency, price id,
+# Stripe account and mode are all frozen on the row and re-verified before a
+# session is minted.
+[functions.subscription-link]
+verify_jwt = false
+
+# Expiry sweep + "link expired unpaid" notification. Called by pg_cron, which
+# carries no user JWT; protected by x-platform-secret.
+[functions.sweep-subscription-links]
+verify_jwt = false

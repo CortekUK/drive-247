@@ -331,6 +331,14 @@ export default function TenantDetailsPage() {
   /** Non-null when the subscription read FAILED — never render that as "none". */
   const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
 
+  // Subscription-link state. The plaintext token exists only in the response to
+  // Generate — it is stored as a hash, so once this is cleared it is gone and
+  // the only way back is Regenerate. That is deliberate.
+  const [subLink, setSubLink] = useState<any | null>(null);
+  const [subLinkUrl, setSubLinkUrl] = useState<string | null>(null);
+  const [subLinkBusy, setSubLinkBusy] = useState(false);
+  const [subLinkTick, setSubLinkTick] = useState(0);
+
   // Plans state
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
@@ -412,7 +420,10 @@ export default function TenantDetailsPage() {
     if (!tenantId) return;
 
     // silent: background refreshes must not re-trigger the loading skeleton.
-    const refresh = () => { void loadSubscription(tenantId, true); };
+    const refresh = () => {
+      void loadSubscription(tenantId, true);
+      void loadSubscriptionLink(tenantId);
+    };
 
     const channel = supabase
       .channel(`admin-tenant-subscription-${tenantId}`)
@@ -466,6 +477,7 @@ export default function TenantDetailsPage() {
       setTenantBannerMessage(data.maintenance_banner_message || 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.');
 
       loadSubscription(id);
+      loadSubscriptionLink(id);
       loadPlans(id);
       loadStats(id);
       loadStaffUsers(id);
@@ -488,6 +500,92 @@ export default function TenantDetailsPage() {
    * collapsed under the operator. Same discipline as `subsLoaded` on the list
    * page.
    */
+  // Recomputed against a 1s tick, not just on refetch: a 20s poll cannot see the
+  // moment a link crosses its own expiry, and "Link live · 0m" is a lie.
+  useEffect(() => {
+    if (!subLink || subLink.status !== 'pending') return;
+    const t = setInterval(() => setSubLinkTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [subLink?.id, subLink?.status]);
+
+  const subLinkExpiresMs = subLink?.expires_at ? new Date(subLink.expires_at).getTime() : 0;
+  const subLinkLive = subLink?.status === 'pending' && subLinkExpiresMs > Date.now();
+  const subLinkRemaining = (() => {
+    void subLinkTick; // re-read the clock on every tick
+    const ms = subLinkExpiresMs - Date.now();
+    if (ms <= 0) return 'expired';
+    const h = Math.floor(ms / 3_600_000);
+    const m = Math.floor((ms % 3_600_000) / 60_000);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  })();
+
+  const loadSubscriptionLink = async (tenantId: string) => {
+    try {
+      const { data } = await supabase
+        .from('subscription_links')
+        .select('id, status, kind, expires_at, mint_count, payment_attempted_at, paid_at, sent_at, amount_snapshot, currency_snapshot, plan_name_snapshot, link_mode')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      setSubLink((data ?? [])[0] ?? null);
+    } catch {
+      // A link read failing must never blank the subscription card.
+    }
+  };
+
+  const handleGenerateLink = async () => {
+    const tenantId = params.id as string;
+    setSubLinkBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-subscription-link', {
+        body: { tenantId },
+      });
+      if (error) {
+        // The edge function puts the actionable reason in the BODY, not the
+        // status text — surface that rather than "non-2xx".
+        let msg = error.message || 'Could not generate the link';
+        try {
+          const body = await (error as any)?.context?.json?.();
+          if (body?.error) msg = body.error;
+        } catch { /* keep the generic message */ }
+        toast.error(msg);
+        return;
+      }
+      if (data?.raced) {
+        toast.info('Another admin just generated a link — showing theirs.');
+      } else if (data?.url) {
+        setSubLinkUrl(data.url);
+        await navigator.clipboard?.writeText(data.url).catch(() => {});
+        toast.success('Link generated and copied — paste it to the client.');
+      }
+      await loadSubscriptionLink(tenantId);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not generate the link');
+    } finally {
+      setSubLinkBusy(false);
+    }
+  };
+
+  const handleRevokeLink = async () => {
+    if (!subLink?.id) return;
+    setSubLinkBusy(true);
+    try {
+      const { error } = await supabase
+        .from('subscription_links')
+        .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+        .eq('id', subLink.id)
+        .eq('status', 'pending');
+      if (error) throw error;
+      setSubLinkUrl(null);
+      toast.success('Link revoked — it can no longer be paid.');
+      await loadSubscriptionLink(params.id as string);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not revoke the link');
+    } finally {
+      setSubLinkBusy(false);
+    }
+  };
+
   const loadSubscription = async (tenantId: string, silent = false) => {
     if (!silent) setSubscriptionLoading(true);
     try {
@@ -1903,6 +2001,26 @@ export default function TenantDetailsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Sales link. Deliberately NOT gated on a subscription
+                      existing: the whole point is the tenant who has never
+                      subscribed, so unlike its neighbour this must render for
+                      them too. */}
+                  <Button
+                    size="sm"
+                    variant={subLinkLive ? 'secondary' : 'outline'}
+                    disabled={subLinkBusy}
+                    onClick={handleGenerateLink}
+                  >
+                    {subLinkBusy
+                      ? 'Working…'
+                      : subLinkLive
+                        ? `Link live · ${subLinkRemaining}`
+                        : subLink?.status === 'expired'
+                          ? 'Link expired · Regenerate'
+                          : subLink
+                            ? 'Generate subscription link'
+                            : 'Generate first subscription link'}
+                  </Button>
                   {/* Gated on a LIVE subscription, not merely on one existing.
                       This page now also loads canceled / unpaid / paused rows so
                       churned tenants are distinguishable from never-subscribed —
@@ -1918,6 +2036,54 @@ export default function TenantDetailsPage() {
                   </Button>
                 </div>
               </div>
+              {(subLinkUrl || subLinkLive || subLink?.status === 'paid') && (
+                <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4 space-y-3">
+                  {subLink?.status === 'paid' ? (
+                    <p className="text-sm font-medium text-emerald-600">
+                      Payment link paid{subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''} — this tenant is subscribed.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Send this to the client
+                        </p>
+                        <span className="text-xs text-muted-foreground">Expires in {subLinkRemaining}</span>
+                      </div>
+                      {subLinkUrl ? (
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 select-all break-all rounded bg-background px-3 py-2 text-xs">
+                            {subLinkUrl}
+                          </code>
+                          <Button size="sm" variant="outline" onClick={() => {
+                            navigator.clipboard?.writeText(subLinkUrl);
+                            toast.success('Link copied');
+                          }}>Copy</Button>
+                        </div>
+                      ) : (
+                        // The plaintext token is never stored, so once this screen is
+                        // gone the address is unrecoverable — by design.
+                        <p className="text-xs text-muted-foreground">
+                          A link is live, but its address is only shown once at generation.
+                          Press Regenerate to create a fresh one you can send.
+                        </p>
+                      )}
+                      {subLink?.payment_attempted_at && (
+                        <p className="text-xs text-red-600">
+                          Card declined — they are not subscribed. They can retry with the same link.
+                        </p>
+                      )}
+                      {(subLink?.mint_count ?? 0) > 0 && (
+                        <p className="text-xs text-muted-foreground">Opened {subLink.mint_count}&times;</p>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" variant="outline" disabled={subLinkBusy} onClick={handleGenerateLink}>Regenerate</Button>
+                        <Button size="sm" variant="ghost" disabled={subLinkBusy} onClick={handleRevokeLink}>Revoke</Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <Separator className="mb-5" />
               <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
                 <div className="space-y-1.5">

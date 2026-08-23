@@ -78,6 +78,7 @@ const ACTION_GROUPS: ActionGroup[] = [
     label: 'Platform & billing',
     actions: [
       { key: 'subscription_activated', label: 'Subscription activated' },
+      { key: 'subscription_link_expired', label: 'Payment link expired unpaid' },
       { key: 'subscription_invoice_paid', label: 'Subscription invoice paid' },
       { key: 'subscription_checkout_created', label: 'Subscription checkout started' },
       { key: 'stripe_account_created', label: 'Stripe account connected' },

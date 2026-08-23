@@ -42,6 +42,7 @@ const ACTION_LABELS: Record<string, string> = {
   vehicle_created: 'Vehicle added',
   fine_created: 'Fine raised',
   subscription_activated: 'Subscription activated',
+  subscription_link_expired: 'Payment link expired UNPAID',
   subscription_invoice_paid: 'Subscription invoice paid',
   subscription_checkout_created: 'Subscription checkout started',
   insurance_payment_confirmed: 'Insurance confirmed',

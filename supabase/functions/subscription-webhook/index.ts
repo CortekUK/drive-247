@@ -689,6 +689,42 @@ async function handleCheckoutCompleted(
     await onMigrationTaskComplete(supabase, tenantId, "payment");
   }
 
+  // ── Settle an anonymous subscription link, if this checkout came from one ──
+  //
+  // Additive and fully contained: a checkout with no subscription_link_id (every
+  // existing flow) skips this entirely, and a throw here can never fail a
+  // checkout that Stripe has already collected money for.
+  //
+  // The status gate is the point. This handler is reached for ANY completed
+  // session — there is no payment_status check above, and `status` is written
+  // verbatim — so an abandoned SCA challenge lands as 'incomplete'. Marking the
+  // link paid on that would show George a green "Paid" for a customer who never
+  // successfully paid. settle_subscription_link enforces the same rule again in
+  // SQL; this gate just avoids a pointless call.
+  const linkId = session.metadata?.subscription_link_id;
+  if (linkId) {
+    try {
+      if (["active", "trialing", "past_due"].includes(subscription.status)) {
+        await supabase.rpc("settle_subscription_link", {
+          p_link_id: linkId,
+          p_source: "webhook",
+          p_stripe_subscription_id: subscription.id,
+        });
+      } else {
+        await supabase
+          .from("subscription_links")
+          .update({
+            payment_attempted_at: new Date().toISOString(),
+            last_failure_reason: `subscription_${subscription.status}`,
+          })
+          .eq("id", linkId)
+          .eq("status", "pending");
+      }
+    } catch (linkErr) {
+      console.error(`[subscription-webhook] link settlement failed for ${linkId}:`, linkErr);
+    }
+  }
+
   console.log(`Subscription ${subscription.id} activated for tenant ${tenantId}, plan: ${resolvedPlanName}`);
 }
 
@@ -886,6 +922,47 @@ async function handleSubscriptionUpdated(
       supabase, subscription, fullSub, card, tenantId, account
     );
     if (!inserted) return; // conflict already logged; tenant row must not move
+  }
+
+  // ── Second settler for anonymous subscription links ──────────────────────
+  //
+  // checkout.session.completed is not guaranteed to be the event that tells us a
+  // link was paid. Stripe creates the subscription object BEFORE payment
+  // confirms, so on a 3-D Secure card the first event we see is
+  // customer.subscription.created carrying status 'incomplete' — verified live:
+  // a failed 3DS challenge produced an 'incomplete' row through this path while
+  // checkout.session.completed never fired at all. This handler is also the only
+  // one that runs if that event is lost entirely.
+  //
+  // Same rule as everywhere else: only a LIVE status settles. settle_subscription_link
+  // re-checks the invariant in SQL and returns false rather than raising, so a
+  // late or duplicate delivery cannot mark a link paid twice or produce a second
+  // notification.
+  const subLinkId = subscription.metadata?.subscription_link_id;
+  if (subLinkId) {
+    try {
+      if (["active", "trialing", "past_due"].includes(patch.status)) {
+        await supabase.rpc("settle_subscription_link", {
+          p_link_id: subLinkId,
+          p_source: "webhook",
+          p_stripe_subscription_id: subscription.id,
+        });
+      } else if (["incomplete", "unpaid", "incomplete_expired"].includes(patch.status)) {
+        // Record the failed attempt so George sees "card declined" rather than
+        // an unexplained silence, and leave the link PENDING so the prospect can
+        // simply try again with the link he already sent them.
+        await supabase
+          .from("subscription_links")
+          .update({
+            payment_attempted_at: new Date().toISOString(),
+            last_failure_reason: `subscription_${patch.status}`,
+          })
+          .eq("id", subLinkId)
+          .eq("status", "pending");
+      }
+    } catch (linkErr) {
+      console.error(`[subscription-webhook] link settlement failed for ${subLinkId}:`, linkErr);
+    }
   }
 
   let activePlan = "basic";
