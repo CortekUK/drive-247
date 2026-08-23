@@ -694,6 +694,36 @@ const RentalDetail = () => {
     enabled: !!rental?.vehicles && isBonzahConnected,
   });
 
+  /**
+   * Correct where this rental came from, after the fact.
+   *
+   * The fact usually arrives late: a customer booking themselves often does not
+   * tick the box, and the operator only learns it on the phone. A tag that can
+   * only be set at creation is a tag that quietly under-counts, which defeats
+   * the one thing it exists for.
+   */
+  const toggleTuroSource = async () => {
+    if (!rental?.id) return;
+    const next = (rental as any).lead_source === 'turo' ? 'direct' : 'turo';
+    try {
+      const { error } = await supabase
+        .from('rentals')
+        .update({ lead_source: next } as any)
+        .eq('id', rental.id);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
+      toast({
+        title: next === 'turo' ? 'Tagged as a Turo booking' : 'Turo tag removed',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Could not update the source',
+        description: e?.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const { data: rentalTotals } = useRentalTotals(id);
 
   // What a deposit raised on this rental should default to. A per-rental
@@ -2611,6 +2641,26 @@ const RentalDetail = () => {
             </p>
             {/* Key Status Badges */}
             <div className="flex flex-wrap gap-2 mt-2">
+              {/* Where the customer came from. Clickable: see toggleTuroSource. */}
+              <Badge
+                variant="outline"
+                role="button"
+                tabIndex={0}
+                onClick={toggleTuroSource}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void toggleTuroSource(); } }}
+                title={
+                  (rental as any).lead_source === 'turo'
+                    ? 'Came from Turo — click to unset'
+                    : 'Click to mark this rental as coming from Turo'
+                }
+                className={
+                  (rental as any).lead_source === 'turo'
+                    ? 'cursor-pointer gap-1 border-violet-500/30 bg-violet-500/10 text-violet-600'
+                    : 'cursor-pointer gap-1 border-dashed text-muted-foreground hover:text-foreground'
+                }
+              >
+                {(rental as any).lead_source === 'turo' ? 'From Turo' : 'Mark as Turo'}
+              </Badge>
               {/* PAYG indicator */}
               {rental.is_pay_as_you_go && (
                 <Badge

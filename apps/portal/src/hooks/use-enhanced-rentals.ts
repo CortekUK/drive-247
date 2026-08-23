@@ -35,6 +35,9 @@ export interface RentalFilters {
 }
 
 export interface EnhancedRental {
+  /** Where the customer came from (direct | turo | other); null on rentals
+   *  created before the field existed. NOT rentals.source. */
+  lead_source?: string | null;
   id: string;
   rental_number: string;
   start_date: string;
@@ -141,6 +144,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         .select(`
           id,
           rental_number,
+          lead_source,
           start_date,
           end_date,
           pickup_time,
