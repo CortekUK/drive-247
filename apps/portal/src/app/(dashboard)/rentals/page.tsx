@@ -365,7 +365,17 @@ const RentalsList = () => {
                         <TableCell className="font-medium">
                           {rental.is_extended ? (
                             <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
+                              <span className="flex items-center gap-1.5">
+                                {rental.rental_number}
+                                {rental.lead_source === 'turo' && (
+                                  <span
+                                    title="This customer came from Turo"
+                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                                  >
+                                    Turo
+                                  </span>
+                                )}
+                              </span>
                               <button
                                 className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
                                 onClick={(e) => {
@@ -380,7 +390,17 @@ const RentalsList = () => {
                             </div>
                           ) : rental.cancellation_requested ? (
                             <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
+                              <span className="flex items-center gap-1.5">
+                                {rental.rental_number}
+                                {rental.lead_source === 'turo' && (
+                                  <span
+                                    title="This customer came from Turo"
+                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                                  >
+                                    Turo
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
                                 <XCircle className="h-3 w-3" />
                                 Cancellation Requested
@@ -388,7 +408,17 @@ const RentalsList = () => {
                             </div>
                           ) : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? (
                             <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
+                              <span className="flex items-center gap-1.5">
+                                {rental.rental_number}
+                                {rental.lead_source === 'turo' && (
+                                  <span
+                                    title="This customer came from Turo"
+                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                                  >
+                                    Turo
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
                                 <ShieldAlert className="h-3 w-3" />
                                 Balance Required
@@ -396,7 +426,17 @@ const RentalsList = () => {
                             </div>
                           ) : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? (
                             <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
+                              <span className="flex items-center gap-1.5">
+                                {rental.rental_number}
+                                {rental.lead_source === 'turo' && (
+                                  <span
+                                    title="This customer came from Turo"
+                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                                  >
+                                    Turo
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
                                 <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
                                 <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto hidden dark:block" />
