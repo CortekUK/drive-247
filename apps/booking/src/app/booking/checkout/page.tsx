@@ -111,6 +111,8 @@ const BookingCheckoutContent = () => {
     customerPhone: "",
     licenseNumber: "",
     agreeTerms: false,
+    // Self-declared marketplace origin. Optional and unverified by design.
+    cameFromTuro: false,
     agreeCharges: false
   });
 
@@ -767,6 +769,9 @@ const BookingCheckoutContent = () => {
           rental_period_type: rentalPeriodType,
           status: "Pending",  // Pending until payment confirmed
           tenant_id: tenant?.id,
+          // Where the customer says they came from. Distinct from rentals.source,
+          // which records which app created the row.
+          lead_source: formData.cameFromTuro ? "turo" : "direct",
           // Delivery data (new simplified flow)
           delivery_option: deliveryData.deliveryOption || 'fixed',
           uses_delivery_service: deliveryData.deliveryOption === 'location' || deliveryData.deliveryOption === 'area',
@@ -1087,6 +1092,26 @@ const BookingCheckoutContent = () => {
                     {errors.licenseNumber && (
                       <p className="text-xs text-destructive mt-1">{errors.licenseNumber}</p>
                     )}
+                  </div>
+
+                  {/* Where they came from — a question, not a consent, so it
+                      sits above the agreement block rather than inside it. */}
+                  <div className="pt-4">
+                    <div className="flex items-start gap-3 rounded-lg border p-4">
+                      <Checkbox
+                        id="checkout-from-turo"
+                        checked={formData.cameFromTuro}
+                        onCheckedChange={(checked) => setFormData({...formData, cameFromTuro: checked as boolean})}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="checkout-from-turo" className="text-sm leading-relaxed cursor-pointer">
+                        I found this company on Turo
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          Optional. It just helps them know where you came from &mdash; it does not
+                          change your booking or your price.
+                        </span>
+                      </Label>
+                    </div>
                   </div>
 
                   <div className="space-y-4 pt-4">

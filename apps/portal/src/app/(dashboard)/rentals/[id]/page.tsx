@@ -704,13 +704,26 @@ const RentalDetail = () => {
    */
   const toggleTuroSource = async () => {
     if (!rental?.id) return;
-    const next = (rental as any).lead_source === 'turo' ? 'direct' : 'turo';
+    // Un-tagging writes NULL, not 'direct'. This control is a Turo marker, and
+    // its off-state means "not marked" — turning a stray click into a positive
+    // "the customer came direct" claim would fabricate an answer nobody gave.
+    // The creation checkboxes still write 'direct' explicitly, which is a real
+    // statement made at the time.
+    const next = (rental as any).lead_source === 'turo' ? null : 'turo';
     try {
-      const { error } = await supabase
+      // .select() so a zero-row write is visible. Without it PostgREST returns
+      // 204 with error null when nothing matched — RLS, a stale id, a
+      // permission problem — and the success toast fired over a write that
+      // never happened.
+      const { data: updated, error } = await supabase
         .from('rentals')
         .update({ lead_source: next } as any)
-        .eq('id', rental.id);
+        .eq('id', rental.id)
+        .select('id');
       if (error) throw error;
+      if (!updated || updated.length === 0) {
+        throw new Error('The rental was not updated — you may not have permission to change it.');
+      }
       await queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
       toast({
         title: next === 'turo' ? 'Tagged as a Turo booking' : 'Turo tag removed',
@@ -2641,13 +2654,17 @@ const RentalDetail = () => {
             </p>
             {/* Key Status Badges */}
             <div className="flex flex-wrap gap-2 mt-2">
-              {/* Where the customer came from. Clickable: see toggleTuroSource. */}
+              {/* Where the customer came from. Clickable only for someone who
+                  may edit rentals — it was the one unpermissioned action on a
+                  page with 38 canEdit gates, so a viewer got a live control. A
+                  viewer still SEES the tag; they just cannot change it. */}
+              {(canEdit('rentals') || (rental as any).lead_source === 'turo') && (
               <Badge
                 variant="outline"
-                role="button"
-                tabIndex={0}
-                onClick={toggleTuroSource}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void toggleTuroSource(); } }}
+                role={canEdit('rentals') ? "button" : undefined}
+                tabIndex={canEdit('rentals') ? 0 : undefined}
+                onClick={canEdit('rentals') ? toggleTuroSource : undefined}
+                onKeyDown={(e) => { if (canEdit('rentals') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); void toggleTuroSource(); } }}
                 title={
                   (rental as any).lead_source === 'turo'
                     ? 'Came from Turo — click to unset'
@@ -2655,12 +2672,13 @@ const RentalDetail = () => {
                 }
                 className={
                   (rental as any).lead_source === 'turo'
-                    ? 'cursor-pointer gap-1 border-violet-500/30 bg-violet-500/10 text-violet-600'
+                    ? `gap-1 border-violet-500/30 bg-violet-500/10 text-violet-600 ${canEdit('rentals') ? 'cursor-pointer' : ''}`
                     : 'cursor-pointer gap-1 border-dashed text-muted-foreground hover:text-foreground'
                 }
               >
                 {(rental as any).lead_source === 'turo' ? 'From Turo' : 'Mark as Turo'}
               </Badge>
+              )}
               {/* PAYG indicator */}
               {rental.is_pay_as_you_go && (
                 <Badge

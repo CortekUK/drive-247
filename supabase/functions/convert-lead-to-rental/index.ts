@@ -27,6 +27,8 @@ interface Payload {
     monthlyAmount?: number;
     rentalPeriodType?: "daily" | "weekly" | "monthly";
   };
+  /** Where the customer came from. Optional; anything else means 'direct'. */
+  leadSource?: "direct" | "turo" | "other";
 }
 
 const CONVERTIBLE_STAGES = ["deposit_paid", "pickup_scheduled"];
@@ -200,6 +202,11 @@ Deno.serve(async (req) => {
         status: "Active",
         rental_period_type: rentalPeriodType,
         source: "lead_conversion",
+        // Where the CUSTOMER came from — a different question from `source`
+        // above, which records which flow created the row. This is the path
+        // where a Turo origin is MOST likely to be known: an enquiry came in and
+        // somebody spoke to them.
+        lead_source: body.leadSource === "turo" ? "turo" : "direct",
         payment_status: "fulfilled", // Deposit captured at deposit_paid stage
         approval_status: "approved",
       })

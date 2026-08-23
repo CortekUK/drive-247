@@ -92,6 +92,7 @@ const RentalsList = () => {
         ? parseInt(searchParams.get("durationMax")!)
         : undefined,
       initialPayment: searchParams.get("initialPayment") || "all",
+      leadSource: searchParams.get("leadSource") || undefined,
       startDateFrom: searchParams.get("startDateFrom")
         ? new Date(searchParams.get("startDateFrom")!)
         : undefined,
@@ -363,19 +364,21 @@ const RentalsList = () => {
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
+                          {/* Outside the branch chain on purpose. The cell has
+                              five variants and 98% of rentals render through the
+                              bare fallback, so a per-branch chip is a chip that
+                              is missing for almost everyone. */}
+                          {rental.lead_source === 'turo' && (
+                            <span
+                              title="This customer came from Turo"
+                              className="mb-0.5 mr-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                            >
+                              Turo
+                            </span>
+                          )}
                           {rental.is_extended ? (
                             <div className="flex flex-col">
-                              <span className="flex items-center gap-1.5">
-                                {rental.rental_number}
-                                {rental.lead_source === 'turo' && (
-                                  <span
-                                    title="This customer came from Turo"
-                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
-                                  >
-                                    Turo
-                                  </span>
-                                )}
-                              </span>
+                              <span>{rental.rental_number}</span>
                               <button
                                 className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
                                 onClick={(e) => {
@@ -390,17 +393,7 @@ const RentalsList = () => {
                             </div>
                           ) : rental.cancellation_requested ? (
                             <div className="flex flex-col">
-                              <span className="flex items-center gap-1.5">
-                                {rental.rental_number}
-                                {rental.lead_source === 'turo' && (
-                                  <span
-                                    title="This customer came from Turo"
-                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
-                                  >
-                                    Turo
-                                  </span>
-                                )}
-                              </span>
+                              <span>{rental.rental_number}</span>
                               <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
                                 <XCircle className="h-3 w-3" />
                                 Cancellation Requested
@@ -408,17 +401,7 @@ const RentalsList = () => {
                             </div>
                           ) : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? (
                             <div className="flex flex-col">
-                              <span className="flex items-center gap-1.5">
-                                {rental.rental_number}
-                                {rental.lead_source === 'turo' && (
-                                  <span
-                                    title="This customer came from Turo"
-                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
-                                  >
-                                    Turo
-                                  </span>
-                                )}
-                              </span>
+                              <span>{rental.rental_number}</span>
                               <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
                                 <ShieldAlert className="h-3 w-3" />
                                 Balance Required
@@ -426,17 +409,7 @@ const RentalsList = () => {
                             </div>
                           ) : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? (
                             <div className="flex flex-col">
-                              <span className="flex items-center gap-1.5">
-                                {rental.rental_number}
-                                {rental.lead_source === 'turo' && (
-                                  <span
-                                    title="This customer came from Turo"
-                                    className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
-                                  >
-                                    Turo
-                                  </span>
-                                )}
-                              </span>
+                              <span>{rental.rental_number}</span>
                               <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
                                 <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
                                 <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto hidden dark:block" />

@@ -4,6 +4,8 @@ import { calculateDuration, getRentalStatus } from "@/lib/rental-utils";
 import { useTenant } from "@/contexts/TenantContext";
 
 export interface RentalFilters {
+  /** Where the customer came from. 'turo' narrows to marketplace bookings. */
+  leadSource?: string;
   captureStatus?: string;
   search?: string;
   status?: string;
@@ -167,6 +169,13 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id) as any;
 
+      // Where the customer came from. Server-side so the COUNT is right — the
+      // meeting asked for "2 of my 5 bookings came from Turo", and a
+      // client-side filter over one page cannot answer that.
+      if (filters.leadSource) {
+        query = query.eq("lead_source", filters.leadSource);
+      }
+
       // Note: Customer type filter moved to client-side to work with regular joins
 
       // Apply date range filters
@@ -247,6 +256,10 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           return {
             id: rental.id,
             rental_number: rental.rental_number,
+            // Selected on the query but previously dropped here: the row is
+            // rebuilt from an explicit literal, so a column not named again is
+            // silently discarded. Every list chip was reading undefined.
+            lead_source: rental.lead_source ?? null,
             start_date: rental.start_date,
             end_date: rental.end_date,
             pickup_time: rental.pickup_time ?? null,
