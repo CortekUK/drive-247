@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,9 +34,6 @@ export function ConvertToRentalDialog({ open, onOpenChange, lead }: Props) {
   // before typing a real number.
   const [monthlyAmount, setMonthlyAmount] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
-  // Where the customer came from. Asked here because the lead flow is where it
-  // is most likely to be known — somebody has already spoken to them.
-  const [fromTuro, setFromTuro] = useState(false);
 
   const handleSubmit = async () => {
     const amount = Number(monthlyAmount);
@@ -53,7 +49,6 @@ export function ConvertToRentalDialog({ open, onOpenChange, lead }: Props) {
           body: {
             leadId: lead.id,
             pricing: { monthlyAmount: amount, rentalPeriodType: (lead.rental_type as "daily" | "weekly" | "monthly") ?? "weekly" },
-            leadSource: fromTuro ? "turo" : "direct",
           },
         },
       );
@@ -125,21 +120,6 @@ export function ConvertToRentalDialog({ open, onOpenChange, lead }: Props) {
               Per the rentals schema, monthly_amount is required. Adjust later from the rental
               detail page.
             </p>
-          </div>
-
-          <div className="flex items-start gap-3 rounded-lg border p-3">
-            <Checkbox
-              id="convert-from-turo"
-              checked={fromTuro}
-              onCheckedChange={(checked) => setFromTuro(checked === true)}
-              className="mt-0.5"
-            />
-            <Label htmlFor="convert-from-turo" className="cursor-pointer text-sm font-normal leading-relaxed">
-              This customer came from Turo
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                Tags the rental so you can tell your Turo bookings apart. Nothing is sent to Turo.
-              </span>
-            </Label>
           </div>
         </div>
 

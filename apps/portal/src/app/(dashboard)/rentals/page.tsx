@@ -92,7 +92,6 @@ const RentalsList = () => {
         ? parseInt(searchParams.get("durationMax")!)
         : undefined,
       initialPayment: searchParams.get("initialPayment") || "all",
-      leadSource: searchParams.get("leadSource") || undefined,
       startDateFrom: searchParams.get("startDateFrom")
         ? new Date(searchParams.get("startDateFrom")!)
         : undefined,
@@ -364,18 +363,6 @@ const RentalsList = () => {
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
-                          {/* Outside the branch chain on purpose. The cell has
-                              five variants and 98% of rentals render through the
-                              bare fallback, so a per-branch chip is a chip that
-                              is missing for almost everyone. */}
-                          {rental.lead_source === 'turo' && (
-                            <span
-                              title="This customer came from Turo"
-                              className="mb-0.5 mr-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
-                            >
-                              Turo
-                            </span>
-                          )}
                           {rental.is_extended ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>

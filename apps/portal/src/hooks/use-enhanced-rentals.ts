@@ -4,8 +4,6 @@ import { calculateDuration, getRentalStatus } from "@/lib/rental-utils";
 import { useTenant } from "@/contexts/TenantContext";
 
 export interface RentalFilters {
-  /** Where the customer came from. 'turo' narrows to marketplace bookings. */
-  leadSource?: string;
   captureStatus?: string;
   search?: string;
   status?: string;
@@ -37,9 +35,6 @@ export interface RentalFilters {
 }
 
 export interface EnhancedRental {
-  /** Where the customer came from (direct | turo | other); null on rentals
-   *  created before the field existed. NOT rentals.source. */
-  lead_source?: string | null;
   id: string;
   rental_number: string;
   start_date: string;
@@ -146,7 +141,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
         .select(`
           id,
           rental_number,
-          lead_source,
           start_date,
           end_date,
           pickup_time,
@@ -168,13 +162,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id) as any;
-
-      // Where the customer came from. Server-side so the COUNT is right — the
-      // meeting asked for "2 of my 5 bookings came from Turo", and a
-      // client-side filter over one page cannot answer that.
-      if (filters.leadSource) {
-        query = query.eq("lead_source", filters.leadSource);
-      }
 
       // Note: Customer type filter moved to client-side to work with regular joins
 
@@ -256,10 +243,6 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           return {
             id: rental.id,
             rental_number: rental.rental_number,
-            // Selected on the query but previously dropped here: the row is
-            // rebuilt from an explicit literal, so a column not named again is
-            // silently discarded. Every list chip was reading undefined.
-            lead_source: rental.lead_source ?? null,
             start_date: rental.start_date,
             end_date: rental.end_date,
             pickup_time: rental.pickup_time ?? null,
