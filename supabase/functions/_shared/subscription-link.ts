@@ -127,6 +127,35 @@ export async function ensurePlanPriceOnAccount(
   return priceId;
 }
 
+/**
+ * Expire the Stripe Checkout session a link last minted, if one is still live.
+ *
+ * Killing our row is not killing the payment. A session already open in the
+ * prospect's tab stays payable until Stripe expires it, and because we clamp
+ * expiry to at least now+30min a session minted near the end of a link's life
+ * outlives that link. Every path that retires a link must call this or the admin
+ * is told something untrue.
+ *
+ * Returns whether a session was actually expired. Never throws: an
+ * already-complete or already-expired session is a normal outcome.
+ */
+export async function expireLinkSession(
+  stripe: Stripe,
+  link: { last_session_id?: string | null; last_session_expires_at?: string | null },
+): Promise<boolean> {
+  if (!link?.last_session_id) return false;
+  if (link.last_session_expires_at && new Date(link.last_session_expires_at).getTime() <= Date.now()) {
+    return false;
+  }
+  try {
+    await stripe.checkout.sessions.expire(link.last_session_id);
+    return true;
+  } catch (_e) {
+    // resource_missing, or the customer completed it a moment ago. Both fine.
+    return false;
+  }
+}
+
 export type IssueResult =
   | { ok: true; linkId: string; url: string; token: string; expiresAt: string; kind: string;
       linkMode: string; plan: Record<string, unknown>; mode: string; account: string; raced?: boolean }
@@ -277,6 +306,19 @@ export async function issueSubscriptionLink(
   }
 
   // ── Supersede any live link, then insert ─────────────────────────────────
+  // Read BEFORE flipping, so we still have the session id to kill. Regenerating
+  // used to leave the previous link's checkout tab payable — the prospect could
+  // pay a link George had already replaced.
+  const { data: toSupersede } = await supabase
+    .from("subscription_links")
+    .select("id, last_session_id, last_session_expires_at")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pending");
+
+  for (const old of toSupersede ?? []) {
+    await expireLinkSession(stripe, old);
+  }
+
   const { data: superseded } = await supabase
     .from("subscription_links")
     .update({ status: "superseded", superseded_at: new Date().toISOString() })

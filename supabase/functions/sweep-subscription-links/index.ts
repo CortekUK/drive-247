@@ -12,6 +12,8 @@
 // DB-driven functions here.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
+import { getSubscriptionStripeClientForAccount } from "../_shared/subscription-stripe.ts";
+import { expireLinkSession } from "../_shared/subscription-link.ts";
 
 Deno.serve(async (req) => {
   const cors = handleCors(req);
@@ -55,7 +57,7 @@ Deno.serve(async (req) => {
       .update({ status: "expired", expired_at: nowIso })
       .lt("expires_at", nowIso)
       .eq("status", "pending")
-      .select("id, tenant_id, kind, amount_snapshot, currency_snapshot, plan_name_snapshot, mint_count, payment_attempted_at, sent_at");
+      .select("id, tenant_id, kind, amount_snapshot, currency_snapshot, plan_name_snapshot, mint_count, payment_attempted_at, sent_at, last_session_id, last_session_expires_at, stripe_account_snapshot, stripe_mode_snapshot");
 
     if (error) {
       console.error("[sweep-subscription-links] update failed:", error);
@@ -63,6 +65,22 @@ Deno.serve(async (req) => {
     }
 
     const rows = expired ?? [];
+
+    // Expiring our row does not expire Stripe's session. A session minted near
+    // the end of a link's life is clamped to at least now+30min, so without this
+    // an "expired" link stays payable for up to half an hour after the sweep
+    // reported it dead.
+    for (const r of rows) {
+      try {
+        const stripe = getSubscriptionStripeClientForAccount(
+          (r as any).stripe_account_snapshot as "uk" | "uae",
+          (r as any).stripe_mode_snapshot as "test" | "live",
+        );
+        await expireLinkSession(stripe, r as any);
+      } catch (e) {
+        console.error(`[sweep-subscription-links] could not expire session for ${r.id}:`, e);
+      }
+    }
 
     // One audit row per expired link. trg_audit_log_platform_push turns this into
     // a push for every super admin who ticked "Payment link expired unpaid" —

@@ -57,6 +57,26 @@ Deno.serve(async (req) => {
       return errorResponse("A single valid email address is required", 400);
     }
 
+    // A second click mints a second link and supersedes the first — the
+    // recipient ends up holding two emails of which the first is already dead.
+    // Resend's own dedupe cannot help: the key is derived from the new link id,
+    // which is a fresh uuid every call. Refuse a repeat to the same address
+    // while a link sent to them is still live.
+    const { data: recentlySent } = await supabase
+      .from("subscription_links")
+      .select("id, sent_at, sent_to")
+      .eq("tenant_id", tenantId)
+      .eq("status", "pending")
+      .eq("sent_to", toRaw)
+      .gt("sent_at", new Date(Date.now() - 5 * 60_000).toISOString())
+      .limit(1);
+    if (recentlySent && recentlySent.length > 0) {
+      return jsonResponse({
+        error: "A link was already emailed to this address in the last few minutes and is still valid. Ask them to check their inbox, or Revoke it first to send a new one.",
+        code: "recently_sent",
+      }, 409);
+    }
+
     const issued = await issueSubscriptionLink(supabase, {
       tenantId, planId: body?.planId ?? null, createdBy: appUser.id,
     });
@@ -145,6 +165,11 @@ Deno.serve(async (req) => {
 
     // Record delivery on the row. sent_to is PII and stays here — it is never
     // copied into audit_logs.
+    // send_count is 1 by construction and stays that way: every send mints a
+    // NEW link, so a link is emailed exactly once in its life. It is kept as a
+    // column rather than dropped because the send history is the row chain —
+    // count the sent_at values across a tenant's links to see how many times a
+    // prospect was chased.
     await supabase.from("subscription_links").update({
       sent_to: toRaw,
       sent_at: new Date().toISOString(),

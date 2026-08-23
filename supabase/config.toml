@@ -375,3 +375,8 @@ verify_jwt = false
 # subscription-webhook with the service role; accepts only a linkId it re-reads.
 [functions.notify-subscription-activated]
 verify_jwt = false
+
+# Revoke a link AND expire its Stripe session. Super admin only; a browser
+# cannot call Stripe, which is why this is a function and not an RLS policy.
+[functions.revoke-subscription-link]
+verify_jwt = true

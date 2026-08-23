@@ -510,6 +510,9 @@ export default function TenantDetailsPage() {
     return () => clearInterval(t);
   }, [subLink?.id, subLink?.status]);
 
+  // Whether the SUBSCRIPTION is live, which is a different question from
+  // whether the link settled. The panel must not answer one with the other.
+  const subIsLive = !!subscription && ['active', 'trialing', 'past_due'].includes(subscription.status);
   const subLinkExpiresMs = subLink?.expires_at ? new Date(subLink.expires_at).getTime() : 0;
   const subLinkLive = subLink?.status === 'pending' && subLinkExpiresMs > Date.now();
   const subLinkRemaining = (() => {
@@ -578,10 +581,20 @@ export default function TenantDetailsPage() {
       });
       if (error) {
         let msg = error.message || 'Could not send the link';
+        let recovered: string | null = null;
         try {
           const b = await (error as any)?.context?.json?.();
           if (b?.error) msg = b.error;
+          // Delivery can fail AFTER the link was created. supabase-js surfaces
+          // any non-2xx as `error`, so without reading the body here George was
+          // left looking at the PREVIOUS link — which this send had already
+          // superseded — and would paste a dead address.
+          if (b?.url) recovered = b.url as string;
         } catch { /* keep the generic message */ }
+        if (recovered) {
+          setSubLinkUrl(recovered);
+          await loadSubscriptionLink(params.id as string);
+        }
         toast.error(msg);
         return;
       }
@@ -602,14 +615,28 @@ export default function TenantDetailsPage() {
     if (!subLink?.id) return;
     setSubLinkBusy(true);
     try {
-      const { error } = await supabase
-        .from('subscription_links')
-        .update({ status: 'revoked', revoked_at: new Date().toISOString() })
-        .eq('id', subLink.id)
-        .eq('status', 'pending');
-      if (error) throw error;
+      // Through the edge function, NOT a direct UPDATE: revoking has to expire
+      // the Stripe session too, and a browser cannot call Stripe. A bare status
+      // write left the prospect's open checkout tab payable while telling George
+      // the opposite.
+      const { data, error } = await supabase.functions.invoke('revoke-subscription-link', {
+        body: { linkId: subLink.id },
+      });
+      if (error) {
+        let msg = error.message || 'Could not revoke the link';
+        try {
+          const b = await (error as any)?.context?.json?.();
+          if (b?.error) msg = b.error;
+        } catch { /* keep the generic message */ }
+        toast.error(msg);
+        return;
+      }
       setSubLinkUrl(null);
-      toast.success('Link revoked — it can no longer be paid.');
+      toast.success(
+        data?.sessionExpired
+          ? 'Link revoked — the open checkout was cancelled too.'
+          : 'Link revoked — it can no longer be paid.',
+      );
       await loadSubscriptionLink(params.id as string);
     } catch (e: any) {
       toast.error(e?.message || 'Could not revoke the link');
@@ -2047,7 +2074,7 @@ export default function TenantDetailsPage() {
                       ? 'Working…'
                       : subLinkLive
                         ? `Link live · ${subLinkRemaining}`
-                        : subLink?.status === 'expired'
+                        : (subLink?.status === 'expired' || (subLink?.status === 'pending' && subLinkExpiresMs > 0 && subLinkExpiresMs <= Date.now()))
                           ? 'Link expired · Regenerate'
                           : subLink
                             ? 'Generate subscription link'
@@ -2071,8 +2098,14 @@ export default function TenantDetailsPage() {
               {(subLinkUrl || subLink) && (
                 <div className="mb-5 rounded-lg border border-border bg-muted/40 p-4 space-y-3">
                   {subLink?.status === 'paid' ? (
-                    <p className="text-sm font-medium text-emerald-600">
-                      Payment link paid{subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''} — this tenant is subscribed.
+                    <p className={`text-sm font-medium ${subIsLive ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {subIsLive
+                        ? `Payment link paid${subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''} — this tenant is subscribed.`
+                        // The link settled, but the subscription is no longer
+                        // live (cancelled, lapsed, expired). Claiming "subscribed"
+                        // off the link row alone was how this printed green while
+                        // the status two lines below read Incomplete_expired.
+                        : `Payment link was paid${subLink.paid_at ? ` on ${new Date(subLink.paid_at).toLocaleDateString()}` : ''}, but the subscription is no longer active — see Status below.`}
                     </p>
                   ) : (
                     <>
@@ -2111,7 +2144,9 @@ export default function TenantDetailsPage() {
                       )}
                       {subLink?.payment_attempted_at && (
                         <p className="text-xs text-red-600">
-                          Card declined — they are not subscribed. They can retry with the same link.
+                          {subLinkLive
+                            ? 'Card declined — they are not subscribed. They can retry with the same link.'
+                            : 'A card was declined on this link before it closed. They are not subscribed — send a fresh link.'}
                         </p>
                       )}
                       {(subLink?.mint_count ?? 0) > 0 && (

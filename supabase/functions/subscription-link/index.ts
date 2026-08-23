@@ -43,9 +43,13 @@ function info(state: State, extra: Record<string, unknown> = {}, status = 200) {
 }
 
 /** Everything that is not a live link collapses to a byte-identical `invalid`,
- *  so the endpoint is not an oracle for which tokens ever existed. */
-function invalid() {
-  return info("invalid", {}, 404);
+ *  so the endpoint is not an oracle for which tokens ever existed.
+ *
+ *  On a form POST it bounces instead — and bounces the SAME way for a revoked,
+ *  superseded or entirely unknown token, so the prospect gets a real page
+ *  without the response becoming a signal about which tokens exist. */
+function invalidFor(isPost: boolean, token: string) {
+  return isPost ? bounce(token, "invalid") : info("invalid", {}, 404);
 }
 
 function redirect(url: string) {
@@ -64,6 +68,19 @@ function bounce(token: string, state: string) {
   return redirect(`${siteBaseUrl()}/subscribe/${encodeURIComponent(token)}?err=${encodeURIComponent(state)}`);
 }
 
+/**
+ * Refuse in whichever shape the caller can actually render.
+ *
+ * The interstitial reads these states as JSON (`info=1`) but SUBMITS as a real
+ * browser navigation, so the same guard has to answer twice over. Returning JSON
+ * to the form left the prospect on a raw blob at supabase.co — and every one of
+ * these states arises in the gap between page load and Submit: George
+ * regenerates, George revokes, the webhook lands first, an admin edits the plan.
+ */
+function refuse(isPost: boolean, token: string, state: State, extra: Record<string, unknown> = {}, status = 200) {
+  return isPost ? bounce(token, state) : info(state, extra, status);
+}
+
 Deno.serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -76,7 +93,7 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const token = url.searchParams.get("token") ?? "";
-    if (!token || token.length < 20 || token.length > 200) return invalid();
+    if (!token || token.length < 20 || token.length > 200) return info("invalid", {}, 404);
 
     const tokenHash = await sha256Hex(token);
     const { data: link } = await supabase
@@ -85,12 +102,13 @@ Deno.serve(async (req) => {
       .eq("token_hash", tokenHash)
       .maybeSingle();
 
-    if (!link) return invalid();
+    if (!link) return invalidFor(req.method === "POST" && url.searchParams.get("info") !== "1", token);
 
     const now = Date.now();
     const expiresMs = new Date(link.expires_at).getTime();
     const isInfo = url.searchParams.get("info") === "1";
     const isDone = url.searchParams.get("done") === "1";
+    const isPost = req.method === "POST" && !isInfo;
 
     // ── tenant + plan, read once ───────────────────────────────────────────
     const { data: tenant } = await supabase
@@ -98,7 +116,7 @@ Deno.serve(async (req) => {
       .select("id, slug, company_name, contact_email, status, stripe_subscription_customer_id, subscription_billing_anchor, subscription_stripe_mode, subscription_account")
       .eq("id", link.tenant_id)
       .maybeSingle();
-    if (!tenant) return invalid();
+    if (!tenant) return invalidFor(isPost, token);
 
     const portalUrl = portalBaseUrl(tenant.slug);
 
@@ -108,12 +126,20 @@ Deno.serve(async (req) => {
     // 404-without — a difference an attacker can measure, and one that also
     // disclosed the tenant's slug.
 
+    // A revoked or superseded token is dead on EVERY path, `done` included.
+    // Placed above the done handler because that handler previously ran first,
+    // so a revoked link answered 200 with its plan and price while an unknown
+    // token answered 404 — an existence oracle that also disclosed the tenant.
+    if (link.status === "revoked" || link.status === "superseded") return invalidFor(isPost, token);
+
     // ══════════════════════════════════════════════════════════════════════
     // DONE — Stripe has redirected the payer back to us.
     // ══════════════════════════════════════════════════════════════════════
     if (isDone) {
       const sessionId = url.searchParams.get("session_id") ?? "";
-      if (!sessionId) return info("invalid", { portalUrl }, 400);
+      // No session id is indistinguishable from a token that does not exist:
+      // answering 400-with-portalUrl here was the same oracle by another route.
+      if (!sessionId) return info("invalid", {}, 404);
       try {
         const stripe = getSubscriptionStripeClientForAccount(
           link.stripe_account_snapshot as "uk" | "uae",
@@ -124,7 +150,7 @@ Deno.serve(async (req) => {
         // The session id in the URL is never trusted on its own — it must be a
         // session WE minted for THIS link.
         if (session.metadata?.subscription_link_id !== link.id) {
-          return invalid();
+          return info("invalid", {}, 404);
         }
 
         const sub = session.subscription as Record<string, any> | string | null;
@@ -178,13 +204,12 @@ Deno.serve(async (req) => {
         if (link.status === "paid") {
           return info("paid", { portalUrl, companyName: tenant.company_name });
         }
-        return invalid();
+        return info("invalid", {}, 404);
       }
     }
 
     // ── guards, in order, shared by info and mint ──────────────────────────
-    if (link.status === "paid") return info("paid", { portalUrl, companyName: tenant.company_name });
-    if (link.status === "revoked" || link.status === "superseded") return invalid();
+    if (link.status === "paid") return refuse(isPost, token, "paid", { portalUrl, companyName: tenant.company_name });
 
     if (expiresMs < now) {
       // Lazy expiry: the link expires when someone looks, not only when cron runs.
@@ -193,11 +218,11 @@ Deno.serve(async (req) => {
           .update({ status: "expired", expired_at: new Date().toISOString() })
           .eq("id", link.id).eq("status", "pending");
       }
-      return info("expired", { portalUrl, companyName: tenant.company_name });
+      return refuse(isPost, token, "expired", { portalUrl, companyName: tenant.company_name });
     }
-    if (link.status === "expired") return info("expired", { portalUrl, companyName: tenant.company_name });
+    if (link.status === "expired") return refuse(isPost, token, "expired", { portalUrl, companyName: tenant.company_name });
 
-    if (tenant.status === "suspended") return info("tenant_suspended", { portalUrl });
+    if (tenant.status === "suspended") return refuse(isPost, token, "tenant_suspended", { portalUrl });
 
     // Non-terminal subscription: a second live subscription is physically
     // impossible (idx_tenant_subscriptions_active), so never mint one.
@@ -221,35 +246,30 @@ Deno.serve(async (req) => {
     // retry is both safe and the only humane behaviour.
     const trulySubscribed = liveSub && ["active", "trialing", "past_due"].includes(liveSub.status);
     if (trulySubscribed && link.link_mode !== "invoice") {
+      // Deliberately does NOT settle this link. The subscription was found by
+      // TENANT, not by this link, and the two are not the same claim: settling
+      // here bound arbitrary outstanding links to a subscription they never
+      // created and wrote revenue audit rows for money nobody paid. Three
+      // subscriptions carried up to three paid links each before this was
+      // removed. Settlement belongs only to the paths that carry
+      // subscription_link_id in Stripe metadata.
       // They already paid — most likely through this very link, via a webhook
       // that landed before the browser came back. Settle and say so.
-      // NOT `.rpc(...).catch(...)`: rpc() returns a PostgrestFilterBuilder, which
-      // is a thenable with no .catch method, so that form threw a TypeError and
-      // turned this whole branch into a 500. It made 'already_subscribed'
-      // unreachable and left this settler dead.
-      try {
-        await supabase.rpc("settle_subscription_link", {
-          p_link_id: link.id, p_source: "success_page",
-          p_stripe_subscription_id: liveSub.stripe_subscription_id,
-        });
-      } catch (e) {
-        console.error("[subscription-link] settle on already-subscribed failed:", e);
-      }
-      return info("already_subscribed", { portalUrl, companyName: tenant.company_name });
+      return refuse(isPost, token, "already_subscribed", { portalUrl, companyName: tenant.company_name });
     }
 
     // Plan checks. A deleted plan nulls plan_id (ON DELETE SET NULL) so that
     // "Delete plan" keeps working; redemption refuses, which is the safe side.
     let plan: Record<string, any> | null = null;
     if (link.link_mode !== "invoice") {
-      if (!link.plan_id) return info("plan_unavailable", { portalUrl, companyName: tenant.company_name });
+      if (!link.plan_id) return refuse(isPost, token, "plan_unavailable", { portalUrl, companyName: tenant.company_name });
       const { data: p } = await supabase
         .from("subscription_plans")
         .select("id, name, stripe_price_id, tenant_id, is_active, trial_days, amount, currency, interval, billing_model, stripe_account")
         .eq("id", link.plan_id)
         .maybeSingle();
       if (!p || p.tenant_id !== tenant.id || !p.is_active || !p.stripe_price_id) {
-        return info("plan_unavailable", { portalUrl, companyName: tenant.company_name });
+        return refuse(isPost, token, "plan_unavailable", { portalUrl, companyName: tenant.company_name });
       }
       plan = p;
 
@@ -259,7 +279,7 @@ Deno.serve(async (req) => {
       const liveMode = tenant.subscription_stripe_mode || "test";
       const liveAccount = tenant.subscription_account === "uae" ? "uae" : "uk";
       if (liveMode !== link.stripe_mode_snapshot || liveAccount !== link.stripe_account_snapshot) {
-        return info("account_changed", { portalUrl, companyName: tenant.company_name });
+        return refuse(isPost, token, "account_changed", { portalUrl, companyName: tenant.company_name });
       }
 
       // The offer must still be the one George quoted out loud.
@@ -268,7 +288,7 @@ Deno.serve(async (req) => {
         (p.currency || "usd").toLowerCase() !== link.currency_snapshot ||
         (p.interval || "month") !== link.interval_snapshot ||
         p.stripe_price_id !== link.stripe_price_id_snapshot;
-      if (drifted) return info("price_changed", { portalUrl, companyName: tenant.company_name });
+      if (drifted) return refuse(isPost, token, "price_changed", { portalUrl, companyName: tenant.company_name });
     }
 
     // Report the cap on both paths, but only STAMP it on the path that would
@@ -280,7 +300,7 @@ Deno.serve(async (req) => {
           .update({ rate_limited_at: new Date().toISOString() })
           .eq("id", link.id).is("rate_limited_at", null);
       }
-      return info("rate_limited", { portalUrl, companyName: tenant.company_name });
+      return refuse(isPost, token, "rate_limited", { portalUrl, companyName: tenant.company_name });
     }
 
     // ══════════════════════════════════════════════════════════════════════
