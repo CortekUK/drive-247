@@ -5196,7 +5196,7 @@
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/[id]/page.tsx": {
-    "sha": "905d37abcf06faaf7ddf85d9dffd06deca3fec6046c60008c5a658c13969964a",
+    "sha": "82ac9cbb426118b93bec6aff1f72eb7237953a34dfb9f5f8d6402badd019317c",
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/audit-logs/page.tsx": {
@@ -6172,7 +6172,11 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sweep-subscription-links/index.ts": {
-    "sha": "4752fad1c3b5df0e2f0d612b822424a8456be174b38a2c0a7994acb02426d894",
+    "sha": "c4d39b9abaea081bd274417186825683f12ff471943ef34b840137fd75ad3e77",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/revoke-subscription-link/index.ts": {
+    "sha": "92665c808bcd3e64d79227e02a9da8c96600d1d5b4ff498d77f23334ae2dbd17",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-fixture-setup/index.ts": {
@@ -6197,6 +6201,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-checkout-session/index.ts": {
     "sha": "d7e54c953fc6165332825b4230a33f6b847f5c82903da3eacaecc0255eb72828",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/expire-link-session/index.ts": {
+    "sha": "d67c449eb66de2330fe50d5d251e85cd73ef071f93a782e6512b05b6cc85b2e4",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-ai-verification/index.ts": {
@@ -6288,7 +6296,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/subscription-link/index.ts": {
-    "sha": "21bda8d9d3a13675e1f7b5f10ba59cf85630dd026517e474fd83db7c9156a47c",
+    "sha": "7078158f707a60d2080218e68f146c76d6f1af23c46a75ac2e68bbcb00cb32ba",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/report-usage-event/index.ts": {
@@ -6628,7 +6636,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-subscription-link-email/index.ts": {
-    "sha": "c731159ad20f37f4c32c53aecc1dcfe2d0ed68fb52f62708f1558d7ca3b78b26",
+    "sha": "49931fb78d45f830c08ebcc623645d16a2dcd01354236e33fac3c04b191d38f5",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/update-manager-permissions/index.ts": {
@@ -6752,7 +6760,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-link.ts": {
-    "sha": "2f278da529d2458d2f68b358a235ccebd69230bb9fe9439cb88615a0911513eb",
+    "sha": "11382ba3400ae5e341d9f2d7a7253a4331b3586a36a1c4848dfe8b89c2c14544",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts": {

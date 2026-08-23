@@ -2704,7 +2704,7 @@
       "video": []
     },
     "total_files": 103,
-    "total_words": 146648,
+    "total_words": 146939,
     "counts": {
       "code": 103
     },
@@ -3150,12 +3150,14 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-installment-reminders/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-bonzah-update-email/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sweep-subscription-links/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/revoke-subscription-link/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-fixture-setup/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-whatsapp-message/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-return-due/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-whisper/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-boldsign-document/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-checkout-session/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/expire-link-session/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-ai-verification/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-identity-verified/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-tenant-sms/index.ts",
@@ -3483,10 +3485,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 371,
-    "total_words": 499955,
+    "total_files": 373,
+    "total_words": 501629,
     "counts": {
-      "code": 364,
+      "code": 366,
       "document": 7
     },
     "semantic_candidates": [
@@ -3535,12 +3537,14 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-installment-reminders/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-bonzah-update-email/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sweep-subscription-links/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/revoke-subscription-link/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-fixture-setup/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-whatsapp-message/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-return-due/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-whisper/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-boldsign-document/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-checkout-session/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/expire-link-session/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-ai-verification/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-identity-verified/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-tenant-sms/index.ts",
