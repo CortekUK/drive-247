@@ -380,3 +380,8 @@ verify_jwt = false
 # cannot call Stripe, which is why this is a function and not an RLS policy.
 [functions.revoke-subscription-link]
 verify_jwt = true
+
+# Expires the Stripe session behind a retired link. Driven by a DB trigger via
+# pg_net, which carries no user JWT; protected by x-platform-secret.
+[functions.expire-link-session]
+verify_jwt = false
