@@ -303,6 +303,7 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/pricing-card.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/card-brand-icon.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/subscription-activated-dialog.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/testimonials/testimonials-manager.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/customer-review-summary-card.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/approval-review-summary.tsx",
@@ -925,10 +926,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 917,
-    "total_words": 882512,
+    "total_files": 918,
+    "total_words": 883180,
     "counts": {
-      "code": 917
+      "code": 918
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/postcss.config.js",
@@ -1154,6 +1155,7 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/subscription-gate-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/pricing-card.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/card-brand-icon.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/subscription-activated-dialog.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/testimonials/testimonials-manager.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/customer-review-summary-card.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/reviews/approval-review-summary.tsx",
@@ -3162,6 +3164,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/manifests.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/extract-brand-colors/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/end-test-subscription/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-payment-intent-ids/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-excess-mileage-payment-link/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-view-policy/index.ts",
@@ -3264,6 +3267,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/update-manager-permissions/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-rejected/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reminders-generate/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-subscription-activated/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-draft-message/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/custom-auth-email/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-accounting-sync-status/index.ts",
@@ -3479,10 +3483,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 369,
-    "total_words": 498276,
+    "total_files": 371,
+    "total_words": 499955,
     "counts": {
-      "code": 362,
+      "code": 364,
       "document": 7
     },
     "semantic_candidates": [
@@ -3545,6 +3549,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/manifests.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sim-control/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/extract-brand-colors/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/end-test-subscription/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-payment-intent-ids/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-excess-mileage-payment-link/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-view-policy/index.ts",
@@ -3647,6 +3652,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/update-manager-permissions/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-booking-rejected/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reminders-generate/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-subscription-activated/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-draft-message/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/custom-auth-email/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-accounting-sync-status/index.ts",

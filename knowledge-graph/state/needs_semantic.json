@@ -1,12 +1,14 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-subscription-link-email/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/admin/app/admin/(protected)/rentals/[id]/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/admin/components/admin/SalesOnboardingDialog.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/subscription-activated-dialog.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/end-test-subscription/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-subscription-activated/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/layout.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/subscription-webhook/index.ts"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/admin-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

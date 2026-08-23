@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const url = process.argv[2];
+const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true });
+const p = await b.newPage();
+await p.goto(url, { waitUntil: 'load', timeout: 60000 });
+await p.waitForTimeout(6000);
+console.log('FINAL URL:', p.url());
+console.log('TEXT:', (await p.locator('body').innerText()).replace(/\n+/g,' | ').slice(0,700));
+console.log('CARD FIELD PRESENT:', await p.locator('input[name="cardNumber"], iframe').count());
+await b.close();

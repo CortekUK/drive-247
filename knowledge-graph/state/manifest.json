@@ -104,7 +104,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/layout.tsx": {
-    "sha": "bd9353465bbb76193687744154ac414e8f001755a8e4b9bd1d79d2444c902779",
+    "sha": "52f5fb2f5fb48694b5c570c9f1b2a05edbdd9a4f9583ea7ba40e9861e9d37d5f",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/error.tsx": {
@@ -1201,6 +1201,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/card-brand-icon.tsx": {
     "sha": "169693ddaaa37148146c76d9fff41b5897c969020b098ea384281b1cd0890717",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/subscription/subscription-activated-dialog.tsx": {
+    "sha": "415697e1ff90217250ceac79ceacb87550e4cf6ed31d83140c1e5379170df231",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/testimonials/testimonials-manager.tsx": {
@@ -6227,6 +6231,10 @@
     "sha": "90d5ec5692f30341b9a63f56d80b6b8b59e83dcafc72cc31a3f67c65710290c4",
     "unit": "edge-functions"
   },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/end-test-subscription/index.ts": {
+    "sha": "f03ee0aa6446eba3d54408a23aea22b314bc097e09549651e948f79656f557e5",
+    "unit": "edge-functions"
+  },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/backfill-payment-intent-ids/index.ts": {
     "sha": "0ca722b98ca488c8bee7e4496538c038020a6021cf8a9751c2bbe3287ee62fcc",
     "unit": "edge-functions"
@@ -6633,6 +6641,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/reminders-generate/index.ts": {
     "sha": "28dfe9e2bf21778f700906716d985f416fcc151f0f5ccc01e0b16162ecfa6665",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-subscription-activated/index.ts": {
+    "sha": "0c81e1fe9fda1419ce3d5f9835891d5c2e566b54673eb633e0f2f1c47d9a31ca",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ai-draft-message/index.ts": {
@@ -7352,7 +7364,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/subscription-webhook/index.ts": {
-    "sha": "b67539c25d9a556bbf3d88f6c78d2116b1e792c9f28d19cb84ac26b04797388b",
+    "sha": "92f3a5fc62f89f08e337b1324314257e83b1c426d88d51c5bed00a0d09bd9c6f",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/dashboard-kpis/index.ts": {
