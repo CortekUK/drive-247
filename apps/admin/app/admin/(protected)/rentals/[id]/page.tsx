@@ -338,6 +338,8 @@ export default function TenantDetailsPage() {
   const [subLinkUrl, setSubLinkUrl] = useState<string | null>(null);
   const [subLinkBusy, setSubLinkBusy] = useState(false);
   const [subLinkTick, setSubLinkTick] = useState(0);
+  const [subLinkEmail, setSubLinkEmail] = useState('');
+  const [subLinkSending, setSubLinkSending] = useState(false);
 
   // Plans state
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
@@ -563,6 +565,36 @@ export default function TenantDetailsPage() {
       toast.error(e?.message || 'Could not generate the link');
     } finally {
       setSubLinkBusy(false);
+    }
+  };
+
+  const handleSendLinkEmail = async () => {
+    const to = subLinkEmail.trim();
+    if (!to) return;
+    setSubLinkSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-subscription-link-email', {
+        body: { tenantId: params.id as string, to },
+      });
+      if (error) {
+        let msg = error.message || 'Could not send the link';
+        try {
+          const b = await (error as any)?.context?.json?.();
+          if (b?.error) msg = b.error;
+        } catch { /* keep the generic message */ }
+        toast.error(msg);
+        return;
+      }
+      // Sending mints a FRESH link, so the address on screen is now stale —
+      // show the new one rather than leaving George with a dead URL to paste.
+      if (data?.url) setSubLinkUrl(data.url);
+      setSubLinkEmail('');
+      toast.success(`Link sent to ${to}`);
+      await loadSubscriptionLink(params.id as string);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not send the link');
+    } finally {
+      setSubLinkSending(false);
     }
   };
 
@@ -2046,7 +2078,7 @@ export default function TenantDetailsPage() {
                     <>
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          Send this to the client
+                          {subLink?.kind === 'first' ? 'First subscription link' : 'Subscription link'}
                         </p>
                         <span className="text-xs text-muted-foreground">
                           {subLinkLive
@@ -2085,6 +2117,26 @@ export default function TenantDetailsPage() {
                       {(subLink?.mint_count ?? 0) > 0 && (
                         <p className="text-xs text-muted-foreground">Opened {subLink.mint_count}&times;</p>
                       )}
+                      {/* Send from here so George never changes tab mid-call.
+                          Sending mints a FRESH link, because the plaintext of
+                          the current one is unrecoverable by design. */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Input
+                          type="email"
+                          placeholder="client@company.com"
+                          value={subLinkEmail}
+                          onChange={(e) => setSubLinkEmail(e.target.value)}
+                          disabled={subLinkSending}
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          size="sm"
+                          disabled={subLinkSending || !subLinkEmail.trim()}
+                          onClick={handleSendLinkEmail}
+                        >
+                          {subLinkSending ? 'Sending…' : 'Email it'}
+                        </Button>
+                      </div>
                       <div className="flex gap-2 pt-1">
                         <Button size="sm" variant="outline" disabled={subLinkBusy} onClick={handleGenerateLink}>Regenerate</Button>
                         {subLinkLive && (

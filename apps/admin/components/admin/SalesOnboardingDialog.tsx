@@ -30,6 +30,11 @@ interface OnboardingResult {
   bookingUrl: string;
   subscriptionAmount: number; // cents
   subscriptionCurrency: string;
+  /** Payment link minted right after provisioning, so George can paste it
+   *  into the call without leaving this pane. Undefined if minting failed —
+   *  the onboarding itself still succeeded. */
+  subscriptionLinkUrl?: string;
+  subscriptionLinkError?: string;
   /**
    * false => the tenant is live but their booking site is still rendering
    * Drive247's placeholder CMS copy. Optional because an older deployment of
@@ -518,6 +523,30 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
         timezone: typeof data.timezone === 'string' ? data.timezone : data.timezone === null ? null : undefined,
         message: data.message,
       });
+
+      // Mint the payment link straight away. The whole point of the meeting was
+      // that George should not have to walk the client through logging in, so
+      // the link has to be on screen at the same moment as the credentials.
+      // Failure here is NON-FATAL: the tenant is provisioned either way, and the
+      // tenant page still has a Generate button.
+      try {
+        const { data: linkData, error: linkError } = await supabase.functions.invoke(
+          'create-subscription-link',
+          { body: { tenantId: data.tenantId, kind: 'first' } },
+        );
+        if (linkError || !linkData?.url) {
+          let why = linkError?.message || 'Could not generate a payment link';
+          try {
+            const b = await (linkError as any)?.context?.json?.();
+            if (b?.error) why = b.error;
+          } catch { /* keep the generic reason */ }
+          setResult((r) => (r ? { ...r, subscriptionLinkError: why } : r));
+        } else {
+          setResult((r) => (r ? { ...r, subscriptionLinkUrl: linkData.url } : r));
+        }
+      } catch (e: any) {
+        setResult((r) => (r ? { ...r, subscriptionLinkError: e?.message || 'Could not generate a payment link' } : r));
+      }
       setShowResult(true);
       onOpenChange(false);
       setFormData({ ...EMPTY_FORM });
@@ -1125,6 +1154,35 @@ export default function SalesOnboardingDialog({ open, onOpenChange, onCreated }:
                   </CardContent>
                 </Card>
               )}
+
+              {/* The payment link, first thing after the credentials: on a live
+                  call this is the artefact George actually needs. */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Payment link (valid 24 hours)</Label>
+                {result.subscriptionLinkUrl ? (
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 select-all break-all rounded border bg-muted px-3 py-2 text-xs">
+                      {result.subscriptionLinkUrl}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => copyToClipboard(result.subscriptionLinkUrl!, 'Payment link')}
+                    >
+                      Copy link
+                    </Button>
+                  </div>
+                ) : result.subscriptionLinkError ? (
+                  <p className="text-xs text-destructive">
+                    {result.subscriptionLinkError} — the account is set up; generate a link from the tenant&apos;s Subscription tab.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Generating…</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Send this and they can pay without logging in. Their login details are in the message below.
+                </p>
+              </div>
 
               {/* Copy-paste message. The only copy control lives in the sticky
                   footer beside Done, so both of the sales person's actions sit
