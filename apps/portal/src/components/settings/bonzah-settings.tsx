@@ -40,7 +40,6 @@ import {
 interface BonzahStatus {
   bonzah_mode: 'test' | 'live';
   bonzah_username: string | null;
-  bonzah_password: string | null;
   integration_bonzah: boolean;
 }
 
@@ -99,7 +98,14 @@ export function BonzahSettings() {
 
       const { data, error } = await supabase
         .from('tenants')
-        .select('bonzah_mode, bonzah_username, bonzah_password, integration_bonzah')
+        // Deliberately does NOT select bonzah_password. A stored credential has no
+        // business being sent to a browser to pre-fill a field nobody reads, and
+        // while it is in this SELECT the column cannot be locked down: PostgREST
+        // fails the WHOLE query with 42501 when the caller lacks a grant on any
+        // one selected column, so revoking it would 403 this entire settings page
+        // rather than just hiding the value. Connected state comes from
+        // integration_bonzah + bonzah_username, which is all it ever needed.
+        .select('bonzah_mode, bonzah_username, integration_bonzah')
         .eq('id', tenantContext.id)
         .single();
 
@@ -107,7 +113,6 @@ export function BonzahSettings() {
 
       // Pre-fill form fields
       if (data?.bonzah_username) setUsername(data.bonzah_username);
-      if (data?.bonzah_password) setPassword(data.bonzah_password);
 
       return data as BonzahStatus;
     },
@@ -645,7 +650,7 @@ export function BonzahSettings() {
                   <Input
                     id="bonzah-password"
                     type="password"
-                    placeholder="Your Bonzah password"
+                    placeholder={isConnected ? 'Saved — re-enter to change' : 'Your Bonzah password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
