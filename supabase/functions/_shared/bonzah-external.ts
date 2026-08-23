@@ -202,12 +202,24 @@ export const BONZAH_REQUIRED_FIELDS: string[] = [
   "preparerAuthorized",
   "userAgreementAccepted",
   "signature",
+  // The three document references their contract marks REQUIRED. They were
+  // omitted while nothing could produce them, which made every gap report three
+  // fields too optimistic. The documents endpoint fills them now — and where a
+  // tenant has not uploaded the file, the gap is real and should be shown.
+  // Regenerated against wizard-definition updatedAt 2026-08-20T15:42:28.316Z:
+  // 92 required fields live, 88 listed here, the 4 remaining being the
+  // additionalDrivers.* children which are judged on the block, not the field.
+  "primaryDriverLicenseDocId",
+  "fleet.vehicleScheduleDocId",
+  "insurance.insurancePolicyDocId",
 ];
 
 export interface MapResult {
   payload: Record<string, unknown>;
   /** Their REQUIRED fields we could not fill — the operator has to supply these. */
   missingRequired: string[];
+  /** Each gap with why it exists and who can close it. Never carries a value. */
+  gapReasons: { field: string; reason: string; resolvedBy: "product" | "bonzah" }[];
   /** Field PATHS whose value we could not make valid. Never carries the value. */
   warnings: { field: string; reason: string }[];
   fieldCount: number;
@@ -462,13 +474,91 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
     return node !== undefined && node !== null && node !== "";
   };
 
+  const missingRequired = REQUIRED.filter((f) => !has(f));
+
   return {
     payload: p,
-    missingRequired: REQUIRED.filter((f) => !has(f)),
+    missingRequired,
+    // Every gap gets a reason and an owner. "Missing" alone sends whoever reads
+    // the report hunting through the form for a field that does not exist.
+    gapReasons: missingRequired.map((f) => ({
+      field: f,
+      ...(BONZAH_GAP_REASONS[f] ?? {
+        reason: "Not collected by our onboarding form",
+        resolvedBy: "product",
+      }),
+    })),
     warnings,
     fieldCount: countLeaves(p),
   };
 }
+
+/**
+ * Why each unfillable required field is unfillable, and who can close it.
+ *
+ * These are the gaps the handover counted as "13-15 required fields we cannot
+ * fill". Three of them are now closed by the documents endpoint and one by
+ * fleet parsing, which leaves the seven below. None can be closed by mapping
+ * harder: each one either asks a question our form never asks, or asks for a
+ * shape our answer does not have. Inventing a value here would put a sentence
+ * in front of an underwriter that the operator never said.
+ *
+ *   resolvedBy "product" — add the question to our onboarding form
+ *   resolvedBy "bonzah"  — ask Brandon whether the gap is acceptable
+ */
+export const BONZAH_GAP_REASONS: Record<string, { reason: string; resolvedBy: "product" | "bonzah" }> = {
+  businessOwners: {
+    reason:
+      "We hold `business_owners` as FREE TEXT on all 9 live submissions; their field is `structural` — a repeating block. A name list is not an ownership declaration, and underwriting reads it as one.",
+    resolvedBy: "product",
+  },
+  "fleet.vehicleRegistrationStatus": {
+    reason:
+      "Their enum is all_current | some_expired | mixed. We ask only whether vehicles are registered in the company name, which is a different question.",
+    resolvedBy: "product",
+  },
+  "fleet.telematicsDevices": {
+    reason:
+      "Distinct from GPS tracking, which we do ask and which already fills fleet.gpsTracking. Asserting one from the other is a guess about the fleet.",
+    resolvedBy: "product",
+  },
+  "insurance.commercialAutoLossHistory": {
+    reason:
+      "Asks for five years of loss history including pending claims. Our nearest field is a free 'anything else?' box — sending it reads as a no-loss declaration.",
+    resolvedBy: "product",
+  },
+  "insurance.usesRentalAgreement": {
+    reason:
+      "Our single field asks only whether the agreement carries a timestamp, which already answers insurance.digitalMechanicalTimestampConfirmed. Answering both from it told Bonzah two operators use no rental agreement at all.",
+    resolvedBy: "product",
+  },
+  "rentalOps.inspectionProcess": {
+    reason:
+      "A textarea asking HOW vehicles are inspected. `inspect_vehicles` is a yes/no, so mapping it sent the literal string 'yes' as the narrative.",
+    resolvedBy: "product",
+  },
+  "rentalOps.insuranceVerificationProcess": {
+    reason:
+      "A textarea asking HOW renter insurance is verified. `verify_renter_insurance` is a yes/no — same problem as inspectionProcess.",
+    resolvedBy: "product",
+  },
+  primaryDriverLicenseDocId: {
+    reason: "Filled by the documents endpoint when the operator has uploaded a driver licence.",
+    resolvedBy: "product",
+  },
+  "fleet.vehicleScheduleDocId": {
+    reason: "Filled by the documents endpoint when the operator has uploaded a vehicle schedule.",
+    resolvedBy: "product",
+  },
+  "insurance.insurancePolicyDocId": {
+    reason: "Filled by the documents endpoint when the operator has uploaded a fleet insurance policy.",
+    resolvedBy: "product",
+  },
+  "fleet.vehicleSchedule": {
+    reason: "Filled by POST /fleet/parse from the uploaded vehicle schedule spreadsheet.",
+    resolvedBy: "product",
+  },
+};
 
 function countLeaves(o: unknown): number {
   if (o === null || typeof o !== "object") return 1;
@@ -525,4 +615,242 @@ export async function putSubmission(
       errorMessage: (e as { message?: string })?.message ?? "Could not reach Bonzah",
     };
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents and fleet parsing
+//
+// Their descriptor lists exactly three endpoints:
+//   PUT  /partners/:id/submission
+//   POST /partners/:id/documents
+//   POST /partners/:id/fleet/parse
+// The latter two were untouched. Both are real and auth-enforced — probed
+// unauthenticated, both return 401 (a route that does not exist returns 404,
+// which is what POST on the submission path does).
+//
+// WHAT IS VERIFIED AND WHAT IS NOT
+// Verified: the routes exist, they require the same bearer key, and the three
+// *DocId fields their contract marks REQUIRED are exactly the three our
+// required-field generator reports as unfillable.
+// NOT verified: the multipart field names and the response shape. There is no
+// key to try, no OpenAPI, and the wizard-definition describes the form, not the
+// upload. `readDocId` therefore accepts every plausible shape rather than
+// guessing one, and an unrecognised response is reported as a failure with the
+// raw keys — not silently treated as success. A DocId we invent is worse than
+// one we admit we did not get.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Our storage categories → their DocId field paths.
+ *
+ * Files live in the private `bonzah-onboarding-files` bucket under
+ * `{tenant_id}/draft/{category}/{filename}` — 55 files across 13 tenants. The
+ * submission JSON never references them, which is why the handover recorded
+ * documents as having no source; the source is the bucket.
+ *
+ * `loss_history_file` has no exact counterpart. Their `insurance.lossRunsDocId`
+ * is labelled "Loss Runs (custom)" and we already map `loss_runs_file` to it,
+ * so loss history goes to `additionalDocumentsDocId` — their own catch-all —
+ * rather than being asserted as a loss-run summary it may not be.
+ */
+export const BONZAH_DOC_CATEGORY_MAP: Record<string, { field: string; required: boolean }> = {
+  driver_licenses:              { field: "primaryDriverLicenseDocId",       required: true  },
+  vehicle_schedule_file:        { field: "fleet.vehicleScheduleDocId",      required: true  },
+  fleet_insurance_policy:       { field: "insurance.insurancePolicyDocId",  required: true  },
+  rental_agreement_file:        { field: "insurance.rentalAgreementDocId",  required: false },
+  loss_runs_file:               { field: "insurance.lossRunsDocId",         required: false },
+  business_logo:                { field: "businessLogoDocId",               required: false },
+  additional_users_spreadsheet: { field: "additionalUsersSpreadsheetDocId", required: false },
+  loss_history_file:            { field: "additionalDocumentsDocId",        required: false },
+};
+
+export interface DocumentUploadInput {
+  /** Storage category folder, e.g. "driver_licenses". */
+  category: string;
+  /** Original filename, sent as the multipart filename. */
+  fileName: string;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+export interface DocumentUploadResult {
+  category: string;
+  fileName: string;
+  field?: string;
+  docId?: string;
+  ok: boolean;
+  httpStatus?: number;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+/**
+ * Pull a document id out of a response whose shape we have never seen.
+ *
+ * Accepts the handful of shapes an upload endpoint realistically returns rather
+ * than betting on one. Returns undefined if none match, and the caller reports
+ * that as a failure — the alternative is fabricating a reference that an
+ * underwriter would later find points at nothing.
+ */
+export function readDocId(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const b = body as Record<string, any>;
+  const candidates = [
+    b.docId, b.documentId, b.id, b.document_id,
+    b.data?.docId, b.data?.documentId, b.data?.id,
+    b.document?.id, b.document?.docId,
+    Array.isArray(b.documents) ? b.documents[0]?.id ?? b.documents[0]?.docId : undefined,
+  ];
+  const hit = candidates.find((c) => typeof c === "string" && c.trim() !== "");
+  return hit as string | undefined;
+}
+
+/**
+ * POST one document. Never logs bytes, filename contents or the response body —
+ * these are driver licences and insurance policies.
+ */
+export async function postDocument(
+  partnerId: string,
+  apiKey: string,
+  doc: DocumentUploadInput,
+): Promise<DocumentUploadResult> {
+  const mapping = BONZAH_DOC_CATEGORY_MAP[doc.category];
+  const base: DocumentUploadResult = {
+    category: doc.category,
+    fileName: doc.fileName,
+    field: mapping?.field,
+    ok: false,
+  };
+
+  if (!mapping) {
+    return { ...base, errorCode: "unmapped_category", errorMessage: `No Bonzah field for category "${doc.category}"` };
+  }
+
+  const url = `${BONZAH_EXTERNAL_BASE}/partners/${encodeURIComponent(partnerId)}/documents`;
+  const form = new FormData();
+  // Field names are unverified. `file` is the near-universal convention; the
+  // category is sent under three plausible aliases so a stricter server finds
+  // the one it wants rather than rejecting the whole upload over a key name.
+  form.append("file", new Blob([doc.bytes], { type: doc.contentType }), doc.fileName);
+  form.append("type", mapping.field);
+  form.append("category", doc.category);
+  form.append("field", mapping.field);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}` },
+      body: form,
+    });
+    let body: unknown = null;
+    try { body = await res.json(); } catch { /* non-JSON */ }
+
+    if (!res.ok) {
+      return {
+        ...base,
+        httpStatus: res.status,
+        errorCode: `http_${res.status}`,
+        errorMessage: (body as { error?: string })?.error ?? `Bonzah returned ${res.status}`,
+      };
+    }
+
+    const docId = readDocId(body);
+    if (!docId) {
+      return {
+        ...base,
+        httpStatus: res.status,
+        errorCode: "no_doc_id",
+        // Keys only. The body may echo document metadata.
+        errorMessage: `Upload accepted but no document id found in the response (keys: ${
+          body && typeof body === "object" ? Object.keys(body as object).join(", ") : typeof body
+        })`,
+      };
+    }
+
+    return { ...base, ok: true, httpStatus: res.status, docId };
+  } catch (e) {
+    return { ...base, errorCode: "network_error", errorMessage: (e as { message?: string })?.message ?? "Could not reach Bonzah" };
+  }
+}
+
+export interface FleetParseResult {
+  ok: boolean;
+  httpStatus?: number;
+  /** Whatever they return for the schedule — passed through, never invented. */
+  schedule?: unknown;
+  vehicleCount?: number;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+/**
+ * POST a vehicle schedule spreadsheet to their stateless parser.
+ *
+ * Their descriptor calls this "stateless fleet-file parsing", so it returns a
+ * parsed structure rather than storing anything. That structure is what
+ * `fleet.vehicleSchedule` (required, structural) wants — the one required field
+ * we can fill from a file we already hold, for the 4 tenants who uploaded one.
+ */
+export async function parseFleetFile(
+  partnerId: string,
+  apiKey: string,
+  doc: DocumentUploadInput,
+): Promise<FleetParseResult> {
+  const url = `${BONZAH_EXTERNAL_BASE}/partners/${encodeURIComponent(partnerId)}/fleet/parse`;
+  const form = new FormData();
+  form.append("file", new Blob([doc.bytes], { type: doc.contentType }), doc.fileName);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}` },
+      body: form,
+    });
+    let body: unknown = null;
+    try { body = await res.json(); } catch { /* non-JSON */ }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        httpStatus: res.status,
+        errorCode: `http_${res.status}`,
+        errorMessage: (body as { error?: string })?.error ?? `Bonzah returned ${res.status}`,
+      };
+    }
+
+    const b = (body ?? {}) as Record<string, any>;
+    const schedule = b.vehicles ?? b.schedule ?? b.data?.vehicles ?? b.data?.schedule ?? b.data ?? body;
+    return {
+      ok: true,
+      httpStatus: res.status,
+      schedule,
+      vehicleCount: Array.isArray(schedule) ? schedule.length : undefined,
+    };
+  } catch (e) {
+    return { ok: false, errorCode: "network_error", errorMessage: (e as { message?: string })?.message ?? "Could not reach Bonzah" };
+  }
+}
+
+/** Merge successful DocIds (and a parsed schedule) into a mapped payload. */
+export function applyDocumentsToPayload(
+  payload: Record<string, unknown>,
+  uploads: DocumentUploadResult[],
+  fleetSchedule?: unknown,
+): void {
+  for (const u of uploads) {
+    if (u.ok && u.docId && u.field) putPath(payload, u.field, u.docId);
+  }
+  if (fleetSchedule !== undefined) putPath(payload, "fleet.vehicleSchedule", fleetSchedule);
+}
+
+/** Exported twin of the module-private `put`, for callers assembling a payload. */
+export function putPath(target: Record<string, unknown>, path: string, value: unknown): void {
+  if (value === undefined) return;
+  const parts = path.split(".");
+  let node = target;
+  for (let i = 0; i < parts.length - 1; i++) {
+    node[parts[i]] ??= {};
+    node = node[parts[i]] as Record<string, unknown>;
+  }
+  node[parts[parts.length - 1]] = value;
 }

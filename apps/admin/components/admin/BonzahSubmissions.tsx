@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import PushToBonzahDialog from '@/components/admin/PushToBonzahDialog';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
@@ -117,6 +118,9 @@ export default function BonzahSubmissions() {
   const [filter, setFilter] = useState<FilterStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selected, setSelected] = useState<Submission | null>(null);
+  // Push-to-API sits beside the existing Brandon email rather than replacing it:
+  // their API cannot confirm underwriting acceptance or return credentials.
+  const [pushTarget, setPushTarget] = useState<{ id: string; name: string } | null>(null);
   const [rowAction, setRowAction] = useState<{ id: string; kind: 'pdf' | 'zip' } | null>(null);
 
   const handleDownloadPdf = async (e: React.MouseEvent, s: Submission) => {
@@ -390,6 +394,17 @@ export default function BonzahSubmissions() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            title="Dry-run the Bonzah API payload and view the gap report"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPushTarget({ id: s.id, name: s.business_trade_name || s.business_legal_name || 'Operator' });
+                            }}
+                          >
+                            Push to API
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelected(s);
@@ -412,6 +427,13 @@ export default function BonzahSubmissions() {
         submission={selected}
         onClose={() => setSelected(null)}
         onUpdated={loadSubmissions}
+      />
+
+      <PushToBonzahDialog
+        submissionId={pushTarget?.id ?? null}
+        tenantName={pushTarget?.name ?? ''}
+        open={!!pushTarget}
+        onOpenChange={(o) => !o && setPushTarget(null)}
       />
     </div>
   );
