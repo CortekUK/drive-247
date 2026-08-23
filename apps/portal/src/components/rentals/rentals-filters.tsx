@@ -177,6 +177,30 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
         {/* Payment type + Requests + Ins. Quoted pushed right */}
         <div className="flex flex-wrap gap-3 items-center sm:ml-auto">
 
+        {/* Where the customer came from. A filter rather than only a chip on the
+            row: the ask was "2 of my 5 bookings came from Turo", which is a
+            COUNT — and the count comes from the filtered total, not from
+            eyeballing a page of rows. */}
+        <div className="flex items-center border rounded-md overflow-hidden">
+          {(() => {
+            const isActive = filters.leadSource === 'turo';
+            const color = '#8b5cf6';
+            return (
+              <button
+                onClick={() => updateFilter('leadSource', isActive ? undefined : 'turo')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  color: color,
+                }}
+              >
+                From Turo
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
+        </div>
+
         {/* Requests group */}
         <div className="flex items-center border rounded-md overflow-hidden">
           <span className="text-xs text-muted-foreground px-2.5 shrink-0">Requests</span>
