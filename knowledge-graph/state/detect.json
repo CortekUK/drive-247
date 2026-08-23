@@ -924,7 +924,7 @@
       "video": []
     },
     "total_files": 915,
-    "total_words": 881879,
+    "total_words": 881985,
     "counts": {
       "code": 915
     },
@@ -2224,7 +2224,7 @@
       "video": []
     },
     "total_files": 365,
-    "total_words": 454522,
+    "total_words": 454628,
     "counts": {
       "code": 350,
       "image": 15
@@ -2712,7 +2712,7 @@
       "video": []
     },
     "total_files": 103,
-    "total_words": 145196,
+    "total_words": 145949,
     "counts": {
       "code": 103
     },
@@ -2835,6 +2835,8 @@
         "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/layout.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/sitemap.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/robots.ts",
+        "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/subscribe/[token]/page.tsx",
+        "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/subscribe/[token]/done/page.tsx",
         "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/api/strategy-call/booking/route.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/api/strategy-call/events/route.ts",
         "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/page.tsx",
@@ -2912,10 +2914,10 @@
       ],
       "video": []
     },
-    "total_files": 77,
-    "total_words": 33521,
+    "total_files": 79,
+    "total_words": 34842,
     "counts": {
-      "code": 75,
+      "code": 77,
       "document": 1,
       "image": 1
     },
@@ -2928,6 +2930,8 @@
       "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/layout.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/sitemap.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/robots.ts",
+      "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/subscribe/[token]/page.tsx",
+      "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/subscribe/[token]/done/page.tsx",
       "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/api/strategy-call/booking/route.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/api/strategy-call/events/route.ts",
       "/home/haseeb-raza/Desktop/drive-247/apps/web/src/app/strategy-call/page.tsx",
@@ -3126,6 +3130,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-insurance-document/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-subscription-link/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-vehicle-profitability/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-subscription-details/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/rag-sync/index.ts",
@@ -3152,6 +3157,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-connect-status/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-installment-reminders/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-bonzah-update-email/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sweep-subscription-links/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-fixture-setup/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-whatsapp-message/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-return-due/index.ts",
@@ -3179,6 +3185,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/rag-init/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-cp-enquiry/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/simulate-payg-timelapse/index.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/subscription-link/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/report-usage-event/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/record-authority-payment/index.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-customer-invite/index.ts",
@@ -3292,6 +3299,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-stripe.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-template-service.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-link.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/aws-config.ts",
@@ -3480,10 +3488,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 364,
-    "total_words": 491260,
+    "total_files": 368,
+    "total_words": 496958,
     "counts": {
-      "code": 357,
+      "code": 361,
       "document": 7
     },
     "semantic_candidates": [
@@ -3504,6 +3512,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-boldsign-document/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/verify-insurance-document/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-subscription-link/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-vehicle-profitability/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-subscription-details/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/rag-sync/index.ts",
@@ -3530,6 +3539,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-connect-status/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-installment-reminders/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-bonzah-update-email/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sweep-subscription-links/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-fixture-setup/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-whatsapp-message/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/notify-return-due/index.ts",
@@ -3557,6 +3567,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/rag-init/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-cp-enquiry/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/simulate-payg-timelapse/index.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/subscription-link/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/report-usage-event/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/record-authority-payment/index.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-customer-invite/index.ts",
@@ -3670,6 +3681,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-stripe.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/email-template-service.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-link.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-refresh.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/agreement-injection.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/aws-config.ts",
