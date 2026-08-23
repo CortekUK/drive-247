@@ -145,6 +145,34 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
+    // A live push is BLOCKED by its own validation. The previous version
+    // computed missingRequired and warnings, wrote them to the ledger, and then
+    // transmitted regardless — so every gap and every bad enum would have gone
+    // to an underwriter the moment a key existed. An incomplete insurance
+    // submission is not a smaller version of a complete one; it is a different
+    // thing, and it is the operator who carries the consequence.
+    //
+    // force:true exists for the case where Bonzah has told us a gap is
+    // acceptable. It is recorded on the ledger so that decision has a name
+    // against it.
+    if (mapped.missingRequired.length > 0 && body?.force !== true) {
+      await finish({
+        status: "blocked",
+        error_code: "incomplete_submission",
+        validation_errors: [
+          ...mapped.missingRequired.map((f) => ({ field: f, reason: "required by Bonzah, not filled" })),
+          ...mapped.warnings,
+        ],
+      });
+      return jsonResponse({
+        error: `${mapped.missingRequired.length} field(s) Bonzah requires are not filled. Resolve them with the operator, or pass force:true if Bonzah has confirmed the gap is acceptable.`,
+        code: "incomplete_submission",
+        missingRequired: mapped.missingRequired,
+        warnings: mapped.warnings,
+        pushId,
+      }, 409);
+    }
+
     const result = await putSubmission(tenant.bonzah_partner_id, apiKey, mapped.payload);
 
     if (!result.ok) {

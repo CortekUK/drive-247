@@ -133,6 +133,7 @@ export const BONZAH_REQUIRED_FIELDS: string[] = [
   "statesOfOperation",
   "licensingCompliance",
   "multiJurisdictionCompliance",
+  "businessOwners",
   "yearsInPrivateAutoRental",
   "yearsOnTuro",
   "primaryContact.firstName",
@@ -143,6 +144,7 @@ export const BONZAH_REQUIRED_FIELDS: string[] = [
   "primaryContact.yearsDriving",
   "primaryContact.maritalStatus",
   "hasAdditionalDrivers",
+  "fleet.vehicleSchedule",
   "fleet.telematicsDevices",
   "fleet.gpsTracking",
   "fleet.vehicleRegistrationStatus",
@@ -189,6 +191,11 @@ export const BONZAH_REQUIRED_FIELDS: string[] = [
   "card.billingState",
   "card.billingPostalCode",
   "card.billingCountry",
+  "legal.claimsPast3Years",
+  "legal.policyCanceledOrNonRenewed",
+  "legal.insuranceFraudConviction",
+  "legal.duiOrSeriousViolations",
+  "legal.vehicleModifications",
   "legal.licenseValid",
   "legal.nonRentalUsageConfirmed",
   "certifyAccuracy",
@@ -292,12 +299,13 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
         const full = str(x?.full_name) ?? "";
         const sp = full.indexOf(" ");
         return {
-          firstName: sp > 0 ? full.slice(0, sp) : (full || undefined),
-          lastName: sp > 0 ? full.slice(sp + 1) : undefined,
+          // Their contract defines only email / phone / maritalStatus /
+          // yearsDriving under additionalDrivers. Sending firstName, lastName
+          // and dob invents fields they never asked for.
           email: str(x?.email),
           phone: str(x?.phone),
-          dob: str(x?.date_of_birth),
-          maritalStatus: str(x?.marital_status),
+          maritalStatus: enumOr("additionalDrivers.maritalStatus", x?.marital_status,
+              ["single","married","divorced","widowed","other"]),
           yearsDriving: num(x?.years_driving),
         };
       }));
@@ -309,7 +317,9 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
   put(p, "fleet.salvageOrRebuiltTitles", yesno(d.any_vehicles_salvage));
   put(p, "fleet.gpsTracking", yesno(d.vehicles_have_gps));
   put(p, "fleet.gpsProvider", str(d.gps_brand));
-  put(p, "fleet.telematicsDevices", yesno(d.vehicles_have_gps));
+  // fleet.telematicsDevices is not the same question as GPS tracking, and the
+  // GPS answer already feeds fleet.gpsTracking. Asserting one from the other
+  // is a guess about the fleet, so it is reported missing instead.
   put(p, "fleet.nonRentalUsage", yesno(d.vehicles_used_outside_rentals));
   put(p, "fleet.rideShareUsage", yesno(d.rent_for_hire));
   put(p, "fleet.vehicleStorageSecurity", str(d.vehicle_storage_security));
@@ -321,6 +331,7 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
   put(p, "rentalOps.deliveryPickupOffered", yesno(d.deliver_or_pickup));
   put(p, "rentalOps.minimumRenterAge", num(d.minimum_age_renters));
   put(p, "rentalOps.averageRentalDurationDays", num(d.average_rental_duration));
+  put(p, "rentalOps.rentalsOver30DaysAllowed", yesno(d.rent_more_than_30_days));
   put(p, "rentalOps.screeningProcess", str(d.renter_screening_process));
   put(p, "rentalOps.employeeDrivingRecordsChecked", yesno(d.check_employee_driving_records));
   put(p, "rentalOps.rentalManagementSystem", str(d.rental_management_system));
@@ -329,20 +340,43 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
   put(p, "rentalOps.primaryInsuranceRequiredFromRenter", yesno(d.require_renters_primary_insurance));
   put(p, "rentalOps.percentRentersWithPersonalAutoInsurance", num(d.pct_renters_with_insurance));
   put(p, "rentalOps.renterProofOfInsuranceRetained", yesno(d.retain_renter_insurance_proof));
-  put(p, "rentalOps.insuranceVerificationProcess", str(d.verify_renter_insurance));
-  put(p, "rentalOps.paymentMethodsAccepted", list(d.payment_methods));
+  // rentalOps.insuranceVerificationProcess is a TEXTAREA asking HOW insurance
+  // is verified. Our verify_renter_insurance is a yes/no, so this was sending
+  // the literal string "yes" as the narrative. Reported missing instead.
+  {
+    // Their multiselect accepts exactly five values. Ours is a free-text box
+    // holding things like "All kinds of payment methods" and "N/A", which a
+    // comma-split turned into invented options. Match what we can; report the
+    // rest rather than inventing.
+    const ALLOWED = ["Credit Card","Debit Card","ACH / Bank Transfer","Cash","Digital Wallet"];
+    const raw = (str(d.payment_methods) ?? "").toLowerCase();
+    const hits = ALLOWED.filter((a) => raw.includes(a.toLowerCase().split(" ")[0]));
+    if (raw && hits.length === 0) {
+      warnings.push({ field: "rentalOps.paymentMethodsAccepted", reason: "free text does not match any of their five options" });
+    }
+    if (hits.length) put(p, "rentalOps.paymentMethodsAccepted", hits);
+  }
   put(p, "rentalOps.cardOnFileRequired", yesno(d.cash_app_card_on_file));
-  put(p, "rentalOps.inspectionProcess", str(d.inspect_vehicles));
+  // rentalOps.inspectionProcess is a textarea asking HOW vehicles are
+  // inspected; inspect_vehicles is a yes/no. Reported missing instead.
   put(p, "rentalOps.maintenanceProgram", str(d.vehicle_maintenance_program));
   put(p, "rentalOps.otherBusinessOwnership", yesno(d.own_other_businesses));
 
   // ── operations: insurance ────────────────────────────────────────────────
   put(p, "insurance.currentProvider", str(d.current_insurance_carrier));
   put(p, "insurance.hadCommercialAutoLosses", yesno(d.had_commercial_auto_losses));
-  put(p, "insurance.commercialAutoLossHistory", str(d.what_else_should_we_know));
+  // insurance.commercialAutoLossHistory asks for five years of loss history
+  // including pending claims. what_else_should_we_know is a free "anything
+  // else?" box — it was sending "We check our vehicle on regular basis" where
+  // an underwriter reads a no-loss declaration. Reported missing instead.
   put(p, "insurance.hasLossRunSummary", yesno(d.has_loss_summary));
   put(p, "insurance.overTheCounterInsuranceOffered", yesno(d.offers_otc_insurance));
-  put(p, "insurance.usesRentalAgreement", yesno(d.rental_agreement_has_timestamp));
+  // insurance.usesRentalAgreement ("Do you use a rental agreement?") and
+  // insurance.digitalMechanicalTimestampConfirmed ("odometer timestamps for
+  // every rental") are TWO questions. Our single field asks only whether the
+  // agreement carries a timestamp, so answering both from it told Bonzah that
+  // two operators use no rental agreement at all. Only the timestamp question
+  // is answered here; the other is reported missing.
   put(p, "insurance.digitalMechanicalTimestampConfirmed", yesno(d.rental_agreement_has_timestamp));
 
   // ── financial & legal: banking ───────────────────────────────────────────
@@ -369,18 +403,51 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
   put(p, "card.nameOnCard", str(d.card_name));
   put(p, "card.billingStreet", str(d.card_billing_address ?? d.business_address));
   put(p, "card.billingCity", str(d.city));
-  put(p, "card.billingState", stateOr("card.billingState", d.state));
+  // card.billingState is type:"text" in their schema, not the state enum —
+  // running it through the enum check dropped a required value and warned.
+  put(p, "card.billingState", str(d.state));
   put(p, "card.billingPostalCode", str(d.postal_code));
   put(p, "card.billingCountry", str(d.country));
 
   // ── legal / declaration ──────────────────────────────────────────────────
   put(p, "legal.licenseValid", yesno(d.require_drivers_valid_license));
-  put(p, "legal.nonRentalUsageConfirmed", yesno(d.vehicles_used_outside_rentals));
+
+  // INVERTED ON PURPOSE. The two questions are opposites:
+  //   theirs: "Do you confirm that NONE of the insured vehicles are used for
+  //            personal or non-rental purposes?"
+  //   ours:   "Do you ALLOW your vehicles to be used for any other purpose
+  //            outside of private rentals?"
+  // Passing our answer through unchanged made an operator who DOES allow it
+  // confirm that they do not — a false statement on a signed insurance
+  // declaration, and the kind that voids cover. 1 of 9 live submissions is in
+  // exactly that position.
+  {
+    const allows = yesno(d.vehicles_used_outside_rentals);
+    put(p, "legal.nonRentalUsageConfirmed",
+        allows === undefined ? undefined : allows === "yes" ? "no" : "yes");
+  }
+
+  // The five disclosures Bonzah types as `structural`. They are required, they
+  // are the heart of underwriting, and the first version of this mapper dropped
+  // all five AND hid them from missingRequired — because the required list was
+  // generated with a `type !== "structural"` filter. Two of nine operators
+  // answered YES to claims in the past three years and it never left the
+  // building. Our own form warns that cover can be voided if material facts are
+  // omitted; this was omitting them.
+  put(p, "legal.claimsPast3Years", yesno(d.uw_accidents_past_3_years));
+  put(p, "legal.policyCanceledOrNonRenewed", yesno(d.uw_canceled_policy));
+  put(p, "legal.insuranceFraudConviction", yesno(d.uw_insurance_fraud));
+  put(p, "legal.duiOrSeriousViolations", yesno(d.uw_dui_violations));
+  put(p, "legal.vehicleModifications", yesno(d.uw_modified_for_performance));
   put(p, "additionalNotes", str(d.what_else_should_we_know));
   put(p, "certifyAccuracy", bool(d.declare_complete_accurate));
   put(p, "preparerAuthorized", bool(d.declare_authorized));
   put(p, "userAgreementAccepted", bool(d.agree_user_agreement));
-  put(p, "signature", str(d.signature_data_url));
+  // Their `signature` is type:"text" labelled "Signature (full legal name)".
+  // We hold a 17-62 KB PNG data URL from a signature pad. Posting that into a
+  // text field is not a signature, it is a wall of base64. The name is sent
+  // instead where we have it.
+  put(p, "signature", str(d.full_name) ?? str(d.name));
 
   // Their REQUIRED set, taken verbatim from the public wizard-definition rather
   // than hand-listed — a hand-list was wrong in the SAME direction as the
