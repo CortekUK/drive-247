@@ -75,8 +75,8 @@
     "ask": []
   },
   "enableAllProjectMcpServers": false,
-  "enabledMcpjsonServers": [],
-  "disabledMcpjsonServers": [
+  "enabledMcpjsonServers": [
     "supabase"
-  ]
+  ],
+  "disabledMcpjsonServers": []
 }
