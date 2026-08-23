@@ -1,6 +1,7 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/expire-link-session/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/push-bonzah-submission/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/bonzah-external.ts"
   ],
   "specs": [
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
