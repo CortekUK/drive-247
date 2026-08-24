@@ -12,7 +12,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Shield, Car } from 'lucide-react';
-import { type BonzahOnboardingFormData, type FileUrls } from '../schema';
+import {
+  type BonzahOnboardingFormData,
+  type FileUrls,
+  VEHICLE_REGISTRATION_STATUS_OPTIONS,
+} from '../schema';
 import { FileUpload } from '../file-upload';
 import { SectionTitle } from './section-title';
 import { YesNoField } from './yes-no-field';
@@ -141,6 +145,12 @@ export function Step5Insurance({ fileUrls, setFileUrls }: Props) {
           label="Do your vehicles have GPS or tracking devices?"
           required
         />
+        {/* Telematics is NOT the same question as GPS tracking, and Bonzah requires
+            both. Deriving one from the other is a guess about the fleet. */}
+        <YesNoField
+          name="vehicles_have_telematics"
+          label="Do your vehicles have telematics devices?"
+        />
         <FormField
           control={form.control}
           name="gps_brand"
@@ -206,6 +216,58 @@ export function Step5Insurance({ fileUrls, setFileUrls }: Props) {
           maxFiles={3}
         />
       </div>
+      <FormField
+        control={form.control}
+        name="vehicle_registration_status"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>
+              What is the registration status of your vehicles?
+            </FormLabel>
+            <FormDescription>
+              Bonzah asks for this separately from whether vehicles are registered in the
+              company name.
+            </FormDescription>
+            <FormControl>
+              <select
+                {...field}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">Select…</option>
+                {VEHICLE_REGISTRATION_STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <YesNoField
+        name="uses_rental_agreement"
+        label="Do you use a written rental agreement with every renter?"
+      />
+
+      <FormField
+        control={form.control}
+        name="commercial_auto_loss_history"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Commercial auto loss history (last 5 years)</FormLabel>
+            <FormDescription>
+              Include pending claims. If you have had no losses, say so explicitly — this
+              goes to an underwriter as a declaration.
+            </FormDescription>
+            <FormControl>
+              <Textarea rows={4} {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
     </div>
   );
 }

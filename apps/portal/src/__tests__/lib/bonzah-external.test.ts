@@ -95,35 +95,89 @@ describe("polarity — the inverted legal declaration", () => {
   });
 });
 
-describe("mappings that answer a different question stay unmapped", () => {
-  const mustNotMap: [string, string][] = [
-    ["rentalOps.inspectionProcess", "a yes/no sent as a narrative"],
-    ["rentalOps.insuranceVerificationProcess", "a yes/no sent as a narrative"],
-    ["insurance.commercialAutoLossHistory", "an 'anything else?' box sent as loss history"],
-    ["insurance.usesRentalAgreement", "answered from the timestamp question"],
-    ["fleet.telematicsDevices", "asserted from the GPS answer"],
-    ["fleet.vehicleRegistrationStatus", "an enum we collect nothing equivalent for"],
-    ["businessOwners", "free text sent as a structural ownership block"],
+describe("every field is answered from the question that actually asks it", () => {
+  /**
+   * These six were previously left unmapped because the only nearby field asked
+   * a DIFFERENT question. The onboarding form now asks each one directly, so the
+   * invariant is no longer "do not map" — it is "map from the right source".
+   * That is the stronger guard: it fails both if the mapping disappears AND if
+   * someone re-points it at the wrong-question field.
+   */
+  const pairs: { target: string; from: string; notFrom: string; why: string }[] = [
+    {
+      target: "rentalOps.insuranceVerificationProcess",
+      from: "d.renter_insurance_verification_process",
+      notFrom: "d.verify_renter_insurance",
+      why: "verify_renter_insurance is a yes/no on all 9 live submissions (max length 3)",
+    },
+    {
+      target: "insurance.commercialAutoLossHistory",
+      from: "d.commercial_auto_loss_history",
+      notFrom: "d.what_else_should_we_know",
+      why: "the 'anything else?' box reaches an underwriter as a no-loss declaration",
+    },
+    {
+      target: "insurance.usesRentalAgreement",
+      from: "d.uses_rental_agreement",
+      notFrom: "d.rental_agreement_has_timestamp",
+      why: "answering both from the timestamp field said two operators use no agreement at all",
+    },
+    {
+      target: "fleet.telematicsDevices",
+      from: "d.vehicles_have_telematics",
+      notFrom: "d.vehicles_have_gps",
+      why: "telematics is not GPS tracking",
+    },
+    {
+      target: "fleet.vehicleRegistrationStatus",
+      from: "d.vehicle_registration_status",
+      notFrom: "d.vehicles_registered_in_company_name",
+      why: "registered-in-company-name is a different question from their enum",
+    },
   ];
 
-  for (const [field, why] of mustNotMap) {
-    it(`does not map ${field} — ${why}`, () => {
-      expect(mapperBody()).not.toContain(`put(p, "${field}"`);
+  for (const { target, from, notFrom, why } of pairs) {
+    it(`maps ${target} from its own question — ${why}`, () => {
+      const b = mapperBody();
+      const i = b.indexOf(`put(p, "${target}"`);
+      expect(i, `${target} must be mapped`).toBeGreaterThan(-1);
+      const clause = b.slice(i, i + 320);
+      expect(clause).toContain(from);
+      expect(clause).not.toContain(notFrom);
     });
   }
 
-  it("explains every one of them instead of just reporting 'missing'", () => {
-    const s = mapper();
-    for (const [field] of mustNotMap) {
-      // Dotted keys are quoted; bare identifiers are not. Accept either.
-      const declared = s.includes(`"${field}": {`) || new RegExp(`\\b${field}:\\s*\\{`).test(s);
-      expect(declared, `${field} needs a gap reason`).toBe(true);
-    }
+  it("maps rentalOps.inspectionProcess from inspect_vehicles, which really is a narrative", () => {
+    // Checked against the data, not the field name: 9 of 9 live submissions hold
+    // prose here and none hold yes/no. An earlier comment called it a yes/no.
+    const b = mapperBody();
+    const i = b.indexOf('put(p, "rentalOps.inspectionProcess"');
+    expect(i).toBeGreaterThan(-1);
+    expect(b.slice(i, i + 200)).toContain("d.inspect_vehicles");
   });
 
-  it("names who can close each gap", () => {
-    const s = mapper();
-    expect(s).toContain('resolvedBy: "product"');
+  it("builds businessOwners from the structured list, never the free-text field", () => {
+    const b = mapperBody();
+    const i = b.indexOf('put(p, "businessOwners"');
+    expect(i).toBeGreaterThan(-1);
+    const block = b.slice(Math.max(0, i - 900), i + 200);
+    expect(block).toContain("business_owners_list");
+    // The legacy prose answer must not become an ownership declaration.
+    expect(block).not.toContain("str(d.business_owners)");
+  });
+
+  it("warns that the businessOwners key names are unconfirmed", () => {
+    // Their contract defines no child fields for the block, unlike additionalDrivers.
+    expect(mapperBody()).toContain("key names are unconfirmed");
+  });
+
+  it("still refuses to invent an ownership declaration from prose alone", () => {
+    const b = mapperBody();
+    expect(b).toContain("only the legacy free-text answer exists");
+  });
+
+  it("still names who can close whatever gaps remain", () => {
+    expect(mapper()).toContain("resolvedBy:");
   });
 });
 

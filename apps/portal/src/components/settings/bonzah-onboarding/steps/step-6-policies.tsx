@@ -3,6 +3,7 @@
 import { useFormContext } from 'react-hook-form';
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -191,6 +192,25 @@ export function Step6Policies({ fileUrls, setFileUrls }: Props) {
           required
         />
       </div>
+
+      {/* Bonzah asks HOW, not whether. The yes/no above cannot answer it — every
+          live submission stores literally "yes" or "no" there. */}
+      <FormField
+        control={form.control}
+        name="renter_insurance_verification_process"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>How do you verify a renter&apos;s insurance is active?</FormLabel>
+            <FormDescription>
+              Describe the check itself — what you ask for and how you confirm it.
+            </FormDescription>
+            <FormControl>
+              <Textarea rows={3} {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <div className="grid gap-5 md:grid-cols-2">
         <FormField

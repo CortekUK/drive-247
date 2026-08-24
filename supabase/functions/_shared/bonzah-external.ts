@@ -324,20 +324,59 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
     }
   }
 
+  {
+    // businessOwners — REQUIRED and `structural`. Their helpText is explicit
+    // about the CONTENT ("List every person with >=10% ownership") but, unlike
+    // additionalDrivers, their contract defines no child fields, so the exact
+    // key names are unverified. We send the information they asked for under
+    // self-describing keys and WARN, rather than either inventing a shape
+    // silently or withholding a required declaration.
+    //
+    // The legacy free-text `business_owners` is deliberately NOT used here: a
+    // prose paragraph is not an ownership declaration, and an underwriter would
+    // read it as one. Only the structured list is sent.
+    const owners = Array.isArray(d.business_owners_list) ? d.business_owners_list : [];
+    const mapped = owners
+      .map((o: Record<string, any>) => ({
+        fullName: str(o?.full_name),
+        ownershipPercent: num(o?.ownership_percent),
+        dateOfBirth: str(o?.date_of_birth),
+        email: str(o?.email),
+      }))
+      .filter((o) => o.fullName !== undefined);
+
+    if (mapped.length > 0) {
+      put(p, "businessOwners", mapped);
+      warnings.push({
+        field: "businessOwners",
+        reason: "sent as an array of {fullName, ownershipPercent, dateOfBirth, email} — their contract defines no child fields for this block, so the key names are unconfirmed",
+      });
+    } else if (str(d.business_owners)) {
+      // Free text exists but no structured list: say so rather than sending it.
+      warnings.push({
+        field: "businessOwners",
+        reason: "only the legacy free-text answer exists; Bonzah expects a structured list of owners with >=10% ownership",
+      });
+    }
+  }
+
   // ── operations: fleet ────────────────────────────────────────────────────
   put(p, "fleet.registeredInCompanyName", yesno(d.vehicles_registered_in_company_name));
   put(p, "fleet.salvageOrRebuiltTitles", yesno(d.any_vehicles_salvage));
   put(p, "fleet.gpsTracking", yesno(d.vehicles_have_gps));
   put(p, "fleet.gpsProvider", str(d.gps_brand));
-  // fleet.telematicsDevices is not the same question as GPS tracking, and the
-  // GPS answer already feeds fleet.gpsTracking. Asserting one from the other
-  // is a guess about the fleet, so it is reported missing instead.
+  // fleet.telematicsDevices now has its own question. It is NOT derived from the
+  // GPS answer — that was always a guess about someone else's fleet.
+  put(p, "fleet.telematicsDevices", yesno(d.vehicles_have_telematics));
   put(p, "fleet.nonRentalUsage", yesno(d.vehicles_used_outside_rentals));
   put(p, "fleet.rideShareUsage", yesno(d.rent_for_hire));
   put(p, "fleet.vehicleStorageSecurity", str(d.vehicle_storage_security));
-  // fleet.vehicleRegistrationStatus is NOT mapped: their enum is
-  // all_current | some_expired | mixed and we collect nothing equivalent.
-  // Deriving it from a yes/no would be inventing an underwriting answer.
+  // fleet.vehicleRegistrationStatus — now collected against their exact enum
+  // rather than derived from "registered in the company name", which is a
+  // different question.
+  put(p, "fleet.vehicleRegistrationStatus",
+      enumOr("fleet.vehicleRegistrationStatus", d.vehicle_registration_status,
+             ["all_current", "some_expired", "mixed"]));
 
   // ── operations: rental ops ───────────────────────────────────────────────
   put(p, "rentalOps.deliveryPickupOffered", yesno(d.deliver_or_pickup));
@@ -369,18 +408,28 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
     if (hits.length) put(p, "rentalOps.paymentMethodsAccepted", hits);
   }
   put(p, "rentalOps.cardOnFileRequired", yesno(d.cash_app_card_on_file));
-  // rentalOps.inspectionProcess is a textarea asking HOW vehicles are
-  // inspected; inspect_vehicles is a yes/no. Reported missing instead.
+  // rentalOps.inspectionProcess — MAPPED, after checking the data rather than
+  // the field name. An earlier note here called `inspect_vehicles` a yes/no; it
+  // is not. Its form control is a textarea ("How and when do you inspect
+  // vehicles?") and all 9 live submissions hold prose, none hold yes/no
+  // (max length 187). So it answers their question directly.
+  put(p, "rentalOps.inspectionProcess", str(d.inspect_vehicles));
+
+  // rentalOps.insuranceVerificationProcess is the one that genuinely cannot be
+  // answered this way: `verify_renter_insurance` IS a yes/no on all 9 (max
+  // length 3). It now has its own narrative field on the form.
+  put(p, "rentalOps.insuranceVerificationProcess", str(d.renter_insurance_verification_process));
   put(p, "rentalOps.maintenanceProgram", str(d.vehicle_maintenance_program));
   put(p, "rentalOps.otherBusinessOwnership", yesno(d.own_other_businesses));
 
   // ── operations: insurance ────────────────────────────────────────────────
   put(p, "insurance.currentProvider", str(d.current_insurance_carrier));
   put(p, "insurance.hadCommercialAutoLosses", yesno(d.had_commercial_auto_losses));
-  // insurance.commercialAutoLossHistory asks for five years of loss history
-  // including pending claims. what_else_should_we_know is a free "anything
-  // else?" box — it was sending "We check our vehicle on regular basis" where
-  // an underwriter reads a no-loss declaration. Reported missing instead.
+  // insurance.commercialAutoLossHistory now has a dedicated question that says
+  // "include pending claims" and asks for an explicit no-loss statement. It is
+  // NOT the "anything else?" box, which was sending things like "We check our
+  // vehicle on regular basis" where an underwriter reads a no-loss declaration.
+  put(p, "insurance.commercialAutoLossHistory", str(d.commercial_auto_loss_history));
   put(p, "insurance.hasLossRunSummary", yesno(d.has_loss_summary));
   put(p, "insurance.overTheCounterInsuranceOffered", yesno(d.offers_otc_insurance));
   // insurance.usesRentalAgreement ("Do you use a rental agreement?") and
@@ -390,6 +439,8 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
   // two operators use no rental agreement at all. Only the timestamp question
   // is answered here; the other is reported missing.
   put(p, "insurance.digitalMechanicalTimestampConfirmed", yesno(d.rental_agreement_has_timestamp));
+  // The other half of that pair, now asked separately.
+  put(p, "insurance.usesRentalAgreement", yesno(d.uses_rental_agreement));
 
   // ── financial & legal: banking ───────────────────────────────────────────
   put(p, "banking.accountName", str(d.bank_account_name));
@@ -509,38 +560,8 @@ export function mapSubmissionToBonzah(d: Record<string, any>): MapResult {
 export const BONZAH_GAP_REASONS: Record<string, { reason: string; resolvedBy: "product" | "bonzah" }> = {
   businessOwners: {
     reason:
-      "We hold `business_owners` as FREE TEXT on all 9 live submissions; their field is `structural` — a repeating block. A name list is not an ownership declaration, and underwriting reads it as one.",
-    resolvedBy: "product",
-  },
-  "fleet.vehicleRegistrationStatus": {
-    reason:
-      "Their enum is all_current | some_expired | mixed. We ask only whether vehicles are registered in the company name, which is a different question.",
-    resolvedBy: "product",
-  },
-  "fleet.telematicsDevices": {
-    reason:
-      "Distinct from GPS tracking, which we do ask and which already fills fleet.gpsTracking. Asserting one from the other is a guess about the fleet.",
-    resolvedBy: "product",
-  },
-  "insurance.commercialAutoLossHistory": {
-    reason:
-      "Asks for five years of loss history including pending claims. Our nearest field is a free 'anything else?' box — sending it reads as a no-loss declaration.",
-    resolvedBy: "product",
-  },
-  "insurance.usesRentalAgreement": {
-    reason:
-      "Our single field asks only whether the agreement carries a timestamp, which already answers insurance.digitalMechanicalTimestampConfirmed. Answering both from it told Bonzah two operators use no rental agreement at all.",
-    resolvedBy: "product",
-  },
-  "rentalOps.inspectionProcess": {
-    reason:
-      "A textarea asking HOW vehicles are inspected. `inspect_vehicles` is a yes/no, so mapping it sent the literal string 'yes' as the narrative.",
-    resolvedBy: "product",
-  },
-  "rentalOps.insuranceVerificationProcess": {
-    reason:
-      "A textarea asking HOW renter insurance is verified. `verify_renter_insurance` is a yes/no — same problem as inspectionProcess.",
-    resolvedBy: "product",
+      "The onboarding form now collects a structured owner list (name, ownership %, DOB, email). This gap remains only for the 9 submissions taken before that field existed, which hold the legacy free-text answer. Their contract defines no child fields for the block, so the key names we send are unconfirmed — worth checking on the first live push.",
+    resolvedBy: "bonzah",
   },
   primaryDriverLicenseDocId: {
     reason: "Filled by the documents endpoint when the operator has uploaded a driver licence.",

@@ -14,6 +14,23 @@ const additionalUserSchema = z.object({
   marital_status: optStr,
 });
 
+/**
+ * Bonzah's `businessOwners` is a REQUIRED structural field whose helpText reads
+ * "List every person with >=10% ownership." Unlike `additionalDrivers`, their
+ * contract defines no child fields for it, so the information is specified but
+ * the serialisation shape is not — see the note in bonzah-external.ts.
+ *
+ * We collect the ownership percentage explicitly because their own threshold is
+ * stated in percent: an owner list without percentages cannot be checked against
+ * "every person with >=10%".
+ */
+const businessOwnerSchema = z.object({
+  full_name: optStr,
+  ownership_percent: optStr,
+  date_of_birth: optStr,
+  email: optStr,
+});
+
 export const bonzahOnboardingSchema = z
   .object({
     // Step 1 — Business Info
@@ -36,6 +53,10 @@ export const bonzahOnboardingSchema = z
     licensed_in_all_locations: yesNo,
     adhering_to_license_requirements: yesNo,
     business_owners: reqStr('Please describe the business owners'),
+    // Kept alongside the free-text field rather than replacing it: 9 live
+    // submissions hold the prose version, and dropping the column would strand
+    // them. Only the structured list is sent to Bonzah.
+    business_owners_list: z.array(businessOwnerSchema).optional(),
     years_in_private_auto_rental: reqStr('Required'),
     years_on_turo: reqStr('Required'),
 
@@ -78,6 +99,18 @@ export const bonzahOnboardingSchema = z
     vehicles_used_outside_rentals: optYesNo,
     had_commercial_auto_losses: yesNo,
     has_loss_summary: optYesNo,
+    // Bonzah requires five years of loss history including pending claims. Our
+    // old nearest field was the free "anything else?" box, which an underwriter
+    // reads as a no-loss declaration.
+    commercial_auto_loss_history: optStr,
+    // Distinct from GPS tracking. Asserting one from the other is a guess.
+    vehicles_have_telematics: optYesNo,
+    // Their enum, verbatim: all_current | some_expired | mixed.
+    vehicle_registration_status: optStr,
+    // "Do you use a rental agreement?" is a different question from whether that
+    // agreement carries a timestamp, which is what rental_agreement_has_timestamp
+    // asks. Answering both from one field told Bonzah two operators use none.
+    uses_rental_agreement: optYesNo,
 
     // Step 6 — Renter Policies
     require_drivers_valid_license: yesNo,
@@ -99,6 +132,14 @@ export const bonzahOnboardingSchema = z
     offers_otc_insurance: optStr,
     vehicle_maintenance_program: optStr,
     inspect_vehicles: reqStr('Required'),
+    // Bonzah's rentalOps.insuranceVerificationProcess is a textarea asking HOW
+    // renter insurance is verified. `verify_renter_insurance` is a yes/no on all
+    // 9 live submissions (max length 3), so it cannot answer this.
+    //
+    // NOTE: there is deliberately no equivalent field for inspectionProcess.
+    // `inspect_vehicles` is ALREADY a narrative textarea — 9 of 9 live
+    // submissions hold prose, none hold yes/no — so it maps directly.
+    renter_insurance_verification_process: optStr,
     what_else_should_we_know: optStr,
     own_other_businesses: reqStr('Required'),
 
@@ -161,6 +202,7 @@ export const stepFields: Record<number, (keyof BonzahOnboardingFormData)[]> = {
     'licensed_in_all_locations',
     'adhering_to_license_requirements',
     'business_owners',
+    'business_owners_list',
     'years_in_private_auto_rental',
     'years_on_turo',
   ],
@@ -202,6 +244,10 @@ export const stepFields: Record<number, (keyof BonzahOnboardingFormData)[]> = {
     'rent_for_hire',
     'vehicles_used_outside_rentals',
     'had_commercial_auto_losses',
+    'commercial_auto_loss_history',
+    'vehicles_have_telematics',
+    'vehicle_registration_status',
+    'uses_rental_agreement',
     'has_loss_summary',
   ],
   6: [
@@ -224,6 +270,7 @@ export const stepFields: Record<number, (keyof BonzahOnboardingFormData)[]> = {
     'offers_otc_insurance',
     'vehicle_maintenance_program',
     'inspect_vehicles',
+    'renter_insurance_verification_process',
     'what_else_should_we_know',
     'own_other_businesses',
   ],
@@ -272,6 +319,13 @@ export interface UploadedFile {
 }
 
 export type FileUrls = Partial<Record<FileField, UploadedFile[]>>;
+
+/** Bonzah's fleet.vehicleRegistrationStatus enum, verbatim from their contract. */
+export const VEHICLE_REGISTRATION_STATUS_OPTIONS = [
+  { value: 'all_current', label: 'All current' },
+  { value: 'some_expired', label: 'Some expired' },
+  { value: 'mixed', label: 'Mixed' },
+] as const;
 
 export const COMPANY_TYPE_OPTIONS = [
   { value: 'sole_proprietor', label: 'Sole Proprietor' },
@@ -347,6 +401,9 @@ export const DEFAULT_VALUES: Partial<BonzahOnboardingFormData> = {
   company_website: '',
   states_where_you_do_business: '',
   business_owners: '',
+  business_owners_list: [],
+  commercial_auto_loss_history: '',
+  vehicle_registration_status: '',
   years_in_private_auto_rental: '',
   years_on_turo: '',
   primary_first_name: '',
@@ -385,6 +442,7 @@ export const DEFAULT_VALUES: Partial<BonzahOnboardingFormData> = {
   offers_otc_insurance: '',
   vehicle_maintenance_program: '',
   inspect_vehicles: '',
+  renter_insurance_verification_process: '',
   what_else_should_we_know: '',
   own_other_businesses: '',
   vehicle_storage_security: '',
