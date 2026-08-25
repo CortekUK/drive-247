@@ -37,6 +37,20 @@ const entries = readFileSync(BASELINE, 'utf8')
     return { hash, path: rest.join(' ') };
   });
 
+// An empty baseline used to pass: zero entries, zero mismatches, exit 0, and
+// verify.sh printed its green banner. Deleting every line was therefore a way
+// to silence this gate without touching this file. It is now a failure.
+if (entries.length === 0) {
+  console.error(`[freeze] baseline has no entries: ${BASELINE}`);
+  console.error('         a freeze gate with nothing frozen cannot fail; refusing to pass.');
+  process.exit(1);
+}
+const malformed = entries.filter((e) => !/^[0-9a-f]{64}$/.test(e.hash) || !e.path);
+if (malformed.length) {
+  for (const m of malformed) console.error(`[freeze] malformed baseline line: ${m.hash} ${m.path}`);
+  process.exit(1);
+}
+
 // Which files does this branch change relative to main?
 let changed = [];
 try {
@@ -48,6 +62,7 @@ try {
 const touchesSquare = changed.some((f) => SQUARE_ARTIFACT.test(f));
 
 let failed = false;
+let proven = 0;
 for (const { hash, path } of entries) {
   if (!existsSync(path)) {
     console.error(`[freeze] FROZEN FILE MISSING: ${path}`);
@@ -68,6 +83,8 @@ for (const { hash, path } of entries) {
     }
   } else {
     console.log(`[freeze] ok  ${path}`);
+    proven += 1;
   }
 }
+if (!failed) console.log(`[freeze] ${proven} frozen file(s) byte-identical to ${BASELINE}`);
 process.exit(failed ? 1 : 0);

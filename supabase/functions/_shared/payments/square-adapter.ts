@@ -4,28 +4,119 @@
  * Credentials come from `square_connections` via a SECURITY DEFINER RPC that
  * decrypts Vault secret ids, exactly as `accounting_get_tokens` does for Xero and
  * Zoho. Raw tokens are never stored in a column and never logged.
+ *
+ * ===========================================================================
+ * THE CORRELATION CONTRACT — read before changing anything about payment links
+ * ===========================================================================
+ * Verified against Square's live reference (checked 2026-08-25, Square-Version
+ * 2026-08-19), because the answer is counter-intuitive:
+ *
+ *   - CreatePaymentLink takes EITHER `quick_pay` OR `order` — they are mutually
+ *     exclusive. Sending both is a 400.
+ *   - The QuickPay object has exactly THREE fields: `name`, `price_money`,
+ *     `location_id`. It has NO `reference_id` and NO `metadata`.
+ *     (https://developer.squareup.com/reference/square/objects/QuickPay)
+ *   - `reference_id` (40 chars) and `metadata` (10 entries, keys <=60 chars of
+ *     [a-zA-Z0-9_-], values <=255 chars) exist on the ORDER object only.
+ *   - Even on the Order path, Square's own forums have an unresolved, reproduced-
+ *     in-production report that `reference_id` does NOT appear in the
+ *     `payment.created` / `payment.updated` webhook payloads, despite the docs
+ *     saying it propagates to the payment.
+ *
+ * So: quick_pay genuinely cannot carry structured metadata, and switching to the
+ * Order variant would NOT buy reliable webhook correlation — it would only change
+ * the buyer-facing order shape (ad-hoc line items, tax/discount surface, an extra
+ * failure mode) in exchange for a field the webhook may not echo. We stay on
+ * quick_pay, and the correlation ladder is explicit:
+ *
+ *   PRIMARY (machine-readable, authoritative):
+ *     `payment_link.order_id`, returned SYNCHRONOUSLY by CreatePaymentLink and
+ *     present as `payment.order_id` / `refund.order_id` on every Square webhook.
+ *     square-webhook correlates with `.eq('square_order_id', ...)`, mirroring
+ *     stripe-webhook-live's `.eq('stripe_checkout_session_id', ...)`.
+ *     >>> THE CALLER MUST PERSIST `squareOrderId` FROM THIS ADAPTER'S RESPONSE
+ *     >>> ONTO payments.square_order_id. Without that write there is no local
+ *     >>> handle at all: at the moment the buyer pays we do not yet know the
+ *     >>> square_payment_id, so order_id is the ONLY column the webhook can
+ *     >>> match on, and the collection lands as "no local payments row".
+ *
+ *   FALLBACK (human-readable, never keyed on):
+ *     `payment_note` -> Payment.note. This is a reconciliation aid for a person
+ *     staring at the Square dashboard after something else went wrong. It is not
+ *     a correlation key: it is free text, it is not indexed, and Square does not
+ *     guarantee it survives every payment shape.
+ *
+ *   LAST RESORT (operator recovery):
+ *     top-level `description`, stored on the PaymentLink and readable via
+ *     GET /v2/online-checkout/payment-links/{id}. Square documents it as internal
+ *     ("useful in your application context. It is not used anywhere").
  */
 
 import { ProviderResolution, servedBySquare, ProviderOutcome, skip, failed, SquareError, SquareMode, PaymentsSupabaseClient } from "./types.ts";
 import { squareFetch, squareIdempotencyKey } from "./square-client.ts";
-import { capabilitiesFor } from "./capabilities.ts";
 import { mapSquarePaymentStatus, mapSquareRefundStatus } from "./square-status-map.ts";
 
 export interface SquareCheckoutSpec {
   amountCents: number;
-  /** ISO-4217. MUST match the connected Location's currency — Square binds
-   *  currency to the location and will not convert. */
+  /**
+   * ISO-4217, case-insensitive (callers pass Stripe's lower-case 'gbp').
+   *
+   * ADVISORY, NOT AUTHORITATIVE. Square binds currency to the LOCATION and will
+   * not convert, so `square_connections.location_currency` decides what we send.
+   * This field is validated against it and the request is refused on a mismatch;
+   * it is never the value that reaches Square. See resolveMoneyCurrency().
+   */
   currency: string;
   description?: string;
   /** Square has redirect_url (success only). There is NO cancel_url analogue. */
   redirectUrl?: string;
   /**
-   * Our own correlation handle. Square's Order.metadata caps at 10 keys / 255
-   * chars and reference_id at 40, versus the 15-key bags our Stripe sessions
-   * carry — so we plant ONE short key and look the rest up locally, which is
-   * also what stripe-webhook-live already does (.eq('stripe_checkout_session_id')).
+   * Our correlation handle. See THE CORRELATION CONTRACT at the top of this file:
+   * this value cannot reach Square as structured data (QuickPay has no
+   * reference_id and no metadata), so it goes into the human-readable
+   * payment_note and the real correlation is the returned order_id.
    */
-  reference: { paymentId: string };
+  reference: {
+    paymentId: string;
+  };
+  /**
+   * OPTIONAL extra identity folded into the idempotency key.
+   *
+   * The key is (reference, currency, amount). That correctly separates a
+   * corrected amount from a true retry, but it CANNOT separate two genuinely
+   * different charges that share a reference AND an amount — e.g. two identical
+   * weekly PAYG collections on one rental, which is reachable today only because
+   * create-checkout-session passes a RENTAL id as `reference.paymentId`. A caller
+   * in that position must pass something row-unique here (the payments row id,
+   * the accrual id, the installment id). Callers that already pass a real
+   * payments-row uuid need nothing: the collision is structurally impossible.
+   */
+  idempotencyScope?: string;
+}
+
+/**
+ * CreatePaymentLink.payment_note caps at 500 chars — its OWN limit.
+ *
+ * An earlier version clamped the note with capabilities.maxReferenceIdChars (40),
+ * which is the ORDER.reference_id limit and has nothing to do with this field.
+ * Borrowing another field's ceiling silently truncated the only human-readable
+ * copy of the reference. There is no capability entry for this because it is a
+ * Checkout-API field, not a cross-provider capability.
+ */
+export const SQUARE_PAYMENT_NOTE_MAX = 500;
+
+/** CreatePaymentLink.description caps at 4096. */
+export const SQUARE_DESCRIPTION_MAX = 4096;
+
+/** Prefix that makes the note recognisable to a human in the Square dashboard. */
+export const SQUARE_NOTE_PREFIX = "Drive247 ref:";
+
+/**
+ * The human-readable fallback note. NOT a correlation key — nothing may parse
+ * this to find a payments row. See THE CORRELATION CONTRACT.
+ */
+export function buildSquarePaymentNote(reference: string): string {
+  return `${SQUARE_NOTE_PREFIX} ${reference}`.slice(0, SQUARE_PAYMENT_NOTE_MAX);
 }
 
 interface SquareConnection {
@@ -117,6 +208,113 @@ export function majorToMinorUnits(amount: unknown): number | null {
   return Math.round(n * 100);
 }
 
+/**
+ * ONE currency policy for BOTH money paths: the connected LOCATION decides.
+ *
+ * Square binds currency to the location and will not convert, so a location that
+ * bills in GBP rejects a USD amount with INVALID_VALUE at money time. The two
+ * halves of this adapter used to disagree — refund read conn.locationCurrency,
+ * checkout read the caller's spec — which meant a tenant whose settings drifted
+ * could refund correctly and fail to charge, or the reverse.
+ *
+ * The drift is reachable in production even though square-oauth-callback refuses
+ * to store a connection whose location currency disagrees with the tenant's
+ * currency_code: nothing re-checks that pairing when an operator later edits
+ * currency_code in settings, and create-checkout-session derives its currency
+ * from exactly that column.
+ *
+ * Both failure modes return failed(), never skip(). A skip is a success-shaped
+ * HTTP 200: it would tell the operator the link was raised, or the refund issued,
+ * while no money moved — the precise laundering that types.ts's failed() exists
+ * to prevent. 409 because the request conflicts with the tenant's connected
+ * location, and no retry of the same request can succeed.
+ */
+function resolveMoneyCurrency(
+  conn: SquareConnection,
+  requested?: string,
+): { currency: string; outcome?: undefined } | { currency?: undefined; outcome: ProviderOutcome } {
+  const locationCurrency = conn.locationCurrency;
+
+  if (!locationCurrency) {
+    return {
+      outcome: failed("square_location_currency_unknown", 409, {
+        locationId: conn.locationId,
+        hint:
+          "square_connections.location_currency is empty on an ACTIVE connection; reconnect the Square " +
+          "account so the location is resolved. Refusing to guess a currency on a money path.",
+      }),
+    };
+  }
+
+  // Callers pass Stripe's lower-case currency ('gbp'), so normalise before
+  // comparing — a case difference is not a mismatch.
+  const asked = (requested ?? "").trim().toUpperCase();
+
+  // An absent/blank request is not an assertion about currency, so it defers to
+  // the location. The refund path takes this branch always: public.payments has
+  // no currency column at all.
+  if (!asked) return { currency: locationCurrency };
+
+  if (asked !== locationCurrency) {
+    return {
+      outcome: failed("square_currency_mismatch", 409, {
+        requested: asked,
+        locationCurrency,
+        locationId: conn.locationId,
+        hint:
+          `This tenant is configured for ${asked} but its connected Square location bills in ` +
+          `${locationCurrency}, and Square does not convert. Align the tenant's currency with the ` +
+          `location, or connect a location in ${asked}.`,
+      }),
+    };
+  }
+
+  return { currency: locationCurrency };
+}
+
+/**
+ * The checkout idempotency key's natural identity.
+ *
+ * WHY AMOUNT AND CURRENCY ARE IN HERE. The key used to be `chk-${paymentId}`,
+ * pinned to the reference alone. Square's documented behaviour is that reusing a
+ * key with changed request data returns 400 IDEMPOTENCY_KEY_REUSED ("The
+ * idempotency key can only be retried with the same request data"), and reusing
+ * it with IDENTICAL data returns 200 with the ORIGINAL resource. Both halves of
+ * that bit us:
+ *
+ *   - operator corrects an amount and re-raises the link -> same key, different
+ *     data -> a hard 400 that no retry can ever clear, because the key is a pure
+ *     function of the reference. That reference is permanently un-chargeable.
+ *   - a second, legitimately different charge on the same reference for the same
+ *     amount -> same key, same data -> 200 carrying the FIRST link. The operator
+ *     sees a valid link; the buyer pays once; the second charge is never
+ *     collected. Silently wrong money.
+ *
+ * Folding the money into the key fixes the first outright and narrows the second
+ * to "same reference AND same amount", which `idempotencyScope` exists to break.
+ *
+ * A missing reference gets a RANDOM key rather than a stable one. Two unrelated
+ * charges of equal amount would otherwise share the key `chk--GBP-5000` and
+ * collapse into one link. Losing retry de-duplication costs at most a spare
+ * unpaid payment link; a collapsed link costs a collection.
+ */
+function checkoutIdempotencySeed(spec: SquareCheckoutSpec, currency: string): string {
+  const reference = spec.reference.paymentId?.trim() ?? "";
+  const scope = spec.idempotencyScope?.trim();
+
+  if (!reference && !scope) {
+    console.warn(
+      "[square-adapter] checkout has no reference and no idempotencyScope; minting a random " +
+        "idempotency key. This call is NOT retry-de-duplicated — a network retry raises a second link.",
+    );
+    return `chk-anon-${crypto.randomUUID()}`;
+  }
+
+  return [`chk`, reference, scope ?? "", currency, String(spec.amountCents)]
+    .filter((part) => part !== "")
+    .join("-");
+}
+
 export async function createSquareCheckout(
   supabase: PaymentsSupabaseClient,
   resolution: ProviderResolution,
@@ -126,13 +324,18 @@ export async function createSquareCheckout(
   const conn = await loadConnection(supabase, resolution.tenantId, mode);
   if (!conn) return skip("square_not_connected", { tenantId: resolution.tenantId });
 
-  const caps = capabilitiesFor("square");
+  // CURRENCY PRE-FLIGHT, before a single byte reaches Square. A clear refusal
+  // naming both currencies beats a Square 400 INVALID_VALUE that names neither.
+  const money = resolveMoneyCurrency(conn, spec.currency);
+  if (money.outcome) return money.outcome;
+  const currency = money.currency;
 
-  // reference_id caps at 40 chars; a bare UUID is 36, so it fits. Guard anyway —
-  // an over-long value is rejected by Square at request time, not truncated.
-  const referenceId = spec.reference.paymentId.slice(0, caps.maxReferenceIdChars);
+  const idempotencyKey = await squareIdempotencyKey(checkoutIdempotencySeed(spec, currency));
 
-  const idempotencyKey = await squareIdempotencyKey(`chk-${spec.reference.paymentId}`);
+  // The FULL reference, never truncated. The old 40-char clamp borrowed
+  // Order.reference_id's limit for a field that is not reference_id, and a
+  // silently shortened id is worse than a long one: it still looks like an id.
+  const reference = spec.reference.paymentId ?? "";
 
   try {
     const res = await squareFetch<{ payment_link?: Record<string, unknown> }>({
@@ -143,13 +346,21 @@ export async function createSquareCheckout(
       idempotencyKey,
       body: {
         quick_pay: {
+          // Buyer-facing line-item name. QuickPay.name caps at 255.
           name: spec.description?.slice(0, 255) ?? "Payment",
-          price_money: { amount: spec.amountCents, currency: spec.currency.toUpperCase() },
+          price_money: { amount: spec.amountCents, currency },
           location_id: conn.locationId,
         },
         // Square shows its own confirmation page when redirect_url is absent.
         checkout_options: spec.redirectUrl ? { redirect_url: spec.redirectUrl } : undefined,
-        payment_note: referenceId,
+        // Human-readable fallback only — see THE CORRELATION CONTRACT. Clamped to
+        // payment_note's own 500-char limit.
+        payment_note: reference ? buildSquarePaymentNote(reference) : undefined,
+        // Operator recovery handle: lets a human find this link by reference via
+        // GET /v2/online-checkout/payment-links when the local write failed.
+        description: reference
+          ? `${SQUARE_NOTE_PREFIX} ${reference}`.slice(0, SQUARE_DESCRIPTION_MAX)
+          : undefined,
       },
     });
 
@@ -159,7 +370,16 @@ export async function createSquareCheckout(
       url: link.url,
       paymentLinkId: link.id,
       orderId: link.order_id,
-      referenceId,
+      // Named for the COLUMN the caller must write it to. `orderId` is kept for
+      // callers already reading it; this alias is what makes the persistence
+      // obligation in THE CORRELATION CONTRACT mechanical rather than a footnote.
+      squareOrderId: link.order_id,
+      currency,
+      amountCents: spec.amountCents,
+      referenceId: reference,
+      // Loud, machine-readable statement of the caller's obligation. Without this
+      // write the buyer can pay and the webhook can never find the row.
+      persist: { square_order_id: link.order_id ?? null },
     });
   } catch (err) {
     if (err instanceof SquareError) {
@@ -201,17 +421,23 @@ export async function refundSquarePayment(
   if (amount <= 0) return skip("refund_amount_not_positive", { amount });
 
   // CURRENCY.
-  // payments has NO currency column at all. The only trustworthy source is the
-  // connected Square LOCATION, because Square binds currency to the location and
-  // will not convert. The previous `?? 'USD'` default sent USD at a GBP location,
-  // which Square rejects with INVALID_VALUE — a hardcoded currency on a money
-  // path is worse than a hard failure, because it fails differently per tenant.
-  const currency = conn.locationCurrency;
-  if (!currency) {
-    return skip("square_location_currency_unknown", {
-      hint: "square_connections.location_currency is empty; reconnect the Square account so the location is resolved.",
-    });
-  }
+  // payments has NO currency column at all, so there is nothing for the caller to
+  // assert and resolveMoneyCurrency() is called with no requested value — it
+  // returns the location's currency. Identical policy to createSquareCheckout by
+  // construction, not by two comments agreeing with each other.
+  //
+  // The previous `?? 'USD'` default sent USD at a GBP location, which Square
+  // rejects with INVALID_VALUE; a hardcoded currency on a money path is worse
+  // than a hard failure because it fails differently per tenant.
+  //
+  // This was a skip() until the currency policy was unified. A skip is
+  // handled:true — a success-shaped 200 — so an empty location_currency told the
+  // operator the refund had been issued while nothing had been sent to Square at
+  // all. An active connection with no location currency is a broken connection,
+  // not a tenant mid-onboarding, and the two must not report the same way.
+  const money = resolveMoneyCurrency(conn);
+  if (money.outcome) return money.outcome;
+  const currency = money.currency;
 
   // IDEMPOTENCY. Keying on (payment, amount) alone silently collapses two
   // legitimate equal-amount partial refunds into one: the second call returns

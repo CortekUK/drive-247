@@ -4,6 +4,50 @@
 # The only lawful way a line here changes is a Stripe-maintenance PR that touches
 # ZERO Square artifacts and updates this file in the same commit.
 #
-# Regenerate (Stripe-maintenance PRs only):
-#   sha256sum supabase/functions/_shared/stripe-client.ts >> docs/square-integration/BASELINE.sha256
+# Regenerate a single line (Stripe-maintenance PRs only):
+#   sha256sum <path>   # then replace that path's line below
+#
+# WHAT EARNS A LINE HERE
+# Not "every Stripe file" — 56 files import stripe-client.ts alone and freezing
+# them all would make ordinary Stripe maintenance impossible. A file is frozen
+# when both hold: (a) the Square workstream has a plausible reason to reach for
+# it, and (b) an edit lands on money that is already moving. Importer counts
+# below are `grep -rl '_shared/<file>' supabase/functions --include=*.ts`,
+# measured 2026-08-25 on feature/square. All seven are byte-identical to main
+# right now, so none of these lines is freezing a change already made.
+#
+# ---------------------------------------------------------------------------
+# 56 importers. 632 lines of the DEPOSIT_HOLD_CARD_VARIANTS downgrade ladder,
+# resolveHoldExpiryDetailed, getWebhookSecretCandidates' empty-string footgun,
+# validateStripeCustomerId and the UK/UAE multi-account helpers. The original
+# and still the most load-bearing entry.
 f1c38aed701799691d1bc27cc408577d5e442e05a09ce938a4815b8e271701bc  supabase/functions/_shared/stripe-client.ts
+#
+# 206 importers — the widest blast radius in the repo, and the one this
+# workstream actually touches: all four Square edge functions (square-oauth-start,
+# square-oauth-callback, square-webhook, refresh-square-tokens) import it. The
+# tempting edit is one line of Access-Control-Allow-Headers for a Square
+# signature header; that same line is in front of stripe-webhook-live.
+0c2f3c7be2d998703ea91e5ea4d57042e7b71be44ba0fe5ebc10be28d2fddc18  supabase/functions/_shared/cors.ts
+#
+# 21 importers. Platform subscription billing, on a SEPARATE Stripe account
+# (STRIPE_SUBSCRIPTION_SECRET_KEY) from Connect. Nothing about Square routing
+# should reach it, and if something does, 52 tenants' access gating moves.
+33332131ff6a7475c250545e23d07ab2f94434580289dfca3abab6e9d841be04  supabase/functions/_shared/subscription-stripe.ts
+#
+# 5 importers (place-deposit-hold, refresh-deposit-holds, reconcile-deposit-holds,
+# sandbox-refresh-deposit-holds, _shared/deposit-hold-notify.ts) — the lowest
+# count here, and frozen on money-criticality rather than reach: 2,758 lines
+# holding real authorisations on real cards. SQUARE_CAPABILITIES
+# .supportsStoredCredential=false is precisely a statement about this engine,
+# so the workstream reasons about it and must still not edit it.
+989dfdfc76ce79a071e75e016ecf6895012926fff3db9b0e68404f5f64281f59  supabase/functions/_shared/deposit-hold-refresh.ts
+#
+# The three settlement receivers. Zero importers each — they are endpoints, so
+# an importer count understates them badly: every one of the 1,026 payments
+# reaches its final state through one of these. All three are deployed
+# (verify_jwt = false in supabase/config.toml) and all three verify their own
+# signatures. The Square equivalent is square-webhook, a separate file.
+2c05be61c915a96af9d53b6ba001959af0f91e329fc90cff79029040b768d527  supabase/functions/stripe-webhook/index.ts
+16a0a963527f432bb9ceb403bcaf80eafeb1ae6c28188cad7de037a53ef93e5d  supabase/functions/stripe-webhook-test/index.ts
+316af48c8c088cbad143bf2a9217152f0497d28838d3e003268f2a13c2320e92  supabase/functions/stripe-webhook-live/index.ts

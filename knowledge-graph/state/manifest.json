@@ -1920,7 +1920,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/square-settings.tsx": {
-    "sha": "ca9f5f2ee1ea4cf00c0d8f0e678a41edac899b03dbca6c6f90311d09024ae511",
+    "sha": "aa3d1fc577522001ced2f435d68ca6a00f956b5cdad6a232457100229d8886dd",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/extras-settings.tsx": {
@@ -6312,7 +6312,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-checkout-session/index.ts": {
-    "sha": "d7e54c953fc6165332825b4230a33f6b847f5c82903da3eacaecc0255eb72828",
+    "sha": "adb57fb0c403636e22c79847096971c9aa984c640b7e2ffa19b61ce394b95ff4",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/expire-link-session/index.ts": {
@@ -6964,7 +6964,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/checkout.ts": {
-    "sha": "ac00849a0874c158362447f994a9de36b6bdfc4ad0040d1da1bb05aba798e6fd",
+    "sha": "e62686f8d17e17d9aad66b7a339f9f1c90b63ef40088eceec6747185501ee856",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/registry.ts": {
@@ -6976,7 +6976,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/types.ts": {
-    "sha": "563e1a4eed3f77f8b4a7b767dd9fe4f7573acb2ab606f09bdd8b7646352aaeae",
+    "sha": "e3782021c02c53132db4302ea11951ad093b99c4376bec84d55686a84e31b705",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/square-status-map.ts": {
@@ -6988,7 +6988,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/resolve.ts": {
-    "sha": "e13cefc7d97d0c003591f7b9c99471f6ad431b759ef90785531bfcac0b71d989",
+    "sha": "94f91b6107ab5c73b76b9404b805c0314ff6e28a1dd8d8a869e8ac29c2996a07",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/capabilities.ts": {
@@ -7000,7 +7000,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/square-adapter.ts": {
-    "sha": "41098898db8ae2e89ae32894f6b121ea6650828bd7e124e51b8c662dd4a7c3e4",
+    "sha": "1d908a5fe2cb81b50d2eb9fad438270ecf98f4081724bdbd71ef7316b0b72c65",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/predicates.ts": {
@@ -7008,7 +7008,15 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/refund.ts": {
-    "sha": "5e19be6bdf339c9b600469a274a1d912138309fa7764c53a35317d35c21a948b",
+    "sha": "92d8daf580bb9025ee89d59583f017df7089ba252056473fcd4905cb729cda35",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/dispatch_test.ts": {
+    "sha": "4057d7bb90b8ecce4789911d41f5ef23aeeb41d7504e589b8490e91763140de2",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/refund_shape_test.ts": {
+    "sha": "10d8777ab5b34d7567fed66c751317d338d74429f23baa215bdf60bc00decd94",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/seam_test.ts": {
@@ -9449,6 +9457,14 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822130000_fleet_health_evaluate_set_based.sql": {
     "sha": "09c5eb3a3820c1b0ea9c70426766e73eae5eabf9a8531ce5bb6906d4225a454a",
+    "unit": "database"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260825172706_square_provider_columns.sql": {
+    "sha": "d7ddfb04377cc8282615d192a97a10c07208394d71fefae498b0d03e51a2fbba",
+    "unit": "database"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260825175054_square_revoke_anon_on_credential_tables.sql": {
+    "sha": "2b3245cef3b6f05b7de167ff5ab811f4ad47937c9673a7d1a26fcca9737b97a3",
     "unit": "database"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql": {
