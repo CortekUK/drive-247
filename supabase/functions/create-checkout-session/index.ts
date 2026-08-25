@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
+import { tryProviderCheckout } from '../_shared/payments/checkout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -180,6 +181,45 @@ serve(async (req) => {
     const depositNoticeText = shouldShowDepositNotice
       ? `After payment, a ${formattedDeposit} security deposit hold (not a charge) will be authorised on the same card. Released when your rental ends.`
       : null;
+
+    // ---- PROVIDER DISPATCH (Square) -------------------------------------
+    // Everything above this line is provider-neutral: request parsing, tenant
+    // resolution, currency and the deposit disclosure. Everything below is the
+    // Stripe rail and is BYTE-IDENTICAL to what it was before Square existed.
+    //
+    // handled === false means "this tenant is on Stripe" and execution simply
+    // continues into the untouched body below. That is why this is an insertion
+    // and not a refactor: the Stripe path cannot regress because it was not
+    // edited.
+    //
+    // requiresStoredCredential is TRUE because line ~280 below sets
+    // setup_future_usage:'off_session' — this session vaults a card for later
+    // deposit holds and off-session charges. Square's hosted payment links
+    // cannot vault a card, so a Square tenant gets an explicit skip here rather
+    // than a link that works once and then cannot be charged again.
+    if (tenantId) {
+      const routed = await tryProviderCheckout(supabaseClient, tenantId, {
+        amountCents: Math.round(amountNum * 100),
+        currency: currencyCode,
+        description: `Payment${referenceId ? ` for ${referenceId}` : ''}`,
+        redirectUrl: successUrl,
+        reference: { paymentId: String(referenceId ?? '') },
+        requiresStoredCredential: true,
+      })
+      if (routed.error) {
+        return new Response(
+          JSON.stringify({ error: routed.reason, ...(routed.body ?? {}) }),
+          { status: routed.httpStatus ?? 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if (routed.handled) {
+        return new Response(
+          JSON.stringify(routed.body ?? {}),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+    // ---- END PROVIDER DISPATCH — Stripe code below is unchanged ------------
 
     // Get Stripe client for the tenant's platform account + mode
     // ('managed' tenants → legacy UK platform, 'own' tenants → UAE platform)

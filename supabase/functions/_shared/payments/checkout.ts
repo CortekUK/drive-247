@@ -8,8 +8,13 @@
  *       redirectUrl: successUrl, reference: { paymentId },
  *       requiresStoredCredential: false,
  *     });
+ *     if (routed.error)   return errorResponse(String(routed.reason), routed.httpStatus ?? 502);
  *     if (routed.handled) return jsonResponse(routed.body!);
  *     // ---- existing Stripe code below, byte-identical ----
+ *
+ * The `routed.error` line is NOT optional. Without it a Square outage or an
+ * expired token returns HTTP 200 with no payment link in the body, and the
+ * operator sees a success that did not happen.
  *
  * The 3 multi-tenant cron sweepers (send-payg-reminders, auto-extend-rentals,
  * send-auto-extension-reminder) are a DIFFERENT shape and get no preamble: their
@@ -17,8 +22,7 @@
  * `.eq('payment_provider','stripe')` on the driving query via predicates.ts.
  */
 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { PASSTHROUGH, ProviderOutcome, skip } from "./types.ts";
+import { PASSTHROUGH, ProviderOutcome, skip, PaymentsSupabaseClient } from "./types.ts";
 import { resolvePaymentProvider } from "./resolve.ts";
 import { capabilitiesFor } from "./capabilities.ts";
 import { createSquareCheckout, SquareCheckoutSpec } from "./square-adapter.ts";
@@ -35,7 +39,7 @@ export interface CheckoutSpec extends SquareCheckoutSpec {
 }
 
 export async function tryProviderCheckout(
-  supabase: SupabaseClient,
+  supabase: PaymentsSupabaseClient,
   tenantId: string,
   spec: CheckoutSpec,
 ): Promise<ProviderOutcome> {

@@ -1,40 +1,68 @@
 #!/usr/bin/env bash
-# Square workstream — run every guardrail. Wire this into CI and pre-push.
+# Square workstream — run every guardrail. Wire into CI and pre-push.
 #
 # Exit non-zero if the Stripe path could have regressed.
+#
+# NOTE ON HOW THIS SCRIPT DECIDES PASS/FAIL:
+# An earlier version inferred failure by grepping a command's OUTPUT for the word
+# "error". That gate was structurally incapable of failing — a non-zero exit with
+# no matching text read as success, and it printed "provably untouched" anyway.
+# Every step below now keys off the command's own EXIT STATUS. If you add a step,
+# do the same; a guardrail that cannot fail is worse than no guardrail, because
+# it manufactures confidence.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
 DENO="${DENO:-$HOME/.supabase/deno}"
 fail=0
+step() { echo; echo "==> $1"; }
 
-echo "==> 1/5  Stripe freeze gate"
-node scripts/square-guardrails/check-frozen.mjs     || fail=1
+step "1/6  Stripe freeze gate"
+if node scripts/square-guardrails/check-frozen.mjs; then echo "    ok"; else echo "    FAIL"; fail=1; fi
 
-echo; echo "==> 2/5  banned predicates & resolver aliases"
-node scripts/square-guardrails/check-predicates.mjs || fail=1
+step "2/6  banned predicates & resolver aliases"
+if node scripts/square-guardrails/check-predicates.mjs; then echo "    ok"; else echo "    FAIL"; fail=1; fi
 
-echo; echo "==> 3/5  typecheck the provider seam"
-"$DENO" check supabase/functions/_shared/payments/*.ts 2>&1 | grep -vE '^Download' | grep -E 'error|TS[0-9]+' && fail=1
-[ $fail -eq 0 ] && echo "    ok"
+step "3/6  typecheck the provider seam"
+# --unstable matches the Supabase edge runtime; the pinned local Deno predates
+# stable Deno.serve and would otherwise flag every edge function in the repo,
+# including long-deployed Stripe ones.
+if out=$("$DENO" check --unstable supabase/functions/_shared/payments/*.ts 2>&1); then
+  echo "    ok"
+else
+  printf '%s\n' "$out" | grep -vE '^Download' | head -20; echo "    FAIL"; fail=1
+fi
 
-echo; echo "==> 4/5  typecheck square edge functions"
-# --unstable is REQUIRED locally: the pinned Deno (1.30.3) predates stable
-# Deno.serve, which the Supabase edge runtime has. Without it every edge
-# function in this repo -- including long-deployed Stripe ones -- reports
-# TS2339 and the check looks broken when it is not.
-for d in supabase/functions/square-*/; do
+step "4/6  typecheck square edge functions"
+shopt -s nullglob
+for d in supabase/functions/square-*/ supabase/functions/refresh-square-tokens/; do
   [ -f "$d/index.ts" ] || continue
-  if "$DENO" check --unstable "$d/index.ts" 2>&1 | grep -qE "^error"; then
-    echo "    FAIL $d"; fail=1
-  else
+  if out=$("$DENO" check --unstable "$d/index.ts" 2>&1); then
     echo "    ok   $d"
+  else
+    printf '%s\n' "$out" | grep -vE '^Download' | head -10; echo "    FAIL $d"; fail=1
   fi
 done
 
-echo; echo "==> 5/5  seam contract tests"
-"$DENO" test --allow-net --allow-env supabase/functions/_shared/payments/__tests__/ 2>&1 \
-  | grep -vE '^Download' | tail -3 || fail=1
+step "5/6  seam contract tests"
+if out=$("$DENO" test --allow-net --allow-env supabase/functions/_shared/payments/__tests__/ 2>&1); then
+  printf '%s\n' "$out" | grep -E '^ok \||passed' | tail -1
+  echo "    ok"
+else
+  printf '%s\n' "$out" | grep -vE '^Download' | tail -25; echo "    FAIL"; fail=1
+fi
+
+step "6/6  seam importers (re-checked every run, never cached)"
+# The claim "the seam has no callers yet" goes stale the moment wiring lands.
+# List them so a reviewer sees the real blast radius rather than a stale note.
+importers=$(grep -rl "_shared/payments" supabase/functions apps --include=*.ts --include=*.tsx 2>/dev/null \
+            | grep -v "_shared/payments/" | sort || true)
+if [ -z "$importers" ]; then
+  echo "    none yet"
+else
+  echo "$importers" | sed 's/^/    /'
+  echo "    ^ these files carry the seam; each MUST keep its Stripe body byte-identical"
+fi
 
 echo
 if [ $fail -eq 0 ]; then

@@ -16,8 +16,7 @@
  * error 42703 on any deploy that landed before the migration.
  */
 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { ProviderId, ProviderResolution, SquareMode } from "./types.ts";
+import { ProviderId, ProviderResolution, SquareMode, PaymentsSupabaseClient } from "./types.ts";
 
 /**
  * The ONLY tenant columns this seam reads. Deliberately tiny and deliberately
@@ -41,7 +40,7 @@ function coerceProvider(value: unknown): ProviderId {
  * charge on the wrong rail.
  */
 export async function resolvePaymentProvider(
-  supabase: SupabaseClient,
+  supabase: PaymentsSupabaseClient,
   tenantId: string,
 ): Promise<ProviderResolution> {
   const { data, error } = await supabase
@@ -50,10 +49,25 @@ export async function resolvePaymentProvider(
     .eq("id", tenantId)
     .single();
 
+  // FAIL OPEN TO STRIPE. This is the single most important line in the seam.
+  //
+  // An earlier version threw here. That contradicted guard.ts's documented fail
+  // direction and was a live Stripe-regression vector the moment the preamble
+  // landed: staging is behind on the migration and returns 42703 for these
+  // columns, so EVERY checkout on a schema-lagging environment would have thrown
+  // instead of falling through to its untouched Stripe body.
+  //
+  // A read failure carries NO evidence that the tenant is on Square. Stripe is
+  // the native rail and the safe default, so we log loudly and degrade to it.
+  // The asymmetry is deliberate: degrading to Stripe for a Square tenant fails
+  // visibly at the Stripe call; throwing for a Stripe tenant breaks live money.
   if (error || !data) {
-    throw new Error(
-      `resolvePaymentProvider: tenant ${tenantId} not readable: ${error?.message ?? "no row"}`,
+    console.error(
+      `[resolvePaymentProvider] could not read tenant ${tenantId} ` +
+        `(${error?.code ?? "no-row"}): falling back to the Stripe rail. ` +
+        `If this tenant is on Square, its checkout will fail visibly at the Stripe call.`,
     );
+    return { tenantId, provider: "stripe", squareMode: null, country: null };
   }
 
   const row = data as Record<string, unknown>;

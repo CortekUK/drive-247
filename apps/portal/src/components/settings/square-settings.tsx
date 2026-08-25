@@ -111,8 +111,21 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
   const { canEditSettings } = useManagerPermissions();
   const { isAdmin } = useAuth();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  // Tracked locally rather than reading query.isFetching: the hook polls every
+  // 60s, so isFetching would put the Refresh button into a spinner (and disable
+  // it) once a minute for no reason the operator can see.
+  const [refreshing, setRefreshing] = useState(false);
 
   const sq = useSquareConnection();
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await sq.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Safe by default, and aligned with the SERVER's authority.
   //
@@ -246,8 +259,8 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
               canEdit={canEdit}
               connecting={sq.isConnecting}
               onReconnect={sq.connect}
-              refreshing={sq.isFetching}
-              onRefresh={() => void sq.refetch()}
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
             />
           ) : sq.needsReconnect ? (
             <ReconnectPrompt
@@ -266,8 +279,8 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
               tenantCurrency={tenant?.currency_code ?? null}
               modeIsLive={modeIsLive}
               canEdit={canEdit}
-              refreshing={sq.isFetching}
-              onRefresh={() => void sq.refetch()}
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
               onDisconnect={() => setConfirmDisconnect(true)}
               disconnecting={sq.isDisconnecting}
             />

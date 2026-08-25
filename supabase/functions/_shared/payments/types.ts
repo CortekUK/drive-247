@@ -74,7 +74,11 @@ export interface ProviderOutcome {
   handled: boolean;
   body?: Record<string, unknown>;
   skipped?: boolean;
-  /** Machine-readable skip cause, e.g. 'square_unsupported_stored_credential'. */
+  /** True when the provider was tried and failed. Caller MUST return a non-2xx. */
+  error?: boolean;
+  /** Suggested HTTP status when error is true. */
+  httpStatus?: number;
+  /** Machine-readable cause, e.g. 'square_unsupported_stored_credential'. */
   reason?: string;
 }
 
@@ -89,6 +93,37 @@ export function skip(reason: string, extra?: Record<string, unknown>): ProviderO
 /** Square serviced the request. */
 export function servedBySquare(body: Record<string, unknown>): ProviderOutcome {
   return { handled: true, body };
+}
+
+/**
+ * The provider genuinely FAILED. Distinct from skip() and that distinction is
+ * load-bearing.
+ *
+ * skip() means "we deliberately did not do this" — a capability the processor
+ * lacks, or a tenant that has not finished connecting. It is a success-shaped
+ * 200 because nothing is wrong.
+ *
+ * failed() means "we tried and it broke" — an expired token, a 429, a Square
+ * outage, a rejected amount. Laundering those into skip() was a real defect: an
+ * operator clicked "create payment link", got HTTP 200, and no link existed.
+ * Callers MUST map this to a non-2xx.
+ *
+ * Both halves of the seam use this. Checkout and refund previously failed in
+ * OPPOSITE directions — checkout swallowed everything, refund threw — so the
+ * same outage produced a silent success on one path and a 500 on the other.
+ */
+export function failed(
+  reason: string,
+  httpStatus = 502,
+  extra?: Record<string, unknown>,
+): ProviderOutcome {
+  return {
+    handled: true,
+    error: true,
+    httpStatus,
+    reason,
+    body: { error: true, reason, ...extra },
+  };
 }
 
 /**
@@ -108,3 +143,23 @@ export class SquareError extends Error {
     this.name = "SquareError";
   }
 }
+
+
+/**
+ * A minimal, VERSION-AGNOSTIC Supabase client shape.
+ *
+ * Edge functions in this repo pin different supabase-js versions —
+ * create-checkout-session uses @2.57.4, others @2.45.0 — and those SupabaseClient
+ * generics are NOT assignable to one another. Importing a pinned SupabaseClient
+ * here would force every caller onto the seam's version, which means editing
+ * working Stripe files purely to satisfy a type. That is exactly the kind of
+ * incidental churn the prime directive forbids.
+ *
+ * The seam only ever calls .from(...).select().eq().single() and .rpc(), so it
+ * asks for precisely that and nothing more. Any supabase-js version satisfies it.
+ */
+// deno-lint-ignore no-explicit-any
+export type PaymentsSupabaseClient = {
+  from: (table: string) => any;
+  rpc: (fn: string, args?: Record<string, unknown>) => any;
+};
