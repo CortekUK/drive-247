@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { formatCurrency } from '../_shared/format-utils.ts';
+import { tryProviderRefund } from '../_shared/payments/refund.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -314,7 +315,7 @@ serve(async (req) => {
                 .select("*")
                 .in("id", apps.map(a => a.payment_id))
                 .eq("extension_id", extensionId)
-                .not("stripe_payment_intent_id", "is", null)
+                .or("stripe_payment_intent_id.not.is.null,square_payment_id.not.is.null")
                 .order("created_at", { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -350,7 +351,7 @@ serve(async (req) => {
               .from("payments")
               .select("*")
               .in("id", paymentIds)
-              .not("stripe_payment_intent_id", "is", null)
+              .or("stripe_payment_intent_id.not.is.null,square_payment_id.not.is.null")
               .order("amount", { ascending: false });
 
             if (eligible && eligible.length > 0) {
@@ -535,6 +536,80 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+    } else if (payment?.payment_provider === "square") {
+      // ---- PROVIDER DISPATCH (Square) -------------------------------------
+      //
+      // Nested inside the existing else on purpose: the Stripe condition above
+      // stays byte-identical, so a Stripe tenant's control flow is untouched by
+      // construction rather than by review. Routing is by the PAYMENT ROW, never
+      // the tenant's current provider — a refund must go back on the rail the
+      // charge was taken on, and payments_provider_handle_exclusivity_check
+      // makes the two impossible to confuse.
+      const routed = await tryProviderRefund(supabase, tenantId, {
+        paymentRecord: payment as Record<string, unknown>,
+        amountCents: Math.round(refundAmount * 100),
+        reason: reason || "Refund",
+      });
+
+      if (routed.error) {
+        // Unlike the Stripe branch, this does NOT return 400 and abort. A refund
+        // request can span several categories; aborting on the first provider
+        // error leaves the earlier categories already refunded at the processor
+        // with no ledger rows written for them. Record the failure and let the
+        // shared code below decide — `type: "error"` suppresses ledger writes.
+        console.error("Square refund failed:", routed.reason);
+        refundResult = {
+          type: "error",
+          message: `Square refund failed: ${routed.reason ?? "unknown error"}`,
+        };
+      } else if (routed.skipped) {
+        // A skip is handled:true with NO error flag. Falling through to the
+        // success branch would tell the operator the customer had been refunded
+        // while nothing left Square. Reachable whenever the connection is
+        // inactive (square_get_tokens filters status='active') or the payment
+        // has no square_payment_id because its webhook was missed.
+        //
+        // Recorded as a MANUAL refund rather than a hard error: the operator
+        // still gets a ledger row and an instruction to settle it by hand.
+        ledgerOnlyFallbackReason =
+          `Square could not process this refund automatically (${routed.reason}). ` +
+          `Recorded as a manual refund — issue it in the Square dashboard and reconcile.`;
+        console.log(ledgerOnlyFallbackReason);
+        refundResult = {
+          type: refundType,
+          amount: refundAmount,
+          status: "manual",
+          message: ledgerOnlyFallbackReason,
+        };
+      } else {
+        // Square accepted it. Note the status: Square refunds are asynchronous
+        // and commonly sit PENDING for days, so this is NOT yet money returned.
+        // The terminal write happens when square-webhook receives refund.updated
+        // with COMPLETED. Reporting "completed" here would tell an operator the
+        // customer has been paid when they have not.
+        const body = (routed.body ?? {}) as Record<string, unknown>;
+        const squareRefundId = (body.squareRefundId ?? body.refundId ?? null) as string | null;
+
+        // No stripe_refund_id here: the exclusivity CHECK forbids a stripe_*
+        // handle on a square row and would throw AFTER Square had moved money.
+        await supabase
+          .from("payments")
+          .update({
+            square_refund_id: squareRefundId,
+            refund_processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", payment.id);
+
+        refundResult = {
+          type: refundType,
+          refundId: squareRefundId,
+          amount: refundAmount,
+          status: String(body.status ?? "processing"),
+          provider: "square",
+        };
+      }
+      // ---- END PROVIDER DISPATCH -------------------------------------------
     } else {
       // No Stripe payment (or Stripe PI was exhausted) — record as manual refund.
       console.log("No Stripe payment found, recording as manual refund");

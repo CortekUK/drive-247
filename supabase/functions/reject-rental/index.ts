@@ -5,6 +5,7 @@ import {
   getStripeClientForRecord,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+import { tryProviderRefund } from "../_shared/payments/refund.ts";
 
 interface RejectRentalRequest {
   rentalId: string;
@@ -110,6 +111,50 @@ Deno.serve(async (req) => {
       };
 
       try {
+        // SQUARE — handled before any Stripe client is resolved.
+        //
+        // Placed at the top of the per-payment try rather than inside the Stripe
+        // logic below because a Square row has no stripe_payment_intent_id and no
+        // stripe_checkout_session_id: it would fall straight through the resolve
+        // step to the manual path and the customer would silently never be
+        // refunded, with the rental still stamped 'refunded' at step 6.
+        //
+        // `continue` on both outcomes: this is a per-payment loop and one
+        // provider failure must not abandon the remaining payments.
+        if (payment.payment_provider === "square") {
+          const alreadyRefunded = Number(payment.refund_amount || 0);
+          const refundableRemaining = Math.max(0, Number(payment.amount || 0) - alreadyRefunded);
+          if (refundableRemaining <= 0) {
+            result.status = "skipped";
+            result.error = "Already fully refunded";
+            refundResults.push(result);
+            continue;
+          }
+
+          const routed = await tryProviderRefund(supabase, tenantId, {
+            paymentRecord: payment as Record<string, unknown>,
+            amountCents: Math.round(refundableRemaining * 100),
+            reason: reason || "Booking rejected",
+          });
+
+          // See the note in cancel-rental-refund: a skip is handled:true with no
+          // error flag, so `.error` alone reported an unissued refund as done.
+          if (routed.error || routed.skipped) {
+            result.status = "failed";
+            result.error = routed.skipped
+              ? `Square refund NOT issued: ${routed.reason ?? "provider skipped"}. No money has been returned to the customer.`
+              : `Square refund failed: ${routed.reason ?? "unknown error"}`;
+          } else {
+            const body = (routed.body ?? {}) as Record<string, unknown>;
+            result.action = "refunded";
+            // Square refunds settle asynchronously; square-webhook writes the
+            // terminal state on refund.updated.
+            result.status = String(body.status ?? "processing");
+          }
+          refundResults.push(result);
+          continue;
+        }
+
         const { client: stripe, options: stripeOptions } = resolveForRecord(payment);
 
         // Resolve payment intent ID if missing

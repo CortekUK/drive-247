@@ -29,6 +29,20 @@ export interface RefundSpec {
   /** Omit for a full refund. */
   amountCents?: number;
   reason?: string;
+  /**
+   * A value unique to THIS refund attempt.
+   *
+   * Square's idempotency key is built from (payment, identity, amount). Without
+   * an identity that changes per refund it fell back to the payments row id,
+   * which is constant — so a second partial refund of the SAME amount reused the
+   * first refund's key, Square returned the FIRST refund object, and the adapter
+   * reported success while the customer was short the money.
+   *
+   * Callers that issue one refund per request can leave this unset: the seam
+   * mints a fresh value below. Pass an explicit one only where a retry of the
+   * same logical refund must genuinely de-duplicate.
+   */
+  refundIdempotencyId?: string;
 }
 
 export async function tryProviderRefund(
@@ -66,5 +80,16 @@ export async function tryProviderRefund(
   }
 
   const resolution = resolveFromTenantRow(tenantRow as Record<string, unknown>);
-  return await refundSquarePayment(supabase, resolution, spec);
+
+  // Give this attempt its own identity before it reaches the adapter, so two
+  // equal-amount partial refunds can never collapse into one at Square.
+  // randomUUID and not a counter: refunds are issued concurrently from crons and
+  // from the portal, and there is no shared sequence between them.
+  return await refundSquarePayment(supabase, resolution, {
+    ...spec,
+    paymentRecord: {
+      ...spec.paymentRecord,
+      refund_row_id: spec.refundIdempotencyId ?? crypto.randomUUID(),
+    },
+  });
 }

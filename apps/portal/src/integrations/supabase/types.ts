@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -2236,6 +2236,103 @@ export type Database = {
           },
         ]
       }
+      bonzah_api_pushes: {
+        Row: {
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          http_status: number | null
+          id: string
+          mode: string
+          partner_id: string | null
+          payload_field_count: number | null
+          payload_sha256: string | null
+          requested_by: string | null
+          started_at: string
+          status: string
+          submission_id: string
+          tenant_id: string
+          validation_errors: Json
+        }
+        Insert: {
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          http_status?: number | null
+          id?: string
+          mode: string
+          partner_id?: string | null
+          payload_field_count?: number | null
+          payload_sha256?: string | null
+          requested_by?: string | null
+          started_at?: string
+          status: string
+          submission_id: string
+          tenant_id: string
+          validation_errors?: Json
+        }
+        Update: {
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          http_status?: number | null
+          id?: string
+          mode?: string
+          partner_id?: string | null
+          payload_field_count?: number | null
+          payload_sha256?: string | null
+          requested_by?: string | null
+          started_at?: string
+          status?: string
+          submission_id?: string
+          tenant_id?: string
+          validation_errors?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_api_pushes_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_api_pushes_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "bonzah_api_pushes_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "bonzah_onboarding_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_api_pushes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_api_pushes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "bonzah_api_pushes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       bonzah_insurance_policies: {
         Row: {
           chain_id: string | null
@@ -2604,6 +2701,80 @@ export type Database = {
           },
           {
             foreignKeyName: "bonzah_onboarding_submissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      bonzah_partner_assignments: {
+        Row: {
+          app_user_id: string
+          assigned_at: string
+          assigned_by: string | null
+          id: string
+          tenant_id: string
+        }
+        Insert: {
+          app_user_id: string
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          tenant_id: string
+        }
+        Update: {
+          app_user_id?: string
+          assigned_at?: string
+          assigned_by?: string | null
+          id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonzah_partner_assignments_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_partner_assignments_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "bonzah_partner_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_partner_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "bonzah_partner_assignments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonzah_partner_assignments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "bonzah_partner_assignments_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -6326,6 +6497,36 @@ export type Database = {
             referencedColumns: ["vehicle_id"]
           },
         ]
+      }
+      fleet_health_trigger_errors: {
+        Row: {
+          context_id: string | null
+          function_name: string
+          id: number
+          message: string | null
+          occurred_at: string
+          sqlstate: string | null
+          vehicle_id: string | null
+        }
+        Insert: {
+          context_id?: string | null
+          function_name: string
+          id?: number
+          message?: string | null
+          occurred_at?: string
+          sqlstate?: string | null
+          vehicle_id?: string | null
+        }
+        Update: {
+          context_id?: string | null
+          function_name?: string
+          id?: number
+          message?: string | null
+          occurred_at?: string
+          sqlstate?: string | null
+          vehicle_id?: string | null
+        }
+        Relationships: []
       }
       gig_driver_images: {
         Row: {
@@ -10599,6 +10800,7 @@ export type Database = {
           method: string | null
           paid_at: string | null
           payment_date: string
+          payment_provider: string
           payment_type: string
           platform_account: string
           preauth_expires_at: string | null
@@ -10611,6 +10813,9 @@ export type Database = {
           rejection_reason: string | null
           remaining_amount: number | null
           rental_id: string | null
+          square_order_id: string | null
+          square_payment_id: string | null
+          square_refund_id: string | null
           status: string | null
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
@@ -10637,6 +10842,7 @@ export type Database = {
           method?: string | null
           paid_at?: string | null
           payment_date?: string
+          payment_provider?: string
           payment_type?: string
           platform_account?: string
           preauth_expires_at?: string | null
@@ -10649,6 +10855,9 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_order_id?: string | null
+          square_payment_id?: string | null
+          square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
@@ -10675,6 +10884,7 @@ export type Database = {
           method?: string | null
           paid_at?: string | null
           payment_date?: string
+          payment_provider?: string
           payment_type?: string
           platform_account?: string
           preauth_expires_at?: string | null
@@ -10687,6 +10897,9 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_order_id?: string | null
+          square_payment_id?: string | null
+          square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
@@ -11062,6 +11275,51 @@ export type Database = {
           },
         ]
       }
+      platform_activity_prefs: {
+        Row: {
+          actions: string[]
+          app_user_id: string
+          created_at: string
+          id: string
+          include_test_tenants: boolean
+          is_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          actions?: string[]
+          app_user_id: string
+          created_at?: string
+          id?: string
+          include_test_tenants?: boolean
+          is_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          actions?: string[]
+          app_user_id?: string
+          created_at?: string
+          id?: string
+          include_test_tenants?: boolean
+          is_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_activity_prefs_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: true
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_activity_prefs_app_user_id_fkey"
+            columns: ["app_user_id"]
+            isOneToOne: true
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+        ]
+      }
       pnl_entries: {
         Row: {
           amount: number
@@ -11407,7 +11665,7 @@ export type Database = {
           source: string
           status: Database["public"]["Enums"]["push_delivery_status"]
           subscription_id: string | null
-          tenant_id: string
+          tenant_id: string | null
           title: string
           url: string | null
         }
@@ -11423,7 +11681,7 @@ export type Database = {
           source?: string
           status: Database["public"]["Enums"]["push_delivery_status"]
           subscription_id?: string | null
-          tenant_id: string
+          tenant_id?: string | null
           title: string
           url?: string | null
         }
@@ -11439,7 +11697,7 @@ export type Database = {
           source?: string
           status?: Database["public"]["Enums"]["push_delivery_status"]
           subscription_id?: string | null
-          tenant_id?: string
+          tenant_id?: string | null
           title?: string
           url?: string | null
         }
@@ -11507,7 +11765,7 @@ export type Database = {
           p256dh: string
           platform: Database["public"]["Enums"]["push_platform"]
           revoked_at: string | null
-          tenant_id: string
+          tenant_id: string | null
           updated_at: string
           user_agent: string | null
         }
@@ -11529,7 +11787,7 @@ export type Database = {
           p256dh: string
           platform?: Database["public"]["Enums"]["push_platform"]
           revoked_at?: string | null
-          tenant_id: string
+          tenant_id?: string | null
           updated_at?: string
           user_agent?: string | null
         }
@@ -11551,7 +11809,7 @@ export type Database = {
           p256dh?: string
           platform?: Database["public"]["Enums"]["push_platform"]
           revoked_at?: string | null
-          tenant_id?: string
+          tenant_id?: string | null
           updated_at?: string
           user_agent?: string | null
         }
@@ -15265,6 +15523,198 @@ export type Database = {
           },
         ]
       }
+      square_connections: {
+        Row: {
+          access_token_secret_id: string | null
+          business_name: string | null
+          connected_at: string
+          connected_by: string | null
+          created_at: string
+          disconnected_at: string | null
+          id: string
+          last_error: string | null
+          location_currency: string | null
+          location_id: string | null
+          merchant_id: string
+          refresh_failure_count: number
+          refresh_token_secret_id: string | null
+          scopes: string[]
+          square_mode: string
+          status: string
+          tenant_id: string
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token_secret_id?: string | null
+          business_name?: string | null
+          connected_at?: string
+          connected_by?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          id?: string
+          last_error?: string | null
+          location_currency?: string | null
+          location_id?: string | null
+          merchant_id: string
+          refresh_failure_count?: number
+          refresh_token_secret_id?: string | null
+          scopes?: string[]
+          square_mode?: string
+          status?: string
+          tenant_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token_secret_id?: string | null
+          business_name?: string | null
+          connected_at?: string
+          connected_by?: string | null
+          created_at?: string
+          disconnected_at?: string | null
+          id?: string
+          last_error?: string | null
+          location_currency?: string | null
+          location_id?: string | null
+          merchant_id?: string
+          refresh_failure_count?: number
+          refresh_token_secret_id?: string | null
+          scopes?: string[]
+          square_mode?: string
+          status?: string
+          tenant_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "square_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "square_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      square_oauth_state: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          origin: string | null
+          return_to: string | null
+          square_mode: string
+          state: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          origin?: string | null
+          return_to?: string | null
+          square_mode?: string
+          state: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          origin?: string | null
+          return_to?: string | null
+          square_mode?: string
+          state?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_oauth_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "square_oauth_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "square_oauth_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      square_webhook_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          merchant_id: string | null
+          payload: Json | null
+          processed_at: string
+          tenant_id: string | null
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          merchant_id?: string | null
+          payload?: Json | null
+          processed_at?: string
+          tenant_id?: string | null
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          merchant_id?: string | null
+          payload?: Json | null
+          processed_at?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_webhook_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "square_webhook_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "square_webhook_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       strategy_call_bookings: {
         Row: {
           booked_at: string
@@ -15581,6 +16031,243 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "strategy_call_bookings"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_links: {
+        Row: {
+          activation_notified_at: string | null
+          amount_snapshot: number
+          awaiting_subscription_row_since: string | null
+          billing_model_snapshot: string
+          created_at: string
+          created_by: string | null
+          currency_snapshot: string
+          expired_at: string | null
+          expires_at: string
+          first_started_at: string | null
+          id: string
+          interval_snapshot: string
+          invoice_url_ref: string | null
+          kind: string
+          last_failure_reason: string | null
+          last_session_expires_at: string | null
+          last_session_id: string | null
+          last_started_at: string | null
+          link_mode: string
+          mint_count: number
+          money_reversal_reason: string | null
+          money_reversed_at: string | null
+          paid_after_expiry: boolean
+          paid_at: string | null
+          paid_source: string | null
+          payment_attempted_at: string | null
+          plan_id: string | null
+          plan_name_snapshot: string
+          rate_limited_at: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          send_count: number
+          sent_at: string | null
+          sent_to: string | null
+          status: string
+          stripe_account_snapshot: string
+          stripe_mode_snapshot: string
+          stripe_price_id_snapshot: string
+          stripe_subscription_id: string | null
+          subscription_row_id: string | null
+          superseded_at: string | null
+          superseded_by: string | null
+          tenant_id: string
+          token_hash: string
+          tos_accepted_at: string | null
+          tos_accepted_ip: string | null
+          tos_accepted_user_agent: string | null
+          tos_version: string | null
+          trial_days_snapshot: number
+          updated_at: string
+        }
+        Insert: {
+          activation_notified_at?: string | null
+          amount_snapshot: number
+          awaiting_subscription_row_since?: string | null
+          billing_model_snapshot: string
+          created_at?: string
+          created_by?: string | null
+          currency_snapshot: string
+          expired_at?: string | null
+          expires_at: string
+          first_started_at?: string | null
+          id?: string
+          interval_snapshot: string
+          invoice_url_ref?: string | null
+          kind?: string
+          last_failure_reason?: string | null
+          last_session_expires_at?: string | null
+          last_session_id?: string | null
+          last_started_at?: string | null
+          link_mode?: string
+          mint_count?: number
+          money_reversal_reason?: string | null
+          money_reversed_at?: string | null
+          paid_after_expiry?: boolean
+          paid_at?: string | null
+          paid_source?: string | null
+          payment_attempted_at?: string | null
+          plan_id?: string | null
+          plan_name_snapshot: string
+          rate_limited_at?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          send_count?: number
+          sent_at?: string | null
+          sent_to?: string | null
+          status?: string
+          stripe_account_snapshot: string
+          stripe_mode_snapshot: string
+          stripe_price_id_snapshot: string
+          stripe_subscription_id?: string | null
+          subscription_row_id?: string | null
+          superseded_at?: string | null
+          superseded_by?: string | null
+          tenant_id: string
+          token_hash: string
+          tos_accepted_at?: string | null
+          tos_accepted_ip?: string | null
+          tos_accepted_user_agent?: string | null
+          tos_version?: string | null
+          trial_days_snapshot?: number
+          updated_at?: string
+        }
+        Update: {
+          activation_notified_at?: string | null
+          amount_snapshot?: number
+          awaiting_subscription_row_since?: string | null
+          billing_model_snapshot?: string
+          created_at?: string
+          created_by?: string | null
+          currency_snapshot?: string
+          expired_at?: string | null
+          expires_at?: string
+          first_started_at?: string | null
+          id?: string
+          interval_snapshot?: string
+          invoice_url_ref?: string | null
+          kind?: string
+          last_failure_reason?: string | null
+          last_session_expires_at?: string | null
+          last_session_id?: string | null
+          last_started_at?: string | null
+          link_mode?: string
+          mint_count?: number
+          money_reversal_reason?: string | null
+          money_reversed_at?: string | null
+          paid_after_expiry?: boolean
+          paid_at?: string | null
+          paid_source?: string | null
+          payment_attempted_at?: string | null
+          plan_id?: string | null
+          plan_name_snapshot?: string
+          rate_limited_at?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          send_count?: number
+          sent_at?: string | null
+          sent_to?: string | null
+          status?: string
+          stripe_account_snapshot?: string
+          stripe_mode_snapshot?: string
+          stripe_price_id_snapshot?: string
+          stripe_subscription_id?: string | null
+          subscription_row_id?: string | null
+          superseded_at?: string | null
+          superseded_by?: string | null
+          tenant_id?: string
+          token_hash?: string
+          tos_accepted_at?: string | null
+          tos_accepted_ip?: string | null
+          tos_accepted_user_agent?: string | null
+          tos_version?: string | null
+          trial_days_snapshot?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "subscription_links_invoice_url_ref_fkey"
+            columns: ["invoice_url_ref"]
+            isOneToOne: false
+            referencedRelation: "tenant_subscription_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "subscription_links_subscription_row_id_fkey"
+            columns: ["subscription_row_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "subscription_links"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "subscription_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -16574,6 +17261,9 @@ export type Database = {
           boldsign_test_brand_id: string | null
           bonzah_brochure_url: string | null
           bonzah_mode: string
+          bonzah_partner_id: string | null
+          bonzah_partner_id_set_at: string | null
+          bonzah_partner_id_set_by: string | null
           bonzah_password: string | null
           bonzah_sandbox_override: boolean
           bonzah_username: string | null
@@ -16589,6 +17279,7 @@ export type Database = {
           company_name: string
           contact_email: string | null
           contact_phone: string | null
+          country: string | null
           created_at: string | null
           cross_tenant_blacklist_enabled: boolean
           currency_code: string | null
@@ -16707,6 +17398,7 @@ export type Database = {
           payg_upfront_required: boolean
           payment_mode: string | null
           payment_model: string
+          payment_provider: string
           phone: string | null
           pickup_area_enabled: boolean | null
           pickup_area_radius_km: number | null
@@ -16744,6 +17436,7 @@ export type Database = {
           setup_completed_at: string | null
           show_effective_daily_rate: boolean
           slug: string
+          square_mode: string
           stack_surcharges: boolean
           status: string
           stripe_account_disabled_reason: string | null
@@ -16835,6 +17528,9 @@ export type Database = {
           boldsign_test_brand_id?: string | null
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
+          bonzah_partner_id?: string | null
+          bonzah_partner_id_set_at?: string | null
+          bonzah_partner_id_set_by?: string | null
           bonzah_password?: string | null
           bonzah_sandbox_override?: boolean
           bonzah_username?: string | null
@@ -16850,6 +17546,7 @@ export type Database = {
           company_name: string
           contact_email?: string | null
           contact_phone?: string | null
+          country?: string | null
           created_at?: string | null
           cross_tenant_blacklist_enabled?: boolean
           currency_code?: string | null
@@ -16968,6 +17665,7 @@ export type Database = {
           payg_upfront_required?: boolean
           payment_mode?: string | null
           payment_model?: string
+          payment_provider?: string
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -17005,6 +17703,7 @@ export type Database = {
           setup_completed_at?: string | null
           show_effective_daily_rate?: boolean
           slug: string
+          square_mode?: string
           stack_surcharges?: boolean
           status?: string
           stripe_account_disabled_reason?: string | null
@@ -17096,6 +17795,9 @@ export type Database = {
           boldsign_test_brand_id?: string | null
           bonzah_brochure_url?: string | null
           bonzah_mode?: string
+          bonzah_partner_id?: string | null
+          bonzah_partner_id_set_at?: string | null
+          bonzah_partner_id_set_by?: string | null
           bonzah_password?: string | null
           bonzah_sandbox_override?: boolean
           bonzah_username?: string | null
@@ -17111,6 +17813,7 @@ export type Database = {
           company_name?: string
           contact_email?: string | null
           contact_phone?: string | null
+          country?: string | null
           created_at?: string | null
           cross_tenant_blacklist_enabled?: boolean
           currency_code?: string | null
@@ -17229,6 +17932,7 @@ export type Database = {
           payg_upfront_required?: boolean
           payment_mode?: string | null
           payment_model?: string
+          payment_provider?: string
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -17266,6 +17970,7 @@ export type Database = {
           setup_completed_at?: string | null
           show_effective_daily_rate?: boolean
           slug?: string
+          square_mode?: string
           stack_surcharges?: boolean
           status?: string
           stripe_account_disabled_reason?: string | null
@@ -17331,7 +18036,22 @@ export type Database = {
           working_hours_enabled?: boolean | null
           working_hours_open?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenants_bonzah_partner_id_set_by_fkey"
+            columns: ["bonzah_partner_id_set_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenants_bonzah_partner_id_set_by_fkey"
+            columns: ["bonzah_partner_id_set_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+        ]
       }
       tesla_supercharger_charges: {
         Row: {
@@ -17662,6 +18382,33 @@ export type Database = {
             referencedColumns: ["vehicle_id"]
           },
         ]
+      }
+      vehicle_disposal_restore: {
+        Row: {
+          blocks: Json
+          captured_at: string
+          id: string
+          jobs: Json
+          reminders: Json
+          vehicle_id: string
+        }
+        Insert: {
+          blocks?: Json
+          captured_at?: string
+          id?: string
+          jobs?: Json
+          reminders?: Json
+          vehicle_id: string
+        }
+        Update: {
+          blocks?: Json
+          captured_at?: string
+          id?: string
+          jobs?: Json
+          reminders?: Json
+          vehicle_id?: string
+        }
+        Relationships: []
       }
       vehicle_events: {
         Row: {
@@ -18893,9 +19640,6 @@ export type Database = {
           initial_payment: number | null
           is_disposed: boolean | null
           is_paused: boolean
-          paused_at: string | null
-          paused_by: string | null
-          paused_reason: string | null
           last_service_date: string | null
           last_service_mileage: number | null
           lockbox_code: string | null
@@ -18908,6 +19652,9 @@ export type Database = {
           mot_due_date: string | null
           owner_id: string | null
           ownership_assigned_at: string | null
+          paused_at: string | null
+          paused_by: string | null
+          paused_reason: string | null
           photo_url: string | null
           pickup_location_id: string | null
           purchase_price: number | null
@@ -18969,9 +19716,6 @@ export type Database = {
           initial_payment?: number | null
           is_disposed?: boolean | null
           is_paused?: boolean
-          paused_at?: string | null
-          paused_by?: string | null
-          paused_reason?: string | null
           last_service_date?: string | null
           last_service_mileage?: number | null
           lockbox_code?: string | null
@@ -18984,6 +19728,9 @@ export type Database = {
           mot_due_date?: string | null
           owner_id?: string | null
           ownership_assigned_at?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          paused_reason?: string | null
           photo_url?: string | null
           pickup_location_id?: string | null
           purchase_price?: number | null
@@ -19045,9 +19792,6 @@ export type Database = {
           initial_payment?: number | null
           is_disposed?: boolean | null
           is_paused?: boolean
-          paused_at?: string | null
-          paused_by?: string | null
-          paused_reason?: string | null
           last_service_date?: string | null
           last_service_mileage?: number | null
           lockbox_code?: string | null
@@ -19060,6 +19804,9 @@ export type Database = {
           mot_due_date?: string | null
           owner_id?: string | null
           ownership_assigned_at?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          paused_reason?: string | null
           photo_url?: string | null
           pickup_location_id?: string | null
           purchase_price?: number | null
@@ -19094,6 +19841,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vehicle_owners"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_paused_by_fkey"
+            columns: ["paused_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_paused_by_fkey"
+            columns: ["paused_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
           },
           {
             foreignKeyName: "vehicles_pickup_location_id_fkey"
@@ -19920,6 +20681,79 @@ export type Database = {
           },
           {
             foreignKeyName: "rental_extensions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      square_connections_public: {
+        Row: {
+          business_name: string | null
+          connected_at: string | null
+          disconnected_at: string | null
+          id: string | null
+          last_error: string | null
+          location_currency: string | null
+          location_id: string | null
+          merchant_id: string | null
+          refresh_failure_count: number | null
+          scopes: string[] | null
+          square_mode: string | null
+          status: string | null
+          tenant_id: string | null
+          token_expires_at: string | null
+        }
+        Insert: {
+          business_name?: string | null
+          connected_at?: string | null
+          disconnected_at?: string | null
+          id?: string | null
+          last_error?: string | null
+          location_currency?: string | null
+          location_id?: string | null
+          merchant_id?: string | null
+          refresh_failure_count?: number | null
+          scopes?: string[] | null
+          square_mode?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          token_expires_at?: string | null
+        }
+        Update: {
+          business_name?: string | null
+          connected_at?: string | null
+          disconnected_at?: string | null
+          id?: string | null
+          last_error?: string | null
+          location_currency?: string | null
+          location_id?: string | null
+          merchant_id?: string | null
+          refresh_failure_count?: number | null
+          scopes?: string[] | null
+          square_mode?: string | null
+          status?: string | null
+          tenant_id?: string | null
+          token_expires_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "square_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "square_connections_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -21176,6 +22010,7 @@ export type Database = {
         }[]
       }
       fine_void_charge: { Args: { f_id: string }; Returns: undefined }
+      fleet_health_gate: { Args: { p_vehicle_id: string }; Returns: boolean }
       generate_daily_reminders: { Args: never; Returns: undefined }
       generate_first_charge_for_rental: {
         Args: { rental_id_param: string }
@@ -21400,6 +22235,7 @@ export type Database = {
         Returns: undefined
       }
       is_bonzah_partner: { Args: never; Returns: boolean }
+      is_bonzah_partner_for: { Args: { p_tenant_id: string }; Returns: boolean }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_global_master_admin: { Args: never; Returns: boolean }
       is_globally_blacklisted: { Args: { p_email: string }; Returns: boolean }
@@ -21666,6 +22502,54 @@ export type Database = {
         }
         Returns: string
       }
+      settle_subscription_link: {
+        Args: {
+          p_link_id: string
+          p_paid_at?: string
+          p_source: string
+          p_stripe_subscription_id: string
+        }
+        Returns: boolean
+      }
+      square_clear_tokens: {
+        Args: {
+          p_error?: string
+          p_new_status?: string
+          p_square_mode?: string
+          p_tenant_id: string
+        }
+        Returns: undefined
+      }
+      square_get_tokens: {
+        Args: { p_square_mode?: string; p_tenant_id: string }
+        Returns: {
+          access_token: string
+          location_currency: string
+          location_id: string
+          merchant_id: string
+          refresh_token: string
+          scopes: string[]
+          square_mode: string
+          status: string
+          token_expires_at: string
+        }[]
+      }
+      square_store_tokens: {
+        Args: {
+          p_access_token: string
+          p_business_name?: string
+          p_connected_by?: string
+          p_expires_at: string
+          p_location_currency?: string
+          p_location_id?: string
+          p_merchant_id: string
+          p_refresh_token: string
+          p_scopes?: string[]
+          p_square_mode: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
       swap_rental_vehicle: {
         Args: {
           p_block_old_end?: string
@@ -21836,7 +22720,7 @@ export type Database = {
       ledger_status: "pending" | "applied"
       payment_status: "paid" | "due" | "overdue" | "void"
       payment_type: "initial_fee" | "monthly" | "fine" | "service" | "other"
-      push_audience: "customer" | "staff"
+      push_audience: "customer" | "staff" | "platform"
       push_delivery_status: "sent" | "failed" | "expired"
       push_platform: "ios" | "android" | "desktop" | "unknown"
       rental_status: "active" | "completed" | "cancelled"
@@ -22037,7 +22921,7 @@ export const Constants = {
       ledger_status: ["pending", "applied"],
       payment_status: ["paid", "due", "overdue", "void"],
       payment_type: ["initial_fee", "monthly", "fine", "service", "other"],
-      push_audience: ["customer", "staff"],
+      push_audience: ["customer", "staff", "platform"],
       push_delivery_status: ["sent", "failed", "expired"],
       push_platform: ["ios", "android", "desktop", "unknown"],
       rental_status: ["active", "completed", "cancelled"],

@@ -9,6 +9,7 @@ import {
 } from "../_shared/resend-service.ts";
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { tryProviderCheckout } from "../_shared/payments/checkout.ts";
 import { hidePlateForTenant, vehicleLabel, plateOrBlank } from "../_shared/vehicle-privacy.ts";
 
 interface SendInvoiceEmailRequest {
@@ -268,6 +269,51 @@ serve(async (req) => {
     let paymentUrl: string | undefined = externalPaymentUrl || undefined;
     if (!paymentUrl) try {
       if (tenant) {
+        // ---- PROVIDER DISPATCH (Square) ---------------------------------
+        // requiresStoredCredential is FALSE, deliberately, even though the
+        // Stripe session below sets setup_future_usage.
+        //
+        // That vaulting exists for exactly one downstream consumer — the comment
+        // on it says so: "Save the card so create-deposit-hold can preauth the
+        // Security Deposit". Square tenants never place a deposit hold; they are
+        // created with deposit_charge_enabled=true because Square cannot
+        // authorise a card at all. So for a Square tenant there is no later
+        // off-session charge to protect, and gating this on the Stripe rail's
+        // requirement would deny them invoice links for a feature they do not have.
+        const routedInv = await tryProviderCheckout(supabase, tenantId, {
+          amountCents: Math.round(invoice.total_amount * 100),
+          currency: tenantCurrencyCode.toLowerCase(),
+          description: `Invoice ${invoice.invoice_number}`,
+          redirectUrl: `https://${tenant.slug || branding.slug}.drive-247.com/booking-success?type=invoice&status=paid`,
+          reference: { paymentId: String(invoiceId) },
+          requiresStoredCredential: false,
+          // Mirrors the Stripe pre-create further down ("Pre-create payment
+          // record so webhook can find and update it") — the same requirement,
+          // on the other rail.
+          paymentRow: invoice.customer_id ? {
+            ...(invoice.rental_id ? { rental_id: invoice.rental_id } : {}),
+            customer_id: invoice.customer_id,
+            ...(invoice.vehicle_id ? { vehicle_id: invoice.vehicle_id } : {}),
+            tenant_id: tenantId,
+            amount: invoice.total_amount,
+            remaining_amount: invoice.total_amount,
+            payment_date: new Date().toISOString().split("T")[0],
+            method: "Card",
+            payment_type: "Payment",
+          } : undefined,
+        });
+
+        if (routedInv.error) {
+          // Best-effort, matching this function's existing posture for Stripe:
+          // the enclosing catch already logs a failed session and sends the
+          // invoice email WITHOUT a payment link rather than failing the send.
+          // Returning a non-2xx here would make a Square outage suppress an
+          // email that Stripe tenants still receive.
+          console.error("Square checkout failed (sending invoice without a payment link):", routedInv.reason);
+        } else if (routedInv.handled) {
+          paymentUrl = String((routedInv.body as Record<string, unknown>)?.url ?? "") || paymentUrl;
+        } else {
+        // ---- END PROVIDER DISPATCH — Stripe code below is unchanged --------
         const stripeMode = (tenant.stripe_mode as StripeMode) || "test";
         const platformAccount = getChargePlatformAccount(tenant);
         const stripe = getStripeClientForAccount(platformAccount, stripeMode);
@@ -331,6 +377,7 @@ serve(async (req) => {
             console.log("Payment record pre-created for session:", session.id);
           }
         }
+        } // end Stripe rail (else of the Square dispatch above)
       }
     } catch (stripeError) {
       console.error("Failed to create Stripe checkout session (continuing without payment link):", stripeError);

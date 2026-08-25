@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2, AlertCircle, ExternalLink, Loader2, RefreshCw, Copy, TestTube2, Zap, Lock } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { SquareSettings } from '@/components/settings/square-settings';
 import { OwnStripeSettings } from './own-stripe-settings';
 
 interface StripeConnectStatus {
@@ -31,7 +32,7 @@ export function StripeConnectSettings() {
 
       const { data: tenant, error: tenantError } = await supabase
         .from('tenants')
-        .select('id, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email, payment_model, own_stripe_account_id, own_stripe_test_account_id')
+        .select('id, payment_provider, stripe_account_id, stripe_onboarding_complete, stripe_account_status, stripe_mode, company_name, contact_email, payment_model, own_stripe_account_id, own_stripe_test_account_id')
         .eq('id', tenantContext.id)
         .single();
 
@@ -104,6 +105,19 @@ export function StripeConnectSettings() {
       });
     }
   };
+
+  // A Square tenant sees the Square panel instead of this one.
+  //
+  // Prepended to the existing early-return chain rather than wrapping it: every
+  // return below is a plain early return, so inserting one more ahead of them
+  // cannot change what a Stripe tenant renders. `payment_provider` is NOT NULL
+  // DEFAULT 'stripe', so a Stripe tenant fails this test the same way it would
+  // have before the column existed — and an undefined value (an older cached
+  // query result) also falls through to Stripe rather than showing a Square
+  // panel to a Stripe operator.
+  if (tenantStatus?.payment_provider === 'square') {
+    return <SquareSettings />;
+  }
 
   if (isLoading) {
     return (

@@ -56,6 +56,10 @@ import { ProviderResolution, servedBySquare, ProviderOutcome, skip, failed, Squa
 import { squareFetch, squareIdempotencyKey } from "./square-client.ts";
 import { mapSquarePaymentStatus, mapSquareRefundStatus } from "./square-status-map.ts";
 
+/** Postgres unique_violation. Here it means "this exact checkout already has a
+ *  payments row", which is the retry path, not a failure. */
+const PG_UNIQUE_VIOLATION = "23505";
+
 export interface SquareCheckoutSpec {
   amountCents: number;
   /**
@@ -92,6 +96,28 @@ export interface SquareCheckoutSpec {
    * payments-row uuid need nothing: the collision is structurally impossible.
    */
   idempotencyScope?: string;
+  /**
+   * The `payments` row to create for this checkout, BEFORE Square is called.
+   *
+   * WHY THIS LIVES IN THE SEAM AND NOT IN THE CALLERS
+   *
+   * The adapter used to return a `persist: { square_order_id }` block described
+   * as "a loud, machine-readable statement of the caller's obligation". No
+   * caller honoured it. Nothing wrote square_order_id, so square-webhook's
+   * findPaymentByHandles() could never match a row: the buyer paid, the webhook
+   * fired, logged "no local payments row", returned 200, and the money was never
+   * recorded against the rental.
+   *
+   * An obligation that five call sites must each remember is a bug waiting to
+   * happen, and it happened. Doing the write HERE makes it structural: a caller
+   * that supplies this cannot forget the handles, and a caller that omits it
+   * gets a link with no row — which is now an explicit, visible choice rather
+   * than a silent omission.
+   *
+   * Omit only for a flow that genuinely manages its own row (send-excess-mileage
+   * -payment-link writes one itself, with the handles, after the link exists).
+   */
+  paymentRow?: Record<string, unknown>;
 }
 
 /**
@@ -199,6 +225,18 @@ export function majorToMinorUnits(amount: unknown): number | null {
 
   const n = Number(amount);
   if (!Number.isFinite(n)) return null;
+
+  // A negative amount is rejected for the same reason a null one is, and the
+  // omission was an inconsistency rather than a decision: on a REFUND path a
+  // negative value inverts the direction of the money, and Square would be asked
+  // to take a payment while our ledger records a return. `process-refund` does
+  // validate `refundAmount > 0` at its entry, but this helper is shared and
+  // cannot assume every present or future caller repeats that check.
+  //
+  // Zero is rejected too. Square rejects a zero-amount payment link anyway, and
+  // a caller that reached here with 0 has computed something wrong upstream —
+  // sending it produces a link nobody can pay rather than a visible failure.
+  if (n <= 0) return null;
 
   // Math.round is load-bearing, not defensive styling: 19.99 * 100 is
   // 1998.9999999999998 in IEEE-754, and Square rejects a non-integer amount with
@@ -332,10 +370,95 @@ export async function createSquareCheckout(
 
   const idempotencyKey = await squareIdempotencyKey(checkoutIdempotencySeed(spec, currency));
 
+  // ---- PRE-INSERT ---------------------------------------------------------
+  // The payments row is created BEFORE Square is called, and a failed insert
+  // ABORTS rather than returning a live URL.
+  //
+  // The ordering is the whole point. square-webhook can only correlate by
+  // square_order_id, and at the moment the buyer pays we do not yet know the
+  // square_payment_id. If the row is written after the link — or not at all —
+  // then a buyer who pays immediately hits a webhook with nothing to match, and
+  // the collection is logged as "no local payments row" and silently lost.
+  //
+  // Returning a payable link we cannot track is strictly worse than returning
+  // an error: the customer is charged either way, but only one of them leaves
+  // us able to see it.
+  //
+  // ONE ROW PER LINK. The row carries the idempotency key and
+  // ux_payments_square_idempotency_key makes it unique, so the row is exactly as
+  // unique as the link Square will hand back.
+  //
+  // Without that, a customer clicking "Pay" twice produced ONE link (Square's
+  // idempotency working correctly) and TWO Pending rows, both later stamped with
+  // the same square_order_id. square-webhook completes the newest and leaves the
+  // other Pending forever; recover-pending-square-payments then finds that
+  // leftover, sees the order genuinely PAID, and allocates the same collection a
+  // second time.
+  let paymentRowId: string | null = null;
+  if (spec.paymentRow) {
+    const { data: inserted, error: insertErr } = await supabase
+      .from("payments")
+      .insert({
+        ...spec.paymentRow,
+        payment_provider: "square",
+        status: "Pending",
+        square_idempotency_key: idempotencyKey,
+      })
+      .select("id")
+      .single();
+
+    if (insertErr) {
+      // A unique violation is the RETRY case, not an error: this exact checkout
+      // already has a row. Adopt it — Square is about to return that same link.
+      if (insertErr.code === PG_UNIQUE_VIOLATION) {
+        const { data: existing, error: findErr } = await supabase
+          .from("payments")
+          .select("id, status")
+          .eq("square_idempotency_key", idempotencyKey)
+          .maybeSingle();
+
+        if (findErr || !existing?.id) {
+          return failed("square_payment_row_conflict_unresolvable", 500, {
+            detail: findErr?.message ?? "row conflicted but could not be re-read",
+          });
+        }
+
+        // Never hand back a fresh link for money that already arrived. The
+        // customer would pay twice for one thing, and the second collection
+        // would have no charge to allocate against.
+        if (existing.status && existing.status !== "Pending") {
+          return failed("square_payment_already_settled", 409, {
+            paymentRowId: String(existing.id),
+            status: existing.status,
+            hint: "This checkout has already been paid or closed. Refusing to issue a second payment link for it.",
+          });
+        }
+
+        paymentRowId = String(existing.id);
+      } else {
+        return failed("square_payment_row_insert_failed", 500, {
+          detail: insertErr.message,
+          hint: "Refusing to create a Square payment link that cannot be correlated to a local row.",
+        });
+      }
+    } else if (!inserted?.id) {
+      return failed("square_payment_row_insert_failed", 500, {
+        detail: "no id returned",
+        hint: "Refusing to create a Square payment link that cannot be correlated to a local row.",
+      });
+    } else {
+      paymentRowId = String(inserted.id);
+    }
+  }
+
   // The FULL reference, never truncated. The old 40-char clamp borrowed
   // Order.reference_id's limit for a field that is not reference_id, and a
   // silently shortened id is worse than a long one: it still looks like an id.
-  const reference = spec.reference.paymentId ?? "";
+  //
+  // Prefer the row we just created: a payments-row uuid is genuinely unique per
+  // charge, whereas the caller's reference is a RENTAL id on some paths and
+  // therefore shared between two identical collections.
+  const reference = paymentRowId ?? spec.reference.paymentId ?? "";
 
   try {
     const res = await squareFetch<{ payment_link?: Record<string, unknown> }>({
@@ -365,7 +488,64 @@ export async function createSquareCheckout(
     });
 
     const link = res.payment_link ?? {};
+
+    // ---- HANDLE WRITE-BACK ------------------------------------------------
+    // Without this the row exists but carries no order_id, which is the same
+    // un-correlatable state as having no row at all.
+    if (paymentRowId) {
+      const { error: handleErr } = await supabase
+        .from("payments")
+        .update({
+          square_order_id: link.order_id ?? null,
+          square_payment_link_id: link.id ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", paymentRowId);
+
+      if (handleErr || !link.order_id) {
+        // The link is live and payable but we cannot correlate it. Say so loudly
+        // rather than handing back a URL: an operator who sees an error will
+        // collect another way, whereas a silent success produces a payment that
+        // arrives and never settles.
+        console.error("[square-adapter] handle write-back failed:", handleErr?.message ?? "no order_id returned");
+
+        // REVOKE IT, do not merely report it. This used to tell the operator to
+        // "void it in the Square dashboard" — a manual step, in a system they may
+        // not have open, for a link that is payable the whole time they take to
+        // do it. Anyone holding the URL could pay against a row we cannot match.
+        let voided = false;
+        if (link.id) {
+          try {
+            const v = await voidSquarePaymentLink(supabase, resolution, String(link.id));
+            voided = !v.error;
+          } catch (voidErr) {
+            console.error("[square-adapter] could not revoke the orphan link:", voidErr);
+          }
+        }
+
+        // Free the key so the operator's next attempt starts clean rather than
+        // adopting this dead row.
+        if (paymentRowId) {
+          await supabase
+            .from("payments")
+            .update({ status: "Failed", square_idempotency_key: null, updated_at: new Date().toISOString() })
+            .eq("id", paymentRowId)
+            .eq("status", "Pending");
+        }
+
+        return failed("square_handle_persist_failed", 502, {
+          paymentRowId,
+          paymentLinkId: link.id ?? null,
+          linkRevoked: voided,
+          hint: voided
+            ? "The Square link could not be linked to the local payment row and has been revoked. Nothing is payable."
+            : "The Square link was created, could not be linked to the local payment row, and could NOT be revoked automatically. Void it in the Square dashboard now.",
+        });
+      }
+    }
+
     return servedBySquare({
+      paymentId: paymentRowId,
       provider: "square",
       url: link.url,
       paymentLinkId: link.id,
@@ -379,9 +559,35 @@ export async function createSquareCheckout(
       referenceId: reference,
       // Loud, machine-readable statement of the caller's obligation. Without this
       // write the buyer can pay and the webhook can never find the row.
-      persist: { square_order_id: link.order_id ?? null },
+      //
+      // square_payment_link_id is persisted alongside it because it is the ONLY
+      // handle DeletePaymentLink accepts. Without it a voided link stays live and
+      // payable while the UI reports it dead — see void-payment-link.
+      persist: {
+        square_order_id: link.order_id ?? null,
+        square_payment_link_id: link.id ?? null,
+      },
     });
   } catch (err) {
+    // The link was never created, so the pre-inserted row describes money that
+    // will never be collected. Left Pending it would be swept by the recovery
+    // cron every minute forever, looking for an order that does not exist.
+    // Clear the idempotency key as well as failing the row. Leaving it behind
+    // would make ux_payments_square_idempotency_key adopt this dead row on the
+    // operator's next attempt at the same collection — and the "already settled"
+    // guard above would then refuse a checkout that never happened.
+    if (paymentRowId) {
+      await supabase
+        .from("payments")
+        .update({
+          status: "Failed",
+          square_idempotency_key: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", paymentRowId)
+        .eq("status", "Pending");
+    }
+
     if (err instanceof SquareError) {
       // NOT a skip. An expired token or an outage must reach the operator as a
       // failure, not as an HTTP 200 with no payment link in it.
@@ -496,3 +702,54 @@ export async function refundSquarePayment(
 }
 
 export { mapSquarePaymentStatus };
+
+/**
+ * Kill an unpaid Square payment link.
+ *
+ * The Stripe counterpart is `checkout.sessions.expire`. Square's equivalent is a
+ * DELETE on the payment link, and it is the reason `square_payment_link_id` is
+ * persisted at creation: Square exposes no way to find a link by order id.
+ *
+ * NOT NOT_FOUND-TOLERANT BY ACCIDENT. A link that Square has already removed
+ * returns 404, and that is a SUCCESS for our purposes — the caller's goal is
+ * "this link cannot be paid", and a link that does not exist satisfies it. Any
+ * other error is a real failure and must reach the operator, because the whole
+ * point of the call is a guarantee about money.
+ */
+export async function voidSquarePaymentLink(
+  supabase: PaymentsSupabaseClient,
+  resolution: ProviderResolution,
+  paymentLinkId: string,
+): Promise<ProviderOutcome> {
+  const mode = resolution.squareMode ?? "test";
+  const conn = await loadConnection(supabase, resolution.tenantId, mode);
+  if (!conn) return skip("square_not_connected", { tenantId: resolution.tenantId });
+
+  try {
+    await squareFetch({
+      mode,
+      accessToken: conn.accessToken,
+      method: "DELETE",
+      path: `/v2/online-checkout/payment-links/${encodeURIComponent(paymentLinkId)}`,
+    });
+    return servedBySquare({ provider: "square", voided: true, paymentLinkId });
+  } catch (err) {
+    if (err instanceof SquareError) {
+      if (err.httpStatus === 404) {
+        // Already gone. The guarantee holds.
+        return servedBySquare({
+          provider: "square",
+          voided: true,
+          paymentLinkId,
+          note: "Link no longer existed at Square; treated as already voided.",
+        });
+      }
+      return failed("square_void_link_failed", err.httpStatus >= 500 ? 502 : 400, {
+        category: err.category,
+        code: err.code,
+        detail: err.message,
+      });
+    }
+    throw err;
+  }
+}

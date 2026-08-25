@@ -83,6 +83,15 @@ interface OnboardingRequest {
   metaDailyBudget?: string;
   otherInfo?: string;
   tenantType?: "production" | "test";
+  /**
+   * Payment provider for this tenant. Chosen ONCE at creation and immutable
+   * afterwards — switching a live tenant between processors would strand
+   * in-flight payments and refunds on a rail it no longer has credentials for.
+   * Omitted means Stripe, which is what every existing caller expects.
+   */
+  paymentProvider?: "stripe" | "square";
+  /** ISO-3166 alpha-2. REQUIRED when paymentProvider is 'square'. */
+  country?: string;
   subscriptionAmount?: number;
   subscriptionCurrency?: string;
 }
@@ -961,6 +970,8 @@ Deno.serve(async (req) => {
     const logoUrl = clean(body.logoUrl, MAX.url + 1);
     const rawPhone = clean(body.businessPhone, MAX.phone);
     const tenantType: "production" | "test" = body.tenantType === "test" ? "test" : "production";
+    const paymentProvider = body.paymentProvider;
+    const country = body.country;
     const isProduction = tenantType === "production";
     const currency = (clean(body.subscriptionCurrency, 8) || "usd").toLowerCase();
     const subscriptionAmount = Number(body.subscriptionAmount);
@@ -1179,6 +1190,46 @@ Deno.serve(async (req) => {
     const derivedTimezone = deriveTimezone(location);
     const tzCols = derivedTimezone ? { timezone: derivedTimezone } : {};
 
+    // Payment provider — the second of the two tenant-creation paths.
+    //
+    // Chosen once, at creation, and immutable afterwards
+    // (trg_tenants_payment_provider_immutable enforces it). Defaults to Stripe
+    // when the caller says nothing, which is what every existing script-driven
+    // onboarding does, so this is inert for them.
+    //
+    // Square requires a supported country: tenants_square_country_supported_check
+    // rejects the row otherwise. Validating here turns a raw constraint
+    // violation — which would abort onboarding after several side effects have
+    // already run — into a refusal before the insert.
+    //
+    // The invariants below are forced rather than defaulted. Square cannot vault
+    // a card, so every feature that charges one later is switched off at birth
+    // instead of failing at money time; and with authorisation holds
+    // unavailable, deposits must be collected as an ordinary charge.
+    const requestedProvider = String(paymentProvider ?? "stripe").toLowerCase();
+    if (requestedProvider !== "stripe" && requestedProvider !== "square") {
+      return errorResponse(`Unknown payment provider "${requestedProvider}". Use "stripe" or "square".`, 400);
+    }
+    const SQUARE_COUNTRIES = ["AU", "CA", "FR", "IE", "JP", "ES", "GB", "US"];
+    const providerCountry = country ? String(country).toUpperCase() : null;
+    if (requestedProvider === "square" && (!providerCountry || !SQUARE_COUNTRIES.includes(providerCountry))) {
+      return errorResponse(
+        `Square is not available in ${providerCountry ?? "an unspecified country"}. ` +
+          `Supported: ${SQUARE_COUNTRIES.join(", ")}. Onboard this tenant on Stripe instead.`,
+        400,
+      );
+    }
+    const providerCols = requestedProvider === "square"
+      ? {
+          payment_provider: "square",
+          country: providerCountry,
+          deposit_charge_enabled: true,
+          installments_enabled: false,
+          auto_extend_enabled: false,
+          payg_auto_reminders_enabled: false,
+        }
+      : { payment_provider: "stripe", ...(providerCountry ? { country: providerCountry } : {}) };
+
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
       .insert({
@@ -1197,6 +1248,7 @@ Deno.serve(async (req) => {
         ...modeCols,
         ...hourCols,
         ...tzCols,
+        ...providerCols,
       })
       .select()
       .single();

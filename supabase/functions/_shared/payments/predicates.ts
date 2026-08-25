@@ -40,3 +40,53 @@ export function applyStripeOnly<T extends { eq: (c: string, v: string) => any }>
 export function applySquareOnly<T extends { eq: (c: string, v: string) => any }>(query: T): T {
   return query.eq(PROVIDER_COLUMN, SQUARE) as T;
 }
+
+/**
+ * "This row represents real electronic money at a processor."
+ *
+ * Ten sites across server and portal encode that idea as
+ * `stripe_payment_intent_id IS NOT NULL`. That was a correct definition while
+ * Stripe was the only rail; it silently becomes "this is a Stripe payment" the
+ * moment a second processor exists, and every one of those sites then treats a
+ * genuine Square charge as a MANUAL payment — refundable only on paper,
+ * un-voidable, and misclassified in the ledger.
+ *
+ * The two handles are mutually exclusive at the database level
+ * (`payments_provider_handle_exclusivity_check`), so this widening cannot make
+ * a Stripe row match differently than it did before: for every existing row
+ * `square_payment_id` is NULL, and the OR collapses to the original term. That
+ * is what makes it safe to ship while all 1,026 rows are still Stripe.
+ */
+export const STRIPE_PAYMENT_HANDLE = "stripe_payment_intent_id";
+export const SQUARE_PAYMENT_HANDLE = "square_payment_id";
+
+/**
+ * Widen a PostgREST query from "has a Stripe PaymentIntent" to "has a processor
+ * handle on either rail".
+ *
+ *   applyElectronicPaymentFilter(supabase.from('payments').select('*'))
+ *
+ * NOTE ON `.or()`: PostgREST applies `.or()` at the top level of the WHERE
+ * clause, so it composes with the `.eq()`/`.in()` terms already on the builder
+ * as AND(existing…, OR(stripe, square)). Callers that need the two handles
+ * scoped inside a larger disjunction must build that explicitly rather than
+ * chaining a second `.or()`.
+ */
+// deno-lint-ignore no-explicit-any
+export function applyElectronicPaymentFilter<T extends { or: (f: string) => any }>(query: T): T {
+  return query.or(
+    `${STRIPE_PAYMENT_HANDLE}.not.is.null,${SQUARE_PAYMENT_HANDLE}.not.is.null`,
+  ) as T;
+}
+
+/**
+ * The in-memory twin, for rows already fetched.
+ *
+ * Kept beside the query helper deliberately: when these two disagree, a row is
+ * selected for refund and then classified as manual, which is precisely the
+ * bug this module exists to prevent.
+ */
+export function isElectronicPayment(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row) return false;
+  return Boolean(row[STRIPE_PAYMENT_HANDLE]) || Boolean(row[SQUARE_PAYMENT_HANDLE]);
+}
