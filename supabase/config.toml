@@ -385,3 +385,39 @@ verify_jwt = true
 # pg_net, which carries no user JWT; protected by x-platform-secret.
 [functions.expire-link-session]
 verify_jwt = false
+
+# ---------------------------------------------------------------------------
+# Square integration
+# ---------------------------------------------------------------------------
+
+# Square redirects the operator's BROWSER here after consent, so there is no
+# Authorization header to verify. Protected instead by a single-use, expiring
+# nonce row in square_oauth_state, which is deleted on first read.
+[functions.square-oauth-callback]
+verify_jwt = false
+
+# ONE application-level subscription serves every OAuth-connected merchant, so
+# this endpoint is public by construction; the tenant is resolved from the
+# payload's merchant_id.
+#
+# verify_jwt MUST be false BEFORE the subscription is created: Square probes the
+# notification URL for reachability at create time and a 401 makes creation fail
+# outright.
+#
+# Auth is the Square signature: base64(HMAC-SHA256(key, notification_url + raw_body)).
+# The URL is part of the signed message, so it must match the registered value
+# byte for byte. Fails closed — a missing or bad signature is a 401 with no DB write.
+[functions.square-webhook]
+verify_jwt = false
+
+# Started from the portal by an authenticated head_admin/admin (or a super
+# admin), so the JWT is both present and load-bearing: without it any holder of a
+# project JWT could bind their own Square account to a victim tenant.
+[functions.square-oauth-start]
+verify_jwt = true
+
+# pg_cron invokes this with the service-role key, which satisfies JWT
+# verification, so it stays true. Square access tokens expire after 30 days and
+# this is the only thing that stops a silent expiry.
+[functions.refresh-square-tokens]
+verify_jwt = true

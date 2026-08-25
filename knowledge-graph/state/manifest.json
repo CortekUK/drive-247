@@ -240,11 +240,11 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/page.tsx": {
-    "sha": "8e1eb49b8410089b8a74f85e102f1f00579d93d8e7d0962044c9d286e4736b26",
+    "sha": "c5049959d6b071809687543c58792700c168545def9ee2889819edf50f3403a9",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx": {
-    "sha": "32c027bba423e034e878d9af7293f9e0af374299c1d248c0685fffb159fe0505",
+    "sha": "3d549bd4437b6d464d602df95ca73a472ee07bfbe7c85e2b6d8cc9ad3cb926b9",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/analytics/page.tsx": {
@@ -260,7 +260,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx": {
-    "sha": "8906ccd9c0166d5c999628e1a803ae47a9710e6f17ea3b6e77262108eb56d7ea",
+    "sha": "c830be0d4df2796d3b13735cd94c0435a40f834cc7278e9fbeca797e098cdcbf",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/reminders/page.tsx": {
@@ -372,7 +372,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx": {
-    "sha": "832e6425f65afe78eadb35869a6035b4ad1ab82f77732783d4cfe907b097866d",
+    "sha": "ef0185171388ec776eaf437e3491228cefe633ed64bdd96fef785cfe5033b777",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx": {
@@ -620,7 +620,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/permissions.ts": {
-    "sha": "691a17d7a2e010d2995ecae824bc5c41d300b7b5a711f2dc761fc6d46011f1ed",
+    "sha": "992e29bf66390e08bcaec920e3e9e6f3186f232fc888d8ec333526b169818783",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/bonzah-compliance.ts": {
@@ -1356,7 +1356,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/app-sidebar.tsx": {
-    "sha": "2e6ac70d9c581d0503955bb91005c4f9bfd89da3e1981170219c1962139e4cdd",
+    "sha": "fe2e77a4288c9fa43aa229fc943ba0f2a01fb877a103ce05982ff487a1b8d933",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/theme-toggle.tsx": {
@@ -2580,7 +2580,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/key-handover-section.tsx": {
-    "sha": "bf69af642826647e445cb9450ff067565f880efc0fb0d482a86e3e7e8f3059fb",
+    "sha": "3ef7790d3fc91c0c92bce96d3004637d280507a9da5302385da9127e527eb114",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/mileage-summary-card.tsx": {
@@ -3500,7 +3500,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-key-handover.ts": {
-    "sha": "9e1ca15229c4a3ada39b9c85c4f517af781dfefefa5bcefb6a5af360cee7348e",
+    "sha": "34b814624cb2e04dfce47e2bdd33a0f0d01748cc1cd3f2afdd6c4ce0521165a7",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-go-live-request.ts": {
@@ -7164,7 +7164,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/chat/index.ts": {
-    "sha": "709fd83ca0f51e51b988e9a026f58662cca7addfae3590796b8b9a01765438a7",
+    "sha": "948a3f2226b481548e6ac1415af6f314785b8d60fc980f2614548328ea7d6a0a",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/chat/actions/registry.ts": {
@@ -9229,6 +9229,18 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820150000_add_booking_v2_flag.sql": {
     "sha": "6aa1ee044abd2916428bf4debe89e9679268ef1e9dd54e91a7c3316b1de41835",
+    "unit": "database"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.ROLLBACK.sql": {
+    "sha": "ffafd23e900d6a7c880f5220216cd4b18655cce4c9f85e08da80e5a2ed2d9032",
+    "unit": "database"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.sql": {
+    "sha": "f858e2e360ede47343f50c0fb7275aa87b8715bb86d4c18e0c903bbfe6db3473",
+    "unit": "database"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822130000_fleet_health_evaluate_set_based.sql": {
+    "sha": "09c5eb3a3820c1b0ea9c70426766e73eae5eabf9a8531ce5bb6906d4225a454a",
     "unit": "database"
   },
   "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql": {

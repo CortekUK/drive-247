@@ -3486,7 +3486,7 @@
       "video": []
     },
     "total_files": 373,
-    "total_words": 501629,
+    "total_words": 501686,
     "counts": {
       "code": 366,
       "document": 7
@@ -4411,16 +4411,19 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820120000_add_web_push.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820140000_add_platform_activity_push.sql",
         "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820150000_add_booking_v2_flag.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.ROLLBACK.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.sql",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822130000_fleet_health_evaluate_set_based.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
         "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",
         "/home/haseeb-raza/Desktop/drive-247/MANUAL_MIGRATION.sql"
       ]
     },
-    "total_files": 376,
-    "total_words": 167028,
+    "total_files": 379,
+    "total_words": 173234,
     "counts": {
-      "code": 376
+      "code": 379
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20251219083413_remote_schema.sql",
@@ -4795,6 +4798,9 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820120000_add_web_push.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820140000_add_platform_activity_push.sql",
       "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260820150000_add_booking_v2_flag.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.ROLLBACK.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.sql",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822130000_fleet_health_evaluate_set_based.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/GMT_HOLD_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/docs/INSHUR_SCHEMA.sql",
       "/home/haseeb-raza/Desktop/drive-247/scripts/cleanup-temp-customers.sql",

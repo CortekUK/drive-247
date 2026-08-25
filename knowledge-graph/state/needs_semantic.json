@@ -1,8 +1,21 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/bonzah-settings.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.ROLLBACK.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822120000_fleet_health_security_and_defect_fixes.sql",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/migrations/20260822130000_fleet_health_evaluate_set_based.sql",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/permissions.ts",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/shared/layout/app-sidebar.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/key-handover-section.tsx",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-key-handover.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/chat/index.ts"
   ],
   "specs": [
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/database-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."

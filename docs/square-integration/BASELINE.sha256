@@ -1,0 +1,9 @@
+# Frozen Stripe money modules — Square workstream.
+#
+# A commit that touches any Square artifact MUST NOT change these checksums.
+# The only lawful way a line here changes is a Stripe-maintenance PR that touches
+# ZERO Square artifacts and updates this file in the same commit.
+#
+# Regenerate (Stripe-maintenance PRs only):
+#   sha256sum supabase/functions/_shared/stripe-client.ts >> docs/square-integration/BASELINE.sha256
+f1c38aed701799691d1bc27cc408577d5e442e05a09ce938a4815b8e271701bc  supabase/functions/_shared/stripe-client.ts
