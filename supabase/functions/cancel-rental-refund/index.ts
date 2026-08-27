@@ -256,7 +256,11 @@ serve(async (req) => {
         refundResult = {
           type: refundType,
           refundId: body.square_refund_id ?? body.refund_id ?? null,
-          amount: refundAmount ?? Number(payment.amount) || 0,
+          // Parenthesised: `a ?? b || c` is a SyntaxError in Deno, and this file
+          // therefore never bundled — the Square branch below it has never been
+          // deployed. Intent is unchanged: the requested amount if given,
+          // otherwise the payment's own amount, otherwise zero.
+          amount: refundAmount ?? (Number(payment.amount) || 0),
           status: String(body.status ?? "processing"),
           provider: "square",
         };

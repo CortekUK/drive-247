@@ -12,6 +12,7 @@ import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
+import { verifyingLine, recordedButNotSavedLine } from "@/lib/payment-provider";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
@@ -131,7 +132,7 @@ const InvoicePaymentSuccess = () => {
           // Stripe didn't confirm within ~34s. Don't lie to the customer.
           // Their card may have been authorised; the webhook will land soon.
           console.warn('[INVOICE-SUCCESS] Could not confirm capture within retry window:', lastResult);
-          setError('Your payment is still being verified by Stripe. You\'ll see it reflect on your account shortly. If you don\'t see it within a few minutes, please contact support.');
+          setError(verifyingLine(tenant?.payment_provider));
         } else {
           console.log('[INVOICE-SUCCESS] Final result:', lastResult);
 
@@ -369,7 +370,7 @@ const BookingSuccessContent = () => {
 
                 if (paymentError) {
                   console.error("❌ Failed to create payment record:", paymentError);
-                  toast.error("Payment recorded by Stripe but failed to save locally. Please contact support.");
+                  toast.error(recordedButNotSavedLine(tenant?.payment_provider));
                 } else {
                   console.log('✅ Payment record created successfully:', paymentRecord.id);
 

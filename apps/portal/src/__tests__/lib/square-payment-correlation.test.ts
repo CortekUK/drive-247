@@ -49,11 +49,18 @@ describe("createSquareCheckout persists before it charges", () => {
   it("aborts instead of returning a payable URL when the pre-insert fails", () => {
     expect(body).toMatch(/square_payment_row_insert_failed/);
     const failAt = body.indexOf("square_payment_row_insert_failed");
-    const squareAt = body.indexOf("squareFetch");
+    // Anchored on the CREATE call, not on "the first squareFetch".
+    //
+    // squareFetch is now also used to RE-READ an existing link on the retry
+    // path, and that call sits earlier in the function — so the old proxy
+    // started measuring the wrong request and failed for a reason that had
+    // nothing to do with the invariant.
+    const createAt = body.indexOf('method: "POST"');
+    expect(createAt).toBeGreaterThan(-1);
     // The abort must be upstream of the charge. Returning a live link we cannot
     // track is worse than an error: the customer is charged either way, but
     // only one of the two leaves us able to see it.
-    expect(failAt).toBeLessThan(squareAt);
+    expect(failAt).toBeLessThan(createAt);
   });
 
   it("writes both correlation handles back after the link exists", () => {
@@ -72,10 +79,42 @@ describe("createSquareCheckout persists before it charges", () => {
 
   it("does not strand a Pending row when the Square call throws", () => {
     const c = body.slice(body.indexOf("} catch (err)"));
-    expect(c).toMatch(/status:\s*["']Failed["']/);
+    expect(c).toMatch(/markSquareRowDead\(supabase, paymentRowId\)/);
+  });
+
+  it("writes a status payments_status_check actually permits", () => {
+    // THE BUG THIS EXISTS FOR.
+    //
+    // The cleanup used to write status 'Failed'. payments_status_check permits
+    // only Applied | Credit | Partial | Reversed | Pending | Completed |
+    // Refunded | Partial Refund — so every cleanup silently violated the
+    // constraint, the update failed unchecked, and the row stayed Pending with
+    // a live idempotency key. The operator's next attempt then adopted that
+    // corpse and was refused as "already settled".
+    //
+    // Source-level, because a status string is only wrong relative to a
+    // constraint no unit test can reach. Keep this list in step with the CHECK.
+    const ALLOWED = [
+      "Applied", "Credit", "Partial", "Reversed",
+      "Pending", "Completed", "Refunded", "Partial Refund",
+    ];
+    // Bounded by the NEXT top-level declaration, not by the first "}" — the
+    // first brace in this helper closes the `const { error }` destructuring.
+    const from = src.indexOf("async function markSquareRowDead");
+    const helper = src.slice(from, src.indexOf("\nexport async function", from));
+    const written = helper.match(/status:\s*"([^"]+)"/);
+    expect(written, "markSquareRowDead does not write a status").toBeTruthy();
+    expect(ALLOWED).toContain(written![1]);
+  });
+
+  it("marks the row dead without ever overwriting a completed one", () => {
+    const helper = src.slice(src.indexOf("async function markSquareRowDead"));
     // Guarded on Pending so a concurrent webhook that already completed the row
     // is never overwritten by this cleanup.
-    expect(c).toMatch(/\.eq\(["']status["'],\s*["']Pending["']\)/);
+    expect(helper).toMatch(/\.eq\(["']status["'],\s*["']Pending["']\)/);
+    // And the failure must be logged: the original bug was invisible precisely
+    // because this update's error was discarded.
+    expect(helper).toMatch(/console\.error/);
   });
 
   it("stamps payment_provider so the exclusivity CHECK classifies the row", () => {

@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
     // Fetch tenant details for Stripe configuration
     const { data: tenantData, error: tenantError } = await supabaseClient
       .from('tenants')
-      .select('id, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
+      .select('id, slug, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id')
       .eq('id', extRow.tenant_id)
       .eq('status', 'active')
       .single();
@@ -244,7 +244,26 @@ Deno.serve(async (req) => {
       return createdButNoCheckout(String(routedExt.reason ?? 'Square checkout failed'));
     }
     if (routedExt.handled) {
-      return jsonResponse({ ...(routedExt.body ?? {}), extensionId: extRow.id });
+      // SAME RESPONSE SHAPE AS THE STRIPE PATH.
+      //
+      // Every caller reads `checkoutUrl` — that is what the Stripe branch below
+      // returns. Passing the adapter's body through verbatim gave Square a `url`
+      // key instead, so `result.checkoutUrl` was undefined and an extension on
+      // Square produced no payable link at all while still reporting success.
+      //
+      // checkoutUrl points at OUR /checkout/{id} page rather than Square's
+      // hosted link: that link has no card fields in sandbox and is
+      // Square-branded in production. paymentId is passed through so a caller
+      // that wants to build its own URL can.
+      const sqBody = (routedExt.body ?? {}) as Record<string, unknown>;
+      const sqRowId = sqBody.paymentId ? String(sqBody.paymentId) : "";
+      const sqOrigin = `https://${tenantData.slug ?? ""}.drive-247.com`;
+      return jsonResponse({
+        ...sqBody,
+        checkoutUrl: sqRowId ? `${sqOrigin}/checkout/${sqRowId}` : (sqBody.url ?? null),
+        extensionId: extRow.id,
+        sequenceNumber: created.sequence_number,
+      });
     }
     // ---- END PROVIDER DISPATCH — Stripe code below is unchanged ------------
 

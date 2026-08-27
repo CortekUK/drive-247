@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { ChecklistItem } from "@/hooks/use-platform-status";
 import { useTenant } from "@/contexts/TenantContext";
+import { providerPresentation } from "@/lib/payment-provider";
 import { useGoLiveRequests } from "@/hooks/use-go-live-request";
 import { useToast } from "@/hooks/use-toast";
 
@@ -153,18 +154,27 @@ const comingSoonBrands: Record<string, React.ReactNode> = {
 
 // --- Info tooltips for integrations ---
 
-const infoTooltips: Record<string, string> = {
+/**
+ * Built per-render from the tenant's processor, not frozen at module load.
+ *
+ * These strings name the processor, and a module-level constant is evaluated
+ * once for the whole app — there is no tenant in scope there, and even if there
+ * were it would be the first tenant to load, not the current one.
+ */
+function infoTooltipsFor(providerName: string): Record<string, string> {
+  return {
   subscription:
-    "Your platform subscription with Drive247. This is separate from Stripe Connect — it covers your access to the portal and all its features.",
+    `Your platform subscription with Drive247. This is separate from ${providerName} — it covers your access to the portal and all its features.`,
   "stripe-connect":
-    "Stripe Connect lets your customers pay you directly. Once connected, payments go straight to your Stripe account.",
+    `${providerName} lets your customers pay you directly. Once connected, payments go straight to your ${providerName} account.`,
   credits:
     "Prepaid credits used for platform services like SMS notifications, AI verification, and document processing.",
   bonzah:
     "Bonzah provides insurance coverage for your rental vehicles. Your customers can purchase protection plans at checkout.",
   boldsign:
     "BoldSign powers digital rental agreements. Customers sign contracts electronically before pickup.",
-};
+  };
+}
 
 // --- Status indicator for inline integration data ---
 
@@ -263,6 +273,8 @@ export function CommandCenter({
 }: CommandCenterProps) {
   const router = useRouter();
   const { tenant } = useTenant();
+  const infoTooltips = infoTooltipsFor(providerPresentation(tenant?.payment_provider).name);
+  const pay = providerPresentation(tenant?.payment_provider);
   const { submitRequest } = useGoLiveRequests();
   const { toast } = useToast();
   const collapseKey = `command-center-collapsed-${tenant?.id}`;

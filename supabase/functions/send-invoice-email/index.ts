@@ -311,7 +311,23 @@ serve(async (req) => {
           // email that Stripe tenants still receive.
           console.error("Square checkout failed (sending invoice without a payment link):", routedInv.reason);
         } else if (routedInv.handled) {
-          paymentUrl = String((routedInv.body as Record<string, unknown>)?.url ?? "") || paymentUrl;
+          // OUR checkout page, not Square's hosted link.
+          //
+          // Square's link has no card form in sandbox (it 303-redirects to a
+          // simulator), so an emailed link could never be tested end to end, and
+          // in production it drops the customer onto a Square-branded page. Our
+          // /pay/{id} page renders Square's Web Payments SDK card fields inside
+          // the business's own site — the card still never touches our servers,
+          // and the journey is identical in both modes.
+          //
+          // Falls back to Square's URL if no row id came back: a link the
+          // customer can pay somewhere is better than no link at all.
+          const invBody = (routedInv.body ?? {}) as Record<string, unknown>;
+          const rowId = invBody.paymentId ? String(invBody.paymentId) : "";
+          const bookingHost = `https://${tenant.slug || branding.slug}.drive-247.com`;
+          paymentUrl = rowId
+            ? `${bookingHost}/checkout/${rowId}`
+            : String(invBody.url ?? "") || paymentUrl;
         } else {
         // ---- END PROVIDER DISPATCH — Stripe code below is unchanged --------
         const stripeMode = (tenant.stripe_mode as StripeMode) || "test";

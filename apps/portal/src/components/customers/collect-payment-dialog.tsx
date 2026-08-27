@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useTenant } from "@/contexts/TenantContext";
+import { bookingOriginFor } from "@/lib/booking-origin";
+import { ProviderMark, providerPresentation } from "@/lib/payment-provider";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { extractFunctionError } from "@/lib/edge-error";
 
@@ -38,6 +40,9 @@ const PAYMENT_METHODS = ["Cash", "Card", "Bank Transfer", "Zelle", "Check", "Oth
 export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: CollectPaymentDialogProps) => {
   const { toast } = useToast();
   const { tenant } = useTenant();
+  // Everything the operator reads about the processor comes from here, so a
+  // Square tenant is never offered a Stripe button it cannot use.
+  const pay = providerPresentation(tenant?.payment_provider);
   const { logAction } = useAuditLog();
   const queryClient = useQueryClient();
 
@@ -100,6 +105,7 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
     if (inFlight.current || !validAmount || busy) return;
     inFlight.current = true;
     setLoading(true);
+
     try {
       const { data: payment, error: paymentError } = await supabase
         .from("payments")
@@ -178,18 +184,42 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
   const handleStripe = async () => {
     if (!validAmount || busy) return;
     setStripeLoading(true);
+    // POPUP-BLOCKER SAFE: the tab is opened SYNCHRONOUSLY, while the click is
+    // still the current user gesture, and pointed at the real URL once it
+    // arrives. window.open() after an await has lost that gesture, so Chrome
+    // blocks it silently — the toast said "opened in a new tab" and no tab
+    // ever appeared.
+    //
+    // Declared OUTSIDE the try so the catch can close it. A const inside the
+    // try block is not in scope in the catch, which is exactly how the first
+    // version of this fix failed to compile.
+    //
+    // This is NOT a Square-specific bug: Stripe took the same path and was
+    // equally blockable. It surfaced on Square because creating a payment link
+    // is a slower round trip, so it reliably exceeds the grace period the
+    // browser allows after a click, while Stripe usually slipped under it.
+    const checkoutTab = window.open("", "_blank");
     try {
       const origin = window.location.origin;
       const data = await createCreditCheckout({
         successUrl: `${origin}/customers/${customerId}?payment=success`,
         cancelUrl: `${origin}/customers/${customerId}?payment=cancelled`,
       });
-      window.open(data.url, "_blank");
+      if (checkoutTab) {
+        checkoutTab.location.href = data.url;
+      } else {
+        // Blocked even so (or opened from an embedded view). Navigating
+        // the current tab is better than a toast claiming a tab opened.
+        window.location.href = data.url;
+      }
       logAction({ action: "payment_credit_checkout_opened", entityType: "customer", entityId: customerId, details: { amount: parsedAmount } });
-      toast({ title: "Stripe Checkout opened", description: "When the customer pays, it lands as account credit to allocate." });
+      toast({ title: pay.openedTitle, description: "When the customer pays, it lands as account credit to allocate." });
       onOpenChange(false);
     } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to open Stripe checkout.", variant: "destructive" });
+      // The blank tab was opened before we knew this would succeed. Leaving it
+      // stranded on about:blank looks like a broken checkout.
+      if (checkoutTab) checkoutTab.close();
+      toast({ title: "Error", description: err.message || `Failed to open ${pay.name} checkout.`, variant: "destructive" });
     } finally {
       setStripeLoading(false);
     }
@@ -219,7 +249,13 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
           recipientEmail: customer.email,
           customerName: customer.name,
           amount: parsedAmount,
-          paymentUrl: checkout.url,
+            // Square: OUR /checkout/{id} page. Square's hosted link has no card
+            // fields in sandbox (it 303-redirects to a simulator) and in
+            // production lands the customer on a Square-branded page.
+          paymentUrl:
+            tenant?.payment_provider === "square" && (checkout as any).paymentId
+              ? `${bookingOriginFor(tenant?.slug)}/checkout/${(checkout as any).paymentId}`
+              : checkout.url,
           overrideAmount: parsedAmount,
           overrideDescription: "Account payment",
         },
@@ -304,7 +340,7 @@ export const CollectPaymentDialog = ({ open, onOpenChange, customerId }: Collect
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" className="h-10 gap-2" onClick={handleStripe} disabled={!validAmount || busy}>
               {stripeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-              <span className="text-sm">Charge via Stripe</span>
+              <span className="text-sm">{pay.chargeLabel}</span>
             </Button>
             <Button variant="outline" className="h-10 gap-2" onClick={handleEmail} disabled={!validAmount || busy || !customer?.email}>
               {emailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}

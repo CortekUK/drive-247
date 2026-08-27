@@ -353,6 +353,45 @@ function checkoutIdempotencySeed(spec: SquareCheckoutSpec, currency: string): st
     .join("-");
 }
 
+/**
+ * Mark a pre-inserted row as never-going-to-be-money.
+ *
+ * 'Reversed', NOT 'Failed'. payments_status_check permits only
+ * Applied | Credit | Partial | Reversed | Pending | Completed | Refunded |
+ * Partial Refund. Writing 'Failed' violated the constraint, and because the
+ * update's error was never inspected it failed SILENTLY — the row stayed
+ * Pending with its idempotency key intact, so the operator's next attempt at
+ * the same collection adopted a dead row and was refused as "already settled".
+ *
+ * 'Reversed' + capture_status 'cancelled' is the established local pair:
+ * void-payment-link writes exactly that, square-webhook's
+ * toPaymentsColumnStatus maps Square's FAILED and CANCELED onto it, and the
+ * portal already renders it.
+ *
+ * The key is cleared so the next attempt starts clean rather than colliding
+ * with this corpse. Guarded on Pending so a webhook that completed the row
+ * first is never overwritten. Errors are LOGGED — the original silent failure
+ * is exactly what this comment exists to prevent recurring.
+ */
+async function markSquareRowDead(
+  supabase: PaymentsSupabaseClient,
+  paymentRowId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("payments")
+    .update({
+      status: "Reversed",
+      capture_status: "cancelled",
+      square_idempotency_key: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", paymentRowId)
+    .eq("status", "Pending");
+  if (error) {
+    console.error("[square-adapter] could not mark row dead:", paymentRowId, error.message);
+  }
+}
+
 export async function createSquareCheckout(
   supabase: PaymentsSupabaseClient,
   resolution: ProviderResolution,
@@ -413,7 +452,7 @@ export async function createSquareCheckout(
       if (insertErr.code === PG_UNIQUE_VIOLATION) {
         const { data: existing, error: findErr } = await supabase
           .from("payments")
-          .select("id, status")
+          .select("id, status, square_payment_link_id, square_order_id")
           .eq("square_idempotency_key", idempotencyKey)
           .maybeSingle();
 
@@ -435,6 +474,53 @@ export async function createSquareCheckout(
         }
 
         paymentRowId = String(existing.id);
+
+        // ---- RETURN THE LINK WE ALREADY MADE --------------------------------
+        //
+        // Do NOT ask Square for it again. The idempotency key covers
+        // (reference, currency, amount) but NOT the redirect URL, and Square
+        // rejects a reused key whose body differs — IDEMPOTENCY_KEY_REUSED,
+        // a hard 400. That is reachable from the portal without any retry:
+        // "Charge via Square" redirects to the rental page while "Email Square
+        // Link" redirects to the booking site, so the second button fails for a
+        // collection the first one already prepared.
+        //
+        // Widening the seed to include the URL would "fix" it by minting a
+        // SECOND link and a second payments row for one debt, which is the
+        // duplicate-allocation bug this key exists to prevent. Handing back the
+        // link we already hold is the only answer that keeps one row, one link,
+        // one collection.
+        const existingLinkId = existing.square_payment_link_id as string | null;
+        if (existingLinkId) {
+          try {
+            const res = await squareFetch<{ payment_link?: Record<string, unknown> }>({
+              mode,
+              accessToken: conn.accessToken,
+              method: "GET",
+              path: `/v2/online-checkout/payment-links/${encodeURIComponent(existingLinkId)}`,
+            });
+            const link = res.payment_link ?? {};
+            if (link.url) {
+              return servedBySquare({
+                paymentId: paymentRowId,
+                provider: "square",
+                url: link.url,
+                paymentLinkId: link.id ?? existingLinkId,
+                orderId: link.order_id ?? existing.square_order_id ?? null,
+                squareOrderId: link.order_id ?? existing.square_order_id ?? null,
+                currency,
+                amountCents: spec.amountCents,
+                referenceId: paymentRowId,
+                reused: true,
+              });
+            }
+          } catch (lookupErr) {
+            // Fall through and let the create attempt below decide. A failed
+            // GET is not evidence the link is gone — but it IS a reason not to
+            // pretend we have a URL we could not read.
+            console.error("[square-adapter] could not re-read existing payment link:", lookupErr);
+          }
+        }
       } else {
         return failed("square_payment_row_insert_failed", 500, {
           detail: insertErr.message,
@@ -526,11 +612,7 @@ export async function createSquareCheckout(
         // Free the key so the operator's next attempt starts clean rather than
         // adopting this dead row.
         if (paymentRowId) {
-          await supabase
-            .from("payments")
-            .update({ status: "Failed", square_idempotency_key: null, updated_at: new Date().toISOString() })
-            .eq("id", paymentRowId)
-            .eq("status", "Pending");
+          await markSquareRowDead(supabase, paymentRowId);
         }
 
         return failed("square_handle_persist_failed", 502, {
@@ -577,15 +659,7 @@ export async function createSquareCheckout(
     // operator's next attempt at the same collection — and the "already settled"
     // guard above would then refuse a checkout that never happened.
     if (paymentRowId) {
-      await supabase
-        .from("payments")
-        .update({
-          status: "Failed",
-          square_idempotency_key: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", paymentRowId)
-        .eq("status", "Pending");
+      await markSquareRowDead(supabase, paymentRowId);
     }
 
     if (err instanceof SquareError) {
@@ -593,6 +667,237 @@ export async function createSquareCheckout(
       // failure, not as an HTTP 200 with no payment link in it.
       return failed("square_checkout_failed", err.httpStatus >= 500 ? 502 : 400, {
         category: err.category, code: err.code, detail: err.message,
+      });
+    }
+    throw err;
+  }
+}
+
+/**
+ * Charge a card token produced by Square's Web Payments SDK.
+ *
+ * WHY THIS EXISTS ALONGSIDE createSquareCheckout
+ *
+ * A hosted payment link hands the card step to Square. This takes it on our own
+ * page: the browser tokenises the card with the Web Payments SDK and sends only
+ * an opaque, single-use token, which is what we charge here. Raw card numbers
+ * never touch this server, exactly as with Stripe Elements.
+ *
+ * It matters for testing as well as UX. Square's SANDBOX has no card form on a
+ * hosted link at all — sandbox.square.link 303-redirects to a simulator — so
+ * this is the only way to exercise real card entry before going live.
+ *
+ * THE CORRELATION CONTRACT IS THE SAME, AND FOR THE SAME REASON.
+ * The payments row is written BEFORE Square is called and a failed insert
+ * aborts: CreatePayment is synchronous, but payment.updated still arrives by
+ * webhook, and a payment with no local row is money we cannot see.
+ *
+ * autocomplete:true — this CAPTURES. Square's authorise-then-capture needs
+ * autocomplete:false plus a later CompletePayment, and CompletePayment takes no
+ * amount, so partial capture is impossible. Deposit holds are out of scope for
+ * Square by product decision, so we take the money outright.
+ */
+export async function createSquareCardPayment(
+  supabase: PaymentsSupabaseClient,
+  resolution: ProviderResolution,
+  spec: {
+    amountCents: number;
+    currency: string;
+    /** Opaque single-use token from the Web Payments SDK. Never a card number. */
+    sourceId: string;
+    /** Square's own anti-fraud signal from the SDK. Pass it through when present. */
+    verificationToken?: string;
+    reference: { paymentId: string };
+    note?: string;
+    paymentRow?: Record<string, unknown>;
+    /**
+     * Settle an EXISTING payments row instead of creating one.
+     *
+     * This is the emailed-link flow: the row was written when the link was
+     * generated, so a customer opening that link must pay THAT debt. Without it,
+     * paying an emailed link would leave the original row Pending forever and
+     * create a duplicate beside it — two rows for one collection, which is the
+     * duplicate-allocation bug in a different disguise.
+     */
+    existingPaymentRowId?: string;
+  },
+): Promise<ProviderOutcome> {
+  const mode = resolution.squareMode ?? "test";
+  const conn = await loadConnection(supabase, resolution.tenantId, mode);
+  if (!conn) return skip("square_not_connected", { tenantId: resolution.tenantId });
+
+  if (!spec.sourceId) return failed("square_card_token_missing", 400);
+
+  // NEVER CHARGE A CARD WE CANNOT RECORD.
+  //
+  // The link path refuses to hand back a payable URL without a payments row.
+  // This path had no equivalent guard, and the gap was not theoretical: a call
+  // with no paymentId and no resolvable customer charged £23.45 at Square and
+  // wrote nothing locally. Money left the customer's account and existed only in
+  // Square's dashboard.
+  //
+  // A card charge is worse than a link in this respect, because it is immediate:
+  // there is no window in which anyone could notice before the money moves.
+  if (!spec.existingPaymentRowId && !spec.paymentRow) {
+    return failed("square_card_payment_uncorrelatable", 400, {
+      hint:
+        "Refusing to charge a card that cannot be recorded against a payment row. " +
+        "Pass paymentId to settle an existing request, or enough detail to create one.",
+    });
+  }
+
+  const money = resolveMoneyCurrency(conn, spec.currency);
+  if (money.outcome) return money.outcome;
+  const currency = money.currency;
+
+  if (!Number.isFinite(spec.amountCents) || spec.amountCents <= 0) {
+    return failed("square_amount_invalid", 400, { amountCents: spec.amountCents });
+  }
+
+  // KEYED ON THE CARD TOKEN, not on (reference, amount).
+  //
+  // A hosted link is keyed on the debt, because two links for one debt is the
+  // duplicate-allocation bug. A card charge is the opposite: the operator has a
+  // customer in front of them, and taking £34 twice on the same rental is an
+  // ordinary thing to do — a second night, a second driver, an excess. Keying on
+  // (reference, amount) made the second one collide with the first and come back
+  // as "already paid", refusing a payment the operator had every right to take.
+  //
+  // The token is the correct identity. It is single-use, so the same token means
+  // one intended charge and Square itself rejects a replay; a NEW token means the
+  // card was entered again, which is a new intended charge. That still protects
+  // the real hazard — a double-submit of one form — while allowing repeat
+  // charges, and it needs no caller to remember to pass a scope.
+  const idempotencyKey = await squareIdempotencyKey(
+    `card-${spec.sourceId}-${currency}-${spec.amountCents}`,
+  );
+
+  let paymentRowId: string | null = spec.existingPaymentRowId ?? null;
+
+  // Refuse to charge a row that is no longer owed. Two people can open the same
+  // emailed link, and the second must be told it is settled rather than take a
+  // second payment for one debt.
+  if (paymentRowId) {
+    const { data: existingRow, error: readErr } = await supabase
+      .from("payments")
+      .select("id, status, square_payment_id")
+      .eq("id", paymentRowId)
+      .maybeSingle();
+    if (readErr || !existingRow) {
+      return failed("square_payment_row_not_found", 404, { paymentRowId });
+    }
+    if (existingRow.square_payment_id || (existingRow.status && existingRow.status !== "Pending")) {
+      return failed("square_payment_already_settled", 409, {
+        paymentRowId,
+        status: existingRow.status,
+        hint: "This payment has already been made.",
+      });
+    }
+  }
+
+  if (!paymentRowId && spec.paymentRow) {
+    const { data: inserted, error: insertErr } = await supabase
+      .from("payments")
+      .insert({
+        ...spec.paymentRow,
+        payment_provider: "square",
+        status: "Pending",
+        square_idempotency_key: idempotencyKey,
+      })
+      .select("id")
+      .single();
+
+    if (insertErr) {
+      if (insertErr.code === PG_UNIQUE_VIOLATION) {
+        const { data: existing } = await supabase
+          .from("payments")
+          .select("id, status, square_payment_id")
+          .eq("square_idempotency_key", idempotencyKey)
+          .maybeSingle();
+        // Already charged. Returning success here is correct and important: a
+        // double-submit must not produce a second charge, and must not report a
+        // failure for money that did arrive.
+        if (existing?.square_payment_id) {
+          return servedBySquare({
+            paymentId: String(existing.id),
+            provider: "square",
+            squarePaymentId: existing.square_payment_id,
+            status: existing.status,
+            currency,
+            amountCents: spec.amountCents,
+            reused: true,
+          });
+        }
+        if (existing?.id) paymentRowId = String(existing.id);
+        else return failed("square_payment_row_conflict_unresolvable", 500);
+      } else {
+        return failed("square_payment_row_insert_failed", 500, { detail: insertErr.message });
+      }
+    } else {
+      paymentRowId = String(inserted!.id);
+    }
+  }
+
+  try {
+    const res = await squareFetch<{ payment?: Record<string, unknown> }>({
+      mode,
+      accessToken: conn.accessToken,
+      method: "POST",
+      path: "/v2/payments",
+      idempotencyKey,
+      body: {
+        source_id: spec.sourceId,
+        ...(spec.verificationToken ? { verification_token: spec.verificationToken } : {}),
+        amount_money: { amount: spec.amountCents, currency },
+        location_id: conn.locationId,
+        autocomplete: true,
+        reference_id: (paymentRowId ?? spec.reference.paymentId).slice(0, 40),
+        note: buildSquarePaymentNote(paymentRowId ?? spec.reference.paymentId),
+      },
+    });
+
+    const payment = res.payment ?? {};
+    const internal = mapSquarePaymentStatus(String(payment.status ?? ""));
+
+    // Write the handles back immediately. Unlike the link path we already know
+    // the payment id, so there is no window where the row is uncorrelatable.
+    if (paymentRowId) {
+      const update: Record<string, unknown> = {
+        square_payment_id: payment.id ?? null,
+        square_order_id: payment.order_id ?? null,
+        status: internal,
+        updated_at: new Date().toISOString(),
+      };
+      if (internal === "Completed") {
+        update.paid_at = payment.updated_at ?? payment.created_at ?? new Date().toISOString();
+      }
+      const { error: handleErr } = await supabase.from("payments").update(update).eq("id", paymentRowId);
+      if (handleErr) {
+        // The money HAS moved. Never report failure — that would invite a second
+        // charge. Report success and shout, so reconciliation can find it.
+        console.error("[square-adapter] card payment taken but row update failed:", handleErr.message, payment.id);
+      }
+    }
+
+    return servedBySquare({
+      paymentId: paymentRowId,
+      provider: "square",
+      squarePaymentId: payment.id,
+      squareOrderId: payment.order_id ?? null,
+      status: internal,
+      currency,
+      amountCents: spec.amountCents,
+      receiptUrl: payment.receipt_url ?? null,
+    });
+  } catch (err) {
+    if (paymentRowId) {
+      await markSquareRowDead(supabase, paymentRowId);
+    }
+    if (err instanceof SquareError) {
+      return failed("square_card_payment_failed", err.httpStatus >= 500 ? 502 : 400, {
+        category: err.category,
+        code: err.code,
+        detail: err.message,
       });
     }
     throw err;

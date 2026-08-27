@@ -72,25 +72,28 @@ describe("the payments row is as unique as the Square link", () => {
 describe("a dead attempt releases its key", () => {
   const body = adapter();
 
+  // The three cleanups now share one helper. These assert the CALLERS reach it;
+  // what the helper actually writes is asserted in square-payment-correlation,
+  // including that the status is one payments_status_check permits — which it
+  // was not, and the failure was silent.
   it("clears the key when the Square call throws", () => {
-    // Otherwise the unique index adopts this failed row on the operator's next
-    // attempt, and the "already settled" guard refuses a checkout that never
-    // happened — turning a transient network error into a permanent block.
     const c = body.slice(body.indexOf("} catch (err)"));
-    expect(c.slice(0, 900)).toMatch(/square_idempotency_key:\s*null/);
-    expect(c.slice(0, 900)).toMatch(/status:\s*["']Failed["']/);
+    expect(c.slice(0, 900)).toMatch(/markSquareRowDead\(supabase, paymentRowId\)/);
   });
 
   it("clears the key when the handles cannot be written back", () => {
     const back = body.slice(body.indexOf("square_handle_persist_failed") - 2200);
-    expect(back).toMatch(/square_idempotency_key:\s*null/);
+    expect(back).toMatch(/markSquareRowDead\(supabase, paymentRowId\)/);
   });
 
-  it("only ever releases a row still Pending", () => {
-    // A concurrent webhook may have completed it in between. Overwriting that
-    // would erase a real collection.
-    const c = body.slice(body.indexOf("} catch (err)"));
-    expect(c.slice(0, 900)).toMatch(/\.eq\(["']status["'],\s*["']Pending["']\)/);
+  it("clears the key on every cleanup path, not just one", () => {
+    // Three sites: the create threw, the handle write-back failed, and the card
+    // charge threw. All three must release the key or the next attempt at that
+    // collection adopts a dead row.
+    const whole = adapter();
+    const calls = whole.match(/markSquareRowDead\(supabase, paymentRowId\)/g) ?? [];
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    expect(whole).toMatch(/square_idempotency_key:\s*null/);
   });
 });
 

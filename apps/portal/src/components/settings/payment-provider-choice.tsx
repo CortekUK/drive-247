@@ -188,6 +188,30 @@ export function PaymentProviderChoice({ canEdit = true }: { canEdit?: boolean })
           payment_provider: choice,
           country,
           payment_provider_locked_at: new Date().toISOString(),
+          // ---- SQUARE INVARIANTS -------------------------------------------
+          //
+          // The admin's create-company path forces these four at birth. This
+          // path did not, and the gap was not theoretical: a tenant who switched
+          // here kept deposit_charge_enabled = false, which means "hold the
+          // deposit as an authorisation". Square cannot hold. So
+          // create-checkout-session computed requiresStoredCredential = true and
+          // returned 409 — "this payment needs a saved card" — on EVERY booking,
+          // for a tenant that had done nothing wrong.
+          //
+          // Square cannot vault a card from a hosted payment link, so anything
+          // that charges later with nobody present is switched off, and the
+          // deposit becomes an ordinary charge that is refunded afterwards.
+          //
+          // Applied only when choosing Square: a tenant confirming Stripe keeps
+          // whatever they already had.
+          ...(choice === "square"
+            ? {
+                deposit_charge_enabled: true,
+                installments_enabled: false,
+                auto_extend_enabled: false,
+                payg_auto_reminders_enabled: false,
+              }
+            : {}),
         })
         .eq("id", tenant.id);
 

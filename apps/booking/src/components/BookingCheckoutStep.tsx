@@ -17,6 +17,7 @@ import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { securedByLine } from "@/lib/payment-provider";
 import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
@@ -560,7 +561,18 @@ export default function BookingCheckoutStep({
             total: getPayableAmount(),
           });
         }
-        window.location.href = data.url;
+        // WHERE THE RENTER GOES.
+        //
+        // Stripe: its hosted Checkout, unchanged. Square: OUR /pay/{id} page,
+        // because Square's hosted link has no card fields in sandbox (it
+        // 303-redirects to a simulator) and in production leaves the renter on a
+        // Square-branded page. Ours renders Square's Web Payments SDK card
+        // fields inside this business's own site, so the card still never
+        // touches our servers and the journey is identical in both modes.
+        window.location.href =
+          tenant?.payment_provider === 'square' && data.paymentId
+            ? `/checkout/${data.paymentId}`
+            : data.url;
       } else {
         throw new Error('Failed to create checkout session');
       }
@@ -2257,7 +2269,7 @@ export default function BookingCheckoutStep({
                   ) : (
                     <Shield className="w-4 h-4" />
                   )}
-                  <span>Secured by Stripe. Card details never stored.</span>
+                  <span>{securedByLine(tenant?.payment_provider)}</span>
                 </div>
               )}
             </div>
