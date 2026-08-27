@@ -165,6 +165,26 @@ export function squareBaseUrl(mode: SquareMode): string {
     : "https://connect.squareupsandbox.com";
 }
 
+/**
+ * Where the OPERATOR'S BROWSER goes to approve the connection.
+ *
+ * NOT squareBaseUrl(). In sandbox the two genuinely differ, and using the API
+ * host produced a blank white page: connect.squareupsandbox.com/oauth2/authorize
+ * is an API route, so it serves no consent UI and no error either — the operator
+ * simply sees nothing and has no idea the request was malformed.
+ *
+ * Production is the exception, not the rule: there the consent screen really is
+ * served from connect.squareup.com, so only sandbox needs the app. host.
+ *
+ * The token exchange (/oauth2/token) stays on squareBaseUrl in BOTH modes — it
+ * is a server-to-server API call, and moving it here would break it.
+ */
+export function squareAuthorizeBaseUrl(mode: SquareMode): string {
+  return mode === "live"
+    ? "https://connect.squareup.com"
+    : "https://app.squareupsandbox.com";
+}
+
 // ---------------------------------------------------------------------------
 // Idempotency
 // ---------------------------------------------------------------------------

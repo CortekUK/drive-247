@@ -15,7 +15,7 @@
  */
 
 import { SquareMode } from "./types.ts";
-import { squareBaseUrl, squareFetch, SQUARE_VERSION } from "./square-client.ts";
+import { squareBaseUrl, squareAuthorizeBaseUrl, squareFetch, SQUARE_VERSION } from "./square-client.ts";
 
 /**
  * The pinned OAuth scope list.
@@ -57,7 +57,10 @@ export function squareAuthorizeUrl(opts: {
   scopes?: readonly string[];
 }): string {
   const scopes = (opts.scopes ?? SQUARE_OAUTH_SCOPES).join("+");
-  const base = squareBaseUrl(opts.mode);
+  // The AUTHORIZE host, not the API host. See squareAuthorizeBaseUrl: the two
+  // differ in sandbox, and the API host renders a blank page rather than an
+  // error, so getting this wrong is silent.
+  const base = squareAuthorizeBaseUrl(opts.mode);
   // session=false forces a fresh sign-in. Square does NOT support it in sandbox.
   const session = opts.mode === "live" ? "&session=false" : "";
   return `${base}/oauth2/authorize?client_id=${encodeURIComponent(opts.applicationId)}` +

@@ -763,7 +763,15 @@ function ConnectedDetail({
         sublabel="Square requires a location on every payment link, and bills in that location's currency."
       >
         <div className="space-y-1">
-          <p className="flex items-center gap-2 text-sm text-foreground">
+          {/*
+            A <div>, not a <p>. <Badge> renders a <div>, and the HTML parser
+            auto-closes a <p> the moment a block element opens inside it — so the
+            server markup and the client tree disagreed and React reported a
+            hydration error on every render of a connected Square account.
+            Nothing else here is a paragraph of prose, so div is also the honest
+            element.
+          */}
+          <div className="flex items-center gap-2 text-sm text-foreground">
             <MapPin className="h-4 w-4 text-muted-foreground" />
             {connection.location_id ? (
               <span className="font-mono text-xs">{connection.location_id}</span>
@@ -775,7 +783,7 @@ function ConnectedDetail({
                 {connection.location_currency.toUpperCase()}
               </Badge>
             ) : null}
-          </p>
+          </div>
           {currencyMismatch ? (
             <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               Your Square location bills in {connection.location_currency?.toUpperCase()} but this

@@ -153,7 +153,18 @@ function safeOrigin(raw: string | null | undefined): string | null {
     const url = new URL(raw);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
     const host = url.hostname.toLowerCase();
-    if (host === "localhost" || host === "127.0.0.1") return url.origin;
+    // `.localhost` as a SUFFIX, not just the bare host.
+    //
+    // Both apps resolve their tenant from a subdomain, so local development runs
+    // on haris-square.portal.localhost:3001 — which is not equal to "localhost"
+    // and does not end in any production suffix. The exact-match test refused it,
+    // so a developer completing the real consent screen was bounced with
+    // "refusing to redirect to non-allowlisted origin" after Square had already
+    // granted the token. .localhost is reserved by RFC 6761 and never resolves
+    // off-machine, so this widens nothing that is reachable from the internet.
+    if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
+      return url.origin;
+    }
     if (ALLOWED_ORIGIN_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`))) return url.origin;
     console.warn(`${LOG} refusing to redirect to non-allowlisted origin host=${host}`);
     return null;

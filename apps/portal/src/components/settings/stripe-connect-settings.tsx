@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseUntyped } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Link2, CheckCircle2, AlertCircle, ExternalLink, Loader2, RefreshCw, Cop
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { SquareSettings } from '@/components/settings/square-settings';
+import { PaymentProviderChoice } from '@/components/settings/payment-provider-choice';
 import { OwnStripeSettings } from './own-stripe-settings';
 
 interface StripeConnectStatus {
@@ -38,6 +39,33 @@ export function StripeConnectSettings() {
 
       if (tenantError) throw tenantError;
       return tenant;
+    },
+    enabled: !!tenantContext?.id,
+  });
+
+  /**
+   * Has this tenant settled which processor takes their money?
+   *
+   * Read on its own, through supabaseUntyped, DELIBERATELY. The generated
+   * Supabase types lag the schema until `gen types` is re-run, and the typed
+   * client rejects an entire select containing one unknown column — folding
+   * payment_provider_locked_at into the query above turned a new feature into
+   * 22 type errors across this file's existing Stripe code.
+   *
+   * Undefined while loading, and undefined on failure, so the gate below can
+   * test for an explicit `false`: an unreadable answer must fall through to
+   * today's behaviour rather than re-opening a decision already made.
+   */
+  const { data: providerLocked } = useQuery({
+    queryKey: ['tenant-provider-locked', tenantContext?.id],
+    queryFn: async (): Promise<boolean | undefined> => {
+      const { data, error } = await supabaseUntyped
+        .from('tenants')
+        .select('payment_provider_locked_at')
+        .eq('id', tenantContext!.id)
+        .single();
+      if (error) return undefined;
+      return data?.payment_provider_locked_at != null;
     },
     enabled: !!tenantContext?.id,
   });
@@ -115,6 +143,19 @@ export function StripeConnectSettings() {
   // have before the column existed — and an undefined value (an older cached
   // query result) also falls through to Stripe rather than showing a Square
   // panel to a Stripe operator.
+  // UNDECIDED TENANTS CHOOSE FIRST.
+  //
+  // Placed ahead of the Square branch, and ahead of every Stripe return below,
+  // because connecting an account before the rail is settled is wasted work:
+  // the tenant would onboard with Stripe and then discover they meant Square.
+  //
+  // The test is `=== null` and not falsy: `undefined` means the column was not
+  // in the select (an older cached query result), and that must fall through to
+  // today's behaviour rather than re-opening a decision the tenant already made.
+  if (providerLocked === false) {
+    return <PaymentProviderChoice />;
+  }
+
   if (tenantStatus?.payment_provider === 'square') {
     return <SquareSettings />;
   }
