@@ -289,11 +289,11 @@ export const EnhancedAssignPlateDialog = ({
                       Proceeding will unassign the current plate and assign {plate.plate_number}.
                     </p>
                     <div className="mt-2 text-xs text-amber-600">
-                      ✓ Current plate will be set to "Received" status
+                      Current plate will be set to "Received" status
                       <br />
-                      ✓ New plate will be set to "Assigned" status
+                      New plate will be set to "Assigned" status
                       <br />
-                      ✓ Both changes will be logged in vehicle history
+                      Both changes will be logged in vehicle history
                     </div>
                   </div>
                 </div>

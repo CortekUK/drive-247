@@ -185,12 +185,12 @@ function EmptyState({
   appName?: string | null;
 }) {
   const suggestions = [
-    { icon: '🚗', label: "Fleet overview", query: "Give me a fleet overview with a chart" },
-    { icon: '📊', label: "Revenue breakdown", query: "Show me revenue breakdown by category" },
-    { icon: '📋', label: "Active rentals", query: "How many active rentals do we have?" },
-    { icon: '💰', label: "Pending payments", query: "What's our pending payment total?" },
-    { icon: '🔧', label: "Vehicles by make", query: "Show me vehicles grouped by make" },
-    { icon: '⚠️', label: "Unpaid fines", query: "How many unpaid fines do we have?" },
+    { icon: '', label: "Fleet overview", query: "Give me a fleet overview with a chart" },
+    { icon: '', label: "Revenue breakdown", query: "Show me revenue breakdown by category" },
+    { icon: '', label: "Active rentals", query: "How many active rentals do we have?" },
+    { icon: '', label: "Pending payments", query: "What's our pending payment total?" },
+    { icon: '', label: "Vehicles by make", query: "Show me vehicles grouped by make" },
+    { icon: '', label: "Unpaid fines", query: "How many unpaid fines do we have?" },
   ];
 
   return (

@@ -765,7 +765,7 @@ export function PlateRedactionDialog({
                       className="ml-0.5 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
                       aria-label={`Remove area ${index + 1}`}
                     >
-                      ✕
+                     
                     </button>
                   </span>
                 ))

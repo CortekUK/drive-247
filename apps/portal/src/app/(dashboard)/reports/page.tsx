@@ -422,7 +422,7 @@ const Reports = () => {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
-              📊
+             
             </div>
             <div>
               <div className="text-sm font-semibold text-indigo-900">Vehicle Profitability →</div>

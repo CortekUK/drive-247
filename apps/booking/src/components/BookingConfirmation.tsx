@@ -80,9 +80,9 @@ const BookingConfirmation = ({ bookingDetails, onClose }: BookingConfirmationPro
       </div>
 
       <div className="space-y-3 text-sm text-muted-foreground">
-        <p>✓ A confirmation email has been sent to {bookingDetails.customerEmail}</p>
-        <p>✓ Our team will contact you shortly to confirm the details</p>
-        <p>✓ You will receive payment instructions before your journey</p>
+        <p>A confirmation email has been sent to {bookingDetails.customerEmail}</p>
+        <p>Our team will contact you shortly to confirm the details</p>
+        <p>You will receive payment instructions before your journey</p>
       </div>
 
       <Button

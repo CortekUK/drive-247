@@ -590,14 +590,14 @@ export function ExtensionRequestDialog({
       // is on the balance and correctly linked; only the customer's way to pay
       // is missing, and that is recoverable by resending once Stripe is healthy.
       const paymentLinkWarning = checkoutError || (extensionTotalAmount > 0 && !checkoutUrl)
-        ? ` ⚠ No payment link was created${checkoutError ? ` (${checkoutError})` : ''} — the charge is on the balance but the customer cannot pay it yet. Check the Stripe connection, then resend the link from the rental page.`
+        ? ` No payment link was created${checkoutError ? ` (${checkoutError})` : ''} — the charge is on the balance but the customer cannot pay it yet. Check the Stripe connection, then resend the link from the rental page.`
         : '';
 
       toast({
         title: paymentLinkWarning
           ? 'Extension Approved — NO PAYMENT LINK'
           : insuranceWarning ? 'Extension Approved — WITHOUT Insurance' : 'Extension Approved',
-        description: `Rental extended to ${format(requestedEndDate, 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencySymbol}${chargedTotal.toFixed(2)} created${paymentLinkWarning ? '' : ' with payment link sent to customer'}.` : ' Customer has been notified.'} An extension agreement has been sent for signing.${insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}${paymentLinkWarning}`,
+        description: `Rental extended to ${format(requestedEndDate, 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencySymbol}${chargedTotal.toFixed(2)} created${paymentLinkWarning ? '' : ' with payment link sent to customer'}.` : ' Customer has been notified.'} An extension agreement has been sent for signing.${insuranceWarning ? ` Insurance: ${insuranceWarning}` : ''}${paymentLinkWarning}`,
         variant: insuranceWarning || paymentLinkWarning ? 'destructive' : 'default',
       });
 

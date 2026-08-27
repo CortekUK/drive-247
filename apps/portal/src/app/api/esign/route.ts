@@ -667,16 +667,16 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
  * Sanitize text for pdf-lib's StandardFonts (WinAnsi/CP1252 only).
  * Replaces common Unicode chars with WinAnsi-compatible equivalents and
  * substitutes anything still outside WinAnsi with '?' to avoid encoding errors
- * like: WinAnsi cannot encode "☐" (0x2610).
+ * like: WinAnsi cannot encode "" (0x2610).
  */
 const WINANSI_REPLACEMENTS: Record<string, string> = {
-    '☐': '[ ]',  // ☐ ballot box
-    '☑': '[x]',  // ☑ ballot box with check
-    '☒': '[x]',  // ☒ ballot box with x
-    '✓': 'Y',    // ✓ check mark
-    '✔': 'Y',    // ✔ heavy check mark
-    '✗': 'X',    // ✗ ballot x
-    '✘': 'X',    // ✘ heavy ballot x
+    '': '[ ]',  // ballot box
+    '': '[x]',  // ballot box with check
+    '': '[x]',  // ballot box with x
+    '': 'Y',    // check mark
+    '': 'Y',    // heavy check mark
+    '': 'X',    // ballot x
+    '': 'X',    // heavy ballot x
     '→': '->',   // → rightwards arrow
     '←': '<-',   // ← leftwards arrow
     '⇒': '=>',   // ⇒

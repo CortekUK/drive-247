@@ -122,7 +122,7 @@ export default function DevJumpPanel() {
 
       if (vehicles && vehicles.length > 0) {
         const vehicle = vehicles[0]
-        console.log('🔧 DEV: Selected vehicle:', vehicle.id, vehicle.make, vehicle.model)
+        console.log('DEV: Selected vehicle:', vehicle.id, vehicle.make, vehicle.model)
         return vehicles[0].id
       }
       return null
@@ -135,7 +135,7 @@ export default function DevJumpPanel() {
   // Upload sample insurance to Supabase storage and create document record
   const uploadSampleInsurance = async (): Promise<{ documentId: string; fileUrl: string } | null> => {
     setIsUploadingInsurance(true)
-    console.log('🔧 DEV: Starting sample insurance upload to Supabase...')
+    console.log('DEV: Starting sample insurance upload to Supabase...')
 
     try {
       // Fetch the sample insurance image from public folder
@@ -162,7 +162,7 @@ export default function DevJumpPanel() {
         throw new Error(`Storage upload failed: ${uploadError.message}`)
       }
 
-      console.log('🔧 DEV: File uploaded to storage:', filePath)
+      console.log('DEV: File uploaded to storage:', filePath)
 
       // Create a temporary customer record
       const uniqueEmail = `dev-${Date.now()}-${Math.random().toString(36).substring(7)}@temp.booking`
@@ -204,7 +204,7 @@ export default function DevJumpPanel() {
         throw new Error(`Failed to create document: ${docError.message}`)
       }
 
-      console.log('🔧 DEV: Document record created:', docData.id)
+      console.log('DEV: Document record created:', docData.id)
 
       // Store in localStorage for legacy cleanup logic (temp customer removal)
       const tempDocInfo = {
@@ -223,11 +223,11 @@ export default function DevJumpPanel() {
         uploaded_at: new Date().toISOString()
       })
 
-      toast.success('✓ Sample insurance uploaded & verified!')
+      toast.success('Sample insurance uploaded & verified!')
       return { documentId: docData.id, fileUrl: filePath }
 
     } catch (error: any) {
-      console.error('🔧 DEV: Failed to upload sample insurance:', error)
+      console.error('DEV: Failed to upload sample insurance:', error)
       toast.error(`Insurance upload failed: ${error.message}`)
       return null
     } finally {
@@ -282,7 +282,7 @@ export default function DevJumpPanel() {
       })
 
       window.dispatchEvent(event)
-      console.log(`🔧 DEV: Jumping to step ${step.number}`, { vehicleId, insuranceUploaded })
+      console.log(`DEV: Jumping to step ${step.number}`, { vehicleId, insuranceUploaded })
 
       setIsMinimized(true)
     } finally {
@@ -315,7 +315,7 @@ export default function DevJumpPanel() {
     }))
 
     toast.success('Insurance marked as verified (no upload)')
-    console.log('🔧 DEV: Insurance marked as verified')
+    console.log('DEV: Insurance marked as verified')
   }
 
   const clearAllData = () => {

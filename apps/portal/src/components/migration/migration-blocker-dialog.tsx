@@ -174,13 +174,13 @@ export function MigrationBlockerDialog() {
               <CheckCircle2 className="h-8 w-8 text-emerald-600" aria-hidden="true" />
             </div>
             <DialogTitle className="text-xl font-semibold text-slate-900">
-              You&apos;re all set 🎉
+              You&apos;re all set
             </DialogTitle>
             <DialogDescription className="mt-2 text-sm leading-relaxed text-slate-600">
               Your Stripe account is connected and your payment details are confirmed.
             </DialogDescription>
             <p className="mt-5 w-full rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-              🎁 100 credits have been added to your balance.
+              100 credits have been added to your balance.
             </p>
           </div>
         </DialogContent>
@@ -259,7 +259,7 @@ export function MigrationBlockerDialog() {
       {/* Reward + dismiss on one line — keeps everything above the fold */}
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="rounded-2xl bg-amber-50 px-4 py-2.5 text-[13px] font-medium leading-snug text-amber-900">
-          🎁 Complete both and we&apos;ll add{" "}
+          Complete both and we&apos;ll add{" "}
           <span className="font-semibold">100 free credits</span> to your account — on us.
         </p>
         {!isHard && (

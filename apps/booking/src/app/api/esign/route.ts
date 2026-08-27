@@ -24,11 +24,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
  * Sanitize text for pdf-lib's StandardFonts (WinAnsi/CP1252 only).
  * Replaces common Unicode chars with WinAnsi-compatible equivalents and
  * substitutes anything still outside WinAnsi with '?' to avoid encoding errors
- * like: WinAnsi cannot encode "☐" (0x2610).
+ * like: WinAnsi cannot encode "" (0x2610).
  */
 const WINANSI_REPLACEMENTS: Record<string, string> = {
-    '☐': '[ ]', '☑': '[x]', '☒': '[x]',
-    '✓': 'Y', '✔': 'Y', '✗': 'X', '✘': 'X',
+    '': '[ ]', '': '[x]', '': '[x]',
+    '': 'Y', '': 'Y', '': 'X', '': 'X',
     '→': '->', '←': '<-', '⇒': '=>',
     ' ': ' ',
 };

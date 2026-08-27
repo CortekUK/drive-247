@@ -37,7 +37,7 @@ export function GoLiveBanner() {
             </div>
             <div>
               <p className="font-semibold text-base">
-                You're Live! <span aria-hidden>🎉</span>
+                You're Live! <span aria-hidden></span>
               </p>
               <p className="text-sm text-muted-foreground">
                 Your Stripe Connect and Bonzah Insurance are now in live mode.

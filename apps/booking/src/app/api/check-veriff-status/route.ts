@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Veriff API key not configured' }, { status: 500 });
         }
 
-        console.log('🔍 Checking Veriff session status for:', sessionId);
+        console.log('Checking Veriff session status for:', sessionId);
 
         // Try different Veriff API endpoints
         const headers: Record<string, string> = {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 
             if (attemptsResponse.ok) {
                 const attemptsData = await attemptsResponse.json();
-                console.log('📋 Veriff attempts response:', JSON.stringify(attemptsData, null, 2));
+                console.log('Veriff attempts response:', JSON.stringify(attemptsData, null, 2));
 
                 if (attemptsData.verifications && attemptsData.verifications.length > 0) {
                     const latestVerification = attemptsData.verifications[0];
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
                     };
                 }
             } else {
-                console.log('❌ Attempts endpoint failed:', attemptsResponse.status);
+                console.log('Attempts endpoint failed:', attemptsResponse.status);
             }
         } catch (err) {
             console.error('Error fetching attempts:', err);
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
 
                 if (decisionResponse.ok) {
                     const decisionData = await decisionResponse.json();
-                    console.log('📋 Veriff decision response:', JSON.stringify(decisionData, null, 2));
+                    console.log('Veriff decision response:', JSON.stringify(decisionData, null, 2));
 
                     if (decisionData.verification) {
                         statusCode = decisionData.verification.code || 9000;
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
                         };
                     }
                 } else {
-                    console.log('❌ Decision endpoint failed:', decisionResponse.status);
+                    console.log('Decision endpoint failed:', decisionResponse.status);
                 }
             } catch (err) {
                 console.error('Error fetching decision:', err);
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
             review_result = 'RETRY';
         }
 
-        console.log('📋 Final result - code:', statusCode, 'decision:', decision, 'review_result:', review_result);
+        console.log('Final result - code:', statusCode, 'decision:', decision, 'review_result:', review_result);
 
         return NextResponse.json({
             ok: true,

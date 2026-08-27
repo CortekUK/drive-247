@@ -679,7 +679,7 @@ export default function BookingCheckoutStep({
 
   const handleSendDocuSign = async () => {
     if (!createdRentalData) {
-      console.error('❌ No rental data available');
+      console.error('No rental data available');
       toast.error("Rental data not found. Please try again.");
       return;
     }
@@ -690,7 +690,7 @@ export default function BookingCheckoutStep({
       // Skip agreement sending for enquiry-based tenants (agreement will be sent later by admin)
       if (!isEnquiry) {
         console.log('═════════════════════════════════════════════════════════');
-        console.log('📄 CREATING DOCUSIGN ENVELOPE (via API route)');
+        console.log('CREATING DOCUSIGN ENVELOPE (via API route)');
         console.log('═════════════════════════════════════════════════════════');
         console.log('Rental ID:', createdRentalData.rental.id);
         console.log('Customer ID:', createdRentalData.customer.id);
@@ -714,7 +714,7 @@ export default function BookingCheckoutStep({
         const error = response.ok ? null : data;
 
         console.log('═════════════════════════════════════════════════════════');
-        console.log('📨 DOCUSIGN RESPONSE');
+        console.log('DOCUSIGN RESPONSE');
         console.log('═════════════════════════════════════════════════════════');
         console.log('Error:', error);
         console.log('Data:', JSON.stringify(data, null, 2));
@@ -730,7 +730,7 @@ export default function BookingCheckoutStep({
           toast.error(data?.error || "Agreement failed to send. Will be sent later.");
         }
       } else {
-        console.log('📋 Enquiry-based tenant — skipping agreement, will be sent by admin later');
+        console.log('Enquiry-based tenant — skipping agreement, will be sent by admin later');
       }
 
       // Proceed based on payable amount
@@ -741,7 +741,7 @@ export default function BookingCheckoutStep({
 
         // For enquiry tenants with no security deposit, skip payment entirely
         if (isEnquiry && payableAmount === 0) {
-          console.log('📋 Enquiry booking with no deposit - redirecting to enquiry submitted page');
+          console.log('Enquiry booking with no deposit - redirecting to enquiry submitted page');
           if (typeof window !== 'undefined' && (window as any).gtag) {
             (window as any).gtag('event', 'enquiry_submitted', {
               rental_id: createdRentalData.rental.id,
@@ -754,14 +754,14 @@ export default function BookingCheckoutStep({
 
         // Route to installment checkout if an installment plan is selected
         if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
-          console.log('💳 Proceeding to installment checkout');
+          console.log('Proceeding to installment checkout');
           redirectToInstallmentCheckout();
           return;
         }
 
         // Proceed to payment (either full amount or deposit only)
         const bookingMode = await getBookingMode();
-        console.log('💳 Proceeding to payment, mode:', bookingMode, 'amount:', payableAmount);
+        console.log('Proceeding to payment, mode:', bookingMode, 'amount:', payableAmount);
         if (bookingMode === 'manual') {
           redirectToPreAuthPayment();
         } else {
@@ -779,7 +779,7 @@ export default function BookingCheckoutStep({
 
         // For enquiry tenants with no security deposit, skip payment entirely
         if (isEnquiry && payableAmount === 0) {
-          console.log('📋 Enquiry booking with no deposit - redirecting to enquiry submitted page');
+          console.log('Enquiry booking with no deposit - redirecting to enquiry submitted page');
           window.location.href = `/booking-enquiry-submitted?rental_id=${createdRentalData.rental.id}`;
           return;
         }
@@ -813,12 +813,12 @@ export default function BookingCheckoutStep({
     setCheckoutProgress(1); // Step 1: Verifying customer details
 
     // DEBUG: Check if verificationSessionId is present
-    console.log('🔍 Checkout formData:', formData);
-    console.log('🔍 Verification Session ID:', formData.verificationSessionId);
+    console.log('Checkout formData:', formData);
+    console.log('Verification Session ID:', formData.verificationSessionId);
 
     try {
       // Step 1: Find existing customer by email for this tenant first, then globally
-      console.log('📝 Checking for existing customer by email...');
+      console.log('Checking for existing customer by email...');
 
       // Helper for empty `{}` errors that supabase-js sometimes produces — surfaces
       // the actual message/code/details/hint so failures aren't silent.
@@ -863,7 +863,7 @@ export default function BookingCheckoutStep({
 
       if (existingCustomer) {
         // Customer exists - update their details and optionally assign to tenant
-        console.log('👤 Found existing customer, updating...', existingCustomer.id);
+        console.log('Found existing customer, updating...', existingCustomer.id);
 
         const updateData: Record<string, unknown> = {
           name: formData.customerName,
@@ -890,13 +890,13 @@ export default function BookingCheckoutStep({
           .single();
 
         if (updateError) {
-          console.error('❌ Customer update error:', describeErr(updateError), updateError);
+          console.error('Customer update error:', describeErr(updateError), updateError);
           throw new Error(`Customer update failed: ${describeErr(updateError)}`);
         }
         customer = updatedCustomer;
       } else {
         // No existing customer - create new one
-        console.log('🆕 Creating new customer...');
+        console.log('Creating new customer...');
 
         const customerData: Record<string, unknown> = {
           name: formData.customerName,
@@ -938,11 +938,11 @@ export default function BookingCheckoutStep({
             if (refound) {
               customer = refound;
             } else {
-              console.error('❌ Customer create error (no recovery):', describeErr(createError), createError);
+              console.error('Customer create error (no recovery):', describeErr(createError), createError);
               throw new Error(`Customer create failed: ${describeErr(createError)}`);
             }
           } else {
-            console.error('❌ Customer create error:', describeErr(createError), createError);
+            console.error('Customer create error:', describeErr(createError), createError);
             throw new Error(`Customer create failed: ${describeErr(createError)}`);
           }
         } else {
@@ -950,12 +950,12 @@ export default function BookingCheckoutStep({
         }
       }
 
-      console.log('✅ Customer ready:', customer.id);
+      console.log('Customer ready:', customer.id);
 
       // Step 1.5: Link verification to customer if verification was completed
       if (formData.verificationSessionId) {
-        console.log('🔗 Linking verification to customer:', formData.verificationSessionId);
-        console.log('🔗 Customer ID to link:', customer.id);
+        console.log('Linking verification to customer:', formData.verificationSessionId);
+        console.log('Customer ID to link:', customer.id);
 
         // Query the verification record by session_id first (primary method)
         // If not found, fallback to querying by id for backward compatibility
@@ -977,10 +977,10 @@ export default function BookingCheckoutStep({
 
         if (sessionData) {
           verification = sessionData;
-          console.log('🔍 Found verification by session_id');
+          console.log('Found verification by session_id');
         } else {
           // Fallback: try querying by id (for older verifications without session_id)
-          console.log('🔍 No match by session_id, trying by id...');
+          console.log('No match by session_id, trying by id...');
           const { data: idData, error: idError } = await supabase
             .from('identity_verifications')
             .select('*')
@@ -989,17 +989,17 @@ export default function BookingCheckoutStep({
 
           if (idData) {
             verification = idData;
-            console.log('🔍 Found verification by id (fallback)');
+            console.log('Found verification by id (fallback)');
           } else {
             verificationQueryError = sessionError || idError;
           }
         }
 
-        console.log('🔍 Query result - verification:', verification);
-        console.log('🔍 Query result - error:', verificationQueryError);
+        console.log('Query result - verification:', verification);
+        console.log('Query result - error:', verificationQueryError);
 
         if (!verificationQueryError && verification) {
-          console.log('✅ Found verification record:', {
+          console.log('Found verification record:', {
             id: verification.id,
             session_id: verification.session_id,
             current_customer_id: verification.customer_id,
@@ -1018,14 +1018,14 @@ export default function BookingCheckoutStep({
             .eq('id', verification.id)
             .select();
 
-          console.log('📝 Update result - data:', updateResult);
-          console.log('📝 Update result - error:', verificationUpdateError);
+          console.log('Update result - data:', updateResult);
+          console.log('Update result - error:', verificationUpdateError);
 
           if (verificationUpdateError) {
-            console.error('❌ Failed to link verification to customer:', verificationUpdateError);
+            console.error('Failed to link verification to customer:', verificationUpdateError);
           } else {
-            console.log('✅ Successfully linked verification to customer');
-            console.log('✅ Updated verification record:', updateResult);
+            console.log('Successfully linked verification to customer');
+            console.log('Updated verification record:', updateResult);
 
             // Verify the update by querying again
             const { data: verifyUpdate } = await supabase
@@ -1034,7 +1034,7 @@ export default function BookingCheckoutStep({
               .eq('id', verification.id)
               .single();
 
-            console.log('🔍 Verification after update:', verifyUpdate);
+            console.log('Verification after update:', verifyUpdate);
 
             // Update customer's identity_verification_status based on verification result
             let verificationStatus = 'pending';
@@ -1052,22 +1052,22 @@ export default function BookingCheckoutStep({
             if (customerStatusError) {
               console.error('Failed to update customer verification status:', customerStatusError);
             } else {
-              console.log('✅ Updated customer verification status to:', verificationStatus);
+              console.log('Updated customer verification status to:', verificationStatus);
             }
           }
         } else {
-          console.log('❌ Verification not found or still pending');
+          console.log('Verification not found or still pending');
           console.log('Error details:', verificationQueryError);
         }
       } else {
-        console.log('⚠️ No verification session ID in formData');
+        console.log('No verification session ID in formData');
       }
 
       setCheckoutProgress(2); // Step 2: Securing your vehicle
 
       // Step 2: Get booking mode FIRST (needed for rental creation)
       const bookingMode = await getBookingMode();
-      console.log('📋 Booking mode:', bookingMode);
+      console.log('Booking mode:', bookingMode);
 
       // Step 3: Create rental in portal DB with Pending status
       const rentalPeriodType = calculateRentalPeriodType();
@@ -1214,14 +1214,14 @@ export default function BookingCheckoutStep({
       let createdBonzahPolicyId: string | null = null;
       let bonzahFailedNow = false;
       if (bonzahPremium > 0 && bonzahCoverage && tenant?.id) {
-        console.log('🛡️ Creating Bonzah insurance quote...');
+        console.log('Creating Bonzah insurance quote...');
         const quoteOutcome = await createBonzahQuote(rental.id, customer.id, tenant.id);
         createdBonzahPolicyId = quoteOutcome.policyId;
         bonzahFailedNow = quoteOutcome.failed;
         if (createdBonzahPolicyId) {
-          console.log('✅ Bonzah quote created:', createdBonzahPolicyId);
+          console.log('Bonzah quote created:', createdBonzahPolicyId);
         } else {
-          console.log('⚠️ Bonzah quote creation failed or skipped');
+          console.log('Bonzah quote creation failed or skipped');
         }
       }
       // State updates don't reach this closure — carry the outcome locally so
@@ -1267,18 +1267,18 @@ export default function BookingCheckoutStep({
         tenant_id: tenant?.id,
       });
 
-      console.log('✅ Invoice ready:', invoice.invoice_number);
+      console.log('Invoice ready:', invoice.invoice_number);
 
       // Step 5b: Generate charges split by category (uses invoice breakdown created above)
-      console.log('🔄 Generating category charges for rental:', rental.id);
+      console.log('Generating category charges for rental:', rental.id);
       const { error: chargeError } = await supabase.rpc("generate_first_charge_for_rental", {
         rental_id_param: rental.id
       });
 
       if (chargeError) {
-        console.error('⚠️ Failed to generate charges:', chargeError);
+        console.error('Failed to generate charges:', chargeError);
       } else {
-        console.log('✅ Category charges generated successfully');
+        console.log('Category charges generated successfully');
       }
       // Augment invoice with discount info (not stored in DB but needed for display)
       const invoiceWithDiscount = {
@@ -1292,7 +1292,7 @@ export default function BookingCheckoutStep({
 
       // Step 5: Store payment details in localStorage for success page
       // Payment record will be created ONLY after Stripe confirms successful payment
-      console.log('💳 Storing payment details for success page...');
+      console.log('Storing payment details for success page...');
       const paymentDetails = {
         amount: grandTotalCharged,
         customer_id: customer.id,
@@ -1302,7 +1302,7 @@ export default function BookingCheckoutStep({
         tenant_id: tenant?.id, // Include tenant_id for proper filtering in portal
       };
       localStorage.setItem('pendingPaymentDetails', JSON.stringify(paymentDetails));
-      console.log('✅ Payment details stored:', paymentDetails);
+      console.log('Payment details stored:', paymentDetails);
 
       // Store rental and invoice data for later use (including Bonzah policy ID)
       setCreatedRentalData({
@@ -1324,13 +1324,13 @@ export default function BookingCheckoutStep({
           ? JSON.parse(localStorage.getItem('pending_insurance_docs') || '[]')
           : [];
 
-        console.log('🔍 Found pending insurance docs:', pendingDocs.length, 'pending files:', pendingFiles.length);
+        console.log('Found pending insurance docs:', pendingDocs.length, 'pending files:', pendingFiles.length);
 
         // Handle old-style pending docs (already created in DB, need linking)
         if (pendingDocs.length > 0) {
           // Update each pending document with real customer_id and rental_id
           for (const doc of pendingDocs) {
-            console.log(`📎 Linking document ${doc.document_id} to customer ${customer.id} and rental ${rental.id}`);
+            console.log(`Linking document ${doc.document_id} to customer ${customer.id} and rental ${rental.id}`);
 
             const { error: linkError } = await supabase
               .from('customer_documents')
@@ -1341,9 +1341,9 @@ export default function BookingCheckoutStep({
               .eq('id', doc.document_id);
 
             if (linkError) {
-              console.warn(`⚠️ Could not link document ${doc.document_id}:`, linkError);
+              console.warn(`Could not link document ${doc.document_id}:`, linkError);
             } else {
-              console.log(`✅ Document ${doc.document_id} linked successfully`);
+              console.log(`Document ${doc.document_id} linked successfully`);
             }
 
             // Optionally delete the temp customer (cleanup)
@@ -1355,9 +1355,9 @@ export default function BookingCheckoutStep({
                 .like('email', 'pending-%@temp.booking')
                 .then(({ error }) => {
                   if (error) {
-                    console.warn('⚠️ Could not cleanup temp customer:', error);
+                    console.warn('Could not cleanup temp customer:', error);
                   } else {
-                    console.log('🧹 Temp customer cleaned up');
+                    console.log('Temp customer cleaned up');
                   }
                 });
             }
@@ -1365,7 +1365,7 @@ export default function BookingCheckoutStep({
 
           // Clear legacy pending docs from localStorage
           localStorage.removeItem('pending_insurance_docs');
-          console.log('✅ Legacy insurance documents linked to rental and cleaned up');
+          console.log('Legacy insurance documents linked to rental and cleaned up');
         }
 
         // Handle new-style pending files (only uploaded to storage, need DB insert)
@@ -1375,7 +1375,7 @@ export default function BookingCheckoutStep({
             new Map(pendingFiles.map((file: any) => [file.file_path, file])).values()
           ) as any[];
 
-          console.log(`📎 Processing ${uniqueFiles.length} unique insurance files`);
+          console.log(`Processing ${uniqueFiles.length} unique insurance files`);
 
           for (const fileInfo of uniqueFiles) {
             // Check if a document with the same filename already exists for this customer
@@ -1394,7 +1394,7 @@ export default function BookingCheckoutStep({
 
             if (existingDoc) {
               // Update existing document record (allows re-uploading same document)
-              console.log('📎 Updating existing document:', fileInfo.file_name);
+              console.log('Updating existing document:', fileInfo.file_name);
               const { data, error } = await supabase
                 .from('customer_documents')
                 .update({
@@ -1431,7 +1431,7 @@ export default function BookingCheckoutStep({
                 docInsertData.tenant_id = tenant.id;
               }
 
-              console.log('📎 Inserting document:', JSON.stringify(docInsertData));
+              console.log('Inserting document:', JSON.stringify(docInsertData));
 
               const { data, error } = await supabase
                 .from('customer_documents')
@@ -1443,9 +1443,9 @@ export default function BookingCheckoutStep({
             }
 
             if (docError) {
-              console.error('📎 Failed to link insurance document:', docError?.message || docError?.code || JSON.stringify(docError));
+              console.error('Failed to link insurance document:', docError?.message || docError?.code || JSON.stringify(docError));
             } else {
-              console.log('✅ Insurance document created/updated for customer:', customer.id);
+              console.log('Insurance document created/updated for customer:', customer.id);
 
               // Trigger AI scanning
               if (insertedDoc?.id) {
@@ -1455,37 +1455,37 @@ export default function BookingCheckoutStep({
                     fileUrl: insertedDoc.file_url
                   }
                 }).then(({ error }) => {
-                  if (error) console.error('📎 AI scan failed:', error);
-                }).catch(e => console.error('📎 AI scan error:', e));
+                  if (error) console.error('AI scan failed:', error);
+                }).catch(e => console.error('AI scan error:', e));
               }
             }
           }
 
           // Clear pending files from Zustand store
           clearPendingInsuranceFiles();
-          console.log('✅ Insurance files processed and cleaned up');
+          console.log('Insurance files processed and cleaned up');
         }
 
         // Handle reused existing document (selected from dropdown, not in pendingFiles)
         if (uploadedDocumentId && uploadedDocumentId !== 'pending' && pendingDocs.length === 0 && pendingFiles.length === 0) {
-          console.log(`📎 Linking reused existing document ${uploadedDocumentId} to rental ${rental.id}`);
+          console.log(`Linking reused existing document ${uploadedDocumentId} to rental ${rental.id}`);
           const { error: linkError } = await supabase
             .from('customer_documents')
             .update({ rental_id: rental.id })
             .eq('id', uploadedDocumentId);
 
           if (linkError) {
-            console.warn('⚠️ Could not link reused document:', linkError);
+            console.warn('Could not link reused document:', linkError);
           } else {
-            console.log('✅ Reused document linked to rental');
+            console.log('Reused document linked to rental');
           }
         }
 
         if (pendingDocs.length === 0 && pendingFiles.length === 0 && !uploadedDocumentId) {
-          console.log('ℹ️ No pending insurance documents to link');
+          console.log('ℹNo pending insurance documents to link');
         }
       } catch (linkErr) {
-        console.warn('⚠️ Error linking insurance documents:', linkErr);
+        console.warn('Error linking insurance documents:', linkErr);
       }
 
       // Handle gig driver data
@@ -1523,9 +1523,9 @@ export default function BookingCheckoutStep({
           }
 
           clearPendingGigDriverFiles();
-          console.log('✅ Gig driver data processed');
+          console.log('Gig driver data processed');
         } catch (gigErr) {
-          console.warn('⚠️ Error processing gig driver data:', gigErr);
+          console.warn('Error processing gig driver data:', gigErr);
         }
       }
 
@@ -1767,7 +1767,7 @@ export default function BookingCheckoutStep({
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-5 h-5 text-accent mt-0.5 flex items-center justify-center">
-                  <span className="text-sm">📞</span>
+                  <span className="text-sm"></span>
                 </div>
                 <div>
                   <p className="text-sm">{formData.customerPhone}</p>

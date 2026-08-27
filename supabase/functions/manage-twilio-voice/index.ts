@@ -112,6 +112,76 @@ async function createAccessToken(
   return `${signingInput}.${signature}`;
 }
 
+/**
+ * Twilio rejects an Access Token with AccessTokenInvalid (20101) when the API Key
+ * that signed it no longer exists — the signature cannot be validated against a
+ * deleted key. The tenant row keeps pointing at the dead SID, and `setup` refuses
+ * to re-run once voice is enabled, so without this the tenant is stuck permanently.
+ *
+ * Returns the credentials to sign with: the stored pair when it is still live, or a
+ * freshly minted pair (persisted) when the stored key is gone. A verification failure
+ * that is NOT a 404 (network blip, 5xx) falls through to the stored pair rather than
+ * churning a new key on every transient error.
+ */
+async function ensureLiveApiKey(
+  supabase: any,
+  tenantId: string,
+  accountSid: string,
+  authToken: string,
+  apiKeySid: string,
+  apiKeySecret: string
+): Promise<{ sid: string; secret: string }> {
+  const stored = { sid: apiKeySid, secret: apiKeySecret };
+
+  let keyExists: boolean;
+  try {
+    const probe = await fetch(
+      `${TWILIO_API_BASE}/Accounts/${accountSid}/Keys/${apiKeySid}.json`,
+      { headers: { 'Authorization': twilioAuth(accountSid, authToken) } }
+    );
+    if (probe.status === 404) {
+      keyExists = false;
+    } else if (probe.ok) {
+      return stored;
+    } else {
+      console.error(`[manage-twilio-voice] API Key probe failed (${probe.status}); using stored key`);
+      return stored;
+    }
+  } catch (err) {
+    console.error('[manage-twilio-voice] API Key probe error; using stored key:', err);
+    return stored;
+  }
+
+  if (keyExists) return stored;
+
+  console.log(`[manage-twilio-voice] API Key ${apiKeySid} no longer exists at Twilio; minting a replacement for tenant ${tenantId}`);
+  const fresh = await twilioFetch(
+    `${TWILIO_API_BASE}/Accounts/${accountSid}/Keys.json`,
+    accountSid,
+    authToken,
+    'POST',
+    { FriendlyName: 'Drive247Voice' }
+  );
+
+  if (!fresh?.sid || !fresh?.secret) {
+    throw new Error('Twilio did not return a usable API Key');
+  }
+
+  // Twilio returns the secret exactly once, at creation. If this write is lost the
+  // new key is unusable and unrecoverable, so a failure here must not be swallowed.
+  const { error: persistError } = await supabase
+    .from('tenants')
+    .update({ twilio_api_key_sid: fresh.sid, twilio_api_key_secret: fresh.secret })
+    .eq('id', tenantId);
+
+  if (persistError) {
+    console.error('[manage-twilio-voice] Failed to persist replacement API Key:', persistError);
+    throw new Error('Failed to persist replacement API Key');
+  }
+
+  return { sid: fresh.sid, secret: fresh.secret };
+}
+
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
@@ -287,10 +357,19 @@ Deno.serve(async (req) => {
 
         const identity = `tenant_${appUser.id}`;
 
+        const signingKey = await ensureLiveApiKey(
+          supabase,
+          tenantId,
+          tenant.twilio_account_sid,
+          tenant.twilio_auth_token,
+          tenant.twilio_api_key_sid,
+          tenant.twilio_api_key_secret
+        );
+
         const accessToken = await createAccessToken(
           tenant.twilio_account_sid,
-          tenant.twilio_api_key_sid,
-          tenant.twilio_api_key_secret,
+          signingKey.sid,
+          signingKey.secret,
           identity,
           tenant.twilio_twiml_app_sid,
           3600 // 1 hour

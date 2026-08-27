@@ -192,7 +192,7 @@ const EnhancedBookingWidget = () => {
         .maybeSingle();
 
       if (unlinkedVerification) {
-        console.log("✅ Auto-linked identity verification:", unlinkedVerification.id);
+        console.log("Auto-linked identity verification:", unlinkedVerification.id);
       }
     }
 
@@ -474,7 +474,7 @@ const EnhancedBookingWidget = () => {
                   {/* Selected Indicator */}
                   {selectedVehicle?.id === vehicle.id && (
                     <div className="flex items-center gap-2 text-accent font-medium text-xs">
-                      ✓ Selected
+                      Selected
                     </div>
                   )}
                 </div>

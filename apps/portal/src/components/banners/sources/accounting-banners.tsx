@@ -1,7 +1,7 @@
 /**
  * useAccountingBanners — the Xero / Zoho connection notice, as a stack source.
  *
- * WHY THIS EXISTS RATHER THAN AN ✕ BOLTED ONTO THE OLD COMPONENT
+ * WHY THIS EXISTS RATHER THAN AN BOLTED ONTO THE OLD COMPONENT
  * -------------------------------------------------------------
  * `dashboard/accounting-connection-expired-banner.tsx` renders itself directly
  * in the dashboard layout and has no dismissal — it even imports lucide's `X`
@@ -11,7 +11,7 @@
  * living beside the stack's: another localStorage key shape, another set of
  * rules about when a dismissed notice comes back, and a bar that sits outside
  * the queue and so cannot participate in the one-at-a-time slot. Moving the
- * notice into the stack instead gives it the ✕, the queue position and the
+ * notice into the stack instead gives it the, the queue position and the
  * per-tenant dismissal memory in one step, and leaves exactly one place where
  * "how do banners behave" is defined.
  *

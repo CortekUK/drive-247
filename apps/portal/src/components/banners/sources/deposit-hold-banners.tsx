@@ -613,7 +613,7 @@ export function useDepositHoldBanners(): AppBanner[] {
         ttlMs: SELF_RESOLVING_COHORTS.has(winner)
           ? Number.POSITIVE_INFINITY
           : 24 * 60 * 60 * 1000,
-        // A bare ✕ implies "handled". Wherever the alarm is coming back, say so
+        // A bare implies "handled". Wherever the alarm is coming back, say so
         // on the control itself — gated on the same cohort rule as the TTL above,
         // not on colour, so an amber-but-unresolved bar is labelled honestly too.
         ...(SELF_RESOLVING_COHORTS.has(winner)

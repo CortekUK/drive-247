@@ -363,7 +363,7 @@ export function OperatorPromptCard({ tenantId }: { tenantId: string }) {
               <div className="rounded-lg border p-3">2. Confirm your payment details</div>
             </div>
             <p className="rounded-lg bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-              🎁 Complete both and we&apos;ll add 100 free credits to your account — on us.
+              Complete both and we&apos;ll add 100 free credits to your account — on us.
             </p>
             {selected === 'hard' && (
               <p className="text-xs text-muted-foreground">

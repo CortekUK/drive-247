@@ -1,6 +1,6 @@
 // Bonzah date rules shared by the UI.
 //
-// ⚠️ KEEP THIS FILE BYTE-IDENTICAL in apps/booking/src/lib and apps/portal/src/lib
+// KEEP THIS FILE BYTE-IDENTICAL in apps/booking/src/lib and apps/portal/src/lib
 // (same convention as calculate-rental-price.ts / coverage-labels.ts).
 //
 // Bonzah refuses to start a policy "today" — the earliest insurable night

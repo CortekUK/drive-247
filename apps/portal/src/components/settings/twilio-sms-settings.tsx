@@ -358,7 +358,7 @@ export function TwilioSmsSettings() {
                           your home base.
                         </Bullet>
                       </ul>
-                      <Tip icon="💰">
+                      <Tip icon="">
                         Free trial includes ~$15 of credit. No credit card required to start.
                       </Tip>
                     </div>
@@ -412,7 +412,7 @@ export function TwilioSmsSettings() {
                         <Code>+14155551234</Code>, with the leading <Strong>+</Strong> and
                         country code).
                       </p>
-                      <Tip icon="💡">
+                      <Tip icon="">
                         Already have a number on your account? Skip the buy step — just go to
                         Active Numbers and grab the one you want.
                       </Tip>
@@ -498,7 +498,7 @@ export function TwilioSmsSettings() {
                         <BulletCheck>Save everything securely</BulletCheck>
                       </ul>
                       <p className="text-muted-foreground">
-                        You'll see a "Twilio Connected" confirmation when it's done. 🎉
+                        You'll see a "Twilio Connected" confirmation when it's done.
                       </p>
                     </div>
                   }

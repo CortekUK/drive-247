@@ -541,7 +541,7 @@ const MultiStepBookingWidget = () => {
         setInsuranceVerified: boolean;
       }>) => {
         const { step, formData: newFormData, vehicleId, setVerified, setInsuranceVerified } = e.detail;
-        console.log('🔧 DEV MODE: Jumping to step', step, { vehicleId, setVerified, setInsuranceVerified });
+        console.log('DEV MODE: Jumping to step', step, { vehicleId, setVerified, setInsuranceVerified });
 
         // Update form data with vehicle ID
         setFormData(prev => ({ ...prev, ...newFormData }));
@@ -586,7 +586,7 @@ const MultiStepBookingWidget = () => {
         autoVerify: boolean;
       }>) => {
         const { file, autoVerify } = e.detail;
-        console.log('🔧 DEV MODE: Auto-uploading insurance...', file.name);
+        console.log('DEV MODE: Auto-uploading insurance...', file.name);
 
         // Set insurance state to trigger the upload flow
         setHasInsurance(true);
@@ -599,7 +599,7 @@ const MultiStepBookingWidget = () => {
           setTimeout(() => {
             setUploadedDocumentId('dev-mock-insurance-' + Date.now());
             setShowUploadDialog(false);
-            console.log('🔧 DEV MODE: Insurance auto-verified');
+            console.log('DEV MODE: Insurance auto-verified');
           }, 500);
         }
       };
@@ -609,7 +609,7 @@ const MultiStepBookingWidget = () => {
         if (e.detail.verified) {
           setHasInsurance(true);
           setUploadedDocumentId(e.detail.documentId || 'dev-mock-insurance-' + Date.now());
-          console.log('🔧 DEV MODE: Insurance marked as verified');
+          console.log('DEV MODE: Insurance marked as verified');
         } else {
           setHasInsurance(null);
           setUploadedDocumentId(null);
@@ -680,10 +680,10 @@ const MultiStepBookingWidget = () => {
         // Only restore license number (not name - that comes from auth or will be entered by user)
         ...(savedLicenseNumber && { licenseNumber: savedLicenseNumber }),
       }));
-      console.log('✅ Loaded verification session from localStorage:', savedVerificationSessionId, savedVerificationStatus);
+      console.log('Loaded verification session from localStorage:', savedVerificationSessionId, savedVerificationStatus);
     } else if (isExpired && savedVerificationSessionId) {
       // Clear expired verification data
-      console.log('🕐 Verification data expired, clearing...');
+      console.log('Verification data expired, clearing...');
       localStorage.removeItem('verificationSessionId');
       localStorage.removeItem('verificationStatus');
       localStorage.removeItem('verificationTimestamp');
@@ -703,7 +703,7 @@ const MultiStepBookingWidget = () => {
         // duration auto-apply never silently overrides a code the customer entered.
         setFormData(prev => ({ ...prev, promoCode: savedPromoCode }));
         setPromoDetails({ ...promoDetailsData, source: promoDetailsData.source || "manual" });
-        console.log('✅ Restored promo code from localStorage:', savedPromoCode);
+        console.log('Restored promo code from localStorage:', savedPromoCode);
       } catch (e) {
         console.error('Failed to parse saved promo details:', e);
         localStorage.removeItem('appliedPromoCode');
@@ -719,14 +719,14 @@ const MultiStepBookingWidget = () => {
 
       // Only check if status is pending (user might have completed verification in popup)
       if (pendingSessionId && currentStatus === 'pending') {
-        console.log('🔄 Window focused - checking verification status for iOS Safari...');
+        console.log('Window focused - checking verification status for iOS Safari...');
         const status = await checkVerificationStatus(pendingSessionId);
         if (status) {
           if (status.review_result === 'GREEN') {
             setVerificationStatus('verified');
             localStorage.setItem('verificationStatus', 'verified');
             localStorage.setItem('verificationTimestamp', Date.now().toString());
-            console.log('✅ Verification updated on window focus');
+            console.log('Verification updated on window focus');
             // Auto-populate form with verified data
             populateFormWithVerifiedData(status);
           } else if (status.review_result === 'RED') {
@@ -751,21 +751,21 @@ const MultiStepBookingWidget = () => {
       if (event.origin !== window.location.origin) return;
 
       if (event.data?.type === 'VERIFF_COMPLETE') {
-        console.log('📨 Received VERIFF_COMPLETE message from popup');
+        console.log('Received VERIFF_COMPLETE message from popup');
         const pendingSessionId = localStorage.getItem('verificationSessionId');
 
         if (pendingSessionId) {
           // Retry logic: check status multiple times with increasing delays
           // This handles webhook processing delays
           const checkWithRetry = async (attempt: number = 1, maxAttempts: number = 5) => {
-            console.log(`🔄 Checking verification status (attempt ${attempt}/${maxAttempts})...`);
+            console.log(`Checking verification status (attempt ${attempt}/${maxAttempts})...`);
             const status = await checkVerificationStatus(pendingSessionId);
 
             if (status?.review_result === 'GREEN') {
               setVerificationStatus('verified');
               localStorage.setItem('verificationStatus', 'verified');
               localStorage.setItem('verificationTimestamp', Date.now().toString());
-              console.log('✅ Verification confirmed via popup message');
+              console.log('Verification confirmed via popup message');
               // Auto-populate form with verified data
               populateFormWithVerifiedData(status);
               return true;
@@ -779,7 +779,7 @@ const MultiStepBookingWidget = () => {
               const delay = attempt * 2000;
               setTimeout(() => checkWithRetry(attempt + 1, maxAttempts), delay);
             } else {
-              console.log('⚠️ Max retry attempts reached, webhook may be delayed');
+              console.log('Max retry attempts reached, webhook may be delayed');
             }
           };
 
@@ -807,7 +807,7 @@ const MultiStepBookingWidget = () => {
       const useVeriff = tenant.integration_veriff === true;
       const newMode = useVeriff ? 'veriff' : 'ai';
       setVerificationMode(newMode);
-      console.log(`[Verification] 🔐 Mode set to: ${newMode.toUpperCase()}`);
+      console.log(`[Verification] Mode set to: ${newMode.toUpperCase()}`);
       console.log(`[Verification] integration_veriff value: ${tenant.integration_veriff} (type: ${typeof tenant.integration_veriff})`);
       console.log(`[Verification] Tenant ID: ${tenant.id}, Slug: ${tenant.slug}`);
     }
@@ -866,7 +866,7 @@ const MultiStepBookingWidget = () => {
     if (isAuthenticated && authInitialized && !authLoading && customerUser?.customer?.date_of_birth) {
       // Only update if DOB is empty (don't overwrite if user manually changed it)
       if (!formData.driverDOB) {
-        console.log('✅ Auto-populating DOB from customer profile:', customerUser.customer.date_of_birth);
+        console.log('Auto-populating DOB from customer profile:', customerUser.customer.date_of_birth);
         setFormData(prev => ({ ...prev, driverDOB: customerUser.customer.date_of_birth }));
       }
     }
@@ -879,7 +879,7 @@ const MultiStepBookingWidget = () => {
     if (currentStep === 4 && isAuthenticated && !isCustomerDataPopulated && !authLoading && authInitialized) {
       const customer = customerUser?.customer;
       if (customer) {
-        console.log('✅ Auto-populating form with authenticated customer data:', customer.name);
+        console.log('Auto-populating form with authenticated customer data:', customer.name);
 
         // Build update object with available customer data
         // For authenticated users, ALWAYS overwrite with their actual account data
@@ -910,7 +910,7 @@ const MultiStepBookingWidget = () => {
         // For authenticated users, ALWAYS clear localStorage verification data
         // Their verification status comes from their account, not localStorage
         // This prevents stale localStorage data from a different session/user from affecting the UI
-        console.log('🧹 Clearing localStorage verification for authenticated user');
+        console.log('Clearing localStorage verification for authenticated user');
         localStorage.removeItem('verificationSessionId');
         localStorage.removeItem('verificationStatus');
         localStorage.removeItem('verificationTimestamp');
@@ -975,7 +975,7 @@ const MultiStepBookingWidget = () => {
     if (isAuthenticated && !isCustomerDataPopulated && authInitialized && !authLoading && !verificationLoading) {
       const customer = customerUser?.customer;
       if (customer) {
-        console.log('🔐 Mid-booking sign-in detected, syncing user data:', customer.name);
+        console.log('Mid-booking sign-in detected, syncing user data:', customer.name);
 
         // Build update object with customer data
         const updates: Partial<typeof formData> = {};
@@ -999,7 +999,7 @@ const MultiStepBookingWidget = () => {
 
         // For authenticated users, ALWAYS clear localStorage verification data
         // Their verification status comes from their account, not localStorage
-        console.log('🧹 Clearing localStorage verification for authenticated user (mid-booking sign-in)');
+        console.log('Clearing localStorage verification for authenticated user (mid-booking sign-in)');
         localStorage.removeItem('verificationSessionId');
         localStorage.removeItem('verificationStatus');
         localStorage.removeItem('verificationTimestamp');
@@ -1010,7 +1010,7 @@ const MultiStepBookingWidget = () => {
 
         // Check if user is already verified from their account
         if (isCustomerAlreadyVerified) {
-          console.log('✅ User has existing verification, setting verified status');
+          console.log('User has existing verification, setting verified status');
           setVerificationStatus('verified');
 
           if (customerVerification?.session_id) {
@@ -1057,7 +1057,7 @@ const MultiStepBookingWidget = () => {
         customerVerification.status === 'verified';
 
       if (isVerified && verificationStatus !== 'verified') {
-        console.log('✅ Verification data loaded, updating status to verified');
+        console.log('Verification data loaded, updating status to verified');
         setVerificationStatus('verified');
 
         if (customerVerification.session_id) {
@@ -1093,7 +1093,7 @@ const MultiStepBookingWidget = () => {
 
       if (hadPreviousSession && !isAuthenticated) {
         // Session expired, show auth dialog
-        console.log('🔐 Session expired, prompting for re-authentication');
+        console.log('Session expired, prompting for re-authentication');
         setShowAuthDialog(true);
         // Clear the flag to avoid repeated prompts
         sessionStorage.removeItem('booking_had_auth_session');
@@ -1206,7 +1206,7 @@ const MultiStepBookingWidget = () => {
   // Check verification status - first tries database, then falls back to Veriff API directly
   const checkVerificationStatus = async (sessionId: string) => {
     try {
-      console.log('🔍 Checking verification status for session:', sessionId);
+      console.log('Checking verification status for session:', sessionId);
 
       // STEP 1: Try database query first
       let { data, error } = await supabase
@@ -1216,12 +1216,12 @@ const MultiStepBookingWidget = () => {
         .maybeSingle();
 
       if (error) {
-        console.error('❌ Database error:', error);
+        console.error('Database error:', error);
       }
 
       // Try email fallback if no data found by session_id
       if (!data && formData.customerEmail) {
-        console.log('🔍 Trying email-based fallback in database...');
+        console.log('Trying email-based fallback in database...');
         const emailResult = await supabase
           .from('identity_verifications')
           .select('review_result, status, review_status, first_name, last_name, document_number, date_of_birth, external_user_id, document_front_url, document_back_url, selfie_image_url')
@@ -1231,14 +1231,14 @@ const MultiStepBookingWidget = () => {
           .maybeSingle();
 
         if (emailResult.data) {
-          console.log('✅ Found record via email fallback!');
+          console.log('Found record via email fallback!');
           data = emailResult.data;
         }
       }
 
       // If database has approved result, return it
       if (data?.review_result === 'GREEN' || data?.review_result === 'RED') {
-        console.log('📋 Database record found with result:', data.review_result);
+        console.log('Database record found with result:', data.review_result);
         return data;
       }
 
@@ -1249,14 +1249,14 @@ const MultiStepBookingWidget = () => {
 
       // Return database data if available
       if (data) {
-        console.log('📋 Returning database record (pending):', data);
+        console.log('Returning database record (pending):', data);
         return data;
       }
 
       console.log('⏳ No verification record found in database');
       return null;
     } catch (error) {
-      console.error('❌ Error checking verification:', error);
+      console.error('Error checking verification:', error);
       return null;
     }
   };
@@ -1288,7 +1288,7 @@ const MultiStepBookingWidget = () => {
       }
 
       toast.success(`Your details have been verified and updated: ${fullName}`, { duration: 5000 });
-      console.log('✅ Form populated with verified data:', { customerName: fullName, licenseNumber: verificationData.document_number });
+      console.log('Form populated with verified data:', { customerName: fullName, licenseNumber: verificationData.document_number });
     }
 
     // Store verification images if available
@@ -1323,7 +1323,7 @@ const MultiStepBookingWidget = () => {
     localStorage.setItem('verificationTimestamp', Date.now().toString());
 
     populateFormWithVerifiedData(mockVerificationData);
-    console.log('🔓 DEV MODE: Mock verification completed with data:', mockVerificationData);
+    console.log('DEV MODE: Mock verification completed with data:', mockVerificationData);
   };
 
   // Clear verification data
@@ -1359,7 +1359,7 @@ const MultiStepBookingWidget = () => {
         throw new Error('Veriff API key not configured. Please contact support.');
       }
 
-      console.log('🔐 Initializing Veriff SDK...');
+      console.log('Initializing Veriff SDK...');
 
       // Create Veriff session directly using their API
       const vendorData = `booking_${formData.customerEmail}_${Date.now()}`;
@@ -1390,7 +1390,7 @@ const MultiStepBookingWidget = () => {
       const sessionId = sessionData.verification.id;
       const sessionUrl = sessionData.verification.url;
 
-      console.log('✅ Veriff session created:', sessionId);
+      console.log('Veriff session created:', sessionId);
 
       // CRITICAL: Create the verification record in database BEFORE opening Veriff
       // This ensures the record exists for the webhook to update and for querying
@@ -1415,7 +1415,7 @@ const MultiStepBookingWidget = () => {
         // Don't block verification - continue anyway (webhook will create record if needed)
         console.log('Continuing without pre-creating record...');
       } else {
-        console.log('✅ Verification record created in database for session:', sessionId);
+        console.log('Verification record created in database for session:', sessionId);
       }
 
       // Store session ID
@@ -1430,7 +1430,7 @@ const MultiStepBookingWidget = () => {
 
       // Helper function to check status with retries after verification finished
       const checkStatusWithRetry = async (attempt: number = 1, maxAttempts: number = 10) => {
-        console.log(`🔄 Checking verification status (attempt ${attempt}/${maxAttempts})...`);
+        console.log(`Checking verification status (attempt ${attempt}/${maxAttempts})...`);
         const status = await checkVerificationStatus(sessionId);
 
         if (status?.review_result === 'GREEN') {
@@ -1466,7 +1466,7 @@ const MultiStepBookingWidget = () => {
           console.log(`⏳ Status not ready, retrying in ${delay / 1000}s...`);
           setTimeout(() => checkStatusWithRetry(attempt + 1, maxAttempts), delay);
         } else {
-          console.log('⚠️ Max retry attempts reached. Verification may still be processing.');
+          console.log('Max retry attempts reached. Verification may still be processing.');
           toast.info('Verification is being processed. Please wait or refresh the page.');
         }
         return false;
@@ -1474,26 +1474,26 @@ const MultiStepBookingWidget = () => {
 
       // Use Veriff InContext SDK to open verification in iframe overlay
       // This provides proper event callbacks for when verification finishes
-      console.log('🚀 Opening Veriff InContext frame...');
+      console.log('Opening Veriff InContext frame...');
 
       createVeriffFrame({
         url: sessionUrl,
         onEvent: (msg: string) => {
-          console.log('📨 Veriff event received:', msg);
+          console.log('Veriff event received:', msg);
 
           switch (msg) {
             case MESSAGES.STARTED:
-              console.log('✅ Veriff session started in iframe');
+              console.log('Veriff session started in iframe');
               break;
 
             case MESSAGES.FINISHED:
-              console.log('✅ User completed verification in Veriff!');
+              console.log('User completed verification in Veriff!');
               setIsVerifying(false);
 
               // IMPORTANT: When Veriff SDK fires FINISHED, the user has successfully
               // completed the verification flow. We can trust this event and mark as verified.
               // The webhook will update the database in the background.
-              console.log('✅ Setting verification status to VERIFIED based on FINISHED event');
+              console.log('Setting verification status to VERIFIED based on FINISHED event');
               setVerificationStatus('verified');
               localStorage.setItem('verificationStatus', 'verified');
               localStorage.setItem('verificationTimestamp', Date.now().toString());
@@ -1514,7 +1514,7 @@ const MultiStepBookingWidget = () => {
               break;
 
             case MESSAGES.CANCELED:
-              console.log('❌ User canceled verification');
+              console.log('User canceled verification');
               toast.info('Verification was canceled. You can try again when ready.');
               setVerificationStatus('init');
               localStorage.removeItem('verificationSessionId');
@@ -1523,7 +1523,7 @@ const MultiStepBookingWidget = () => {
               break;
 
             default:
-              console.log('ℹ️ Unknown Veriff event:', msg);
+              console.log('ℹUnknown Veriff event:', msg);
           }
         }
       });
@@ -1570,7 +1570,7 @@ const MultiStepBookingWidget = () => {
     setIsVerifying(true);
 
     try {
-      console.log('🔐 Starting AI verification...');
+      console.log('Starting AI verification...');
 
       const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
         body: {
@@ -1588,7 +1588,7 @@ const MultiStepBookingWidget = () => {
         throw new Error(data?.error || error?.message || 'Failed to create AI verification session');
       }
 
-      console.log('✅ AI verification session created:', data.sessionId);
+      console.log('AI verification session created:', data.sessionId);
 
       // Store session data
       setVerificationSessionId(data.sessionId);
@@ -1635,7 +1635,7 @@ const MultiStepBookingWidget = () => {
 
   // Handle AI verification completion
   const handleAIVerificationComplete = (data: any) => {
-    console.log('✅ AI verification completed:', data);
+    console.log('AI verification completed:', data);
     setVerificationStatus('verified');
     localStorage.setItem('verificationStatus', 'verified');
 
@@ -1761,7 +1761,7 @@ const MultiStepBookingWidget = () => {
   const validatePromoCode = async (code: string) => {
     if (!code || !tenant?.id) {
       if (!tenant?.id) {
-        console.log('⚠️ Promo validation skipped - tenant not loaded yet');
+        console.log('Promo validation skipped - tenant not loaded yet');
         setPromoError("Please wait while we load your settings...");
       }
       return;
@@ -1790,7 +1790,7 @@ const MultiStepBookingWidget = () => {
       }
 
       if (!data) {
-        console.log('❌ Promo code not found:', code, 'for tenant:', tenant.id);
+        console.log('Promo code not found:', code, 'for tenant:', tenant.id);
         setPromoError("Invalid promo code");
         return;
       }
@@ -2037,7 +2037,7 @@ const MultiStepBookingWidget = () => {
         const unlinkedVerification = linkedVerifications?.[0] ?? null;
 
         if (linkedVerifications?.length && !linkError) {
-          console.log("✅ Auto-linked identity verification(s):", linkedVerifications.length, "to customer:", customerId);
+          console.log("Auto-linked identity verification(s):", linkedVerifications.length, "to customer:", customerId);
 
           // A passed check anywhere in the set is what the customer's status
           // should reflect, not whichever row happened to come back first.
@@ -3344,8 +3344,8 @@ const MultiStepBookingWidget = () => {
       updateBookingContext(bookingContext as any);
 
       // DEBUG: Check if verification session ID is still in formData before moving to step 2
-      console.log('📝 Moving to Step 2 with formData:', formData);
-      console.log('📝 Verification Session ID in formData:', formData.verificationSessionId);
+      console.log('Moving to Step 2 with formData:', formData);
+      console.log('Verification Session ID in formData:', formData.verificationSessionId);
 
       // Note: We DON'T clear verification state here anymore because we need it for checkout linking
 
@@ -3392,7 +3392,7 @@ const MultiStepBookingWidget = () => {
     // DEV: Check for bypass flag
     const devSkip = typeof window !== 'undefined' && localStorage.getItem('dev_skip_insurance') === 'true';
     if (devSkip) {
-      console.log('🔓 DEV MODE: Skipping insurance verification');
+      console.log('DEV MODE: Skipping insurance verification');
       setHasInsurance(true);
       setUploadedDocumentId('dev-bypass-doc-id');
     }
@@ -3482,19 +3482,19 @@ const MultiStepBookingWidget = () => {
 
   // Step 4: Customer Details
   const handleStep4Continue = async () => {
-    console.log('🚀 handleStep4Continue called');
-    console.log('🔐 Current verification status:', verificationStatus);
-    console.log('🔘 Button disabled state:', verificationStatus !== 'verified');
+    console.log('handleStep4Continue called');
+    console.log('Current verification status:', verificationStatus);
+    console.log('Button disabled state:', verificationStatus !== 'verified');
 
     const isValid = validateStep4();
-    console.log('✨ Validation returned:', isValid);
+    console.log('Validation returned:', isValid);
 
     if (!isValid) {
-      console.log('❌ Validation failed! Not moving to step 5');
+      console.log('Validation failed! Not moving to step 5');
       return;
     }
 
-    console.log('✅ Validation passed! Moving to step 5');
+    console.log('Validation passed! Moving to step 5');
 
     // Calculate age from DOB for young driver check
     const driverAge = formData.driverDOB ? calculateAge(parseDateString(formData.driverDOB)) : 0;
@@ -3558,12 +3558,12 @@ const MultiStepBookingWidget = () => {
     // Check verification status (with dev bypass)
     const devBypassVerification = typeof window !== 'undefined' && localStorage.getItem('dev_bypass_verification') === 'true';
     if (verificationStatus !== 'verified' && !devBypassVerification) {
-      console.log('❌ Verification not completed:', verificationStatus);
+      console.log('Verification not completed:', verificationStatus);
       toast.error('Please complete identity verification to continue');
       return false;
     }
     if (devBypassVerification) {
-      console.log('🔓 DEV MODE: Bypassing verification check');
+      console.log('DEV MODE: Bypassing verification check');
     }
 
     setErrors(newErrors);
@@ -5050,9 +5050,9 @@ const MultiStepBookingWidget = () => {
                           </Button>
                           <div className="pt-4 border-t border-border/50">
                             <p className="text-xs text-muted-foreground">
-                              ✓ Instant AI verification<br />
-                              ✓ Accepted formats: PDF, JPG, PNG<br />
-                              ✓ Max file size: 10MB
+                              Instant AI verification<br />
+                              Accepted formats: PDF, JPG, PNG<br />
+                              Max file size: 10MB
                             </p>
                           </div>
                         </div>
@@ -5161,9 +5161,9 @@ const MultiStepBookingWidget = () => {
                           {isBonzahEligible && !isBonzahEligibilityLoading && (
                             <div className="pt-4 border-t border-border/50">
                               <p className="text-xs text-muted-foreground">
-                                ✓ Instant online quotes<br />
-                                ✓ Affordable rates<br />
-                                ✓ Quick 5-minute setup
+                                Instant online quotes<br />
+                                Affordable rates<br />
+                                Quick 5-minute setup
                               </p>
                             </div>
                           )}
@@ -6106,7 +6106,7 @@ const MultiStepBookingWidget = () => {
                           className="border-purple-500 text-purple-600 hover:bg-purple-500 hover:text-white w-full sm:w-auto text-sm"
                           size="sm"
                         >
-                          <span className="mr-2">🔧</span>
+                          <span className="mr-2"></span>
                           DEV: Mock Verify
                         </Button>
                       )}
@@ -6147,7 +6147,7 @@ const MultiStepBookingWidget = () => {
                               onClick={() => {
                                 // Since Veriff API authentication isn't working, trust the user's
                                 // confirmation that they completed verification in Veriff
-                                console.log('✅ User confirmed verification complete');
+                                console.log('User confirmed verification complete');
                                 setVerificationStatus('verified');
                                 localStorage.setItem('verificationStatus', 'verified');
                                 toast.success('Identity verified! You can now continue with your booking.');
@@ -6496,7 +6496,7 @@ const MultiStepBookingWidget = () => {
         if (verificationStatus !== 'verified') {
           setVerificationStatus('init');
         }
-        console.log('🔐 Auth success, triggering data re-sync');
+        console.log('Auth success, triggering data re-sync');
       }}
     />
 

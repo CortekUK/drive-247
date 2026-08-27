@@ -271,10 +271,10 @@ export function LeadInfoPanel({ lead, onFocusComposer }: Props) {
           onSave={(next) => updateContact.mutate({ leadId: lead.id, patch: { email: next } })}
         />
         {!phoneOk && (
-          <p className="mt-1 text-[10px] text-amber-700">⚠ No usable phone — SMS / WhatsApp disabled.</p>
+          <p className="mt-1 text-[10px] text-amber-700">No usable phone — SMS / WhatsApp disabled.</p>
         )}
         {!emailOk && (
-          <p className="mt-1 text-[10px] text-amber-700">⚠ No usable email — Email channel disabled.</p>
+          <p className="mt-1 text-[10px] text-amber-700">No usable email — Email channel disabled.</p>
         )}
       </Section>
 

@@ -113,7 +113,7 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       description?: string;
     }>) => {
       const data = e.detail;
-      console.log('🔧 DEV MODE: Filling vehicle form with:', data);
+      console.log('DEV MODE: Filling vehicle form with:', data);
 
       // Set form values
       form.setValue('reg', data.reg);

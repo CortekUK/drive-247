@@ -842,7 +842,7 @@ export function AdminExtendRentalDialog({
       // used to be a console.error under a success toast, which is how an
       // unpayable extension could sit unnoticed.
       const paymentLinkWarning = checkoutError || (extensionTotalAmount > 0 && !checkoutUrl)
-        ? ` ⚠ No payment link was created${checkoutError ? ` (${checkoutError})` : ''} — the charge is on the balance but the customer cannot pay it yet. Check the Stripe connection, then resend the link from the rental page.`
+        ? ` No payment link was created${checkoutError ? ` (${checkoutError})` : ''} — the charge is on the balance but the customer cannot pay it yet. Check the Stripe connection, then resend the link from the rental page.`
         : '';
 
       toast({
@@ -854,7 +854,7 @@ export function AdminExtendRentalDialog({
         description: `${agreementSent
           ? `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencyLabel}${chargedTotal.toFixed(2)} created.` : ''} Agreement sent to customer for signing.`
           : `Rental extended to ${format(parseLocalDate(newEndDate), 'MMMM dd, yyyy')}.${chargedTotal > 0 ? ` Extension charge of ${currencyLabel}${chargedTotal.toFixed(2)} created.` : ''} Agreement failed to send — you can retry from the rental details page.`}${
-          insuranceWarning ? ` ⚠ Insurance: ${insuranceWarning}` : ''}${paymentLinkWarning}`,
+          insuranceWarning ? ` Insurance: ${insuranceWarning}` : ''}${paymentLinkWarning}`,
         variant: insuranceWarning || paymentLinkWarning ? 'destructive' : 'default',
       });
 

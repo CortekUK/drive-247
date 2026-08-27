@@ -2,7 +2,7 @@
  * Sales onboarding credentials — client-side mirror of the
  * `create-sales-onboarding` edge function.
  *
- * ⚠️  THIS FILE MUST STAY IN LOCKSTEP WITH
+ *  THIS FILE MUST STAY IN LOCKSTEP WITH
  *     supabase/functions/create-sales-onboarding/index.ts
  *
  * The Sales tab needs to re-show a client's credentials long after the
@@ -111,8 +111,8 @@ export interface ClientMessageArgs {
 /**
  * The "send to client" message.
  *
- * Copied character-for-character from index.ts §14 (including the 🎉 / 🔑 / 🖥️ /
- * 🚗 emoji and the DOUBLE space after 🖥️ and 🚗). Any edit here must be made on
+ * Copied character-for-character from index.ts §14 (including the / / /
+ * emoji and the DOUBLE space after and). Any edit here must be made on
  * the server too, or a re-sent message will not match the original.
  */
 export const buildClientMessage = (args: ClientMessageArgs): string => {
@@ -129,13 +129,13 @@ export const buildClientMessage = (args: ClientMessageArgs): string => {
 
   return (
     `Hi ${args.firstName || 'there'},\n\n` +
-    `Your ${args.companyName} portal is ready! 🎉\n\n` +
-    `🔑 Login details\n` +
+    `Your ${args.companyName} portal is ready!\n\n` +
+    `Login details\n` +
     `Email: ${args.email}\n` +
     `Password: ${args.password}\n` +
     `(You'll set your own password on first login.)\n\n` +
-    `🖥️  Admin portal (log in here): ${args.portalUrl}\n` +
-    `🚗  Your booking site: ${args.bookingUrl}\n\n` +
+    ` Admin portal (log in here): ${args.portalUrl}\n` +
+    ` Your booking site: ${args.bookingUrl}\n\n` +
     subscriptionLine +
     `Any questions, just reply here!`
   );

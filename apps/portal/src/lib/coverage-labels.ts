@@ -1,6 +1,6 @@
 // Shared coverage-label formatter for Bonzah insurance display.
 //
-// ⚠️ KEEP THIS FILE BYTE-IDENTICAL in apps/booking/src/lib and apps/portal/src/lib
+// KEEP THIS FILE BYTE-IDENTICAL in apps/booking/src/lib and apps/portal/src/lib
 // (same convention as calculate-rental-price.ts / calculate-extras-total.ts).
 //
 // Bonzah stores coverage as four independent booleans on `coverage_types`

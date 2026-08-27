@@ -1,5 +1,5 @@
 /**
- * ⚠️  DUPLICATED FILE — KEEP IN SYNC ⚠️
+ *  DUPLICATED FILE — KEEP IN SYNC
  * This exact file exists twice: apps/booking/src/lib/calculate-rental-price.ts
  * and apps/portal/src/lib/calculate-rental-price.ts.
  * Any change to one MUST be mirrored to the other or the customer

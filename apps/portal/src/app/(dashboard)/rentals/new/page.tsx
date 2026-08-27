@@ -5663,7 +5663,7 @@ const CreateRental = () => {
                           <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
                         </Button>
                         {insuranceDocId && (
-                          <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
+                          <span className="text-sm text-green-600 whitespace-nowrap">Uploaded</span>
                         )}
                       </div>
                     </div>

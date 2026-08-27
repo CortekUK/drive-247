@@ -5,10 +5,10 @@
  * every financial_event for the rental and its sync state per active provider.
  *
  * Display:
- *   ✓ Invoice INV-04127 · Synced 12 May 2026
- *   ✓ Payment £450 · Synced 12 May 2026
+ *   Invoice INV-04127 · Synced 12 May 2026
+ *   Payment £450 · Synced 12 May 2026
  *   ⏳ Damage charge £150 · Pending
- *   ✗ Late fee £25 · Failed → [click to open failure detail]
+ *   Late fee £25 · Failed → [click to open failure detail]
  *
  * Hidden entirely when:
  *   - Tenant has no active accounting_connections rows

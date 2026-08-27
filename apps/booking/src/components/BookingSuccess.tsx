@@ -66,7 +66,7 @@ const BookingSuccess = () => {
           if (pendingPaymentDetailsStr) {
             try {
               const paymentDetails = JSON.parse(pendingPaymentDetailsStr);
-              console.log('💳 Creating payment record after successful Stripe payment...');
+              console.log('Creating payment record after successful Stripe payment...');
 
               // Verify this payment is for the correct rental
               if (paymentDetails.rental_id === rentalId) {
@@ -91,50 +91,50 @@ const BookingSuccess = () => {
                   .single();
 
                 if (paymentError) {
-                  console.error("❌ Failed to create payment record:", paymentError);
+                  console.error("Failed to create payment record:", paymentError);
                   toast.error("Payment recorded by Stripe but failed to save locally. Please contact support.");
                 } else {
-                  console.log('✅ Payment record created successfully:', paymentRecord.id);
+                  console.log('Payment record created successfully:', paymentRecord.id);
 
                   // Apply the payment to charges using edge function
                   try {
-                    console.log('🔄 Applying payment to charges...');
+                    console.log('Applying payment to charges...');
                     const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', {
                       body: { paymentId: paymentRecord.id }
                     });
 
                     if (applyError) {
-                      console.error("❌ Failed to apply payment:", applyError);
+                      console.error("Failed to apply payment:", applyError);
                     } else {
-                      console.log('✅ Payment applied successfully:', applyResult);
+                      console.log('Payment applied successfully:', applyResult);
                     }
                   } catch (applyErr) {
-                    console.error("❌ Error applying payment:", applyErr);
+                    console.error("Error applying payment:", applyErr);
                   }
 
                   // Place Stripe deposit hold on the saved card (non-blocking).
                   try {
                     const rentalIdForHold = (paymentRecord as any)?.rental_id;
                     if (rentalIdForHold) {
-                      console.log('🔒 Placing deposit hold...');
+                      console.log('Placing deposit hold...');
                       const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
                         body: { rentalId: rentalIdForHold },
                       });
                       if (holdError) {
-                        console.warn('⚠️ Deposit hold failed:', holdError);
+                        console.warn('Deposit hold failed:', holdError);
                       } else {
-                        console.log('✅ Deposit hold placed:', holdData);
+                        console.log('Deposit hold placed:', holdData);
                       }
                     }
                   } catch (holdErr) {
-                    console.warn('⚠️ Deposit hold error (non-blocking):', holdErr);
+                    console.warn('Deposit hold error (non-blocking):', holdErr);
                   }
                 }
 
                 // Clear localStorage after processing
                 localStorage.removeItem('pendingPaymentDetails');
               } else {
-                console.warn('⚠️ Payment details rental_id mismatch');
+                console.warn('Payment details rental_id mismatch');
               }
             } catch (parseError) {
               console.error("Error parsing payment details:", parseError);
