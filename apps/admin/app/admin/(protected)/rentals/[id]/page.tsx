@@ -132,6 +132,7 @@ interface TenantSubscription {
   id: string;
   stripe_subscription_id: string;
   stripe_customer_id: string;
+  plan_id: string | null;
   status: string;
   plan_name: string;
   amount: number;
@@ -397,6 +398,13 @@ export default function TenantDetailsPage() {
   const [discountValue, setDiscountValue] = useState('');
   const [discountBusy, setDiscountBusy] = useState(false);
   const [currentDiscount, setCurrentDiscount] = useState<{ percentOff: number | null; amountOff: number | null; currency: string | null } | null>(null);
+
+  // Reprice an ONGOING subscription (a renegotiated rate), as opposed to the
+  // one-time discount above which only touches the next invoice.
+  const [showRepriceModal, setShowRepriceModal] = useState(false);
+  const [repriceAmount, setRepriceAmount] = useState('');
+  const [repricePlanId, setRepricePlanId] = useState<string | null>(null);
+  const [repriceBusy, setRepriceBusy] = useState(false);
   const [showBannerDialog, setShowBannerDialog] = useState(false);
 
   useEffect(() => {
@@ -758,6 +766,70 @@ export default function TenantDetailsPage() {
       toast.error(await fnErrorMessage(e, 'Failed to remove discount'));
     } finally {
       setDiscountBusy(false);
+    }
+  };
+
+  /** Open the reprice modal primed with the plan the subscription is actually on. */
+  const openRepriceModal = () => {
+    const current =
+      plans.find((p) => p.id === subscription?.plan_id) ??
+      plans.find((p) => p.is_active) ??
+      plans[0];
+    setRepricePlanId(current?.id ?? null);
+    setRepriceAmount(current ? (current.amount / 100).toFixed(2) : '');
+    setShowRepriceModal(true);
+  };
+
+  /**
+   * Move a live subscription onto a new ongoing rate.
+   *
+   * Two calls on purpose. manage-subscription-plans mints the new Stripe Price
+   * and rewrites the plan row, but deliberately leaves existing subscribers
+   * alone; change-subscription-price then moves this subscription onto it.
+   * Doing only the first is what let an edited plan read as applied on this
+   * screen while Stripe quietly carried on billing the old amount.
+   */
+  const handleReprice = async () => {
+    const tenantId = params.id as string;
+    const plan = plans.find((p) => p.id === repricePlanId);
+    if (!plan) {
+      toast.error('Pick which plan to reprice');
+      return;
+    }
+
+    const dollars = Number(repriceAmount);
+    if (!Number.isFinite(dollars) || dollars <= 0) {
+      toast.error('Enter a positive amount');
+      return;
+    }
+    const cents = Math.round(dollars * 100);
+
+    setRepriceBusy(true);
+    try {
+      if (cents !== plan.amount) {
+        const { data, error } = await supabase.functions.invoke('manage-subscription-plans', {
+          body: { action: 'update', planId: plan.id, amount: cents },
+        });
+        if (error) throw error;
+        if (data?.success === false) throw new Error(data.error || 'Failed to update the plan');
+      }
+
+      const { data: moved, error: moveErr } = await supabase.functions.invoke('change-subscription-price', {
+        body: { tenantId, planId: plan.id, action: 'apply' },
+      });
+      if (moveErr) throw moveErr;
+      if (moved?.success === false) throw new Error(moved.error || 'Failed to move the subscription');
+
+      const renews = subscription?.current_period_end
+        ? new Date(subscription.current_period_end).toLocaleDateString()
+        : 'their next renewal';
+      toast.success(`Now ${formatCurrency(cents, plan.currency)}/${plan.interval} from ${renews} — nothing charged today.`);
+      setShowRepriceModal(false);
+      await Promise.all([loadSubscription(tenantId, true), loadPlans(tenantId)]);
+    } catch (e: any) {
+      toast.error(await fnErrorMessage(e, 'Failed to change the price'));
+    } finally {
+      setRepriceBusy(false);
     }
   };
 
@@ -2090,6 +2162,14 @@ export default function TenantDetailsPage() {
                       Discount next invoice
                     </Button>
                   )}
+                  {/* Same live-subscription gate: there is no ongoing rate to
+                      change on a dead subscription. Also needs a plan to move
+                      onto — the price lives on the plan, not the subscription. */}
+                  {subscription && ['active', 'trialing', 'past_due'].includes(subscription.status) && plans.length > 0 && (
+                    <Button size="sm" variant="outline" onClick={openRepriceModal}>
+                      Change price
+                    </Button>
+                  )}
                   <Button size="sm" onClick={() => setShowSubscriptionDetail(true)}>
                     Manage Plans
                   </Button>
@@ -2891,6 +2971,97 @@ export default function TenantDetailsPage() {
                   <Button variant="outline" onClick={() => setShowDiscountModal(false)} disabled={discountBusy}>Cancel</Button>
                   <Button onClick={handleApplyDiscount} disabled={!valid || discountBusy}>
                     {discountBusy ? 'Applying…' : 'Apply discount'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reprice modal — changes the ONGOING rate, unlike the one-time discount above */}
+      <Dialog open={showRepriceModal} onOpenChange={(o) => { if (!o) setShowRepriceModal(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change subscription price</DialogTitle>
+            <DialogDescription>
+              Sets {tenant?.company_name}&rsquo;s ongoing rate. It takes effect at their next renewal — nothing is charged or credited today, and the renewal date does not move.
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const plan = plans.find((p) => p.id === repricePlanId) || null;
+            const cur = plan?.currency || subscription?.currency || 'usd';
+            const dollars = Number(repriceAmount);
+            const valid = !!plan && Number.isFinite(dollars) && dollars > 0;
+            const cents = valid ? Math.round(dollars * 100) : 0;
+            const renews = subscription?.current_period_end
+              ? new Date(subscription.current_period_end).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+              : null;
+            return (
+              <div className="space-y-4 py-1">
+                {plans.length > 1 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Plan</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {plans.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => { setRepricePlanId(p.id); setRepriceAmount((p.amount / 100).toFixed(2)); }}
+                          className={cn(
+                            'px-3 py-1 rounded border text-xs font-medium transition-colors',
+                            repricePlanId === p.id
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'border-border text-muted-foreground hover:text-foreground'
+                          )}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    New amount ({cur.toUpperCase()} per {plan?.interval || subscription?.interval || 'month'})
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={repriceAmount}
+                    onChange={(e) => setRepriceAmount(e.target.value)}
+                    placeholder="250.00"
+                  />
+                </div>
+                {valid && (
+                  <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Today</span>
+                      <span className="font-semibold">Nothing charged</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{renews ? `From ${renews}` : 'From next renewal'}</span>
+                      <span className="font-semibold">
+                        {formatCurrency(cents, cur)}/{plan?.interval || 'month'}{' '}
+                        {subscription && cents !== subscription.amount && (
+                          <span className="text-muted-foreground text-xs line-through">
+                            {formatCurrency(subscription.amount, subscription.currency)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {currentDiscount && (
+                      <p className="text-[11px] text-amber-600 pt-1">
+                        A one-time discount is already queued, so their very next invoice still gets that — the new rate bills from the one after.
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="outline" onClick={() => setShowRepriceModal(false)} disabled={repriceBusy}>Cancel</Button>
+                  <Button onClick={handleReprice} disabled={!valid || repriceBusy}>
+                    {repriceBusy ? 'Applying…' : 'Change price'}
                   </Button>
                 </div>
               </div>
