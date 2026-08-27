@@ -80,6 +80,8 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { verifySquareWebhook } from "../_shared/payments/square-client.ts";
+import { reduceRefundedMinor, minorToMajor2dp, refundStatusFor, remainingAfterRefund }
+  from "../_shared/payments/square-refund-math.ts";
 import {
   InternalPaymentStatus,
   mapSquarePaymentStatus,
@@ -155,6 +157,19 @@ interface SquareRefundObject {
   amount_money?: SquareMoney;
 }
 
+/**
+ * `oauth.authorization.revoked` payload. Verified against Square's reference:
+ *   data.object.revocation = { revoked_at, revoker_type }
+ * `revoker_type` is MERCHANT (operator hit "Disconnect" in their Square
+ * dashboard) or APPLICATION (we called RevokeToken ourselves). BOTH must land
+ * the same way — the grant is gone either way — so it is recorded for the audit
+ * trail and never branched on.
+ */
+interface SquareRevocationObject {
+  revoked_at?: string;
+  revoker_type?: string;
+}
+
 interface SquareEventEnvelope {
   merchant_id?: string;
   type?: string;
@@ -166,6 +181,7 @@ interface SquareEventEnvelope {
     object?: {
       payment?: SquarePaymentObject;
       refund?: SquareRefundObject;
+      revocation?: SquareRevocationObject;
     };
   };
 }
@@ -173,7 +189,7 @@ interface SquareEventEnvelope {
 /** The payments columns this function reads. Nothing else is needed. */
 const PAYMENT_COLUMNS =
   "id, tenant_id, amount, status, capture_status, paid_at, refund_amount, refund_status, " +
-  "refund_processed_at, square_order_id, square_payment_id, square_refund_id";
+  "refund_processed_at, remaining_amount, square_order_id, square_payment_id, square_refund_id";
 
 interface PaymentRow {
   id: string;
@@ -185,6 +201,7 @@ interface PaymentRow {
   refund_amount: number | null;
   refund_status: string | null;
   refund_processed_at: string | null;
+  remaining_amount: number | null;
   square_order_id: string | null;
   square_payment_id: string | null;
   square_refund_id: string | null;
@@ -601,6 +618,66 @@ async function handlePaymentEvent(
   };
 }
 
+/**
+ * The AUTHORITATIVE refunded total for a payment, in major units.
+ *
+ * WHY THIS REPLACED INCREMENTAL ACCUMULATION
+ * ------------------------------------------
+ * The previous logic did `existing + this` and used a single stored
+ * `square_refund_id` to decide "have I already counted this one?". Square allows
+ * 20 refunds per payment but the payments row holds ONE id, so with two refunds
+ * the stored id flips back and forth and each redelivery of the *other* refund
+ * reads as brand new and is added again.
+ *
+ * That is not theoretical. On payment 7bR3JDwdPvNx…, two real £10 refunds
+ * produced this sequence — created(A) 10, updated(B) 20, updated(A) 30,
+ * updated(B) 40, updated(A) 50 — recording £50 against a £25 payment when only
+ * £20 had actually been refunded. Square guarantees NO event ordering and
+ * redelivers freely, so it compounds without bound.
+ *
+ * Instead we derive the total from the event log, which is the same data Square
+ * sent us: take the LATEST state of each DISTINCT refund id and sum the ones
+ * that did not fail. This is idempotent, order-independent and duplicate-immune
+ * — replaying every event in any order yields the same number.
+ *
+ * Safe to call here because the current event is CLAIMED (inserted) in step 2,
+ * before dispatch, so it is already part of the aggregate.
+ *
+ * Returns null when the total cannot be determined; the caller then leaves the
+ * stored value alone rather than writing a guess onto a money column.
+ */
+async function computeRefundedTotal(
+  supabase: SupabaseClient,
+  startedAt: number,
+  squarePaymentId: string | null,
+): Promise<number | null> {
+  if (!squarePaymentId) return null;
+
+  const { data, error } = await supabase
+    .from("square_webhook_events")
+    .select("payload, processed_at")
+    .like("event_type", "refund.%")
+    .order("processed_at", { ascending: false })
+    .abortSignal(deadlineSignal(startedAt));
+
+  if (error || !data) {
+    console.error("[square-webhook] refund aggregate failed:", error?.message ?? "no rows");
+    return null;
+  }
+
+  // Delegate to the TESTED pure reducer — one implementation, not two.
+  // square-refund-math.ts carries the regression tests built from the real
+  // 7-event sequence that produced the £50-for-£20 corruption.
+  const events = (data as Array<{ payload?: Record<string, unknown> }>)
+    // deno-lint-ignore no-explicit-any
+    .map((r) => (r.payload as any)?.data?.object?.refund)
+    .filter(Boolean);
+
+  const totalMinor = reduceRefundedMinor(events, squarePaymentId);
+  if (totalMinor === null) return null;
+  return minorToMajor2dp(totalMinor);
+}
+
 async function handleRefundEvent(
   supabase: SupabaseClient,
   startedAt: number,
@@ -623,43 +700,29 @@ async function handleRefundEvent(
   const thisRefund = minorToMajor(refund.amount_money?.amount);
   const existing = Number(row.refund_amount ?? 0);
 
-  /**
-   * Accumulate correctly across the PENDING -> COMPLETED lifecycle.
-   *
-   * The same refund is reported at least twice (created, then updated), so a
-   * blind `existing + this` would double the refunded total on the second
-   * event. Comparing the stored square_refund_id distinguishes "this refund
-   * again" (take the max — idempotent) from "a second, distinct refund"
-   * (add it), and a rejection unwinds what its own create banked.
-   *
-   * Known limit: two DISTINCT refunds whose created/updated events
-   * interleave can over-count the first, because only one refund id is stored
-   * per payments row. Square caps us at 20 partial refunds per payment and our
-   * flows issue one at a time, so this is recorded rather than engineered
-   * around — fixing it properly needs a per-refund table.
-   */
-  const sameRefund = !!row.square_refund_id && !!refund.id && row.square_refund_id === refund.id;
-
   // Once a refund is settled it cannot un-settle. A late-arriving
   // `refund.created` (PENDING) must not walk 'completed' back to 'processing'.
   const alreadySettled = row.refund_status === "completed";
 
+  /**
+   * AUTHORITATIVE TOTAL, not an increment. See computeRefundedTotal() for why
+   * the previous `existing + this` approach over-counted whenever a payment had
+   * more than one refund.
+   *
+   * Fallback order, most to least trustworthy:
+   *   1. the aggregate over every distinct refund id we have seen
+   *   2. this event's own amount, but ONLY when nothing is banked yet — that is
+   *      a genuinely first refund and cannot double-count
+   *   3. leave the stored value untouched; never guess on a money column
+   */
+  const aggregate = await computeRefundedTotal(supabase, startedAt, refund.payment_id ?? null);
   let nextRefundAmount: number;
-  if (thisRefund === null) {
-    nextRefundAmount = existing;
-  } else if (internal === "Failed") {
-    // REJECTED / FAILED. We bank the amount optimistically on refund.created
-    // (it is the only event that carries it early), so a refund that then dies
-    // must hand it back — otherwise the payment reads as partly refunded when
-    // no money ever left. Only unwind OUR OWN pending amount: if we never saw
-    // the create, there is nothing of ours to remove.
-    nextRefundAmount = sameRefund && !alreadySettled
-      ? round2(Math.max(0, existing - thisRefund))
-      : existing;
-  } else if (sameRefund) {
-    nextRefundAmount = round2(Math.max(existing, thisRefund));
+  if (aggregate !== null) {
+    nextRefundAmount = aggregate;
+  } else if (existing === 0 && thisRefund !== null && internal !== "Failed") {
+    nextRefundAmount = round2(thisRefund);
   } else {
-    nextRefundAmount = round2(existing + thisRefund);
+    nextRefundAmount = existing;
   }
 
   // Build the diff, then prune anything already equal to what is stored. Every
@@ -679,8 +742,18 @@ async function handleRefundEvent(
     // Full vs partial measured against the ORIGINAL amount, same test as
     // stripe-webhook-live's charge.refunded handler.
     const original = Number(row.amount ?? 0);
-    const nextStatus = original > 0 && nextRefundAmount >= original ? "Refunded" : "Partial Refund";
+    const nextStatus = refundStatusFor(original, nextRefundAmount);
     if (nextStatus !== row.status) update.status = nextStatus;
+
+    // remaining_amount MUST be derived from the corrected total. It was
+    // previously left stale, producing rows that contradicted themselves —
+    // status 'Refunded' with remaining_amount still equal to the full charge.
+    if (original > 0) {
+      const nextRemaining = remainingAfterRefund(original, nextRefundAmount);
+      if (Number(row.remaining_amount ?? -1) !== nextRemaining) {
+        update.remaining_amount = nextRemaining;
+      }
+    }
   } else if (internal === "Failed" && !alreadySettled) {
     // REJECTED / FAILED. payments.status is deliberately untouched: the original
     // charge is still good money, only the refund attempt died.
@@ -753,6 +826,67 @@ async function resolveTenant(
     (r.status === "active" ? 2 : 0) + (mode !== null && r.square_mode === mode ? 1 : 0);
 
   return rows.reduce((best, r) => (score(r) > score(best) ? r : best), rows[0]);
+}
+
+/**
+ * oauth.authorization.revoked — the merchant (or we) killed the grant.
+ *
+ * WHY THIS EXISTS. Every token Square issued to us for this merchant is dead
+ * the instant this event fires, but nothing else in the system can observe
+ * that. `refresh-square-tokens` deliberately never writes 'revoked' (see its
+ * header: "A merchant-initiated revocation arrives as the
+ * `oauth.authorization.revoked` webhook, which owns that transition"), and
+ * `square_get_tokens` filters on `status='active'` — so without this case the
+ * row stays 'active' with a corpse in the Vault. The portal keeps rendering a
+ * green "Connected" card, `loadConnection` keeps handing the adapter a token
+ * Square will refuse, and every checkout dies at the API with an opaque 401
+ * instead of the operator being told to reconnect.
+ *
+ * MODE-SCOPED, and that is load-bearing. `uq_square_connections_active` is
+ * UNIQUE(tenant_id, square_mode) WHERE status='active', so one active TEST and
+ * one active LIVE connection coexist by design. Sandbox and production merchant
+ * ids are disjoint, so a revocation is always about exactly one of them —
+ * passing NULL here would let a sandbox disconnect take the live merchant's
+ * payments down with it.
+ *
+ * IDEMPOTENT for free: square_clear_tokens only touches rows already 'active',
+ * so a redelivery is a no-op UPDATE of zero rows rather than a second write
+ * that would stomp `disconnected_at`.
+ *
+ * NOTE the row is NOT deleted, matching resolveTenant's contract: a refund that
+ * settles after the operator walked away must still map merchant_id -> tenant_id.
+ */
+async function handleRevocationEvent(
+  supabase: SupabaseClient,
+  tenantId: string,
+  mode: string,
+  revocation: SquareRevocationObject | undefined,
+): Promise<HandlerResult> {
+  const revokerType = revocation?.revoker_type ?? "UNKNOWN";
+  const revokedAt = revocation?.revoked_at ?? new Date().toISOString();
+
+  const { error } = await supabase.rpc("square_clear_tokens", {
+    p_tenant_id: tenantId,
+    p_square_mode: mode,
+    p_new_status: "revoked",
+    // Written to `last_error`, which the portal surfaces verbatim. Say who did
+    // it and what the operator must now do — an empty reason on a dead
+    // connection reads as a bug in our software.
+    p_error:
+      `Square access was revoked by ${revokerType} at ${revokedAt}. ` +
+      `Reconnect from Settings to resume taking payments.`,
+  });
+
+  if (error) {
+    // Retryable: the grant really is gone, so leaving the row 'active' is the
+    // wrong resting state and it is worth asking Square to redeliver.
+    throw new RetryableError(`square_clear_tokens failed: ${error.message}`);
+  }
+
+  return {
+    matched: true,
+    note: `connection revoked (${mode}) by ${revokerType}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -852,6 +986,9 @@ Deno.serve(async (req: Request) => {
   try {
     // ---- 3. ROUTE BY MERCHANT ----------------------------------------------
     let tenantId: string | null = null;
+    // The mode of the row we actually matched — NOT tenants.square_mode. A
+    // revocation must be applied to the exact connection the event is about.
+    let connMode: string | null = null;
     if (merchantId) {
       const conn = await resolveTenant(supabase, startedAt, merchantId, verified.mode);
       if (!conn) {
@@ -862,6 +999,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ received: true, processed: false, reason: "unknown_merchant" });
       }
       tenantId = conn.tenant_id;
+      connMode = conn.square_mode;
     } else {
       console.error("[square-webhook] event carried no merchant_id:", eventId, eventType);
       return jsonResponse({ received: true, processed: false, reason: "missing_merchant_id" });
@@ -901,6 +1039,23 @@ Deno.serve(async (req: Request) => {
           break;
         }
         result = await handleRefundEvent(supabase, startedAt, refund);
+        break;
+      }
+
+      case "oauth.authorization.revoked": {
+        // tenantId is non-null here — the `else` above returns early — but the
+        // compiler cannot see that through the closure, and connMode is only
+        // set on the same path.
+        if (!tenantId || !connMode) {
+          result = { matched: false, note: "revocation without a resolved connection" };
+          break;
+        }
+        result = await handleRevocationEvent(
+          supabase,
+          tenantId,
+          connMode,
+          envelope.data?.object?.revocation,
+        );
         break;
       }
 

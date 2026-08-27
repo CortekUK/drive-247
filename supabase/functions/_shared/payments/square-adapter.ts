@@ -645,16 +645,40 @@ export async function refundSquarePayment(
   if (money.outcome) return money.outcome;
   const currency = money.currency;
 
-  // IDEMPOTENCY. Keying on (payment, amount) alone silently collapses two
-  // legitimate equal-amount partial refunds into one: the second call returns
-  // the FIRST refund's object, the adapter reports success, and the customer is
-  // short the money. A refund is legitimately repeatable, so the key must carry
-  // the refund's own row identity. Fall back to the payment row id, and only
-  // then to amount-only, so behaviour degrades rather than breaking.
+  /**
+   * IDEMPOTENCY — this key has to satisfy two OPPOSING requirements.
+   *
+   *   RETRY of one refund      -> same key, so Square de-dupes and we never
+   *                               refund twice for one operation.
+   *   SECOND, DISTINCT refund  -> different key, so a genuine second partial
+   *                               refund actually reaches Square.
+   *
+   * Keying on (payment, amount) fails the second: two £10 partial refunds of the
+   * same payment collapse into one, Square returns the FIRST refund's object,
+   * the adapter reports success, and the customer is short £10.
+   * Keying on (payment, rowId, amount) fails it identically, because both
+   * refunds belong to the SAME payments row — there is no per-refund row here
+   * (process-refund passes the payment record, and refund_row_id does not exist
+   * on it: verified, 0 occurrences).
+   *
+   * So the discriminator is HOW MUCH WAS ALREADY REFUNDED when this call was
+   * made. That advances only when a refund actually settles:
+   *   1st £10 (nothing banked)     -> seed "0"
+   *   retry of it (still nothing)  -> seed "0"      -> de-dupes  ✅
+   *   2nd £10 (£10 now banked)     -> seed "1000"   -> proceeds  ✅
+   *
+   * The failure direction is deliberate: if the settling webhook has not landed
+   * yet, a genuine second refund shares the first's key and is REFUSED. Blocking
+   * a real refund is recoverable — a retry once the webhook lands succeeds.
+   * Double-refunding real money is not.
+   */
+  const priorRefundedMinor = Math.max(
+    0,
+    majorToMinorUnits(spec.paymentRecord.refund_amount) ?? 0,
+  );
   const refundIdentity =
     (spec.paymentRecord.refund_row_id as string | undefined) ??
-    (spec.paymentRecord.id as string | undefined) ??
-    String(amount);
+    `${spec.paymentRecord.id ?? "norow"}-after${priorRefundedMinor}`;
   const idempotencyKey = await squareIdempotencyKey(
     `rfnd-${squarePaymentId}-${refundIdentity}-${amount}`,
   );

@@ -3385,9 +3385,11 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/square-adapter.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/predicates.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/refund.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/square_client_test.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/dispatch_test.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/refund_shape_test.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/seam_test.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/adapter_correlation_test.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/factory.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/zoho-client.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/xero-client.ts",
@@ -3557,10 +3559,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 393,
-    "total_words": 524890,
+    "total_files": 395,
+    "total_words": 533159,
     "counts": {
-      "code": 386,
+      "code": 388,
       "document": 7
     },
     "semantic_candidates": [
@@ -3792,9 +3794,11 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/square-adapter.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/predicates.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/refund.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/square_client_test.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/dispatch_test.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/refund_shape_test.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/seam_test.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/payments/__tests__/adapter_correlation_test.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/factory.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/zoho-client.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/accounting/xero-client.ts",
@@ -4102,6 +4106,7 @@
         "/home/haseeb-raza/Desktop/drive-247/scripts/add-vehicle-dates.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/sim/helpers.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/sim/scenario-payg-30-days.mjs",
+        "/home/haseeb-raza/Desktop/drive-247/scripts/square-guardrails/check-meta.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/square-guardrails/check-predicates.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/square-guardrails/check-frozen.mjs"
       ],
@@ -4112,10 +4117,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 22,
-    "total_words": 20584,
+    "total_files": 23,
+    "total_words": 23561,
     "counts": {
-      "code": 21,
+      "code": 22,
       "document": 1
     },
     "semantic_candidates": [
@@ -4138,6 +4143,7 @@
       "/home/haseeb-raza/Desktop/drive-247/scripts/add-vehicle-dates.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/sim/helpers.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/sim/scenario-payg-30-days.mjs",
+      "/home/haseeb-raza/Desktop/drive-247/scripts/square-guardrails/check-meta.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/square-guardrails/check-predicates.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/square-guardrails/check-frozen.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/README.md"

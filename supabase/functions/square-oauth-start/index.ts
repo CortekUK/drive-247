@@ -69,9 +69,27 @@ type AuthorizeResult =
  * perfectly valid one) could bind their own Square account to a victim tenant
  * and collect that tenant's rental payments into their own bank account.
  *
- * Differs from stripe-oauth-start's version only in returning the acting
+ * Differs from stripe-oauth-start's version in two ways: it returns the acting
  * app_users.id, which we persist on the state row so a connect attempt is
- * attributable to a person.
+ * attributable to a person, and it CHECKS is_active.
+ *
+ * WHY is_active IS LOAD-BEARING AND NOT DEFENSIVE PADDING. A Supabase access
+ * token is a stateless JWT: nothing about flipping app_users.is_active to false
+ * invalidates one, and admin-deactivate-user's only revocation attempt is an
+ * `auth.admin.signOut(..., 'global')` wrapped in a try/catch that merely warns
+ * (admin-deactivate-user/index.ts:130). Measured on this database: two
+ * deactivated admins — one of them is_super_admin — hold 51 auth.sessions rows
+ * between them with 51 unrevoked refresh tokens and not_after IS NULL, i.e. no
+ * expiry at all. Any one of those refreshes into a token that auth.getUser()
+ * accepts. Without this check a REVOKED super admin can still bind a Square
+ * merchant account to any tenant on the platform — which is the exact attack the
+ * paragraph above says this function exists to prevent, merely arriving through
+ * a former employee rather than a booking customer.
+ *
+ * Fails CLOSED (`=== true`, not `!== false`): the column is NOT NULL DEFAULT
+ * true, so a missing value can only mean the select drifted, and locking an
+ * admin out of a Connect button is a recoverable annoyance whereas granting a
+ * revoked one is not.
  */
 async function authorizeCaller(
   req: Request,
@@ -95,13 +113,23 @@ async function authorizeCaller(
 
   const { data: appUser } = await supabase
     .from("app_users")
-    .select("id, is_super_admin, tenant_id, role")
+    .select("id, is_super_admin, tenant_id, role, is_active")
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
   if (!appUser) {
     // A booking customer authenticates against auth.users but has no app_users
     // row at all. That is the single most likely holder of a stray project JWT.
+    return { ok: false, response: errorResponse("Not authorized to connect Square for this tenant", 403) };
+  }
+
+  // See the is_active note in the docblock: deactivation does not invalidate an
+  // already-issued JWT, so this row-level check is the only thing that stops a
+  // revoked admin. Checked before role, so a deactivated super admin is refused.
+  if (appUser.is_active !== true) {
+    console.warn(
+      `[square-oauth-start] refused deactivated app_user ${appUser.id} for tenant ${tenantId}`,
+    );
     return { ok: false, response: errorResponse("Not authorized to connect Square for this tenant", 403) };
   }
 

@@ -87,11 +87,12 @@ if [ $fail -eq 0 ]; then
   echo "  - each gate above was deliberately violated this run and each one failed"
   echo
   echo "NOT proven: that Stripe behaviour is unchanged in any file outside the"
-  echo "frozen set. Nothing here reads a diff for meaning. These branch-touched"
-  echo "files mention Stripe and are NOT frozen — review their diffs by hand:"
+  echo "frozen set. Nothing here reads a diff for meaning. These files existed on"
+  echo "main, were MODIFIED by this branch, mention Stripe, and are NOT frozen —"
+  echo "review their diffs by hand:"
   frozen_paths=" $(grep -vE '^[[:space:]]*(#|$)' "$BASELINE" 2>/dev/null | awk '{print $2}' | tr '\n' ' ')"
   residual=0
-  for f in $(git diff --name-only main...HEAD 2>/dev/null | grep -E '\.tsx?$' || true); do
+  for f in $(git diff --name-only --diff-filter=M main...HEAD 2>/dev/null | grep -E '\.tsx?$' || true); do
     case "$frozen_paths" in *" $f "*) continue ;; esac
     [ -f "$f" ] || continue
     if grep -qi stripe "$f"; then echo "    $f"; residual=$((residual+1)); fi

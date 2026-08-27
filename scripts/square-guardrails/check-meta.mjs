@@ -42,8 +42,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { RULES, violationsFor } from './check-predicates.mjs';
-
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 const BASELINE_REL = 'docs/square-integration/BASELINE.sha256';
@@ -57,6 +55,37 @@ if (process.env.SQUARE_GUARDRAILS_META === 'child') {
 
 const TMP = mkdtempSync(join(tmpdir(), 'square-guardrail-meta-'));
 process.on('exit', () => { try { rmSync(TMP, { recursive: true, force: true }); } catch {} });
+
+// Imported dynamically, and behind an exit guard.
+//
+// An earlier draft imported this statically and was neutered by it: the version
+// of check-predicates.mjs that shipped before this rewrite runs its whole scan
+// at module scope and ends in `process.exit(0)`. Importing it therefore ENDED
+// THIS PROCESS with status 0, mid-import, and verify.sh recorded the meta gate
+// as passing without a single proof having run — the precise failure mode this
+// file exists to prevent, reproduced inside it. Neutralising the meta gate must
+// never be one `git checkout` away, so a checker that exits during import is
+// now a loud failure, not a silent pass.
+let RULES, violationsFor;
+{
+  const realExit = process.exit.bind(process);
+  process.exit = (code) => {
+    throw new Error(`check-predicates.mjs called process.exit(${code}) at module scope`);
+  };
+  try {
+    ({ RULES, violationsFor } = await import('./check-predicates.mjs'));
+    if (!Array.isArray(RULES)) throw new Error('RULES is not an exported array');
+    if (typeof violationsFor !== 'function') throw new Error('violationsFor is not an exported function');
+  } catch (err) {
+    process.exit = realExit;
+    console.error('[meta] GATE DOES NOT BITE: check-predicates.mjs cannot be mutation-tested.');
+    console.error(`       ${err.message}`);
+    console.error('       It must export { RULES, violationsFor } and must not run at import time.');
+    process.exit(1);
+  } finally {
+    process.exit = realExit;
+  }
+}
 
 let failed = false;
 let proofs = 0;
@@ -226,6 +255,22 @@ const SANCTIONED = [
 
   assert(entries.length > 0, 'BASELINE.sha256 lists no files');
 
+  // Floor. Everything below tests whatever the baseline happens to list, so
+  // quietly deleting a line would shrink the tested surface without failing
+  // anything. This one entry is named in the workstream directive as CI-gated,
+  // so it is asserted here independently of the baseline's contents.
+  const REQUIRED = {
+    'supabase/functions/_shared/stripe-client.ts':
+      'f1c38aed701799691d1bc27cc408577d5e442e05a09ce938a4815b8e271701bc',
+  };
+  for (const [path, hash] of Object.entries(REQUIRED)) {
+    const listed = entries.find((e) => e.path === path);
+    assert(!!listed, `BASELINE.sha256 no longer freezes ${path}`);
+    assert(!listed || listed.hash === hash,
+           `BASELINE.sha256 records a different checksum for ${path}`,
+           `directive pins ${hash}, baseline says ${listed && listed.hash}`);
+  }
+
   // Reproduce the real tree for exactly the frozen paths.
   const originals = new Map();
   for (const e of entries) {
@@ -281,10 +326,22 @@ const SANCTIONED = [
   copyFileSync(join(HERE, 'verify.sh'), sh);
   chmodSync(sh, 0o755);
 
-  const denoOk = write(box, 'stub/deno-ok', '#!/usr/bin/env bash\nexit 0\n');
-  const denoFail = write(box, 'stub/deno-fail', '#!/usr/bin/env bash\nexit 1\n');
-  chmodSync(denoOk, 0o755);
-  chmodSync(denoFail, 0o755);
+  // Stub `deno`s. A blanket failing stub would only prove that SOME typecheck
+  // step is wired up: break step 3 alone and steps 4 and 5 still fail the run,
+  // so the hole stays invisible. These fail for exactly one step each, so every
+  // step has to carry its own exit status.
+  const stub = (name, body) => {
+    const p = write(box, `stub/${name}`, `#!/usr/bin/env bash\n${body}\n`);
+    chmodSync(p, 0o755);
+    return p;
+  };
+  const denoOk = stub('deno-ok', 'exit 0');
+  const denoFail = stub('deno-fail', 'exit 1');
+  const denoFailSeam = stub('deno-fail-seam',
+    '[ "$1" = check ] && case "$*" in *_shared/payments*) exit 1;; esac\nexit 0');
+  const denoFailSquareFn = stub('deno-fail-square-fn',
+    '[ "$1" = check ] && case "$*" in *square-*) exit 1;; esac\nexit 0');
+  const denoFailTests = stub('deno-fail-tests', '[ "$1" = test ] && exit 1\nexit 0');
 
   // A minimal tree the real script can walk: both grep roots, one square edge
   // function so step 4's loop body actually executes, one frozen file.
@@ -315,10 +372,16 @@ const SANCTIONED = [
   rmSync(planted);
 
   // typecheck failure propagates — the defect this script was rewritten for.
-  // The stub prints nothing at all, so a gate that looked for the word "error"
-  // in the output would read this as success.
+  // The stubs print nothing at all, so a gate that looked for the word "error"
+  // in the output would read every one of these as success.
   assert(runVerify(denoFail) !== 0, 'verify.sh exits 0 while deno reports failure',
          'the typecheck/test steps are not keying off exit status');
+  assert(runVerify(denoFailSeam) !== 0,
+         'verify.sh exits 0 while the SEAM typecheck (step 3) is failing');
+  assert(runVerify(denoFailSquareFn) !== 0,
+         'verify.sh exits 0 while a SQUARE EDGE FUNCTION typecheck (step 4) is failing');
+  assert(runVerify(denoFailTests) !== 0,
+         'verify.sh exits 0 while the SEAM CONTRACT TESTS (step 5) are failing');
 
   assert(runVerify(denoOk) === 0, 'verify.sh stays red after the sandbox is repaired');
 }

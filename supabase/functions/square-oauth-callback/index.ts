@@ -93,6 +93,31 @@ interface SquareMerchant {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Make an UNTRUSTED string safe to interpolate into a log line.
+ *
+ * `error` and `error_description` arrive in the query string of a PUBLIC
+ * endpoint, so they are attacker-controlled, not Square-controlled — anyone
+ * holding a live state nonce can put anything in them. Interpolated raw, an
+ * embedded newline ends the current log line and starts a new one that is
+ * byte-identical in shape to this function's own success line:
+ *
+ *   ?error_description=x%0A[square-oauth-callback] stored connection FORGED …
+ *
+ * Measured against the deployed function on 27 Aug 2026: the forged lines
+ * landed in the logs exactly as written, and a 2 KB parameter produced a 2,095
+ * byte log entry. `redirectBack` already clamps the same values before they
+ * reach a URL; this is the identical defence applied to the other sink.
+ *
+ * Control characters are replaced rather than slugged, because Square's real
+ * `error_description` is prose an operator needs to read — destroying it would
+ * trade one defect for another.
+ */
+function safeForLog(raw: string, max = 200): string {
+  const flattened = raw.replace(/[\u0000-\u001f\u007f]+/g, " ").trim();
+  return flattened.length > max ? `${flattened.slice(0, max)}…[truncated]` : flattened;
+}
+
+/**
  * Render an error for a log line WITHOUT leaking credentials.
  *
  * Deliberately drops SquareError.raw: that is the full parsed response body, and
@@ -342,7 +367,26 @@ Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  if (req.method !== "GET" && req.method !== "HEAD") {
+  // HEAD MUST NOT CONSUME THE NONCE.
+  //
+  // The state row is single-use and whoever reaches it first wins it. A
+  // top-level browser navigation — which is the only thing Square ever sends
+  // here — is ALWAYS a GET. So anything issuing HEAD against this URL is an
+  // intermediary rather than the operator: browser speculative prefetch, a
+  // corporate link scanner, or a security proxy that HEAD-probes a redirect
+  // target before permitting the navigation.
+  //
+  // Measured against the deployed function on 27 Aug 2026: one HEAD consumed
+  // the state and the operator's real GET immediately after got a hard 400
+  // ("expired or was already used") with no route forward except restarting
+  // from the dashboard. Answering HEAD with a bodyless 200 and NO database work
+  // makes those probes harmless and leaves the real flow byte-for-byte as it
+  // was.
+  if (req.method === "HEAD") {
+    return new Response(null, { status: 200 });
+  }
+
+  if (req.method !== "GET") {
     return errorResponse("Method not allowed", 405);
   }
 
@@ -404,9 +448,14 @@ Deno.serve(async (req) => {
 
   // Operator denied consent, or Square refused. Nothing was created.
   if (oauthError || !code) {
+    // safeForLog on BOTH: these are query-string values on a public endpoint,
+    // so a raw interpolation lets the caller forge extra log lines (verified
+    // against the deployed function, 27 Aug 2026). The redirect is already
+    // clamped by redirectBack; this closes the matching hole in the log sink.
     console.error(
       `${LOG} authorization failed for tenant ${stateRow.tenant_id}: ` +
-        `${oauthError ?? "missing code"}${oauthErrorDescription ? ` — ${oauthErrorDescription}` : ""}`,
+        `${oauthError ? safeForLog(oauthError, 64) : "missing code"}` +
+        `${oauthErrorDescription ? ` — ${safeForLog(oauthErrorDescription)}` : ""}`,
     );
     return redirectBack(stateRow, "error", oauthError ?? "missing_code");
   }

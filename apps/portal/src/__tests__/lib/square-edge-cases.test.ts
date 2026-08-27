@@ -318,3 +318,80 @@ describe("R-22 · a Square tenant is not permanently 'not ready'", () => {
     expect(mig()).toContain("COALESCE(sc.location_id, ''::text) <> ''::text");
   });
 });
+
+/**
+ * Lifecycle: the merchant pulls the plug.
+ *
+ * Square emits `oauth.authorization.revoked` when an operator disconnects our
+ * app from THEIR Square dashboard. Verified 2026-08-27 that the live sandbox
+ * subscription (wbhk_434fbbab569644ad95b5a9ffc65f4f1d, enabled, pointed at
+ * .../functions/v1/square-webhook) really does carry that event type, so this
+ * is a delivery we WILL receive rather than a hypothetical.
+ *
+ * Every assertion below runs against `codeOnly`, because this file's own header
+ * comments name the event and a prose match would pass on nothing.
+ */
+describe("lifecycle · oauth.authorization.revoked kills the connection", () => {
+  const wh = () => codeOnly(fn("square-webhook"));
+
+  it("dispatches the event instead of dropping it into `default`", () => {
+    // Without a case the switch falls through to `default`, which logs
+    // "unhandled event type" and acks 200. The row stays 'active' holding a
+    // token Square has already destroyed.
+    expect(wh()).toContain('case "oauth.authorization.revoked"');
+  });
+
+  it("flips the row to 'revoked' via square_clear_tokens", () => {
+    const s = wh();
+    expect(s).toContain('square_clear_tokens');
+    expect(s).toContain('p_new_status: "revoked"');
+  });
+
+  it("scopes the revocation to the matched connection's mode", () => {
+    // uq_square_connections_active is UNIQUE(tenant_id, square_mode) WHERE
+    // status='active', so one active TEST and one active LIVE connection
+    // coexist by design. Passing NULL for the mode would let a sandbox
+    // disconnect take the live merchant's payments down with it. Confirmed
+    // against the deployed RPC: clearing mode 'live' left the active 'test'
+    // row untouched.
+    const s = wh();
+    // The RPC is called with the handler's own `mode` argument …
+    expect(s).toContain('p_square_mode: mode');
+    expect(s).not.toContain('p_square_mode: null');
+    // … and the call site feeds that argument from the resolved row.
+    expect(s).toMatch(/handleRevocationEvent\([\s\S]{0,120}connMode/);
+  });
+
+  it("derives the mode from the resolved row, never from tenants.square_mode", () => {
+    // The event is about one specific grant. resolveTenant already matched the
+    // row by merchant_id; its square_mode is the only trustworthy answer.
+    expect(wh()).toContain('connMode = conn.square_mode');
+  });
+
+  it("refuses to act when no connection was resolved", () => {
+    expect(wh()).toContain('if (!tenantId || !connMode)');
+  });
+
+  it("never deletes the connection row", () => {
+    // resolveTenant must keep mapping merchant_id -> tenant_id so a refund that
+    // settles after the operator walked away is still recorded against them.
+    const s = wh();
+    expect(s).not.toContain('.from("square_connections")\n      .delete()');
+    expect(s).not.toMatch(/square_connections[\s\S]{0,80}\.delete\(\)/);
+  });
+
+  it("treats an RPC failure as retryable rather than acking a lie", () => {
+    // Leaving the row 'active' when the grant is gone is the wrong resting
+    // state, so it is worth asking Square to redeliver.
+    expect(wh()).toMatch(/square_clear_tokens failed[\s\S]{0,40}RetryableError|RetryableError\([\s\S]{0,60}square_clear_tokens failed/);
+  });
+
+  it("records the revoker without branching on it", () => {
+    // MERCHANT (operator disconnected) and APPLICATION (we called RevokeToken)
+    // both mean the grant is gone; branching would be a bug waiting to happen.
+    const s = wh();
+    expect(s).toContain('revoker_type');
+    expect(s).not.toContain('=== "MERCHANT"');
+    expect(s).not.toContain("=== 'MERCHANT'");
+  });
+});
