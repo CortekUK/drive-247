@@ -9,6 +9,7 @@ import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
 import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import BonzahAvailabilityNotice from "@/components/rentals/bonzah-availability-notice";
+import { resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -544,20 +545,33 @@ const CreateRental = () => {
         // block was informational on the screen operators use most — which is how
         // a maintenance hold stayed bypassable from the portal.
         //
-        // Scoped to maintenance/swap deliberately, to match what
-        // check_rental_overlap actually rejects (23P02). The table also holds 217
-        // vehicle-specific `manual` blocks that the trigger does NOT reject;
-        // blocking those here would refuse bookings the database would accept and
-        // would change behaviour for every operator using manual blocks today.
-        // Whether manual blocks should bind is a product decision, and it belongs
-        // in the trigger first — the client is advisory UX either way.
-        const isHold = block.source_type === "maintenance" || block.source_type === "swap";
+        // `manual` blocks now bind here too. They previously did not, on the
+        // reasoning that the trigger does not reject them either — but that left
+        // the one screen operators use most as the only place a block they
+        // deliberately created had no effect. Five rentals were created straight
+        // over an in-force block through this screen (all source='portal'); one
+        // cost a tenant a $410.15 refund and a written apology to the customer.
+        //
+        // Reviewing every in-force block confirms the intent is unambiguous:
+        // "repair", "Turo", "rented", "Rented long term", "Car totaled", "Wreak".
+        // None are informational. An operator who blocks dates means "do not
+        // book this car", and this screen should honour that.
+        //
+        // Still deliberately client-side: it returns a readable reason to our own
+        // staff and never reaches check_rental_overlap, so it cannot surface a raw
+        // 23P02 (which interpolates the operator's private note) to a customer.
+        // Staff who genuinely need to book can delete the block first.
+        const isHold =
+          block.source_type === "maintenance" ||
+          block.source_type === "swap" ||
+          block.source_type === "manual" ||
+          !block.source_type;
 
         if (isGlobal || (block.vehicle_id === vehicleId && isHold)) {
           console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (${isGlobal ? "global" : "maintenance hold"})`);
           return {
             blocked: true,
-            reason: block.reason_code || block.reason || (isGlobal ? "General blocked period" : "In service"),
+            reason: block.reason_code || block.reason || (isGlobal ? "General blocked period" : "Blocked dates"),
             isGlobal
           };
         }
@@ -1075,7 +1089,7 @@ const CreateRental = () => {
         // `is_paused` is selected but deliberately NOT filtered out: staff may
         // still need to put a paused vehicle on a rental knowingly. The picker
         // marks it instead of hiding it, so the override is never blind.
-        .select("id, reg, make, model, status, is_paused, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
+        .select("id, reg, make, model, status, is_paused, available_daily, available_weekly, available_monthly, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -3598,6 +3612,9 @@ const CreateRental = () => {
                                               )}
                                               {vehicle.is_paused && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Paused</span>
+                                              )}
+                                              {resolveVehicleStatus(vehicle) === 'Unavailable' && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 font-medium">Off sale</span>
                                               )}
                                               {fleetHealthEnabled && (
                                                 <HealthStatusChip status={healthStatusFor(vehicle.id)} compact />

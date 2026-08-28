@@ -178,10 +178,27 @@ describe("§5.1 — the portal booking form no longer waives a maintenance hold"
     expect(page()).not.toContain("vehicle-specific blocks are informational only");
   });
 
-  it("scopes to exactly what the live trigger rejects, so the client cannot be stricter than the database", () => {
+  it("honours manual blocks too — deliberately stricter than the trigger", () => {
     const s = page();
-    // 217 vehicle-specific `manual` blocks exist that check_rental_overlap does
-    // NOT reject. Blocking those here would refuse bookings the database allows.
-    expect(s).toContain('block.source_type === "maintenance" || block.source_type === "swap"');
+    // REVERSED 2026-08-28, with evidence the original decision lacked.
+    //
+    // This previously scoped to maintenance/swap so the client could not be
+    // stricter than check_rental_overlap. In practice that left this screen —
+    // the one operators use most — as the only place a block they deliberately
+    // created had no effect. Five rentals were created straight over an
+    // in-force block, every one of them source='portal'; one cost a tenant a
+    // $410.15 refund and a written apology to the customer.
+    //
+    // Every in-force block's reason is unambiguous: "Car totaled", "Wreak",
+    // "repair", "Turo", "rented", "Rented long term". An operator blocking
+    // dates means "do not book this car".
+    //
+    // The trigger cannot safely take this on: its maintenance branch raises
+    // 23P02 interpolating the operator's private note, and nothing in the
+    // booking app catches that errcode, so it would surface to a customer.
+    // Client-side is the correct home for it — staff who genuinely need to
+    // book can delete the block first.
+    expect(s).toContain('block.source_type === "manual"');
+    expect(s).toContain('block.vehicle_id === vehicleId && isHold');
   });
 });

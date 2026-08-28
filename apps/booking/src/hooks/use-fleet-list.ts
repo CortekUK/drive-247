@@ -44,10 +44,16 @@ export function useFleetList() {
           .select(canRevealRegistration(tenant) ? "id, reg, make, model, status" : "id, make, model, status")
           .eq("tenant_id", tenant.id)
           .in("status", ["Available", "Rented"])
-          // A paused vehicle is off the road. This picker reads neither
-          // blocked_dates nor available_*, so without this it stays selectable
-          // in the enquiry / apply forms no matter what the operator switches off.
+          // A paused vehicle is off the road. This picker still reads no
+          // blocked_dates, so a date-scoped block does not remove a car here —
+          // only Pause and the all-durations-off check below do.
           .eq("is_paused", false)
+          // A car with every hire duration switched off is off sale — /fleet
+          // already excludes it (fleet/page.tsx). This picker previously did
+          // not, so an operator who switched all three off still saw the car
+          // offered in their own enquiry form. Partial combinations are
+          // untouched: a monthly-only car is still legitimately offerable.
+          .or("available_daily.eq.true,available_weekly.eq.true,available_monthly.eq.true")
           .order("make", { ascending: true })
           .order("model", { ascending: true });
         if (vErr) throw vErr;

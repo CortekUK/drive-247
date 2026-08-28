@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     // customer can pick another from the same offer.
     const { data: vehicleRow } = await supabase
       .from("vehicles")
-      .select("id, tenant_id, status, is_paused")
+      .select("id, tenant_id, status, is_paused, available_daily, available_weekly, available_monthly")
       .eq("id", body.vehicleId)
       .maybeSingle();
     if (!vehicleRow || vehicleRow.tenant_id !== offer.tenant_id) {
@@ -76,7 +76,13 @@ Deno.serve(async (req) => {
     // below is what enforces the dates. So reject only what is truly off the
     // books: disposed/sold, or paused by the operator.
     const vStatus = (vehicleRow.status ?? "").toLowerCase();
-    if (vehicleRow.is_paused || ["disposed", "sold", "retired"].includes(vStatus)) {
+    // Every hire duration switched off = off sale. This is the only
+    // customer-facing path that can WRITE a rental, so it must reject here.
+    const offSale =
+      vehicleRow.available_daily === false &&
+      vehicleRow.available_weekly === false &&
+      vehicleRow.available_monthly === false;
+    if (vehicleRow.is_paused || offSale || ["disposed", "sold", "retired"].includes(vStatus)) {
       return jsonResponse({ status: "vehicle_unavailable", reason: "retired", availableVehicles: vehiclesArr }, 409);
     }
 
