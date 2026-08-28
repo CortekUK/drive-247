@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
-import { VehicleStatusBadge } from "@/components/vehicles/vehicle-status-badge";
+import { VehicleStatusBadge, resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
 import type { InshurEligibilityState } from "@/components/vehicles/inshur-eligibility-badge";
 import {
@@ -347,11 +347,12 @@ export default function VehiclesListEnhanced() {
     // `status` value, because status is machine-owned — closing a rental
     // unconditionally resets it to 'Available' and would silently un-pause.
     if (filters.status !== 'all') {
-      filtered = filters.status === 'paused'
-        ? filtered.filter(vehicle => vehicle.is_paused === true)
-        : filtered.filter(vehicle =>
-            vehicle.status.toLowerCase() === filters.status.toLowerCase()
-          );
+      // Match on the RESOLVED status so the filter agrees with the badge the
+      // operator can see. Filtering on the raw column made 'Unavailable'
+      // unselectable and hid paused cars under 'Available'.
+      filtered = filtered.filter(
+        vehicle => resolveVehicleStatus(vehicle).toLowerCase() === filters.status.toLowerCase()
+      );
     }
 
     // Make filter
@@ -558,6 +559,7 @@ export default function VehiclesListEnhanced() {
           { value: 'available', label: 'Available' },
           { value: 'rented', label: 'Rented' },
           { value: 'paused', label: 'Paused' },
+          { value: 'unavailable', label: 'Unavailable' },
           { value: 'disposed', label: 'Disposed' },
         ];
         const performanceOptions = [
@@ -810,7 +812,7 @@ export default function VehiclesListEnhanced() {
                       </TableCell>
                     )}
                     <TableCell className="text-center">
-                      <VehicleStatusBadge status={vehicle.is_paused ? 'Paused' : vehicle.status} />
+                      <VehicleStatusBadge status={resolveVehicleStatus(vehicle)} />
                     </TableCell>
                     {fleetHealthEnabled && (
                       <TableCell>

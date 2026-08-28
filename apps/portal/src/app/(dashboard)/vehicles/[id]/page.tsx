@@ -25,7 +25,7 @@ import { WarrantyStatusChip } from "@/components/vehicles/warranty-status-chip";
 import { ServicePlanChip } from "@/components/vehicles/service-plan-chip";
 import { SpareKeyChip } from "@/components/vehicles/spare-key-chip";
 import { MetricCard, MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
-import { VehicleStatusBadge } from "@/components/vehicles/vehicle-status-badge";
+import { VehicleStatusBadge, resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { VehiclePauseCard } from "@/components/vehicles/vehicle-pause-card";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -1266,7 +1266,7 @@ export default function VehicleDetail() {
                     <Car className="h-5 w-5" />
                     Vehicle Details
                   </CardTitle>
-                  <VehicleStatusBadge status={vehicle.is_paused ? 'Paused' : vehicle.status} showTooltip />
+                  <VehicleStatusBadge status={resolveVehicleStatus(vehicle)} showTooltip />
                 </div>
                 <CardDescription>Basic vehicle information and specifications</CardDescription>
               </CardHeader>
@@ -1335,8 +1335,19 @@ export default function VehicleDetail() {
                         id="avail-daily"
                         checked={vehicle.available_daily !== false}
                         onCheckedChange={async (checked) => {
-                          await supabase.from("vehicles").update({ available_daily: checked }).eq("id", vehicle.id);
+                          // Was fire-and-forget: no error check, no confirmation.
+                          // A failed save looked identical to a successful one.
+                          const { error } = await supabase.from("vehicles").update({ available_daily: checked }).eq("id", vehicle.id);
+                          if (error) {
+                            toast({ title: "Couldn't save", description: error.message, variant: "destructive" });
+                            return;
+                          }
+                          toast({
+                            title: checked ? "Daily hire on" : "Daily hire off",
+                            description: "This only controls which hire lengths are quoted. To take the car off your booking site, use Vehicle Status below.",
+                          });
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
                         }}
                       />
                       <label htmlFor="avail-daily" className="text-xs font-medium">Daily</label>
@@ -1346,8 +1357,19 @@ export default function VehicleDetail() {
                         id="avail-weekly"
                         checked={vehicle.available_weekly !== false}
                         onCheckedChange={async (checked) => {
-                          await supabase.from("vehicles").update({ available_weekly: checked }).eq("id", vehicle.id);
+                          // Was fire-and-forget: no error check, no confirmation.
+                          // A failed save looked identical to a successful one.
+                          const { error } = await supabase.from("vehicles").update({ available_weekly: checked }).eq("id", vehicle.id);
+                          if (error) {
+                            toast({ title: "Couldn't save", description: error.message, variant: "destructive" });
+                            return;
+                          }
+                          toast({
+                            title: checked ? "Weekly hire on" : "Weekly hire off",
+                            description: "This only controls which hire lengths are quoted. To take the car off your booking site, use Vehicle Status below.",
+                          });
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
                         }}
                       />
                       <label htmlFor="avail-weekly" className="text-xs font-medium">Weekly</label>
@@ -1357,14 +1379,29 @@ export default function VehicleDetail() {
                         id="avail-monthly"
                         checked={vehicle.available_monthly !== false}
                         onCheckedChange={async (checked) => {
-                          await supabase.from("vehicles").update({ available_monthly: checked }).eq("id", vehicle.id);
+                          // Was fire-and-forget: no error check, no confirmation.
+                          // A failed save looked identical to a successful one.
+                          const { error } = await supabase.from("vehicles").update({ available_monthly: checked }).eq("id", vehicle.id);
+                          if (error) {
+                            toast({ title: "Couldn't save", description: error.message, variant: "destructive" });
+                            return;
+                          }
+                          toast({
+                            title: checked ? "Monthly hire on" : "Monthly hire off",
+                            description: "This only controls which hire lengths are quoted. To take the car off your booking site, use Vehicle Status below.",
+                          });
                           queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
+                          queryClient.invalidateQueries({ queryKey: ["vehicles-list"] });
                         }}
                       />
                       <label htmlFor="avail-monthly" className="text-xs font-medium">Monthly</label>
                     </div>
                   </div>
                 </div>
+                <p className="col-span-full text-xs text-muted-foreground -mt-1">
+                  These control which hire lengths customers can quote. To remove this vehicle
+                  from your booking site entirely, use <strong>Vehicle Status &rarr; Pause this vehicle</strong> below.
+                </p>
               </div>
               {vehicle.description && (
                 <div className="col-span-full">
