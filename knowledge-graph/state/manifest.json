@@ -376,7 +376,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx": {
-    "sha": "8ac9e7bcfd9be8e2f218f70b10759d5694b08f8ff646a4565032120dddbe554f",
+    "sha": "c93edf28d1308daacdc76f22156f359132a674ea270f31aea94bc89f417c3ea7",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx": {
@@ -3668,7 +3668,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/fleet-health-p0.test.ts": {
-    "sha": "d28d855892e5f4ca8623308de4914aaaca86c2272b4ea409b4b14216bbeb8414",
+    "sha": "cf0e3c0d2a7e1c4297406fa541460d520868737c9368655d39e3e0e2a642ae99",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/fleet-health-csv.test.ts": {
@@ -5020,7 +5020,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-fleet-list.ts": {
-    "sha": "f4ffedbf96da2cf77f6aca5b46a4d814c2d9c76a47927f4f25d647311c04551b",
+    "sha": "fb55c7acc1f9e3bb6cea3081e6c22b4ce7f12472553cf294e4b8c08014f369dd",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/useDynamicTheme.ts": {
@@ -7292,7 +7292,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/accept-offer/index.ts": {
-    "sha": "9f813758dda42be2ae28fc1fcd96c91e4d9e45e3dadf1d6b90a4e7f9a9d650e5",
+    "sha": "e36d7d3804fa486ffc67ad74ceb9b4c0775ca2dbc96c47f271e30b1bfd6a1116",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/bonzah-calculate-premium/index.ts": {

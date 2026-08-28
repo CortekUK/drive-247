@@ -955,7 +955,7 @@
       "video": []
     },
     "total_files": 946,
-    "total_words": 912419,
+    "total_words": 912685,
     "counts": {
       "code": 946
     },
@@ -2279,7 +2279,7 @@
       "video": []
     },
     "total_files": 358,
-    "total_words": 445563,
+    "total_words": 445619,
     "counts": {
       "code": 343,
       "image": 15
@@ -3543,7 +3543,7 @@
       "video": []
     },
     "total_files": 374,
-    "total_words": 503386,
+    "total_words": 503431,
     "counts": {
       "code": 367,
       "document": 7
