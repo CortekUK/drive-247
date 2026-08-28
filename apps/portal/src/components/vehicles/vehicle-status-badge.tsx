@@ -27,9 +27,11 @@ export function resolveVehicleStatus(v: {
   available_monthly?: boolean | null;
 }): string {
   if (v.is_paused) return 'Paused';
-  // All three hire durations off = not quotable on any tier, i.e. not bookable.
+  // All three hire durations off = not quotable on any tier. NOTE: this is
+  // "off sale", NOT "cannot be booked" — the enquiry picker and the staff New
+  // Rental picker both still offer it. Only Pause closes every path.
   if (
-    v.status === 'Available' &&
+    (v.status ?? '').toLowerCase() === 'available' &&
     v.available_daily === false &&
     v.available_weekly === false &&
     v.available_monthly === false
@@ -53,7 +55,7 @@ const getStatusConfig = (status: string) => {
         variant: 'secondary' as const,
         icon: AlertTriangle,
         className: 'bg-amber-100 text-amber-800 hover:bg-amber-200',
-        tooltip: 'Not bookable — every hire duration is switched off'
+        tooltip: 'Off sale — no hire durations enabled, so it cannot be quoted. It can still be picked in enquiries and by staff; use Pause to remove it everywhere.'
       };
     case 'rented':
       return {
