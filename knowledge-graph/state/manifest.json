@@ -6464,7 +6464,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-enquiry/index.ts": {
-    "sha": "f899177124aafaf675e71d5b8909d29e66b3d3f539712c80df7f5f4113445363",
+    "sha": "826c2fcdaf252e85c7b03313d53f35db01d71341fb50c2887c7e330a0a581176",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-migration-email/index.ts": {
@@ -7312,7 +7312,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-application/index.ts": {
-    "sha": "aa042374db7335321f00e5baca929276cd93ea45be581f9a5a0a0975eef09af8",
+    "sha": "41de50bd6d39d2a6fec8576cf6ec73756875015a2ee778da96529f290e3cbdc1",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/aws-sns-sms/index.ts": {

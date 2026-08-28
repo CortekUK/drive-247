@@ -16,11 +16,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw, Upload } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
+import { CustomerCsvImportDialog } from "@/components/customers/customer-csv-import-dialog";
 import { GenerateInviteDialog } from "@/components/customers/generate-invite-dialog";
 import { CustomerBalanceChip } from "@/components/customers/customer-balance-chip";
 import { CustomerSummaryCards } from "@/components/customers/customer-summary-cards";
@@ -137,6 +138,7 @@ const CustomersList = () => {
   // Block/Delete dialog state
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [blockReason, setBlockReason] = useState("");
 
@@ -686,6 +688,16 @@ const CustomersList = () => {
             </Button>
           )}
           {canEdit('customers') && (
+            <Button
+              variant="outline"
+              className="flex-1 sm:flex-none"
+              onClick={() => setCsvImportOpen(true)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </Button>
+          )}
+          {canEdit('customers') && (
             <Button className="bg-gradient-primary flex-1 sm:flex-none" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
@@ -1033,6 +1045,8 @@ const CustomersList = () => {
           )}
         </div>
       )}
+
+      <CustomerCsvImportDialog open={csvImportOpen} onOpenChange={setCsvImportOpen} />
 
       <CustomerFormModal
         open={isModalOpen}

@@ -1,14 +1,10 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/fleet-health-p0.test.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-fleet-list.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/accept-offer/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-enquiry/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-application/index.ts"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }
