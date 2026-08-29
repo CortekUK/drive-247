@@ -90,3 +90,51 @@ export function isElectronicPayment(row: Record<string, unknown> | null | undefi
   if (!row) return false;
   return Boolean(row[STRIPE_PAYMENT_HANDLE]) || Boolean(row[SQUARE_PAYMENT_HANDLE]);
 }
+
+/**
+ * Every column that is a handle on a payment processor, on either rail.
+ *
+ * `square_order_id` is here and deliberately NOT in `isElectronicPayment`. The
+ * two answer different questions and the distinction is the whole point:
+ *
+ *   isElectronicPayment  — "has money moved at a processor?"  (settled charge)
+ *   hasProcessorHandle   — "did a processor ever touch this row?"
+ *
+ * An order created but not yet paid has moved no money, so it is not an
+ * electronic PAYMENT — but it is emphatically not a manual, cash-at-the-desk
+ * row either, and the destructive paths below must refuse it.
+ */
+export const PROCESSOR_HANDLE_COLUMNS = [
+  STRIPE_PAYMENT_HANDLE,
+  SQUARE_PAYMENT_HANDLE,
+  "square_order_id",
+] as const;
+
+/**
+ * "A processor was involved in this row" — the provider-neutral replacement for
+ * `stripe_payment_intent_id IS NOT NULL` wherever that stood in for it.
+ *
+ * WHY THIS EXISTS
+ *
+ * The platform's test for "is this a manual payment?" was
+ * `stripe_payment_intent_id IS NULL`, which is TRUE for every Square row by the
+ * live `payments_provider_handle_exclusivity_check` — that CHECK forbids a
+ * Square row from carrying any `stripe_*` handle at all. So the two one-click
+ * destructive paths gated on it, Reverse and Undo, were both open on real
+ * Square money: Undo deletes the `payments` row outright, with no refund at
+ * Square and no trace.
+ *
+ * WHY IT CANNOT REGRESS STRIPE
+ *
+ * The same CHECK runs the other way: a `payment_provider='stripe'` row must
+ * have `square_order_id`, `square_payment_id` and `square_refund_id` all NULL.
+ * So for every Stripe row the two added terms are constant-false and this
+ * function returns exactly what `Boolean(stripe_payment_intent_id)` returned.
+ * The widening is a no-op on Stripe rows by database constraint, not by
+ * convention — which is what makes it safe to land while the estate is still
+ * entirely Stripe.
+ */
+export function hasProcessorHandle(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row) return false;
+  return PROCESSOR_HANDLE_COLUMNS.some((column) => Boolean(row[column]));
+}

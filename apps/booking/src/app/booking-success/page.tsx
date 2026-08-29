@@ -62,12 +62,32 @@ const InvoicePaymentSuccess = () => {
     const processPayment = async (sessionParam: string | null) => {
       try {
 
-        // If no session_id in URL, find the most recent pending payment's session
+        // If no session_id in URL, fall back to this tenant's most recent
+        // pending Stripe checkout.
+        //
+        // THIS QUERY RUNS AS `anon` AND USED TO HAVE NO TENANT FILTER. It took
+        // "the most recent Pending payment carrying a stripe_checkout_session_id"
+        // across the WHOLE estate — 14 rows currently match — and fed it to
+        // process-pending-payment. A customer landing here without a session_id
+        // could therefore settle a stranger's checkout at a different tenant.
+        //
+        // That is a live cross-tenant defect on its own, and Square turns it
+        // from latent into routine: Square has a single redirect and appends no
+        // session identifier, so a Square customer arrives here with no
+        // session_id EVERY time and drops straight into this branch.
+        //
+        // Both fences are load-bearing. The tenant fence is the one that closes
+        // the cross-tenant reach; the provider fence keeps a Square tenant out
+        // of a Stripe-only recovery path, so the fallback is inert when it is
+        // reached by mistake rather than merely narrower. With no tenant
+        // resolved there is nothing safe to guess at, so it fails closed.
         let checkoutSessionId = sessionParam;
-        if (!checkoutSessionId) {
+        if (!checkoutSessionId && tenant?.id) {
           const { data: pendingPayment } = await supabase
             .from('payments')
             .select('stripe_checkout_session_id')
+            .eq('tenant_id', tenant.id)
+            .eq('payment_provider', 'stripe')
             .eq('status', 'Pending')
             .not('stripe_checkout_session_id', 'is', null)
             .order('created_at', { ascending: false })

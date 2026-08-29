@@ -84,7 +84,12 @@ const STATUS_WRITES: { file: string; status: string }[] = [];
 for (const file of SCANNED_FILES) {
   const body = codeOnly(readFileSync(file, 'utf8'));
   for (const m of body.matchAll(/deposit_hold_status\s*:\s*['"]([a-z_]+)['"]/g)) {
-    STATUS_WRITES.push({ file: file.slice(REPO_ROOT.length + 1), status: m[1] });
+    // Forward slashes regardless of platform. `join` gives backslashes on
+    // Windows, and every expected path in this suite is written POSIX-style —
+    // so the set comparison below failed on a Windows checkout against source
+    // that was correct, naming the right two files in the wrong dialect.
+    const relative = file.slice(REPO_ROOT.length + 1).replace(/\\/g, '/');
+    STATUS_WRITES.push({ file: relative, status: m[1] });
   }
 }
 

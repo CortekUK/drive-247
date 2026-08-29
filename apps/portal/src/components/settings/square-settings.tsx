@@ -295,6 +295,17 @@ export function SquareSettings({ canEdit: canEditProp }: Props = {}) {
         </CardContent>
       </Card>
 
+      <GoLivePanel
+        modeIsLive={modeIsLive}
+        canEdit={canEdit}
+        tenantCurrency={tenant?.currency_code ?? null}
+        liveConnection={sq.connections.find((c) => c.square_mode === "live" && c.status === "active") ?? null}
+        connecting={sq.isConnecting}
+        onConnectLive={() => sq.connect("live")}
+        settingMode={sq.isSettingMode}
+        onSetMode={sq.setSquareMode}
+      />
+
       <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -938,5 +949,128 @@ function ExpiryLine({
         Square before it reaches zero — once it does, payments and refunds stop until you do.
       </p>
     </div>
+  );
+}
+
+/**
+ * Sandbox <-> production, the one control that decides whether a customer's card
+ * is really charged.
+ *
+ * CONNECT FIRST, FLIP SECOND — and the panel is laid out in that order because
+ * the reverse is unsafe. square-oauth-start accepts an explicit mode and
+ * tolerates connecting production while the tenant is still on sandbox, so the
+ * production account can be attached and verified by Square with no effect on
+ * the customers transacting today. Only once that connection exists does the
+ * switch below do anything; set-square-mode refuses it otherwise. Flipping first
+ * would leave the tenant live with no live connection and fail every payment in
+ * between.
+ *
+ * The gate is restated here as UI, never enforced here: the button is disabled
+ * for the same reasons the server refuses, so the operator learns why before
+ * clicking rather than after. The server is what actually decides.
+ */
+function GoLivePanel({
+  modeIsLive,
+  canEdit,
+  tenantCurrency,
+  liveConnection,
+  connecting,
+  onConnectLive,
+  settingMode,
+  onSetMode,
+}: {
+  modeIsLive: boolean;
+  canEdit: boolean;
+  tenantCurrency: string | null;
+  liveConnection: SquareConnectionRow | null;
+  connecting: boolean;
+  onConnectLive: () => void;
+  settingMode: boolean;
+  onSetMode: (mode: "test" | "live") => void;
+}) {
+  const wanted = (tenantCurrency ?? "").toUpperCase();
+  const got = (liveConnection?.location_currency ?? "").toUpperCase();
+  const currencyMatches = Boolean(wanted) && wanted === got;
+  const liveReady = Boolean(liveConnection?.location_id) && currencyMatches;
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="text-base font-medium">Environment</CardTitle>
+        <CardDescription>
+          {modeIsLive
+            ? "This tenant is LIVE. Payments charge real cards and move real money."
+            : "This tenant is in sandbox. No real money moves, and test cards are the only ones that work."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {modeIsLive ? (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Returning to sandbox stops real cards being charged immediately. It is never
+              blocked — if live payments are failing, this is the way back.
+            </p>
+            <Button
+              variant="outline"
+              disabled={!canEdit || settingMode}
+              onClick={() => onSetMode("test")}
+            >
+              {settingMode ? "Switching…" : "Return to sandbox"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">1. Attach the production Square account</p>
+              <p className="text-sm text-muted-foreground">
+                Safe to do now — this tenant keeps transacting on sandbox until you switch below.
+              </p>
+              {liveConnection ? (
+                <p className="text-sm">
+                  Connected to <strong>{liveConnection.business_name ?? liveConnection.merchant_id}</strong>
+                  {got ? ` · location bills ${got}` : " · no location cleared for card processing yet"}
+                </p>
+              ) : null}
+              <Button variant="outline" disabled={!canEdit || connecting} onClick={onConnectLive}>
+                {connecting
+                  ? "Opening Square…"
+                  : liveConnection
+                    ? "Reconnect production account"
+                    : "Connect production account"}
+              </Button>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <p className="text-sm font-medium">2. Switch this tenant to live</p>
+              {!liveConnection ? (
+                <p className="text-sm text-muted-foreground">
+                  Connect the production account first.
+                </p>
+              ) : !liveConnection.location_id ? (
+                <p className="text-sm text-amber-500">
+                  Square has not cleared a location on that account for card processing yet.
+                </p>
+              ) : !currencyMatches ? (
+                <p className="text-sm text-amber-500">
+                  That location bills in {got || "an unknown currency"} but this tenant is set to{" "}
+                  {wanted || "an unknown currency"}. Square cannot convert — connect a location in
+                  the tenant's currency.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Ready. After this, every payment charges a real card.
+                </p>
+              )}
+              <Button
+                disabled={!canEdit || settingMode || !liveReady}
+                onClick={() => onSetMode("live")}
+              >
+                {settingMode ? "Switching…" : "Go live"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

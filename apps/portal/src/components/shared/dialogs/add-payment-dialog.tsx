@@ -27,7 +27,7 @@ import { bookingOriginFor } from "@/lib/booking-origin";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus, useRentalChargesAndPayments } from "@/hooks/use-customer-balance";
 import { createInvoice } from "@/lib/invoice-utils";
-import { extractFunctionError } from "@/lib/edge-error";
+import { extractFunctionError, extractFunctionErrorPayload } from "@/lib/edge-error";
 import { cn } from "@/lib/utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
@@ -863,7 +863,29 @@ export const AddPaymentDialog = ({
         },
       });
 
-      if (error) throw new Error(await extractFunctionError(error, 'Failed to create checkout session'));
+      if (error) {
+        // ALREADY PAID IS NOT A FAILURE.
+        //
+        // createSquareCheckout refuses to mint a second link for a debt that is
+        // already settled — correctly, because a second link for one charge is a
+        // second collection. But the operator only ever saw that refusal as a red
+        // "Error" toast, because the rental page behind this dialog was still
+        // showing the pre-payment state that made them click Collect Payment in
+        // the first place. Show them the payment, not the refusal: re-read the
+        // rental from the database and let the settled state render.
+        const payload = await extractFunctionErrorPayload(error);
+        if (payload?.reason === 'square_payment_already_settled') {
+          if (checkoutTab) checkoutTab.close();
+          await invalidateAllPaymentQueries(finalCustomerId);
+          toast({
+            title: "Already paid",
+            description: "This payment has already been received. The rental has been refreshed to show it.",
+          });
+          onOpenChange(false);
+          return;
+        }
+        throw new Error(await extractFunctionError(error, 'Failed to create checkout session'));
+      }
       if (!data?.url) throw new Error('No checkout URL returned');
 
       // Store targetCategories in localStorage so the fallback handler can use them

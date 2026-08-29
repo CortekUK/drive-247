@@ -353,7 +353,15 @@ export function useSquareConnection() {
 
   // ── connect ───────────────────────────────────────────────────────────────
   const connectMutation = useMutation({
-    mutationFn: async () => {
+    // The mode to connect IN, which is not always the mode the tenant is in.
+    //
+    // Going live is connect-then-flip: you attach the production account while
+    // the tenant is still transacting on sandbox, Square verifies the merchant
+    // and we record its location and currency, and only then does
+    // set-square-mode flip square_mode. square-oauth-start explicitly tolerates
+    // that mismatch. Flipping first would leave the tenant live with no live
+    // connection, and every payment in that window fails at Square.
+    mutationFn: async (connectMode?: SquareMode) => {
       if (!tenantId) throw new Error("No tenant context");
 
       const { data, error } = await supabase.functions.invoke("square-oauth-start", {
@@ -364,7 +372,10 @@ export function useSquareConnection() {
           // SEPARATE HOSTS with non-interchangeable credentials — the mode is
           // the base URL, not a key — so connecting on the wrong one produces a
           // link that can never take a real payment.
-          mode: squareMode,
+          //
+          // Defaults to the tenant's own mode; an explicit argument is how the
+          // production account gets attached before the tenant is live.
+          mode: connectMode ?? squareMode,
           returnTo: "portal",
           origin: window.location.origin,
         },
@@ -410,6 +421,34 @@ export function useSquareConnection() {
       toast.error(err instanceof Error ? err.message : "Failed to disconnect Square"),
   });
 
+  // ── go live / retreat to sandbox ──────────────────────────────────────────
+  //
+  // The gate lives in the edge function, not here: refusing in the browser
+  // would be advice, and this decides whether real cards are charged.
+  const setModeMutation = useMutation({
+    mutationFn: async (nextMode: SquareMode) => {
+      if (!tenantId) throw new Error("No tenant context");
+      const { data, error } = await supabase.functions.invoke("set-square-mode", {
+        body: { tenantId, mode: nextMode },
+      });
+      if (error) await throwEdgeError(error);
+      return (data ?? { ok: true }) as { ok: boolean; mode: SquareMode };
+    },
+    onSuccess: (result) => {
+      // The tenant row drives squareMode, which in turn picks the connection
+      // row and every downstream payment call — so both caches must go.
+      queryClient.invalidateQueries({ queryKey: ["square-connection", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["tenant"] });
+      toast.success(
+        result.mode === "live"
+          ? "Square is live — payments will now charge real cards."
+          : "Square is back in sandbox. No real cards will be charged.",
+      );
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Could not change the Square mode"),
+  });
+
   return {
     // raw
     connection,
@@ -438,8 +477,10 @@ export function useSquareConnection() {
     daysUntilExpiry,
 
     // actions
-    connect: () => connectMutation.mutate(),
+    connect: (connectMode?: SquareMode) => connectMutation.mutate(connectMode),
     isConnecting: connectMutation.isPending,
+    setSquareMode: (nextMode: SquareMode) => setModeMutation.mutate(nextMode),
+    isSettingMode: setModeMutation.isPending,
     disconnect: () => disconnectMutation.mutate(),
     isDisconnecting: disconnectMutation.isPending,
   };

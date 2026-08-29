@@ -416,6 +416,19 @@ verify_jwt = false
 [functions.square-oauth-start]
 verify_jwt = true
 
+# Same reasoning as square-oauth-start, and the stakes are higher in the other
+# direction: this one STOPS a live merchant taking money. JWT plus the in-function
+# super-admin / own-tenant-admin check.
+[functions.square-disconnect]
+verify_jwt = true
+
+# Flips tenants.square_mode between sandbox and production. JWT plus the same
+# super-admin / own-tenant-admin check, and a server-side readiness gate: it
+# refuses to go live without a verified production connection whose location
+# currency matches the tenant's.
+[functions.set-square-mode]
+verify_jwt = true
+
 # pg_cron invokes this with the service-role key, which satisfies JWT
 # verification, so it stays true. Square access tokens expire after 30 days and
 # this is the only thing that stops a silent expiry.

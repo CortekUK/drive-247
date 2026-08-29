@@ -37,6 +37,7 @@ import { usePaygInvoices } from "@/hooks/use-payg-invoices";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { PaymentLinksPanel } from "@/components/payments/payment-links-panel";
 import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
+import { useSquarePaymentSync } from "@/hooks/use-square-payment-sync";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { DamageAnalysisCard } from "@/components/rentals/damage-analysis-card";
@@ -750,6 +751,20 @@ const RentalDetail = () => {
   const depositIsCharged =
     depositHasLedgerCharge || (depositIsChargedTenant && !depositHoldPresent);
   const { data: paymentLinks, isLoading: paymentLinksLoading } = useRentalPaymentLinks(id);
+
+  // A Square collection is completed somewhere this page cannot see: our hosted
+  // /checkout page in another tab, or the customer's own phone. providers.tsx
+  // turns refetch-on-focus off portal-wide, so coming back here refetched
+  // nothing and the operator kept reading pre-payment state — a link still
+  // "Awaiting payment" next to a breakdown that already said Paid. Re-read the
+  // payment state from the database instead of trusting the cache.
+  const hasOpenSquareLink = (paymentLinks || []).some(
+    (link) => link.paymentProvider === "square" && link.status === "awaiting",
+  );
+  useSquarePaymentSync({
+    enabled: tenant?.payment_provider === "square",
+    hasOpenLink: hasOpenSquareLink,
+  });
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
@@ -2299,6 +2314,30 @@ const RentalDetail = () => {
   const totalCharges = (rentalTotals?.totalCharges || 0) + rentalFinesTotal;
   const totalPayments = (rentalTotals?.totalPayments || 0) + rentalFinesPaidAmount;
 
+  // IS THERE ANYTHING LEFT TO COLLECT?
+  //
+  // Read from the SAME two numbers the "Collected" and "Balance Due" cards print
+  // (~line 3115), so the Collect Payment button can never contradict the card
+  // three inches below it. Both branches are the cards' own: PAYG reads the
+  // rolling-invoice totals, everything else reads the allocation ledger.
+  //
+  // NOT from rentalPaymentsTotal. That query counts only status in
+  // ('Applied','Credit','Partial'), and a Square card payment is written
+  // 'Completed' by createSquareCardPayment — so a fully-paid Square rental
+  // scored zero there and the button stayed live. Money-received has to come
+  // from the allocation totals, which are provider-agnostic.
+  const isPaygRental = rental?.is_pay_as_you_go === true;
+  const collectedTotal = isPaygRental
+    ? Math.max(paygInvoiceData?.totals?.collected ?? 0, rentalPaymentsTotal)
+    : totalPayments;
+  const balanceDueTotal = isPaygRental
+    ? (paygInvoiceData?.totals?.balanceDue ?? 0)
+    : outstandingBalance;
+  // Money has arrived, the ledger wants nothing more, and any PAYG upfront
+  // requirement is met. Sub-penny tolerance because these are summed floats.
+  const rentalFullyPaid =
+    collectedTotal > 0 && balanceDueTotal <= 0.01 && paygUpfront.unmetDue <= 0;
+
   // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
     if (rental.status === 'Cancelled') return 'Cancelled';
@@ -2733,9 +2772,15 @@ const RentalDetail = () => {
               variant="default"
               className="bg-indigo-600 hover:bg-indigo-700 text-white"
               onClick={() => setShowAddPayment(true)}
+              disabled={rentalFullyPaid}
+              title={
+                rentalFullyPaid
+                  ? 'This rental is fully paid — there is nothing left to collect.'
+                  : undefined
+              }
             >
               <CreditCard className="h-4 w-4 mr-2" />
-              Collect Payment
+              {rentalFullyPaid ? 'Fully Paid' : 'Collect Payment'}
             </Button>
           )}
           {/* Pending Rental - Show Approve, Reject, Delete buttons */}
@@ -3504,6 +3549,8 @@ const RentalDetail = () => {
         <PaymentLinksPanel
           links={paymentLinks || []}
           isLoading={paymentLinksLoading}
+          categoryLedger={paymentBreakdown ?? undefined}
+          categoryRefunds={refundBreakdown ?? undefined}
           currencyCode={tenant?.currency_code || 'USD'}
           allowVoid={canEdit('rentals')}
         />
@@ -3569,6 +3616,19 @@ const RentalDetail = () => {
             if (depositIsCharged) {
               const led = paymentBreakdown?.['Security Deposit'];
               if (!led || led.total <= 0) return '';
+              // The STATUS badge beside this already reads the refund ledger and
+              // says Refunded / Partial Refund. This line did not, so a refunded
+              // deposit kept describing itself as "Paid — refundable" directly
+              // under a badge saying "Refunded" — the same fact, two answers.
+              // Derived from the amounts, so it follows any refund size.
+              const depositRefunded = refundBreakdown?.['Security Deposit'] ?? 0;
+              if (depositRefunded > 0) {
+                const deductedToMileage = (rentalCharges || []).some(c => c.category === 'Excess Mileage');
+                if (deductedToMileage) return 'Applied to Excess Mileage';
+                return depositRefunded >= led.paid - 0.01
+                  ? 'Refunded to customer'
+                  : 'Partially refunded';
+              }
               if (led.remaining <= 0) return 'Paid — refundable';
               if (led.paid > 0) return 'Part paid';
               return 'Refundable deposit';

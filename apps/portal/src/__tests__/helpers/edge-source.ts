@@ -41,9 +41,32 @@ import ts from 'typescript';
 const REPO_ROOT = resolve(__dirname, '../../../../..');
 const PORTAL_SRC = resolve(__dirname, '../..');
 
+/**
+ * Line endings are normalised to LF on every read, and that is load-bearing
+ * rather than tidiness.
+ *
+ * These suites assert on SOURCE TEXT, so they are reading whatever git handed
+ * the checkout. `core.autocrlf` gives a Windows working tree CRLF for the same
+ * commit a Linux checkout gets as LF, and two kinds of assertion then fail on
+ * one machine and pass on the other for the same code:
+ *
+ *   * a newline written literally in the pattern — `indexOf("  payments_ready\n")`
+ *     never matches `payments_ready\r\n`, so it returns -1 and reads as
+ *     "the column is missing" when the column is right there;
+ *   * any fixed-width window — `slice(0, 900)` buys ~20 fewer characters of
+ *     code once every line costs an extra byte, so a match that sits near the
+ *     end of the window falls out of it.
+ *
+ * Both were live: two Square suites failed on a Windows checkout against source
+ * that was correct. Normalising here fixes every caller at once and cannot
+ * weaken an assertion — no test in this repo asserts on a carriage return, and
+ * a CR is not part of any pattern being matched.
+ */
+const toLf = (source: string): string => source.replace(/\r\n/g, '\n');
+
 /** Read a file by its path relative to the monorepo root. */
 export const readRepoSource = (relPath: string): string =>
-  readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
+  toLf(readFileSync(resolve(REPO_ROOT, relPath), 'utf8'));
 
 /** Read a Supabase edge-function file, e.g. `_shared/deposit-hold-refresh.ts`. */
 export const readEdgeSource = (relPath: string): string =>
@@ -51,7 +74,7 @@ export const readEdgeSource = (relPath: string): string =>
 
 /** Read an apps/portal file, e.g. `components/shared/dialogs/add-payment-dialog.tsx`. */
 export const readPortalSource = (relPath: string): string =>
-  readFileSync(resolve(PORTAL_SRC, relPath), 'utf8');
+  toLf(readFileSync(resolve(PORTAL_SRC, relPath), 'utf8'));
 
 const parse = (source: string, isTsx: boolean): ts.SourceFile =>
   ts.createSourceFile(
