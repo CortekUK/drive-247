@@ -959,7 +959,7 @@
       "video": []
     },
     "total_files": 950,
-    "total_words": 919930,
+    "total_words": 920020,
     "counts": {
       "code": 950
     },
@@ -3551,7 +3551,7 @@
       "video": []
     },
     "total_files": 374,
-    "total_words": 503721,
+    "total_words": 504625,
     "counts": {
       "code": 367,
       "document": 7
@@ -3939,6 +3939,7 @@
       "code": [],
       "document": [
         "/home/haseeb-raza/Desktop/drive-247/docs/A2P_10DLC_SUBMISSION_GUIDE.md",
+        "/home/haseeb-raza/Desktop/drive-247/docs/STAGING.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/GMT_GATE0_TEST_PLAN.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/AUTO_EXTENSION.md",
         "/home/haseeb-raza/Desktop/drive-247/docs/gmt-auth-hold-verdicts.html",
@@ -3988,14 +3989,15 @@
       "image": [],
       "video": []
     },
-    "total_files": 44,
-    "total_words": 98981,
+    "total_files": 45,
+    "total_words": 99769,
     "counts": {
-      "document": 34,
+      "document": 35,
       "paper": 10
     },
     "semantic_candidates": [
       "/home/haseeb-raza/Desktop/drive-247/docs/A2P_10DLC_SUBMISSION_GUIDE.md",
+      "/home/haseeb-raza/Desktop/drive-247/docs/STAGING.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/GMT_GATE0_TEST_PLAN.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/AUTO_EXTENSION.md",
       "/home/haseeb-raza/Desktop/drive-247/docs/gmt-auth-hold-verdicts.html",
@@ -4053,6 +4055,7 @@
         "/home/haseeb-raza/Desktop/drive-247/scripts/bulk-update-branding.js",
         "/home/haseeb-raza/Desktop/drive-247/scripts/db-switch.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/create-site-settings-page.js",
+        "/home/haseeb-raza/Desktop/drive-247/scripts/staging-seed.mjs",
         "/home/haseeb-raza/Desktop/drive-247/scripts/seed-vehicles.ts",
         "/home/haseeb-raza/Desktop/drive-247/scripts/update-cms-content.js",
         "/home/haseeb-raza/Desktop/drive-247/scripts/stripe-uk-export.mjs",
@@ -4072,10 +4075,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 20,
-    "total_words": 20025,
+    "total_files": 21,
+    "total_words": 20765,
     "counts": {
-      "code": 19,
+      "code": 20,
       "document": 1
     },
     "semantic_candidates": [
@@ -4087,6 +4090,7 @@
       "/home/haseeb-raza/Desktop/drive-247/scripts/bulk-update-branding.js",
       "/home/haseeb-raza/Desktop/drive-247/scripts/db-switch.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/create-site-settings-page.js",
+      "/home/haseeb-raza/Desktop/drive-247/scripts/staging-seed.mjs",
       "/home/haseeb-raza/Desktop/drive-247/scripts/seed-vehicles.ts",
       "/home/haseeb-raza/Desktop/drive-247/scripts/update-cms-content.js",
       "/home/haseeb-raza/Desktop/drive-247/scripts/stripe-uk-export.mjs",

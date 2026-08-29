@@ -1,9 +1,19 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx"
+    "/home/haseeb-raza/Desktop/drive-247/docs/STAGING.md",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/staging-seed.mjs",
+    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-pending-bookings.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-auto-extend-rentals/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-extension-checkout/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/auto-extend-rentals/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-auto-extension-reminder/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/scripts/kill-dev-ports.mjs"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/docs-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json",
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/scripts-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }

@@ -102,7 +102,15 @@ export function AutoExtensionSection({
     );
   };
 
-  const perPeriodRate = Math.round((Number(rental.monthly_amount) || 0) * (1 + (Number(taxPercent) || 0) / 100) * 100) / 100;
+  // monthly_amount is the PRE-discount per-period rate; the agreed discount sits
+  // in its own column. This figure is not merely a stat — it seeds the renewal
+  // email subject/body, the occurrence dialog's chargeable baseRate, and the
+  // "Pay X Now" preview, so it must equal what auto-extend actually charges.
+  // It does: auto-extend-rentals bills computeBreakdown(discountedRate(r)), and
+  // the signed BoldSign agreement quotes the same discounted figure.
+  const discountedBase =
+    Math.max(0, (Number(rental.monthly_amount) || 0) - (Number(rental.discount_applied) || 0));
+  const perPeriodRate = Math.round(discountedBase * (1 + (Number(taxPercent) || 0) / 100) * 100) / 100;
 
   const nextChargeAt = rental.auto_extend_next_charge_at
     ? formatInTimeZone(new Date(rental.auto_extend_next_charge_at), tz, "EEE dd MMM yyyy, h:mm a")

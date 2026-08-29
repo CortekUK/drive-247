@@ -152,6 +152,15 @@ function computeBreakdown(rentalAmount: number, tenant: any): {
   return { rental, tax, serviceFee, total: round2(rental + tax + serviceFee) };
 }
 
+/**
+ * The per-period rate actually owed: the headline rate less the agreed discount.
+ * Flat currency amount, same period scope as monthly_amount (it is computed from
+ * it at booking time), and the same subtraction the e-sign templates already do.
+ */
+function discountedRate(r: { monthly_amount?: number | null; discount_applied?: number | null }): number {
+  return Math.max(0, (Number(r?.monthly_amount) || 0) - (Number(r?.discount_applied) || 0));
+}
+
 function fmtCurrency(amount: number, code: string): string {
   try {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).format(amount);
@@ -259,7 +268,7 @@ Deno.serve(async (req) => {
     let rentalQuery = supabase
       .from("rentals")
       .select(`
-        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
+        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount, discount_applied,
         auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
@@ -395,7 +404,14 @@ Deno.serve(async (req) => {
           const rental = taxPct > 0 ? round2(incl / (1 + taxPct / 100)) : incl;
           bd = { rental, tax: round2(incl - rental), serviceFee: 0, total: incl };
         } else {
-          bd = computeBreakdown(r.monthly_amount, tenant);
+          // Renewals bill the DISCOUNTED rate. monthly_amount is the pre-discount
+          // per-period rate and the discount sits in its own column, so billing
+          // monthly_amount raw charged the full price forever. The signed
+          // BoldSign agreement has always quoted the discounted figure
+          // (api/esign/route.ts, create-boldsign-document) — so every renewal
+          // charged more than the contract the customer signed. RevTek: contract
+          // $333.84, cron charged $417.30.
+          bd = computeBreakdown(discountedRate(r), tenant);
         }
 
         // Extras + insurance ride on top of the period price (all tax-inclusive flat amounts).

@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
     const rentalQuery = supabase
       .from("rentals")
       .select(`
-        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
+        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount, discount_applied,
         auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
@@ -321,7 +321,11 @@ Deno.serve(async (req) => {
           const rental = taxPct > 0 ? round2(incl / (1 + taxPct / 100)) : incl;
           bd = { rental, tax: round2(incl - rental), serviceFee: 0, total: incl };
         } else {
-          bd = computeBreakdown(r.monthly_amount, tenant);
+          // Parity with auto-extend-rentals: renewals bill the DISCOUNTED rate.
+          bd = computeBreakdown(
+            Math.max(0, (Number(r.monthly_amount) || 0) - (Number(r.discount_applied) || 0)),
+            tenant,
+          );
         }
 
         // Extras + insurance ride on top of the period price (all tax-inclusive flat amounts).
