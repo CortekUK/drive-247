@@ -847,6 +847,7 @@ const CreateRental = () => {
   // Persist form state to localStorage so it survives tab close/refresh
   const PORTAL_RENTAL_STORAGE_KEY = 'portal_new_rental_draft';
   const draftRestoredRef = useRef(false);
+  const [showClearFormConfirm, setShowClearFormConfirm] = useState(false);
 
   // Restore saved draft on mount (skip if this is a renewal)
   useEffect(() => {
@@ -857,6 +858,18 @@ const CreateRental = () => {
       const saved = localStorage.getItem(PORTAL_RENTAL_STORAGE_KEY);
       if (!saved) return;
       const draft = JSON.parse(saved);
+
+      // Expire stale drafts. Without this an abandoned half-filled rental
+      // ambushes whoever opens this page next — days or weeks later, with no
+      // indication of where the values came from. A draft is a convenience for
+      // "I refreshed the tab", not a document.
+      // Drafts written before this shipped carry no savedAt; treat them as stale
+      // rather than trusting them indefinitely.
+      const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+      if (!draft.savedAt || Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS) {
+        localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
+        return;
+      }
 
       // Restore form values
       if (draft.customer_id) form.setValue("customer_id", draft.customer_id);
@@ -922,6 +935,8 @@ const CreateRental = () => {
         selectedExtras,
         pickupLocationId,
         returnLocationId,
+        // Read by the restore effect to expire stale drafts.
+        savedAt: Date.now(),
       };
       localStorage.setItem(PORTAL_RENTAL_STORAGE_KEY, JSON.stringify(draft));
     }, 500);
@@ -2888,11 +2903,27 @@ const CreateRental = () => {
     toast({ title: "Form auto-filled", description: `${customer.name} → ${vehicle.make} ${vehicle.model} (${vehicle.reg})` });
   };
 
-  // Dev-only: reset form to blank state
-  const handleDevClear = () => {
-    if (process.env.NODE_ENV !== 'development') return;
+  // Reset the form to blank AND drop the persisted draft.
+  //
+  // The draft in localStorage is the reason this has to exist for real operators,
+  // not just in dev: form.reset() alone leaves the saved draft behind, so the next
+  // visit silently repopulates everything the operator just cleared. Until now the
+  // only way out was to complete the rental (the sole place the key was removed) or
+  // clear site data by hand.
+  const resetRentalForm = () => {
+    try {
+      // Stop the debounced writer re-saving the state we are about to clear.
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
+    } catch {
+      // Private mode / storage disabled — the in-memory reset below still applies.
+    }
 
     form.reset();
+    // Not covered by form.reset(): these live outside the form and are persisted
+    // in the draft, so leaving them set would contradict the cleared fields.
+    setPickupLocationId(null);
+    setReturnLocationId(null);
     setSelectedExtras({});
     setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
     setBonzahPremium(0);
@@ -2923,6 +2954,12 @@ const CreateRental = () => {
     toast({ title: "Form cleared" });
   };
 
+  // Dev-only alias kept so the dashed Auto-fill / Clear pair still work locally.
+  const handleDevClear = () => {
+    if (process.env.NODE_ENV !== 'development') return;
+    resetRentalForm();
+  };
+
   return (
     <>
     <RentalProgressOverlay
@@ -2949,6 +2986,21 @@ const CreateRental = () => {
             {renewalSource ? "Continue from a previous rental" : "Set up a new rental agreement for a customer"}
           </p>
         </div>
+        {/* Real, always-available Clear form. Distinct from the dashed dev pair
+            below: this one ships. Hidden on a renewal, where the prefilled values
+            come from the source rental rather than from a draft. */}
+        {!renewalSource && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowClearFormConfirm(true)}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <XCircle className="h-3.5 w-3.5 mr-1.5" />
+            Clear form
+          </Button>
+        )}
         {process.env.NODE_ENV === 'development' && (
           <div className="flex gap-2 shrink-0">
             <Button
@@ -6504,6 +6556,31 @@ const CreateRental = () => {
       {/* Deliberate friction before the deposit amount can be edited. The
           failure this guards against is typing 20 when you meant 100 — cheap to
           prevent here, expensive to find out at vehicle return. */}
+      {/* Clearing loses everything typed so far, so it confirms. */}
+      <AlertDialog open={showClearFormConfirm} onOpenChange={setShowClearFormConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear this form?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Everything you have entered will be discarded, including the saved draft
+              that would otherwise reappear next time you open this page. This cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                resetRentalForm();
+                setShowClearFormConfirm(false);
+              }}
+            >
+              Clear form
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={depositEditConfirmOpen} onOpenChange={setDepositEditConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
