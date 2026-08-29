@@ -4991,20 +4991,67 @@ const RentalDetail = () => {
             },
           ];
 
+          // A credit posted against this extension lives in its own ledger row
+          // (category 'Adjustment', negative remaining). extRows is built only
+          // from the five 'Extension*' categories — page.tsx:2106 filters
+          // 'Adjustment' out — so these rows still carry their FULL pre-credit
+          // remaining_amount and the collect controls would take the whole
+          // undiscounted figure.
+          //
+          // rental_extension_totals nets the Adjustment: its LATERAL has no
+          // CATEGORY and no SIGN filter, but it DOES require type='Charge'.
+          // These credits qualify only because they are posted as type='Charge'
+          // with a negative amount. A credit written as type 'Refund' or
+          // 'Adjustment' would be invisible here and this clamp would do nothing.
+          // Clamp to it: nothing collectable once the view says zero.
+          // Without this, Keri's table offers to collect $333.84 on a week she
+          // owes $0.00 on, Sabrina $294.25 against $250.11, Debbie $197.38
+          // against $100.30 — $475.06 of over-collection across three live
+          // customers, created by the corrections themselves.
+          const extTotalsRow = (extensionTotals || []).find(
+            (t: any) => t.id === (group as any).extensionId,
+          ) as any;
+          const extTrueOutstanding = Number(extTotalsRow?.outstanding_amount ?? NaN);
+
+          // A CANCELLED extension is a week that was priced and then declined. Its
+          // charges keep their full remaining_amount forever, and extensionGroups
+          // applies no status filter — while `isCancelledOrRejected` below tests the
+          // RENTAL's status, not the extension's. So a cancelled week renders with
+          // live checkboxes and Add Payment links. Sabrina's R-c91368 offers $888.97
+          // this way, on a week the Balance Due tile correctly excludes
+          // (page.tsx:2182 filters cancelled/refunded/pending_approval).
+          const extIsDead = ['cancelled', 'refunded', 'pending_approval'].includes(
+            String(extTotalsRow?.display_status ?? ''),
+          );
+          const extIsSettledByCredit =
+            extIsDead || (Number.isFinite(extTrueOutstanding) && extTrueOutstanding <= 0.001);
+
           // Compute selectable categories for this extension
-          const extSelectableCategories = extRows
+          const extSelectableCategories = (extIsSettledByCredit ? [] : extRows)
             .filter(({ amount, remaining_amount }) => amount > 0 && remaining_amount > 0)
             .map(r => r.category);
 
           const extAllSelected = extSelectableCategories.length > 0 && extSelectableCategories.every(c => selectedExtCategories.has(c));
           const extSomeSelected = extSelectableCategories.some(c => selectedExtCategories.has(c));
 
-          const extSelectedTotal = Math.round(extSelectableCategories
-            .filter(c => selectedExtCategories.has(c))
-            .reduce((sum, c) => {
-              const row = extRows.find(r => r.category === c);
-              return sum + (row?.remaining_amount ?? 0);
-            }, 0) * 100) / 100;
+          // Never offer to collect more than the extension actually still owes.
+          // Clamp each row against the extension's true outstanding and then sum,
+          // rather than clamping the subtotal against the whole-extension figure —
+          // the latter produced amounts belonging to neither the row nor the
+          // extension (ticking only Rental on Sabrina gave 250.11 beside a 275.00 row).
+          const extCollectableCap = extIsDead ? 0 : extTrueOutstanding;
+          const extSelectedTotal = Math.round(
+            extSelectableCategories
+              .filter(c => selectedExtCategories.has(c))
+              .reduce((sum, c) => {
+                const row = extRows.find(r => r.category === c);
+                const rowRemaining = row?.remaining_amount ?? 0;
+                const capped = Number.isFinite(extCollectableCap)
+                  ? Math.min(rowRemaining, Math.max(0, extCollectableCap - sum))
+                  : rowRemaining;
+                return sum + capped;
+              }, 0) * 100,
+          ) / 100;
 
           const toggleExtCategory = (category: string) => {
             setSelectedExtCategories(prev => {
@@ -5059,7 +5106,18 @@ const RentalDetail = () => {
                   const isInsuranceRow = category === 'Extension Insurance';
                   const isPaid = applied && remaining_amount === 0;
                   const isPartial = !isInsuranceRow && applied && remaining_amount > 0 && remaining_amount < amount;
-                  const hasUnpaid = applied && !isPaid && !fullyRefunded;
+                  // A credit against this extension lives in an 'Adjustment' row that
+                  // extRows never sees, so remaining_amount here still states the FULL
+                  // pre-credit debt. Gating the row button on it alone let the whole
+                  // $475.06 be collected one row at a time — the checkbox clamp above
+                  // does not touch this path, and add-payment-dialog skips its
+                  // overpayment guard whenever defaultAmount is supplied, which this
+                  // button always does. So gate on the extension's true outstanding too.
+                  const hasUnpaid = applied && !isPaid && !fullyRefunded && !extIsSettledByCredit;
+                  // What this row may actually collect, never more than the extension owes.
+                  const rowCollectable = Number.isFinite(extCollectableCap)
+                    ? Math.min(remaining_amount, extCollectableCap)
+                    : remaining_amount;
                   const isExtSelectable = extSelectableCategories.includes(category);
                   const isExtSelected = selectedExtCategories.has(category);
 
@@ -5098,6 +5156,17 @@ const RentalDetail = () => {
                           if (refunded > 0) {
                             return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
                           }
+                          // A credit against this extension settled it. The row's own
+                          // remaining_amount still states the full pre-credit debt (the
+                          // 'Adjustment' row is filtered out of extRows), so without this
+                          // the operator sees "Not Paid $390.00" on a week that is settled
+                          // and reads the table as broken.
+                          if (extIsDead) {
+                            return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Not billable</Badge>;
+                          }
+                          if (extIsSettledByCredit) {
+                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Settled by credit</Badge>;
+                          }
                           if (isPaid) {
                             return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
                           }
@@ -5135,7 +5204,7 @@ const RentalDetail = () => {
                           <button
                             className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
                             onClick={() => {
-                              setExtensionPaymentAmount(remaining_amount > 0 ? remaining_amount : amount);
+                              setExtensionPaymentAmount(rowCollectable > 0 ? rowCollectable : amount);
                               setExtensionPaymentCategories([category]);
                               // Authoritative extensionId from rental_extension_totals.id —
                               // don't trust (thisCharge.extension_id) because legacy rows
@@ -5187,8 +5256,14 @@ const RentalDetail = () => {
               </TableBody>
             </Table>
 
-            {/* Selection footer for targeted extension payment */}
-            {selectedExtCategories.size > 0 && (
+            {/* Selection footer for targeted extension payment.
+                Gated on extSelectableCategories too: selectedExtCategories is ONE
+                component-level Set keyed by category NAME and shared by every
+                extension group, so ticking a row on one extension previously made
+                this footer render on a settled one showing "$0.00 selected" with a
+                live Add Payment button — which seeds the dialog with the whole
+                rental's outstanding, stamped against the wrong extension. */}
+            {selectedExtCategories.size > 0 && extSelectableCategories.length > 0 && extSelectedTotal > 0 && (
               <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                   {selectedExtCategories.size} item{selectedExtCategories.size > 1 ? 's' : ''} selected &mdash;{' '}

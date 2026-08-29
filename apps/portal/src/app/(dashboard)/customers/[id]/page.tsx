@@ -350,6 +350,22 @@ const CustomerDetail = () => {
         .filter(r => !r.is_pay_as_you_go)
         .map(r => r.id);
 
+      // A cancelled extension's charges keep their full remaining_amount — the
+      // week was priced, then declined. The RENTAL page already excludes them
+      // (rentals/[id]/page.tsx:2182 filters display_status cancelled/refunded/
+      // pending_approval), so without the same filter here the two screens
+      // disagree: Sabrina's R-c91368 reads $905.88 on this page and $16.91 on
+      // the rental page, an $888.97 gap on one cancelled week.
+      const deadExtRes = fixedRentalIds.length > 0
+        ? await supabase
+            .from("rental_extension_totals")
+            .select("id, display_status")
+            .in("rental_id", fixedRentalIds)
+            .in("display_status", ["cancelled", "refunded", "pending_approval"])
+        : { data: [], error: null };
+      if (deadExtRes.error) console.error("Cancelled-extension fetch failed:", deadExtRes.error);
+      const deadExtIds = new Set((deadExtRes.data || []).map((e: any) => e.id));
+
       const [paygRes, ledgerRes] = await Promise.all([
         paygRentalIds.length > 0
           ? supabase
@@ -363,7 +379,7 @@ const CustomerDetail = () => {
         fixedRentalIds.length > 0
           ? supabase
               .from("ledger_entries")
-              .select("rental_id, remaining_amount")
+              .select("rental_id, remaining_amount, extension_id")
               .eq("tenant_id", tenant.id)
               .in("rental_id", fixedRentalIds)
               .eq("type", "Charge")
@@ -380,6 +396,9 @@ const CustomerDetail = () => {
         map[key] = (map[key] || 0) + dayTotal;
       });
       (ledgerRes.data as any[])?.forEach(entry => {
+        // Skip charges belonging to a cancelled/refunded/unapproved extension —
+        // matching the rental page. Without this the two screens disagree.
+        if (entry.extension_id && deadExtIds.has(entry.extension_id)) return;
         const key = entry.rental_id || "__no_rental__";
         map[key] = (map[key] || 0) + Number(entry.remaining_amount || 0);
       });
