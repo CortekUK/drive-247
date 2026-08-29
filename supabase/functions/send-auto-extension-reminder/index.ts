@@ -170,30 +170,67 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
           `the reminder will send as soon as Stripe accepts charges.`,
       };
     }
+    // Creating a session does not invalidate the previous one. The open-check
+    // above is skipped entirely for custom amounts, so a still-open old link can
+    // survive alongside the new one; the customer pays the old one, the webhook
+    // finds no row for that session id, and nothing settles — the exact failure
+    // this whole change exists to remove. Expire it so only one link is payable.
+    if (sessionId && sessionId !== session.id) {
+      await ctx.stripe.checkout.sessions
+        .expire(sessionId, ctx.options)
+        .catch((e: { message?: string }) =>
+          console.log(`[auto-ext-reminder] could not expire old session ${sessionId}: ${e?.message || "unknown"}`)
+        );
+    }
     url = session.url || url;
     sessionId = session.id;
     if (ext) {
       await supabase.from("rental_extensions").update({ checkout_url: url, stripe_checkout_session_id: sessionId }).eq("id", ext.id);
-      // NOTE: this insert has NEVER succeeded. `booking_source: "auto_extend"`
-      // violates payments_booking_source_check, which allows only 'admin' and
-      // 'website' — 0 rows with 'auto_extend' exist in production. The error was
-      // discarded, so the comment below has always described something that did
-      // not happen; payments settle through the webhook's 'website' path instead.
-      // Surfacing it rather than changing the value: making the row appear for
-      // the first time could double up with the row the webhook creates, and
-      // that is a money-path decision, not a cleanup.
+      // booking_source is 'website', not 'auto_extend': the latter violates
+      // payments_booking_source_check (admin|website only), so this insert failed
+      // every single time and zero such rows have ever existed. The old comment
+      // here worried that fixing it "could double up with the row the webhook
+      // creates" — but the webhook is UPDATE-only and creates no row, so the
+      // real duplicate risk is our OWN pay-link row from auto-extend-rentals.
+      // We therefore point the existing row at the fresh session rather than
+      // inserting a second one: the reminder always mints a NEW Stripe session,
+      // and the webhook finds the payment by session id.
       const today = new Date().toISOString().split("T")[0];
-      const { error: pendingErr } = await supabase.from("payments").insert({
-        rental_id: rental.id, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id, tenant_id: rental.tenant_id,
-        extension_id: ext.id, amount, remaining_amount: amount, payment_date: today, method: "Card", payment_type: "Payment",
-        status: "Pending", verification_status: "pending", capture_status: "requires_capture",
-        stripe_checkout_session_id: sessionId, booking_source: "auto_extend", platform_account: ctx.platformAccount,
-        target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
-      });
+      // 18 extensions in production carry MORE than one Pending row (one has 6),
+      // and 5 of those sets hold differing amounts — so an unordered pick is a
+      // coin toss. Take the newest, and refresh the money on it: the operator's
+      // "send reminder" can carry a custom amount, and Stripe would then charge
+      // X while this row still recorded Y, mis-crediting the customer by the gap.
+      const { data: existingPending } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("extension_id", ext.id)
+        .eq("status", "Pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { error: pendingErr } = existingPending?.id
+        ? await supabase
+            .from("payments")
+            .update({
+              stripe_checkout_session_id: sessionId,
+              amount,
+              remaining_amount: amount,
+              payment_date: today,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingPending.id)
+        : await supabase.from("payments").insert({
+            rental_id: rental.id, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id, tenant_id: rental.tenant_id,
+            extension_id: ext.id, amount, remaining_amount: amount, payment_date: today, method: "Card", payment_type: "Payment",
+            status: "Pending", verification_status: "pending", capture_status: "requires_capture",
+            stripe_checkout_session_id: sessionId, booking_source: "website", platform_account: ctx.platformAccount,
+            target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
+          });
       if (pendingErr) {
-        // Expected today (the CHECK rejects 'auto_extend'). Logged loudly so it
-        // stops being invisible — the reminder itself still sends, because the
-        // customer pays through the Stripe link, not through this row.
+        // If this fails the customer can still pay the Stripe link, but nothing
+        // will record it — so it must be loud, never swallowed.
         console.error(
           `[auto-ext-reminder] pending payment row NOT created for extension ${ext.id}: ${pendingErr.message}`
         );
@@ -254,8 +291,16 @@ Deno.serve(async (req) => {
     // ── Cron nudge sweep ───────────────────────────────────
     const nowMs = Date.now();
     const { data: rentals } = await supabase.from("rentals").select(RENTAL_SELECT)
-      .eq("auto_extend_enabled", true).eq("auto_extend_status", "awaiting_payment")
-      .eq("auto_extend_reminder_enabled", true).eq("auto_extend_paused", false);
+      .eq("auto_extend_enabled", true)
+      // Include paused rentals. Excluding them made pause a terminal state: the
+      // customer stops being asked at exactly the point the operator most needs
+      // them to pay, and only a human could ever break the loop.
+      .in("auto_extend_status", ["awaiting_payment", "paused"])
+      .eq("auto_extend_reminder_enabled", true)
+      // The sweep never checked the rental itself was live. A Closed rental
+      // (returned vehicle) with an outstanding balance sat in it, spared only by
+      // its reminder cap — and the cap is exactly what the counter reset relaxes.
+      .eq("status", "Active");
     let sent = 0, skipped = 0;
     // Intl weekday name -> number (0=Sunday .. 6=Saturday), matches DB convention.
     const WEEKDAY_NUM: Record<string, number> = {

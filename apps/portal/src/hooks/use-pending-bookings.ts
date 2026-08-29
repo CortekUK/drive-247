@@ -84,7 +84,12 @@ export const usePendingBookings = () => {
         `
         )
         .eq("booking_source", "website")
-        .eq("capture_status", "requires_capture");
+        .eq("capture_status", "requires_capture")
+        // An extension pay-link is NOT a booking awaiting approval. It matched
+        // this query only by coincidence of shape, and Reject on this screen
+        // calls cancel-booking-preauth, which sets rentals.status='Cancelled' —
+        // so rejecting a phantom row CANCELS A LIVE ACTIVE RENTAL.
+        .is("extension_id", null);
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -116,7 +121,12 @@ export const usePendingBookingsCount = () => {
         .from("payments")
         .select("id", { count: "exact", head: true })
         .eq("booking_source", "website")
-        .eq("capture_status", "requires_capture");
+        .eq("capture_status", "requires_capture")
+        // An extension pay-link is NOT a booking awaiting approval. It matched
+        // this query only by coincidence of shape, and Reject on this screen
+        // calls cancel-booking-preauth, which sets rentals.status='Cancelled' —
+        // so rejecting a phantom row CANCELS A LIVE ACTIVE RENTAL.
+        .is("extension_id", null);
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
