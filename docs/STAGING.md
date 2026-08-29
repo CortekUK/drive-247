@@ -37,6 +37,7 @@ export STAGING_DB_PASS=...                # staging branch DB password
 ./scripts/staging-rebuild.sh              # schema mirror of prod, no data
 ./scripts/staging-verify.sh               # prove parity (exits non-zero on drift)
 ./scripts/staging-set-secrets.sh          # edge-function secrets, live keys blocked
+./scripts/staging-sync-storage.sh         # buckets + storage policies (NOT in the dump)
 ./scripts/staging-install-crons.sh        # crons, rewritten to staging, INACTIVE
 node scripts/staging-seed.mjs             # super admin + synthetic tenants
 supabase functions deploy --project-ref ksmreaadhbirzakkxqrq
@@ -88,6 +89,12 @@ verifies against the API rather than trusting exit codes.
 `authenticated` and `service_role` have no privileges and every request fails
 with `42501 permission denied` — including login. The rebuild re-applies grants
 and default privileges as its last step.
+
+**The dump does not cover the `storage` schema.** `supabase db dump --schema
+public,private` leaves buckets and their RLS policies stale, so anything that
+uploads (vehicle photos, CMS media, receipts, ID cards) silently diverges from
+prod. `staging-sync-storage.sh` mirrors bucket definitions and policies — never
+object contents.
 
 **`btree_gist`, `pg_net` and `vector` live in the `public` schema**, so
 `DROP SCHEMA public CASCADE` removes them and the dump will not restore them.
