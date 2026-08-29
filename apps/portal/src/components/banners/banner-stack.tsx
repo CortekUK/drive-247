@@ -536,7 +536,7 @@ const DismissButton = forwardRef<HTMLButtonElement, DismissButtonProps>(
      *
      * A critical should pass `dismissal.label = "Snooze 24h"` so the control
      * tells the truth — the underlying TTL brings it back tomorrow, and a
-     * button that reads like a permanent ✕ would misrepresent that.
+     * button that reads like a permanent would misrepresent that.
      */
     const label = banner.dismissal?.label ?? `Dismiss: ${banner.plainTitle}`;
     const hasVisibleLabel = !!banner.dismissal?.label;

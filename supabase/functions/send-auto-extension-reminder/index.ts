@@ -72,6 +72,28 @@ function emailHtml(a: { name: string; company: string; vehicle: string; amount: 
   </div>`;
 }
 
+/**
+ * EVERY charge type an extension pay-link settles — this is what goes in the
+ * Stripe metadata and on the payments row. It MUST include "Extension Add-on":
+ * auto-extend-rentals stamps all five, and stripe-webhook-live allocates from
+ * the session metadata in preference to the row, so a four-entry metadata on a
+ * re-minted session leaves any Add-on charge unallocated and apply-payment turns
+ * the remainder into a Credit — the customer pays in full and the extension
+ * still reads as outstanding.
+ */
+const EXT_CATEGORIES_ALL = [
+  "Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance",
+];
+
+/**
+ * The MINIMUM a Pending row must cover to count as a whole-period row and be
+ * safe to repoint at a new session. Deliberately excludes "Extension Add-on":
+ * legacy rows (and this function's own older inserts) carry only these four, and
+ * demanding all five would refuse every one of them and insert a duplicate on
+ * every send. A five-entry row is a superset and still qualifies.
+ */
+const EXT_CATEGORIES_CORE = ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"];
+
 async function sendForRental(supabase: any, rental: any, opts: { customAmount?: number; isNudge: boolean; sentBy?: string }) {
   const tenant = rental.tenants;
   const customer = rental.customers;
@@ -90,6 +112,29 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
   const ext = outstanding;
   const amount = opts.customAmount ?? Number(ext?.outstanding_amount || ext?.total_amount || 0);
   if (amount <= 0) return { ok: false, reason: "amount is zero" };
+
+  // The nudge cap is meant to be PER WEEK, but auto_extend_reminder_count lives on
+  // the RENTAL and only ever advances. The reset added to auto-extend-rentals sits
+  // inside the pay-link park, which is unreachable while a pending extension is
+  // parked — so for a customer who has NOT paid (exactly the population dunning is
+  // for) it stayed a lifetime cap. Two live RevTek rentals are stuck at 3/2 and 3/1
+  // and can never be reminded again about any future week.
+  //
+  // So count what actually matters: reminders already sent FOR THIS EXTENSION.
+  // Self-scoping per week, no reset needed, and immune to a stale rental counter.
+  // The manual path (isNudge false) is deliberately uncapped — an operator asking
+  // for a link must always get one.
+  if (opts.isNudge && ext?.id) {
+    const { count: sentForThisWeek } = await supabase
+      .from("auto_extension_reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("extension_id", ext.id)
+      .eq("status", "sent");
+    const max = Number(rental.auto_extend_reminder_max) || 3;
+    if ((sentForThisWeek ?? 0) >= max) {
+      return { ok: false, reason: `reminder cap reached for this period (${sentForThisWeek}/${max})` };
+    }
+  }
 
   const ctx = await stripeCtx(tenant);
   if (!ctx) return { ok: false, reason: "no stripe context" };
@@ -114,6 +159,8 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
   // could be handed a second one and pay twice.
   let url = ext?.checkout_url as string | undefined;
   let sessionId = ext?.stripe_checkout_session_id as string | undefined;
+  // The previous session, killed only after its replacement is safely delivered.
+  let supersededSessionId: string | null = null;
 
   let storedLinkStillOpen = false;
   if (url && sessionId && opts.customAmount == null) {
@@ -156,7 +203,7 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
         type: "extension", rental_id: rental.id, customer_id: rental.customer_id, tenant_id: rental.tenant_id,
         ...(ext ? { extension_id: ext.id, new_end_date: ext.new_end_date, previous_end_date: ext.previous_end_date } : {}),
         source: "auto_extend_reminder",
-        target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"]),
+        target_categories: JSON.stringify(EXT_CATEGORIES_ALL),
       },
       }, ctx.options);
     } catch (stripeErr) {
@@ -170,30 +217,91 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
           `the reminder will send as soon as Stripe accepts charges.`,
       };
     }
+    // Creating a session does not invalidate the previous one. The open-check
+    // above is skipped entirely for custom amounts, so a still-open old link can
+    // survive alongside the new one; the customer pays the old one, the webhook
+    // finds no row for that session id, and nothing settles.
+    //
+    // We must still kill it — but NOT here. Expiring before the email means a
+    // Resend outage or a bad address destroys the only link the customer holds
+    // and delivers no replacement, and since the counter only advances on a
+    // successful send, the next tick mints and destroys another. Both manual
+    // sends run during today's verification failed at Resend AFTER this point.
+    // So remember it, and expire it only once the replacement is delivered.
+    supersededSessionId = sessionId && sessionId !== session.id ? sessionId : null;
     url = session.url || url;
     sessionId = session.id;
     if (ext) {
       await supabase.from("rental_extensions").update({ checkout_url: url, stripe_checkout_session_id: sessionId }).eq("id", ext.id);
-      // NOTE: this insert has NEVER succeeded. `booking_source: "auto_extend"`
-      // violates payments_booking_source_check, which allows only 'admin' and
-      // 'website' — 0 rows with 'auto_extend' exist in production. The error was
-      // discarded, so the comment below has always described something that did
-      // not happen; payments settle through the webhook's 'website' path instead.
-      // Surfacing it rather than changing the value: making the row appear for
-      // the first time could double up with the row the webhook creates, and
-      // that is a money-path decision, not a cleanup.
+      // booking_source is 'website', not 'auto_extend': the latter violates
+      // payments_booking_source_check (admin|website only), so this insert failed
+      // every single time and zero such rows have ever existed. The old comment
+      // here worried that fixing it "could double up with the row the webhook
+      // creates" — but the webhook is UPDATE-only and creates no row, so the
+      // real duplicate risk is our OWN pay-link row from auto-extend-rentals.
+      // We therefore point the existing row at the fresh session rather than
+      // inserting a second one: the reminder always mints a NEW Stripe session,
+      // and the webhook finds the payment by session id.
       const today = new Date().toISOString().split("T")[0];
-      const { error: pendingErr } = await supabase.from("payments").insert({
-        rental_id: rental.id, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id, tenant_id: rental.tenant_id,
-        extension_id: ext.id, amount, remaining_amount: amount, payment_date: today, method: "Card", payment_type: "Payment",
-        status: "Pending", verification_status: "pending", capture_status: "requires_capture",
-        stripe_checkout_session_id: sessionId, booking_source: "auto_extend", platform_account: ctx.platformAccount,
-        target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Insurance"],
-      });
+      // Reuse a Pending row ONLY if it already covers this whole period.
+      //
+      // 18 extensions carry more than one Pending row (one has 6), so a pick is
+      // needed at all; but "newest" alone is wrong. A customer can pay a single
+      // category from the portal breakdown, which leaves a Pending row scoped to
+      // e.g. ["Extension Rental"] — and 46 of the 50 extensions holding a Pending
+      // row today have a NEWEST row that is exactly such a partial (92%).
+      // Repointing one of those at a full-period session makes the customer pay
+      // the full amount while only that one charge settles, because
+      // process-pending-payment reads target_categories off the ROW.
+      //
+      // So: require the row's categories to CONTAIN every category we are about
+      // to charge. Order-insensitive — prod holds the 4-category set in a
+      // different order than we write it. Containment rather than equality so a
+      // 5-category row from auto-extend-rentals (which also carries
+      // "Extension Add-on") still qualifies. No match => insert a fresh row,
+      // which is simply the old behaviour and is always safe.
+      const covers = (rowCats: unknown): boolean => {
+        const have = new Set((Array.isArray(rowCats) ? rowCats : []).map(String));
+        return EXT_CATEGORIES_CORE.every((c) => have.has(c));
+      };
+      const { data: pendingCandidates } = await supabase
+        .from("payments")
+        .select("id, target_categories")
+        .eq("extension_id", ext.id)
+        .eq("status", "Pending")
+        .order("created_at", { ascending: false })
+        .limit(20);
+      const existingPending =
+        (pendingCandidates ?? []).find((r: any) => covers(r.target_categories)) ?? null;
+
+      const { error: pendingErr } = existingPending?.id
+        ? await supabase
+            .from("payments")
+            .update({
+              stripe_checkout_session_id: sessionId,
+              // The session was just minted on ctx's account. Leaving a stale
+              // platform_account behind means process-pending-payment and
+              // recover-pending-stripe-payments both pick the WRONG Stripe keys
+              // (they derive the client from this column), the retrieve throws,
+              // and a customer who paid settles nothing. Every covering row in
+              // prod today still says 'uk' while its tenant charges on 'uae'.
+              platform_account: ctx.platformAccount,
+              amount,
+              remaining_amount: amount,
+              payment_date: today,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingPending.id)
+        : await supabase.from("payments").insert({
+            rental_id: rental.id, customer_id: rental.customer_id, vehicle_id: rental.vehicle_id, tenant_id: rental.tenant_id,
+            extension_id: ext.id, amount, remaining_amount: amount, payment_date: today, method: "Card", payment_type: "Payment",
+            status: "Pending", verification_status: "pending", capture_status: "requires_capture",
+            stripe_checkout_session_id: sessionId, booking_source: "website", platform_account: ctx.platformAccount,
+            target_categories: EXT_CATEGORIES_ALL,
+          });
       if (pendingErr) {
-        // Expected today (the CHECK rejects 'auto_extend'). Logged loudly so it
-        // stops being invisible — the reminder itself still sends, because the
-        // customer pays through the Stripe link, not through this row.
+        // If this fails the customer can still pay the Stripe link, but nothing
+        // will record it — so it must be loud, never swallowed.
         console.error(
           `[auto-ext-reminder] pending payment row NOT created for extension ${ext.id}: ${pendingErr.message}`
         );
@@ -208,6 +316,43 @@ async function sendForRental(supabase: any, rental: any, opts: { customAmount?: 
   const html = emailHtml({ name: customer.name, company: tenant.company_name || "us", vehicle: vehicleName, amount: amtStr, url: url!, period, isNudge: opts.isNudge });
 
   const sendRes = await sendEmail(customer.email, subject, html, tenant.slug || "noreply");
+
+  // Exactly ONE payable link must exist, and it must be the one the customer
+  // actually holds. Which session that is depends on whether the email landed.
+  if (supersededSessionId) {
+    if (sendRes.success) {
+      // They have the new link. Kill the old one.
+      await ctx.stripe.checkout.sessions
+        .expire(supersededSessionId, ctx.options)
+        .catch((e: { message?: string }) =>
+          console.log(`[auto-ext-reminder] could not expire superseded session ${supersededSessionId}: ${e?.message || "unknown"}`)
+        );
+    } else {
+      // The replacement never reached them, so the link in their inbox is still
+      // the OLD one. Simply leaving the new session alive would strand them: the
+      // payments row now points at the undelivered session, so paying the link
+      // they DO hold would match no row and settle nothing — the original bug,
+      // reintroduced on the failure path. Expire the undelivered session and
+      // point the bookkeeping back at the live one.
+      await ctx.stripe.checkout.sessions
+        .expire(sessionId!, ctx.options)
+        .catch((e: { message?: string }) =>
+          console.log(`[auto-ext-reminder] could not expire undelivered session ${sessionId}: ${e?.message || "unknown"}`)
+        );
+      if (ext) {
+        await supabase.from("rental_extensions")
+          .update({ stripe_checkout_session_id: supersededSessionId })
+          .eq("id", ext.id);
+        await supabase.from("payments")
+          .update({ stripe_checkout_session_id: supersededSessionId, updated_at: new Date().toISOString() })
+          .eq("extension_id", ext.id)
+          .eq("stripe_checkout_session_id", sessionId!);
+      }
+      console.error(
+        `[auto-ext-reminder] send failed for rental ${rental.id}; reverted bookkeeping to still-live session ${supersededSessionId}`
+      );
+    }
+  }
 
   await supabase.from("auto_extension_reminders").insert({
     rental_id: rental.id, extension_id: ext?.id ?? null, tenant_id: rental.tenant_id,
@@ -254,8 +399,16 @@ Deno.serve(async (req) => {
     // ── Cron nudge sweep ───────────────────────────────────
     const nowMs = Date.now();
     const { data: rentals } = await supabase.from("rentals").select(RENTAL_SELECT)
-      .eq("auto_extend_enabled", true).eq("auto_extend_status", "awaiting_payment")
-      .eq("auto_extend_reminder_enabled", true).eq("auto_extend_paused", false);
+      .eq("auto_extend_enabled", true)
+      // Include paused rentals. Excluding them made pause a terminal state: the
+      // customer stops being asked at exactly the point the operator most needs
+      // them to pay, and only a human could ever break the loop.
+      .in("auto_extend_status", ["awaiting_payment", "paused"])
+      .eq("auto_extend_reminder_enabled", true)
+      // The sweep never checked the rental itself was live. A Closed rental
+      // (returned vehicle) with an outstanding balance sat in it, spared only by
+      // its reminder cap — and the cap is exactly what the counter reset relaxes.
+      .eq("status", "Active");
     let sent = 0, skipped = 0;
     // Intl weekday name -> number (0=Sunday .. 6=Saturday), matches DB convention.
     const WEEKDAY_NUM: Record<string, number> = {
@@ -294,7 +447,11 @@ Deno.serve(async (req) => {
         const last = r.auto_extend_last_reminder_at ? new Date(r.auto_extend_last_reminder_at).getTime() : 0;
         if (nowMs - last < interval) { skipped++; continue; }
       }
-      if ((r.auto_extend_reminder_count || 0) >= (Number(r.auto_extend_reminder_max) || 3)) { skipped++; continue; }
+      // NOTE: no auto_extend_reminder_count gate here any more. That column is a
+      // per-rental lifetime tally that nothing reliably resets, and gating on it
+      // permanently muted rentals whose customer never paid. The real per-week cap
+      // is enforced inside sendForRental against auto_extension_reminders for the
+      // specific extension being chased.
       const res = await sendForRental(supabase, r, { isNudge: true });
       res.ok ? sent++ : skipped++;
     }

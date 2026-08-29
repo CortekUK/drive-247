@@ -304,23 +304,42 @@ const BookingSuccessContent = () => {
           if (pendingPaymentDetailsStr && sessionId) {
             try {
               const paymentDetails = JSON.parse(pendingPaymentDetailsStr);
-              console.log('💳 Syncing payment with Stripe payment_intent_id...');
+              console.log('Syncing payment with Stripe payment_intent_id...');
 
               // Verify this payment is for the correct rental
               if (paymentDetails.rental_id === rentalId) {
-                // First, check if payment already exists (created by create-checkout-session)
-                const { data: existingPayment } = await supabase
+                // Find the payment row for THIS checkout session.
+                //
+                // This used to filter on rental_id alone and .single(), discarding
+                // the error. PostgREST returns PGRST116 with data=null for BOTH
+                // "no rows" AND ">1 row", so on any rental with two session-bearing
+                // payments — 73 rentals in production, one with 132 — the lookup
+                // silently returned null and the branch below INSERTED a duplicate
+                // "Applied/captured" row whose amount came from localStorage rather
+                // than from Stripe. Scoping by session id makes the lookup exact,
+                // and the error is now read rather than thrown away.
+                const { data: existingPayment, error: paymentLookupError } = await supabase
                   .from("payments")
                   .select("id, stripe_checkout_session_id, stripe_payment_intent_id")
                   .eq("rental_id", rentalId)
-                  .not("stripe_checkout_session_id", "is", null)
-                  .single();
+                  .eq("stripe_checkout_session_id", sessionId)
+                  .order("created_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (paymentLookupError) {
+                  console.error(
+                    "Payment lookup failed — leaving this to stripe-webhook rather than inserting:",
+                    paymentLookupError,
+                  );
+                }
 
                 let paymentRecord = existingPayment;
 
-                // If no payment exists yet (edge case), create one
-                if (!existingPayment) {
-                  console.log('⚠️ No existing payment found, creating one...');
+                // If no payment exists yet, create one — but never when the lookup
+                // itself failed, because "we could not tell" is not "there is none".
+                if (!existingPayment && !paymentLookupError) {
+                  console.log('No existing payment found, creating one...');
                   const today = new Date().toISOString().split('T')[0];
 
                   const { data: newPayment, error: createError } = await supabase
@@ -347,7 +366,7 @@ const BookingSuccessContent = () => {
                     .single();
 
                   if (createError) {
-                    console.error("❌ Failed to create payment record:", createError);
+                    console.error("Failed to create payment record:", createError);
                   } else {
                     paymentRecord = newPayment;
                   }
@@ -355,7 +374,7 @@ const BookingSuccessContent = () => {
 
                 // Sync payment_intent_id from Stripe if not already set
                 if (paymentRecord && !paymentRecord.stripe_payment_intent_id) {
-                  console.log('🔄 Syncing payment_intent_id from Stripe...');
+                  console.log('Syncing payment_intent_id from Stripe...');
                   try {
                     // Get tenant info for Stripe Connect
                     const { data: rentalData } = await supabase
@@ -376,54 +395,54 @@ const BookingSuccessContent = () => {
                     });
 
                     if (syncError) {
-                      console.error("❌ Failed to sync payment_intent_id:", syncError);
+                      console.error("Failed to sync payment_intent_id:", syncError);
                     } else {
-                      console.log('✅ Payment synced with Stripe:', syncResult);
+                      console.log('Payment synced with Stripe:', syncResult);
                       paymentRecord = { ...paymentRecord, stripe_payment_intent_id: syncResult.payment_intent_id };
                     }
                   } catch (syncErr) {
-                    console.error("❌ Error syncing payment_intent_id:", syncErr);
+                    console.error("Error syncing payment_intent_id:", syncErr);
                   }
                 }
 
                 const paymentError = null; // For compatibility with existing code below
 
                 if (paymentError) {
-                  console.error("❌ Failed to create payment record:", paymentError);
+                  console.error("Failed to create payment record:", paymentError);
                   toast.error(recordedButNotSavedLine(tenant?.payment_provider));
                 } else {
-                  console.log('✅ Payment record created successfully:', paymentRecord.id);
+                  console.log('Payment record created successfully:', paymentRecord.id);
 
                   // Apply the payment to charges using edge function
                   try {
-                    console.log('🔄 Applying payment to charges...');
+                    console.log('Applying payment to charges...');
                     const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', {
                       body: { paymentId: paymentRecord.id }
                     });
 
                     if (applyError) {
-                      console.error("❌ Failed to apply payment:", applyError);
+                      console.error("Failed to apply payment:", applyError);
                     } else {
-                      console.log('✅ Payment applied successfully:', applyResult);
+                      console.log('Payment applied successfully:', applyResult);
                     }
                   } catch (applyErr) {
-                    console.error("❌ Error applying payment:", applyErr);
+                    console.error("Error applying payment:", applyErr);
                   }
 
                   // Place Stripe deposit hold on the saved card (non-blocking — if it
                   // fails, the rental still completes and admin can retry manually).
                   try {
-                    console.log('🔒 Placing deposit hold...');
+                    console.log('Placing deposit hold...');
                     const { data: holdData, error: holdError } = await supabase.functions.invoke('place-deposit-hold', {
                       body: { rentalId },
                     });
                     if (holdError) {
-                      console.warn('⚠️ Deposit hold failed:', holdError);
+                      console.warn('Deposit hold failed:', holdError);
                     } else {
-                      console.log('✅ Deposit hold placed:', holdData);
+                      console.log('Deposit hold placed:', holdData);
                     }
                   } catch (holdErr) {
-                    console.warn('⚠️ Deposit hold error (non-blocking):', holdErr);
+                    console.warn('Deposit hold error (non-blocking):', holdErr);
                   }
 
                   // Send booking notification emails and create in-app notifications
@@ -448,7 +467,7 @@ const BookingSuccessContent = () => {
                         ? `${rentalForNotify.vehicle.make} ${rentalForNotify.vehicle.model}`
                         : vehicleDisplayName(rentalForNotify.vehicle, tenant);
 
-                      console.log('📧 Sending booking notification...');
+                      console.log('Sending booking notification...');
                       const { data: notifyResult, error: notifyError } = await supabase.functions.invoke('notify-booking-pending', {
                         body: {
                           paymentId: paymentRecord.id,
@@ -470,20 +489,20 @@ const BookingSuccessContent = () => {
                       });
 
                       if (notifyError) {
-                        console.error("❌ Failed to send booking notification:", notifyError);
+                        console.error("Failed to send booking notification:", notifyError);
                       } else {
-                        console.log('✅ Booking notification sent:', notifyResult);
+                        console.log('Booking notification sent:', notifyResult);
                       }
                     }
                   } catch (notifyErr) {
-                    console.error("❌ Error sending booking notification:", notifyErr);
+                    console.error("Error sending booking notification:", notifyErr);
                   }
                 }
 
                 // Clear localStorage after processing
                 localStorage.removeItem('pendingPaymentDetails');
               } else {
-                console.warn('⚠️ Payment details rental_id mismatch');
+                console.warn('Payment details rental_id mismatch');
               }
             } catch (parseError) {
               console.error("Error parsing payment details:", parseError);
@@ -493,7 +512,7 @@ const BookingSuccessContent = () => {
           // Step 2.5: Activate installment plan if this is an installment checkout
           if (isInstallment) {
             try {
-              console.log('📋 Activating installment plan for rental:', rentalId);
+              console.log('Activating installment plan for rental:', rentalId);
               const { data: activateResult, error: activateError } = await supabase.functions.invoke('activate-installment-plan', {
                 body: {
                   rentalId,
@@ -502,14 +521,14 @@ const BookingSuccessContent = () => {
               });
 
               if (activateError) {
-                console.error('❌ Failed to activate installment plan:', activateError);
+                console.error('Failed to activate installment plan:', activateError);
               } else if (activateResult?.already_active) {
-                console.log('✅ Installment plan already active:', activateResult.plan_id);
+                console.log('Installment plan already active:', activateResult.plan_id);
               } else {
-                console.log('✅ Installment plan activated:', activateResult);
+                console.log('Installment plan activated:', activateResult);
               }
             } catch (activateErr) {
-              console.error('❌ Error activating installment plan:', activateErr);
+              console.error('Error activating installment plan:', activateErr);
             }
           }
 
@@ -522,7 +541,7 @@ const BookingSuccessContent = () => {
               .single();
 
             if (rentalForBonzah?.bonzah_policy_id) {
-              console.log('🛡️ Confirming Bonzah insurance policy...');
+              console.log('Confirming Bonzah insurance policy...');
               const { data: bonzahResult, error: bonzahError } = await supabase.functions.invoke('bonzah-confirm-payment', {
                 body: {
                   policy_record_id: rentalForBonzah.bonzah_policy_id,
@@ -531,15 +550,15 @@ const BookingSuccessContent = () => {
               });
 
               if (bonzahError) {
-                console.error('❌ Failed to confirm Bonzah insurance:', bonzahError);
+                console.error('Failed to confirm Bonzah insurance:', bonzahError);
               } else if (bonzahResult?.already_processed) {
-                console.log('✅ Bonzah insurance already confirmed:', bonzahResult.policy_no);
+                console.log('Bonzah insurance already confirmed:', bonzahResult.policy_no);
               } else {
-                console.log('✅ Bonzah insurance confirmed:', bonzahResult);
+                console.log('Bonzah insurance confirmed:', bonzahResult);
               }
             }
           } catch (bonzahErr) {
-            console.error('❌ Error confirming Bonzah insurance:', bonzahErr);
+            console.error('Error confirming Bonzah insurance:', bonzahErr);
           }
 
           // Step 4: Fetch rental details with customer and vehicle info

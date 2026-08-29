@@ -95,7 +95,7 @@ export function BlockBar({
             {formatDate(block.end_date)}
           </p>
           {onRemove && (
-            <p className="text-muted-foreground/70 pt-0.5">Hover the bar and click ✕ to unblock</p>
+            <p className="text-muted-foreground/70 pt-0.5">Hover the bar and click to unblock</p>
           )}
         </div>
       </TooltipContent>

@@ -1,6 +1,6 @@
 // Shared rental-extras total calculator.
 //
-// ⚠️ KEEP THIS FILE BYTE-IDENTICAL in apps/booking/src/lib and apps/portal/src/lib
+// KEEP THIS FILE BYTE-IDENTICAL in apps/booking/src/lib and apps/portal/src/lib
 // (same convention as calculate-rental-price.ts). Editing one copy without the
 // other makes the customer total and the operator total disagree.
 //

@@ -32,14 +32,36 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { platform } from 'node:process';
 
 const isWindows = platform === 'win32';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** app name -> dev port, read from each workspace's own `dev` script. */
+// Port range is worktree-aware so the staging worktree never kills the main
+// worktree's dev servers (hard rule: staging runs on 4000+, main on 3000+).
+//   - explicit override:  DEV_PORTS=4000,4001,4002  or  DEV_PORT_BASE=4000
+//   - otherwise: a checkout whose directory name contains "staging" uses 4000-4005
+const base = process.env.DEV_PORT_BASE
+  ? Number(process.env.DEV_PORT_BASE)
+  : basename(process.cwd()).includes('staging') ? 4000 : 3000;
+
+const PORTS = process.env.DEV_PORTS
+  ? process.env.DEV_PORTS.split(',').map((p) => Number(p.trim())).filter(Boolean)
+  : [base, base + 1, base + 2, base + 3, base + 4, base + 5];
+
+/**
+ * The base the ports in apps/<app>/package.json are written against.
+ *
+ * A staging worktree runs the SAME package.json on a shifted range, so an app's
+ * declared port is translated by the offset rather than read literally —
+ * otherwise `dev:portal` in a staging checkout would free main's 3001 and evict
+ * the very servers the worktree split exists to protect.
+ */
+const CANONICAL_BASE = 3000;
+
+/** app name -> dev port for THIS worktree, from each workspace's own `dev` script. */
 function readAppPorts() {
   const ports = new Map();
   let entries;
@@ -57,7 +79,7 @@ function readAppPorts() {
       continue; // not a workspace, or unreadable — nothing to learn from it
     }
     const match = /--port[= ](\d+)/.exec(pkg.scripts?.dev ?? '');
-    if (match) ports.set(pkg.name ?? entry.name, Number(match[1]));
+    if (match) ports.set(pkg.name ?? entry.name, Number(match[1]) - CANONICAL_BASE + base);
   }
   return ports;
 }
@@ -69,7 +91,9 @@ const args = process.argv.slice(2);
 const targets = new Set();
 const unknown = [];
 if (args.length === 0) {
-  for (const port of appPorts.values()) targets.add(port);
+  // No app named — `npm run dev` starts everything, so clear the worktree's
+  // whole range rather than only the ports apps/ currently declares.
+  for (const port of PORTS) targets.add(port);
 } else {
   for (const arg of args) {
     if (/^\d+$/.test(arg)) targets.add(Number(arg));

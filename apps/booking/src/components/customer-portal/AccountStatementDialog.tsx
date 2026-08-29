@@ -151,7 +151,7 @@ function StatementContent({
                     return (
                       <tr key={c.category} style={{ borderTop: "1px solid #e5e7eb" }}>
                         <td style={{ padding: "8px 12px", color: isFine ? "#b45309" : undefined, fontWeight: isFine ? 600 : undefined }}>
-                          {c.category}{isFine ? " ⚠" : ""}
+                          {c.category}{isFine ? "" : ""}
                         </td>
                         <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(c.charged)}</td>
                         <td style={{ padding: "8px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "#16a34a" }}>{fmt(c.paid)}</td>

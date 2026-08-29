@@ -1,10 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 
 interface Vehicle {
   id: string;
   status: string;
   is_disposed: boolean;
   is_paused?: boolean;
+  available_daily?: boolean | null;
+  available_weekly?: boolean | null;
+  available_monthly?: boolean | null;
   purchase_price?: number;
   plData?: {
     net_profit: number;
@@ -26,10 +30,16 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
   // Count available vehicles (status = 'Available'). A paused vehicle is off
   // the road, so it must not be counted as ready to rent — that is exactly the
   // "it still show available" the operator sees.
-  const availableVehicles = activeVehicles.filter(v => v.status === 'Available' && !v.is_paused).length;
+  // Use the same resolver as the badge, so the tile and the row can never
+  // disagree. A car with every hire duration switched off is not "ready for
+  // rental" and must not be counted here.
+  const availableVehicles = activeVehicles.filter(v => resolveVehicleStatus(v) === 'Available').length;
 
   // Count paused vehicles (taken off the road by the operator)
   const pausedVehicles = activeVehicles.filter(v => v.is_paused).length;
+
+  // Switched off on every tier — bookable by nobody, but not formally paused.
+  const unavailableVehicles = activeVehicles.filter(v => resolveVehicleStatus(v) === 'Unavailable').length;
 
   // Count currently rented vehicles (status = 'Rented'). Paused ones are
   // excluded here too — they are removed from the denominator below, so leaving
@@ -41,7 +51,7 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
   // Paused vehicles are excluded from the denominator: an off-road car is not
   // idle capacity, and leaving it in makes a fleet look less efficient the
   // longer a repair takes.
-  const rentableVehicles = totalVehicles - pausedVehicles;
+  const rentableVehicles = totalVehicles - pausedVehicles - unavailableVehicles;
   const utilizationRate = rentableVehicles > 0
     ? Math.round((rentedVehicles / rentableVehicles) * 100)
     : 0;
@@ -66,6 +76,12 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
       className: "bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20 hover:border-amber-500/40 hover:shadow-lg",
     },
     {
+      title: "Unavailable",
+      value: unavailableVehicles,
+      description: "All hire durations off",
+      className: "bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/20 hover:border-amber-500/40 hover:shadow-lg",
+    },
+    {
       title: "Paused",
       value: pausedVehicles,
       description: "Off the road",
@@ -85,7 +101,7 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {cards.map((card) => {
         return (
           <Card key={card.title} className={`relative overflow-hidden transition-all duration-300 border-2 ${card.className}`}>

@@ -169,6 +169,7 @@ const RentalsList = () => {
         "Duration",
         "Period Type",
         "Rental Amount",
+        "Discount",
         "Protection Cost",
         "Total Amount",
         "Initial Payment",
@@ -183,7 +184,10 @@ const RentalsList = () => {
           rental.end_date || "",
           formatRentalDuration(rental.start_date, rental.end_date),
           rental.rental_period_type || "Monthly",
-          `${currencySymbol}${rental.monthly_amount}`,
+          `${currencySymbol}${(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0))).toFixed(2)}`,
+          (Number((rental as any).discount_applied) || 0) > 0
+            ? `${currencySymbol}${Number((rental as any).discount_applied).toFixed(2)}`
+            : "—",
           rental.protection_cost > 0 ? `${currencySymbol}${rental.protection_cost}` : "—",
           `${currencySymbol}${rental.total_amount}`,
           rental.initial_payment ? `${currencySymbol}${rental.initial_payment}` : "—",

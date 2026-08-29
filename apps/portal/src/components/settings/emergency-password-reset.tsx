@@ -89,7 +89,7 @@ export const EmergencyPasswordReset = () => {
               {message}
               {isSuccess && (
                 <div className="mt-2 text-sm font-medium">
-                  👈 Now enter this password in the main Sign In form and click "Sign In"
+                  Now enter this password in the main Sign In form and click "Sign In"
                 </div>
               )}
             </AlertDescription>

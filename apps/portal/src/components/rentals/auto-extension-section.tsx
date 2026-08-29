@@ -102,7 +102,15 @@ export function AutoExtensionSection({
     );
   };
 
-  const perPeriodRate = Math.round((Number(rental.monthly_amount) || 0) * (1 + (Number(taxPercent) || 0) / 100) * 100) / 100;
+  // monthly_amount is the PRE-discount per-period rate; the agreed discount sits
+  // in its own column. This figure is not merely a stat — it seeds the renewal
+  // email subject/body, the occurrence dialog's chargeable baseRate, and the
+  // "Pay X Now" preview, so it must equal what auto-extend actually charges.
+  // It does: auto-extend-rentals bills computeBreakdown(discountedRate(r)), and
+  // the signed BoldSign agreement quotes the same discounted figure.
+  const discountedBase =
+    Math.max(0, (Number(rental.monthly_amount) || 0) - (Number(rental.discount_applied) || 0));
+  const perPeriodRate = Math.round(discountedBase * (1 + (Number(taxPercent) || 0) / 100) * 100) / 100;
 
   const nextChargeAt = rental.auto_extend_next_charge_at
     ? formatInTimeZone(new Date(rental.auto_extend_next_charge_at), tz, "EEE dd MMM yyyy, h:mm a")
@@ -196,13 +204,20 @@ export function AutoExtensionSection({
           <Stat icon={<Clock className="h-4 w-4" />} label="Next renewal" value={isPaused ? "Paused" : nextChargeAt} />
         </div>
 
-        {/* Promo discounts never apply to renewal cycles — only to the original fixed term. */}
-        <div className="flex items-start gap-2 rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
-          <Info className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>
-            Promo &amp; duration discounts apply only to the original fixed booking. Each auto-extension renewal is billed at the full per-{periodLabel} rate above — discounts are never carried into renewal cycles.
-          </span>
-        </div>
+        {/* Renewals DO carry the discount as of 2026-08-29 — auto-extend-rentals bills
+            computeBreakdown(monthly_amount - discount_applied). This notice used to say the
+            opposite and was left behind by that change, so it actively contradicted both the
+            charge and the signed agreement. Only shown when a discount actually exists. */}
+        {Number(rental.discount_applied) > 0 && (
+          <div className="flex items-start gap-2 rounded-md border border-muted bg-muted/40 p-3 text-xs text-muted-foreground">
+            <Info className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              A discount of {formatCurrency(Number(rental.discount_applied), currencyCode)} per {periodLabel} is applied to this rental.
+              The per-{periodLabel} rate above is the discounted rate, and each auto-extension renewal is billed at it —
+              matching the signed agreement.
+            </span>
+          </div>
+        )}
 
         {/* Next renewal (automation only). The per-extension payment breakdown,
             agreements & insurance live in the standard Extension view on this page. */}

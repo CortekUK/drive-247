@@ -92,6 +92,7 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
           end_date,
           status,
           monthly_amount,
+          discount_applied,
           rental_period_type,
           payment_status,
           approval_status,

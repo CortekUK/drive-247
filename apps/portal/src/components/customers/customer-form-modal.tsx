@@ -201,7 +201,7 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
       // Trigger validation
       form.trigger();
-      console.log('🔧 DEV: Customer form filled with data:', data);
+      console.log('DEV: Customer form filled with data:', data);
     };
 
     window.addEventListener('dev-fill-customer-form', handleDevFill as EventListener);

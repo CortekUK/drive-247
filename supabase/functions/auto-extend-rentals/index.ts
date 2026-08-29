@@ -152,6 +152,15 @@ function computeBreakdown(rentalAmount: number, tenant: any): {
   return { rental, tax, serviceFee, total: round2(rental + tax + serviceFee) };
 }
 
+/**
+ * The per-period rate actually owed: the headline rate less the agreed discount.
+ * Flat currency amount, same period scope as monthly_amount (it is computed from
+ * it at booking time), and the same subtraction the e-sign templates already do.
+ */
+function discountedRate(r: { monthly_amount?: number | null; discount_applied?: number | null }): number {
+  return Math.max(0, (Number(r?.monthly_amount) || 0) - (Number(r?.discount_applied) || 0));
+}
+
 function fmtCurrency(amount: number, code: string): string {
   try {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).format(amount);
@@ -259,7 +268,7 @@ Deno.serve(async (req) => {
     let rentalQuery = supabase
       .from("rentals")
       .select(`
-        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
+        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount, discount_applied,
         auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
@@ -335,7 +344,7 @@ Deno.serve(async (req) => {
         // A pay-link extension is still awaiting payment -> don't create another.
         if (r.auto_extend_pending_extension_id) {
           const { data: pending } = await supabase
-            .from("rental_extensions").select("id, status").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
+            .from("rental_extensions").select("id, status, created_at").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
           if (pending && pending.status === "paid") {
             // Webhook already settled it; clear the flag and let next cron renew.
             await supabase.from("rentals").update({
@@ -343,9 +352,39 @@ Deno.serve(async (req) => {
             }).eq("id", r.id);
           } else {
             // Still unpaid. Pause past the grace window; otherwise leave it parked.
+            //
+            // Grace runs from when the customer was last actually ASKED to pay,
+            // not from auto_extend_next_charge_at. That pointer is derived from
+            // the rental END DATE, which only advances when a week is paid, so a
+            // rental that had fallen behind carried a due-date weeks in the past
+            // and burned its whole 48h window before the email had even gone out.
+            // On live data two RevTek rentals were paused 15 minutes — one cron
+            // tick — after their link was minted, and one of those customers had
+            // paid 26 minutes earlier.
+            //
+            // "Last asked" is the later of the extension's creation and the most
+            // recent reminder actually sent for it. Creation alone is not enough:
+            // the portal's Resume button clears auto_extend_paused but leaves the
+            // pending extension in place, so a rental resumed against a >48h-old
+            // extension was re-paused on the very next tick — the operator's
+            // click silently undone. A resend or resume-then-remind now restores
+            // a real window.
             const graceMs = (Number(tenant.auto_extend_grace_hours) || 48) * 3600 * 1000;
-            const dueMs = new Date(r.auto_extend_next_charge_at).getTime();
-            if (now.getTime() - dueMs > graceMs) {
+            const { data: lastNudge } = await supabase
+              .from("auto_extension_reminders")
+              .select("sent_at")
+              .eq("extension_id", r.auto_extend_pending_extension_id)
+              .eq("status", "sent")
+              .order("sent_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const askedAtMs = Math.max(
+              pending?.created_at
+                ? new Date(pending.created_at).getTime()
+                : new Date(r.auto_extend_next_charge_at).getTime(),
+              lastNudge?.sent_at ? new Date(lastNudge.sent_at).getTime() : 0,
+            );
+            if (now.getTime() - askedAtMs > graceMs) {
               await supabase.from("rentals").update({
                 auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
               }).eq("id", r.id);
@@ -377,7 +416,14 @@ Deno.serve(async (req) => {
           const rental = taxPct > 0 ? round2(incl / (1 + taxPct / 100)) : incl;
           bd = { rental, tax: round2(incl - rental), serviceFee: 0, total: incl };
         } else {
-          bd = computeBreakdown(r.monthly_amount, tenant);
+          // Renewals bill the DISCOUNTED rate. monthly_amount is the pre-discount
+          // per-period rate and the discount sits in its own column, so billing
+          // monthly_amount raw charged the full price forever. The signed
+          // BoldSign agreement has always quoted the discounted figure
+          // (api/esign/route.ts, create-boldsign-document) — so every renewal
+          // charged more than the contract the customer signed. RevTek: contract
+          // $333.84, cron charged $417.30.
+          bd = computeBreakdown(discountedRate(r), tenant);
         }
 
         // Extras + insurance ride on top of the period price (all tax-inclusive flat amounts).
@@ -641,7 +687,7 @@ Deno.serve(async (req) => {
                 extension_id: ext.id, amount: dueNow, remaining_amount: dueNow,
                 payment_date: today, method: "Card", payment_type: "Payment",
                 status: "Completed", verification_status: "approved", capture_status: "captured",
-                stripe_payment_intent_id: pi.id, booking_source: "auto_extend", platform_account: chargeCtx.platformAccount,
+                stripe_payment_intent_id: pi.id, booking_source: "website", platform_account: chargeCtx.platformAccount,
                 target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
                 created_at: nowIso, updated_at: nowIso,
               }).select("id").single();
@@ -802,15 +848,28 @@ Deno.serve(async (req) => {
             stripe_checkout_session_id: session.id, checkout_url: session.url,
           }).eq("id", ext.id);
 
-          await supabase.from("payments").insert({
+          // booking_source MUST be 'website': payments_booking_source_check permits
+          // only admin|website, so the previous value 'auto_extend' meant this
+          // insert failed EVERY time and the error was thrown away. Without this
+          // row, stripe-webhook-live's lookup by session id finds nothing, so a
+          // customer could pay the link and nothing settled, allocated, rolled the
+          // end date, or un-paused the rental. 'website' is also the value the
+          // webhook already settles under.
+          const { error: payErr } = await supabase.from("payments").insert({
             rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
             extension_id: ext.id, amount: dueNow, remaining_amount: dueNow,
             payment_date: today, method: "Card", payment_type: "Payment",
             status: "Pending", verification_status: "pending", capture_status: "requires_capture",
-            stripe_checkout_session_id: session.id, booking_source: "auto_extend", platform_account: ctx.platformAccount,
+            stripe_checkout_session_id: session.id, booking_source: "website", platform_account: ctx.platformAccount,
             target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
             created_at: nowIso, updated_at: nowIso,
           });
+          if (payErr) {
+            // Never silent again: a missing row means the customer cannot be
+            // credited for a payment they are about to be asked to make.
+            console.error(`[auto-extend] payments insert FAILED for ${r.id} ext#${seq}: ${payErr.message}`);
+            errors.push(`${String(r.id).slice(0, 8)}: payments row not created — ${payErr.message}`);
+          }
 
           const total = fmtCurrency(dueNow, ctx.currencyCode);
           const vehicle = r.vehicles ? `${r.vehicles.make ?? ""} ${r.vehicles.model ?? ""}`.trim() : "your vehicle";
@@ -843,6 +902,16 @@ Deno.serve(async (req) => {
             auto_extend_pending_extension_id: ext.id,
             auto_extend_status: "awaiting_payment",
             auto_extend_next_charge_at: nextChargeAt.toISOString(),
+            // Reset the nudge counter per WEEK. It was only ever incremented and
+            // never reset anywhere, making it a lifetime cap — three of RevTek's
+            // four paused rentals sat at or OVER their max (one at 3/1) and could
+            // never be reminded again about any future week.
+            auto_extend_reminder_count: 0,
+            // nowIso, NOT null. The park email IS the first payment ask, so the
+            // nudge interval starts from it. null means epoch, so `now - 0 >=
+            // interval` is trivially true and the 14:00 sweep would nudge a
+            // rental parked at 13:50 ten minutes later.
+            auto_extend_last_reminder_at: nowIso,
             updated_at: nowIso,
           }, "pay-link park");
           linked++;

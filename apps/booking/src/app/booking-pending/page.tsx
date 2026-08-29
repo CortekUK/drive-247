@@ -90,7 +90,7 @@ const BookingPendingContent = () => {
         // Bonzah uses tenant balance (not customer card), so it can be confirmed for preauth bookings
         if (rental?.bonzah_policy_id) {
           try {
-            console.log('🛡️ Confirming Bonzah insurance policy...');
+            console.log('Confirming Bonzah insurance policy...');
             const { data: bonzahResult, error: bonzahError } = await supabase.functions.invoke('bonzah-confirm-payment', {
               body: {
                 policy_record_id: rental.bonzah_policy_id,
@@ -99,14 +99,14 @@ const BookingPendingContent = () => {
             });
 
             if (bonzahError) {
-              console.error('❌ Failed to confirm Bonzah insurance:', bonzahError);
+              console.error('Failed to confirm Bonzah insurance:', bonzahError);
             } else if (bonzahResult?.already_processed) {
-              console.log('✅ Bonzah insurance already confirmed:', bonzahResult.policy_no);
+              console.log('Bonzah insurance already confirmed:', bonzahResult.policy_no);
             } else {
-              console.log('✅ Bonzah insurance confirmed:', bonzahResult);
+              console.log('Bonzah insurance confirmed:', bonzahResult);
             }
           } catch (bonzahErr) {
-            console.error('❌ Error confirming Bonzah insurance:', bonzahErr);
+            console.error('Error confirming Bonzah insurance:', bonzahErr);
           }
         }
 

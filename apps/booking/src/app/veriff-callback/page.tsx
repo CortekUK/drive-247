@@ -11,7 +11,7 @@ const VeriffCallback = () => {
     if (typeof window !== 'undefined') {
       // Notify parent window that verification is complete (for iOS Safari)
       if (window.opener && !window.opener.closed) {
-        console.log('📢 Notifying parent window: verification complete');
+        console.log('Notifying parent window: verification complete');
         window.opener.postMessage({ type: 'VERIFF_COMPLETE' }, window.location.origin);
       }
 

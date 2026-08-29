@@ -85,7 +85,11 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
           start_date: newStartDate,
           end_date: newEndDate,
           rental_period_type: rental.rental_period_type || 'Monthly',
+          // Carry the agreed discount into the renewal, so the rental this creates
+          // matches the rate shown in this dialog and the rate auto-extend bills.
+          // Displaying net while creating gross would quote one price and charge another.
           monthly_amount: rental.monthly_amount,
+          discount_applied: (rental as any).discount_applied ?? null,
           status: 'Pending',
           source: 'customer_portal',
           tenant_id: tenant.id,
@@ -164,7 +168,7 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
                     {format(sourceStartDate, 'MMM dd, yyyy')} — {format(sourceEndDate, 'MMM dd, yyyy')}
                   </p>
                   <p className="text-sm font-medium mt-0.5">
-                    {formatCurrency(rental.monthly_amount, currencyCode)} / {rental.rental_period_type?.toLowerCase() || 'month'}
+                    {formatCurrency(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)), currencyCode)} / {rental.rental_period_type?.toLowerCase() || 'month'}
                   </p>
                 </div>
               </div>
@@ -262,7 +266,7 @@ export function RenewRentalDialog({ open, onOpenChange, rental }: RenewRentalDia
                 <div className="border-t pt-3 flex justify-between items-center">
                   <span className="text-sm font-medium">Rate</span>
                   <span className="font-bold text-lg">
-                    {formatCurrency(rental.monthly_amount, currencyCode)} / {rental.rental_period_type?.toLowerCase() || 'month'}
+                    {formatCurrency(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)), currencyCode)} / {rental.rental_period_type?.toLowerCase() || 'month'}
                   </span>
                 </div>
               </div>

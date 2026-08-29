@@ -234,7 +234,7 @@ export function AppSidebar() {
           tooltip={collapsed ? "Send feedback" : undefined}
           className="h-8 transition-all duration-200 ease-in-out"
         >
-          <MessageSquarePlus className="h-4 w-4 shrink-0" />
+          {collapsed && <MessageSquarePlus className="h-4 w-4 shrink-0" />}
           <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
             Send Feedback
           </span>
@@ -382,7 +382,7 @@ export function AppSidebar() {
         >
           <Link href={item.href} onClick={closeMobileOnNav} className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2 min-w-0">
-              <item.icon className="h-3.5 w-3.5 shrink-0" />
+              {collapsed && <item.icon className="h-3.5 w-3.5 shrink-0" />}
               <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
                 {item.name}
               </span>
@@ -544,7 +544,7 @@ export function AppSidebar() {
                               onClick={closeMobileOnNav}
                               className="flex items-center gap-2.5"
                             >
-                              <item.icon className="h-4 w-4 shrink-0" />
+                              {collapsed && <item.icon className="h-4 w-4 shrink-0" />}
                               <span className="text-[13px]">{item.label}</span>
                             </Link>
                           </SidebarMenuButton>
@@ -648,7 +648,7 @@ export function AppSidebar() {
                   className="h-8 transition-all duration-200 ease-in-out"
                 >
                   <Link href="/" className="flex items-center gap-2">
-                    <AnimatedBlocks className="h-4 w-4 shrink-0" />
+                    {collapsed && <AnimatedBlocks className="h-4 w-4 shrink-0" />}
                     <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                       Dashboard
                     </span>
@@ -669,7 +669,7 @@ export function AppSidebar() {
                   className="h-8 transition-all duration-200 ease-in-out"
                 >
                   <Link href="/welcome" onClick={closeMobileOnNav} className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 shrink-0" />
+                    {collapsed && <BookOpen className="h-4 w-4 shrink-0" />}
                     <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                       Welcome Pack
                     </span>
@@ -739,7 +739,7 @@ export function AppSidebar() {
                       <SidebarMenuButton
                         className="h-8 w-full pointer-events-none"
                       >
-                        <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />
+                        {collapsed && <group.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : ""}`} />}
                         <span className="flex-1 text-left text-[13.5px] font-semibold">
                           {group.label}
                         </span>
@@ -829,7 +829,7 @@ export function AppSidebar() {
                 className="h-8 transition-all duration-200 ease-in-out"
               >
                 <Link href="/settings">
-                  <AnimatedSettings className="h-4 w-4 shrink-0" />
+                  {collapsed && <AnimatedSettings className="h-4 w-4 shrink-0" />}
                   <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                     Settings
                   </span>

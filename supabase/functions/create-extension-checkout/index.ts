@@ -344,8 +344,9 @@ Deno.serve(async (req) => {
         stripe_checkout_session_id: session.id,
         capture_status: 'requires_capture',
         platform_account: platformAccount,
-        booking_source: 'portal',
-        notes: `Extension #${extRow.sequence_number}: ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`,
+        // 'admin' — this link is raised by staff from the portal. 'portal' is not
+        // permitted by payments_booking_source_check and made every insert fail.
+        booking_source: 'admin',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -353,7 +354,12 @@ Deno.serve(async (req) => {
       .single();
 
     if (paymentError) {
-      console.error('Failed to create extension payment record:', paymentError);
+      // A live Stripe session now exists that the customer can pay, with no row
+      // to record it against. That must never be a silent console line again.
+      console.error(
+        `[create-extension-checkout] ORPHANED SESSION ${session.id} for extension ${extRow.id}: ` +
+        `payments insert failed — ${paymentError.message}`,
+      );
     } else {
       console.log('Created extension payment record:', payment.id);
     }

@@ -62,7 +62,7 @@ export const generateInvoiceNumber = (): string => {
 export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
   const invoiceNumber = generateInvoiceNumber();
 
-  console.log('📄 Creating invoice with data:', {
+  console.log('Creating invoice with data:', {
     rental_id: data.rental_id,
     customer_id: data.customer_id,
     vehicle_id: data.vehicle_id,
@@ -105,11 +105,11 @@ export const createInvoice = async (data: InvoiceData): Promise<Invoice> => {
     .single();
 
   if (error) {
-    console.error('❌ Error creating invoice in database:', error);
+    console.error('Error creating invoice in database:', error);
     throw error;
   }
 
-  console.log('✅ Invoice created:', invoice.invoice_number);
+  console.log('Invoice created:', invoice.invoice_number);
   return invoice as Invoice;
 };
 
@@ -150,7 +150,7 @@ export const createInvoiceWithFallback = async (data: InvoiceData): Promise<Invo
   try {
     return await createInvoice(data);
   } catch (error) {
-    console.warn('⚠️ Database invoice creation failed, using local invoice:', error);
+    console.warn('Database invoice creation failed, using local invoice:', error);
     return createLocalInvoice(data);
   }
 };

@@ -937,13 +937,13 @@ export function AuthPromptDialog({
         {newPassword.length > 0 && (
           <div className="flex gap-3 text-xs">
             <span className={newPassword.length >= 8 ? 'text-green-600' : 'text-muted-foreground'}>
-              {newPassword.length >= 8 ? '✓' : '○'} 8+ chars
+              {newPassword.length >= 8 ? '' : '○'} 8+ chars
             </span>
             <span className={/[A-Z]/.test(newPassword) ? 'text-green-600' : 'text-muted-foreground'}>
-              {/[A-Z]/.test(newPassword) ? '✓' : '○'} Uppercase
+              {/[A-Z]/.test(newPassword) ? '' : '○'} Uppercase
             </span>
             <span className={/\d/.test(newPassword) ? 'text-green-600' : 'text-muted-foreground'}>
-              {/\d/.test(newPassword) ? '✓' : '○'} Number
+              {/\d/.test(newPassword) ? '' : '○'} Number
             </span>
           </div>
         )}

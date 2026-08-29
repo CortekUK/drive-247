@@ -303,7 +303,7 @@ export function InstallmentSection({ rentalId, rentalStart, rentalEnd, customerI
           <Badge className={cn("border", plan.collection_mode === "auto"
             ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
             : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30")}>
-            {plan.collection_mode === "auto" ? "🟢 AUTO" : "🟡 MANUAL"}
+            {plan.collection_mode === "auto" ? "AUTO" : "MANUAL"}
           </Badge>
           {plan.status !== "active" ? (
             <Badge className="bg-muted text-foreground/90 border border-border capitalize">{plan.status}</Badge>

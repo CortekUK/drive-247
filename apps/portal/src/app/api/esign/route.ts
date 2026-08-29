@@ -284,7 +284,12 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
                 };
             }
             const periodType = (rental as any)?.rental_period_type || 'Monthly';
-            const daily = computePaygDailyRate((rental as any)?.monthly_amount, periodType);
+            // Net of discount, so payg_daily/weekly/monthly_rate agree with
+            // payg_billing_amount and with monthly_amount/rental_amount below.
+            const daily = computePaygDailyRate(
+                Math.max(0, (Number((rental as any)?.monthly_amount) || 0) - (Number((rental as any)?.discount_applied) || 0)),
+                periodType,
+            );
             const intervalDays =
                 (rental as any)?.payg_reminder_interval_days ??
                 (tenant as any)?.payg_reminder_interval_days ?? null;
@@ -292,7 +297,12 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
                 payg_daily_rate: daily > 0 ? formatCurrency(daily, currencyCode) : '',
                 payg_weekly_rate: daily > 0 ? formatCurrency(daily * 7, currencyCode) : '',
                 payg_monthly_rate: daily > 0 ? formatCurrency(daily * 30, currencyCode) : '',
-                payg_billing_amount: formatCurrency((rental as any)?.monthly_amount, currencyCode),
+                // Net of discount, matching monthly_amount/rental_amount above — this
+                // figure goes into the SIGNED agreement.
+                payg_billing_amount: formatCurrency(
+                    Math.max(0, (Number((rental as any)?.monthly_amount) || 0) - (Number((rental as any)?.discount_applied) || 0)),
+                    currencyCode,
+                ),
                 payg_period_label: String(periodType),
                 payg_reminder_interval: intervalDays
                     ? `every ${intervalDays} day${Number(intervalDays) === 1 ? '' : 's'}`
@@ -667,16 +677,16 @@ function parseHtmlToBlocks(html: string): PdfBlock[] {
  * Sanitize text for pdf-lib's StandardFonts (WinAnsi/CP1252 only).
  * Replaces common Unicode chars with WinAnsi-compatible equivalents and
  * substitutes anything still outside WinAnsi with '?' to avoid encoding errors
- * like: WinAnsi cannot encode "☐" (0x2610).
+ * like: WinAnsi cannot encode "" (0x2610).
  */
 const WINANSI_REPLACEMENTS: Record<string, string> = {
-    '☐': '[ ]',  // ☐ ballot box
-    '☑': '[x]',  // ☑ ballot box with check
-    '☒': '[x]',  // ☒ ballot box with x
-    '✓': 'Y',    // ✓ check mark
-    '✔': 'Y',    // ✔ heavy check mark
-    '✗': 'X',    // ✗ ballot x
-    '✘': 'X',    // ✘ heavy ballot x
+    '': '[ ]',  // ballot box
+    '': '[x]',  // ballot box with check
+    '': '[x]',  // ballot box with x
+    '': 'Y',    // check mark
+    '': 'Y',    // heavy check mark
+    '': 'X',    // ballot x
+    '': 'X',    // heavy ballot x
     '→': '->',   // → rightwards arrow
     '←': '<-',   // ← leftwards arrow
     '⇒': '=>',   // ⇒

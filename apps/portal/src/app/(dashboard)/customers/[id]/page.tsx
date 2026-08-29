@@ -934,7 +934,11 @@ const CustomerDetail = () => {
                             {rental.end_date ? format(parseLocalDate(rental.end_date), "MM/dd/yyyy") : "Ongoing"}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(rental.monthly_amount, currencyCode)}
+                            {/* Net of discount_applied — monthly_amount is stored GROSS. */}
+                            {formatCurrency(
+                              Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)),
+                              currencyCode,
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             {isCancelledOrRejected ? (
@@ -1347,7 +1351,11 @@ const CustomerDetail = () => {
                             {history.end_date ? format(parseLocalDate(history.end_date), "MM/dd/yyyy") : "Ongoing"}
                           </TableCell>
                           <TableCell className="text-right font-medium">
-                            {formatCurrency(history.monthly_amount, currencyCode)}
+                            {/* Net of discount_applied — monthly_amount is stored GROSS. */}
+                            {formatCurrency(
+                              Math.max(0, (Number(history.monthly_amount) || 0) - (Number((history as any).discount_applied) || 0)),
+                              currencyCode,
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant={history.status === 'Active' ? 'default' : 'secondary'}>

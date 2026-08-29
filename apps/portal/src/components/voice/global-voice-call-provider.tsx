@@ -104,7 +104,7 @@ export function GlobalVoiceCallProvider() {
 
       flashInterval = setInterval(() => {
         showingAlert = !showingAlert;
-        document.title = showingAlert ? '📞 Incoming Call!' : originalTitle;
+        document.title = showingAlert ? 'Incoming Call!' : originalTitle;
       }, 1000);
 
       return () => {

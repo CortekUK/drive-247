@@ -20,6 +20,18 @@ export interface SwapCandidate {
   /** Has a vehicle-specific blocked-dates range overlapping this rental's dates. */
   blocked: boolean;
   conflictReason?: string;
+  /**
+   * Fleet Health status, when one has been computed for this vehicle.
+   *
+   * A swap is a point of rental like any other, and it is the one place where
+   * the operator is under time pressure and reaching for whatever is free. A
+   * blocked-dates badge already stopped them putting a customer into a car that
+   * is in the garage; nothing stopped them putting one into a car whose
+   * inspection lapsed last week, which is the strict-liability case.
+   */
+  healthStatus?: string | null;
+  /** True for a compliance lapse — the status that should stop a swap, not just flag it. */
+  notRoadLegal: boolean;
 }
 
 interface UseVehicleSwapArgs {
@@ -112,19 +124,44 @@ export const useVehicleSwap = ({
         }
       }
 
+      // 4. Fleet Health status, so a swap cannot quietly move a customer onto a
+      // vehicle that is not road legal. Read from the cache rather than
+      // recomputed: this is a picker, and the nightly sweep plus the write
+      // triggers already keep the cache current.
+      const { data: health } = await (supabase as any)
+        .from("vehicle_health_cache")
+        .select("vehicle_id, status")
+        .eq("tenant_id", tenant.id);
+
+      const healthByVehicle = new Map<string, string>();
+      for (const h of health || []) {
+        if (h.vehicle_id) healthByVehicle.set(h.vehicle_id, h.status);
+      }
+
       return (vehicles || [])
         .filter((v: any) => v.id !== currentVehicleId)
         .map((v: any): SwapCandidate => {
           const unavailable = unavailableIds.has(v.id);
           const blocked = blockedIds.has(v.id);
+          const healthStatus = healthByVehicle.get(v.id) ?? null;
+          const notRoadLegal = healthStatus === "not_road_legal";
           return {
             ...v,
             unavailable,
             blocked,
+            healthStatus,
+            notRoadLegal,
+            // Ordered by what actually stops the swap. A compliance lapse ranks
+            // above an overdue service because it is the operator's licence and
+            // their motor policy, not a maintenance preference.
             conflictReason: unavailable
               ? "Booked for overlapping dates"
               : blocked
               ? "Blocked for maintenance"
+              : notRoadLegal
+              ? "Not road legal — compliance lapsed"
+              : healthStatus === "overdue"
+              ? "Service overdue"
               : undefined,
           };
         });

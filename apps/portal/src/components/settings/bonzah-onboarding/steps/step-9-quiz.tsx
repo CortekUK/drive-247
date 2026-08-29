@@ -39,7 +39,7 @@ export function Step9Quiz({ result, onResult }: Step9QuizProps) {
       onResult(res);
       if (res.passed) {
         toast({
-          title: 'Quiz passed 🎉',
+          title: 'Quiz passed',
           description: `You scored ${res.score}/${res.total}. You can now submit your application.`,
         });
       } else {

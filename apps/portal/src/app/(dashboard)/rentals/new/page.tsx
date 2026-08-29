@@ -9,6 +9,7 @@ import * as z from "zod";
 import { addMonths, addDays, addWeeks, isAfter, isBefore, subYears, startOfDay, format, differenceInDays, parseISO } from "date-fns";
 import { clampToBonzahStart } from "@/lib/bonzah-dates";
 import BonzahAvailabilityNotice from "@/components/rentals/bonzah-availability-notice";
+import { resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -538,13 +539,40 @@ const CreateRental = () => {
       if (hasOverlap) {
         const isGlobal = !block.vehicle_id;
 
-        // Admin portal only enforces global blocks — vehicle-specific blocks are informational only
-        if (isGlobal) {
-          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (global block)`);
+        // A Fleet Health maintenance hold is now enforced here too.
+        //
+        // This branch used to fire only for global blocks, so a vehicle-specific
+        // block was informational on the screen operators use most — which is how
+        // a maintenance hold stayed bypassable from the portal.
+        //
+        // `manual` blocks now bind here too. They previously did not, on the
+        // reasoning that the trigger does not reject them either — but that left
+        // the one screen operators use most as the only place a block they
+        // deliberately created had no effect. Five rentals were created straight
+        // over an in-force block through this screen (all source='portal'); one
+        // cost a tenant a $410.15 refund and a written apology to the customer.
+        //
+        // Reviewing every in-force block confirms the intent is unambiguous:
+        // "repair", "Turo", "rented", "Rented long term", "Car totaled", "Wreak".
+        // None are informational. An operator who blocks dates means "do not
+        // book this car", and this screen should honour that.
+        //
+        // Still deliberately client-side: it returns a readable reason to our own
+        // staff and never reaches check_rental_overlap, so it cannot surface a raw
+        // 23P02 (which interpolates the operator's private note) to a customer.
+        // Staff who genuinely need to book can delete the block first.
+        const isHold =
+          block.source_type === "maintenance" ||
+          block.source_type === "swap" ||
+          block.source_type === "manual" ||
+          !block.source_type;
+
+        if (isGlobal || (block.vehicle_id === vehicleId && isHold)) {
+          console.log(`[BlockedDates] Rental blocked: ${startDate.toISOString()} - ${endDate.toISOString()} overlaps with ${block.start_date} - ${block.end_date} (${isGlobal ? "global" : "maintenance hold"})`);
           return {
             blocked: true,
-            reason: block.reason || "General blocked period",
-            isGlobal: true
+            reason: block.reason_code || block.reason || (isGlobal ? "General blocked period" : "Blocked dates"),
+            isGlobal
           };
         }
       }
@@ -819,6 +847,7 @@ const CreateRental = () => {
   // Persist form state to localStorage so it survives tab close/refresh
   const PORTAL_RENTAL_STORAGE_KEY = 'portal_new_rental_draft';
   const draftRestoredRef = useRef(false);
+  const [showClearFormConfirm, setShowClearFormConfirm] = useState(false);
 
   // Restore saved draft on mount (skip if this is a renewal)
   useEffect(() => {
@@ -829,6 +858,18 @@ const CreateRental = () => {
       const saved = localStorage.getItem(PORTAL_RENTAL_STORAGE_KEY);
       if (!saved) return;
       const draft = JSON.parse(saved);
+
+      // Expire stale drafts. Without this an abandoned half-filled rental
+      // ambushes whoever opens this page next — days or weeks later, with no
+      // indication of where the values came from. A draft is a convenience for
+      // "I refreshed the tab", not a document.
+      // Drafts written before this shipped carry no savedAt; treat them as stale
+      // rather than trusting them indefinitely.
+      const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+      if (!draft.savedAt || Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS) {
+        localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
+        return;
+      }
 
       // Restore form values
       if (draft.customer_id) form.setValue("customer_id", draft.customer_id);
@@ -894,6 +935,8 @@ const CreateRental = () => {
         selectedExtras,
         pickupLocationId,
         returnLocationId,
+        // Read by the restore effect to expire stale drafts.
+        savedAt: Date.now(),
       };
       localStorage.setItem(PORTAL_RENTAL_STORAGE_KEY, JSON.stringify(draft));
     }, 500);
@@ -1061,7 +1104,7 @@ const CreateRental = () => {
         // `is_paused` is selected but deliberately NOT filtered out: staff may
         // still need to put a paused vehicle on a rental knowingly. The picker
         // marks it instead of hiding it, so the override is never blind.
-        .select("id, reg, make, model, status, is_paused, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
+        .select("id, reg, make, model, status, is_paused, available_daily, available_weekly, available_monthly, daily_rent, weekly_rent, monthly_rent, security_deposit, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, current_mileage, lockbox_code");
 
       if (tenant?.id) {
         query = query.eq("tenant_id", tenant.id);
@@ -2860,11 +2903,27 @@ const CreateRental = () => {
     toast({ title: "Form auto-filled", description: `${customer.name} → ${vehicle.make} ${vehicle.model} (${vehicle.reg})` });
   };
 
-  // Dev-only: reset form to blank state
-  const handleDevClear = () => {
-    if (process.env.NODE_ENV !== 'development') return;
+  // Reset the form to blank AND drop the persisted draft.
+  //
+  // The draft in localStorage is the reason this has to exist for real operators,
+  // not just in dev: form.reset() alone leaves the saved draft behind, so the next
+  // visit silently repopulates everything the operator just cleared. Until now the
+  // only way out was to complete the rental (the sole place the key was removed) or
+  // clear site data by hand.
+  const resetRentalForm = () => {
+    try {
+      // Stop the debounced writer re-saving the state we are about to clear.
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      localStorage.removeItem(PORTAL_RENTAL_STORAGE_KEY);
+    } catch {
+      // Private mode / storage disabled — the in-memory reset below still applies.
+    }
 
     form.reset();
+    // Not covered by form.reset(): these live outside the form and are persisted
+    // in the draft, so leaving them set would contradict the cleared fields.
+    setPickupLocationId(null);
+    setReturnLocationId(null);
     setSelectedExtras({});
     setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
     setBonzahPremium(0);
@@ -2895,6 +2954,12 @@ const CreateRental = () => {
     toast({ title: "Form cleared" });
   };
 
+  // Dev-only alias kept so the dashed Auto-fill / Clear pair still work locally.
+  const handleDevClear = () => {
+    if (process.env.NODE_ENV !== 'development') return;
+    resetRentalForm();
+  };
+
   return (
     <>
     <RentalProgressOverlay
@@ -2921,6 +2986,21 @@ const CreateRental = () => {
             {renewalSource ? "Continue from a previous rental" : "Set up a new rental agreement for a customer"}
           </p>
         </div>
+        {/* Real, always-available Clear form. Distinct from the dashed dev pair
+            below: this one ships. Hidden on a renewal, where the prefilled values
+            come from the source rental rather than from a draft. */}
+        {!renewalSource && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowClearFormConfirm(true)}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <XCircle className="h-3.5 w-3.5 mr-1.5" />
+            Clear form
+          </Button>
+        )}
         {process.env.NODE_ENV === 'development' && (
           <div className="flex gap-2 shrink-0">
             <Button
@@ -3584,6 +3664,9 @@ const CreateRental = () => {
                                               )}
                                               {vehicle.is_paused && (
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-medium">Paused</span>
+                                              )}
+                                              {resolveVehicleStatus(vehicle) === 'Unavailable' && (
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 font-medium">Off sale</span>
                                               )}
                                               {fleetHealthEnabled && (
                                                 <HealthStatusChip status={healthStatusFor(vehicle.id)} compact />
@@ -5649,7 +5732,7 @@ const CreateRental = () => {
                           <span className="sm:hidden">{insuranceDocId ? "Uploaded" : "Upload"}</span>
                         </Button>
                         {insuranceDocId && (
-                          <span className="text-sm text-green-600 whitespace-nowrap">✓ Uploaded</span>
+                          <span className="text-sm text-green-600 whitespace-nowrap">Uploaded</span>
                         )}
                       </div>
                     </div>
@@ -6473,6 +6556,31 @@ const CreateRental = () => {
       {/* Deliberate friction before the deposit amount can be edited. The
           failure this guards against is typing 20 when you meant 100 — cheap to
           prevent here, expensive to find out at vehicle return. */}
+      {/* Clearing loses everything typed so far, so it confirms. */}
+      <AlertDialog open={showClearFormConfirm} onOpenChange={setShowClearFormConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear this form?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Everything you have entered will be discarded, including the saved draft
+              that would otherwise reappear next time you open this page. This cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                resetRentalForm();
+                setShowClearFormConfirm(false);
+              }}
+            >
+              Clear form
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={depositEditConfirmOpen} onOpenChange={setDepositEditConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

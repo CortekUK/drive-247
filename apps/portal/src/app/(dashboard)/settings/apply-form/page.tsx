@@ -154,7 +154,7 @@ export default function ApplyFormSettingsPage() {
                           }`}
                           title={required ? "Required (operator override) — click to make optional" : "Optional — click to require"}
                         >
-                          {f} {required ? "✓" : ""}
+                          {f} {required ? "" : ""}
                         </button>
                       );
                     })}

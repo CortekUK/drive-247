@@ -88,10 +88,10 @@ function getPushStatus(t: Tenant, state: MigrationState): PushStatus {
 }
 
 const MIGRATION_STATE_META: Record<MigrationState, { label: string; className: string }> = {
-  uk: { label: '🇬🇧 UK', className: 'bg-secondary text-muted-foreground border-border' },
-  'partial-sub': { label: '🟡 Partial · Sub UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  'partial-connect': { label: '🟡 Partial · Connect UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  uae: { label: '🇦🇪 UAE', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  uk: { label: 'UK', className: 'bg-secondary text-muted-foreground border-border' },
+  'partial-sub': { label: 'Partial · Sub UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  'partial-connect': { label: 'Partial · Connect UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  uae: { label: 'UAE', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
 };
 
 const PUSH_STATUS_META: Record<PushStatus, { label: string; className: string }> = {

@@ -124,9 +124,9 @@ export const useOrgSettings = () => {
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: async (updates: Partial<OrgSettings>): Promise<OrgSettings> => {
-      console.log('🔧 [SETTINGS] Updating settings with:', updates);
-      console.log('🔧 [SETTINGS] Tenant context:', tenant?.id);
-      console.log('🔧 [SETTINGS] Calling Edge Function...');
+      console.log('[SETTINGS] Updating settings with:', updates);
+      console.log('[SETTINGS] Tenant context:', tenant?.id);
+      console.log('[SETTINGS] Calling Edge Function...');
       
       // Include tenant_id from context for proper multi-tenant audit logging
       const requestBody = {
@@ -138,18 +138,18 @@ export const useOrgSettings = () => {
         body: requestBody,
       });
 
-      console.log('🔧 [SETTINGS] Edge Function response:', { data, error });
+      console.log('[SETTINGS] Edge Function response:', { data, error });
 
       if (error) {
-        console.error('❌ [SETTINGS] Settings update error:', error);
+        console.error('[SETTINGS] Settings update error:', error);
         throw new Error(`Failed to update settings: ${error.message}`);
       }
 
-      console.log('✅ [SETTINGS] Settings updated successfully! Response:', data);
+      console.log('[SETTINGS] Settings updated successfully! Response:', data);
       return data;
     },
     onSuccess: (data) => {
-      console.log('✅ [SETTINGS] onSuccess - Cache updated');
+      console.log('[SETTINGS] onSuccess - Cache updated');
       // Update the cache with new data
       queryClient.setQueryData(['org-settings'], data);
       
@@ -195,16 +195,16 @@ export const useOrgSettings = () => {
   };
 
   const toggleReminder = (reminderType: keyof Pick<OrgSettings, 'reminder_due_today' | 'reminder_overdue_1d' | 'reminder_overdue_multi' | 'reminder_due_soon_2d'>) => {
-    console.log('🔔 [TOGGLE] toggleReminder called with:', reminderType);
-    console.log('🔔 [TOGGLE] Current settings:', settings);
+    console.log('[TOGGLE] toggleReminder called with:', reminderType);
+    console.log('[TOGGLE] Current settings:', settings);
     
     if (!settings) {
-      console.log('🔔 [TOGGLE] No settings available, returning early');
+      console.log('[TOGGLE] No settings available, returning early');
       return;
     }
 
     const newValue = !settings[reminderType];
-    console.log('🔔 [TOGGLE] Toggling', reminderType, 'from', settings[reminderType], 'to', newValue);
+    console.log('[TOGGLE] Toggling', reminderType, 'from', settings[reminderType], 'to', newValue);
 
     return updateSettingsMutation.mutate({
       [reminderType]: newValue

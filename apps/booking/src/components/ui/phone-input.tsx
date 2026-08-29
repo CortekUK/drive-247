@@ -20,40 +20,40 @@ import {
 
 // Country codes with phone number length rules (digits after country code)
 export const COUNTRY_CODES = [
-    { code: "+1", country: "US", flag: "🇺🇸", name: "United States", minLen: 10, maxLen: 10 },
-    { code: "+44", country: "GB", flag: "🇬🇧", name: "United Kingdom", minLen: 10, maxLen: 10 },
-    { code: "+1", country: "CA", flag: "🇨🇦", name: "Canada", minLen: 10, maxLen: 10 },
-    { code: "+353", country: "IE", flag: "🇮🇪", name: "Ireland", minLen: 7, maxLen: 9 },
-    { code: "+49", country: "DE", flag: "🇩🇪", name: "Germany", minLen: 6, maxLen: 11 },
-    { code: "+33", country: "FR", flag: "🇫🇷", name: "France", minLen: 9, maxLen: 9 },
-    { code: "+34", country: "ES", flag: "🇪🇸", name: "Spain", minLen: 9, maxLen: 9 },
-    { code: "+39", country: "IT", flag: "🇮🇹", name: "Italy", minLen: 9, maxLen: 10 },
-    { code: "+31", country: "NL", flag: "🇳🇱", name: "Netherlands", minLen: 9, maxLen: 9 },
-    { code: "+32", country: "BE", flag: "🇧🇪", name: "Belgium", minLen: 8, maxLen: 9 },
-    { code: "+41", country: "CH", flag: "🇨🇭", name: "Switzerland", minLen: 9, maxLen: 9 },
-    { code: "+43", country: "AT", flag: "🇦🇹", name: "Austria", minLen: 7, maxLen: 11 },
-    { code: "+46", country: "SE", flag: "🇸🇪", name: "Sweden", minLen: 7, maxLen: 10 },
-    { code: "+47", country: "NO", flag: "🇳🇴", name: "Norway", minLen: 8, maxLen: 8 },
-    { code: "+45", country: "DK", flag: "🇩🇰", name: "Denmark", minLen: 8, maxLen: 8 },
-    { code: "+48", country: "PL", flag: "🇵🇱", name: "Poland", minLen: 9, maxLen: 9 },
-    { code: "+351", country: "PT", flag: "🇵🇹", name: "Portugal", minLen: 9, maxLen: 9 },
-    { code: "+61", country: "AU", flag: "🇦🇺", name: "Australia", minLen: 9, maxLen: 9 },
-    { code: "+64", country: "NZ", flag: "🇳🇿", name: "New Zealand", minLen: 8, maxLen: 9 },
-    { code: "+91", country: "IN", flag: "🇮🇳", name: "India", minLen: 10, maxLen: 10 },
-    { code: "+92", country: "PK", flag: "🇵🇰", name: "Pakistan", minLen: 10, maxLen: 10 },
-    { code: "+971", country: "AE", flag: "🇦🇪", name: "United Arab Emirates", minLen: 7, maxLen: 9 },
-    { code: "+966", country: "SA", flag: "🇸🇦", name: "Saudi Arabia", minLen: 9, maxLen: 9 },
-    { code: "+65", country: "SG", flag: "🇸🇬", name: "Singapore", minLen: 8, maxLen: 8 },
-    { code: "+852", country: "HK", flag: "🇭🇰", name: "Hong Kong", minLen: 8, maxLen: 8 },
-    { code: "+81", country: "JP", flag: "🇯🇵", name: "Japan", minLen: 9, maxLen: 10 },
-    { code: "+82", country: "KR", flag: "🇰🇷", name: "South Korea", minLen: 9, maxLen: 10 },
-    { code: "+86", country: "CN", flag: "🇨🇳", name: "China", minLen: 11, maxLen: 11 },
-    { code: "+55", country: "BR", flag: "🇧🇷", name: "Brazil", minLen: 10, maxLen: 11 },
-    { code: "+52", country: "MX", flag: "🇲🇽", name: "Mexico", minLen: 10, maxLen: 10 },
-    { code: "+27", country: "ZA", flag: "🇿🇦", name: "South Africa", minLen: 9, maxLen: 9 },
-    { code: "+234", country: "NG", flag: "🇳🇬", name: "Nigeria", minLen: 7, maxLen: 8 },
-    { code: "+254", country: "KE", flag: "🇰🇪", name: "Kenya", minLen: 9, maxLen: 9 },
-    { code: "+20", country: "EG", flag: "🇪🇬", name: "Egypt", minLen: 10, maxLen: 10 },
+    { code: "+1", country: "US", flag: "", name: "United States", minLen: 10, maxLen: 10 },
+    { code: "+44", country: "GB", flag: "", name: "United Kingdom", minLen: 10, maxLen: 10 },
+    { code: "+1", country: "CA", flag: "", name: "Canada", minLen: 10, maxLen: 10 },
+    { code: "+353", country: "IE", flag: "", name: "Ireland", minLen: 7, maxLen: 9 },
+    { code: "+49", country: "DE", flag: "", name: "Germany", minLen: 6, maxLen: 11 },
+    { code: "+33", country: "FR", flag: "", name: "France", minLen: 9, maxLen: 9 },
+    { code: "+34", country: "ES", flag: "", name: "Spain", minLen: 9, maxLen: 9 },
+    { code: "+39", country: "IT", flag: "", name: "Italy", minLen: 9, maxLen: 10 },
+    { code: "+31", country: "NL", flag: "", name: "Netherlands", minLen: 9, maxLen: 9 },
+    { code: "+32", country: "BE", flag: "", name: "Belgium", minLen: 8, maxLen: 9 },
+    { code: "+41", country: "CH", flag: "", name: "Switzerland", minLen: 9, maxLen: 9 },
+    { code: "+43", country: "AT", flag: "", name: "Austria", minLen: 7, maxLen: 11 },
+    { code: "+46", country: "SE", flag: "", name: "Sweden", minLen: 7, maxLen: 10 },
+    { code: "+47", country: "NO", flag: "", name: "Norway", minLen: 8, maxLen: 8 },
+    { code: "+45", country: "DK", flag: "", name: "Denmark", minLen: 8, maxLen: 8 },
+    { code: "+48", country: "PL", flag: "", name: "Poland", minLen: 9, maxLen: 9 },
+    { code: "+351", country: "PT", flag: "", name: "Portugal", minLen: 9, maxLen: 9 },
+    { code: "+61", country: "AU", flag: "", name: "Australia", minLen: 9, maxLen: 9 },
+    { code: "+64", country: "NZ", flag: "", name: "New Zealand", minLen: 8, maxLen: 9 },
+    { code: "+91", country: "IN", flag: "", name: "India", minLen: 10, maxLen: 10 },
+    { code: "+92", country: "PK", flag: "", name: "Pakistan", minLen: 10, maxLen: 10 },
+    { code: "+971", country: "AE", flag: "", name: "United Arab Emirates", minLen: 7, maxLen: 9 },
+    { code: "+966", country: "SA", flag: "", name: "Saudi Arabia", minLen: 9, maxLen: 9 },
+    { code: "+65", country: "SG", flag: "", name: "Singapore", minLen: 8, maxLen: 8 },
+    { code: "+852", country: "HK", flag: "", name: "Hong Kong", minLen: 8, maxLen: 8 },
+    { code: "+81", country: "JP", flag: "", name: "Japan", minLen: 9, maxLen: 10 },
+    { code: "+82", country: "KR", flag: "", name: "South Korea", minLen: 9, maxLen: 10 },
+    { code: "+86", country: "CN", flag: "", name: "China", minLen: 11, maxLen: 11 },
+    { code: "+55", country: "BR", flag: "", name: "Brazil", minLen: 10, maxLen: 11 },
+    { code: "+52", country: "MX", flag: "", name: "Mexico", minLen: 10, maxLen: 10 },
+    { code: "+27", country: "ZA", flag: "", name: "South Africa", minLen: 9, maxLen: 9 },
+    { code: "+234", country: "NG", flag: "", name: "Nigeria", minLen: 7, maxLen: 8 },
+    { code: "+254", country: "KE", flag: "", name: "Kenya", minLen: 9, maxLen: 9 },
+    { code: "+20", country: "EG", flag: "", name: "Egypt", minLen: 10, maxLen: 10 },
 ] as const;
 
 interface PhoneInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
@@ -112,7 +112,7 @@ export const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
 
         const selectedCountry = COUNTRY_CODES.find(c => c.country === selectedKey);
         const selectedCode = selectedCountry?.code || "+1";
-        const displayFlag = selectedCountry?.flag || "🌍";
+        const displayFlag = selectedCountry?.flag || "";
         const maxLen = selectedCountry?.maxLen || 12;
         const minLen = selectedCountry?.minLen || 7;
 

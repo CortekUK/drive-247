@@ -159,7 +159,10 @@ export const DeleteRentalDialog = ({
               </p>
               <p>
                 <span className="font-medium">Monthly Amount:</span>{" "}
-                {formatCurrency(rental.monthly_amount, currencyCode)}
+                {formatCurrency(
+                  Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)),
+                  currencyCode,
+                )}
               </p>
             </div>
           </div>

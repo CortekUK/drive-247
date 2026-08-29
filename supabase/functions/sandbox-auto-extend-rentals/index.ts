@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
     const rentalQuery = supabase
       .from("rentals")
       .select(`
-        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount,
+        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount, discount_applied,
         auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
         auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
         auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
         // A pay-link extension is still awaiting payment -> don't create another.
         if (r.auto_extend_pending_extension_id) {
           const { data: pending } = await supabase
-            .from("rental_extensions").select("id, status").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
+            .from("rental_extensions").select("id, status, created_at").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
           if (pending && pending.status === "paid") {
             // Webhook already settled it; clear the flag and let next cron renew.
             await supabase.from("rentals").update({
@@ -269,9 +269,27 @@ Deno.serve(async (req) => {
             }).eq("id", r.id);
           } else {
             // Still unpaid. Pause past the grace window; otherwise leave it parked.
+            // Mirrors auto-extend-rentals: grace runs from when the customer was
+            // last ASKED, not from auto_extend_next_charge_at (which is derived
+            // from the rental end date and so sits in the past once a rental has
+            // fallen behind). Without this the Time Machine reproduces the BUG
+            // rather than the fix, and any sim run still shows a one-tick pause.
             const graceMs = (Number(tenant.auto_extend_grace_hours) || 48) * 3600 * 1000;
-            const dueMs = new Date(r.auto_extend_next_charge_at).getTime();
-            if (now.getTime() - dueMs > graceMs) {
+            const { data: lastNudge } = await supabase
+              .from("auto_extension_reminders")
+              .select("sent_at")
+              .eq("extension_id", r.auto_extend_pending_extension_id)
+              .eq("status", "sent")
+              .order("sent_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const askedAtMs = Math.max(
+              pending?.created_at
+                ? new Date(pending.created_at).getTime()
+                : new Date(r.auto_extend_next_charge_at).getTime(),
+              lastNudge?.sent_at ? new Date(lastNudge.sent_at).getTime() : 0,
+            );
+            if (now.getTime() - askedAtMs > graceMs) {
               await supabase.from("rentals").update({
                 auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
               }).eq("id", r.id);
@@ -303,7 +321,11 @@ Deno.serve(async (req) => {
           const rental = taxPct > 0 ? round2(incl / (1 + taxPct / 100)) : incl;
           bd = { rental, tax: round2(incl - rental), serviceFee: 0, total: incl };
         } else {
-          bd = computeBreakdown(r.monthly_amount, tenant);
+          // Parity with auto-extend-rentals: renewals bill the DISCOUNTED rate.
+          bd = computeBreakdown(
+            Math.max(0, (Number(r.monthly_amount) || 0) - (Number(r.discount_applied) || 0)),
+            tenant,
+          );
         }
 
         // Extras + insurance ride on top of the period price (all tax-inclusive flat amounts).
@@ -398,7 +420,7 @@ Deno.serve(async (req) => {
                 extension_id: ext.id, amount: chargeTotal, remaining_amount: chargeTotal,
                 payment_date: today, method: "Card", payment_type: "Payment",
                 status: "Completed", verification_status: "approved", capture_status: "captured",
-                stripe_payment_intent_id: pi.id, booking_source: "auto_extend", platform_account: ctx.platformAccount,
+                stripe_payment_intent_id: pi.id, booking_source: "website", platform_account: ctx.platformAccount,
                 target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
                 created_at: nowIso, updated_at: nowIso,
               }).select("id").single();
@@ -483,7 +505,7 @@ Deno.serve(async (req) => {
             extension_id: ext.id, amount: chargeTotal, remaining_amount: chargeTotal,
             payment_date: today, method: "Card", payment_type: "Payment",
             status: "Pending", verification_status: "pending", capture_status: "requires_capture",
-            stripe_checkout_session_id: session.id, booking_source: "auto_extend", platform_account: ctx.platformAccount,
+            stripe_checkout_session_id: session.id, booking_source: "website", platform_account: ctx.platformAccount,
             target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
             created_at: nowIso, updated_at: nowIso,
           });
@@ -514,6 +536,10 @@ Deno.serve(async (req) => {
             auto_extend_pending_extension_id: ext.id,
             auto_extend_status: "awaiting_payment",
             auto_extend_next_charge_at: nextChargeAt.toISOString(),
+            // Parity with auto-extend-rentals: the nudge counter is per WEEK.
+            // Without this the Time Machine sim diverges from prod behaviour.
+            auto_extend_reminder_count: 0,
+            auto_extend_last_reminder_at: nowIso,
             updated_at: nowIso,
           }).eq("id", r.id);
           linked++;

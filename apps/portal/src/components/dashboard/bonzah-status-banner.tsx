@@ -51,7 +51,7 @@ export function BonzahStatusBanner() {
               </div>
               <div className="min-w-0">
                 <p className="font-semibold text-base">
-                  Bonzah is active <span aria-hidden>🎉</span>
+                  Bonzah is active <span aria-hidden></span>
                 </p>
                 <p className="text-sm text-muted-foreground line-clamp-2">{message}</p>
               </div>

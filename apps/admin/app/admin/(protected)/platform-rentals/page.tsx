@@ -388,7 +388,7 @@ export default function PlatformRentalsPage() {
                   </div>
                 ) : (
                   <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-emerald-400 text-sm font-medium">
-                    ✅ Every integration was live-ready at creation.
+                    Every integration was live-ready at creation.
                   </div>
                 )}
 

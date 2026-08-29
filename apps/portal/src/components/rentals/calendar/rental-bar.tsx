@@ -128,8 +128,16 @@ export function RentalBar({ rental, position, topOffset, barHeight }: RentalBarP
             <div className="flex items-center gap-2">
               <DollarSign className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0" />
               <span className="text-xs font-semibold text-foreground">
-                {formatCurrency(rental.monthly_amount, tenant?.currency_code || 'USD')}
-                <span className="text-muted-foreground/60 font-normal">/mo</span>
+                {/* Net of discount_applied, and labelled with the rental's ACTUAL
+                    period — this hard-coded "/mo" mislabelled every weekly rental. */}
+                {formatCurrency(
+                  Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)),
+                  tenant?.currency_code || 'USD',
+                )}
+                <span className="text-muted-foreground/60 font-normal">
+                  /{((rental as any).rental_period_type || 'Monthly') === 'Daily' ? 'day'
+                    : ((rental as any).rental_period_type || 'Monthly') === 'Weekly' ? 'wk' : 'mo'}
+                </span>
               </span>
             </div>
           </div>

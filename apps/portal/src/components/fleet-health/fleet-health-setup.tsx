@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Gauge, CalendarCheck, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Gauge, CalendarCheck, ArrowRight, CheckCircle2, Upload } from "lucide-react";
 import { useVehiclesNeedingOdometer } from "@/hooks/use-vehicle-odometer";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { RecordOdometerDialog } from "@/components/fleet-health/record-odometer-dialog";
+import { CsvImportDialog } from "@/components/fleet-health/csv-import-dialog";
 
 interface FleetHealthSetupProps {
   /** Lets the operator dismiss the setup screen and look at the list anyway. */
@@ -35,6 +36,7 @@ export function FleetHealthSetup({ onSkip }: FleetHealthSetupProps) {
   const { data: pending = [], isLoading } = useVehiclesNeedingOdometer();
   const stats = useFleetHealthStats();
   const [active, setActive] = useState<{ id: string; reg: string } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const done = stats.seeded;
   const total = stats.total;
@@ -92,6 +94,13 @@ export function FleetHealthSetup({ onSkip }: FleetHealthSetupProps) {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             )}
+            {/* The one-at-a-time walk above is right for four vehicles and hopeless
+                for twenty-two at zero coverage, which is what the largest real fleets
+                actually look like. They already keep these numbers in a spreadsheet. */}
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Import from spreadsheet
+            </Button>
             {onSkip && (
               <Button variant="outline" onClick={onSkip}>
                 Skip for now
@@ -154,6 +163,8 @@ export function FleetHealthSetup({ onSkip }: FleetHealthSetupProps) {
           )}
         </CardContent>
       </Card>
+
+      <CsvImportDialog open={importing} onOpenChange={setImporting} />
 
       {active && (
         <RecordOdometerDialog

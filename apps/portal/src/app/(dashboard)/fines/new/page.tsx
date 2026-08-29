@@ -111,7 +111,7 @@ const CreateFine = () => {
       notes: string;
     }>) => {
       const data = e.detail;
-      console.log('🔧 DEV MODE: Filling fine form with:', data);
+      console.log('DEV MODE: Filling fine form with:', data);
 
       // Set form values
       form.setValue('type', data.type);

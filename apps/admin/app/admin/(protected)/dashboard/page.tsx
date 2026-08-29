@@ -236,7 +236,7 @@ export default function DashboardPage() {
           title="Total Rental Companies"
           value={m.companies}
           subtitle={`${m.activeCompanies} active`}
-          icon="🏢"
+          icon=""
           bgColor="bg-blue-900/20 border border-blue-800/50"
           textColor="text-blue-400"
         />
@@ -245,7 +245,7 @@ export default function DashboardPage() {
           title="Total Vehicles"
           value={m.vehicles}
           subtitle={`Across all ${tenantWord} companies`}
-          icon="🚗"
+          icon=""
           bgColor="bg-green-900/20 border border-green-800/50"
           textColor="text-green-400"
         />
@@ -254,7 +254,7 @@ export default function DashboardPage() {
           title="Total Rentals"
           value={m.rentals}
           subtitle="All-time bookings"
-          icon="📋"
+          icon=""
           bgColor="bg-purple-900/20 border border-purple-800/50"
           textColor="text-purple-400"
         />
@@ -263,7 +263,7 @@ export default function DashboardPage() {
           title="Total Customers"
           value={m.customers}
           subtitle={`${tenantWord} tenants`}
-          icon="👥"
+          icon=""
           bgColor="bg-yellow-900/20 border border-yellow-800/50"
           textColor="text-yellow-400"
         />
@@ -273,7 +273,7 @@ export default function DashboardPage() {
           title="Monthly Recurring Revenue"
           value={formatMoneyMap(m.mrr)}
           subtitle={`From tenant subscriptions · ${lifetimeLabel} collected all-time`}
-          icon="💰"
+          icon=""
           bgColor="bg-indigo-900/20 border border-indigo-800/50"
           textColor="text-indigo-400"
         />
@@ -283,7 +283,7 @@ export default function DashboardPage() {
           title="Booking Volume (GMV)"
           value={formatMoneyMap(m.bookingVolume)}
           subtitle={`Gross rental value · ${tenantWord} tenants · not Drive247 revenue`}
-          icon="📊"
+          icon=""
           bgColor="bg-cyan-900/20 border border-cyan-800/50"
           textColor="text-cyan-400"
         />
@@ -292,7 +292,7 @@ export default function DashboardPage() {
           title="Platform Health"
           value="Operational"
           subtitle="All systems running"
-          icon="✅"
+          icon=""
           bgColor="bg-emerald-900/20 border border-emerald-800/50"
           textColor="text-emerald-400"
         />

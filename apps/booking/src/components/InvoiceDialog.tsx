@@ -222,7 +222,7 @@ const PrintableInvoice = ({ invoice, customer, vehicle, rental, promoDetails, se
               <tr className="border-b border-gray-300">
                 <td className="p-3 text-sm">
                   <div className="flex items-start gap-2">
-                    <span style={{ color: '#C5A572' }}>🛡</span>
+                    <span style={{ color: '#C5A572' }}></span>
                     <p className="font-medium">Bonzah Insurance</p>
                   </div>
                 </td>

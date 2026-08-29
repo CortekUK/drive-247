@@ -470,7 +470,7 @@ export default function BookingDetailPage() {
       const { data, error } = await (supabase as any)
         .from('rentals')
         .select(`
-          id, rental_number, start_date, end_date, status, monthly_amount, rental_period_type,
+          id, rental_number, start_date, end_date, status, monthly_amount, discount_applied, rental_period_type,
           payment_status, approval_status, pickup_location, return_location,
           created_at, has_installment_plan, is_extended, previous_end_date,
           original_end_date, cancellation_requested, cancellation_reason,
@@ -912,7 +912,7 @@ export default function BookingDetailPage() {
                   <CreditCard className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <span className="text-muted-foreground">Amount:</span>
                   <span className="font-medium">
-                    {formatCurrency(rental.monthly_amount || 0, currencyCode)}
+                    {formatCurrency(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)), currencyCode)}
                     {rental.rental_period_type && (
                       <span className="text-muted-foreground font-normal">
                         /{rental.rental_period_type === 'daily' ? 'day' : rental.rental_period_type === 'weekly' ? 'wk' : 'mo'}

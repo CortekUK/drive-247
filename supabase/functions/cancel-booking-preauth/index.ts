@@ -85,7 +85,40 @@ serve(async (req) => {
     // Get Stripe client for the platform account this payment was created on
     const stripe = getStripeClientForRecord(payment, stripeMode);
 
-    // 3. Check if payment can be cancelled
+    // 3a. This endpoint REJECTS A PENDING BOOKING: it cancels the rental, frees
+    //     the vehicle and voids every unpaid charge. It must never run on an
+    //     extension pay-link or on a live rental.
+    //
+    //     Extension pay-links share the shape this function's caller screen
+    //     filters on (booking_source 'website' + capture_status
+    //     'requires_capture'), so 86 of them were sitting in the portal's
+    //     Pending Bookings queue — 23 on ACTIVE rentals. One Reject click there
+    //     set rentals.status='Cancelled', marked the car Available while the
+    //     customer was driving it, and voided the whole balance rather than the
+    //     one extension. The queue filter was fixed in the portal, but the
+    //     portal is only one caller; the guard belongs here.
+    if (payment.extension_id) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "This is an extension payment link, not a pending booking. Void the payment link instead.",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const rentalStatus = (payment as { rental?: { status?: string } })?.rental?.status;
+    if (rentalStatus && rentalStatus !== "Pending") {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `This rental is ${rentalStatus}, not a pending booking — rejecting it would cancel a live rental. Cancel the rental from the rental page instead.`,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3b. Check if payment can be cancelled
     if (
       payment.capture_status &&
       payment.capture_status !== "requires_capture"

@@ -126,12 +126,12 @@ export function TestCallsSection({
             </div>
             {!isBusinessLine && (
               <div className="text-amber-600">
-                ⚠ Name announcement only runs in <code>business_line</code> caller-ID mode.
+                Name announcement only runs in <code>business_line</code> caller-ID mode.
               </div>
             )}
             {!status?.callForwardingEnabled && (
               <div className="text-amber-600">
-                ⚠ Forwarding is off — preview will not show phone legs.
+                Forwarding is off — preview will not show phone legs.
               </div>
             )}
           </div>

@@ -140,12 +140,12 @@ export default function DevPanel() {
         }
 
         toast.success('Login form filled')
-        console.log('🔧 DEV: Login form filled')
+        console.log('DEV: Login form filled')
     }
 
     const createCustomer = async () => {
         setIsLoadingCustomer(true)
-        console.log('🔧 DEV: Creating customer and filling form...')
+        console.log('DEV: Creating customer and filling form...')
 
         try {
             const tenantId = tenant?.id
@@ -184,12 +184,12 @@ export default function DevPanel() {
                 .single()
 
             if (error) {
-                console.error('🔧 DEV: Customer insert error:', JSON.stringify(error, null, 2))
+                console.error('DEV: Customer insert error:', JSON.stringify(error, null, 2))
                 toast.error(`Failed to create customer: ${error.message || error.code || 'Unknown error'}`)
                 return
             }
 
-            console.log('🔧 DEV: Customer created:', insertedCustomer)
+            console.log('DEV: Customer created:', insertedCustomer)
 
             // Navigate to customers page first if not there, then dispatch event
             if (pathname === '/customers') {
@@ -207,7 +207,7 @@ export default function DevPanel() {
                 }, 1000)
             }
 
-            toast.success(`✓ Customer created: ${customerData.name}`)
+            toast.success(`Customer created: ${customerData.name}`)
 
             // Invalidate customer queries to refresh the list
             await queryClient.invalidateQueries({
@@ -218,7 +218,7 @@ export default function DevPanel() {
             })
 
         } catch (error: any) {
-            console.error('🔧 DEV: Customer creation error:', error)
+            console.error('DEV: Customer creation error:', error)
             toast.error(`Customer creation failed: ${error.message}`)
         } finally {
             setIsLoadingCustomer(false)
@@ -227,7 +227,7 @@ export default function DevPanel() {
 
     const createVehicle = async () => {
         setIsLoadingVehicle(true)
-        console.log('🔧 DEV: Creating vehicle directly in database...')
+        console.log('DEV: Creating vehicle directly in database...')
 
         try {
             const tenantId = tenant?.id
@@ -264,13 +264,13 @@ export default function DevPanel() {
                 .single()
 
             if (error) {
-                console.error('🔧 DEV: Vehicle insert error:', error)
+                console.error('DEV: Vehicle insert error:', error)
                 toast.error(`Failed to create vehicle: ${error.message}`)
                 return
             }
 
-            console.log('🔧 DEV: Vehicle created:', insertedVehicle)
-            toast.success(`✓ Vehicle created: ${vehicleData.make} ${vehicleData.model} (${vehicleData.reg})`)
+            console.log('DEV: Vehicle created:', insertedVehicle)
+            toast.success(`Vehicle created: ${vehicleData.make} ${vehicleData.model} (${vehicleData.reg})`)
 
             // Invalidate vehicle queries to refresh the list
             // Use predicate to match queries that start with these keys (includes tenant ID variants)
@@ -282,7 +282,7 @@ export default function DevPanel() {
             })
 
         } catch (error: any) {
-            console.error('🔧 DEV: Vehicle creation error:', error)
+            console.error('DEV: Vehicle creation error:', error)
             toast.error(`Vehicle creation failed: ${error.message}`)
         } finally {
             setIsLoadingVehicle(false)
@@ -291,7 +291,7 @@ export default function DevPanel() {
 
     const createFine = async () => {
         setIsLoadingFine(true)
-        console.log('🔧 DEV: Creating fine and filling form...')
+        console.log('DEV: Creating fine and filling form...')
 
         try {
             const tenantId = tenant?.id
@@ -313,7 +313,7 @@ export default function DevPanel() {
 
             if (mockCustomer) {
                 customer = mockCustomer
-                console.log('🔧 DEV: Found mock customer:', customer.name)
+                console.log('DEV: Found mock customer:', customer.name)
             } else {
                 // Fallback: Fetch first available customer
                 const { data: customers, error: customerError } = await supabase
@@ -328,7 +328,7 @@ export default function DevPanel() {
                     return
                 }
                 customer = customers[0]
-                console.log('🔧 DEV: Using fallback customer:', customer.name)
+                console.log('DEV: Using fallback customer:', customer.name)
             }
 
             // Fetch first available vehicle
@@ -392,12 +392,12 @@ export default function DevPanel() {
                 .single()
 
             if (error) {
-                console.error('🔧 DEV: Fine insert error:', error)
+                console.error('DEV: Fine insert error:', error)
                 toast.error(`Failed to create fine: ${error.message}`)
                 return
             }
 
-            console.log('🔧 DEV: Fine created:', insertedFine)
+            console.log('DEV: Fine created:', insertedFine)
 
             // Navigate to fines/new page first if not there, then dispatch event
             if (pathname === '/fines/new') {
@@ -417,7 +417,7 @@ export default function DevPanel() {
                 }, 1000)
             }
 
-            toast.success(`✓ Fine created: ${randomType} $${randomAmount} for ${customer.name}`)
+            toast.success(`Fine created: ${randomType} $${randomAmount} for ${customer.name}`)
 
             // Invalidate fine queries to refresh the list
             await queryClient.invalidateQueries({
@@ -428,7 +428,7 @@ export default function DevPanel() {
             })
 
         } catch (error: any) {
-            console.error('🔧 DEV: Fine creation error:', error)
+            console.error('DEV: Fine creation error:', error)
             toast.error(`Fine creation failed: ${error.message}`)
         } finally {
             setIsLoadingFine(false)
@@ -437,7 +437,7 @@ export default function DevPanel() {
 
     const createPayment = async () => {
         setIsLoadingPayment(true)
-        console.log('🔧 DEV: Creating payment and filling form...')
+        console.log('DEV: Creating payment and filling form...')
 
         try {
             const tenantId = tenant?.id
@@ -459,7 +459,7 @@ export default function DevPanel() {
 
             if (mockCustomer) {
                 customer = mockCustomer
-                console.log('🔧 DEV: Found mock customer:', customer.name)
+                console.log('DEV: Found mock customer:', customer.name)
             } else {
                 // Fallback: Fetch first available customer
                 const { data: customers, error: customerError } = await supabase
@@ -474,7 +474,7 @@ export default function DevPanel() {
                     return
                 }
                 customer = customers[0]
-                console.log('🔧 DEV: Using fallback customer:', customer.name)
+                console.log('DEV: Using fallback customer:', customer.name)
             }
 
             // Find active rental for the customer to get vehicle
@@ -493,7 +493,7 @@ export default function DevPanel() {
                 const rental = activeRentals[0]
                 rentalId = rental.id
                 vehicle = rental.vehicles as any
-                console.log('🔧 DEV: Found active rental with vehicle:', vehicle?.reg)
+                console.log('DEV: Found active rental with vehicle:', vehicle?.reg)
             } else {
                 // No active rental, try to get first vehicle
                 const { data: vehicles } = await supabase
@@ -504,7 +504,7 @@ export default function DevPanel() {
 
                 if (vehicles?.length) {
                     vehicle = vehicles[0]
-                    console.log('🔧 DEV: No active rental, using first vehicle:', vehicle.reg)
+                    console.log('DEV: No active rental, using first vehicle:', vehicle.reg)
                 }
             }
 
@@ -547,12 +547,12 @@ export default function DevPanel() {
                 .single()
 
             if (error) {
-                console.error('🔧 DEV: Payment insert error:', error)
+                console.error('DEV: Payment insert error:', error)
                 toast.error(`Failed to create payment: ${error.message}`)
                 return
             }
 
-            console.log('🔧 DEV: Payment created, applying via edge function...')
+            console.log('DEV: Payment created, applying via edge function...')
 
             // Apply payment using edge function
             const { data: applyResult, error: applyError } = await supabase.functions.invoke('apply-payment', {
@@ -560,11 +560,11 @@ export default function DevPanel() {
             })
 
             if (applyError || !applyResult?.ok) {
-                console.warn('🔧 DEV: Payment application warning:', applyError || applyResult?.error)
+                console.warn('DEV: Payment application warning:', applyError || applyResult?.error)
                 // Don't delete payment, just warn - it's still recorded
             }
 
-            console.log('🔧 DEV: Payment created and applied:', insertedPayment)
+            console.log('DEV: Payment created and applied:', insertedPayment)
 
             // Navigate to payments page first if not there, then dispatch event
             if (pathname === '/payments') {
@@ -582,7 +582,7 @@ export default function DevPanel() {
                 }, 1000)
             }
 
-            toast.success(`✓ Payment recorded: $${randomAmount} via ${randomMethod} for ${customer.name}`)
+            toast.success(`Payment recorded: $${randomAmount} via ${randomMethod} for ${customer.name}`)
 
             // Invalidate payment queries to refresh the list
             await queryClient.invalidateQueries({
@@ -594,7 +594,7 @@ export default function DevPanel() {
             })
 
         } catch (error: any) {
-            console.error('🔧 DEV: Payment creation error:', error)
+            console.error('DEV: Payment creation error:', error)
             toast.error(`Payment creation failed: ${error.message}`)
         } finally {
             setIsLoadingPayment(false)
@@ -603,7 +603,7 @@ export default function DevPanel() {
 
     const fillRentalForm = async () => {
         setIsLoadingRental(true)
-        console.log('🔧 DEV: Starting rental form auto-fill...')
+        console.log('DEV: Starting rental form auto-fill...')
 
         try {
             // Get tenant from context
@@ -614,7 +614,7 @@ export default function DevPanel() {
                 return
             }
 
-            console.log('🔧 DEV: Using tenant ID:', tenantId)
+            console.log('DEV: Using tenant ID:', tenantId)
 
             // First try to find the specific mock customer by email
             let customer: { id: string; name: string; email: string } | null = null
@@ -629,7 +629,7 @@ export default function DevPanel() {
 
             if (mockCustomer) {
                 customer = mockCustomer
-                console.log('🔧 DEV: Found mock customer:', customer.id, customer.name)
+                console.log('DEV: Found mock customer:', customer.id, customer.name)
             } else {
                 // If mock customer not found, fetch any active customer
                 const { data: customers, error: customersError } = await supabase
@@ -645,10 +645,10 @@ export default function DevPanel() {
                 }
                 customer = customers[0]
                 toast.info(`Mock customer not found, using: ${customer.name}`)
-                console.log('🔧 DEV: Using fallback customer:', customer.id, customer.name)
+                console.log('DEV: Using fallback customer:', customer.id, customer.name)
             }
 
-            console.log('🔧 DEV: Selected customer:', customer.id, customer.name)
+            console.log('DEV: Selected customer:', customer.id, customer.name)
 
             // Fetch first available vehicle
             const { data: vehicles, error: vehiclesError } = await supabase
@@ -664,7 +664,7 @@ export default function DevPanel() {
             }
 
             const vehicle = vehicles[0]
-            console.log('🔧 DEV: Selected vehicle:', vehicle.id, vehicle.make, vehicle.model)
+            console.log('DEV: Selected vehicle:', vehicle.id, vehicle.make, vehicle.model)
 
             // Calculate dates
             const today = new Date()
@@ -708,10 +708,10 @@ export default function DevPanel() {
                 }, 1000)
             }
 
-            console.log('🔧 DEV: Rental form fill event dispatched', rentalData)
+            console.log('DEV: Rental form fill event dispatched', rentalData)
 
         } catch (error: any) {
-            console.error('🔧 DEV: Error filling rental form:', error)
+            console.error('DEV: Error filling rental form:', error)
             toast.error(`Failed to fill rental form: ${error.message}`)
         } finally {
             setIsLoadingRental(false)

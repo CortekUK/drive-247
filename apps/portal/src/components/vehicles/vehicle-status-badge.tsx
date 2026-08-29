@@ -8,6 +8,39 @@ interface VehicleStatusBadgeProps {
   compact?: boolean;
 }
 
+/**
+ * The status an operator should SEE, derived from every signal that actually
+ * affects bookability — not just the machine-owned `status` column.
+ *
+ * `vehicles.status` is written only by the system (a rental opening or closing
+ * flips it Rented/Available), so an operator who switches all three hire
+ * durations off has no way to change it. Before this, the badge kept reading
+ * "Available" — and telling them "Vehicle is available for rental" — on a car
+ * they had just taken off sale. That is what operators report as
+ * "I can't switch the car to unavailable".
+ */
+export function resolveVehicleStatus(v: {
+  status?: string | null;
+  is_paused?: boolean | null;
+  available_daily?: boolean | null;
+  available_weekly?: boolean | null;
+  available_monthly?: boolean | null;
+}): string {
+  if (v.is_paused) return 'Paused';
+  // All three hire durations off = not quotable on any tier. NOTE: this is
+  // "off sale", NOT "cannot be booked" — the enquiry picker and the staff New
+  // Rental picker both still offer it. Only Pause closes every path.
+  if (
+    (v.status ?? '').toLowerCase() === 'available' &&
+    v.available_daily === false &&
+    v.available_weekly === false &&
+    v.available_monthly === false
+  ) {
+    return 'Unavailable';
+  }
+  return v.status ?? 'Available';
+}
+
 const getStatusConfig = (status: string) => {
   switch (status?.toLowerCase()) {
     case 'available':
@@ -16,6 +49,13 @@ const getStatusConfig = (status: string) => {
         icon: CheckCircle,
         className: 'bg-pink-100 text-pink-700 hover:bg-pink-200',
         tooltip: 'Vehicle is available for rental'
+      };
+    case 'unavailable':
+      return {
+        variant: 'secondary' as const,
+        icon: AlertTriangle,
+        className: 'bg-amber-100 text-amber-800 hover:bg-amber-200',
+        tooltip: 'Off sale — no hire durations enabled, so it cannot be quoted. It can still be picked in enquiries and by staff; use Pause to remove it everywhere.'
       };
     case 'rented':
       return {

@@ -19,10 +19,24 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+/**
+ * Line endings normalised to LF, and that is load-bearing rather than tidiness.
+ *
+ * This suite locates regions of the page by slicing between literal source
+ * markers, and fourteen of those markers embed a `\n`. `core.autocrlf` hands a
+ * Windows checkout CRLF for the same commit a Linux checkout gets as LF, so
+ * every one of them silently fails to match there — `indexOf` returns -1, the
+ * slice comes back as an empty string, and the assertion reports the branch as
+ * MISSING from a page where it is plainly present. Three tests failed that way
+ * against entirely correct source.
+ *
+ * `helpers/edge-source.ts` normalises for the same reason; this file reads the
+ * page directly, so it has to do it itself.
+ */
 const pageSource = readFileSync(
   resolve(__dirname, '../../app/(dashboard)/rentals/[id]/page.tsx'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 /**
  * The seven statuses this row was originally built around.

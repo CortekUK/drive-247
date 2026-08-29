@@ -192,7 +192,7 @@ export function AttachAutomationDropdown({ leadId, tenantId }: Props) {
                     className="rounded p-1 text-red-600 hover:bg-red-50"
                     title="Stop"
                   >
-                    ✕
+                   
                   </button>
                 </div>
               </div>

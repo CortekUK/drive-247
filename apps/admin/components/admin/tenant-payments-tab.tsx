@@ -783,7 +783,7 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
                       )}
                       {d.renewalTooClose && (
                         <span className="block mt-1 font-medium">
-                          ⚠️ Too close to renewal — wait until after this date to send the capture link.
+                          Too close to renewal — wait until after this date to send the capture link.
                         </span>
                       )}
                     </div>

@@ -131,12 +131,21 @@ Deno.serve(async (req) => {
     if (vehicleId) {
       const { data: vehicle } = await supabase
         .from("vehicles")
-        .select("id, tenant_id, is_paused")
+        .select("id, tenant_id, is_paused, available_daily, available_weekly, available_monthly")
         .eq("id", vehicleId)
         .maybeSingle();
       // A paused vehicle is off the road. Checked server-side because a stale
       // enquiry modal can submit long after the operator paused the car.
-      if (!vehicle || vehicle.tenant_id !== tenant.id || vehicle.is_paused) {
+      //
+      // Every hire duration switched off is the OTHER way operators take a car
+      // off sale, and it is far more common than Pause — checking is_paused
+      // alone let those straight through, which is exactly the case reported
+      // by kedic-services (both cars off-sale, neither paused).
+      const offSale =
+        vehicle?.available_daily === false &&
+        vehicle?.available_weekly === false &&
+        vehicle?.available_monthly === false;
+      if (!vehicle || vehicle.tenant_id !== tenant.id || vehicle.is_paused || offSale) {
         return errorResponse("Selected vehicle is not available", 400);
       }
     }
