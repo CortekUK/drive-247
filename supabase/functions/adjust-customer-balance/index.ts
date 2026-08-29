@@ -36,12 +36,17 @@ Deno.serve(async (req) => {
       amount,
       direction,
       reason,
+      rentalId,
+      extensionId,
     } = body as {
       customerId?: string;
       tenantId?: string;
       amount?: number;
       direction?: "increase" | "decrease";
       reason?: string;
+      // Optional scoping. Omitted => account-level, exactly as before.
+      rentalId?: string;
+      extensionId?: string;
     };
 
     if (!customerId) return errorResponse("customerId is required");
@@ -93,6 +98,16 @@ Deno.serve(async (req) => {
         entry_date: today,
         due_date: today,
         reference: reason.trim().slice(0, 500),
+        // Scoping, when supplied. This matters more than it looks: the rental
+        // page's Balance Due is two disjoint halves. The non-extension half
+        // discards any category whose remaining is <= 0, so a negative
+        // Adjustment is thrown away there. The extension half is the
+        // rental_extension_totals view, whose LATERAL keys on extension_id with
+        // NO sign or category filter — so ONLY an extension-scoped credit
+        // actually moves the number an operator is looking at. An account-level
+        // adjustment (both null) shifts that tile by exactly $0.00.
+        ...(rentalId ? { rental_id: rentalId } : {}),
+        ...(extensionId ? { extension_id: extensionId } : {}),
       })
       .select()
       .single();

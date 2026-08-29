@@ -1,31 +1,5 @@
 {
-  "files": [
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/api/esign/route.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/customers/[id]/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/payments/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/template-variables.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/close-rental-dialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/delete-rental-dialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/rejection-dialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/auto-extension-section.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/calendar/rental-bar.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-calendar-rentals.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-enhanced-rentals.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/booking-success/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/bookings/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/app/(customer-portal)/portal/bookings/[id]/page.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/RentalCard.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/components/customer-portal/RenewRentalDialog.tsx",
-    "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/hooks/use-customer-rentals.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-auto-extension-reminder/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/cancel-booking-preauth/index.ts"
-  ],
-  "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/booking-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
-  ],
+  "files": [],
+  "specs": [],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }
