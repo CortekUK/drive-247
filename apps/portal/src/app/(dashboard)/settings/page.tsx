@@ -1107,6 +1107,28 @@ const Settings = () => {
     }
   }, [pendingTab, saveAllDirtyForms]);
 
+  // Live authorisation holds, for the charge-vs-hold switch below.
+  //
+  // Switching a tenant from holds to charges while authorisations are live
+  // strands them: nothing refreshes them any more, so they lapse silently on
+  // the card and the operator is left with cars out and no deposit behind them.
+  // The switch is blocked until they are released.
+  const { data: liveHoldCount = 0 } = useQuery({
+    queryKey: ['deposit-live-holds', tenant?.id],
+    enabled: !!tenant?.id,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('rentals')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenant!.id)
+        .eq('deposit_hold_status', 'held');
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  const [showChargeConfirm, setShowChargeConfirm] = useState(false);
+
   // Maintenance run tracking
 
   const { data: maintenanceRuns } = useQuery({
@@ -3890,9 +3912,96 @@ const Settings = () => {
                       deposit.
                     </p>
                   )}
+
+                  {/* Charge vs hold. This was previously settable only by a direct
+                      database write, so every tenant sat on holds while this card
+                      said "Enabled" — which reads as the feature being broken
+                      rather than simply not switched on. */}
+                  <div className="mt-6 pt-5 border-t space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="deposit-charge-toggle" className="text-sm font-medium">
+                          Collect the deposit as a real charge
+                        </Label>
+                        <p className="text-xs text-muted-foreground max-w-xl">
+                          {rentalForm.deposit_charge_enabled
+                            ? 'On. The deposit is charged to the card and the money reaches your account. Refund it in full or in part from the rental page — nothing is returned automatically when a rental closes.'
+                            : 'Off. We place a temporary authorisation on the card and release it after the vehicle is returned. No money moves, and the hold expires on long rentals unless it is renewed.'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Label htmlFor="deposit-charge-toggle" className="text-sm text-muted-foreground">
+                          {rentalForm.deposit_charge_enabled ? 'Charge' : 'Hold'}
+                        </Label>
+                        <Switch
+                          id="deposit-charge-toggle"
+                          checked={rentalForm.deposit_charge_enabled}
+                          onCheckedChange={(checked) => {
+                            // Switching ON changes what real customers are charged, so it
+                            // confirms. Switching OFF is the safe direction and does not.
+                            if (checked) { setShowChargeConfirm(true); return; }
+                            setRentalForm(prev => ({ ...prev, deposit_charge_enabled: false }));
+                          }}
+                          disabled={!canEditSettings('preauth') || (liveHoldCount > 0 && !rentalForm.deposit_charge_enabled)}
+                        />
+                      </div>
+                    </div>
+
+                    {liveHoldCount > 0 && !rentalForm.deposit_charge_enabled && (
+                      <p className="text-xs text-destructive">
+                        {liveHoldCount} rental{liveHoldCount === 1 ? ' has' : 's have'} a live
+                        authorisation. Release {liveHoldCount === 1 ? 'it' : 'them'} before switching
+                        to charges &mdash; once this is on, existing holds stop being renewed and
+                        will lapse, leaving those cars out with no deposit behind them.
+                      </p>
+                    )}
+
+                    {rentalForm.deposit_charge_enabled && Number(rentalForm.global_deposit_amount) === 0 && (
+                      <p className="text-xs text-destructive">
+                        Your deposit amount is $0, so no deposit will be collected on any booking.
+                        Set an amount above.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 
+
+              {/* Switching to charges is a change to real money on real cards. */}
+              <AlertDialog open={showChargeConfirm} onOpenChange={setShowChargeConfirm}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Start charging the deposit?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2">
+                        <p>
+                          New rentals will take the deposit as a real charge instead of an
+                          authorisation hold. The money leaves the customer&rsquo;s card and
+                          arrives in your account.
+                        </p>
+                        <p>
+                          Two things change for you: the deposit is <strong>not returned
+                          automatically</strong> when a rental closes &mdash; you refund it from
+                          the rental page &mdash; and past rentals will start describing their
+                          deposit as a charge rather than a hold.
+                        </p>
+                        <p>Rentals already on the road keep whatever they have today.</p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep using holds</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        setRentalForm(prev => ({ ...prev, deposit_charge_enabled: true }));
+                        setShowChargeConfirm(false);
+                      }}
+                    >
+                      Switch to charges
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
               {canEditSettings('preauth') && (
                 <Button
