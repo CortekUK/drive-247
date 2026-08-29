@@ -1,6 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import PaymentProviderPicker, {
+  DEFAULT_PAYMENT_PROVIDER_SELECTION,
+  paymentProviderTenantColumns,
+  validatePaymentProviderSelection,
+  type PaymentProviderSelection,
+} from '@/components/tenants/payment-provider-picker';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -47,6 +53,16 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [credentials, setCredentials] = useState<TenantCredentials | null>(null);
   const [formErrors, setFormErrors] = useState<{ slug?: string }>({});
+  /**
+   * Payment provider is chosen ONCE, at creation, and is immutable afterwards.
+   * The lead was explicit that this is never a toggle: switching a live tenant
+   * between processors would strand in-flight payments, refunds and saved cards
+   * on a rail the tenant no longer has credentials for.
+   */
+  const [providerSelection, setProviderSelection] = useState<PaymentProviderSelection>(
+    DEFAULT_PAYMENT_PROVIDER_SELECTION,
+  );
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   // New clients get a simple, predictable first-login password derived from their
   // rental name: "<rentalname>123!" (e.g. slug "drive-hustle" -> "drivehustle123!").
@@ -74,6 +90,16 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
       setFormErrors({ slug: slugError });
       return;
     }
+
+    // Square is only available in the countries Square actually operates in, and
+    // the tenants table carries a CHECK to match. Catching it here turns a raw
+    // constraint violation into a sentence the operator can act on.
+    const providerProblem = validatePaymentProviderSelection(providerSelection);
+    if (providerProblem) {
+      setProviderError(providerProblem);
+      return;
+    }
+    setProviderError(null);
     setFormErrors({});
     setCreating(true);
 
@@ -87,6 +113,26 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
           contact_email: formData.contactEmail,
           status: 'active',
           tenant_type: formData.tenantType,
+          ...paymentProviderTenantColumns(providerSelection),
+          // Square invariants, forced at creation rather than left to fail later.
+          //
+          // Square cannot vault a card from a hosted payment link, so every
+          // feature that charges a stored credential with nobody present is
+          // switched off for these tenants at birth. Doing it here — instead of
+          // relying on a guard at money time — is what keeps an operator from
+          // enabling installments in settings and discovering at the first
+          // charge that Square never had the card.
+          //
+          // deposit_charge_enabled=true is the counterpart: with holds
+          // unavailable, a Square deposit is collected as an ordinary charge.
+          ...(providerSelection.paymentProvider === 'square'
+            ? {
+                deposit_charge_enabled: true,
+                installments_enabled: false,
+                auto_extend_enabled: false,
+                payg_auto_reminders_enabled: false,
+              }
+            : {}),
         }])
         .select()
         .single();
@@ -134,6 +180,8 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
       setShowDetailsModal(true);
       onOpenChange(false);
       setFormData({ companyName: '', adminName: '', slug: '', contactEmail: '', tenantType: 'production' });
+      setProviderSelection(DEFAULT_PAYMENT_PROVIDER_SELECTION);
+      setProviderError(null);
       onCreated?.();
     } catch (error: any) {
       let errorMessage = error.message;
@@ -183,97 +231,120 @@ Access URLs:
     <>
       {/* Create Tenant Dialog */}
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
+        {/*
+          flex + max-h + p-0 is load-bearing, not styling.
+
+          DialogContent's base is `grid ... gap-4 p-6` with NO height cap, so this
+          form simply grew past the viewport: the country select, the processor
+          picker and BOTH buttons ended up below the fold with nothing to scroll.
+          Bounding the panel and making it a flex column lets the field area be
+          the only thing that scrolls, so the title stays readable and Create
+          Company stays reachable no matter how tall the form gets.
+        */}
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0">
+          <DialogHeader className="shrink-0 space-y-1.5 border-b px-6 py-4 text-left">
             <DialogTitle>Add New Rental Company</DialogTitle>
             <DialogDescription>
               Create a new rental company with an initial admin user.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateTenant} className="space-y-4">
-            <div>
-              <Label className="mb-1.5 block">Company Name *</Label>
-              <Input
-                required
-                value={formData.companyName}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                placeholder="Acme Rentals"
-              />
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Admin Name</Label>
-              <Input
-                value={formData.adminName}
-                onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
-                placeholder="John Doe"
-              />
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Slug (subdomain) *</Label>
-              <Input
-                required
-                minLength={3}
-                maxLength={50}
-                value={formData.slug}
-                onChange={(e) => {
-                  setFormData({ ...formData, slug: e.target.value });
-                  if (formErrors.slug) {
-                    const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-                    if (newSlug.length >= 3) setFormErrors({});
-                  }
-                }}
-                className={formErrors.slug ? 'border-destructive' : ''}
-                placeholder="acme-rentals"
-              />
-              {formErrors.slug ? (
-                <p className="text-xs text-destructive mt-1">{formErrors.slug}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Contact Email *</Label>
-              <Input
-                type="email"
-                required
-                value={formData.contactEmail}
-                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                placeholder="admin@acmerentals.com"
-              />
-            </div>
-
-            <div>
-              <Label className="mb-1.5 block">Tenant Type *</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={formData.tenantType === 'production' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, tenantType: 'production' })}
-                  className={cn('flex-1', formData.tenantType === 'production' && 'bg-success hover:bg-success/90')}
-                >
-                  Production
-                </Button>
-                <Button
-                  type="button"
-                  variant={formData.tenantType === 'test' ? 'default' : 'outline'}
-                  onClick={() => setFormData({ ...formData, tenantType: 'test' })}
-                  className={cn('flex-1', formData.tenantType === 'test' && 'bg-warning hover:bg-warning/90 text-warning-foreground')}
-                >
-                  Test
-                </Button>
+          <form onSubmit={handleCreateTenant} className="flex min-h-0 flex-1 flex-col">
+            {/* min-h-0 is required: without it a flex child refuses to shrink
+                below its content height and the overflow never engages. */}
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+              <div>
+                <Label className="mb-1.5 block">Company Name *</Label>
+                <Input
+                  required
+                  value={formData.companyName}
+                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                  placeholder="Acme Rentals"
+                />
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Production = real customer, Test = internal/testing use
-              </p>
+
+              <div>
+                <Label className="mb-1.5 block">Admin Name</Label>
+                <Input
+                  value={formData.adminName}
+                  onChange={(e) => setFormData({ ...formData, adminName: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block">Slug (subdomain) *</Label>
+                <Input
+                  required
+                  minLength={3}
+                  maxLength={50}
+                  value={formData.slug}
+                  onChange={(e) => {
+                    setFormData({ ...formData, slug: e.target.value });
+                    if (formErrors.slug) {
+                      const newSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+                      if (newSlug.length >= 3) setFormErrors({});
+                    }
+                  }}
+                  className={formErrors.slug ? 'border-destructive' : ''}
+                  placeholder="acme-rentals"
+                />
+                {formErrors.slug ? (
+                  <p className="text-xs text-destructive mt-1">{formErrors.slug}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Portal: {formData.slug || 'slug'}.portal.drive-247.com | Booking: {formData.slug || 'slug'}.drive-247.com
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block">Contact Email *</Label>
+                <Input
+                  type="email"
+                  required
+                  value={formData.contactEmail}
+                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                  placeholder="admin@acmerentals.com"
+                />
+              </div>
+
+              <div>
+                <Label className="mb-1.5 block">Tenant Type *</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={formData.tenantType === 'production' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, tenantType: 'production' })}
+                    className={cn('flex-1', formData.tenantType === 'production' && 'bg-success hover:bg-success/90')}
+                  >
+                    Production
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={formData.tenantType === 'test' ? 'default' : 'outline'}
+                    onClick={() => setFormData({ ...formData, tenantType: 'test' })}
+                    className={cn('flex-1', formData.tenantType === 'test' && 'bg-warning hover:bg-warning/90 text-warning-foreground')}
+                  >
+                    Test
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Production = real customer, Test = internal/testing use
+                </p>
+              </div>
+
+              <PaymentProviderPicker
+                value={providerSelection}
+                onChange={setProviderSelection}
+                disabled={creating}
+                error={providerError}
+              />
+
             </div>
 
-            <DialogFooter>
+            {/* Outside the scroll area: the primary action must never scroll away. */}
+            <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
               <Button
                 type="button"
                 variant="outline"

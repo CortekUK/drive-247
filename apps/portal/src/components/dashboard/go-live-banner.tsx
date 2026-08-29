@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Rocket, X } from "lucide-react";
 import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useTenant } from "@/contexts/TenantContext";
+import { providerPresentation } from "@/lib/payment-provider";
 
 export function GoLiveBanner() {
   const { tenant } = useTenant();
+  const pay = providerPresentation(tenant?.payment_provider);
   const { justWentLive, isLive } = useSetupStatus();
   const [dismissed, setDismissed] = useState(true); // default true to avoid flash
 
@@ -40,7 +42,7 @@ export function GoLiveBanner() {
                 You're Live! <span aria-hidden></span>
               </p>
               <p className="text-sm text-muted-foreground">
-                Your Stripe Connect and Bonzah Insurance are now in live mode.
+                {`Your ${pay.name} and Bonzah Insurance are now in live mode.`}
               </p>
             </div>
           </div>

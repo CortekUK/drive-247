@@ -63,7 +63,7 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
+        .select('payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
         .eq('id', tenantId)
         .single()
 
@@ -72,6 +72,28 @@ serve(async (req) => {
         tenantData = tenant
         console.log('Tenant loaded:', tenantId, 'mode:', stripeMode)
       }
+    }
+
+    // Square cannot vault a card from a hosted payment link — it has no
+    // SetupIntent equivalent — so there is no stored credential to charge and no
+    // authorisation to place. This is designed out for Square, not merely
+    // unbuilt: these features are forced off at tenant creation and rendered
+    // disabled in the portal.
+    //
+    // A SKIP, not a throw. The same reasoning place-deposit-hold gives applies:
+    // several callers reach these paths, and turning a deliberately-absent
+    // feature into a 500 pages someone for working-as-designed behaviour.
+    if ((tenantData as { payment_provider?: string } | null)?.payment_provider === 'square') {
+      console.log('[create-preauth-checkout] tenant is on Square — pre-authorisation is not supported.')
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: 'square_tenant',
+          message: 'This tenant processes payments through Square, which cannot pre-authorise a card. Collect the payment as a charge instead.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     // Get currency from tenant settings (Stripe expects lowercase)

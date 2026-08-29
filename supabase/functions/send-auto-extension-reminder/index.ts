@@ -377,7 +377,7 @@ const RENTAL_SELECT = `
   auto_extend_reminder_count, auto_extend_reminder_send_weekday, auto_extend_last_reminder_at, auto_extend_pending_extension_id,
   customers!rentals_customer_id_fkey ( id, name, email ),
   vehicles ( make, model, reg ),
-  tenants ( id, slug, company_name, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, timezone, payment_model, own_stripe_account_id, own_stripe_test_account_id )
+  tenants ( id, slug, company_name, currency_code, payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, timezone, payment_model, own_stripe_account_id, own_stripe_test_account_id )
 `;
 
 Deno.serve(async (req) => {
@@ -415,6 +415,16 @@ Deno.serve(async (req) => {
       Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
     };
     for (const r of (rentals as any[]) || []) {
+      // Auto-extend is unavailable to Square tenants — the feature is forced off
+      // at tenant creation because every renewal charges a stored card, which
+      // Square cannot vault. Skipped and counted, never processed: this is a
+      // multi-tenant batch and one Square rental must not abort the run.
+      //
+      // Defence in depth. The rental-level auto_extend_enabled flag is a
+      // separate column from the tenant-level one, so nothing in the database
+      // prevents a rental being flagged for a tenant whose feature is off.
+      if (r.tenants?.payment_provider === "square") { skipped++; continue; }
+
       const weekday = r.auto_extend_reminder_send_weekday;
       if (weekday !== null && weekday !== undefined) {
         // Weekday mode: nudge only on the operator-chosen day, evaluated in the

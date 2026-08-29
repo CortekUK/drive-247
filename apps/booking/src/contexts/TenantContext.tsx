@@ -11,6 +11,15 @@ export interface Tenant {
   id: string;
   slug: string;
   company_name: string;
+  /**
+   * Which processor takes this tenant's money.
+   *
+   * Customer-facing copy reads this: the checkout footer used to promise
+   * "Secured by Stripe" to every renter, including those of a Square tenant,
+   * who would then be sent to a Square page. Naming the wrong processor on a
+   * payment screen is the one place a renter is entitled to be suspicious.
+   */
+  payment_provider?: 'stripe' | 'square' | null;
   status: string;
   contact_email: string | null;
   contact_phone: string | null;
@@ -411,6 +420,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           id,
           slug,
           company_name,
+          payment_provider,
           status,
           contact_email,
           contact_phone,

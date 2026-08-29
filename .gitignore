@@ -52,6 +52,11 @@ testing-qa.env
 
 # local env backups — NEVER commit (contain secrets)
 .env*.bak
+# ...and timestamped/suffixed copies: ".env*.bak" only matches names ENDING
+# in .bak, so a file like .env.bak.1788001483 slipped through as untracked and
+# would have been picked up by `git add -A`.
+.env.bak*
+.env.*.bak*
 
 # Strategy-call video masters. 2.9 GB of 1080p60 ~38 Mbps exports that the
 # web-optimized files in apps/web/public/strategy-call/videos/ are derived from.

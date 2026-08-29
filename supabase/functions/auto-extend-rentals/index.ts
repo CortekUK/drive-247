@@ -301,7 +301,19 @@ Deno.serve(async (req) => {
                tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, service_fee_amount,
                stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id,
                auto_extend_grace_hours, auto_extend_max_retries, deposit_charge_enabled`)
-      .in("id", tenantIds);
+      .in("id", tenantIds)
+      // Stripe-only fence on the TENANT prefetch, because the loop below already
+      // does `if (!tenant) { skipped++; continue; }` — so this skips-and-counts a
+      // Square rental without restructuring the query or risking the driving
+      // predicate.
+      //
+      // Auto-extend is already excluded for Square by data (the flag is forced
+      // false at tenant creation, and all 6 currently-flagged rentals belong to
+      // tenants that have it on), so this is defence in depth rather than the
+      // control. It matters because the rental-level flag is a SEPARATE column
+      // from the tenant-level one: nothing in the database stops a rental being
+      // flagged for a tenant whose feature is off.
+      .eq("payment_provider", "stripe");
     const tenantMap = new Map<string, any>((tenants ?? []).map((t: any) => [t.id, t]));
 
     for (const r of rentals as any[]) {

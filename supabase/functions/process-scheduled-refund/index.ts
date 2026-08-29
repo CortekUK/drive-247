@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { formatCurrency } from '../_shared/format-utils.ts';
+import { tryProviderRefund } from '../_shared/payments/refund.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,6 +52,62 @@ serve(async (req) => {
 
       if (paymentError || !payment) {
         throw new Error(`Payment not found: ${paymentError?.message || 'Unknown error'}`);
+      }
+
+      // SQUARE — handled before the Stripe intent is resolved.
+      //
+      // Without this the guard below throws "Payment has no Stripe payment
+      // intent. Please provide one from Stripe Dashboard." for a Square payment,
+      // which sends an operator hunting through a Stripe dashboard for a charge
+      // that was never on Stripe.
+      if (payment.payment_provider === 'square') {
+        const squareTenantId = requestBody.tenantId || payment.tenant_id || payment.rentals?.tenant_id;
+        const routed = await tryProviderRefund(supabase, squareTenantId, {
+          paymentRecord: payment as Record<string, unknown>,
+          amountCents: requestBody.amount ? Math.round(Number(requestBody.amount) * 100) : undefined,
+          reason: requestBody.reason || 'Scheduled refund',
+        });
+
+        // A skip must throw too. Falling through wrote refund_processed_at and a
+        // NULL square_refund_id, then returned success:true — marking the payment
+        // refunded when nothing had been sent to Square.
+        if (routed.error || routed.skipped) {
+          throw new Error(
+            routed.skipped
+              ? `Square refund NOT issued: ${routed.reason ?? 'provider skipped'}. No money has been returned to the customer.`
+              : `Square refund failed: ${routed.reason ?? 'unknown error'}`,
+          );
+        }
+
+        const body = (routed.body ?? {}) as Record<string, unknown>;
+        const squareRefundId = (body.square_refund_id ?? body.refund_id ?? null) as string | null;
+
+        await supabase
+          .from('payments')
+          .update({
+            // No stripe_refund_id: the exclusivity CHECK forbids a stripe_* handle
+            // on a square row and would throw here, after the money had moved.
+            square_refund_id: squareRefundId,
+            refund_processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', payment.id);
+
+        // Submitted, not settled — square-webhook writes the terminal state when
+        // refund.updated arrives.
+        return new Response(
+          JSON.stringify({
+            success: true,
+            provider: 'square',
+            message: 'Refund submitted to Square. It completes when Square confirms it.',
+            refundId: squareRefundId,
+            status: String(body.status ?? 'processing'),
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
       }
 
       // Use provided paymentIntentId or fall back to the one in payment record

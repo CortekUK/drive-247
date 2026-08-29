@@ -27,6 +27,14 @@ interface PaymentLinksPanelProps {
   emptyText?: string;
   /** When true, staff can void unpaid links (gated by edit permission at the call site). */
   allowVoid?: boolean;
+  /**
+   * Per-category allocation ledger for the rental this panel belongs to
+   * (useRentalPaymentBreakdown). Optional: without it every link is reported
+   * from its own row alone, exactly as before.
+   */
+  categoryLedger?: Record<string, { total: number; paid: number; remaining: number }>;
+  /** Per-category refunded totals (useRentalRefundBreakdown). */
+  categoryRefunds?: Record<string, number>;
 }
 
 const STATUS_META: Record<
@@ -77,9 +85,68 @@ const STATUS_META: Record<
   },
 };
 
+// A link row carries only its OWN payment state, and that is not the whole truth
+// about the debt it was sent for. The same charge can be settled by a different
+// payment entirely — cash recorded at the desk, a card taken in person, an
+// earlier link — and the request row is then left Pending forever, still
+// advertising "Awaiting payment" for money that has already arrived. Worse, once
+// that settled charge is refunded the panel is two states behind the Payment
+// Breakdown sitting directly beneath it.
+//
+// So when the caller hands us the rental's allocation ledger, a link whose
+// TARGET CATEGORIES are fully settled is reported from the ledger instead: Paid,
+// or Refunded / Partial refund once money has gone back. Derived from the
+// amounts, so it holds for any category and any refund size.
+type DisplayStatus = PaymentLinkStatus | 'refunded' | 'partial_refund';
+
+const DERIVED_STATUS_META: Record<'refunded' | 'partial_refund', { label: string; className: string }> = {
+  refunded: {
+    label: 'Refunded',
+    className:
+      'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:border-amber-700 dark:bg-amber-950/30',
+  },
+  partial_refund: {
+    label: 'Partial refund',
+    className:
+      'text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:border-amber-700 dark:bg-amber-950/30',
+  },
+};
+
+/** Only a link that still needs paying can be re-read from the ledger. */
+const OPEN_STATUSES: PaymentLinkStatus[] = ['awaiting', 'expired', 'superseded'];
+
+export function resolveDisplayStatus(
+  link: PaymentLink,
+  categoryLedger?: Record<string, { total: number; paid: number; remaining: number }>,
+  categoryRefunds?: Record<string, number>,
+): DisplayStatus {
+  if (!categoryLedger || !OPEN_STATUSES.includes(link.status)) return link.status;
+
+  // Without target categories there is nothing to look up. A general "Balance"
+  // request is deliberately left alone: it is not tied to any one charge, so a
+  // settled ledger is no evidence that THIS request is what settled it.
+  const categories = link.targetCategories ?? [];
+  if (categories.length === 0) return link.status;
+
+  let paid = 0;
+  let refunded = 0;
+  for (const category of categories) {
+    const led = categoryLedger[category];
+    // Unknown or still-owed category — the request is live. One is enough.
+    if (!led || led.total <= 0 || led.paid <= 0 || led.remaining > 0.01) return link.status;
+    paid += led.paid;
+    refunded += categoryRefunds?.[category] ?? 0;
+  }
+
+  if (refunded > 0) {
+    return refunded >= paid - 0.01 ? 'refunded' : 'partial_refund';
+  }
+  return 'paid';
+}
+
 // An unpaid link that staff may safely remove: awaiting/expired/superseded. Never
 // Paid, never a Deposit hold, never an already-Voided row.
-const VOIDABLE_STATUSES: PaymentLinkStatus[] = ['awaiting', 'expired', 'superseded'];
+const VOIDABLE_STATUSES: DisplayStatus[] = ['awaiting', 'expired', 'superseded'];
 
 // Human label for what a link was for, derived from its shape.
 export function describeLink(link: PaymentLink): string {
@@ -93,8 +160,11 @@ export function describeLink(link: PaymentLink): string {
   return 'Balance';
 }
 
-export function StatusBadge({ status }: { status: PaymentLinkStatus }) {
-  const meta = STATUS_META[status];
+export function StatusBadge({ status }: { status: DisplayStatus }) {
+  const meta =
+    status === 'refunded' || status === 'partial_refund'
+      ? DERIVED_STATUS_META[status]
+      : STATUS_META[status];
   return (
     <Badge variant="outline" className={`text-[10px] ${meta.className}`}>
       {meta.label}
@@ -196,16 +266,29 @@ export function PaymentLinksPanel({
   title = 'Payment Links',
   emptyText = 'No payment links have been sent yet.',
   allowVoid = false,
+  categoryLedger,
+  categoryRefunds,
 }: PaymentLinksPanelProps) {
+  // Resolved once, reused by the header counts and the rows, so the summary line
+  // and the badges under it can never disagree.
+  const rows = useMemo(
+    () =>
+      links.map((link) => ({
+        link,
+        displayStatus: resolveDisplayStatus(link, categoryLedger, categoryRefunds),
+      })),
+    [links, categoryLedger, categoryRefunds],
+  );
+
   const counts = useMemo(() => {
     const c = { paid: 0, awaiting: 0, other: 0 };
-    for (const l of links) {
-      if (l.status === 'paid') c.paid += 1;
-      else if (l.status === 'awaiting') c.awaiting += 1;
+    for (const { displayStatus } of rows) {
+      if (displayStatus === 'paid') c.paid += 1;
+      else if (displayStatus === 'awaiting') c.awaiting += 1;
       else c.other += 1;
     }
     return c;
-  }, [links]);
+  }, [rows]);
 
   return (
     <Card>
@@ -246,8 +329,8 @@ export function PaymentLinksPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {links.map((link) => (
-                <TableRow key={link.id} className={link.status === 'superseded' ? 'opacity-60' : undefined}>
+              {rows.map(({ link, displayStatus }) => (
+                <TableRow key={link.id} className={displayStatus === 'superseded' ? 'opacity-60' : undefined}>
                   <TableCell className="text-sm py-2.5 whitespace-nowrap">
                     {format(new Date(link.createdAt), 'MMM d, yyyy · h:mm a')}
                   </TableCell>
@@ -256,8 +339,8 @@ export function PaymentLinksPanel({
                     {formatCurrency(link.amount, currencyCode)}
                   </TableCell>
                   <TableCell className="py-2.5">
-                    <StatusBadge status={link.status} />
-                    {link.status === 'paid' && link.paidAt && (
+                    <StatusBadge status={displayStatus} />
+                    {displayStatus === 'paid' && link.paidAt && (
                       <span className="text-[11px] text-muted-foreground ml-2 hidden sm:inline">
                         {format(new Date(link.paidAt), 'MMM d')}
                       </span>
@@ -268,10 +351,10 @@ export function PaymentLinksPanel({
                       {/* Copy is only possible where a reusable customer URL is stored
                           (extension links today). Awaiting/expired links elsewhere have
                           no persisted URL — a fresh link must be re-sent to reuse. */}
-                      {link.checkoutUrl && (link.status === 'awaiting' || link.status === 'expired') ? (
+                      {link.checkoutUrl && (displayStatus === 'awaiting' || displayStatus === 'expired') ? (
                         <CopyLinkButton url={link.checkoutUrl} />
                       ) : null}
-                      {allowVoid && VOIDABLE_STATUSES.includes(link.status) ? (
+                      {allowVoid && VOIDABLE_STATUSES.includes(displayStatus) ? (
                         <VoidLinkButton paymentId={link.id} />
                       ) : null}
                     </div>

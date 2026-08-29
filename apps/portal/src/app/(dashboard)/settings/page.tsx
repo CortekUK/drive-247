@@ -1771,7 +1771,11 @@ const Settings = () => {
                 { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
                 { value: 'promos', icon: Zap, label: 'Promos' },
                 { value: 'extras', icon: Package, label: 'Extras' },
-                { value: 'payments', icon: CreditCard, label: 'Stripe' },
+                // Provider-neutral on purpose. This tab holds whichever processor
+                // the tenant settled on — and since they now choose it themselves,
+                // a hard-coded "Stripe" sent a Square operator looking for a menu
+                // item that does not describe what they would find there.
+                { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'accounting', icon: Landmark, label: 'Accounting' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'push', icon: BellRing, label: 'Push' },

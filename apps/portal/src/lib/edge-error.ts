@@ -38,3 +38,28 @@ export const throwEdgeError = async (error: unknown): Promise<never> => {
   if (message) throw new Error(message);
   throw error;
 };
+
+/**
+ * The edge function's error BODY, not just its message.
+ *
+ * extractFunctionError deliberately collapses a failure to one human string, but
+ * the payments seam answers with a machine-readable shape —
+ * `{ error: true, reason: "square_payment_already_settled", status, hint }` —
+ * and some of those reasons are not failures the operator should be shown as
+ * errors at all. Callers that need to branch on `reason` need the object.
+ *
+ * Returns null when the error carries no JSON body (a network failure, a
+ * non-2xx with an HTML body), so a caller can fall back to the string form.
+ */
+export const extractFunctionErrorPayload = async (
+  error: unknown,
+): Promise<Record<string, unknown> | null> => {
+  const ctx = (error as { context?: Response })?.context;
+  if (!ctx || typeof ctx.clone !== "function") return null;
+  try {
+    const body = await ctx.clone().json();
+    return body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+};

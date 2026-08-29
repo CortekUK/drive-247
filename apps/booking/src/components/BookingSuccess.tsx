@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseDateOnly } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { recordedButNotSavedLine } from "@/lib/payment-provider";
 
 const BookingSuccess = () => {
   const searchParams = useSearchParams();
@@ -92,7 +93,7 @@ const BookingSuccess = () => {
 
                 if (paymentError) {
                   console.error("Failed to create payment record:", paymentError);
-                  toast.error("Payment recorded by Stripe but failed to save locally. Please contact support.");
+                  toast.error(recordedButNotSavedLine(tenant?.payment_provider));
                 } else {
                   console.log('Payment record created successfully:', paymentRecord.id);
 
