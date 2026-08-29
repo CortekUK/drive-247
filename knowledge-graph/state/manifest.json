@@ -224,7 +224,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/customers/[id]/page.tsx": {
-    "sha": "8fdf91debabc7e5e9901c1ac65f367611ec3ce814b8ca5bf7c8e0409feeb96f2",
+    "sha": "d57009381c1aa74e282b508f04cb9c5455d858eecfb61bd17e2a3775b910109e",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/customers/analytics/page.tsx": {
@@ -380,7 +380,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx": {
-    "sha": "fc2326925b7fadb69e80587688acf17a13fe0e98934dffe05b2be024417c2c18",
+    "sha": "90b344152b93f02fb1ee108392bfd53dabccac3ea6f128135bb66cf11132a96d",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/rentals/analytics/page.tsx": {
