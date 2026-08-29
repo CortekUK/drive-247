@@ -57,3 +57,4 @@ testing-qa.env
 # web-optimized files in apps/web/public/strategy-call/videos/ are derived from.
 # Keep the masters out of git; re-encode from the originals if they change.
 /funnel_videos/
+.staging-credentials.local
