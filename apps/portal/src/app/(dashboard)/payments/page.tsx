@@ -489,9 +489,16 @@ const PaymentsList = () => {
                                 else units = Math.max(1, Math.round(totalDays / (tenant?.monthly_tier_days ?? 30)));
 
                                 const cc = tenant?.currency_code || 'USD';
+                                // With a discount the vehicle's list rate is not what this
+                                // customer pays, so quote the agreed per-period figure.
+                                const disc = Number((rental as any).discount_applied) || 0;
+                                const shownRate = disc > 0
+                                  ? Math.max(0, ((Number(rental.monthly_amount) || 0) - disc) / units)
+                                  : unitRate;
                                 return (
                                   <p className="text-xs text-muted-foreground font-normal">
-                                    {formatCurrency(unitRate, cc)}/{unitLabel} × {units}
+                                    {formatCurrency(shownRate, cc)}/{unitLabel} × {units}
+                                    {disc > 0 ? ` (after ${formatCurrency(disc, cc)} discount)` : ''}
                                   </p>
                                 );
                               })()}

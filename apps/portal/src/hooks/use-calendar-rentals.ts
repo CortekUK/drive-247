@@ -53,6 +53,7 @@ export const useCalendarRentals = (
           end_date,
           return_time,
           monthly_amount,
+          discount_applied,
           status,
           payment_mode,
           auto_extend_enabled,
@@ -122,6 +123,7 @@ export const useCalendarRentals = (
           start_date: rental.start_date,
           end_date: rental.end_date,
           monthly_amount: rental.monthly_amount,
+          discount_applied: rental.discount_applied ?? null,
           status: rental.status,
           computed_status: getRentalStatus(
             rental.start_date,

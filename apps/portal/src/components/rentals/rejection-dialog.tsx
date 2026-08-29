@@ -250,7 +250,11 @@ export default function RejectionDialog({
         vehicle_reg: rental.vehicle?.reg || '',
         rental_start_date: rental.start_date ? format(parseLocalDate(rental.start_date), 'MMMM dd, yyyy') : 'N/A',
         rental_end_date: rental.end_date ? format(parseLocalDate(rental.end_date), 'MMMM dd, yyyy') : 'N/A',
-        rental_amount: formatCurrency(rental.monthly_amount || 0, currencyCode),
+        // Net of discount — this is emailed to the customer.
+        rental_amount: formatCurrency(
+          Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)),
+          currencyCode,
+        ),
         company_name: (tenant as any)?.company_name || 'Our Company',
         company_email: (tenant as any)?.contact_email || '',
         company_phone: (tenant as any)?.phone || '',

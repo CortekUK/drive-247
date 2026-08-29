@@ -3391,7 +3391,7 @@ const RentalDetail = () => {
         <div className="mb-4">
           <PaygSchedulePreview
             periodType={(rental as any).rental_period_type}
-            amount={rental.monthly_amount}
+            amount={Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0))}
             startDate={rental.start_date}
             currencyCode={tenant?.currency_code || 'USD'}
             tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
@@ -5428,7 +5428,13 @@ const RentalDetail = () => {
                 const periodType = (rental.rental_period_type || 'Monthly').toLowerCase();
                 const vehicle = rental.vehicles;
                 const currCode = tenant?.currency_code || 'USD';
-                const totalAmount = Number(rental.monthly_amount);
+                // monthly_amount is stored GROSS; the agreed reduction lives in
+                // discount_applied. Showing the gross figure here is what an operator
+                // reports as "the weekly rental amount is still showing a higher amount"
+                // — this tile is the first money figure on the page.
+                const discountAmt = Number((rental as any).discount_applied) || 0;
+                const grossAmount = Number(rental.monthly_amount);
+                const totalAmount = Math.max(0, grossAmount - discountAmt);
 
                 // Get the per-unit rate from the vehicle
                 let unitRate = 0;
@@ -5452,8 +5458,12 @@ const RentalDetail = () => {
                   return (
                     <>
                       <p className="text-xs uppercase tracking-wider text-muted-foreground">{paygRateLabel}</p>
-                      <p className="text-lg font-semibold">{formatCurrencyUtil(rental.monthly_amount, currCode)}<span className="text-sm font-normal text-muted-foreground">/{paygUnitLabel}</span></p>
-                      <p className="text-xs text-muted-foreground">Pay-As-You-Go — accrued daily by the cron</p>
+                      <p className="text-lg font-semibold">{formatCurrencyUtil(totalAmount, currCode)}<span className="text-sm font-normal text-muted-foreground">/{paygUnitLabel}</span></p>
+                      <p className="text-xs text-muted-foreground">
+                        {discountAmt > 0
+                          ? `${formatCurrencyUtil(grossAmount, currCode)} less ${formatCurrencyUtil(discountAmt, currCode)} discount · Pay-As-You-Go`
+                          : "Pay-As-You-Go — accrued daily by the cron"}
+                      </p>
                     </>
                   );
                 }
@@ -5474,9 +5484,14 @@ const RentalDetail = () => {
                   return (
                     <>
                       <p className="text-xs uppercase tracking-wider text-muted-foreground">{rental.rental_period_type || 'Monthly'} Rate</p>
-                      <p className="text-lg font-semibold">{formatCurrencyUtil(unitRate, currCode)}<span className="text-sm font-normal text-muted-foreground">/{unitLabel}</span></p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrencyUtil(discountAmt > 0 ? totalAmount / units : unitRate, currCode)}
+                        <span className="text-sm font-normal text-muted-foreground">/{unitLabel}</span>
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatCurrencyUtil(unitRate, currCode)} × {units} {unitLabel}{units !== 1 ? 's' : ''} = {formatCurrencyUtil(totalAmount, currCode)}
+                        {discountAmt > 0
+                          ? `${formatCurrencyUtil(unitRate, currCode)} × ${units} ${unitLabel}${units !== 1 ? 's' : ''} less ${formatCurrencyUtil(discountAmt, currCode)} discount = ${formatCurrencyUtil(totalAmount, currCode)}`
+                          : `${formatCurrencyUtil(unitRate, currCode)} × ${units} ${unitLabel}${units !== 1 ? 's' : ''} = ${formatCurrencyUtil(totalAmount, currCode)}`}
                       </p>
                     </>
                   );
@@ -5492,7 +5507,9 @@ const RentalDetail = () => {
                       </div>
                       <p className="text-lg font-semibold">{formatCurrencyUtil(totalAmount, currCode)}</p>
                       <p className="text-xs text-muted-foreground">
-                        Vehicle rate: {formatCurrencyUtil(unitRate, currCode)}/{unitLabel} — overridden at creation
+                        {discountAmt > 0
+                          ? `${formatCurrencyUtil(grossAmount, currCode)} less ${formatCurrencyUtil(discountAmt, currCode)} discount · vehicle rate ${formatCurrencyUtil(unitRate, currCode)}/${unitLabel}`
+                          : `Vehicle rate: ${formatCurrencyUtil(unitRate, currCode)}/${unitLabel} — overridden at creation`}
                       </p>
                     </>
                   );

@@ -2724,7 +2724,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/auto-extension-section.tsx": {
-    "sha": "5f05650a8cb5c8be5cbe9aa0aee0c4586affdfa4265b0ae696933207a5813bef",
+    "sha": "651417efcb9ec57fd263b075e7e81eca39b2d0d269ae1d21423d10431e7edf6e",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/rentals/payg-section.tsx": {
@@ -6528,7 +6528,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-auto-extend-rentals/index.ts": {
-    "sha": "30d61712c6d0ba515811680bdcf90dcf4e4f8862584b400b2f16857b17fda518",
+    "sha": "daf63c1a4e8927dcff51b27f013b1f7e72f3bd371cb2ee554da8702dad71a478",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/change-subscription-price/index.ts": {
@@ -7204,7 +7204,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/auto-extend-rentals/index.ts": {
-    "sha": "73e3fcb26961f2da152a7cce4fa2afea0f40f2eb55a5a56edd2a71e90aa6042a",
+    "sha": "9c23590d4e5d90e9ca2b8b967daf1352790e57207237129bca052a4beb90112a",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sync-payment-intent/index.ts": {

@@ -180,7 +180,11 @@ export const CloseRentalDialog = ({ open, onOpenChange, rental }: CloseRentalDia
                 <p><span className="font-medium">Customer:</span> {rental.customer.name}</p>
                 <p><span className="font-medium">Vehicle:</span> {rental.vehicle.reg} ({rental.vehicle.make} {rental.vehicle.model})</p>
                 <p><span className="font-medium">Start Date:</span> {formatLocalDate(rental.start_date)}</p>
-                <p><span className="font-medium">Monthly Amount:</span> {formatCurrency(rental.monthly_amount, currencyCode)}</p>
+                {/* Net of discount_applied — monthly_amount is stored GROSS. */}
+                <p><span className="font-medium">Rental Amount:</span> {formatCurrency(
+                  Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)),
+                  currencyCode,
+                )}</p>
               </div>
             </div>
 

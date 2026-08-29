@@ -287,18 +287,37 @@ const BookingSuccessContent = () => {
 
               // Verify this payment is for the correct rental
               if (paymentDetails.rental_id === rentalId) {
-                // First, check if payment already exists (created by create-checkout-session)
-                const { data: existingPayment } = await supabase
+                // Find the payment row for THIS checkout session.
+                //
+                // This used to filter on rental_id alone and .single(), discarding
+                // the error. PostgREST returns PGRST116 with data=null for BOTH
+                // "no rows" AND ">1 row", so on any rental with two session-bearing
+                // payments — 73 rentals in production, one with 132 — the lookup
+                // silently returned null and the branch below INSERTED a duplicate
+                // "Applied/captured" row whose amount came from localStorage rather
+                // than from Stripe. Scoping by session id makes the lookup exact,
+                // and the error is now read rather than thrown away.
+                const { data: existingPayment, error: paymentLookupError } = await supabase
                   .from("payments")
                   .select("id, stripe_checkout_session_id, stripe_payment_intent_id")
                   .eq("rental_id", rentalId)
-                  .not("stripe_checkout_session_id", "is", null)
-                  .single();
+                  .eq("stripe_checkout_session_id", sessionId)
+                  .order("created_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+                if (paymentLookupError) {
+                  console.error(
+                    "Payment lookup failed — leaving this to stripe-webhook rather than inserting:",
+                    paymentLookupError,
+                  );
+                }
 
                 let paymentRecord = existingPayment;
 
-                // If no payment exists yet (edge case), create one
-                if (!existingPayment) {
+                // If no payment exists yet, create one — but never when the lookup
+                // itself failed, because "we could not tell" is not "there is none".
+                if (!existingPayment && !paymentLookupError) {
                   console.log('No existing payment found, creating one...');
                   const today = new Date().toISOString().split('T')[0];
 

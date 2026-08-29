@@ -534,7 +534,7 @@ export function RentalCard({ rental, insuranceReuploadRequired }: RentalCardProp
                 <div className="pt-2 flex items-center justify-between border-t mt-2">
                   <span className="text-muted-foreground">Total</span>
                   <span className="font-semibold text-lg">
-                    {formatCurrency(rental.monthly_amount || 0, currencyCode)}
+                    {formatCurrency(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)), currencyCode)}
                   </span>
                 </div>
               )}

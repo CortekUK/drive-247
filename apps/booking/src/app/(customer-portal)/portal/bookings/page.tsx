@@ -300,7 +300,8 @@ export default function BookingsPage() {
                         </span>
                       )}
                       <span className="hidden sm:inline">
-                        {formatCurrency(rental.monthly_amount || 0, tenant?.currency_code || 'USD')}
+                        {/* Net of discount — the customer must never be quoted the pre-discount rate. */}
+                        {formatCurrency(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0)), tenant?.currency_code || 'USD')}
                       </span>
                     </div>
                   </div>

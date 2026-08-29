@@ -465,14 +465,21 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
   {
     key: 'monthly_amount',
     label: 'Total Amount',
-    description: 'Total payment amount (includes taxes, fees, deposit)',
+    description: 'Total payment amount, after any discount (includes taxes, fees, deposit)',
     sample: '$2,500.00',
+    category: 'rental',
+  },
+  {
+    key: 'rental_discount',
+    label: 'Discount Applied',
+    description: 'Discount agreed on this rental, per period. Empty when there is no discount.',
+    sample: '$78.00',
     category: 'rental',
   },
   {
     key: 'rental_price',
     label: 'Rental Price',
-    description: 'Vehicle rental rate based on period type (daily/weekly/monthly)',
+    description: 'Agreed rental rate for the period, after any discount',
     sample: '$100.00',
     category: 'rental',
   },
@@ -884,7 +891,8 @@ export function buildTemplateData(
         };
       }
       const period = rental?.rental_period_type || 'Weekly';
-      const amount = Number(rental?.monthly_amount) || 0;
+      // Net of discount, for the same reason as monthly_amount above.
+      const amount = Math.max(0, (Number(rental?.monthly_amount) || 0) - (Number(rental?.discount_applied) || 0));
       const daily = computePaygDailyRate(amount, period);
       const weekly = daily * 7;
       const monthly = daily * 30;
@@ -917,9 +925,29 @@ export function buildTemplateData(
     rental_number: rental?.rental_number || rental?.id?.substring(0, 8)?.toUpperCase() || '',
     rental_start_date: formatDate(rental?.start_date),
     rental_end_date: rental?.end_date ? formatDate(rental.end_date) : 'Ongoing',
-    monthly_amount: formatTemplateCurrency(rental?.monthly_amount, currencyCode),
+    // NET of discount_applied. monthly_amount is stored GROSS with the agreed
+    // reduction in its own column, and these two variables are rendered into
+    // customer emails and signed agreements. api/esign/route.ts has always
+    // subtracted it, so leaving these gross meant two documents for the same
+    // rental quoting different money.
+    monthly_amount: formatTemplateCurrency(
+      Math.max(0, (Number(rental?.monthly_amount) || 0) - (Number(rental?.discount_applied) || 0)),
+      currencyCode,
+    ),
+    rental_discount: (Number(rental?.discount_applied) || 0) > 0
+      ? formatTemplateCurrency(Number(rental?.discount_applied), currencyCode)
+      : '',
     rental_price: (() => {
       const type = rental?.rental_period_type || 'Monthly';
+      const discount = Number(rental?.discount_applied) || 0;
+      // With a discount the vehicle's list rate is not what this customer pays,
+      // so quote the agreed per-period figure instead.
+      if (discount > 0) {
+        return formatTemplateCurrency(
+          Math.max(0, (Number(rental?.monthly_amount) || 0) - discount),
+          currencyCode,
+        );
+      }
       const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
       return formatTemplateCurrency(rate, currencyCode);
     })(),
