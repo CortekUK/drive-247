@@ -264,7 +264,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/page.tsx": {
-    "sha": "c830be0d4df2796d3b13735cd94c0435a40f834cc7278e9fbeca797e098cdcbf",
+    "sha": "db92d758d440bfff26ce2a33980dbe9a88ef4f29c91c99db091f92c438ad6868",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/settings/reminders/page.tsx": {
@@ -6248,7 +6248,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/place-deposit-hold/index.ts": {
-    "sha": "4c8d051adfb65f7488215abf113b2c1641659eddcbbe23cc08c27e472e140a92",
+    "sha": "61bc6e488e2721c43ee46432d7cf0514bc70e7a127bd393c6e4e2ad34aaccea9",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/submit-customer-registration/index.ts": {
@@ -6872,7 +6872,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-amount.ts": {
-    "sha": "bd1495c46214bce97f22ce6ec508f6b24f6019a2f1cdc9318f1d1d42b1ee71dc",
+    "sha": "077ec6a849b5c1a10fc49013c7618cac79f1bbb7d3386ef9daac302217e275a8",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts": {
