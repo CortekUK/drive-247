@@ -44,6 +44,7 @@ export interface EnhancedRental {
   rental_period_type?: string;
   monthly_amount: number;
   discount_applied: number | null;
+  promo_code: string | null;
   protection_cost: number;
   total_amount: number;
   status: string;
@@ -148,6 +149,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           return_time,
           monthly_amount,
           discount_applied,
+          promo_code,
           status,
           approval_status,
           payment_status,
@@ -252,6 +254,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             rental_period_type: periodType,
             monthly_amount: rental.monthly_amount,
             discount_applied: rental.discount_applied ?? null,
+            promo_code: rental.promo_code ?? null,
             protection_cost: protectionCost,
             total_amount: totalAmount,
             status: rental.status,

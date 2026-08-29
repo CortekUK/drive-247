@@ -470,7 +470,7 @@ export default function BookingDetailPage() {
       const { data, error } = await (supabase as any)
         .from('rentals')
         .select(`
-          id, rental_number, start_date, end_date, status, monthly_amount, discount_applied, rental_period_type,
+          id, rental_number, start_date, end_date, status, monthly_amount, discount_applied, promo_code, rental_period_type,
           payment_status, approval_status, pickup_location, return_location,
           created_at, has_installment_plan, is_extended, previous_end_date,
           original_end_date, cancellation_requested, cancellation_reason,

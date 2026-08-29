@@ -247,6 +247,9 @@ export function AdminExtendRentalDialog({
     currentEndDate: snapshotEndDate,
     newEndDate: newEndDate || undefined,
     rentalPeriodType: rental.rental_period_type,
+    // Honour the rental's agreed discount, matching the auto-extend cron and
+    // the signed agreement. No promo => list price, exactly as before.
+    promoCode: (rental as any).promo_code ?? null,
   });
 
   const hasBonzahCoverage = extensionInsuranceType === 'bonzah' && bonzahSellable && (extensionCoverage.cdw || extensionCoverage.rcli || extensionCoverage.sli || extensionCoverage.pai);

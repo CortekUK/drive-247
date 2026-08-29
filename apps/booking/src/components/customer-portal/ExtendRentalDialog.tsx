@@ -52,6 +52,9 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
     currentEndDate: rental.end_date,
     newEndDate: newEndDate || undefined,
     rentalPeriodType: rental.rental_period_type,
+    // Honour the rental's agreed discount, matching the auto-extend cron and
+    // the signed agreement. No promo => list price, exactly as before.
+    promoCode: (rental as any).promo_code ?? null,
   });
 
   const currencyCode = tenant?.currency_code || 'USD';

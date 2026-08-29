@@ -151,6 +151,9 @@ export function ExtensionRequestDialog({
     currentEndDate: snapshotEndDate,
     newEndDate: isStaleRequest ? undefined : (snapshotRequestedDate || undefined),
     rentalPeriodType: rental.rental_period_type,
+    // Honour the rental's agreed discount, matching the auto-extend cron and
+    // the signed agreement. No promo => list price, exactly as before.
+    promoCode: (rental as any).promo_code ?? null,
   });
 
   const currencySymbol = getCurrencySymbol(tenant?.currency_code || 'USD');

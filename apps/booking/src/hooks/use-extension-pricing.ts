@@ -13,6 +13,12 @@ interface UseExtensionPricingParams {
   currentEndDate?: string; // YYYY-MM-DD
   newEndDate?: string;     // YYYY-MM-DD
   rentalPeriodType?: string; // 'Daily' | 'Weekly' | 'Monthly' — use same rate tier as original rental
+  /**
+   * The rental's promo code, when it has one. Makes a manual extension honour the
+   * same discount the original booking was given, matching the auto-extend cron
+   * and the signed agreement. Omitted => list price, exactly as before.
+   */
+  promoCode?: string | null;
 }
 
 interface ExtensionPricingResult {
@@ -51,8 +57,37 @@ export function useExtensionPricing({
   currentEndDate,
   newEndDate,
   rentalPeriodType,
+  promoCode,
 }: UseExtensionPricingParams): ExtensionPricingResult {
   const { tenant } = useTenant();
+
+  // Resolve the discount from the PROMO's declared type, not from
+  // rentals.discount_applied. That column is a frozen currency amount, and
+  // deriving a ratio from it assumes it was a percentage of monthly_amount —
+  // true for 9 of 11 discounted rentals in production, false for 2.
+  // Only 'percentage' promos scale a per-day rate; a fixed-amount promo was a
+  // one-off reduction on the original booking and must not repeat per day.
+  const { data: promo } = useQuery({
+    queryKey: ['extension-pricing-promo', tenant?.id, promoCode],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from('promocodes')
+        .select('type, value')
+        .eq('tenant_id', tenant!.id)
+        .eq('code', promoCode!)
+        .maybeSingle();
+      return data ?? null;
+    },
+    enabled: !!tenant?.id && !!promoCode,
+    staleTime: 60_000,
+  });
+
+  const contractFactor = (() => {
+    if (!promo || promo.type !== 'percentage') return 1;
+    const pct = Number(promo.value);
+    if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) return 1;
+    return 1 - pct / 100;
+  })();
   const { holidays, vehicleOverrides, dailyPrices, isLoading: loadingDynamic } = useDynamicPricing(vehicleId);
 
   // Fetch vehicle rates (all tiers)
@@ -88,11 +123,18 @@ export function useExtensionPricing({
       return { extensionCost: 0, extensionDays: 0, dailyRate: effectiveRate, dayBreakdown: [] as DayBreakdown[], hasSurcharges: false };
     }
 
-    // Use calculateRentalPriceBreakdown with the effective rate as the daily rate
+    // Scale the tier rate rather than subtracting a lump sum, so surcharges and
+    // per-vehicle overrides still compose. Exactly 1 without a percentage promo,
+    // making this a literal no-op for every other rental.
+    const contractedRate = contractFactor === 1
+      ? effectiveRate
+      : Math.round(effectiveRate * contractFactor * 100) / 100;
+
+    // Use calculateRentalPriceBreakdown with the contracted rate as the daily rate
     const priceResult = calculateRentalPriceBreakdown(
       currentEndDate,
       newEndDate,
-      { daily_rent: effectiveRate, weekly_rent: 0, monthly_rent: 0 },
+      { daily_rent: contractedRate, weekly_rent: 0, monthly_rent: 0 },
       weekendConfig,
       holidays,
       vehicleOverrides,
@@ -106,11 +148,11 @@ export function useExtensionPricing({
     return {
       extensionCost: priceResult.rentalPrice,
       extensionDays: priceResult.rentalDays,
-      dailyRate: effectiveRate,
+      dailyRate: contractedRate,
       dayBreakdown: priceResult.dayBreakdown,
       hasSurcharges: priceResult.dayBreakdown.some(d => d.type !== 'regular'),
     };
-  }, [vehicleData, currentEndDate, newEndDate, weekendConfig, holidays, vehicleOverrides, dailyPrices, vehicleId, rentalPeriodType]);
+  }, [vehicleData, currentEndDate, newEndDate, weekendConfig, holidays, vehicleOverrides, dailyPrices, vehicleId, rentalPeriodType, contractFactor]);
 
   return {
     ...result,
