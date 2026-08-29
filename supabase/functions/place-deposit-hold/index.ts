@@ -349,9 +349,22 @@ Deno.serve(async (req) => {
     // security_deposit — the value the booking page and portal already show.
     // place-deposit-hold historically ignored deposit_mode and under-held
     // vehicles priced above the global (e.g. GMT's Tesla: $200 configured, $100
-    // held). SCOPED to GMT only for now: the other per_vehicle tenants have
+    // held).
+    //
+    // CURRENTLY INERT: GMT moved to deposit_mode='global' (2026-08-25) when
+    // per-vehicle deposits were dropped as a product decision, so this set no
+    // longer matches any tenant's mode and the resolver falls through to the
+    // tenant global. Kept so the mechanism survives — do NOT read it as "GMT is
+    // on per-vehicle".
+    //
+    // Still scoped deliberately: the other per_vehicle tenants have
     // global_deposit_amount = $0, so enabling this for them would start placing
-    // holds they don't collect today — a separate rollout decision.
+    // holds they don't collect today — a separate rollout decision. And the
+    // inverse is worse: switching them to 'global' would drop 40 vehicles to a
+    // $0 deposit. Set their global amount before touching their mode.
+    //
+    // NOTE: this is a second copy of PER_VEHICLE_DEPOSIT_TENANT_IDS, duplicated
+    // from _shared/deposit-amount.ts. Keep the two in step.
     const PER_VEHICLE_DEPOSIT_TENANT_IDS = new Set([
       "ada84c6f-eb17-43b6-a14d-d16518165349", // globalmotiontransport (GMT)
     ]);

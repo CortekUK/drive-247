@@ -3798,10 +3798,28 @@ const Settings = () => {
                 Security Deposit
               </CardTitle>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                {/* Copy MUST follow deposit_charge_enabled, not just the master switch.
+                    On the hold path nothing is taken and nothing is "returned" — an
+                    authorisation is placed and released. Describing a charge to a hold
+                    tenant contradicts every other screen they see (the rental form's
+                    "Pre-Authorization" line, the "no deposit held" banner), which is
+                    exactly how this reads as a bug rather than as copy. */}
                 <CardDescription>
-                  Take a refundable security deposit on customer bookings. This switch controls
-                  the booking site &mdash; when it is off, customers are not shown or charged a
-                  deposit. You can still take one on a rental you create yourself.
+                  {rentalForm.deposit_charge_enabled ? (
+                    <>
+                      Take a refundable security deposit on customer bookings. This switch controls
+                      the booking site &mdash; when it is off, customers are not shown or charged a
+                      deposit. You can still take one on a rental you create yourself.
+                    </>
+                  ) : (
+                    <>
+                      Hold a refundable security deposit on customer bookings. We place a temporary
+                      authorisation on the customer&rsquo;s card at pickup and release it after the
+                      vehicle is returned &mdash; no money moves unless you charge against it. This
+                      switch controls the booking site; you can still take a deposit on a rental you
+                      create yourself.
+                    </>
+                  )}
                 </CardDescription>
                 <div className="flex items-center gap-2 shrink-0">
                   <Label htmlFor="security-deposit-toggle" className="text-sm text-muted-foreground">
@@ -3856,9 +3874,22 @@ const Settings = () => {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Taken on every booking and returned when the vehicle comes back, less any
-                    damage, fines or unpaid charges.
+                    {rentalForm.deposit_charge_enabled
+                      ? 'Charged on every booking and refunded when the vehicle comes back, less any damage, fines or unpaid charges.'
+                      : 'Held on the customer’s card at pickup and released after the vehicle is returned. Nothing is taken unless you charge against the hold.'}
                   </p>
+                  {/* The per-vehicle radios were removed from this card, but the MODE still
+                      exists in the database and the rental form still honours it (it renders
+                      "(per-vehicle)" next to the amount). Without this line an operator on
+                      per_vehicle reads a single global figure here and a different one there,
+                      with nothing explaining the gap. */}
+                  {rentalForm.deposit_mode === 'per_vehicle' && (
+                    <p className="text-xs text-amber-600 dark:text-amber-500">
+                      Your deposits are set per vehicle. This amount is only the fallback for
+                      vehicles that don&rsquo;t have their own &mdash; edit a vehicle to change its
+                      deposit.
+                    </p>
+                  )}
                 </div>
               )}
 

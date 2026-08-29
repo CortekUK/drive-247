@@ -23,9 +23,18 @@ export const DEPOSIT_AMOUNT_RENTAL_COLUMNS = "vehicle_id, deposit_amount_overrid
 /**
  * Tenants whose per-vehicle `deposit_mode` is actually honoured.
  *
- * SCOPED DELIBERATELY. The other `per_vehicle` tenants run
+ * CURRENTLY INERT. GMT was moved to `deposit_mode = 'global'` (2026-08-25) —
+ * per-vehicle deposits were dropped as a product decision — so this set no
+ * longer matches any tenant's mode and every caller falls through to
+ * `tenant_global`. The entry is kept only so the mechanism and its reasoning
+ * survive; do not read it as "GMT is on per-vehicle", which it no longer is.
+ *
+ * SCOPED DELIBERATELY. The remaining `per_vehicle` tenants (dbcarrentals,
+ * eastpeakrentalsllc, flowrentalsllc, jangramrentals) run
  * `global_deposit_amount = 0`, so honouring `deposit_mode` for them would start
  * placing holds they do not collect today — a rollout decision, not a bug fix.
+ * The inverse is the dangerous one: switching THEM to `global` would drop 40
+ * vehicles to a $0 deposit. Set their global amount before touching their mode.
  * Widening this set changes what real customers are charged: do it deliberately.
  */
 export const PER_VEHICLE_DEPOSIT_TENANT_IDS: ReadonlySet<string> = new Set([

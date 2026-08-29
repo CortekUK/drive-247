@@ -220,7 +220,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/customers/page.tsx": {
-    "sha": "227ee578fc8809fad081495c85c532d4d4b4f66919f24983eb743c9e77e26df6",
+    "sha": "dfb56a68c0a3ca124584ab66422ef0c8ad951cca948ee38ff32e820d3e7c885d",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/app/(dashboard)/customers/[id]/page.tsx": {
@@ -593,6 +593,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/calendar-utils.ts": {
     "sha": "00e1284bc731201db9a4401a2702bf9ce00029d075178741b2514baa4008c8b7",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/customers-csv.ts": {
+    "sha": "a17e06303d2afc203cbb5699bee45f39f939776d9efd5088ecc2a992142a4236",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/lib/delivery-tiers.ts": {
@@ -1545,6 +1549,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/customers/rejected-customer-dialog.tsx": {
     "sha": "23fb0dba8dd12f07a13358d98679126709b74a73e1bf200d3e3cf00778f0633c",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/customers/customer-csv-import-dialog.tsx": {
+    "sha": "66fde19fe3f8d4ee6d60723100f5816ab85d0482bdf3d44410d25b6764bbb1b5",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/customers/add-customer-document-dialog.tsx": {
@@ -3011,6 +3019,10 @@
     "sha": "b6b6cdcc98ae65974eff1a980ed65562e993054cbf378613449733a9c0a9e250",
     "unit": "portal"
   },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-customer-import.ts": {
+    "sha": "70978fc79892d8d9f51aaedd9d6104c1b5d0febe8a92124aa847ac1619eb6643",
+    "unit": "portal"
+  },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-cms-page-sections.ts": {
     "sha": "0e67969024beae4fcbeec52f15888b1a9831f6ea511a34053704337077a31cf6",
     "unit": "portal"
@@ -3729,6 +3741,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/inshur-transforms.test.ts": {
     "sha": "848e76c783850667843ee5606abf863cbba2b428699980c8e228942189768da7",
+    "unit": "portal"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/customers-csv.test.ts": {
+    "sha": "8c760775ced5d25c8ca619b1e65240b47dc509ac005304083cdd6e5a5685b19e",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/__tests__/lib/accounting-backoff.test.ts": {
