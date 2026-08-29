@@ -7568,7 +7568,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/adjust-customer-balance/index.ts": {
-    "sha": "56dcf47727d1da4df8b2b0626c78d0ceffa53d86698430a03605eed806d99711",
+    "sha": "83a9dabf50f24ce2b8d5e75be469f01b5838aca87c8aa066fc69e07dac6334b3",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/emergency-password-reset/index.ts": {
