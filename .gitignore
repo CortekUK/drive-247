@@ -63,3 +63,6 @@ testing-qa.env
 # Keep the masters out of git; re-encode from the originals if they change.
 /funnel_videos/
 .staging-credentials.local
+
+# root build artifact
+tsconfig.tsbuildinfo
