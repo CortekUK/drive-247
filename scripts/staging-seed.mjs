@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 /**
  * staging-seed.mjs — put the minimum usable data into a freshly rebuilt
- * staging DB: one super-admin login, two synthetic tenants, a tenant admin,
- * and a small fleet. Idempotent: safe to re-run.
+ * staging DB: one super-admin login, ONE synthetic tenant ("northwind"), its
+ * head admin, and a small fleet. Idempotent: safe to re-run.
+ *
+ * Deliberately ONE tenant. Multiple near-identical tenants made it ambiguous
+ * which one a given test was exercising. "northwind" is the long-standing
+ * convention for sample data — it reads as a believable operator in the UI
+ * while being unmistakably not a real customer. Never "test": that collides
+ * with the real `test` tenant slug used in production.
  *
  * Synthetic ONLY. Never copy production customer data into staging.
  *
@@ -71,8 +77,15 @@ console.log('▸ super admin');
   const email = 'staging-admin@drive-247.com';
   const password = pw();
   const { id, created } = await ensureAuthUser(email, password);
-  if (created) creds.push({ role: 'super admin (admin app)', email, password });
-  else console.log('   auth user already existed — password unchanged');
+  if (!created) {
+    // Re-runs must not silently drop this login from the creds file: the file is
+    // overwritten each run, so an unrotated password would simply vanish and the
+    // account would be unreachable. Rotate instead.
+    await authAdmin(`/admin/users/${id}`, {
+      method: 'PUT', body: JSON.stringify({ password }),
+    });
+  }
+  creds.push({ role: 'super admin (admin app)', email, password });
   await sql(`
     insert into app_users (auth_user_id, email, role, tenant_id, is_super_admin, is_primary_super_admin)
     values ('${id}', '${esc(email)}', 'head_admin', null, true, true)
@@ -81,11 +94,33 @@ console.log('▸ super admin');
   console.log(`   ${email}`);
 }
 
+const TENANT = { slug: 'northwind', company_name: 'Northwind Rentals' };
+const TENANTS = [TENANT];
+
+console.log('▸ removing any tenant that is not the seed tenant');
+{
+  // Guarded: this script hard-codes the staging ref at the top, so it can only
+  // ever run against staging. Never point it at production.
+  const stale = await sql(`select id, slug from tenants where slug <> '${TENANT.slug}'`);
+  for (const t of stale) {
+    // Remove the auth.users rows too. An app_users row deleted on its own
+    // leaves an orphaned auth user, which makes signup report "already exists"
+    // while login reports "no account" — a loop that is painful to diagnose.
+    const orphans = await sql(
+      `select auth_user_id from app_users where tenant_id = '${t.id}' and auth_user_id is not null`
+    );
+    await sql(`delete from vehicles  where tenant_id = '${t.id}'`);
+    await sql(`delete from app_users where tenant_id = '${t.id}'`);
+    await sql(`delete from tenants   where id = '${t.id}'`);
+    for (const o of orphans) {
+      await authAdmin(`/admin/users/${o.auth_user_id}`, { method: 'DELETE' }).catch(() => {});
+    }
+    console.log(`   removed ${t.slug}${orphans.length ? ` (+${orphans.length} auth user)` : ''}`);
+  }
+  if (!stale.length) console.log('   none');
+}
+
 console.log('▸ tenants');
-const TENANTS = [
-  { slug: 'demo',    company_name: 'Demo Rentals (staging)' },
-  { slug: 'testco',  company_name: 'TestCo Motors (staging)' },
-];
 for (const t of TENANTS) {
   await sql(`insert into tenants (slug, company_name)
              values ('${esc(t.slug)}', '${esc(t.company_name)}')
@@ -93,22 +128,27 @@ for (const t of TENANTS) {
   console.log(`   ${t.slug}`);
 }
 
-console.log('▸ tenant admin for "demo"');
+console.log('▸ tenant admin for "northwind"');
 {
-  const email = 'demo-admin@drive-247.com';
+  const email = 'northwind-admin@drive-247.com';
   const password = pw();
   const { id, created } = await ensureAuthUser(email, password);
-  if (created) creds.push({ role: 'tenant head_admin (demo portal)', email, password });
+  if (!created) {
+    await authAdmin(`/admin/users/${id}`, {
+      method: 'PUT', body: JSON.stringify({ password }),
+    });
+  }
+  creds.push({ role: 'tenant head_admin (northwind portal)', email, password });
   await sql(`
     insert into app_users (auth_user_id, email, role, tenant_id, is_super_admin)
     select '${id}', '${esc(email)}', 'head_admin', t.id, false
-      from tenants t where t.slug = 'demo'
+      from tenants t where t.slug = '${TENANT.slug}'
     on conflict (auth_user_id) do update
       set tenant_id = excluded.tenant_id, role = 'head_admin';`);
   console.log(`   ${email}`);
 }
 
-console.log('▸ fleet for "demo"');
+console.log('▸ fleet for "northwind"');
 {
   const vehicles = [
     ['Tesla', 'Model 3', 2023, 'STG-001'],
@@ -118,7 +158,7 @@ console.log('▸ fleet for "demo"');
   for (const [make, model, year, reg] of vehicles) {
     await sql(`insert into vehicles (tenant_id, make, model, year, reg)
                select t.id, '${esc(make)}', '${esc(model)}', ${year}, '${esc(reg)}'
-                 from tenants t where t.slug='demo'
+                 from tenants t where t.slug='${TENANT.slug}'
                  and not exists (select 1 from vehicles v where v.reg='${esc(reg)}');`);
   }
   console.log(`   ${vehicles.length} vehicles`);
