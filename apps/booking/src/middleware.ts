@@ -2,18 +2,23 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Mirrors the fallbacks in src/integrations/supabase/client.ts. That generated
-// client is why every page in this app renders without a workspace-root .env —
-// it falls back to the project's public URL / anon key. This file did NOT, so a
-// dev run without .env threw "supabaseUrl is required" from the module body and
-// took down EVERY path the matcher covers (checkout included), long before any
-// route code ran. Keep these two in sync.
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hviqoaokxvlancmftwuo.supabase.co';
+// Mirrors src/integrations/supabase/client.ts — keep these two in sync.
+//
+// These previously fell back to a hardcoded PRODUCTION URL + anon key so a dev
+// run without .env wouldn't throw "supabaseUrl is required" from the module
+// body (which takes down EVERY path the matcher covers, checkout included).
+// That fallback is worse than the crash it prevented: a staging or
+// misconfigured build silently reads and writes PRODUCTION. Fail loudly
+// instead — set the env vars.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error(
+    'Missing Supabase env in middleware: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY).'
+  );
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

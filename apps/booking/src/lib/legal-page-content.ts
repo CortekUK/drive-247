@@ -21,8 +21,10 @@ import {
   type TermsOfServiceContent,
 } from '@/hooks/usePageContent';
 
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://hviqoaokxvlancmftwuo.supabase.co';
+// No hardcoded production fallback: without it a staging build would silently
+// serve PRODUCTION legal content. Both call sites below already degrade to the
+// in-app default when these are unset, so absence is handled without a throw.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
