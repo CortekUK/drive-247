@@ -95,7 +95,7 @@ export function AccountingBackfillWizard({ open, provider, onClose, onOpenMappin
         {step === 1 && (
           <>
             <DialogHeader>
-              <DialogTitle>Sync historical data to {provider === "xero" ? "Xero" : "Zoho Books"}</DialogTitle>
+              <DialogTitle>Sync historical data to Xero</DialogTitle>
               <DialogDescription>Step 1 of 3 — Which date range should we sync?</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
@@ -233,7 +233,7 @@ export function AccountingBackfillWizard({ open, provider, onClose, onOpenMappin
               <DialogDescription>Step 3 of 3 — Ready to sync.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
-              <ReviewRow label="Provider" value={provider === "xero" ? "Xero" : "Zoho Books"} />
+              <ReviewRow label="Provider" value="Xero" />
               <ReviewRow label="Date range" value={
                 rangeChoice === "all" ? "All time" :
                 rangeChoice === "12m" ? "Last 12 months" :

@@ -6,7 +6,7 @@
  * external refs + state transitions. Honours:
  *
  *   - Spec §8.3: one invoice per rental until closed; extensions get new invoices
- *   - Spec §7.3: idempotency (Xero Idempotency-Key, Zoho via pre-flight check)
+ *   - Spec §7.3: idempotency (Xero Idempotency-Key)
  *   - Spec §14.2: error classification → retry / mark-expired / surface
  *   - Spec §14 backoff schedule: 1m, 5m, 30m, 2h, 12h, dead-letter
  *
@@ -58,10 +58,9 @@ const CLAIM_TIMEOUT_MINUTES = Number(Deno.env.get("ACCOUNTING_SYNC_CLAIM_TIMEOUT
 // headroom left for the OAuth refresh cron sharing the same quota.
 //
 // The previous formula was `Math.ceil(LIMIT * (2 / 60)) * 60`, which collapses
-// to 120 for Xero and 180 for Zoho regardless of the configured limit — both
-// above BATCH_SIZE, so the guard could never fire even once.
+// to 120 for Xero regardless of the configured limit — above BATCH_SIZE, so
+// the guard could never fire even once.
 const RATE_LIMIT_XERO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_XERO") ?? 55);
-const RATE_LIMIT_ZOHO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_ZOHO") ?? 90);
 const TICK_MINUTES = 2;
 const CALLS_PER_ROW = 3;   // worst case: ensureContact + findInvoice + create/append
 
@@ -159,7 +158,6 @@ Deno.serve(async (req) => {
     // us past Xero's 60/min ceiling and into the 429s.
     const remaining: Record<ProviderName, number> = {
       xero: RATE_LIMIT_XERO * TICK_MINUTES,
-      zoho: RATE_LIMIT_ZOHO * TICK_MINUTES,
     };
 
     for (const row of batch) {
@@ -730,7 +728,7 @@ async function flagConnectionExpired(
     .eq("tenant_id", tenantId)
     .eq("provider", provider)
     .eq("status", "active");
-  const flagColumn = provider === "xero" ? "integration_xero" : "integration_zoho_books";
+  const flagColumn = "integration_xero";
   await supabase.from("tenants").update({ [flagColumn]: false }).eq("id", tenantId);
 }
 

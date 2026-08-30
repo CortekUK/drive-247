@@ -5,7 +5,7 @@
  * a configured provider client. Encapsulates:
  *   - Calling `accounting_get_tokens` RPC to retrieve vault-decrypted creds
  *   - Validating the connection is still active (not expired/revoked)
- *   - Constructing the right concrete client (Xero or Zoho)
+ *   - Constructing the concrete Xero client
  *
  * Refresh-on-expiry is handled separately by the `refresh-accounting-tokens`
  * cron. If a token has expired between cron ticks and a worker request fires
@@ -16,7 +16,6 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { AccountingProvider, ProviderError, ProviderName } from "./types.ts";
 import { XeroClient } from "./xero-client.ts";
-import { ZohoClient } from "./zoho-client.ts";
 
 export async function getProvider(
   supabase: SupabaseClient,
@@ -47,12 +46,5 @@ export async function getProvider(
     );
   }
 
-  if (provider === "xero") {
-    return new XeroClient(row.access_token as string, row.external_org_id as string);
-  }
-  return new ZohoClient(
-    row.access_token as string,
-    row.external_org_id as string,
-    (row.external_region as string | null) ?? "com",
-  );
+  return new XeroClient(row.access_token as string, row.external_org_id as string);
 }

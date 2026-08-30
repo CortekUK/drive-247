@@ -30,7 +30,7 @@ export const extractFunctionError = async (error: unknown, fallback: string): Pr
  * branch never ran and every Finance Sync failure surfaced as the generic
  * "Edge Function returned a non-2xx status code", exactly the opacity
  * extractFunctionError was written to prevent. Real messages discarded this way
- * included "Zoho Books is not configured on the server yet" and the super-admin
+ * included "Xero is not configured on the server yet" and the super-admin
  * tenant-resolution errors.
  */
 export const throwEdgeError = async (error: unknown): Promise<never> => {

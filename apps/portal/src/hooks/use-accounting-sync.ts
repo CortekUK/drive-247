@@ -5,8 +5,8 @@
  * and per-rental sync stripe need. Bundled to keep import noise low.
  *
  *   useAccountingMappings(provider)
- *   useAccountingAccounts(provider)            — Xero/Zoho chart of accounts
- *   useAccountingTaxRates(provider)            — Xero/Zoho tax rates
+ *   useAccountingAccounts(provider)            — Xero chart of accounts
+ *   useAccountingTaxRates(provider)            — Xero tax rates
  *   useSaveAccountingMappings()                — mutation
  *   useAccountingSyncLog(filters)              — paginated list
  *   useAccountingSyncStats(provider)           — KPI tiles

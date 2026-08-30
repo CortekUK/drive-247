@@ -14,7 +14,7 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { resolveTenantId } from "../_shared/accounting/resolve-tenant.ts";
 
 interface Payload {
-  provider?: "xero" | "zoho";
+  provider?: "xero";
   backfillJobId?: string;
 }
 

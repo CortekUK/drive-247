@@ -3,7 +3,7 @@
  *
  *   useVehicleProfitability(period) — fetches the KPI snapshot + per-vehicle rows.
  *
- * Driven entirely by `pnl_entries` (per master plan Deviation #4) — no Xero/Zoho
+ * Driven entirely by `pnl_entries` (per master plan Deviation #4) — no accounting
  * connection required. This dashboard ships as a "bonus" for every tenant who
  * has the Finance Sync feature unlocked, even pre-connection.
  */

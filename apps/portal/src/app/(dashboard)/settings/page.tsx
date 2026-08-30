@@ -2945,7 +2945,7 @@ const Settings = () => {
           <StripeConnectSettings />
         </TabsContent>
 
-        {/* Accounting Tab — Xero + Zoho Books connections (Growth+ tier) */}
+        {/* Accounting Tab — Xero connection (Growth+ tier) */}
         <TabsContent value="accounting" className="space-y-6">
           <AccountingSettings />
         </TabsContent>

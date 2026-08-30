@@ -3,7 +3,7 @@
  *
  * Operator-facing dashboard showing per-vehicle revenue, expenses, profit
  * and ROI over a chosen period. Driven entirely by Drive247's internal
- * `pnl_entries` ledger — no Xero/Zoho connection required.
+ * `pnl_entries` ledger — no accounting connection required.
  *
  * Gated to Growth+ tier via useFeatureAccess('finance_sync') so it shows
  * up alongside the rest of the Finance Sync surface.

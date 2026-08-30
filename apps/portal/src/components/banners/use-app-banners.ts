@@ -4,7 +4,7 @@
  * WHY A REGISTRY AND NOT JUST RENDERING EACH BANNER
  * -------------------------------------------------
  * Seven banner components already render themselves independently
- * (maintenance, Xero/Zoho, low credits, platform status, Bonzah x2, go-live).
+ * (maintenance, Xero, low credits, platform status, Bonzah x2, go-live).
  * Each decides its own visibility, its own dismissal, and its own place in the
  * DOM — so on a bad day an operator meets a wall of stacked bars and stops
  * reading any of them. That is precisely how the GMT deposit notification

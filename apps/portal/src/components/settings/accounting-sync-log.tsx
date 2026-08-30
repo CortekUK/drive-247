@@ -93,7 +93,7 @@ export function AccountingSyncLog({ provider, onBack }: Props) {
           <ArrowLeft className="h-3 w-3" /> Back to Accounting
         </button>
         <h2 className="text-lg font-semibold">
-          Sync log — {provider === "xero" ? "Xero" : "Zoho Books"}
+          Sync log — Xero
         </h2>
       </div>
 

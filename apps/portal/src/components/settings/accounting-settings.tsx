@@ -2,11 +2,8 @@
  * AccountingSettings — Sprint 2 surface.
  *
  * Settings → Accounting tab. Gated to Growth+ tier via useFeatureAccess
- * (Confirmed Decision D1). Shows two provider cards (Xero + Zoho Books). For
- * each: not-connected → "Connect" button; connected → status row + Disconnect.
- *
- * Sprint 5 — both Xero and Zoho cards are fully wired. Zoho card opens the
- * region-selector modal before redirecting to the right data centre.
+ * (Confirmed Decision D1). Shows the Xero provider card:
+ * not-connected → "Connect" button; connected → status row + Disconnect.
  */
 "use client";
 
@@ -28,7 +25,6 @@ import {
 import { AccountingMappings } from "./accounting-mappings";
 import { AccountingSyncLog } from "./accounting-sync-log";
 import { AccountingBackfillWizard } from "./accounting-backfill-wizard";
-import { ZohoRegionSelector } from "./zoho-region-selector";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,7 +61,7 @@ const OAUTH_REASONS: Record<string, string> = {
   organisations_lookup_failed:
     "You authorised successfully, but the provider rejected our request for your organisation list. This usually means a missing permission — reconnect, and if it repeats check the server logs.",
   no_organisations:
-    "You authorised successfully, but that account has no Zoho Books organisation yet. Create one at books.zoho.com — signed in as the same account you just authorised with — then reconnect.",
+    "You authorised successfully, but that account has no organisation yet. Create one — signed in as the same account you just authorised with — then reconnect.",
   persist_failed: "The connection succeeded but could not be saved. Please try again.",
 };
 
@@ -73,7 +69,6 @@ export function AccountingSettings() {
   const access = useFeatureAccess("finance_sync");
   const allConnections = useAccountingConnections();
   const xero = useActiveAccountingConnection("xero");
-  const zoho = useActiveAccountingConnection("zoho");
   const [view, setView] = useState<View>({ kind: "cards" });
 
   // ── Report the OAuth round-trip result ───────────────────────────────────
@@ -99,7 +94,7 @@ export function AccountingSettings() {
     if (handledOAuthResult.current) return;
     handledOAuthResult.current = true;
 
-    const label = provider === "zoho" ? "Zoho Books" : "Xero";
+    const label = "Xero";
 
     if (status === "success") {
       // The card reads cached connection state, so it will not show the new
@@ -155,7 +150,7 @@ export function AccountingSettings() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4">
         <ProviderCard
           provider="xero"
           name="Xero"
@@ -165,20 +160,7 @@ export function AccountingSettings() {
           onOpenMappings={() => setView({ kind: "mappings", provider: "xero" })}
           onOpenLog={() => setView({ kind: "log", provider: "xero" })}
         />
-        <ProviderCard
-          provider="zoho"
-          name="Zoho Books"
-          tagline="Online accounting for small businesses"
-          connection={zoho.data}
-          onConnect={ConnectZohoButton}
-          onOpenMappings={() => setView({ kind: "mappings", provider: "zoho" })}
-          onOpenLog={() => setView({ kind: "log", provider: "zoho" })}
-        />
       </div>
-
-      <p className="text-xs text-muted-foreground">
-        You can connect both providers if you use different accounting systems for different parts of your business.
-      </p>
     </div>
   );
 }
@@ -188,7 +170,7 @@ export function AccountingSettings() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ProviderCardProps {
-  provider: "xero" | "zoho";
+  provider: "xero";
   name: string;
   tagline: string;
   connection: AccountingConnectionRow | null;
@@ -348,21 +330,6 @@ function ConnectXeroButton() {
   );
 }
 
-function ConnectZohoButton() {
-  const [regionOpen, setRegionOpen] = useState(false);
-  return (
-    <>
-      <Button
-        onClick={() => setRegionOpen(true)}
-        className="bg-[#0f172a] text-white hover:bg-[#0f172a]/90"
-      >
-        Connect Zoho <ChevronRight className="ml-1 h-3.5 w-3.5" />
-      </Button>
-      <ZohoRegionSelector open={regionOpen} onClose={() => setRegionOpen(false)} />
-    </>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Paywall
 // ─────────────────────────────────────────────────────────────────────────────
@@ -379,7 +346,7 @@ function FinanceSyncPaywall({ planName, requiredTier }: { planName: string | nul
         </h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
           You&apos;re currently on {planName ?? "the Basic tier"}. Upgrade to {requiredTier} to sync rentals,
-          payments, refunds and damages to Xero or Zoho Books automatically.
+          payments, refunds and damages to Xero automatically.
         </p>
         <Button asChild className="mt-4 bg-[#0f172a] text-white hover:bg-[#0f172a]/90">
           <a href="/settings?tab=subscription">

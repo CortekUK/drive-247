@@ -63,7 +63,7 @@ export function AccountingMappings({ provider, onBack }: Props) {
   // The guard used to be `if (Object.keys(draft).length > 0) return;` with
   // `draft` in the dependency array. That works only while the tenant HAS
   // mappings. With zero rows — a provider that has never been configured, which
-  // is every tenant's starting state and Zoho's today — `seeded` is `{}`, so
+  // is every tenant's starting state — `seeded` is `{}`, so
   // setDraft({}) hands React a brand-new object identity on every pass, `draft`
   // changes by reference, the effect re-runs, and the component spins forever.
   //
@@ -164,10 +164,10 @@ export function AccountingMappings({ provider, onBack }: Props) {
           <ArrowLeft className="h-3 w-3" /> Back to Accounting
         </button>
         <h2 className="text-lg font-semibold">
-          Configure mappings — {provider === "xero" ? "Xero" : "Zoho Books"}
+          Configure mappings — Xero
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tell Drive247 which {provider === "xero" ? "Xero" : "Zoho"} account each type of charge should go to,
+          Tell Drive247 which Xero account each type of charge should go to,
           and which tax rate to apply.
         </p>
       </div>
@@ -177,7 +177,7 @@ export function AccountingMappings({ provider, onBack }: Props) {
           <CardContent className="flex items-start gap-2 py-4 text-xs text-amber-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p className="font-medium">Couldn&apos;t reach {provider === "xero" ? "Xero" : "Zoho"}.</p>
+              <p className="font-medium">Couldn&apos;t reach Xero.</p>
               <p className="mt-0.5">
                 {(accountsError?.message ?? taxRatesError?.message ?? "Unknown error")}
               </p>
@@ -270,7 +270,7 @@ export function AccountingMappings({ provider, onBack }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Payment account</CardTitle>
           <CardDescription>
-            When Drive247 records a payment in {provider === "xero" ? "Xero" : "Zoho Books"}, which bank or
+            When Drive247 records a payment in Xero, which bank or
             clearing account should it post against?
           </CardDescription>
         </CardHeader>

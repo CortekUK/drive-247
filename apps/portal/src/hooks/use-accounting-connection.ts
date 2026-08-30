@@ -19,7 +19,7 @@ import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { throwEdgeError } from "@/lib/edge-error";
 
-export type AccountingProvider = "xero" | "zoho";
+export type AccountingProvider = "xero";
 export type AccountingConnectionStatus = "active" | "expired" | "revoked" | "error";
 
 export interface AccountingConnectionRow {
@@ -115,28 +115,6 @@ export function useConnectXero() {
   });
 }
 
-/** Zoho regions — six data centres, operator picks at connect time. */
-export type ZohoRegion = "com" | "eu" | "in" | "com.au" | "jp" | "sa";
-
-export function useConnectZoho() {
-  const { tenant } = useTenant();
-  return useMutation({
-    mutationFn: async (args: { region: ZohoRegion; redirectBack?: string }) => {
-      const { data, error } = await supabase.functions.invoke("zoho-oauth-start", {
-        body: { region: args.region, redirectBack: args.redirectBack ?? null, tenantSlug: tenant?.slug ?? null },
-      });
-      if (error) {
-        await throwEdgeError(error);
-      }
-      const { authorizeUrl } = data as { ok: boolean; authorizeUrl: string };
-      if (!authorizeUrl) throw new Error("No authorize URL returned");
-      window.location.href = authorizeUrl;
-      return { redirected: true };
-    },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to start Zoho connection"),
-  });
-}
-
 export function useDisconnectAccounting() {
   const qc = useQueryClient();
   const { tenant, refetchTenant } = useTenant();
@@ -153,7 +131,7 @@ export function useDisconnectAccounting() {
     onSuccess: async (data) => {
       qc.invalidateQueries({ queryKey: ["accounting-connections", tenant?.id] });
       await refetchTenant?.();
-      toast.success(`Disconnected from ${data.provider === "xero" ? "Xero" : "Zoho Books"}`);
+      toast.success("Disconnected from Xero");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to disconnect"),
   });

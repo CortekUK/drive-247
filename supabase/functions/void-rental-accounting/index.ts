@@ -2,8 +2,8 @@
  * void-rental-accounting — Sprint 6 patch: manual-void flow.
  *
  * When an operator manually cancels a rental in the portal (status flips to
- * 'Cancelled' / 'Void'), any already-synced invoice for that rental in Xero /
- * Zoho needs to be voided so the operator's books don't carry phantom revenue.
+ * 'Cancelled' / 'Void'), any already-synced invoice for that rental in Xero
+ * needs to be voided so the operator's books don't carry phantom revenue.
  *
  * Called by the portal's rental cancel mutation right after the status flip.
  * Loops every active accounting connection for the tenant and voids the open

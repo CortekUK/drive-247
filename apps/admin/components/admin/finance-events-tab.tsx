@@ -111,7 +111,7 @@ export function FinanceEventsTab({ tenantId }: { tenantId: string }) {
             <Activity className="h-4 w-4" /> Finance Sync · Financial Events
           </CardTitle>
           <CardDescription>
-            Internal ledger feeding the Xero/Zoho sync layer. Most recent 200 events for this tenant.
+            Internal ledger feeding the Xero sync layer. Most recent 200 events for this tenant.
             Populated automatically by edge functions (payments, refunds, damages, mileage, deposits, supercharger costs).
           </CardDescription>
         </CardHeader>

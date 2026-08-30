@@ -14,7 +14,7 @@
  */
 
 /** Features gated on subscription tier. */
-export type GatedFeature = "finance_sync"; // Xero / Zoho Books integration (Growth+)
+export type GatedFeature = "finance_sync"; // Xero integration (Growth+)
 
 export type Tier = "basic" | "pro" | "growth";
 

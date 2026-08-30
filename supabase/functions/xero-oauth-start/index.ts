@@ -72,9 +72,9 @@ Deno.serve(async (req) => {
       return errorResponse("Only admin or head_admin can connect Xero", 403);
     }
 
-    // Check server configuration BEFORE writing anything — see the matching
-    // comment in zoho-oauth-start. Persisting a nonce we already know cannot be
-    // redeemed just leaves an orphan row behind on every failed click.
+    // Check server configuration BEFORE writing anything. Persisting a nonce we
+    // already know cannot be redeemed just leaves an orphan row behind on every
+    // failed click.
     //
     // The secret is checked here too even though only the callback uses it: a
     // half-configured server would otherwise pass this step, redirect the

@@ -2,7 +2,7 @@
  * AccountingConnectionExpiredBanner — Sprint 6 hardening.
  *
  * Top-of-app banner that appears whenever the tenant has an expired/error
- * connection to Xero or Zoho. The `refresh-accounting-tokens` cron flips
+ * connection to Xero. The `refresh-accounting-tokens` cron flips
  * connection.status='expired' after 3 consecutive 4xx token refreshes and
  * inserts a reminders row with rule_code='accounting_connection_expired'.
  *
@@ -40,7 +40,7 @@ export function AccountingConnectionExpiredBanner() {
   if (hideOnSettings) return null;
   void onAccountingPage; // referenced for future granularity if needed
 
-  const providerLabel = expired.provider === "xero" ? "Xero" : "Zoho Books";
+  const providerLabel = "Xero";
 
   return (
     <div className="border-b border-amber-200 bg-amber-50">

@@ -1,5 +1,5 @@
 /**
- * useAccountingBanners — the Xero / Zoho connection notice, as a stack source.
+ * useAccountingBanners — the Xero connection notice, as a stack source.
  *
  * WHY THIS EXISTS RATHER THAN AN BOLTED ONTO THE OLD COMPONENT
  * -------------------------------------------------------------
@@ -44,7 +44,7 @@ export function useAccountingBanners(): AppBanner[] {
     );
     if (!broken) return [];
 
-    const providerLabel = broken.provider === "xero" ? "Xero" : "Zoho Books";
+    const providerLabel = "Xero";
 
     return [
       {
