@@ -3,16 +3,16 @@
  *
  * WHY THIS EXISTS
  * The portal grew seven bespoke banners (platform-status, bonzah-pending,
- * go-live, maintenance, accounting-connection-expired, low-credits,
+ * go-live, maintenance, low-credits,
  * bonzah-status). Three of them rolled their own `localStorage` dismissal with
  * three different key shapes; the other four cannot be dismissed at all, and
- * `accounting-connection-expired-banner.tsx` imports `X` from lucide without
+ * a connection-expired banner imports `X` from lucide without
  * ever rendering it — a half-finished dismiss affordance frozen mid-thought.
  * Nothing coordinates them, so N live conditions means N stacked bars.
  *
  * This module is the vocabulary the stack speaks. It is deliberately generic:
  * it knows about SEVERITY, ORDER and DISMISSAL, and nothing about deposits,
- * Xero, credits or Bonzah. A source hook produces `AppBanner[]`; the stack
+ * credits or Bonzah. A source hook produces `AppBanner[]`; the stack
  * renders them. That seam is what lets the seven existing banners move in one
  * at a time rather than in a single risky rewrite.
  *
@@ -178,7 +178,7 @@ export interface AppBanner {
 
   /**
    * Hide while the operator is already on the page that fixes it.
-   * The Xero banner does this with an inline `pathname?.startsWith("/settings")`
+   * A settings-scoped banner does this with an inline `pathname?.startsWith("/settings")`
    * today; this hoists that idiom so every banner gets it for free.
    */
   hideOnPathPrefix?: string[];

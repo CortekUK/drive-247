@@ -123,9 +123,9 @@ export const RefundDialog = ({
     try {
       // Round to whole cents HERE, at the source. The percentage path produced
       // values like 16.665, which each destination then rounded independently:
-      // Stripe from Math.round(x*100), the ledger via a numeric(12,2) cast, and
-      // the Xero/Zoho credit note from its own Math.round — so one refund could
-      // be recorded as three different amounts that never reconcile. Nothing
+      // Stripe from Math.round(x*100) and the ledger via a numeric(12,2) cast
+      // — so one refund could be recorded as two different amounts that never
+      // reconcile. Nothing
       // downstream can repair a sub-cent input; it can only round it its own way.
       const rawRefundAmount = data.refundType === "full"
         ? maxRefundAmount

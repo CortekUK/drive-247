@@ -137,7 +137,6 @@ const settingsTabGroups = [
   {
     label: "Integrations",
     items: [
-      { value: 'accounting', icon: Banknote, label: 'Accounting' },
       { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
       { value: 'insurance', icon: Shield, label: 'Insurance' },
       { value: 'esign', icon: FileSignature, label: 'E-Signatures' },
