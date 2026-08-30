@@ -394,6 +394,28 @@ export function usePlatformStatus(): PlatformStatus {
       comingSoon: true,
       icon: "whatsapp",
     },
+    {
+      id: "cmd-driver-verification",
+      label: "CMD Driver Verification",
+      description: "Automated driver licence & identity checks",
+      isComplete: false,
+      actionLabel: "Learn more",
+      actionPath: "/settings?tab=requirements",
+      priority: 22,
+      comingSoon: true,
+      icon: "cmd-driver",
+    },
+    {
+      id: "cmd-insurance-verification",
+      label: "CMD Insurance Verification",
+      description: "Automated motor insurance validation",
+      isComplete: false,
+      actionLabel: "Learn more",
+      actionPath: "/settings?tab=insurance",
+      priority: 23,
+      comingSoon: true,
+      icon: "cmd-insurance",
+    },
   ];
 
   const activeItems = checklist.filter((i) => !i.comingSoon);
