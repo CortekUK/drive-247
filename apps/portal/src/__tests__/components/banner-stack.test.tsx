@@ -428,7 +428,7 @@ describe("scope and path filtering", () => {
     pathname = "/settings";
     mount(
       <BannerStack
-        banners={[banner("accounting", "warning", { hideOnPathPrefix: ["/settings"] })]}
+        banners={[banner("xero", "warning", { hideOnPathPrefix: ["/settings"] })]}
       />,
     );
     expect(renderedIds()).toEqual([]);
