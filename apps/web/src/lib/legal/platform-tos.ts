@@ -254,7 +254,7 @@ export const PLATFORM_TOS_SECTIONS: TosSection[] = [
       {
         t: "p",
         text:
-          "Insurance products made available through or in connection with the Platform (including third-party integrations such as Bonzah, where applicable) are supplied by independent, licensed insurance providers who are not affiliated with Drive247. Drive247 is not an insurer, insurance broker, managing general agent, or underwriter. Drive247 accepts no responsibility or liability for underwriting decisions, policy terms, coverage determinations, premium calculations, or claims handling, all of which are the sole responsibility of the relevant insurance provider and the Customer.",
+          "Insurance products made available through or in connection with the Platform (including third-party integrations such as Bonzah or Inshur, where applicable) are supplied by independent, licensed insurance providers who are not affiliated with Drive247. Drive247 is not an insurer, insurance broker, managing general agent, or underwriter. Drive247 accepts no responsibility or liability for underwriting decisions, policy terms, coverage determinations, premium calculations, or claims handling, all of which are the sole responsibility of the relevant insurance provider and the Customer.",
       },
     ],
   },
@@ -276,7 +276,7 @@ export const PLATFORM_TOS_SECTIONS: TosSection[] = [
       {
         t: "p",
         text:
-          "The Platform may integrate with, or provide access to, Third-Party Services, including Stripe, identity verification providers, e-signature providers, telematics and vehicle-tracking providers, communications providers (including SMS and WhatsApp messaging providers), artificial-intelligence services, and other third-party systems. Drive247 does not control, and is not liable for, the availability, performance, accuracy, security, or business practices of any Third-Party Service, including outages, API changes, pricing changes, or discontinuation of any Third-Party Service. Your use of any Third-Party Service is subject to that provider's own terms and policies. Drive247 does not guarantee that any specific third-party integration (including, without limitation, Stripe, Bonzah, Tesla, or WhatsApp) will remain available throughout the term of a Subscription.",
+          "The Platform may integrate with, or provide access to, Third-Party Services, including Stripe, identity verification providers, e-signature providers, telematics and vehicle-tracking providers, communications providers (including SMS and WhatsApp messaging providers), artificial-intelligence services, and other third-party systems. Drive247 does not control, and is not liable for, the availability, performance, accuracy, security, or business practices of any Third-Party Service, including outages, API changes, pricing changes, or discontinuation of any Third-Party Service. Your use of any Third-Party Service is subject to that provider's own terms and policies. Drive247 does not guarantee that any specific third-party integration (including, without limitation, Stripe, Bonzah, Inshur, Tesla, or WhatsApp) will remain available throughout the term of a Subscription.",
       },
     ],
   },

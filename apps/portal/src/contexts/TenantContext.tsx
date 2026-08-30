@@ -27,8 +27,9 @@ interface Tenant {
   // The tenant's Stripe Connect mode — i.e. whether renters are being charged
   // real money. Not the same as subscription_stripe_mode, which is how the
   // tenant pays US. Loaded because several safety warnings compare it against
-  // an integration's own mode, and those warnings silently never fired while
-  // this column was absent from the select.
+  // an integration's own mode: "INSHUR is simulated but Stripe is LIVE" means a
+  // renter can be charged for cover that does not exist, and that warning
+  // silently never fired while this column was absent from the select.
   stripe_mode: 'test' | 'live' | null;
   // Which processor takes this tenant's customer money. Drives every
   // operator-facing label that used to say "Stripe" unconditionally.
@@ -36,6 +37,16 @@ interface Tenant {
   // select cannot lock the login page out the way an ungranted column would.
   payment_provider: 'stripe' | 'square' | null;
   subscription_stripe_mode: 'test' | 'live' | null;
+  integration_inshur: boolean | null;
+  inshur_mode: 'mock' | 'test' | 'live' | null;
+  inshur_customer_number: string | null;
+  inshur_policy_number: string | null;
+  inshur_states_allowed: string[] | null;
+  inshur_states_synced_at: string | null;
+  inshur_billing_mode: 'host_absorbs' | 'renter_pays' | null;
+  // Credentials (inshur_username / inshur_password / inshur_2fa_token) are
+  // deliberately NOT loaded here. This context is read by every page; the
+  // Settings panel and useInshur() fetch what they need on their own.
   timezone: string | null;
   currency_code: string | null;
   distance_unit: 'km' | 'miles' | null;
@@ -104,6 +115,9 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 const TENANT_CORE_COLUMNS =
   'id, slug, company_name, status, contact_email, phone, admin_name, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
+
+const TENANT_INSHUR_COLUMNS =
+  'integration_inshur, inshur_mode, inshur_customer_number, inshur_policy_number, inshur_states_allowed, inshur_states_synced_at, inshur_billing_mode';
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
@@ -239,14 +253,25 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           .in('status', ['active', 'suspended'])
           .single();
 
+      let { data, error: queryError } = await queryTenant(
+        `${TENANT_CORE_COLUMNS}, ${TENANT_INSHUR_COLUMNS}`
+      );
+
       // `anon` holds COLUMN-level grants on `tenants`, not a table grant
       // (20260723090000_lock_down_tenants_rls.sql), and this provider runs on
       // the login page where there is no session. A column without a grant does
       // not come back null — Postgres refuses the whole row, so one ungranted
       // column takes down branding and login for every tenant. That has already
-      // happened once, with customer_theme_mode. Every column added to
-      // TENANT_CORE_COLUMNS must be GRANTed SELECT to anon.
-      const { data, error: queryError } = await queryTenant(TENANT_CORE_COLUMNS);
+      // happened once, with customer_theme_mode. Retry without the newest
+      // columns rather than let a missing GRANT lock operators out.
+      if (queryError && queryError.code !== 'PGRST116') {
+        console.warn(
+          '[TenantContext] Full tenant select failed; retrying without the INSHUR columns. ' +
+            'If this persists, GRANT SELECT on them to anon. Cause:',
+          queryError.message
+        );
+        ({ data, error: queryError } = await queryTenant(TENANT_CORE_COLUMNS));
+      }
 
       if (queryError) {
         if (queryError.code === 'PGRST116') {

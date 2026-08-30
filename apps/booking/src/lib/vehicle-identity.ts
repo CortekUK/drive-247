@@ -73,7 +73,7 @@ export function canRevealRegistration(tenant: TenantLike): boolean {
  * `reg` is appended only when the tenant permits it, so a hidden plate is never
  * sent to the browser at all — not merely hidden with CSS or skipped in JSX.
  * `vin` is NEVER here: no customer surface displays it, and it is the identity
- * key an insurer binds cover against.
+ * key INSHUR binds cover against.
  *
  * Anything absent is absent on purpose. Before adding one, ask whether a
  * stranger reading it would harm the operator — see the lockbox note above.

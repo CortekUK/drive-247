@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -41,6 +41,7 @@ import { AccountingSettings } from '@/components/settings/accounting-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
+import { InshurSettings } from '@/components/settings/inshur-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
@@ -173,7 +174,7 @@ const Settings = () => {
     'requirements', 'duration', 'lockbox',
     'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments', 'accounting',
     'reminders', 'push', 'templates',
-    'messaging', 'insurance', 'esign', 'tesla', 'blacklist',
+    'messaging', 'insurance', 'inshur', 'esign', 'tesla', 'blacklist',
     'subscription',
   ];
   const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
@@ -1781,6 +1782,7 @@ const Settings = () => {
                 { value: 'templates', icon: FileText, label: 'Templates' },
                 { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
                 { value: 'insurance', icon: Shield, label: 'Insurance' },
+                { value: 'inshur', icon: ShieldCheck, label: 'INSHUR' },
                 { value: 'esign', icon: FilePenLine, label: 'E-Sign' },
                 { value: 'tesla', icon: Zap, label: 'Tesla' },
                 { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
@@ -5220,6 +5222,11 @@ const Settings = () => {
         {/* Insurance Tab */}
         <TabsContent value="insurance" className="space-y-6">
           <BonzahSettings />
+        </TabsContent>
+
+        {/* INSHUR Period Z Tab */}
+        <TabsContent value="inshur" className="space-y-6">
+          <InshurSettings />
         </TabsContent>
 
         {/* E-Signatures Tab */}

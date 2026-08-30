@@ -24,11 +24,21 @@ import { DollarSign, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VerificationsTab } from "@/components/insurance/verifications-tab";
 import { bonzahBlockedReason } from "@/lib/bonzah";
+import { supabaseUntyped } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { useInshur } from "@/hooks/use-inshur";
+import type { InshurCoverage } from "@/hooks/use-inshur-coverage";
+import {
+  INSHUR_BRAND,
+  InshurIdCardButton,
+  InshurModeChip,
+  InshurStatusBadge,
+} from "@/components/rentals/inshur-coverage-block";
 
-/** Two providers share this list, so a boolean discriminator does not work:
- *  `uploaded` documents can name Bonzah as their carrier while not being a
- *  Bonzah-issued policy at all. */
-type InsuranceProviderKey = "bonzah" | "uploaded";
+/** Three providers now share this list, so a boolean discriminator no longer
+ *  works: `uploaded` documents can name Bonzah as their carrier while not being
+ *  a Bonzah-issued policy at all. */
+type InsuranceProviderKey = "bonzah" | "inshur" | "uploaded";
 
 interface InsuranceDoc {
   id: string;
@@ -51,6 +61,9 @@ interface InsuranceDoc {
   payment_status?: "paid" | "partial" | "unpaid" | null;
   remaining_amount?: number | null;
   policy_type?: string | null;
+  /** INSHUR-only: the coverage row, carried whole so the ID card button and the
+   *  PDF export can read it without a second lookup. */
+  inshur?: InshurCoverage;
 }
 
 type PaymentState = "paid" | "partial" | "unpaid";
@@ -127,7 +140,37 @@ export default function InsurancesList() {
     enabled: !!tenant,
   });
 
+  // INSHUR is per-tenant and off by default. `enabled` is tri-state — null
+  // means the config could not be read, which must not render as "off" while
+  // coverage rows may exist.
+  const inshur = useInshur();
+  const inshurEnabled = inshur.enabled === true;
+
+  const {
+    data: inshurCoverage = [],
+    isLoading: isLoadingInshur,
+    error: inshurError,
+    refetch: refetchInshur,
+  } = useQuery({
+    queryKey: ["inshur-coverage-insurances", tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await supabaseUntyped
+        .from("inshur_rental_coverage")
+        .select(`
+          *,
+          customers!inshur_rental_coverage_customer_id_fkey(name)
+        `)
+        .eq("tenant_id", tenant!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []) as Array<InshurCoverage & { customers?: { name: string } | null }>;
+    },
+    enabled: !!tenant?.id && inshurEnabled,
+  });
+
   // Fetch insurance ledger entries to derive payment status per policy.
+  // Both providers write into the same two categories and are told apart by the
+  // reference prefix, so one round trip covers them.
   const { data: insuranceLedger = [], isLoading: isLoadingLedger } = useQuery({
     queryKey: ["insurance-ledger", tenant?.id],
     queryFn: async () => {
@@ -137,28 +180,31 @@ export default function InsurancesList() {
         .eq("tenant_id", tenant!.id)
         .in("category", ["Insurance", "Extension Insurance"])
         .eq("type", "Charge")
-        .like("reference", "BONZAH-%");
+        .or("reference.like.BONZAH-%,reference.like.INSHUR-%");
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenant,
   });
 
-  // Map BONZAH-{policy_db_id} → { state, remaining, amount }
+  // Map BONZAH-{policy_db_id} / INSHUR-{coverage_id} → { state, remaining, amount }
   type LedgerFacts = { state: PaymentState; remaining: number; amount: number };
   const paymentByBonzahId = new Map<string, LedgerFacts>();
+  const paymentByInshurId = new Map<string, LedgerFacts>();
   for (const entry of insuranceLedger) {
     const ref = entry.reference || "";
-    const policyDbId = ref.replace(/^BONZAH-/, "");
+    const isInshur = ref.startsWith("INSHUR-");
+    const policyDbId = ref.replace(/^(BONZAH|INSHUR)-/, "");
     if (!policyDbId || policyDbId === ref) continue;
     const amount = Number(entry.amount || 0);
     const remaining = Number(entry.remaining_amount || 0);
     const state: PaymentState =
       remaining <= 0 ? "paid" : remaining < amount ? "partial" : "unpaid";
-    paymentByBonzahId.set(policyDbId, { state, remaining: Math.max(remaining, 0), amount });
+    const target = isInshur ? paymentByInshurId : paymentByBonzahId;
+    target.set(policyDbId, { state, remaining: Math.max(remaining, 0), amount });
   }
 
-  const isLoading = isLoadingDocs || isLoadingBonzah || isLoadingLedger;
+  const isLoading = isLoadingDocs || isLoadingBonzah || isLoadingLedger || isLoadingInshur;
 
   // Combine all insurance documents
   const allInsurances: InsuranceDoc[] = [
@@ -168,6 +214,30 @@ export default function InsurancesList() {
         ? 'bonzah'
         : 'uploaded') as InsuranceProviderKey,
     })),
+    ...inshurCoverage.map((c: any) => {
+      const payment = paymentByInshurId.get(c.id);
+      const simulated = c.source_mode !== 'live';
+      return {
+        id: `inshur-${c.id}`,
+        document_name: `INSHUR Period Z${c.inshur_rental_id ? ` — ${c.inshur_rental_id}` : ''}`,
+        created_at: c.created_at,
+        document_type: 'Insurance',
+        status: c.status,
+        customer_id: c.customer_id,
+        customers: c.customers || undefined,
+        file_url: null,
+        provider: 'inshur' as InsuranceProviderKey,
+        rental_id: c.rental_id,
+        // No ledger charge means the operator absorbs the cost — INSHUR invoices
+        // them monthly per VIN. Rendering $0.00 would say the opposite.
+        premium_amount: payment ? payment.amount : null,
+        payment_status: payment?.state || null,
+        remaining_amount: payment?.remaining ?? null,
+        policy_type: null,
+        inshur: c as InshurCoverage,
+        insurance_provider: simulated ? 'INSHUR (simulated)' : 'INSHUR',
+      };
+    }),
     ...bonzahPolicies.map((policy: any) => {
       const payment = paymentByBonzahId.get(policy.id);
       return {
@@ -195,7 +265,8 @@ export default function InsurancesList() {
   const filteredInsurances = allInsurances.filter((doc) => {
     const needle = searchQuery.toLowerCase();
     const matchesSearch = doc.document_name.toLowerCase().includes(needle) ||
-                         doc.customers?.name?.toLowerCase().includes(needle);
+                         doc.customers?.name?.toLowerCase().includes(needle) ||
+                         (doc.inshur?.vin?.toLowerCase().includes(needle) ?? false);
     const matchesProvider = !providerFilter || doc.provider === providerFilter;
     return matchesSearch && matchesProvider;
   });
@@ -334,11 +405,41 @@ export default function InsurancesList() {
     addRow("Created", format(new Date(doc.created_at), "MMM dd, yyyy HH:mm"));
     addRow(
       "Source",
-      doc.provider === "bonzah" ? "Bonzah Insurance" : "Uploaded Document",
+      doc.provider === "bonzah"
+        ? "Bonzah Insurance"
+        : doc.provider === "inshur"
+        ? "INSHUR Period Z"
+        : "Uploaded Document",
     );
     if (doc.insurance_provider) addRow("Provider", doc.insurance_provider);
     if (doc.document_type) addRow("Document Type", doc.document_type);
     if (doc.status) addRow("Status", doc.status.charAt(0).toUpperCase() + doc.status.slice(1));
+
+    // INSHUR coverage details
+    if (doc.provider === "inshur" && doc.inshur) {
+      const c = doc.inshur;
+      y += 5;
+      pdf.setDrawColor(200);
+      pdf.line(margin, y, pageWidth - margin, y);
+      y += 10;
+
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(40);
+      pdf.text("INSHUR Period Z Details", margin, y);
+      y += 9;
+
+      if (c.inshur_rental_id) addRow("Rental Period", c.inshur_rental_id);
+      addRow("VIN", c.vin);
+      if (c.state) addRow("Garaging State", c.state);
+      if (c.usage_type) addRow("Usage Type", c.usage_type);
+      // Verbatim as sent to ABI — recomputing them would not prove what was bought.
+      if (c.start_time_sent) addRow("Cover Start", `${c.start_time_sent} ${c.timezone || ""}`.trim());
+      if (c.end_time_sent) addRow("Cover End", `${c.end_time_sent} ${c.timezone || ""}`.trim());
+      if (c.has_comp_coll != null) addRow("Comp & Collision", c.has_comp_coll ? "Included" : "Liability only");
+      addRow("Mode", c.source_mode === "live" ? "Live" : c.source_mode === "test" ? "TEST ACCOUNT" : "SIMULATED");
+      if (c.error_message) addRow("Last Error", c.error_message.slice(0, 80));
+    }
 
     // For Bonzah policies, add extra details
     if (doc.provider === "bonzah" && doc.id.startsWith("bonzah-")) {
@@ -418,6 +519,22 @@ export default function InsurancesList() {
 
     // Footer
     y = pdf.internal.pageSize.getHeight() - 15;
+    // An exported record must carry its own provenance — the file outlives this
+    // screen, and a simulated policy that reads as real in a PDF is the exact
+    // failure the SIMULATED marker exists to prevent.
+    const simulated = doc.provider === "inshur" && doc.inshur && doc.inshur.source_mode !== "live";
+    if (simulated) {
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(180, 83, 9);
+      pdf.text(
+        doc.inshur!.source_mode === "test"
+          ? "TEST ACCOUNT — this record represents no insurance and insures nobody."
+          : "SIMULATED — generated by the Drive247 INSHUR simulator. This record represents no insurance.",
+        margin,
+        y - 6,
+      );
+    }
     pdf.setFontSize(8);
     pdf.setFont("helvetica", "normal");
     pdf.setTextColor(150);
@@ -426,7 +543,7 @@ export default function InsurancesList() {
 
     const customerName = (doc.customers?.name || "Unknown").replace(/[^a-zA-Z0-9-_ ]/g, "_");
     const docName = doc.document_name.replace(/[^a-zA-Z0-9-_ ]/g, "_").slice(0, 50);
-    const fileName = `${customerName}_${docName}.pdf`;
+    const fileName = `${simulated ? "SIMULATED_" : ""}${customerName}_${docName}.pdf`;
 
     return { blob: pdf.output("blob"), fileName };
   };
@@ -480,7 +597,7 @@ export default function InsurancesList() {
     } finally {
       setIsDownloadingAll(false);
     }
-  }, [allInsurances, bonzahPolicies, tenant]);
+  }, [allInsurances, bonzahPolicies, inshurCoverage, tenant]);
 
   if (isLoading) {
     return (
@@ -498,7 +615,9 @@ export default function InsurancesList() {
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold">Insurances</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
-            Manage customer insurance documents and Bonzah policies
+            {inshurEnabled
+              ? "Manage customer insurance documents, Bonzah policies and INSHUR Period Z cover"
+              : "Manage customer insurance documents and Bonzah policies"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -552,8 +671,25 @@ export default function InsurancesList() {
         </div>
       )}
 
+      {inshurEnabled && inshurError && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-3">
+          <ShieldCheck className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm flex-1">
+            <p className="font-medium text-amber-700 dark:text-amber-400">
+              Couldn&apos;t load INSHUR cover
+            </p>
+            <p className="text-muted-foreground mt-0.5">
+              The list below is missing INSHUR rows. Everything else is up to date.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => refetchInshur()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className={cn("grid grid-cols-2 gap-3 sm:gap-4", inshurEnabled ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
         <Card className="bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20">
           <CardContent className="p-3 sm:p-4">
             <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Total Insurances</p>
@@ -568,6 +704,22 @@ export default function InsurancesList() {
             <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">Via Bonzah integration</p>
           </CardContent>
         </Card>
+        {inshurEnabled && (
+          <Card className="border-[#3D2BFF]/20" style={{ backgroundColor: 'rgba(61,43,255,0.06)' }}>
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">INSHUR Period Z</p>
+              <p className="text-xl sm:text-2xl font-bold mt-1 break-all">{allInsurances.filter(d => d.provider === 'inshur').length}</p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-tight">
+                {inshurCoverage.filter((c: any) => c.status === 'active').length} on cover now
+                {inshurCoverage.some((c: any) => c.status === 'failed') && (
+                  <span className="text-red-600 font-medium">
+                    {' '}· {inshurCoverage.filter((c: any) => c.status === 'failed').length} failed
+                  </span>
+                )}
+              </p>
+            </CardContent>
+          </Card>
+        )}
         <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20">
           <CardContent className="p-3 sm:p-4">
             <p className="text-xs sm:text-sm font-medium text-muted-foreground leading-tight">Uploaded</p>
@@ -634,6 +786,25 @@ export default function InsurancesList() {
           Bonzah Only
           {providerFilter === 'bonzah' && <X className="ml-1 h-3.5 w-3.5" />}
         </button>
+        {inshurEnabled && (
+          <button
+            onClick={() => {
+              setProviderFilter(providerFilter === 'inshur' ? null : 'inshur');
+              setCurrentPage(1);
+            }}
+            aria-pressed={providerFilter === 'inshur'}
+            className="inline-flex items-center gap-2 px-3 h-8 rounded-md border text-xs font-medium whitespace-nowrap transition-colors shrink-0"
+            style={{
+              borderColor: providerFilter === 'inshur' ? INSHUR_BRAND : 'rgba(61, 43, 255, 0.3)',
+              backgroundColor: providerFilter === 'inshur' ? INSHUR_BRAND : 'transparent',
+              color: providerFilter === 'inshur' ? '#fff' : INSHUR_BRAND,
+            }}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            INSHUR Only
+            {providerFilter === 'inshur' && <X className="ml-1 h-3.5 w-3.5" />}
+          </button>
+        )}
       </div>
 
       {/* Insurance Table */}
@@ -643,6 +814,8 @@ export default function InsurancesList() {
           title="No insurance documents found"
           description={searchQuery || providerFilter
             ? "No insurance documents match your search criteria"
+            : inshurEnabled
+            ? "Start INSHUR cover from a rental, sell a Bonzah policy, or upload a customer's own policy."
             : "There are no insurance documents in the system yet."}
           actionLabel={providerFilter ? "Clear filter" : undefined}
           onAction={providerFilter ? () => { setProviderFilter(null); setCurrentPage(1); } : undefined}
@@ -666,7 +839,14 @@ export default function InsurancesList() {
                 </TableHeader>
                 <TableBody>
                   {paginatedDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
+                    <TableRow
+                      key={doc.id}
+                      className={cn(
+                        doc.provider === 'inshur' &&
+                          doc.inshur?.source_mode !== 'live' &&
+                          'border-l-4 border-l-amber-400',
+                      )}
+                    >
                       <TableCell className="font-medium">
                         <div className="flex flex-wrap items-center gap-2">
                           {doc.document_name}
@@ -679,6 +859,19 @@ export default function InsurancesList() {
                               <img src="/bonzah-logo-dark.svg" alt="" className="h-2.5 w-auto hidden dark:block" />
                             </span>
                           )}
+                          {doc.provider === 'inshur' && (
+                            <>
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                                style={{ backgroundColor: 'rgba(61, 43, 255, 0.1)', color: INSHUR_BRAND }}
+                              >
+                                INSHUR
+                              </span>
+                              {/* Next to the name, never only in the status column —
+                                  status columns get scanned past. */}
+                              <InshurModeChip mode={doc.inshur?.source_mode} />
+                            </>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="font-medium text-foreground">
@@ -687,12 +880,23 @@ export default function InsurancesList() {
                       <TableCell className="text-right text-sm font-mono">
                         {doc.premium_amount != null ? (
                           `$${doc.premium_amount.toFixed(2)}`
+                        ) : doc.provider === 'inshur' ? (
+                          // No renter charge means the operator absorbs it — ABI
+                          // invoices them monthly per VIN. "$0.00" would lie.
+                          <span
+                            className="text-xs text-muted-foreground font-sans"
+                            title="Cover is included in the rental. INSHUR invoices you monthly per VIN — the renter isn't charged a separate line."
+                          >
+                            Included
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {doc.provider === 'bonzah' ? (
+                        {doc.provider === 'inshur' ? (
+                          <InshurStatusBadge status={doc.status} />
+                        ) : doc.provider === 'bonzah' ? (
                           <PolicyStatusBadge status={doc.status} />
                         ) : (
                           <span className="text-xs text-muted-foreground">{doc.document_type || "—"}</span>
@@ -727,6 +931,33 @@ export default function InsurancesList() {
                                 <ExternalLink className="h-4 w-4" />
                               </Button>
                             </>
+                          ) : doc.provider === 'inshur' ? (
+                            <div className="flex items-center gap-2">
+                              {(doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => setPaymentDoc(doc)}
+                                  className="text-xs"
+                                >
+                                  <DollarSign className="h-4 w-4 mr-1" />
+                                  Add Payment
+                                </Button>
+                              )}
+                              {doc.inshur && (doc.inshur.status === 'active' || doc.inshur.status === 'ended') && (
+                                <InshurIdCardButton coverage={doc.inshur} className="text-xs" />
+                              )}
+                              {doc.rental_id && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/rentals/${doc.rental_id}`)}
+                                  className="text-xs"
+                                >
+                                  <ExternalLink className="h-4 w-4 mr-1" />
+                                  View Rental
+                                </Button>
+                              )}
+                            </div>
                           ) : doc.provider === 'bonzah' ? (
                             <div className="flex items-center gap-2">
                               {(doc.payment_status === "unpaid" || doc.payment_status === "partial") && doc.rental_id && (
