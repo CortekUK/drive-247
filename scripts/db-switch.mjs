@@ -23,6 +23,9 @@ const APPS = ["portal", "booking", "admin", "web"];
 // --- Staging (Supabase branch clone) values ---
 const STAGING = {
   NEXT_PUBLIC_SUPABASE_URL: "https://ksmreaadhbirzakkxqrq.supabase.co",
+  // Must be rewritten too — it was previously left on the prod ref, so anything
+  // reading PROJECT_ID on staging silently addressed production.
+  NEXT_PUBLIC_SUPABASE_PROJECT_ID: "ksmreaadhbirzakkxqrq",
   NEXT_PUBLIC_SUPABASE_ANON_KEY:
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzbXJlYWFkaGJpcnpha2t4cXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MzI5MTIsImV4cCI6MjA5NjMwODkxMn0.3oKl4PxS0D5rkV5MsgxBwHXUUfleRgmzdZHZf_uwk0s",
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_GUx5Z4qoLYZpkjgbstLHjw_2BrPf4YL",

@@ -33,11 +33,71 @@ Deno.serve(async (req) => {
     console.log("[PROCESS-PENDING] Looking for payment with session:", checkoutSessionId);
 
     // Find the payment by checkout session ID
-    const { data: payment, error: findError } = await supabase
+    let { data: payment, error: findError } = await supabase
       .from('payments')
-      .select('id, status, rental_id, tenant_id, amount, target_categories, extension_id, platform_account')
+      .select('id, status, rental_id, tenant_id, amount, target_categories, extension_id, platform_account, customer_id, vehicle_id')
       .eq('stripe_checkout_session_id', checkoutSessionId)
       .maybeSingle();
+
+    // SELF-HEAL for auto-extension pay-links whose Pending payments row was never
+    // persisted. auto-extend-rentals (pay-link path) creates the checkout session
+    // and stamps rental_extensions.stripe_checkout_session_id, then inserts the
+    // Pending payments row — but that insert was historically UNCHECKED, so a
+    // silent failure left a payable session with NO payments row. When the
+    // customer then paid, BOTH reconcilers (this poller + the webhook extension
+    // branch) look the row up by session id, find nothing, and no-op — the
+    // extension sits "approved/unpaid", the rental never rolls forward, and the
+    // money is stranded (RevTek / Sabrina Jones $294.25, post UK→UAE migration).
+    //
+    // Recover by reconstructing the missing row from the extension record. The
+    // normal paid-flow below (mark Completed -> apply-payment -> finalize_rental_extension)
+    // then finalizes it. This is account-agnostic (UK or UAE) because platform_account
+    // is taken from the rental the extension belongs to.
+    if (!findError && !payment) {
+      const { data: ext } = await supabase
+        .from('rental_extensions')
+        .select('id, rental_id, tenant_id, total_amount, status')
+        .eq('stripe_checkout_session_id', checkoutSessionId)
+        .maybeSingle();
+      if (ext && ext.status !== 'paid' && ext.status !== 'active') {
+        // platform_account must follow the RENTAL the charge lives on, not the
+        // tenant's current model (which may have flipped UK->UAE since booking).
+        const { data: rentalRow } = await supabase
+          .from('rentals')
+          .select('customer_id, vehicle_id, platform_account')
+          .eq('id', ext.rental_id)
+          .maybeSingle();
+        const { data: created, error: createErr } = await supabase
+          .from('payments')
+          .insert({
+            rental_id: ext.rental_id,
+            customer_id: rentalRow?.customer_id ?? null,
+            vehicle_id: rentalRow?.vehicle_id ?? null,
+            tenant_id: ext.tenant_id,
+            extension_id: ext.id,
+            amount: ext.total_amount,
+            remaining_amount: ext.total_amount,
+            payment_date: new Date().toISOString().split('T')[0],
+            method: 'Card',
+            payment_type: 'Payment',
+            status: 'Pending',
+            verification_status: 'pending',
+            capture_status: 'requires_capture',
+            stripe_checkout_session_id: checkoutSessionId,
+            booking_source: 'auto_extend',
+            platform_account: rentalRow?.platform_account === 'uae' ? 'uae' : 'uk',
+            target_categories: ['Extension Rental', 'Extension Tax', 'Extension Service Fee', 'Extension Add-on', 'Extension Insurance'],
+          })
+          .select('id, status, rental_id, tenant_id, amount, target_categories, extension_id, platform_account, customer_id, vehicle_id')
+          .single();
+        if (createErr) {
+          console.error('[PROCESS-PENDING] extension self-heal: failed to reconstruct payments row:', createErr);
+        } else {
+          console.log('[PROCESS-PENDING] extension self-heal: reconstructed missing payments row', created.id, 'for extension', ext.id);
+          payment = created;
+        }
+      }
+    }
 
     if (findError || !payment) {
       return new Response(JSON.stringify({ ok: false, error: "Payment not found" }), {

@@ -907,13 +907,62 @@ serve(async (req) => {
           // Find payment by stripe_checkout_session_id and update status.
           // Use .maybeSingle() + deterministic ordering: duplicates exist in legacy
           // data and webhook retries can race. Prefer the most recent row.
-          const { data: extensionPayment, error: extPaymentError } = await supabase
+          let { data: extensionPayment, error: extPaymentError } = await supabase
             .from("payments")
             .select("id")
             .eq("stripe_checkout_session_id", session.id)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
+
+          // SELF-HEAL: auto-extend-rentals (pay-link path) historically inserted the
+          // Pending payments row with an UNCHECKED insert, so a silent failure left a
+          // payable extension session with NO row. Both this webhook and the poller
+          // then no-op'd, stranding the money (RevTek/Sabrina $294.25, post UK->UAE).
+          // Reconstruct the row from the extension record so the flow below finalizes.
+          if (!extensionPayment) {
+            const { data: ext } = await supabase
+              .from("rental_extensions")
+              .select("id, rental_id, tenant_id, total_amount, status")
+              .eq("stripe_checkout_session_id", session.id)
+              .maybeSingle();
+            if (ext && ext.status !== "paid" && ext.status !== "active") {
+              const { data: rentalRow } = await supabase
+                .from("rentals")
+                .select("customer_id, vehicle_id, platform_account")
+                .eq("id", ext.rental_id)
+                .maybeSingle();
+              const { data: created, error: createErr } = await supabase
+                .from("payments")
+                .insert({
+                  rental_id: ext.rental_id,
+                  customer_id: rentalRow?.customer_id ?? null,
+                  vehicle_id: rentalRow?.vehicle_id ?? null,
+                  tenant_id: ext.tenant_id,
+                  extension_id: ext.id,
+                  amount: ext.total_amount,
+                  remaining_amount: ext.total_amount,
+                  payment_date: new Date().toISOString().split("T")[0],
+                  method: "Card",
+                  payment_type: "Payment",
+                  status: "Pending",
+                  verification_status: "pending",
+                  capture_status: "requires_capture",
+                  stripe_checkout_session_id: session.id,
+                  booking_source: "auto_extend",
+                  platform_account: rentalRow?.platform_account === "uae" ? "uae" : "uk",
+                  target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
+                })
+                .select("id")
+                .single();
+              if (createErr) {
+                console.error("[LIVE MODE] extension self-heal: failed to reconstruct payments row:", createErr.message);
+              } else {
+                console.log("[LIVE MODE] extension self-heal: reconstructed missing payments row", created.id, "for extension", ext.id);
+                extensionPayment = created;
+              }
+            }
+          }
 
           if (extensionPayment) {
             await supabase
