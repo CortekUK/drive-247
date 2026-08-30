@@ -7,8 +7,8 @@ import type {
   ChatApiResponse,
   UseChatReturn,
 } from '@/types/chat';
+import { SUPABASE_URL_VALIDATED as SUPABASE_URL } from "@/integrations/supabase/client";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
 
 export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);

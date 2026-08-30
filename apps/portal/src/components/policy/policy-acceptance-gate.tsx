@@ -16,8 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Shield, LogOut } from "lucide-react";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
+import { SUPABASE_URL_VALIDATED as SUPABASE_URL, SUPABASE_ANON_KEY_VALIDATED as SUPABASE_ANON_KEY } from "@/integrations/supabase/client";
 
 export function PolicyAcceptanceGate() {
   const { appUser, signOut } = useAuth();
