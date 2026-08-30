@@ -242,10 +242,6 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   integrations: 'settings.integrations',
   messaging: 'settings.integrations',
   insurance: 'settings.integrations',
-  // Load-bearing in the wrong direction: canViewSettings() fails OPEN for an
-  // unmapped tab value, so omitting this line would expose the INSHUR ABI
-  // credentials to every manager regardless of their granted permissions.
-  inshur: 'settings.integrations',
   esign: 'settings.integrations',
   tesla: 'settings.integrations',
   blacklist: 'settings.integrations',

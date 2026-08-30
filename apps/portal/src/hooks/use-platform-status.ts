@@ -6,9 +6,6 @@ import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useBonzahBalance, getBonzahPortalUrl } from "@/hooks/use-bonzah-balance";
 import { useCreditWallet } from "@/hooks/use-credit-wallet";
 import { useGoLiveRequests } from "@/hooks/use-go-live-request";
-import { useInshur } from "@/hooks/use-inshur";
-import { useInshurFleetEligibility } from "@/hooks/use-inshur-eligibility";
-import { useInshurActiveCoverageCount } from "@/hooks/use-inshur-coverage";
 import { format } from "date-fns";
 
 export type IntegrationStatus =
@@ -74,15 +71,6 @@ export function usePlatformStatus(): PlatformStatus {
   } = useBonzahBalance();
   const { balance, testBalance } = useCreditWallet();
   const { getRequestStatus } = useGoLiveRequests();
-  const {
-    mode: inshurMode,
-    enabled: inshurEnabled,
-    hasCredentials: inshurHasCredentials,
-    configState: inshurConfigState,
-    simulatedWhileStripeLive,
-  } = useInshur();
-  const inshurFleet = useInshurFleetEligibility();
-  const { activeCount: inshurActiveCover } = useInshurActiveCoverageCount();
 
   // Extra queries for checklist items not covered by existing hooks
   const { data: extraData, isLoading: extraLoading } = useQuery({
@@ -147,58 +135,6 @@ export function usePlatformStatus(): PlatformStatus {
 
   const stripeMode = td?.stripe_mode ?? "test";
   const stripeComplete = !!stripeItem?.isComplete;
-
-  // --- INSHUR Period Z ---
-  // `enabled` is null while the config read is in flight or has failed; the
-  // TenantContext copy of the same flag is the fallback so a slow settings read
-  // does not demote a configured tenant to the "coming soon" row.
-  const inshurOn = inshurEnabled ?? tenant?.integration_inshur === true;
-  const inshurConfigUnknown = inshurConfigState === "unknown";
-  const inshurCredsComplete = inshurHasCredentials === true;
-
-  // Every branch keeps "could not determine" separate from "zero". A fleet
-  // whose eligibility could not be read must never render as "0 of 0 eligible",
-  // which reads as a fleet problem and sends the operator to ABI to fix nothing.
-  const inshurFleetValue = inshurFleet.isLoading
-    ? "—"
-    : inshurFleet.total == null
-      ? "Unavailable"
-      : `${inshurFleet.eligible} of ${inshurFleet.total}`;
-
-  // Most urgent first. Only one warning fits in the metric row.
-  const inshurWarning: { warning?: string; warningUrl?: string } = (() => {
-    // The Bonzah failure shape exactly: real money, simulated cover.
-    if (simulatedWhileStripeLive === true) {
-      return {
-        warning: "Cover is simulated while Stripe is live",
-        warningUrl: "/settings?tab=insurance",
-      };
-    }
-    if (inshurConfigUnknown) {
-      return {
-        warning: "Could not read your INSHUR settings",
-        warningUrl: "/settings?tab=insurance",
-      };
-    }
-    if (!inshurFleet.isLoading && inshurFleet.total == null) {
-      return { warning: "Fleet eligibility unavailable", warningUrl: "/vehicles" };
-    }
-    // Nothing eligible has two causes with two different fixes: vehicles ABI has
-    // rejected, versus vehicles nobody has asked about yet.
-    if (inshurFleet.eligible === 0 && inshurFleet.ineligible > 0) {
-      return { warning: "No vehicle is on Period X yet", warningUrl: "https://portal.abiweb.com" };
-    }
-    if (inshurFleet.eligible === 0 && inshurFleet.unchecked > 0) {
-      return { warning: "No vehicle has been checked yet", warningUrl: "/vehicles" };
-    }
-    if (inshurFleet.noVin != null && inshurFleet.noVin > 0) {
-      return {
-        warning: `${inshurFleet.noVin} vehicle${inshurFleet.noVin === 1 ? "" : "s"} missing a VIN`,
-        warningUrl: "/vehicles",
-      };
-    }
-    return {};
-  })();
 
   const checklist: ChecklistItem[] = [
     {
@@ -280,74 +216,6 @@ export function usePlatformStatus(): PlatformStatus {
         ? getRequestStatus("bonzah")
         : null,
     },
-    // A tenant without the integration gets the `comingSoon` variant, which is
-    // excluded from the progress denominator — otherwise shipping INSHUR would
-    // knock every other tenant's setup bar down on the day it lands.
-    inshurOn
-      ? {
-          id: "inshur",
-          label: "INSHUR Period Z",
-          description: inshurConfigUnknown
-            ? "Status unavailable · Could not read your INSHUR settings"
-            : !inshurCredsComplete
-              ? "Simulation mode · Add your ABI credentials to start writing cover"
-              : inshurMode === "live"
-                ? "Connected · Writing real per-rental cover"
-                : inshurMode === "test"
-                  ? "Connected · Test account — no renter is insured yet"
-                  : "Simulation mode · Nothing reaches INSHUR",
-          // Matches the Bonzah/Stripe semantics: complete means "credentials in
-          // place". Live-vs-test is carried by the pill and the go-live request,
-          // not by withholding the tick from an operator who has done their part.
-          isComplete: inshurCredsComplete,
-          actionLabel: inshurCredsComplete ? "Manage" : "Set up",
-          // tab=insurance is BONZAH's panel. The INSHUR panel is tab=inshur —
-          // the two live side by side in Settings and the names are one letter
-          // apart, so this is an easy and silent mis-route.
-          actionPath: "/settings?tab=inshur",
-          priority: 7,
-          integrationStatus: !inshurCredsComplete
-            ? "not_configured"
-            : inshurMode === "live"
-              ? "live"
-              : "test",
-          statusLabel: inshurConfigUnknown
-            ? "Unavailable"
-            : !inshurCredsComplete
-              ? "Not connected"
-              : inshurMode === "live"
-                ? "Live"
-                : inshurMode === "test"
-                  ? "Test account"
-                  : "Simulated",
-          // Simulation renders as TEST in this shared 9px pill rather than
-          // inventing a third state in the renderer. The unmissable simulation
-          // signalling lives on the INSHUR surfaces themselves.
-          mode: inshurMode === "live" ? "live" : "test",
-          metric: {
-            label: "Insurable vehicles",
-            value: inshurFleetValue,
-            ...inshurWarning,
-          },
-          secondaryMetric: {
-            label: "On cover now",
-            value: inshurActiveCover == null ? "—" : String(inshurActiveCover),
-          },
-          secondaryActionLabel: "Vehicles",
-          secondaryActionPath: "/vehicles",
-          goLiveStatus: inshurCredsComplete ? getRequestStatus("inshur") : null,
-        }
-      : {
-          id: "inshur",
-          label: "INSHUR Period Z",
-          description: "Per-rental liability cover for US fleets",
-          isComplete: false,
-          actionLabel: "Learn more",
-          actionPath: "/settings?tab=inshur",
-          priority: 24,
-          comingSoon: true,
-          icon: "inshur",
-        },
     {
       id: "boldsign",
       label: "BoldSign E-Sign",
