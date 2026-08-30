@@ -13,9 +13,6 @@ interface Tenant {
   admin_name: string | null;
   integration_veriff: boolean | null;
   integration_bonzah: boolean | null;
-  // Finance Sync — TRUE while an active accounting_connections row exists for
-  // this tenant. Flipped false by refresh-accounting-tokens / process-accounting-sync
-  // when the connection expires, so the Settings pill reflects reality.
   bonzah_brochure_url: string | null;
   bonzah_username: string | null;
   bonzah_mode: 'test' | 'live' | null;

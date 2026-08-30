@@ -4,7 +4,7 @@
  * WHY A REGISTRY AND NOT JUST RENDERING EACH BANNER
  * -------------------------------------------------
  * Seven banner components already render themselves independently
- * (maintenance, accounting, low credits, platform status, Bonzah x2, go-live).
+ * (maintenance, low credits, platform status, Bonzah x2, go-live).
  * Each decides its own visibility, its own dismissal, and its own place in the
  * DOM — so on a bad day an operator meets a wall of stacked bars and stops
  * reading any of them. That is precisely how the GMT deposit notification
@@ -38,17 +38,15 @@ import { useMemo } from "react";
 
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import type { AppBanner } from "./banner-types";
-import { useAccountingBanners } from "./sources/accounting-banners";
 import { useDepositHoldBanners } from "./sources/deposit-hold-banners";
 
 export function useAppBanners(): AppBanner[] {
   // Hooks first, unconditionally, in a stable order.
   const deposit = useDepositHoldBanners();
-  const accounting = useAccountingBanners();
   const { canView } = useManagerPermissions();
 
   return useMemo(() => {
-    const all: AppBanner[] = [...deposit, ...accounting];
+    const all: AppBanner[] = [...deposit];
 
     return all.filter((b) => (b.requiresTab ? canView(b.requiresTab) : true));
     // `canView` is rebuilt on every render of the permissions hook, so it is
@@ -56,5 +54,5 @@ export function useAppBanners(): AppBanner[] {
     // permission data it closes over is what actually changes, and that
     // re-renders this hook anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deposit, accounting]);
+  }, [deposit]);
 }

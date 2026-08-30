@@ -2,7 +2,7 @@
  * BannerStack — the single top-of-app notice slot.
  *
  * Generic by construction: it knows `AppBanner`, severity and dismissal, and
- * nothing about deposits, accounting, Bonzah or credits. Every existing banner can
+ * nothing about deposits, Bonzah or credits. Every existing banner can
  * move in behind an adapter that returns `AppBanner[]`, and the two with
  * genuinely bespoke bodies (go-live's gradient, bonzah-pending's three buttons
  * and retry progress) can move in unchanged via the `render` escape hatch.
@@ -85,7 +85,7 @@ interface Tone {
 
 /**
  * The amber row is lifted verbatim from
- * `dashboard/accounting-connection-expired-banner.tsx` so that the accounting bar is
+ * a dedicated connection-expired banner so that the notice bar is
  * pixel-identical once it moves in — a migration nobody can see is a migration
  * nobody has to review. Red/blue/emerald are matched to it, and the dark
  * variants follow the existing `dark:bg-*-950/40` idiom already established in

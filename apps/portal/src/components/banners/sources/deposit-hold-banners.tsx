@@ -14,7 +14,7 @@
  * 1. AGGREGATE, NEVER PER-RENTAL. Six failed holds produce one banner reading
  *    "6 active rentals have no deposit held", never six bars. This file emits
  *    AT MOST ONE `AppBanner` no matter how many things are wrong, so the deposit
- *    feature can never crowd MaintenanceBanner or the accounting banner out of the
+ *    feature can never crowd MaintenanceBanner out of the
  *    host. The highest-precedence cohort gets the full bar; every other live
  *    cohort collapses into one compact chip row underneath, each chip deep-
  *    linking to its own filtered list. Nothing is hidden behind a timer.
