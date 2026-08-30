@@ -1,5 +1,0 @@
-{
-  "files": [],
-  "specs": [],
-  "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
-}
