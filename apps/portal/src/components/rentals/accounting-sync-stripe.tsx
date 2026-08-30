@@ -61,7 +61,7 @@ interface Props {
 
 export function AccountingSyncStripe({ rentalId }: Props) {
   const { tenant } = useTenant();
-  const hasActiveConnection = (tenant as { integration_xero?: boolean } | null)?.integration_xero;
+  const hasActiveConnection = (tenant as { integration_xero?: boolean } | null)?.integration_xero;  // legacy tenant flag
 
   const query = useRentalAccountingState(hasActiveConnection ? rentalId : null);
 
@@ -91,7 +91,7 @@ export function AccountingSyncStripe({ rentalId }: Props) {
         {[...byProvider.entries()].map(([provider, rows]) => (
           <div key={provider}>
             <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-              Xero
+              Accounting
             </div>
             <ul className="space-y-1.5">
               {rows.map((row) => {

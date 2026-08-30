@@ -5,20 +5,16 @@
  * accounting_connections row whose access token expires in <15 min, refresh
  * the token by calling the provider's token endpoint with grant_type=refresh_token.
  *
- * Provider notes:
- *   - **Xero rotates the refresh token on every refresh** — must persist the
- *     new one. accounting_store_tokens handles UPSERT correctly.
  *
  * On 3 consecutive 4xx responses we flip the connection to 'expired' and
- * insert a reminders row so the portal shows a banner "Your Xero connection
- * has expired — reconnect" (Sprint 6 hardening lights up the banner UI).
+ * insert a reminders row so the portal shows a banner "Your accounting
+ * connection has expired — reconnect" (Sprint 6 hardening lights up the banner UI).
  *
  * Idempotent: safe to fire multiple times — if a token is already fresh
  * we just skip it.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { XERO } from "../_shared/accounting/oauth-constants.ts";
 
 const REFRESH_WINDOW_SECONDS = 15 * 60;   // refresh if token expires within 15 min
 const MAX_CONSECUTIVE_FAILURES = 3;       // then mark expired
@@ -57,7 +53,7 @@ Deno.serve(async (req) => {
       .eq("status", "active")
       .or(`token_expires_at.is.null,token_expires_at.lt.${cutoff}`);
     const candidates = (candidatesRaw ?? []) as Array<{
-      id: string; tenant_id: string; provider: "xero";
+      id: string; tenant_id: string; provider: string;
       external_region: string | null; token_expires_at: string | null;
       last_error: string | null; refresh_failure_count: number | null;
     }>;
@@ -80,9 +76,9 @@ Deno.serve(async (req) => {
         const usedRefreshToken = tokenRow.refresh_token as string;
         const fresh = await refreshOne(c.provider, c.external_region, usedRefreshToken);
         if (!fresh.ok) {
-          // Xero rotates the refresh token on every successful refresh and
-          // invalidates the old one immediately. So a 400 here has two very
-          // different causes:
+          // A provider that rotates the refresh token on every successful
+          // refresh invalidates the old one immediately. So a 400 here has two
+          // very different causes:
           //   (a) the grant really is dead → the operator must reconnect
           //   (b) another worker (or an overlapping tick of this cron) already
           //       refreshed, rotating the token out from under us
@@ -112,7 +108,7 @@ Deno.serve(async (req) => {
         // Belt and braces: refreshOne already rejects a non-numeric expires_in,
         // but a NaN reaching here throws inside toISOString() and the throw is
         // swallowed by the catch below — the connection would then silently stop
-        // refreshing. Fall back to Xero's standard one-hour token life.
+        // refreshing. Fall back to the standard one-hour token life.
         const expiresInSeconds = Number.isFinite(fresh.expiresInSeconds) && fresh.expiresInSeconds > 0
           ? fresh.expiresInSeconds
           : 3600;
@@ -121,7 +117,7 @@ Deno.serve(async (req) => {
           p_tenant_id: c.tenant_id,
           p_provider: c.provider,
           p_access_token: fresh.accessToken,
-          // Xero rotates → persist the new refresh token.
+          // Persist the new refresh token when the provider rotates it.
           p_refresh_token: fresh.newRefreshToken ?? null,
           p_expires_at: newExpiresAt,
           p_external_org_id: "__keep__",                  // ignored on UPDATE (we just refresh tokens)
@@ -160,36 +156,15 @@ interface RefreshResult {
 }
 
 async function refreshOne(
-  provider: "xero",
+  provider: string,
   region: string | null,
   refreshToken: string,
 ): Promise<RefreshResult> {
-  const clientId = Deno.env.get("XERO_CLIENT_ID");
-  const clientSecret = Deno.env.get("XERO_CLIENT_SECRET");
-  if (!clientId || !clientSecret) {
-    return fail("xero_not_configured", false);
-  }
-  const basic = btoa(`${clientId}:${clientSecret}`);
-  const form = new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-  });
-  const res = await fetch(XERO.tokenUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: form.toString(),
-  });
-  if (!res.ok) {
-    const status = res.status;
-    const text = await res.text().catch(() => "");
-    const isAuth = status === 400 || status === 401 || status === 403;
-    return { ok: false, accessToken: "", newRefreshToken: null, expiresInSeconds: 0, error: `xero_refresh_${status}: ${text.slice(0, 200)}`, markExpired: isAuth };
-  }
-  const json = await res.json() as { access_token: string; refresh_token: string; expires_in: number };
-  return { ok: true, accessToken: json.access_token, newRefreshToken: json.refresh_token ?? null, expiresInSeconds: json.expires_in, error: "", markExpired: false };
+  // No provider adapter remains, so there is nothing to refresh against.
+  // Non-terminal on purpose: this must not expire a stored connection.
+  void region;
+  void refreshToken;
+  return fail(`${provider}_not_configured`, false);
 }
 
 function fail(error: string, markExpired: boolean): RefreshResult {
@@ -200,7 +175,7 @@ async function recordFailure(
   supabase: ReturnType<typeof createClient>,
   connectionId: string,
   tenantId: string,
-  provider: "xero",
+  provider: string,
   errorMsg: string,
   currentFailures: number,
 ) {
@@ -209,7 +184,7 @@ async function recordFailure(
   // This function previously expired the connection on the FIRST 4xx, which is
   // why MAX_CONSECUTIVE_FAILURES existed as a constant but did nothing. Expiry
   // is not recoverable without the operator re-running the full OAuth consent
-  // flow, so it is far too harsh a response to one bad response from Xero.
+  // flow, so it is far too harsh a response to one bad response from the provider.
   const failures = currentFailures + 1;
   await supabase
     .from("accounting_connections")
@@ -234,7 +209,7 @@ async function recordFailure(
 async function markExpired(
   supabase: ReturnType<typeof createClient>,
   tenantId: string,
-  provider: "xero",
+  provider: string,
   reason: string,
 ) {
   // Flip status to 'expired' (does NOT delete vault secrets — they'd be useless
@@ -258,7 +233,7 @@ async function markExpired(
     rule_code: "accounting_connection_expired",
     object_type: "tenant",
     object_id: tenantId,
-    title: "Your Xero connection has expired",
+    title: "Your accounting connection has expired",
     message: "Reconnect from Settings → Accounting to resume syncing financial events.",
     severity: "warning",
     status: "pending",

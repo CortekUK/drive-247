@@ -21,7 +21,7 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { resolveTenantId } from "../_shared/accounting/resolve-tenant.ts";
 
 interface Payload {
-  provider?: "xero";
+  provider?: string;
   dateFrom?: string | null;   // ISO date or null = all-time
   dateTo?: string;            // ISO date — defaults to today
 }
@@ -33,8 +33,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = (await req.json().catch(() => ({}))) as Payload;
-    if (!body.provider || !["xero"].includes(body.provider)) {
-      return errorResponse("provider is required ('xero')", 400);
+    if (!body.provider) {
+      return errorResponse("provider is required", 400);
     }
 
     // Resolve caller

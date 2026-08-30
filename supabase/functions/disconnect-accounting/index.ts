@@ -17,7 +17,7 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { resolveTenantId } from "../_shared/accounting/resolve-tenant.ts";
 
 interface Payload {
-  provider?: "xero";
+  provider?: string;
 }
 
 Deno.serve(async (req) => {
@@ -27,8 +27,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = (await req.json().catch(() => ({}))) as Payload;
-    if (!body.provider || !["xero"].includes(body.provider)) {
-      return errorResponse("provider is required ('xero')", 400);
+    if (!body.provider) {
+      return errorResponse("provider is required", 400);
     }
     const provider = body.provider;
 
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     }
 
     // Flip the per-provider tenant flag
-    const flagColumn = "integration_xero";
+    const flagColumn = "integration_xero";  // legacy per-provider tenant flag
     await supabase
       .from("tenants")
       .update({ [flagColumn]: false })

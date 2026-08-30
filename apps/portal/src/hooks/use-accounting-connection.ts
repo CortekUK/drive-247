@@ -4,7 +4,6 @@
  *   useAccountingConnections()       — list active + historical connections (tenant-safe view)
  *   useActiveAccountingConnection(provider)
  *                                    — convenience selector for one provider's active row
- *   useConnectXero()                 — calls xero-oauth-start → redirects to Xero
  *   useDisconnectAccounting()        — calls disconnect-accounting edge fn
  *
  * Reads come via the `accounting_connections_public` view which excludes
@@ -19,7 +18,7 @@ import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { throwEdgeError } from "@/lib/edge-error";
 
-export type AccountingProvider = "xero";
+export type AccountingProvider = string;
 export type AccountingConnectionStatus = "active" | "expired" | "revoked" | "error";
 
 export interface AccountingConnectionRow {
@@ -93,28 +92,6 @@ export function useActiveAccountingConnection(provider: AccountingProvider) {
   return { ...query, data: active ?? null };
 }
 
-export function useConnectXero() {
-  // Super admins have app_users.tenant_id = NULL, so the edge function cannot
-  // infer which tenant to connect. Send the slug of the portal we are in.
-  const { tenant } = useTenant();
-  return useMutation({
-    mutationFn: async (args?: { redirectBack?: string }) => {
-      const { data, error } = await supabase.functions.invoke("xero-oauth-start", {
-        body: { redirectBack: args?.redirectBack ?? null, tenantSlug: tenant?.slug ?? null },
-      });
-      if (error) {
-        await throwEdgeError(error);
-      }
-      const { authorizeUrl } = data as { ok: boolean; authorizeUrl: string };
-      if (!authorizeUrl) throw new Error("No authorize URL returned");
-      // Hand off to Xero — operator returns via the callback.
-      window.location.href = authorizeUrl;
-      return { redirected: true };
-    },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to start Xero connection"),
-  });
-}
-
 export function useDisconnectAccounting() {
   const qc = useQueryClient();
   const { tenant, refetchTenant } = useTenant();
@@ -131,7 +108,7 @@ export function useDisconnectAccounting() {
     onSuccess: async (data) => {
       qc.invalidateQueries({ queryKey: ["accounting-connections", tenant?.id] });
       await refetchTenant?.();
-      toast.success("Disconnected from Xero");
+      toast.success(`Disconnected from ${data.provider}`);
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to disconnect"),
   });

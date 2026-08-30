@@ -11,7 +11,7 @@
  *
  * Super admins carry `tenant_id = NULL` by design (see CLAUDE.md — it is what
  * lets them bypass tenant RLS). So that line made the ENTIRE Finance Sync
- * feature unusable for them. xero-oauth-start was worse than the others: its
+ * feature unusable for them. The OAuth start fns were worse than the others: their
  * guard read
  *
  *     if (!tenantId && !appUser.is_super_admin) return 403;
@@ -26,7 +26,7 @@
  *
  * A user WITH a tenant_id is pinned to it, unconditionally. Their request may
  * carry a tenant slug and we still ignore it. Trusting a client-supplied tenant
- * for a scoped user would let any tenant admin connect Xero against another
+ * for a scoped user would let any tenant admin connect a provider against another
  * operator's books, push invoices into them, or read their chart of accounts.
  *
  * ONLY a super admin may name a tenant, because only they legitimately act

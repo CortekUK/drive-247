@@ -1,5 +1,5 @@
 /**
- * useAccountingBanners — the Xero connection notice, as a stack source.
+ * useAccountingBanners — the accounting connection notice, as a stack source.
  *
  * WHY THIS EXISTS RATHER THAN AN BOLTED ONTO THE OLD COMPONENT
  * -------------------------------------------------------------
@@ -44,7 +44,7 @@ export function useAccountingBanners(): AppBanner[] {
     );
     if (!broken) return [];
 
-    const providerLabel = "Xero";
+    const providerLabel = "Accounting";
 
     return [
       {

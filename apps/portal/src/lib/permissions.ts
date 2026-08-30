@@ -230,7 +230,7 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   promos: 'settings.rental',
   extras: 'settings.extras',
   payments: 'settings.payments',
-  // Finance Sync (Xero) — Growth+ tier, mapped to its own key
+  // Finance Sync — Growth+ tier, mapped to its own key
   accounting: 'settings.accounting',
   // Communication
   reminders: 'settings.reminders',

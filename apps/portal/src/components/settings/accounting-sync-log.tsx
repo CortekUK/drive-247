@@ -93,7 +93,7 @@ export function AccountingSyncLog({ provider, onBack }: Props) {
           <ArrowLeft className="h-3 w-3" /> Back to Accounting
         </button>
         <h2 className="text-lg font-semibold">
-          Sync log — Xero
+          Sync log
         </h2>
       </div>
 
@@ -171,7 +171,7 @@ export function AccountingSyncLog({ provider, onBack }: Props) {
               <p className="text-sm font-medium text-rose-600">Couldn&apos;t load sync log</p>
               <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                 {log.error instanceof Error ? log.error.message : "Unknown error fetching sync state."}
-                {" "}Try refreshing — if it keeps failing, your Xero connection may have expired (reconnect from the Accounting tab).
+                {" "}Try refreshing — if it keeps failing, your accounting connection may have expired (reconnect from the Accounting tab).
               </p>
             </div>
           ) : (log.data?.rows ?? []).length === 0 ? (

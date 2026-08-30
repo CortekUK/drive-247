@@ -164,10 +164,10 @@ export function AccountingMappings({ provider, onBack }: Props) {
           <ArrowLeft className="h-3 w-3" /> Back to Accounting
         </button>
         <h2 className="text-lg font-semibold">
-          Configure mappings — Xero
+          Configure mappings
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tell Drive247 which Xero account each type of charge should go to,
+          Tell Drive247 which account each type of charge should go to,
           and which tax rate to apply.
         </p>
       </div>
@@ -177,7 +177,7 @@ export function AccountingMappings({ provider, onBack }: Props) {
           <CardContent className="flex items-start gap-2 py-4 text-xs text-amber-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p className="font-medium">Couldn&apos;t reach Xero.</p>
+              <p className="font-medium">Couldn&apos;t reach the accounting provider.</p>
               <p className="mt-0.5">
                 {(accountsError?.message ?? taxRatesError?.message ?? "Unknown error")}
               </p>
@@ -270,7 +270,7 @@ export function AccountingMappings({ provider, onBack }: Props) {
         <CardHeader>
           <CardTitle className="text-base">Payment account</CardTitle>
           <CardDescription>
-            When Drive247 records a payment in Xero, which bank or
+            When Drive247 records a payment, which bank or
             clearing account should it post against?
           </CardDescription>
         </CardHeader>

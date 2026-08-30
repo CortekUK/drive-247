@@ -2,8 +2,7 @@
  * Finance Sync — Provider abstraction (Spec §7.1).
  *
  * `process-accounting-sync` and the list/test edge functions only ever talk
- * to this interface. The Xero implementation lives in `xero-client.ts`.
- * Factory in `factory.ts` returns the right one for
+ * to this interface. Factory in `factory.ts` returns the right one for
  * a (tenant_id, provider) tuple.
  *
  * Keeping this layer free of Drive247-specific types — everything flows
@@ -11,7 +10,7 @@
  * The sync worker translates `financial_events` rows into these.
  */
 
-export type ProviderName = "xero";
+export type ProviderName = string;
 
 /** A reference to something we created (or upserted) in the provider's books. */
 export interface ExternalRef {
@@ -34,7 +33,7 @@ export interface ContactInput {
     country?: string;
   };
   /** Optional hint when we want the provider to UPSERT against an existing
-   *  contact (Xero uses ContactNumber for this). */
+   *  contact (some providers expose a ContactNumber for this). */
   externalIdHint?: string;
 }
 
@@ -46,7 +45,7 @@ export interface InvoiceLine {
   unitAmountCents: number;
   /** Provider account code from `accounting_account_mappings`. */
   accountCode: string;
-  /** Optional Xero TaxType (e.g. `OUTPUT2`). */
+  /** Optional provider tax-type code (e.g. `OUTPUT2`). */
   taxCode?: string;
   taxRate?: number;
   /** Optional line ref — vehicle reg, ledger entry id, etc. */
@@ -56,7 +55,7 @@ export interface InvoiceLine {
 export interface InvoiceInput {
   /** Provider contact id from `accounting_contact_links`. */
   contactExternalId: string;
-  /** Drive247-issued number — used as Xero `InvoiceNumber`.
+  /** Drive247-issued number — used as the provider's invoice number.
    *  Acts as the per-invoice idempotency key so re-syncing the same logical
    *  invoice doesn't duplicate. */
   invoiceNumber: string;
@@ -73,7 +72,7 @@ export interface InvoiceInput {
 
 /** Used when adding a line to an EXISTING invoice. */
 export interface InvoiceLineAppend {
-  /** The provider's invoice id (Xero InvoiceID). */
+  /** The provider's invoice id. */
   invoiceExternalId: string;
   line: InvoiceLine;
 }
@@ -98,7 +97,7 @@ export interface CreditNoteInput {
   amountCents: number;
   currency: string;
   issueDate: string;
-  /** Operator-entered reason — surfaces in Xero. */
+  /** Operator-entered reason — surfaces in the provider's books. */
   reason?: string;
   /** Lines mirror the original invoice's accounts when possible. */
   lines: InvoiceLine[];
@@ -112,7 +111,7 @@ export interface ExternalAccount {
 }
 
 export interface ExternalTaxRate {
-  /** Xero `TaxType` code. */
+  /** Provider tax-rate code. */
   code: string;
   name: string;
   rate?: number;             // percent

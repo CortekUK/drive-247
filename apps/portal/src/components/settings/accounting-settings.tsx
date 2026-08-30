@@ -2,8 +2,8 @@
  * AccountingSettings — Sprint 2 surface.
  *
  * Settings → Accounting tab. Gated to Growth+ tier via useFeatureAccess
- * (Confirmed Decision D1). Shows the Xero provider card:
- * not-connected → "Connect" button; connected → status row + Disconnect.
+ * (Confirmed Decision D1). Shows a provider card per connected provider:
+ * connected → status row + Disconnect.
  */
 "use client";
 
@@ -17,7 +17,6 @@ import { useFeatureAccess } from "@/hooks/use-feature-access";
 import {
   useAccountingConnections,
   useActiveAccountingConnection,
-  useConnectXero,
   useDisconnectAccounting,
   type AccountingConnectionRow,
   type AccountingProvider,
@@ -68,7 +67,6 @@ const OAUTH_REASONS: Record<string, string> = {
 export function AccountingSettings() {
   const access = useFeatureAccess("finance_sync");
   const allConnections = useAccountingConnections();
-  const xero = useActiveAccountingConnection("xero");
   const [view, setView] = useState<View>({ kind: "cards" });
 
   // ── Report the OAuth round-trip result ───────────────────────────────────
@@ -79,7 +77,6 @@ export function AccountingSettings() {
   // message at all and reasonably concluded it had worked; on success the
   // provider card kept its cached "not connected" state until a manual reload.
   //
-  // Provider-agnostic on purpose — Xero had exactly the same blind spot.
   const searchParams = useSearchParams();
   const router = useRouter();
   const qc = useQueryClient();
@@ -94,7 +91,7 @@ export function AccountingSettings() {
     if (handledOAuthResult.current) return;
     handledOAuthResult.current = true;
 
-    const label = "Xero";
+    const label = provider;
 
     if (status === "success") {
       // The card reads cached connection state, so it will not show the new
@@ -150,17 +147,9 @@ export function AccountingSettings() {
         </p>
       </div>
 
-      <div className="grid gap-4">
-        <ProviderCard
-          provider="xero"
-          name="Xero"
-          tagline="Cloud accounting trusted by 3.5M+ businesses"
-          connection={xero.data}
-          onConnect={ConnectXeroButton}
-          onOpenMappings={() => setView({ kind: "mappings", provider: "xero" })}
-          onOpenLog={() => setView({ kind: "log", provider: "xero" })}
-        />
-      </div>
+      <p className="rounded-lg border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
+        No accounting provider is available to connect right now.
+      </p>
     </div>
   );
 }
@@ -170,7 +159,7 @@ export function AccountingSettings() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ProviderCardProps {
-  provider: "xero";
+  provider: string;
   name: string;
   tagline: string;
   connection: AccountingConnectionRow | null;
@@ -304,33 +293,6 @@ function ProviderCard({ provider, name, tagline, connection, onConnect: ConnectB
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Connect buttons
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ConnectXeroButton() {
-  const connect = useConnectXero();
-  return (
-    <Button
-      onClick={() => {
-        // Pass the current portal origin so the OAuth callback knows where to
-        // send the operator back to. Without this the callback would emit a
-        // relative /settings path that resolves against the Supabase function
-        // host (yields "requested path is invalid").
-        const redirectBack = typeof window !== "undefined"
-          ? `${window.location.origin}/settings?tab=accounting`
-          : undefined;
-        connect.mutate({ redirectBack });
-      }}
-      disabled={connect.isPending}
-      className="bg-[#0f172a] text-white hover:bg-[#0f172a]/90"
-    >
-      {connect.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-      Connect Xero <ChevronRight className="ml-1 h-3.5 w-3.5" />
-    </Button>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Paywall
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -346,7 +308,7 @@ function FinanceSyncPaywall({ planName, requiredTier }: { planName: string | nul
         </h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
           You&apos;re currently on {planName ?? "the Basic tier"}. Upgrade to {requiredTier} to sync rentals,
-          payments, refunds and damages to Xero automatically.
+          payments, refunds and damages to your accounting system automatically.
         </p>
         <Button asChild className="mt-4 bg-[#0f172a] text-white hover:bg-[#0f172a]/90">
           <a href="/settings?tab=subscription">

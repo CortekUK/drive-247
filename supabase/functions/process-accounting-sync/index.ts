@@ -6,7 +6,7 @@
  * external refs + state transitions. Honours:
  *
  *   - Spec §8.3: one invoice per rental until closed; extensions get new invoices
- *   - Spec §7.3: idempotency (Xero Idempotency-Key)
+ *   - Spec §7.3: idempotency (provider idempotency key)
  *   - Spec §14.2: error classification → retry / mark-expired / surface
  *   - Spec §14 backoff schedule: 1m, 5m, 30m, 2h, 12h, dead-letter
  *
@@ -45,7 +45,7 @@ import { isFinalisedStatus } from "../_shared/accounting/rental-status.ts";
 
 // Rows claimed per tick. Deliberately well below the old value of 100: each row
 // costs 2–3 provider API calls (ensure contact → find invoice → create/append),
-// so a 100-row batch meant 200–300 Xero calls against a 60-calls/minute limit.
+// so a 100-row batch meant 200–300 provider calls against a 60-calls/minute limit.
 // That guaranteed a 429 partway through every large batch.
 const BATCH_SIZE = Number(Deno.env.get("ACCOUNTING_SYNC_BATCH_SIZE") ?? 40);
 
@@ -58,9 +58,9 @@ const CLAIM_TIMEOUT_MINUTES = Number(Deno.env.get("ACCOUNTING_SYNC_CLAIM_TIMEOUT
 // headroom left for the OAuth refresh cron sharing the same quota.
 //
 // The previous formula was `Math.ceil(LIMIT * (2 / 60)) * 60`, which collapses
-// to 120 for Xero regardless of the configured limit — above BATCH_SIZE, so
-// the guard could never fire even once.
-const RATE_LIMIT_XERO = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT_XERO") ?? 55);
+// to 120 regardless of the configured limit — above BATCH_SIZE, so the guard
+// could never fire even once.
+const RATE_LIMIT_DEFAULT = Number(Deno.env.get("ACCOUNTING_SYNC_RATE_LIMIT") ?? 55);
 const TICK_MINUTES = 2;
 const CALLS_PER_ROW = 3;   // worst case: ensureContact + findInvoice + create/append
 
@@ -155,13 +155,13 @@ Deno.serve(async (req) => {
 
     // Per-provider API-call budget for THIS tick. Counted in calls, not rows —
     // one row costs up to CALLS_PER_ROW calls, and undercounting is what pushed
-    // us past Xero's 60/min ceiling and into the 429s.
-    const remaining: Record<ProviderName, number> = {
-      xero: RATE_LIMIT_XERO * TICK_MINUTES,
-    };
+    // us past the provider's 60/min ceiling and into the 429s.
+    const remaining: Record<string, number> = {};
+    const budget = () => RATE_LIMIT_DEFAULT * TICK_MINUTES;
 
     for (const row of batch) {
-      const p = row.provider as ProviderName;
+      const p = row.provider as string;
+      if (remaining[p] === undefined) remaining[p] = budget();
       // Reserve the worst case before starting the row. If the row cannot be
       // funded in full we stop rather than begin work we may not finish — a
       // half-processed row is how invoices end up duplicated.
@@ -196,9 +196,9 @@ async function processOne(
   summary: Summary,
 ): Promise<void> {
   // Acquire a per-rental mutex BEFORE we read the open invoice / append a line.
-  // Without this, two cron-tick workers can both GET the same Xero invoice and
+  // Without this, two cron-tick workers can both GET the same provider invoice and
   // both PUT it back with their respective new lines — the second PUT silently
-  // overwrites the first PUT's line (Xero's PUT replaces all lines).
+  // overwrites the first PUT's line (the provider's PUT replaces all lines).
   //
   // Lock is keyed on (tenant_id, rental_id, provider) and auto-expires after
   // 5 minutes so a crashed worker can't wedge a rental. Events with NO rental_id
@@ -284,7 +284,7 @@ async function processOne(
         // closes is the normal case, not an edge case: final settlement, a late
         // installment, a deposit shortfall. Without the fallback every one of
         // those failed with "No open invoice", retried on the transient
-        // schedule, and dead-lettered — leaving Xero showing an unpaid invoice
+        // schedule, and dead-lettered — leaving the provider showing an unpaid invoice
         // for a rental the customer had in fact paid in full.
         //
         // `refund` below already had this fallback; payment_receipt did not.
@@ -728,7 +728,7 @@ async function flagConnectionExpired(
     .eq("tenant_id", tenantId)
     .eq("provider", provider)
     .eq("status", "active");
-  const flagColumn = "integration_xero";
+  const flagColumn = "integration_xero";  // legacy per-provider tenant flag
   await supabase.from("tenants").update({ [flagColumn]: false }).eq("id", tenantId);
 }
 
