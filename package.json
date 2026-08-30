@@ -12,7 +12,6 @@
     "dev:portal": "turbo run dev --filter=portal",
     "dev:web": "turbo run dev --filter=web",
     "dev:admin": "turbo run dev --filter=admin",
-    "dev:bonzah": "turbo run dev --filter=bonzah",
     "build": "turbo run build",
     "lint": "turbo run lint"
   },
