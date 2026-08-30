@@ -11,7 +11,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   FileText,
-  ShieldCheck,
   ShoppingBag,
   FileSignature,
   CreditCard,
@@ -98,18 +97,6 @@ export function LeadAutomationsPanel({ lead }: Props) {
     } finally {
       setBusy(null);
     }
-  };
-
-  const runVeriff = async () => {
-    invoke(
-      "create-veriff-session",
-      {
-        customerDetails: { name: lead.full_name, email: lead.email, phone: lead.phone },
-        tenantId: lead.tenant_id,
-        external_user_id: lead.id,
-      },
-      "Veriff session created",
-    );
   };
 
   const checkBonzah = async () => {
@@ -292,9 +279,6 @@ export function LeadAutomationsPanel({ lead }: Props) {
       <div className="grid grid-cols-2 gap-2">
         <Button size="sm" variant="outline" onClick={requestDocuments} disabled={busy !== null}>
           <FileText className="mr-1.5 h-3.5 w-3.5" /> Request docs
-        </Button>
-        <Button size="sm" variant="outline" onClick={runVeriff} disabled={busy !== null}>
-          <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Run Veriff
         </Button>
         <Button size="sm" variant="outline" onClick={checkBonzah} disabled={busy !== null}>
           <ShoppingBag className="mr-1.5 h-3.5 w-3.5" /> Bonzah quote

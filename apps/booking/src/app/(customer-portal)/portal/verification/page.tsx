@@ -52,7 +52,6 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import AIVerificationQR from '@/components/AIVerificationQR';
-import { createVeriffFrame, MESSAGES } from '@veriff/incontext-sdk';
 
 interface AISessionData {
   sessionId: string;
@@ -86,7 +85,6 @@ export default function VerificationPage() {
 
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [isStartingVerification, setIsStartingVerification] = useState(false);
-  const [verificationMode, setVerificationMode] = useState<'idle' | 'ai' | 'veriff'>('idle');
   const [aiSessionData, setAiSessionData] = useState<AISessionData | null>(null);
 
   // Edit details state
@@ -105,9 +103,6 @@ export default function VerificationPage() {
   const [validationFields, setValidationFields] = useState<Array<{ field: string; matches: boolean; message: string }>>([]);
 
   const statusInfo = getVerificationStatusLabel(currentVerification);
-
-  // Check if Veriff is enabled for this tenant
-  const isVeriffEnabled = tenant?.integration_veriff === true && !!process.env.NEXT_PUBLIC_VERIFF_API_KEY;
 
   // Start AI verification (QR code flow)
   const handleStartAIVerification = useCallback(async () => {
@@ -142,7 +137,6 @@ export default function VerificationPage() {
         qrUrl: data.qrUrl,
         expiresAt: new Date(data.expiresAt),
       });
-      setVerificationMode('ai');
       setShowUpdateDialog(false);
       toast.success('Scan the QR code with your phone to verify your identity.');
     } catch (error: any) {
@@ -153,116 +147,10 @@ export default function VerificationPage() {
     }
   }, [customerUser, tenant]);
 
-  // Start Veriff verification
-  const handleStartVeriffVerification = async () => {
-    if (!customerUser?.customer || !tenant) {
-      toast.error('Unable to start verification. Please try again.');
-      return;
-    }
-
-    setIsStartingVerification(true);
-
-    try {
-      const VERIFF_API_KEY = process.env.NEXT_PUBLIC_VERIFF_API_KEY;
-      if (!VERIFF_API_KEY) {
-        throw new Error('Veriff API key not configured');
-      }
-
-      const nameParts = (customerUser.customer.name || '').split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || firstName;
-      const vendorData = `portal_${customerUser.customer.email}_${Date.now()}`;
-
-      // Create Veriff session
-      const sessionResponse = await fetch('https://stationapi.veriff.com/v1/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-AUTH-CLIENT': VERIFF_API_KEY,
-        },
-        body: JSON.stringify({
-          verification: {
-            person: {
-              firstName,
-              lastName,
-            },
-            vendorData,
-          },
-        }),
-      });
-
-      if (!sessionResponse.ok) {
-        const errorText = await sessionResponse.text();
-        throw new Error(`Veriff session creation failed: ${errorText}`);
-      }
-
-      const sessionData = await sessionResponse.json();
-      const sessionId = sessionData.verification?.id;
-      const sessionUrl = sessionData.verification?.url;
-
-      if (!sessionId || !sessionUrl) {
-        throw new Error('Invalid Veriff session response');
-      }
-
-      // Pre-create database record
-      const { error: dbError } = await supabase.from('identity_verifications').insert({
-        session_id: sessionId,
-        external_user_id: vendorData,
-        verification_provider: 'veriff',
-        status: 'pending',
-        customer_id: customerUser.customer_id,
-        tenant_id: tenant.id,
-      });
-
-      if (dbError) {
-        console.error('Error creating verification record:', dbError);
-      }
-
-      setVerificationMode('veriff');
-      setShowUpdateDialog(false);
-
-      // Open Veriff InContext frame
-      createVeriffFrame({
-        url: sessionUrl,
-        onEvent: async (msg: string) => {
-          switch (msg) {
-            case MESSAGES.FINISHED:
-              toast.success('Identity verified successfully!');
-              setVerificationMode('idle');
-              // Update customer status
-              await supabase
-                .from('customers')
-                .update({ identity_verification_status: 'verified' })
-                .eq('id', customerUser.customer_id);
-              refetch();
-              refetchCustomerUser();
-              // Update onboarding status to remove sidebar warning badge
-              queryClient.invalidateQueries({ queryKey: ['customer-onboarding'] });
-              break;
-
-            case MESSAGES.CANCELED:
-              toast.info('Verification was canceled. You can try again when ready.');
-              setVerificationMode('idle');
-              break;
-          }
-        },
-      });
-
-      toast.success('Verification started. Please complete the identity verification.');
-    } catch (error: any) {
-      console.error('Veriff verification error:', error);
-      toast.error(error.message || 'Failed to start verification. Please try again.');
-      setVerificationMode('idle');
-    } finally {
-      setIsStartingVerification(false);
-    }
-  };
-
   // Handle AI verification completion
   const handleAIVerificationComplete = useCallback(async (data: any) => {
     console.log('AI verification completed:', data);
     toast.success('Identity verified successfully!');
-    setVerificationMode('idle');
     setAiSessionData(null);
 
     // Update customer status
@@ -283,7 +171,6 @@ export default function VerificationPage() {
   const handleAIVerificationExpired = useCallback(() => {
     toast.info('Verification session expired. Please try again.');
     setAiSessionData(null);
-    setVerificationMode('idle');
   }, []);
 
   // Handle retry
@@ -291,15 +178,6 @@ export default function VerificationPage() {
     setAiSessionData(null);
     handleStartAIVerification();
   }, [handleStartAIVerification]);
-
-  // Unified start verification handler
-  const handleStartVerification = () => {
-    if (isVeriffEnabled) {
-      handleStartVeriffVerification();
-    } else {
-      handleStartAIVerification();
-    }
-  };
 
   // Open edit details dialog
   const handleOpenEditDetails = useCallback(() => {
@@ -417,7 +295,7 @@ export default function VerificationPage() {
   }, [currentVerification, editFirstName, editLastName, editDateOfBirth, editDocumentNumber, editDocumentType, editDocumentExpiry, editDocumentCountry, validationApproved, refetch, refetchCustomerUser]);
 
   // Show verification in progress
-  if (verificationMode === 'ai' && aiSessionData) {
+  if (aiSessionData) {
     return (
       <div className="space-y-4 sm:space-y-6">
         <div>
@@ -441,10 +319,7 @@ export default function VerificationPage() {
         <div className="text-center">
           <Button
             variant="outline"
-            onClick={() => {
-              setVerificationMode('idle');
-              setAiSessionData(null);
-            }}
+            onClick={() => setAiSessionData(null)}
           >
             Cancel Verification
           </Button>
@@ -758,7 +633,7 @@ export default function VerificationPage() {
               <p className="text-muted-foreground mb-4">
                 Verify your identity to speed up future bookings and unlock all features.
               </p>
-              <Button onClick={handleStartVerification} disabled={isStartingVerification}>
+              <Button onClick={handleStartAIVerification} disabled={isStartingVerification}>
                 {isStartingVerification ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -834,7 +709,7 @@ export default function VerificationPage() {
               <Button variant="outline" onClick={() => setShowUpdateDialog(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button onClick={handleStartVerification} disabled={isStartingVerification} className="w-full sm:w-auto">
+              <Button onClick={handleStartAIVerification} disabled={isStartingVerification} className="w-full sm:w-auto">
                 {isStartingVerification ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

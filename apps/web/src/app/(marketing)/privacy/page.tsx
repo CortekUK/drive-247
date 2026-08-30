@@ -25,7 +25,7 @@ import type { Metadata } from "next";
  *     below covers marketing leads only, and was already published)
  *   · lawful bases for each processing purpose
  *   · the sub-processor list (Supabase, Stripe, AWS SES/SNS, Twilio, OpenAI,
- *     BoldSign, Veriff, Bonzah/Inshur are all in the stack)
+ *     BoldSign, Bonzah/Inshur are all in the stack)
  *   · international transfer mechanism (UK company, US-hosted infrastructure)
  *   · the rights-request procedure and response times
  * Those create binding commitments and belong to whoever owns the document.

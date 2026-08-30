@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.boldsign-webhook]
 verify_jwt = false
 
-[functions.veriff-webhook]
-verify_jwt = false
-
 [functions.customer-chat]
 verify_jwt = false
 

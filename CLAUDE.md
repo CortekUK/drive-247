@@ -148,11 +148,11 @@ Uses Supabase Realtime channels (replaced Socket.io):
 
 ### Edge Functions
 100+ Supabase Edge Functions in `supabase/functions/`. Major categories:
-- **Webhooks**: Stripe (`stripe-webhook-test`, `stripe-webhook-live`, `stripe-connect-webhook`), BoldSign (`boldsign-webhook`), Veriff
+- **Webhooks**: Stripe (`stripe-webhook-test`, `stripe-webhook-live`, `stripe-connect-webhook`), BoldSign (`boldsign-webhook`)
 - **Payments**: `create-checkout-session`, `create-preauth-checkout`, `capture-booking-payment`, `process-refund`, `schedule-refund`, installment handling
 - **Stripe Connect**: `create-connected-account`, `get-connect-onboarding-link`, `sync-stripe-account`
 - **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions, `send-collection-whatsapp`, `send-signing-whatsapp` (Twilio WhatsApp)
-- **Verification**: `create-veriff-session`, `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
+- **Verification**: `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
 - **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`, `bonzah-get-balance`, `bonzah-probe-pdf`
 - **Lockbox**: `notify-lockbox-code` — sends lockbox code to customers via email/SMS using per-tenant templates from `lockbox_templates` table
 - **Admin**: `admin-create-user`, `admin-update-role`, `admin-deactivate-user`, `emergency-bootstrap`
@@ -161,7 +161,15 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Reviews**: `generate-review-summary` — AI-generated customer review summaries via OpenAI
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
-10 functions have `verify_jwt = false` in `supabase/config.toml`: `boldsign-webhook`, `veriff-webhook`, `customer-chat`, `validate-customer-invite`, `submit-customer-registration`, `custom-auth-email`, `subscription-webhook`, `check-policy-acceptance`, `stripe-webhook-test`, `stripe-webhook-live`. Stripe webhook functions handle their own signature verification. All other functions require JWT auth by default.
+**61** functions have `verify_jwt = false` in `supabase/config.toml` — i.e. they are
+publicly callable without a JWT. They fall into three groups: third-party webhooks
+that verify their own signatures (Stripe, BoldSign, Twilio, Square, GHL, provider
+OAuth callbacks), cron targets invoked by pg_cron with a service-role bearer, and a
+handful of genuinely public endpoints (`submit-enquiry`, `submit-application`,
+`view-offer`, `validate-customer-invite`, `submit-customer-registration`).
+Run `grep -B1 'verify_jwt = false' supabase/config.toml` for the current list rather
+than trusting a hardcoded enumeration here — this line has drifted before.
+All other functions require JWT auth by default.
 
 Edge function pattern:
 ```typescript
@@ -228,7 +236,6 @@ Required variables (see `.env.example`):
 - `STRIPE_TEST_SECRET_KEY`, `STRIPE_LIVE_SECRET_KEY` (edge functions)
 - `STRIPE_TEST_PUBLISHABLE_KEY`, `STRIPE_LIVE_PUBLISHABLE_KEY`
 - `STRIPE_SUBSCRIPTION_SECRET_KEY`, `STRIPE_SUBSCRIPTION_PRICE_ID`, `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` (platform subscription billing)
-- `NEXT_PUBLIC_VERIFF_API_KEY` (booking)
 - BoldSign API keys (`BOLDSIGN_TEST_API_KEY`, `BOLDSIGN_LIVE_API_KEY`, `BOLDSIGN_BASE_URL`)
 - AWS SES/SNS credentials for emails and SMS
 - Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`) for WhatsApp

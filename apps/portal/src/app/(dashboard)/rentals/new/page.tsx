@@ -1052,7 +1052,6 @@ const CreateRental = () => {
   // Derive verification state
   const isCustomerVerified = customerVerification?.review_result === "GREEN" || customerDetails?.identity_verification_status === "verified" || customerDetails?.identity_verification_status === "manually_verified";
   const verificationPending = customerVerification?.status === "pending" || customerVerification?.review_status === "pending";
-  const verificationMode = tenant?.integration_veriff !== false ? "veriff" : "ai";
 
   // 'manually_verified' is a real, already-supported status value (see
   // pending-bookings/page.tsx). It satisfies isCustomerVerified above honestly —
@@ -1065,7 +1064,7 @@ const CreateRental = () => {
    * `customers` carries no verified_by / verified_at / notes column, so the audit
    * log IS the record. We read the most recent manual-verification entry back so
    * the form can show the approver rather than passing off a staff decision as a
-   * normal Veriff pass.
+   * normal ID verification pass.
    */
   const { data: manualVerifyRecord } = useQuery({
     queryKey: ["customer-manual-verification-audit", tenant?.id, selectedCustomerId],
@@ -1342,51 +1341,29 @@ const CreateRental = () => {
 
     setCreatingVerification(true);
     try {
-      if (verificationMode === "ai") {
-        // AI verification flow
-        const { data, error } = await supabase.functions.invoke("create-ai-verification-session", {
-          body: {
-            customerId: selectedCustomerId,
-            tenantId: tenant.id,
-            tenantSlug: tenant.slug,
-            ...(verificationDocTypeOverride ? { documentType: verificationDocTypeOverride } : {}),
-          },
-        });
+      const { data, error } = await supabase.functions.invoke("create-ai-verification-session", {
+        body: {
+          customerId: selectedCustomerId,
+          tenantId: tenant.id,
+          tenantSlug: tenant.slug,
+          ...(verificationDocTypeOverride ? { documentType: verificationDocTypeOverride } : {}),
+        },
+      });
 
-        if (error) throw error;
-        if (!data.ok) {
-          throw new Error(data.detail || data.error || "Failed to create AI verification session");
-        }
-
-        sonnerToast.success("AI verification session created");
-        setAiSessionData({
-          sessionId: data.sessionId,
-          qrUrl: data.qrUrl,
-          expiresAt: new Date(data.expiresAt),
-        });
-        setShowQRModal(true);
-        setIsPolling(true);
-        await refetchVerification();
-      } else {
-        // Veriff flow
-        const { data, error } = await supabase.functions.invoke("create-veriff-session", {
-          body: { customerId: selectedCustomerId },
-        });
-
-        if (error) throw error;
-        if (!data.ok) {
-          throw new Error(data.detail || data.error || "Failed to create verification session");
-        }
-
-        sonnerToast.success("Verification session created successfully");
-
-        // Open Veriff verification in new window
-        if (data.sessionUrl) {
-          window.open(data.sessionUrl, "_blank");
-        }
-
-        await refetchVerification();
+      if (error) throw error;
+      if (!data.ok) {
+        throw new Error(data.detail || data.error || "Failed to create AI verification session");
       }
+
+      sonnerToast.success("AI verification session created");
+      setAiSessionData({
+        sessionId: data.sessionId,
+        qrUrl: data.qrUrl,
+        expiresAt: new Date(data.expiresAt),
+      });
+      setShowQRModal(true);
+      setIsPolling(true);
+      await refetchVerification();
     } catch (error: any) {
       console.error("Error creating verification:", error);
       sonnerToast.error(error.message || "Failed to create verification session");
@@ -1978,7 +1955,7 @@ const CreateRental = () => {
         }
       }
 
-      // Additional drivers: bulk-insert rows + fire-and-forget Veriff invites.
+      // Additional drivers: bulk-insert rows + fire-and-forget verification invites.
       // Non-fatal — the rental row is already saved. If any of these calls fail
       // the operator can resend / re-add from the rental detail page. We don't
       // gate the rental creation success on these because the rental itself
@@ -3171,11 +3148,11 @@ const CreateRental = () => {
                           <Shield className="h-5 w-5 text-primary" />
                           <h3 className="font-medium">Identity Verification</h3>
                           <span className="text-sm text-muted-foreground">
-                            ({verificationMode === "ai" ? "AI Verification" : "Veriff"})
+                            (AI Verification)
                           </span>
                         </div>
                         {isManuallyVerified ? (
-                          /* Deliberately distinct from the green Veriff pass — a staff
+                          /* Deliberately distinct from the green verified pass — a staff
                              decision must never be mistaken for a completed ID check. */
                           <Badge variant="default" className="bg-indigo-500 hover:bg-indigo-600"><ShieldCheck className="h-3 w-3 mr-1" />Manually Verified</Badge>
                         ) : isCustomerVerified ? (
@@ -3211,7 +3188,7 @@ const CreateRental = () => {
                       {isManuallyVerified ? (
                         <div className="rounded-md border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 dark:border-indigo-900 dark:bg-indigo-950/30">
                           <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
-                            Verified manually by a member of staff — not by {verificationMode === "ai" ? "AI verification" : "Veriff"}.
+                            Verified manually by a member of staff — not by AI verification.
                           </p>
                           {manualVerifyRecord ? (
                             <div className="mt-1.5 space-y-0.5 text-xs text-indigo-800/90 dark:text-indigo-300/90">
@@ -6687,7 +6664,7 @@ const CreateRental = () => {
               onChange={(e) => setManualVerifyReason(e.target.value)}
               disabled={manualVerifying}
               rows={3}
-              placeholder="e.g. Passport and driving licence checked in person at the branch on 9 Aug; Veriff repeatedly failed on document scan."
+              placeholder="e.g. Passport and driving licence checked in person at the branch on 9 Aug; ID verification repeatedly failed on document scan."
             />
             <p className="text-xs text-muted-foreground">
               {manualVerifyReason.trim().length < MANUAL_VERIFY_MIN_REASON
@@ -6765,7 +6742,7 @@ const CreateRental = () => {
               value={idWaiverReason}
               onChange={(e) => setIdWaiverReason(e.target.value)}
               rows={3}
-              placeholder="e.g. Long-standing corporate account, ID held on file at head office; Veriff unavailable and customer collecting today."
+              placeholder="e.g. Long-standing corporate account, ID held on file at head office; ID verification unavailable and customer collecting today."
             />
             {/* Count DOWN against the minimum rather than restating the rule.
                 Stating "at least 15 characters" next to a greyed-out button

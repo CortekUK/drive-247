@@ -330,8 +330,6 @@ export default function DevJumpPanel() {
       "verificationToken",
       "verifiedCustomerName",
       "verifiedLicenseNumber",
-      "verificationVendorData",
-      "verificationMode",
       "dev_last_vehicle_id",
       "dev_widget_step",
       "dev_widget_form_data",

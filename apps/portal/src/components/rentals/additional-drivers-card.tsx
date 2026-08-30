@@ -81,7 +81,7 @@ const signingBadge = (status: RentalAdditionalDriver["signing_status"]) => {
 
 /**
  * Renders the additional drivers attached to a rental + per-driver actions.
- * Verification status updates live via the Veriff webhook → realtime channel.
+ * Verification status updates live via the identity-verification webhook → realtime channel.
  * Signing status updates live via the BoldSign webhook → realtime channel.
  */
 export function AdditionalDriversCard({ rentalId }: AdditionalDriversCardProps) {
