@@ -69,8 +69,7 @@ export const TERMINAL_RENTAL_STATUSES = [
   "Closed",
   "Completed",
   "Cancelled",
-  // US spelling — inshur-reconcile treats both as terminal, so both exist in
-  // somebody's data.
+  // US spelling — both spellings exist in somebody's data.
   "Canceled",
   "Rejected",
 ] as const;

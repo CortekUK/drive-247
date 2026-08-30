@@ -239,14 +239,13 @@ describe('the flag reaches the page that needs it', () => {
     expect(cols).toContain('allow_rental_without_id_verification');
   });
 
-  it('survives the reduced-column retry, which only drops the INSHUR block', () => {
-    // The retry exists because `anon` holds COLUMN-level grants on `tenants`:
-    // one ungranted column makes Postgres refuse the whole row and every
-    // tenant's login page loses its branding. The waiver column is in the core
-    // list, so the grant — not the retry — is what protects it.
+  it('is in the single tenant select, which has no reduced-column fallback', () => {
+    // `anon` holds COLUMN-level grants on `tenants`: one ungranted column makes
+    // Postgres refuse the whole row and every tenant's login page loses its
+    // branding. There is exactly one select, so the GRANT is what protects the
+    // waiver column.
     const core = liftDeclaration(tenantContext, 'TENANT_CORE_COLUMNS');
-    const inshur = liftDeclaration(tenantContext, 'TENANT_INSHUR_COLUMNS');
     expect(core).toContain('allow_rental_without_id_verification');
-    expect(inshur).not.toContain('allow_rental_without_id_verification');
+    expect(tenantContext).toContain('queryTenant(TENANT_CORE_COLUMNS)');
   });
 });
