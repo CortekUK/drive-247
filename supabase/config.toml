@@ -434,3 +434,11 @@ verify_jwt = true
 # this is the only thing that stops a silent expiry.
 [functions.refresh-square-tokens]
 verify_jwt = true
+
+# Drive247 Turo Bridge (PoC). The Chrome extension runs in a browser signed into
+# turo.com, not into Drive247 — there is no Supabase JWT to present, and shipping
+# an anon key inside an unpacked extension would publish it to anyone who
+# installs it. The pairing token in the request body is the credential, and the
+# function resolves tenant_id from it server-side.
+[functions.turo-bridge-ingest]
+verify_jwt = false

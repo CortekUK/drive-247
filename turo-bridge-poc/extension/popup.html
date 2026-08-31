@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Drive247 Turo Bridge</title>
+  <!-- Styles live in popup.css. The MV3 CSP allows a linked stylesheet and an
+       inline <style>, but forbids inline <script> — which is why popup.js is a
+       separate file and why nothing here has an on* attribute. -->
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <header class="head">
+    <div class="mark" aria-hidden="true">
+      <!-- Inline SVG: no network fetch, so it cannot fail to load. -->
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 12h14"></path>
+        <path d="m13 6 6 6-6 6"></path>
+      </svg>
+    </div>
+    <div class="head-text">
+      <h1>Turo Bridge</h1>
+      <p>Drive247</p>
+    </div>
+  </header>
+
+  <main class="body">
+
+    <div class="field">
+      <div class="label-row">
+        <label for="token">Pairing token</label>
+        <button type="button" class="linkish subtle" id="reveal" aria-pressed="false">Show</button>
+      </div>
+      <input id="token" type="password" placeholder="d247_turo_…"
+             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p class="hint" id="tokenHint">Paste the token from your Drive247 portal.</p>
+    </div>
+
+    <button type="button" class="primary" id="sync">
+      <span class="spinner" id="spinner" hidden></span>
+      <span id="syncLabel">Sync one reservation</span>
+    </button>
+
+    <section class="status" id="status" data-phase="idle" aria-live="polite">
+      <div class="status-head">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="statusTitle">Ready</span>
+      </div>
+      <p class="status-detail" id="statusDetail"></p>
+      <span class="badge" id="badge" data-source="" hidden></span>
+
+      <dl class="result" id="result" hidden>
+        <div class="row"><dt>Trip</dt><dd class="mono" id="rTrip"></dd></div>
+        <div class="row"><dt>Vehicle</dt><dd id="rVehicle"></dd></div>
+        <div class="row"><dt>Guest</dt><dd id="rGuest"></dd></div>
+        <div class="row"><dt>Dates</dt><dd id="rDates"></dd></div>
+      </dl>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <p class="hint">Reads the Turo session already open in this browser. Never asks for your Turo password.</p>
+    <button type="button" class="linkish subtle" id="clear">Clear</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

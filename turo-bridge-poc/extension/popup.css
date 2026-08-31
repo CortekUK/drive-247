@@ -1,0 +1,374 @@
+/* popup.css — Drive247 Turo Bridge
+ *
+ * Follows the portal's design system: flat surfaces, 1px borders, no shadows,
+ * indigo #6366f1 as the single accent, status expressed as coloured TEXT rather
+ * than background pills. Fonts are a system stack, not DM Sans — an extension's
+ * default CSP blocks remote stylesheets, so pulling Google Fonts here would
+ * silently fail and fall back anyway.
+ */
+
+:root {
+  --indigo: #6366f1;
+  --indigo-soft: #eef2ff;
+  --ink: #080812;
+  --body: #404040;
+  --muted: #737373;
+  --surface: #ffffff;
+  --sunken: #f8fafc;
+  --line: #f1f5f9;
+  --line-strong: #e2e8f0;
+  --dark: #0f172a;
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+  --blue: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --indigo: #818cf8;
+    --indigo-soft: #1e1b4b;
+    --ink: #f8fafc;
+    --body: #cbd5e1;
+    --muted: #94a3b8;
+    --surface: #0b1120;
+    --sunken: #111827;
+    --line: #1f2937;
+    --line-strong: #253044;
+    --dark: #e2e8f0;
+    --green: #4ade80;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --blue: #60a5fa;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The UA's `[hidden] { display: none }` is a bare attribute selector, so ANY
+   class rule that sets `display` beats it. .result, .status and .primary all
+   set display, so popup.js's `el.hidden = true` would silently do nothing.
+   This rule is what makes hiding work at all — do not drop it. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 372px;
+  background: var(--surface);
+  color: var(--body);
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- header -- */
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--indigo);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.head-text h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.head-text p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ body -- */
+
+.body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--sunken);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+input::placeholder {
+  color: var(--muted);
+  font-family: inherit;
+}
+
+input:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 18%, transparent);
+}
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.hint.warn {
+  color: var(--amber);
+}
+
+.hint.good {
+  color: var(--green);
+}
+
+/* --------------------------------------------------------------- buttons -- */
+
+.primary {
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--indigo);
+  color: #fff;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter 0.12s ease;
+}
+
+.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--indigo);
+  cursor: pointer;
+}
+
+.linkish:hover {
+  text-decoration: underline;
+}
+
+.linkish.subtle {
+  color: var(--muted);
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* ---------------------------------------------------------------- status -- */
+
+.status {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status[data-phase="running"] .dot {
+  background: var(--blue);
+}
+.status[data-phase="done"] .dot {
+  background: var(--green);
+}
+.status[data-phase="error"] .dot {
+  background: var(--red);
+}
+
+.status[data-phase="done"] .status-head {
+  color: var(--green);
+}
+.status[data-phase="error"] .status-head {
+  color: var(--red);
+}
+
+.status-detail {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.status-detail:empty {
+  display: none;
+}
+
+/* Source badge — the one place a pill is used, because "is this real data?"
+   must be impossible to miss during a demo. */
+.badge {
+  align-self: flex-start;
+  font-family: Inter, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.badge[data-source="turo"] {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  color: var(--green);
+}
+
+.badge[data-source="fixture"] {
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--amber);
+}
+
+/* ---------------------------------------------------------------- result -- */
+
+.result {
+  margin: 4px 0 0;
+  border-top: 1px solid var(--line-strong);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.result .row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.result dt {
+  flex: none;
+  width: 62px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.result dd {
+  margin: 0;
+  flex: 1;
+  font-size: 12px;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px !important;
+}
+
+/* ---------------------------------------------------------------- footer -- */
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}

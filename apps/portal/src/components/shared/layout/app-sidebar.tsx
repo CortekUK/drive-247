@@ -32,7 +32,7 @@ import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
-import { UserPlus, Workflow } from "lucide-react";
+import { UserPlus, Workflow, DownloadCloud } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
@@ -288,6 +288,11 @@ export function AppSidebar() {
         { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
+        // Turo Bridge (PoC). Deliberately NOT behind a tenant feature flag: the
+        // flagged siblings above read a column with `=== true`, so an absent
+        // column evaluates false and the item silently vanishes — which on demo
+        // day is indistinguishable from a broken build.
+        { name: "Turo Bridge", href: "/turo-bridge", icon: DownloadCloud },
       ],
     },
     {
