@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { formatCurrency } from '../_shared/format-utils.ts';
 import { getStripeClientForAccount, getWebhookSecretCandidates, readHoldCaptureFacts } from '../_shared/stripe-client.ts';
+import { settleBookingPayment, confirmBonzahPolicy } from '../_shared/booking-settlement.ts';
 import { notifyOperatorsInApp } from '../_shared/notify-inapp.ts';
 import { sendEmail, getTenantNotificationRecipient, isOperatorEmailEnabled } from '../_shared/resend-service.ts';
 
@@ -1194,365 +1195,32 @@ serve(async (req) => {
             // Don't fail the webhook for notification errors
           }
         } else {
-          // Auto mode: Payment was captured
-          const isPortalPayment = session.metadata?.source === 'portal';
-          console.log("Auto checkout completed:", rentalId, isPortalPayment ? "(portal-initiated)" : "(booking flow)");
-
-          // For booking flow payments, update rental payment_status
-          if (!isPortalPayment) {
-            const { error: rentalUpdateError } = await supabase
-              .from("rentals")
-              .update({
-                payment_status: "fulfilled",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", rentalId);
-
-            if (rentalUpdateError) {
-              console.error("Failed to update rental payment_status:", rentalUpdateError);
-            } else {
-              console.log("Rental payment_status updated to fulfilled");
+          // Auto mode: Payment was captured.
+          //
+          // The entire body of this branch now lives in
+          // _shared/booking-settlement.ts, so that payment_intent.succeeded — the ONLY
+          // event an embedded Stripe Elements payment ever emits — can run exactly the
+          // same settlement. Nothing was dropped in the move: rentals.payment_status,
+          // the payments row -> Completed/captured, apply-payment, the PAYG and
+          // installment invoice settlement (self-heal and the category guard included),
+          // notify-booking-pending and place-deposit-hold all travelled together.
+          //
+          // The helper decides idempotency from the payments row's own state, never
+          // from which event called it — which is what makes it safe for Stripe to
+          // deliver BOTH events for one hosted checkout, in either order, more than once.
+          await settleBookingPayment(
+            { supabase, stripe, stripeOptions, platformAccount, logPrefix: "[TEST MODE]" },
+            {
+              rentalId,
+              checkoutSessionId: session.id,
+              paymentIntentId:
+                typeof session.payment_intent === "string"
+                  ? session.payment_intent
+                  : session.payment_intent?.id ?? null,
+              metadata: session.metadata ?? null,
+              amountMinorUnits: session.amount_total ?? null,
             }
-          }
-
-          // Find existing payment (created by create-checkout-session with Pending status)
-          const { data: existingPayment } = await supabase
-            .from("payments")
-            .select("id")
-            .eq("stripe_checkout_session_id", session.id)
-            .single();
-
-          let finalPaymentId: string | null = null;
-
-          if (existingPayment) {
-            // Update existing Pending payment to Completed
-            const { error: updateError } = await supabase
-              .from("payments")
-              .update({
-                status: "Completed",
-                capture_status: "captured",
-                verification_status: "auto_approved",
-                stripe_payment_intent_id: session.payment_intent as string,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", existingPayment.id);
-
-            if (updateError) {
-              console.error("Failed to update payment to Completed:", updateError);
-            } else {
-              console.log("Payment updated to Completed:", existingPayment.id);
-            }
-            finalPaymentId = existingPayment.id;
-          } else {
-            // No existing payment — create one (legacy booking flow)
-            const { data: rental } = await supabase
-              .from("rentals")
-              .select("customer_id, vehicle_id, monthly_amount, tenant_id")
-              .eq("id", rentalId)
-              .single();
-
-            if (rental) {
-              const paymentAmount = session.amount_total ? session.amount_total / 100 : rental.monthly_amount;
-              const today = new Date().toISOString().split("T")[0];
-
-              const paymentData: any = {
-                rental_id: rentalId,
-                customer_id: rental.customer_id,
-                vehicle_id: rental.vehicle_id,
-                amount: paymentAmount,
-                payment_date: today,
-                apply_from_date: today,
-                method: "Card",
-                payment_type: "Payment",
-                status: "Completed",
-                remaining_amount: paymentAmount,
-                verification_status: "auto_approved",
-                stripe_checkout_session_id: session.id,
-                stripe_payment_intent_id: session.payment_intent as string,
-                capture_status: "captured",
-                booking_source: "website",
-                platform_account: platformAccount,
-              };
-
-              if (rental.tenant_id) {
-                paymentData.tenant_id = rental.tenant_id;
-              }
-
-              const { data: newPayment, error: paymentError } = await supabase
-                .from("payments")
-                .insert(paymentData)
-                .select()
-                .single();
-
-              if (paymentError) {
-                console.error("Failed to create payment record:", paymentError);
-              } else {
-                console.log("Payment record created from webhook:", newPayment.id);
-                finalPaymentId = newPayment.id;
-              }
-            }
-          }
-
-          // Trigger FIFO allocation via apply-payment
-          if (finalPaymentId) {
-            try {
-              const targetCategories = session.metadata?.target_categories
-                ? JSON.parse(session.metadata.target_categories)
-                : undefined;
-
-              console.log("Triggering apply-payment for:", finalPaymentId, targetCategories ? `categories: ${targetCategories.join(', ')}` : "(universal FIFO)");
-
-              const applyResponse = await fetch(
-                `${Deno.env.get("SUPABASE_URL")}/functions/v1/apply-payment`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                  },
-                  body: JSON.stringify({
-                    paymentId: finalPaymentId,
-                    ...(targetCategories ? { targetCategories } : {}),
-                  }),
-                }
-              );
-              if (applyResponse.ok) {
-                console.log("Payment FIFO allocation completed");
-              } else {
-                console.error("FIFO allocation failed:", await applyResponse.text());
-              }
-            } catch (applyError) {
-              console.error("Error applying payment:", applyError);
-            }
-
-            const paygAccrualId = session.metadata?.payg_accrual_id;
-            if (paygAccrualId) {
-              const { error: settleErr } = await supabase.rpc("payg_settle_invoice", {
-                p_payment_id: finalPaymentId,
-                p_accrual_id: paygAccrualId,
-              });
-              if (settleErr) {
-                console.error("PAYG settle_invoice failed:", settleErr);
-              } else {
-                console.log("PAYG invoice settled:", paygAccrualId);
-              }
-            }
-
-            let installmentId = session.metadata?.installment_id;
-            const installmentPlanId = session.metadata?.installment_plan_id;
-
-            // SELF-HEAL FALLBACK: when the dialog forgot to stamp
-            // installment_id (typically a stale dev bundle that didn't
-            // forward the prop, but possible for any consumer that doesn't
-            // know about installments), discover it server-side. We have
-            // enough signal: rental_id is always on metadata, and the
-            // rental either has an installment plan or doesn't. If it does
-            // AND the payment looks like a rental-installment payment (not
-            // an extension/bonzah/etc.), settle the latest overdue or
-            // due-today open slot. installment_settle_invoice cumulatively
-            // supersedes earlier opens, so this matches the
-            // PAYG-style "pay the latest invoice and earlier ones clear"
-            // behavior that's already wired for paygAccrualId.
-            //
-            // CRITICAL GUARD: skip self-heal when this payment is
-            // category-targeted to fees only (Tax, Service Fee, etc.). A
-            // Tax payment must never settle an installment slot — that
-            // corrupts the plan (flips upfront_paid=true, stamps
-            // upfront_payment_id with the wrong payment) and leaves the
-            // Tax ledger entry untouched, so the UI shows "Tax: Not Paid"
-            // while the installment side records the money. The explicit
-            // case (installmentId stamped by the dialog) is unaffected.
-            const rentalIdFromMeta = session.metadata?.rental_id;
-            const hasExtensionId = !!session.metadata?.extension_id;
-            const hasBonzahId = !!session.metadata?.bonzah_policy_id;
-            const targetCategoriesMeta: string[] | null = session.metadata?.target_categories
-              ? (() => { try { return JSON.parse(session.metadata!.target_categories!); } catch { return null; } })()
-              : null;
-            const isCategoryTargeted = Array.isArray(targetCategoriesMeta) && targetCategoriesMeta.length > 0;
-            const targetsIncludeRental = isCategoryTargeted && targetCategoriesMeta!.includes("Rental");
-            const allowInstallmentSelfHeal = !isCategoryTargeted || targetsIncludeRental;
-            if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId && allowInstallmentSelfHeal) {
-              try {
-                const todayStr = new Date().toISOString().split("T")[0];
-                // Find the latest overdue/due-today open installment for
-                // this rental. Latest (highest installment_number) is the
-                // PAYG-style cumulative target — settling it auto-clears
-                // earlier ones via supersession.
-                const { data: targetSlot } = await supabase
-                  .from("scheduled_installments")
-                  .select("id, installment_number, due_date, installment_plan_id")
-                  .eq("rental_id", rentalIdFromMeta)
-                  .eq("invoice_status", "open")
-                  .lte("due_date", todayStr)
-                  .order("installment_number", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (targetSlot) {
-                  installmentId = targetSlot.id;
-                  console.log("Installment self-heal: resolved", targetSlot.id, "from rental", rentalIdFromMeta, "(slot", targetSlot.installment_number + ")");
-                }
-              } catch (fbErr) {
-                console.error("Installment self-heal lookup failed:", fbErr);
-              }
-            } else if (!installmentId && finalPaymentId && rentalIdFromMeta && !hasExtensionId && !hasBonzahId && !allowInstallmentSelfHeal) {
-              console.log(`[TEST MODE] Skipping installment self-heal: payment is targeted to non-Rental categories (${targetCategoriesMeta!.join(", ")}). Installment plan untouched.`);
-            }
-
-            if (installmentId && finalPaymentId) {
-              const { error: instSettleErr } = await supabase.rpc("installment_settle_invoice", {
-                p_payment_id: finalPaymentId,
-                p_installment_id: installmentId,
-              });
-              if (instSettleErr) {
-                console.error("Installment settle_invoice failed:", instSettleErr);
-              } else {
-                console.log("Installment invoice settled:", installmentId);
-                if (installmentPlanId) {
-                  const paymentIntentId = typeof session.payment_intent === "string"
-                    ? session.payment_intent
-                    : session.payment_intent?.id;
-                  let paymentMethodId: string | undefined;
-                  if (paymentIntentId) {
-                    try {
-                      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-                      paymentMethodId = typeof pi.payment_method === "string"
-                        ? pi.payment_method
-                        : pi.payment_method?.id;
-                    } catch (piErr) {
-                      console.error("Failed to retrieve PI for installment plan:", piErr);
-                    }
-                  }
-                  await supabase
-                    .from("installment_plans")
-                    .update({
-                      status: "active",
-                      upfront_paid: true,
-                      upfront_payment_id: finalPaymentId,
-                      stripe_payment_method_id: paymentMethodId ?? null,
-                      collection_mode: paymentMethodId ? "auto" : "manual",
-                    })
-                    .eq("id", installmentPlanId);
-                }
-              }
-            }
-          }
-
-          // Payment received: both the in-app BELL and the operator EMAIL are now
-          // emitted universally by DB triggers (notify_payment_received on payments,
-          // and the notify-operator-email dispatch on notifications), which fire from
-          // EVERY settlement path — so nothing is emitted here.
-
-          // Send booking pending notification for booking flow (not portal)
-          if (!isPortalPayment && finalPaymentId) {
-            try {
-              const { data: rentalWithDetails } = await supabase
-                .from("rentals")
-                .select(`
-                  id,
-                  start_date,
-                  end_date,
-                  monthly_amount,
-                  tenant_id,
-                  customer:customers(id, name, email, phone),
-                  vehicle:vehicles(id, make, model, reg)
-                `)
-                .eq("id", rentalId)
-                .single();
-
-              if (rentalWithDetails && rentalWithDetails.customer && rentalWithDetails.vehicle) {
-                const vehicleName = rentalWithDetails.vehicle.make && rentalWithDetails.vehicle.model
-                  ? `${rentalWithDetails.vehicle.make} ${rentalWithDetails.vehicle.model}`
-                  : rentalWithDetails.vehicle.reg;
-
-                const notificationData = {
-                  paymentId: finalPaymentId,
-                  rentalId: rentalId,
-                  tenantId: rentalWithDetails.tenant_id,
-                  customerId: rentalWithDetails.customer.id,
-                  customerName: rentalWithDetails.customer.name,
-                  customerEmail: rentalWithDetails.customer.email,
-                  customerPhone: rentalWithDetails.customer.phone,
-                  vehicleName: vehicleName,
-                  vehicleMake: rentalWithDetails.vehicle.make,
-                  vehicleModel: rentalWithDetails.vehicle.model,
-                  vehicleReg: rentalWithDetails.vehicle.reg,
-                  pickupDate: new Date(rentalWithDetails.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                  returnDate: new Date(rentalWithDetails.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-                  amount: rentalWithDetails.monthly_amount || (session.amount_total ? session.amount_total / 100 : 0),
-                  bookingRef: rentalId.substring(0, 8).toUpperCase(),
-                  paymentMode: 'auto',
-                };
-
-                console.log("Sending booking pending notification for auto mode:", notificationData.bookingRef);
-
-                const notifyResponse = await fetch(
-                  `${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-booking-pending`,
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                    },
-                    body: JSON.stringify(notificationData),
-                  }
-                );
-
-                if (notifyResponse.ok) {
-                  console.log("Booking notification sent successfully");
-                } else {
-                  console.error("Failed to send booking notification:", await notifyResponse.text());
-                }
-              }
-            } catch (notifyError) {
-              console.error("Error sending booking notification:", notifyError);
-            }
-          }
-
-          // AUTO-PLACE DEPOSIT HOLD: when the portal's new-rental flow stamps
-          // place_deposit_hold='true', the rental payment we just captured
-          // saved the customer's card (setup_future_usage: 'off_session' in
-          // create-checkout-session). Now authorise the deposit on that same
-          // card without prompting the customer — place-deposit-hold creates
-          // a manual-capture PaymentIntent and writes deposit_hold_status='held'
-          // on the rental. The function is idempotent; if the rental already
-          // has a hold or the tenant has deposits disabled, it no-ops safely.
-          if (session.metadata?.place_deposit_hold === "true" && rentalId) {
-            console.log("[TEST MODE] place_deposit_hold flag detected, placing off-session hold for rental:", rentalId);
-            try {
-              const holdResponse = await fetch(
-                `${Deno.env.get("SUPABASE_URL")}/functions/v1/place-deposit-hold`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                  },
-                  body: JSON.stringify({ rentalId }),
-                }
-              );
-              const holdResult = await holdResponse.json().catch(() => ({}));
-              if (holdResponse.ok) {
-                if (holdResult.skipped) {
-                  console.log("[TEST MODE] Deposit hold skipped:", holdResult.message);
-                } else if (holdResult.alreadyHeld) {
-                  console.log("[TEST MODE] Deposit hold already active");
-                } else {
-                  console.log("[TEST MODE] Deposit hold placed:", holdResult.paymentIntentId, "amount:", holdResult.amount);
-                }
-              } else {
-                // Don't fail the webhook — the rental payment is already captured.
-                // The hold can be placed manually from the rental detail page.
-                console.error("[TEST MODE] place-deposit-hold failed:", holdResult?.error || holdResponse.statusText);
-                await supabase
-                  .from("rentals")
-                  .update({ deposit_hold_status: "failed" })
-                  .eq("id", rentalId)
-                  .is("deposit_hold_status", null);
-              }
-            } catch (holdError) {
-              console.error("[TEST MODE] Error invoking place-deposit-hold:", holdError);
-            }
-          }
+          );
         }
 
         // BACKFILL: Ensure stripe_payment_intent_id is saved for ALL matching payments
@@ -1578,37 +1246,22 @@ serve(async (req) => {
           }
         }
 
-        // BONZAH INSURANCE: Confirm payment and issue policy if bonzah_policy_id is present
+        // BONZAH INSURANCE: Confirm payment and issue policy if bonzah_policy_id is
+        // present. This deliberately sits OUTSIDE the preauth/auto fork — a pre-auth
+        // booking can carry a policy too — which is exactly why it is its own helper
+        // rather than part of settleBookingPayment.
         const bonzahPolicyId = session.metadata?.bonzah_policy_id;
         if (bonzahPolicyId) {
-          console.log("[TEST MODE] Confirming Bonzah insurance payment for policy:", bonzahPolicyId);
-          try {
-            const bonzahResponse = await fetch(
-              `${Deno.env.get("SUPABASE_URL")}/functions/v1/bonzah-confirm-payment`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                },
-                body: JSON.stringify({
-                  policy_record_id: bonzahPolicyId,
-                  stripe_payment_intent_id: session.payment_intent as string,
-                }),
-              }
-            );
-
-            if (bonzahResponse.ok) {
-              const bonzahResult = await bonzahResponse.json();
-              console.log("[TEST MODE] Bonzah policy issued successfully:", bonzahResult.policy_no);
-            } else {
-              const errorText = await bonzahResponse.text();
-              console.error("[TEST MODE] Failed to confirm Bonzah payment:", errorText);
+          await confirmBonzahPolicy(
+            { logPrefix: "[TEST MODE]" },
+            {
+              bonzahPolicyId,
+              paymentIntentId:
+                typeof session.payment_intent === "string"
+                  ? session.payment_intent
+                  : session.payment_intent?.id ?? null,
             }
-          } catch (bonzahError) {
-            console.error("[TEST MODE] Error calling bonzah-confirm-payment:", bonzahError);
-            // Don't fail the webhook for Bonzah errors - payment was still successful
-          }
+          );
         }
         break;
       }
@@ -1616,6 +1269,48 @@ serve(async (req) => {
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log("PaymentIntent succeeded:", paymentIntent.id);
+
+        // EMBEDDED ELEMENTS SETTLEMENT — the second entry point into
+        // _shared/booking-settlement.ts.
+        //
+        // An Elements payment creates no Checkout Session, so
+        // checkout.session.completed never fires and THIS is the only event that will
+        // ever arrive for it. Without this branch the card is charged and nothing
+        // downstream happens: no rentals.payment_status, no ledger allocation, no
+        // booking email, no deposit hold — a silent settlement failure on real money.
+        //
+        // Gated on the discriminator create-booking-payment-intent stamps. A hosted
+        // Checkout ALSO emits payment_intent.succeeded for the same money and Stripe
+        // does not order the two deliveries, so settling every succeeded PaymentIntent
+        // here would double-settle every hosted booking and — on the deliveries where
+        // this event won the race — insert a duplicate payments row, because the
+        // session-keyed lookup would still find nothing. Hosted PaymentIntents do not
+        // carry the flag and fall straight through to the original behaviour below.
+        if (paymentIntent.metadata?.settlement_source === "payment_intent") {
+          await settleBookingPayment(
+            { supabase, stripe, stripeOptions, platformAccount, logPrefix: "[TEST MODE]" },
+            {
+              rentalId: paymentIntent.metadata?.rental_id ?? null,
+              checkoutSessionId: null,
+              paymentIntentId: paymentIntent.id,
+              metadata: paymentIntent.metadata ?? null,
+              amountMinorUnits: paymentIntent.amount_received || paymentIntent.amount,
+            }
+          );
+
+          const elementsBonzahPolicyId = paymentIntent.metadata?.bonzah_policy_id;
+          if (elementsBonzahPolicyId) {
+            await confirmBonzahPolicy(
+              { logPrefix: "[TEST MODE]" },
+              { bonzahPolicyId: elementsBonzahPolicyId, paymentIntentId: paymentIntent.id }
+            );
+          }
+
+          // settleBookingPayment already advanced the row past Pending and handed it
+          // to apply-payment, which owns the move to 'Applied'. Falling through to the
+          // generic updater below would stomp that.
+          break;
+        }
 
         // Update payment record if exists
         const { data: payment } = await supabase
