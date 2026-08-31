@@ -1,12 +1,18 @@
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { FAQS } from "@/lib/fixtures/landing";
+import { loadFaqs } from "@/lib/cms/server";
 
-export function FaqSection() {
+import { FaqAccordion } from "@/components/sections/faq-accordion";
+
+/**
+ * The FAQ band. Questions come from the `faqs` table, which the portal edits
+ * directly — there is no `cms_page_sections` key for them.
+ *
+ * The heading and standfirst below have no CMS field anywhere in the portal, so
+ * they are design constants. Flagged in the coverage report rather than invented
+ * as a key nobody writes to.
+ */
+export async function FaqSection() {
+  const seed = await loadFaqs();
+
   return (
     <section className="bg-brand-cream">
       <div className="container-page py-12 lg:py-24">
@@ -21,27 +27,7 @@ export function FaqSection() {
         </header>
 
         <div className="mx-auto mt-10 max-w-3xl">
-          <Accordion
-            type="single"
-            collapsible
-            defaultValue={FAQS[0]?.id}
-            className="space-y-3"
-          >
-            {FAQS.map((faq) => (
-              <AccordionItem
-                key={faq.id}
-                value={faq.id}
-                className="rounded-xl border-0 bg-brand-stone px-5 data-[state=open]:bg-brand-stone"
-              >
-                <AccordionTrigger className="py-5 text-base font-medium text-brand-text hover:no-underline">
-                  {faq.question}
-                </AccordionTrigger>
-                <AccordionContent className="pt-0 pb-5 text-sm leading-relaxed text-muted-foreground">
-                  {faq.answer}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <FaqAccordion seed={seed} />
         </div>
       </div>
     </section>

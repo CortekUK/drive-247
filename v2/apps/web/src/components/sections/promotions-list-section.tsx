@@ -1,32 +1,37 @@
 import { Tag } from "lucide-react";
-import Image from "next/image";
 
-import { PROMOTIONS } from "@/lib/fixtures/promotions";
-import type { Promotion } from "@/lib/fixtures/promotions";
-import { cn } from "@/lib/utils";
+import { DEFAULT_PROMOTIONS_TERMS } from "@/lib/cms/defaults";
+import { getSection } from "@/lib/cms/merge";
+import { loadPageSections, loadPromotions } from "@/lib/cms/server";
 
-const ACCENT_RING: Record<Promotion["accent"], string> = {
-  amber: "from-brand-amber/0 via-black/35 to-black/85",
-  forest: "from-brand-forest/0 via-brand-forest/40 to-brand-forest-deep/95",
-  stone: "from-black/0 via-black/40 to-black/85",
-  deep: "from-black/0 via-brand-forest-darker/45 to-brand-forest-darker/95",
-};
+import { PromotionsGrid } from "@/components/sections/promotions-grid";
 
-const ACCENT_TAG: Record<Promotion["accent"], string> = {
-  amber: "bg-brand-amber text-brand-text",
-  forest: "bg-white text-brand-forest",
-  stone: "bg-brand-stone text-brand-text",
-  deep: "bg-brand-amber text-brand-text",
-};
+/**
+ * The promotions band. Three portal sources meet here:
+ *
+ *   the `promotions` table            -> the cards
+ *   `promotions / empty_state`        -> what shows when none are running
+ *   `promotions / terms`              -> the small print underneath
+ *
+ * The whole page-sections map goes to the grid rather than just the merged
+ * empty state: it is exactly what `usePageSections("promotions")` caches, so
+ * handing it over seeds the client query itself instead of freezing one
+ * server-rendered snapshot of one key into a prop.
+ *
+ * The heading above the cards has no portal field, so it stays a constant. The
+ * terms block is absent from the Figma design and defaults to empty, so it
+ * appears only for operators who have written terms.
+ */
+export async function PromotionsListSection() {
+  const [seed, sections] = await Promise.all([
+    loadPromotions(),
+    loadPageSections("promotions"),
+  ]);
 
-const ACCENT_DISCOUNT: Record<Promotion["accent"], string> = {
-  amber: "text-brand-amber",
-  forest: "text-white",
-  stone: "text-brand-stone",
-  deep: "text-brand-amber",
-};
+  const terms = getSection(sections, "terms", DEFAULT_PROMOTIONS_TERMS);
+  const termsTitle = terms.title.trim();
+  const showTerms = termsTitle !== "" && terms.terms.length > 0;
 
-export function PromotionsListSection() {
   return (
     <section className="bg-white">
       <div className="container-page py-12 lg:py-20">
@@ -43,89 +48,29 @@ export function PromotionsListSection() {
           </p>
         </header>
 
-        <ul className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {PROMOTIONS.map((promo) => (
-            <PromoCard key={promo.id} promo={promo} />
-          ))}
-        </ul>
+        <PromotionsGrid seed={seed} sectionsSeed={sections} />
+
+        {showTerms && (
+          <div className="mx-auto mt-12 max-w-3xl rounded-[14px] border border-brand-border-soft bg-brand-cream p-6">
+            <h3 className="text-base font-semibold text-brand-text">
+              {termsTitle}
+            </h3>
+            <ul className="mt-3 space-y-2">
+              {terms.terms.map((term, index) => (
+                <li
+                  key={`${index}-${term.slice(0, 24)}`}
+                  className="flex gap-2 text-[13px] leading-[20px] text-brand-text-soft"
+                >
+                  <span aria-hidden className="text-brand-text-subtle">
+                    •
+                  </span>
+                  <span className="min-w-0 flex-1">{term}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </section>
-  );
-}
-
-function PromoCard({ promo }: { promo: Promotion }) {
-  return (
-    <li className="flex flex-col">
-      <article className="group relative isolate flex aspect-[4/5] flex-col justify-between overflow-hidden rounded-[14px] bg-brand-text">
-        <Image
-          src={promo.image}
-          alt={promo.imageAlt}
-          fill
-          sizes="(min-width: 1024px) 280px, (min-width: 640px) 50vw, 100vw"
-          className="-z-20 object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-        />
-        <div
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b",
-            ACCENT_RING[promo.accent],
-          )}
-        />
-
-        <div className="relative flex items-start justify-between p-4">
-          <span
-            className={cn(
-              "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]",
-              ACCENT_TAG[promo.accent],
-            )}
-          >
-            {promo.badge}
-          </span>
-          <BrandWingsMark className="text-white/85" />
-        </div>
-
-        <div className="relative flex flex-col items-start gap-1 p-4">
-          <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-white/85">
-            {promo.title}
-          </p>
-          <p
-            className={cn(
-              "text-[34px] font-semibold leading-[0.95] tracking-tight",
-              ACCENT_DISCOUNT[promo.accent],
-            )}
-          >
-            {promo.discount}
-          </p>
-        </div>
-      </article>
-
-      <p className="mt-3 text-[13px] leading-[20px] text-brand-text">
-        {promo.caption}{" "}
-        <span className="text-brand-text-subtle">{promo.validUntil}</span>
-      </p>
-    </li>
-  );
-}
-
-function BrandWingsMark({ className }: { className?: string }) {
-  return (
-    <svg
-      width="34"
-      height="14"
-      viewBox="0 0 34 14"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      <path
-        d="M17 7 L1 4 L4 6 L1 7 L4 8 L1 10 L17 7 L33 4 L30 6 L33 7 L30 8 L33 10 L17 7Z"
-        stroke="currentColor"
-        strokeWidth="0.7"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <circle cx="17" cy="7" r="1.2" fill="currentColor" />
-    </svg>
   );
 }

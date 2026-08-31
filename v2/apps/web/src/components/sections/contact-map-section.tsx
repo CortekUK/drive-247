@@ -1,22 +1,92 @@
 import { CornerUpRight } from "lucide-react";
 import Link from "next/link";
 
-// Coordinate-based embed avoids Google's auto-generated place tooltip.
-// (Dubai Silicon Oasis approx 25.118, 55.391)
-const MAP_EMBED_SRC =
+import {
+  DEFAULT_SITE_CONTACT,
+  DEFAULT_SITE_LOGO,
+  EMPTY_CONTACT_INFO,
+  FALLBACK_OFFICE_ADDRESS,
+} from "@/lib/cms/defaults";
+import { loadSection } from "@/lib/cms/server";
+
+/**
+ * The location card and map.
+ *
+ * The shipped fallback is Drive247's own Dubai office, embedded by COORDINATES
+ * rather than by name — a coordinate embed avoids Google's auto-generated place
+ * tooltip sitting over the card. That is why it is a constant here and not in
+ * `DEFAULT_SITE_CONTACT`: an operator's default address must never silently be
+ * ours.
+ *
+ * Once an operator fills in `site-settings / contact` (or the contact page's
+ * `office.address`), the embed switches to a query on THEIR address and the
+ * links point at their `google_maps_url` when they set one.
+ */
+// Dubai Silicon Oasis approx 25.118, 55.391
+const FALLBACK_EMBED =
   "https://maps.google.com/maps?q=25.1180,55.3910&z=14&output=embed&iwloc=near";
 
-const MAP_LINK =
+const FALLBACK_MAP_LINK =
   "https://www.google.com/maps/place/Dubai+Silicon+Oasis,+Dubai,+UAE";
 
-export function ContactMapSection() {
+function joinAddress(parts: readonly string[]): string {
+  return parts.map((part) => part.trim()).filter((part) => part !== "").join(", ");
+}
+
+export async function ContactMapSection() {
+  const [site, logo, info] = await Promise.all([
+    loadSection("site-settings", "contact", DEFAULT_SITE_CONTACT),
+    loadSection("site-settings", "logo", DEFAULT_SITE_LOGO),
+    // EMPTY, not the default: this section has to know whether the operator
+    // actually supplied an address, because a fallback address must not become
+    // the map's search query. The default is applied further down, for display
+    // only.
+    loadSection("contact", "contact_info", EMPTY_CONTACT_INFO),
+  ]);
+
+  // A street line or a city is what makes an address findable. Without one,
+  // the site-settings block is not an address at all — the seeded tenant has
+  // only `country: "USA"`, and feeding that to Google returns a map of the
+  // United States sitting under a card captioned with one word.
+  const hasSiteAddress =
+    site.address_line1.trim() !== "" || site.city.trim() !== "";
+
+  const siteAddress = hasSiteAddress
+    ? joinAddress([
+        site.address_line1,
+        site.address_line2,
+        site.city,
+        site.state,
+        site.zip,
+        site.country,
+      ])
+    : "";
+
+  // The contact page's own office field wins — it is the one an operator edits
+  // while they are looking at this page.
+  const address = info.office.address.trim() || siteAddress;
+  const hasAddress = address !== "";
+
+  const embedSrc = hasAddress
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=14&output=embed&iwloc=near`
+    : FALLBACK_EMBED;
+
+  const mapLink =
+    site.google_maps_url.trim() ||
+    (hasAddress
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+      : FALLBACK_MAP_LINK);
+
+  const displayAddress = hasAddress ? address : FALLBACK_OFFICE_ADDRESS;
+  const name = logo.logo_alt.trim() || "Drive247";
+
   return (
     <section className="bg-brand-cream">
       <div className="container-page pb-12">
         <div className="relative overflow-hidden rounded-[16px] ring-1 ring-brand-border">
           <iframe
-            src={MAP_EMBED_SRC}
-            title="Drive247 location"
+            src={embedSrc}
+            title={`${name} location`}
             loading="lazy"
             referrerPolicy="no-referrer-when-downgrade"
             className="block h-[420px] w-full border-0 lg:h-[520px]"
@@ -26,7 +96,7 @@ export function ContactMapSection() {
               of the iframe) and route the click to our own Google Maps link.
               Hidden on mobile where the address card already takes that area. */}
           <a
-            href={MAP_LINK}
+            href={mapLink}
             target="_blank"
             rel="noreferrer"
             aria-label="Open in Google Maps"
@@ -41,11 +111,11 @@ export function ContactMapSection() {
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-[13px] font-semibold text-brand-text">
-                    Drive247
+                  <h3 className="min-w-0 truncate text-[13px] font-semibold text-brand-text">
+                    {name}
                   </h3>
                   <a
-                    href={MAP_LINK}
+                    href={mapLink}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-brand-progress-bar hover:underline"
@@ -55,14 +125,13 @@ export function ContactMapSection() {
                   </a>
                 </div>
                 <p className="mt-1 text-[11px] leading-snug text-brand-text-soft">
-                  IFZA - Building A1 DDP - Dubai Silicon Oasis - Industrial Area
-                  - Dubai - United Arab Emirates
+                  {displayAddress}
                 </p>
               </div>
             </div>
 
             <Link
-              href={MAP_LINK}
+              href={mapLink}
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-flex w-full items-center justify-center rounded-full bg-brand-forest px-4 py-2 text-[12px] font-medium text-white transition-opacity hover:opacity-90"

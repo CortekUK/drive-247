@@ -1,14 +1,10 @@
-import { Facebook, Instagram, Twitter, Youtube } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-const SOCIALS = [
-  { Icon: Youtube, href: "#", label: "YouTube" },
-  { Icon: Instagram, href: "#", label: "Instagram" },
-  { Icon: Facebook, href: "#", label: "Facebook" },
-  { Icon: Twitter, href: "#", label: "X" },
-];
+import { DEFAULT_ABOUT_HERO, DEFAULT_SITE_SOCIAL } from "@/lib/cms/defaults";
+import { loadSection } from "@/lib/cms/server";
+import { socialLinks } from "@/lib/cms/social";
 
 type AboutHeroSectionProps = {
   imageSrc?: string;
@@ -21,16 +17,41 @@ type AboutHeroSectionProps = {
   ctaHref?: string;
 };
 
-export function AboutHeroSection({
+/**
+ * The shared page hero — /about, /fleet, /promotions and /reviews all use it.
+ *
+ * CMS wiring has to respect that sharing. `about / hero` supplies the copy ONLY
+ * when the page has not passed its own: /about passes nothing and so becomes
+ * operator-controlled, while /fleet, /promotions and /reviews pass explicit
+ * headings and keep them. Reading `about / hero` unconditionally would put the
+ * about-page headline on all four.
+ *
+ * (The portal does have a `fleet / hero` and a `promotions / hero`. Wiring
+ * those needs the pages to stop hardcoding their copy, which is a one-line edit
+ * in files this agent does not own — see the coverage report.)
+ *
+ * The social row is genuinely shared, so it reads `site-settings / social` on
+ * every page that renders this hero.
+ */
+export async function AboutHeroSection({
   imageSrc = "/booking_landingpage/about-hero.jpg",
   imageAlt = "",
   imageObjectPosition = "70% center",
-  heading = "The Pinnacle of Luxury Mobility.",
-  body = "Founded in 2010 to provide the highest standard of premium vehicle rentals with unmatched flexibility and discretion.",
+  heading,
+  body,
   topBadge,
   ctaLabel = "Rent a Car",
   ctaHref = "/booking",
 }: AboutHeroSectionProps = {}) {
+  const [hero, social] = await Promise.all([
+    loadSection("about", "hero", DEFAULT_ABOUT_HERO),
+    loadSection("site-settings", "social", DEFAULT_SITE_SOCIAL),
+  ]);
+
+  const resolvedHeading = heading ?? hero.title;
+  const resolvedBody = body ?? hero.subtitle;
+  const socials = socialLinks(social);
+
   return (
     <section className="relative isolate -mt-[88px] overflow-hidden bg-brand-text">
       {/* Background image — pulled up under the navbar so the navbar
@@ -60,10 +81,10 @@ export function AboutHeroSection({
 
         <div className="flex max-w-[640px] flex-col gap-4">
           <h1 className="text-3xl font-semibold leading-[1.05] tracking-tight text-brand-text sm:text-4xl lg:text-[58px]">
-            {heading}
+            {resolvedHeading}
           </h1>
           <p className="max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
-            {body}
+            {resolvedBody}
           </p>
         </div>
 
@@ -76,9 +97,9 @@ export function AboutHeroSection({
 
         <div className="mt-6 flex items-center gap-4">
           <span className="text-[13px] text-brand-text-soft">Follow us:</span>
-          <ul className="flex items-center gap-3">
-            {SOCIALS.map(({ Icon, href, label }) => (
-              <li key={label}>
+          <ul className="flex flex-wrap items-center gap-3">
+            {socials.map(({ key, href, label, Icon }) => (
+              <li key={key}>
                 <Link
                   href={href}
                   aria-label={label}

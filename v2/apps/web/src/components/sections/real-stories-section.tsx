@@ -1,10 +1,26 @@
 import { Users } from "lucide-react";
 
 import { MarqueeStrip } from "@/components/sections/marquee-strip";
-import { REVIEWS } from "@/lib/fixtures/reviews";
-import type { Review } from "@/lib/fixtures/reviews";
+import { DEFAULT_STORIES } from "@/lib/cms/defaults";
+import { loadTestimonials } from "@/lib/cms/server";
+import type { TestimonialItem } from "@/lib/cms/types";
 
-export function RealStoriesSection() {
+/**
+ * The /reviews wall — the same `testimonials` table as the two-up quote band,
+ * shown in full rather than sliced to two.
+ *
+ * Server-rendered end to end, with no client half. Reviews are the whole point
+ * of this page: they belong in the HTML for a crawler, and there is nothing on
+ * the page for a user to interact with that would make them go stale mid-visit.
+ *
+ * The heading and standfirst are design constants — the portal has no /reviews
+ * section keys at all (its `reviews` CMS page is seeded with zero sections).
+ */
+export async function RealStoriesSection() {
+  const rows = await loadTestimonials();
+  const stories: readonly TestimonialItem[] =
+    rows && rows.length > 0 ? rows : DEFAULT_STORIES;
+
   return (
     <section className="bg-white">
       <div className="container-page py-12 lg:py-20">
@@ -22,8 +38,8 @@ export function RealStoriesSection() {
         </header>
 
         <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {REVIEWS.map((review) => (
-            <ReviewCard key={review.id} review={review} />
+          {stories.map((story) => (
+            <ReviewCard key={story.id} story={story} />
           ))}
         </ul>
       </div>
@@ -33,21 +49,25 @@ export function RealStoriesSection() {
   );
 }
 
-function ReviewCard({ review }: { review: Review }) {
+function ReviewCard({ story }: { story: TestimonialItem }) {
+  const source = story.source.trim();
+
   return (
     <li className="flex flex-col gap-4 rounded-[14px] border border-brand-border-soft bg-white p-5 transition-shadow hover:shadow-[0_4px_18px_rgba(0,0,0,0.06)]">
       <p className="flex-1 text-[13px] leading-[20px] text-brand-text-soft">
-        “{review.quote}”
+        “{story.quote}”
       </p>
       <div className="flex items-center gap-3">
         <Avatar />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold leading-tight text-brand-text">
-            {review.author}
+            {story.author}
           </p>
-          <p className="text-[11px] leading-tight text-brand-text-subtle">
-            Rented: {review.rented}
-          </p>
+          {source !== "" && (
+            <p className="text-[11px] leading-tight text-brand-text-subtle">
+              {source}
+            </p>
+          )}
         </div>
       </div>
     </li>

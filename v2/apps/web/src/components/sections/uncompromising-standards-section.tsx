@@ -1,19 +1,42 @@
 import Image from "next/image";
 
-export function UncompromisingStandardsSection() {
+import { DEFAULT_ABOUT_STORY } from "@/lib/cms/defaults";
+import { htmlToParagraphs } from "@/lib/cms/html";
+import { loadSection } from "@/lib/cms/server";
+
+/**
+ * The founder's-note band on /about — the portal's `about / about_story`.
+ *
+ * That field is rich text from the portal's Tiptap editor, stored as raw HTML.
+ * It is rendered as TEXT paragraphs, never injected: see `lib/cms/html.ts` for
+ * why (stored XSS, and a rich-text `<table>` would destroy this fixed
+ * two-column layout at 360px).
+ *
+ * The founder attribution below has no CMS field and stays a design constant.
+ */
+export async function UncompromisingStandardsSection() {
+  const story = await loadSection("about", "about_story", DEFAULT_ABOUT_STORY);
+  const paragraphs = htmlToParagraphs(story.content);
+
   return (
     <section className="bg-white">
       <div className="container-page grid grid-cols-1 items-center gap-10 py-12 lg:grid-cols-2 lg:gap-16 lg:py-20">
         <div className="flex flex-col gap-6">
           <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-[1.05]">
-            Uncompromising Standards
+            {story.title}
           </h2>
-          <p className="max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
-            “What began as a boutique service has grown into the trusted choice
-            for executives and discerning clients. We recognized a need for a
-            service that truly understood the unique requirements of premium
-            hire — offering flexible terms without compromising on quality.”
-          </p>
+
+          <div className="flex max-w-[480px] flex-col gap-4">
+            {paragraphs.map((paragraph, index) => (
+              <p
+                key={`${index}-${paragraph.slice(0, 24)}`}
+                className="text-sm leading-relaxed text-brand-text-soft sm:text-base"
+              >
+                {paragraph}
+              </p>
+            ))}
+          </div>
+
           <div className="mt-2 flex flex-col gap-1">
             <p className="text-sm font-medium text-brand-text-soft">
               Founder Drive 247

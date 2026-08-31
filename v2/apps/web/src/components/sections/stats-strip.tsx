@@ -1,12 +1,36 @@
-import { STATS } from "@/lib/fixtures/landing";
+import { evenGridCols } from "@/lib/cms/format";
+import { DEFAULT_STATS } from "@/lib/cms/defaults";
+import { loadSection } from "@/lib/cms/server";
 
-export function StatsStrip() {
+/**
+ * The dark stats band. Reads the portal's `about / stats` section.
+ *
+ * Two things the fixture version could not do:
+ *
+ *  - the column count follows the operator. It was hardcoded `sm:grid-cols-4`
+ *    because the fixture had exactly four stats; a tenant who writes three
+ *    would have left a hole in the row.
+ *  - `value` and `suffix` are separate fields in the portal ("500" + "+"), so
+ *    they are joined here rather than expecting one pre-formatted string.
+ *
+ * NOT wired: `StatItem.use_dynamic` / `dynamic_source`, the portal's option to
+ * count a stat live from the fleet or customer tables. The operator's typed
+ * value renders either way; see the coverage note.
+ */
+export async function StatsStrip() {
+  const stats = await loadSection("about", "stats", DEFAULT_STATS);
+  const items = stats.items.slice(0, 6);
+
+  if (items.length === 0) return null;
+
   return (
     <section className="bg-brand-stats-bg text-white">
-      <div className="container-page grid grid-cols-1 py-2 sm:grid-cols-4 sm:py-12">
-        {STATS.map((stat, index) => (
+      <div
+        className={`container-page grid py-2 sm:py-12 ${evenGridCols(items.length)}`}
+      >
+        {items.map((stat, index) => (
           <div
-            key={stat.id}
+            key={`${stat.label}-${index}`}
             className={`relative flex flex-col items-center justify-center gap-1 px-6 py-3 text-center sm:py-0 ${
               index === 0
                 ? ""
@@ -14,11 +38,9 @@ export function StatsStrip() {
             }`}
           >
             <p className="font-sans text-4xl font-semibold leading-none tracking-tight text-white sm:text-5xl">
-              {stat.value}
+              {`${stat.value}${stat.suffix ?? ""}`}
             </p>
-            <p className="text-sm leading-snug text-white/70">
-              {stat.label}
-            </p>
+            <p className="text-sm leading-snug text-white/70">{stat.label}</p>
           </div>
         ))}
       </div>

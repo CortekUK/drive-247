@@ -1,28 +1,41 @@
-import { CalendarDays, ClipboardCheck } from "lucide-react";
-
 import { FeatureCard } from "@/components/cards/feature-card";
-import { CHOOSE_US } from "@/lib/fixtures/landing";
+import { DEFAULT_WHY_CHOOSE_US } from "@/lib/cms/defaults";
+import { resolveIcon } from "@/lib/cms/icons";
+import { loadSection } from "@/lib/cms/server";
 
-const SMALL_ICONS = {
-  flexible: ClipboardCheck,
-  availability: CalendarDays,
-} as const;
+/**
+ * "Why Choose Us" — the portal's `about / why_choose_us` section.
+ *
+ * The Figma layout is four fixed slots of three different shapes: one tall
+ * image card, two small icon cards, one wide muted card with the shield. The
+ * portal's shape is a flat ordered list of `{ icon, title, description }`, so
+ * POSITION decides the shape here — item 1 is the tall card, 2 and 3 are the
+ * small pair, 4 is the muted band. An operator who writes only two items gets
+ * the first two shapes and no holes; anything past the fourth is dropped rather
+ * than breaking the grid.
+ *
+ * The section subtitle is a design constant: the portal has no field for it.
+ */
+const SUBTITLE =
+  "Experience a new standard of mobility where luxury meets absolute convenience.";
 
-export function WhyChooseUsSection() {
-  const featureCard = CHOOSE_US.find((item) => item.variant === "feature");
-  const smallCards = CHOOSE_US.filter((item) => item.variant === "small");
-  const mutedCard = CHOOSE_US.find((item) => item.variant === "muted");
+export async function WhyChooseUsSection() {
+  const content = await loadSection("about", "why_choose_us", DEFAULT_WHY_CHOOSE_US);
+  const items = content.items.slice(0, 4);
+
+  const featureCard = items[0];
+  const smallCards = items.slice(1, 3);
+  const mutedCard = items[3];
 
   return (
     <section className="bg-white">
       <div className="container-page py-12 lg:py-24">
         <header className="mx-auto max-w-2xl text-center">
           <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-none">
-            Why Choose Us?
+            {content.title}
           </h2>
           <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
-            Experience a new standard of mobility where luxury meets absolute
-            convenience.
+            {SUBTITLE}
           </p>
         </header>
 
@@ -38,20 +51,19 @@ export function WhyChooseUsSection() {
           )}
 
           <div className="flex flex-col gap-5">
-            <div className="grid gap-5 sm:grid-cols-2">
-              {smallCards.map((card) => {
-                const Icon = SMALL_ICONS[card.id as keyof typeof SMALL_ICONS];
-                return (
+            {smallCards.length > 0 && (
+              <div className="grid gap-5 sm:grid-cols-2">
+                {smallCards.map((card, index) => (
                   <FeatureCard
-                    key={card.id}
+                    key={`${card.title}-${index}`}
                     title={card.title}
                     description={card.description}
-                    icon={Icon}
+                    icon={resolveIcon(card.icon)}
                     variant="small"
                   />
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
 
             {mutedCard && (
               <FeatureCard

@@ -1,186 +1,78 @@
-"use client";
+import { FeatureCard } from "@/components/cards/feature-card";
+import { FleetBrowser } from "@/components/fleet/fleet-browser";
+import type { FleetSeed } from "@/components/fleet/fleet-vehicle";
+import { DEFAULT_RENTAL_RATES } from "@/lib/cms/defaults";
+import { resolveIcon } from "@/lib/cms/icons";
+import { loadSection } from "@/lib/cms/server";
+import type { RentalRateCard } from "@/lib/cms/types";
 
-import { Check, Fuel, Gauge, User } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { useState } from "react";
-
-import { FLEET } from "@/lib/fixtures/landing";
-import type { Vehicle } from "@/lib/fixtures/landing";
-import { cn } from "@/lib/utils";
-
-type Period = "day" | "week" | "month";
-
-const PERIOD_MULTIPLIER: Record<Period, number> = {
-  day: 1,
-  week: 6,
-  month: 22,
+type FleetPricingSectionProps = {
+  /**
+   * Server-rendered vehicles for the first paint, from `loadFleetSeed()`.
+   * Optional: without it the browser simply starts on its loading state.
+   */
+  seed?: FleetSeed | null;
 };
 
-const PERIOD_LABEL: Record<Period, string> = {
-  day: "per day",
-  week: "per week",
-  month: "per month",
-};
+/** Icon per rental period, by position — the portal's shape carries no icon. */
+const RATE_ICONS = ["calendar-days", "clock", "car"] as const;
 
-const TABS: { id: Period; label: string }[] = [
-  { id: "day", label: "Day" },
-  { id: "week", label: "Weekly" },
-  { id: "month", label: "Monthly" },
-];
+/**
+ * The fleet band on /fleet.
+ *
+ * This used to map the static `FLEET` fixture — six identical "Vanquish · 2024
+ * Silver Birch · $500" cards — and invent weekly and monthly prices by
+ * multiplying the daily rate by 6 and 22. Both are gone: the vehicles are the
+ * tenant's real rows, and each period shows the operator's own `weekly_rent` /
+ * `monthly_rent`, which on real data are not multiples of the daily rate.
+ *
+ * The heading and the three period cards now come from the portal's
+ * `fleet / rental_rates`. The cards default to empty — they are not in the
+ * Figma design — so they appear only for an operator who has written them, and
+ * the page an unconfigured tenant gets is unchanged.
+ *
+ * The client boundary still starts at `FleetBrowser`, so the heading and the
+ * rate copy ship in the HTML.
+ */
+export async function FleetPricingSection({ seed = null }: FleetPricingSectionProps) {
+  const rates = await loadSection("fleet", "rental_rates", DEFAULT_RENTAL_RATES);
 
-export function FleetPricingSection() {
-  const [period, setPeriod] = useState<Period>("day");
+  const periods: RentalRateCard[] = [rates.daily, rates.weekly, rates.monthly].filter(
+    (card) => card.title.trim() !== "",
+  );
 
   return (
-    <section className="bg-white">
-      <div className="container-page py-12 lg:py-24">
-        <header className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-none">
-            Our Fleet
+    <section id="fleet" className="scroll-mt-24 bg-white">
+      <div className="container-page py-12 lg:py-20">
+        <header className="max-w-2xl">
+          <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl">
+            {rates.section_title}
           </h2>
-          <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
-            Browse our curated selection of premium vehicles, each maintained
-            to perfection and ready for immediate pickup
+          <p className="mt-4 max-w-[520px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
+            Every car we run, with the rate and the mileage you actually get.
+            Filter by category, budget or fuel, then pick a vehicle to build your
+            booking.
           </p>
         </header>
 
-        {/* Day / Weekly / Monthly tabs */}
-        <div
-          role="tablist"
-          aria-label="Pricing period"
-          className="mx-auto mt-8 flex w-fit items-center gap-1 rounded-full border border-brand-border-soft bg-white p-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-        >
-          {TABS.map((tab) => {
-            const active = tab.id === period;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setPeriod(tab.id)}
-                className={cn(
-                  "inline-flex h-9 items-center justify-center rounded-full px-5 text-sm transition-colors",
-                  active
-                    ? "bg-brand-text text-white"
-                    : "text-brand-text-subtle hover:text-brand-text",
-                )}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {periods.length > 0 && (
+          <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {periods.map((card, index) => (
+              <FeatureCard
+                key={`${card.title}-${index}`}
+                title={card.title}
+                description={card.description}
+                icon={resolveIcon(RATE_ICONS[index])}
+                variant="small"
+              />
+            ))}
+          </div>
+        )}
 
-        {/* Vehicle grid */}
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {FLEET.map((vehicle) => (
-            <FleetVehicleCard
-              key={vehicle.id}
-              vehicle={vehicle}
-              period={period}
-            />
-          ))}
+        <div className="mt-10">
+          <FleetBrowser seed={seed} />
         </div>
       </div>
     </section>
-  );
-}
-
-type FleetVehicleCardProps = {
-  vehicle: Vehicle;
-  period: Period;
-};
-
-function FleetVehicleCard({ vehicle, period }: FleetVehicleCardProps) {
-  const price = vehicle.pricePerDay * PERIOD_MULTIPLIER[period];
-
-  return (
-    <article className="flex flex-col rounded-[14px] border border-brand-border-soft bg-white p-4 transition-shadow hover:shadow-[0_4px_18px_rgba(0,0,0,0.06)]">
-      <header className="flex items-start justify-between gap-2">
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold leading-tight text-brand-text">
-            {vehicle.name}
-          </h3>
-          <p className="text-xs leading-tight text-brand-text-subtle">
-            {vehicle.year} · {vehicle.trim}
-          </p>
-        </div>
-        <BrandWingsMark className="text-brand-text-subtle" />
-      </header>
-
-      <ul className="mt-3 flex items-center gap-3 text-xs leading-tight text-brand-text-soft">
-        <li className="inline-flex items-center gap-1">
-          <User className="size-3" strokeWidth={1.75} />
-          {vehicle.seats}
-        </li>
-        <li className="inline-flex items-center gap-1">
-          <Gauge className="size-3" strokeWidth={1.75} />
-          {vehicle.transmission}
-        </li>
-        <li className="inline-flex items-center gap-1">
-          <Fuel className="size-3" strokeWidth={1.75} />
-          {vehicle.rangeLiters}L
-        </li>
-      </ul>
-
-      {vehicle.status === "ready" && (
-        <p className="mt-2 inline-flex items-center gap-1 text-xs leading-tight text-brand-text">
-          <Check className="size-3" strokeWidth={2.25} />
-          Ready for Pickup
-        </p>
-      )}
-
-      <div className="my-3 flex h-[88px] w-full items-center justify-center">
-        <Image
-          src={vehicle.image}
-          alt={`${vehicle.year} ${vehicle.name}`}
-          width={1268}
-          height={353}
-          className="h-full w-auto object-contain"
-        />
-      </div>
-
-      <footer className="flex items-end justify-between">
-        <p className="leading-tight">
-          <span className="block text-xl font-semibold leading-tight text-brand-text">
-            ${price}
-          </span>
-          <span className="block text-xs leading-tight text-brand-text-subtle">
-            {PERIOD_LABEL[period]}
-          </span>
-        </p>
-        <Link
-          href={`/booking?vehicle=${vehicle.id}`}
-          className="inline-flex items-center justify-center rounded-full bg-brand-forest px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90"
-        >
-          Rent Now
-        </Link>
-      </footer>
-    </article>
-  );
-}
-
-function BrandWingsMark({ className }: { className?: string }) {
-  return (
-    <svg
-      width="34"
-      height="14"
-      viewBox="0 0 34 14"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      <path
-        d="M17 7 L1 4 L4 6 L1 7 L4 8 L1 10 L17 7 L33 4 L30 6 L33 7 L30 8 L33 10 L17 7Z"
-        stroke="currentColor"
-        strokeWidth="0.7"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <circle cx="17" cy="7" r="1.2" fill="currentColor" />
-    </svg>
   );
 }

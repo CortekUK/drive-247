@@ -1,23 +1,29 @@
-import {
-  Facebook,
-  Instagram,
-  ShieldCheck,
-  Twitter,
-  Youtube,
-} from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 import { ContactForm } from "@/components/forms/contact-form";
+import { DEFAULT_CONTACT_HERO, DEFAULT_SITE_SOCIAL } from "@/lib/cms/defaults";
+import { loadSection } from "@/lib/cms/server";
+import { socialLinks } from "@/lib/cms/social";
 
-const SOCIALS = [
-  { Icon: Youtube, href: "#", label: "YouTube" },
-  { Icon: Instagram, href: "#", label: "Instagram" },
-  { Icon: Facebook, href: "#", label: "Facebook" },
-  { Icon: Twitter, href: "#", label: "X" },
-];
+/**
+ * The /contact hero. Copy from `contact / hero`, social row from
+ * `site-settings / social`.
+ *
+ * The roadside-assistance pill and the "Inquire About a Vehicle" button are
+ * design constants — the portal's contact page has no field for either. The
+ * form itself is `components/forms/contact-form.tsx`, which this agent does not
+ * own, so `contact / contact_form` is reported unmapped rather than half-wired.
+ */
+export async function ContactHeroSection() {
+  const [hero, social] = await Promise.all([
+    loadSection("contact", "hero", DEFAULT_CONTACT_HERO),
+    loadSection("site-settings", "social", DEFAULT_SITE_SOCIAL),
+  ]);
 
-export function ContactHeroSection() {
+  const socials = socialLinks(social);
+
   return (
     <section className="relative isolate -mt-[88px] bg-brand-cream">
       {/* Background image clipped to its own absolute wrapper so the form can overflow the section */}
@@ -40,7 +46,7 @@ export function ContactHeroSection() {
         {/* LEFT — Hero text block; stretches to row height so Follow us can sit at the bottom */}
         <div className="flex flex-col gap-8 lg:h-full">
           <div className="inline-flex items-center gap-2 self-start rounded-full bg-white/90 px-4 py-2 text-[12px] leading-tight text-brand-text shadow-sm ring-1 ring-brand-border-soft backdrop-blur-sm">
-            <span className="inline-flex size-5 items-center justify-center rounded-full bg-brand-amber/30">
+            <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-amber/30">
               <ShieldCheck className="size-3 text-brand-text" strokeWidth={2} />
             </span>
             24/7 Roadside Assistance included with every verified rental.
@@ -48,12 +54,10 @@ export function ContactHeroSection() {
 
           <div className="flex max-w-[520px] flex-col gap-4">
             <h1 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-[1.05]">
-              What can we help you with?
+              {hero.title}
             </h1>
             <p className="text-sm leading-relaxed text-brand-text-soft sm:text-base">
-              Whether you have questions about a specific vehicle’s vitals or
-              need assistance with a custom booking, our fleet specialists are
-              here to help.
+              {hero.subtitle}
             </p>
           </div>
 
@@ -66,9 +70,9 @@ export function ContactHeroSection() {
 
           <div className="flex items-center gap-4 lg:mt-auto lg:pt-8">
             <span className="text-[13px] text-brand-text-soft">Follow us:</span>
-            <ul className="flex items-center gap-3">
-              {SOCIALS.map(({ Icon, href, label }) => (
-                <li key={label}>
+            <ul className="flex flex-wrap items-center gap-3">
+              {socials.map(({ key, href, label, Icon }) => (
+                <li key={key}>
                   <Link
                     href={href}
                     aria-label={label}
