@@ -163,7 +163,7 @@ export function VehicleListRow({
           aria-hidden
           className="relative z-10 mt-auto inline-flex min-h-11 w-full items-center justify-center rounded-full bg-brand-forest px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 md:min-h-0 md:w-auto"
         >
-          Rent Now
+          Book Now
         </Link>
       </div>
     </article>

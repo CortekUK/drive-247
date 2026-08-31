@@ -6,14 +6,34 @@ import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+/** Shipped copy, used only when the operator has written nothing. */
+const DEFAULT_SUBMIT_LABEL = "Book a Car";
+
 type LocationSearchFormProps = {
   className?: string;
+  /**
+   * The hero CTA's label, from `home_hero.book_cta_text`.
+   *
+   * This is the operator's own copy and it WINS over the constant above — the
+   * default is a fallback for an unconfigured tenant, not a house string to
+   * paint over a configured one. It arrives as a prop rather than through
+   * `useCmsSection` on purpose: the hero is a Server Component that has already
+   * loaded this section, so passing it down costs nothing, whereas reading it
+   * here would add a browser round-trip and swap the label of the page's
+   * primary CTA after hydration.
+   */
+  submitLabel?: string | null;
 };
 
-export function LocationSearchForm({ className }: LocationSearchFormProps) {
+export function LocationSearchForm({
+  className,
+  submitLabel,
+}: LocationSearchFormProps) {
   const router = useRouter();
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+
+  const label = submitLabel?.trim() ? submitLabel.trim() : DEFAULT_SUBMIT_LABEL;
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,9 +66,9 @@ export function LocationSearchForm({ className }: LocationSearchFormProps) {
       <div className="pt-4">
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-full bg-brand-forest px-7 py-[11.5px] text-[13.5px] leading-[20.25px] text-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
+          className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand-forest px-7 py-[11.5px] text-[13.5px] leading-[20.25px] text-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
         >
-          Rent a Car
+          {label}
         </button>
       </div>
     </form>

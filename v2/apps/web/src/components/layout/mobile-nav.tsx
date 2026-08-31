@@ -35,7 +35,7 @@ export function MobileNav() {
         <SheetHeader className="px-0">
           <SheetTitle className="text-lg">Menu</SheetTitle>
           <SheetDescription className="sr-only">
-            Site navigation and the booking link.
+            Site navigation, sign-in, and the booking link.
           </SheetDescription>
         </SheetHeader>
         <nav className="mt-2 flex flex-col">
@@ -50,15 +50,23 @@ export function MobileNav() {
             </SheetClose>
           ))}
         </nav>
-        <SheetClose asChild>
-          <Button
-            asChild
-            variant="brand"
-            className="mt-6 h-12 w-full"
-          >
-            <Link href="/booking">Rent a Car</Link>
-          </Button>
-        </SheetClose>
+        {/*
+          Booking first, account second. The outline pill is the same height as
+          the CTA so both clear 44px, but it reads as the quieter of the two —
+          the sheet still has exactly one primary action.
+        */}
+        <div className="mt-6 flex flex-col gap-3">
+          <SheetClose asChild>
+            <Button asChild variant="brand" className="h-12 w-full">
+              <Link href="/booking">Book a Car</Link>
+            </Button>
+          </SheetClose>
+          <SheetClose asChild>
+            <Button asChild variant="brand-outline" className="h-12 w-full">
+              <Link href="/login">Log in</Link>
+            </Button>
+          </SheetClose>
+        </div>
       </SheetContent>
     </Sheet>
   );

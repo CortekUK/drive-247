@@ -31,7 +31,7 @@ type VehicleCardProps = {
  *
  * The WHOLE card navigates to that vehicle's booking page, in the same tab: the
  * heading carries a stretched link (`after:absolute after:inset-0`) so the click
- * target is the card while the accessible name stays the car's name. "Rent Now"
+ * target is the card while the accessible name stays the car's name. "Book Now"
  * sits above it on its own z-index and remains the explicit affordance — it is
  * the second link rather than a nested one, because an `<a>` inside an `<a>` is
  * invalid HTML and browsers recover from it unpredictably.
@@ -141,7 +141,7 @@ export function VehicleCard({
           aria-hidden
           className="relative z-10 inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-brand-forest px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 sm:min-h-0"
         >
-          Rent Now
+          Book Now
         </Link>
       </footer>
     </article>

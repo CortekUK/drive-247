@@ -56,7 +56,7 @@ export function SafetyVerificationSection() {
             href="/booking"
             className="inline-flex w-fit items-center justify-center rounded-full bg-brand-forest px-7 py-[13px] text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
-            Rent a Car now
+            Book a Car now
           </Link>
         </div>
 
