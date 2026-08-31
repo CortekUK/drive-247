@@ -1,0 +1,26 @@
+{
+  "_fixture": true,
+  "_note": "Bundled demo reservation. Shape mirrors an item from GET https://turo.com/api/v2/feeds/upcoming-trips?appMode=HOST. Field names are our best reconstruction — the edge function owns the mapping, so correcting this costs a redeploy, not a reinstall.",
+  "id": 4412907731,
+  "reservationId": "R-4412907731",
+  "status": "BOOKED",
+  "startDate": "2026-09-14T15:00:00Z",
+  "endDate": "2026-09-18T15:00:00Z",
+  "pickupLocation": { "city": "Austin", "state": "TX", "address": "1100 Congress Ave, Austin, TX 78701" },
+  "vehicle": {
+    "id": 20118842,
+    "make": "Tesla",
+    "model": "Model 3",
+    "year": 2023,
+    "licensePlate": "TX-8841QD",
+    "image": "https://images.turo.com/media/vehicle/images/demo.jpg"
+  },
+  "renter": {
+    "id": 99120043,
+    "firstName": "Marcus",
+    "lastName": "Delaney",
+    "email": "marcus.delaney@example.com",
+    "phone": "+15125550142"
+  },
+  "cost": { "currency": "USD", "totalEarnings": 486.20, "tripPrice": 552.00 }
+}

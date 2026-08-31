@@ -1,0 +1,41 @@
+<meta charset="utf-8" />
+<title>Drive247 Turo Bridge</title>
+<style>
+  /* Portal design tokens: DM Sans, indigo #6366f1 accent, flat 1px borders,
+     no shadows. See CLAUDE.md "Portal Design System". System-font fallback
+     keeps the popup zero-build — no webfont fetch. */
+  :root { --ink:#080812; --body:#404040; --muted:#737373; --accent:#6366f1;
+          --line:#f1f5f9; --surface:#f8fafc; --ok:#16a34a; --err:#dc2626; }
+  * { box-sizing: border-box; }
+  body { width: 320px; margin: 0; padding: 16px;
+         font: 14px/1.45 "DM Sans", system-ui, -apple-system, sans-serif;
+         color: var(--body); background: #fff; }
+  h1 { margin: 0 0 2px; font-size: 16px; font-weight: 500; color: var(--ink); }
+  p.sub { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  input { width:100%; padding:8px 10px; font:inherit; font-size:13px;
+          border:1px solid var(--line); border-radius:6px;
+          background:var(--surface); color:var(--ink); }
+  input:focus { outline:none; border-color:var(--accent); }
+  button { width:100%; margin-top:12px; padding:9px 12px;
+           font:500 13px/1 Inter, system-ui, sans-serif; color:#fff;
+           background:var(--accent); border:0; border-radius:6px; cursor:pointer; }
+  button:disabled { opacity:.55; cursor:default; }
+  #status { margin:12px 0 0; padding-top:12px; border-top:1px solid var(--line);
+            font-size:12px; min-height:32px; color:var(--muted); }
+  #status.working { color: var(--body); }
+  #status.done    { color: var(--ok); }
+  #status.error   { color: var(--err); }
+</style>
+
+<h1>Turo Bridge</h1>
+<p class="sub">Imports one upcoming reservation from your Turo host account.</p>
+
+<label for="token">Pairing token</label>
+<input id="token" type="text" placeholder="Paste from Portal → Settings → Integrations" autocomplete="off" spellcheck="false" />
+
+<button id="sync">Sync one reservation</button>
+
+<p id="status">Ready.</p>
+
+<script src="popup.js"></script>

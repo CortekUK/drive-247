@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Drive247 Turo Bridge (PoC)",
+  "version": "0.0.1",
+  "description": "Imports one upcoming Turo host reservation into Drive247, using the operator's own logged-in turo.com session.",
+
+  "minimum_chrome_version": "116",
+
+  "permissions": [
+    "scripting",
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://*.turo.com/*",
+    "https://hviqoaokxvlancmftwuo.supabase.co/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_title": "Drive247 Turo Bridge",
+    "default_popup": "popup.html"
+  }
+}
