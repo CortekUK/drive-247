@@ -1,7 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "installCommand": "COREPACK_ENABLE_STRICT=0 corepack enable && cd v2 && COREPACK_ENABLE_STRICT=0 pnpm install --filter @drive247/web --no-frozen-lockfile",
-  "buildCommand": "cd v2/apps/web && COREPACK_ENABLE_STRICT=0 npx next build",
-  "outputDirectory": "v2/apps/web/.next"
-}
