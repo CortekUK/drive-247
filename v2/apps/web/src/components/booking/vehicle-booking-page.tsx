@@ -13,7 +13,8 @@ import { useRentalExtras } from "@/hooks/use-rental-extras";
 import { useVehicle } from "@/hooks/use-vehicle";
 import { useVehicleBookedDates } from "@/hooks/use-vehicle-availability";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
-import type { BookingPaymentIntentRequest } from "@/hooks/use-payment-intent";
+import { useCreateBooking } from "@/hooks/use-create-booking";
+import type { BookingLocationLeg } from "@/lib/booking/types";
 import {
   getTierFeeRange,
   hasActiveTiers,
@@ -45,6 +46,7 @@ import { deriveBookingRules, resolveDeliveryModes } from "./booking-rules";
 import {
   PaymentPanel,
   readPaymentReturn,
+  type BookingPaymentRequest,
   type PaymentOutcome,
   type PaymentReturn,
 } from "./payment-panel";
@@ -408,6 +410,21 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
 
+  /*
+    THE WRITE PATH. "Continue to payment" no longer just opens a dialog: it
+    commits the booking first — customer, rental, extras, invoice, ledger — and
+    only then mounts Stripe, because `create-booking-payment-intent` prices the
+    charge from the rental's ledger and refuses a request without a rental id.
+    See `@/lib/booking/create-booking` for the ordering and why it is fixed.
+  */
+  const booking = useCreateBooking();
+  // Destructured so the click handler depends on the STABLE action rather than
+  // on the hook's result object, which is new on every render.
+  const { create: createBooking } = booking;
+  const creatingBooking = booking.state.status === "creating";
+  /** Paid for. The CTA must not offer to book the same car for the same days again. */
+  const [bookingCompleted, setBookingCompleted] = useState(false);
+
   const validation = useMemo(
     () =>
       validateBooking({
@@ -485,6 +502,15 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
    * the delivery question moot, and an unpriced quote makes all of it moot.
    */
   const hardBlockReason = useMemo<string | null>(() => {
+    if (bookingCompleted) {
+      // The rental is paid for. Pressing Continue again would try to book the
+      // same car for the same dates a second time and be refused by the overlap
+      // trigger — a confusing dead end after a successful payment.
+      return "This booking is confirmed. Start a new booking to reserve another vehicle.";
+    }
+    if (creatingBooking) {
+      return null;
+    }
     if (vehicle?.isPaused ?? false) {
       return "This vehicle is not bookable right now. Please choose another from the fleet.";
     }
@@ -498,7 +524,14 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
       return "Choose your pickup and return dates to see the price.";
     }
     return null;
-  }, [vehicle?.isPaused, pricingRulesDegraded, quote.deliveryBlocked, quote.ready]);
+  }, [
+    bookingCompleted,
+    creatingBooking,
+    vehicle?.isPaused,
+    pricingRulesDegraded,
+    quote.deliveryBlocked,
+    quote.ready,
+  ]);
 
   const outstanding = useMemo(
     () => describeOutstanding(validation.errors),
@@ -506,6 +539,18 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
   );
 
   const checkoutBlock = useMemo<CheckoutBlock | null>(() => {
+    /*
+      The write takes several round-trips, so the button must be dead for its
+      duration — a second press would start a second `createBooking` that cannot
+      see the first one's draft and would race the overlap trigger against it.
+
+      `kind: "incomplete"` and not `"blocked"`: the kind is a styling
+      discriminator, and `blocked` paints the line in the warning colour. "Saving
+      your booking…" is progress, not a problem, so it takes the neutral one.
+    */
+    if (creatingBooking) {
+      return { kind: "incomplete", message: "Saving your booking…" };
+    }
     if (hardBlockReason !== null) {
       return { kind: "blocked", message: hardBlockReason };
     }
@@ -513,7 +558,7 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
       return { kind: "incomplete", message: outstanding };
     }
     return null;
-  }, [hardBlockReason, outstanding]);
+  }, [creatingBooking, hardBlockReason, outstanding]);
 
   /* ── payment ──────────────────────────────────────────────────────────── */
 
@@ -542,6 +587,7 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
    * page behind it, so closing the dialog does not look like nothing happened.
    */
   const handlePaymentSucceeded = useCallback((outcome: PaymentOutcome) => {
+    setBookingCompleted(true);
     const reference =
       outcome.rentalNumber === null ? "" : ` Your booking reference is ${outcome.rentalNumber}.`;
     setCheckoutMessage(
@@ -564,29 +610,105 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
     });
   }, []);
 
+  /* ── where the car is collected and returned, as `rentals` stores it ────── */
+
   /**
-   * The payload the edge function prices from.
+   * Each leg reduced to the two columns `rentals` actually has: an optional
+   * `pickup_locations` id and a human address.
    *
-   * Null until the form is genuinely complete and priced, which is the same
-   * condition that ungreys the button — so the panel can never open without one.
-   * Note what is NOT here: no amount is sent as an instruction. The two
-   * `quoted*Cents` figures are what the customer was SHOWN, sent so the server
-   * can refuse a booking whose price has moved under them.
+   * The three modes fill them differently, and the difference is not cosmetic —
+   * `pickup_location_id` is a foreign key and must be null unless the customer
+   * really picked one of the operator's locations.
    */
-  const paymentRequest = useMemo<BookingPaymentIntentRequest | null>(() => {
-    if (!tenant || !vehicle || !quote.ready || !validation.isComplete) return null;
+  const bookingLegs = useMemo<{ pickup: BookingLocationLeg; return: BookingLocationLeg }>(() => {
+    const returnId = form.sameAsPickup ? form.pickupLocationId : form.returnLocationId;
+
+    if (mode === "location") {
+      return {
+        pickup: {
+          id: form.pickupLocationId,
+          address: form.pickupLocationId
+            ? (locationsById.get(form.pickupLocationId)?.address ?? null)
+            : null,
+        },
+        return: {
+          id: returnId,
+          address: returnId ? (locationsById.get(returnId)?.address ?? null) : null,
+        },
+      };
+    }
+
+    if (mode === "area") {
+      const returnAddress = form.sameAsPickup ? form.pickupAddress : form.returnAddress;
+      return {
+        pickup: { id: null, address: form.pickupAddress },
+        return: { id: null, address: returnAddress },
+      };
+    }
+
+    // 'fixed' — the operator's own address, with the customer's typed address as
+    // the fallback for a tenant that enabled the mode but never set one (the
+    // same fallback `validateBooking` assumes when it asks for the address).
+    const pickupAddress = rules.fixedPickupAddress ?? form.pickupAddress;
+    return {
+      pickup: { id: null, address: pickupAddress },
+      return: {
+        id: null,
+        address: form.sameAsPickup
+          ? pickupAddress
+          : (rules.fixedReturnAddress ?? form.returnAddress),
+      },
+    };
+  }, [
+    mode,
+    form.pickupLocationId,
+    form.returnLocationId,
+    form.pickupAddress,
+    form.returnAddress,
+    form.sameAsPickup,
+    locationsById,
+    rules.fixedPickupAddress,
+    rules.fixedReturnAddress,
+  ]);
+
+  /**
+   * The payload the edge function prices from — available only AFTER the
+   * booking is written.
+   *
+   * `rentalId` is the load-bearing field: `create-booking-payment-intent`
+   * refuses a request without one, because it computes the amount by summing
+   * that rental's open ledger charges rather than trusting the browser. So this
+   * is null until `createBooking` has returned, which is also why the panel
+   * cannot be opened before then.
+   *
+   * `expectedAmount` is the customer-facing total sent back as an INTEGRITY
+   * CHECK. If the server's own figure has moved by more than a cent it refuses
+   * the whole request, so the customer can never be shown one number and
+   * charged another. It is in major units; `quotedTotalCents` below is the same
+   * money in minor units and is what the hook's own contract documents.
+   */
+  const paymentRequest = useMemo<BookingPaymentRequest | null>(() => {
+    if (booking.state.status !== "ready") return null;
+    if (!tenant || !vehicle || !quote.ready) return null;
+
+    const created = booking.state.booking;
 
     return {
+      rentalId: created.rentalId,
+      tenantSlug: tenant.slug,
+      customerId: created.customerId,
+      customerEmail: form.customerEmail.trim().toLowerCase(),
+      customerName: form.customerName.trim(),
+      expectedAmount: quote.grandTotal,
+
       tenantId: tenant.id,
       vehicleId: vehicle.id,
       pickup: { date: form.pickupDate, time: form.pickupTime },
       dropoff: { date: form.dropoffDate, time: form.dropoffTime },
       delivery: {
         option: mode,
-        pickupLocationId: form.pickupLocationId,
-        returnLocationId: form.sameAsPickup
-          ? form.pickupLocationId
-          : form.returnLocationId,
+        pickupLocationId: bookingLegs.pickup.id,
+        returnLocationId: bookingLegs.return.id,
         pickupAddress: form.pickupAddress,
         returnAddress: form.sameAsPickup ? form.pickupAddress : form.returnAddress,
         sameAsPickup: form.sameAsPickup,
@@ -619,17 +741,26 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
       currency: (tenant.currency_code ?? "USD").toUpperCase(),
     };
   }, [
+    booking.state,
     tenant,
     vehicle,
     quote,
-    validation.isComplete,
     form,
     mode,
+    bookingLegs,
     billableExtras,
     promo.promo,
   ]);
 
-  const handleCheckout = useCallback(() => {
+  /**
+   * Commit the booking, then show the card form.
+   *
+   * The order is forced (see `create-booking.ts`) and so is the failure
+   * behaviour: if the write does not land, the customer is told so in plain
+   * words and NO Stripe dialog opens. An empty card form over a booking that
+   * does not exist is the one outcome worth going out of the way to avoid.
+   */
+  const handleCheckout = useCallback(async () => {
     // Still set, even though the button is now disabled while incomplete: it
     // reveals any field the customer never focused, which blur alone misses.
     setSubmitAttempted(true);
@@ -646,8 +777,49 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
       return;
     }
 
+    if (!tenant || !vehicle || !quote.ready) return;
+
+    const result = await createBooking({
+      tenantId: tenant.id,
+      vehicleId: vehicle.id,
+      form,
+      deliveryOption: mode,
+      quote,
+      selectedExtras: billableExtras,
+      pickupLocation: bookingLegs.pickup,
+      returnLocation: bookingLegs.return,
+    });
+
+    // null means a write was already in flight and this click was swallowed.
+    if (result === null) return;
+
+    if (!result.ok) {
+      if (result.failure.detail !== null) {
+        // The customer gets the sentence; the console gets the column that
+        // actually refused, which is what makes this diagnosable at all.
+        console.error(`[booking] ${result.failure.detail}`);
+      }
+      setCheckoutMessage(
+        result.failure.retryable
+          ? `${result.failure.message}`
+          : result.failure.message,
+      );
+      return;
+    }
+
     setPaymentOpen(true);
-  }, [validation.isComplete, rules.collectPaymentUpfront]);
+  }, [
+    validation.isComplete,
+    rules.collectPaymentUpfront,
+    tenant,
+    vehicle,
+    quote,
+    form,
+    mode,
+    billableExtras,
+    bookingLegs,
+    createBooking,
+  ]);
 
   /* ── states ───────────────────────────────────────────────────────────── */
 

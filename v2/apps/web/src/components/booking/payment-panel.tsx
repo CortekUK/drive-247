@@ -158,19 +158,56 @@ export type PaymentOutcome =
   /** Taken, but the bank has not settled — a real Stripe state, not an error. */
   | { kind: "processing"; rentalNumber: string | null };
 
+/* ─────────────────── what the deployed endpoint actually reads ───────────── */
+
+/**
+ * The body `create-booking-payment-intent` destructures, on top of the payload
+ * `use-payment-intent` documents.
+ *
+ * THE ONE FIELD THAT MATTERS IS `rentalId`. The endpoint refuses a request
+ * without it — "the amount is computed from the rental, not supplied by the
+ * caller" — because it prices the charge by summing that rental's OPEN LEDGER
+ * CHARGES. So the booking must already be committed before this panel opens;
+ * see `@/lib/booking/create-booking`.
+ *
+ * `expectedAmount` is in MAJOR units and is an INTEGRITY CHECK, never an
+ * instruction: the server compares it with its own figure and refuses the whole
+ * request if they differ by more than a cent, so the customer can never be shown
+ * one number and charged another. `quotedTotalCents` on the base type is minor
+ * units and is a different thing — the endpoint ignores it.
+ *
+ * These live here rather than in `use-payment-intent` because that hook's
+ * request type is another workstream's file. Extra keys are ignored by the
+ * function, so the documented payload is still sent unchanged.
+ */
+export interface BookingPaymentRequest extends BookingPaymentIntentRequest {
+  /** `rentals.id`. Without it the endpoint 400s. */
+  rentalId: string;
+  /** Preferred over `tenantId` by the endpoint's own resolution order. */
+  tenantSlug: string | null;
+  /** `customers.id`, so the Stripe Customer is vaulted against the right person. */
+  customerId: string;
+  customerEmail: string;
+  customerName: string;
+  /** MAJOR units — dollars, not cents. See above. */
+  expectedAmount: number;
+}
+
 /* ──────────────────────────────── the panel ──────────────────────────────── */
 
 export interface PaymentPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /**
-   * Everything the server needs to price and book. Null while the form is
-   * incomplete — the panel is never opened in that state.
+   * Everything the server needs to price the charge, INCLUDING the id of the
+   * rental it prices from. Null until the booking has actually been written —
+   * the panel is never opened before that, because an intent cannot be minted
+   * without a rental and an empty card dialog is worse than an honest error.
    */
-  request: BookingPaymentIntentRequest | null;
+  request: BookingPaymentRequest | null;
   /**
    * Already formatted, e.g. "$1,215.00" — the page's own total, used only until
-   * the intent lands. See `formatMinorUnits` for why the intent then wins.
+   * the intent lands. See `formatIntentAmount` for why the intent then wins.
    */
   amountLabel: string;
   /** "2021 Chevrolet Camaro" — so the dialog says what is being paid for. */
@@ -443,17 +480,21 @@ function PanelHeader({ vehicleLabel }: { vehicleLabel: string }) {
  * independently and returns what it is charging, so once the intent exists that
  * is the only figure worth putting on the button.
  *
- * `/ 100` assumes a two-decimal currency, which is the assumption the whole
- * pricing path already makes (`grandTotalCents` is `grandTotal * 100`
- * unconditionally). Zero-decimal currencies would need fixing there first.
+ * ── THE UNIT, VERIFIED AGAINST THE DEPLOYED FUNCTION ────────────────────────
+ * `create-booking-payment-intent` returns `amount: amountDue` — the rounded
+ * MAJOR-unit figure (dollars), not the `amountMinorUnits` it hands Stripe — and
+ * `currency` lower-cased, straight off `tenants.currency_code`. An earlier
+ * reading of this as minor units divided by 100 a second time and would have
+ * printed "$3.06" on a button that charges $305.77. It is formatted as-is, and
+ * `Intl` accepts a lower-case ISO code.
  */
-function formatMinorUnits(amount: number | null, currency: string | null): string | null {
+function formatIntentAmount(amount: number | null, currency: string | null): string | null {
   if (amount === null || currency === null) return null;
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
-    }).format(amount / 100);
+    }).format(amount);
   } catch {
     // An unrecognised ISO code must not take the amount off the button.
     return null;
@@ -589,7 +630,7 @@ function CardForm({
   }
 
   const ready = stripe !== null && elements !== null;
-  const payLabel = formatMinorUnits(intent.amount, intent.currency) ?? amountLabel;
+  const payLabel = formatIntentAmount(intent.amount, intent.currency) ?? amountLabel;
 
   return (
     <form onSubmit={handleSubmit} className="pt-4">
