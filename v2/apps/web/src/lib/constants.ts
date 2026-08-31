@@ -79,7 +79,14 @@ export function extractTenantSlugFromHost(host: string): string | null {
  * arbitrary tenant's data to every visitor.
  */
 export const DEV_FALLBACK_TENANT_SLUG: string | null =
-  process.env.NODE_ENV === "development"
+  process.env.NODE_ENV === "development" ||
+  // Vercel PREVIEW builds only. A preview is served from a bare
+  // *.vercel.app host, which carries no tenant subdomain, so without this a
+  // reviewer opening the deployment link sees a tenantless shell. Vercel sets
+  // VERCEL_ENV itself and it is 'production' on production deployments, so
+  // this can never widen the rule there — the guarantee above still holds
+  // where it matters.
+  process.env.NEXT_PUBLIC_VERCEL_ENV === "preview"
     ? process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG || null
     : null;
 
