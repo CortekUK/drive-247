@@ -1,11 +1,8 @@
 "use client";
 
 import React from 'react';
-import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { useRemindersByObject } from '@/hooks/use-reminders';
 import { AlertTriangle, Clock, Bell, CheckCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { getDueStatus, formatDueStatusText } from '@/lib/mot-tax-utils';
@@ -22,8 +19,6 @@ interface VehicleCompliancePanelProps {
 }
 
 export function VehicleCompliancePanel({ vehicle }: VehicleCompliancePanelProps) {
-  const { data: reminders = [], isLoading } = useRemindersByObject('Vehicle', vehicle.id);
-
   const motStatus = vehicle.mot_due_date ? getDueStatus(parseISO(vehicle.mot_due_date)) : { state: 'missing' as const };
   const taxStatus = vehicle.tax_due_date ? getDueStatus(parseISO(vehicle.tax_due_date)) : { state: 'missing' as const };
 
@@ -47,44 +42,11 @@ export function VehicleCompliancePanel({ vehicle }: VehicleCompliancePanelProps)
     }
   };
 
-  const criticalReminders = reminders.filter(r => r.severity === 'critical').length;
-  const warningReminders = reminders.filter(r => r.severity === 'warning').length;
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Inspection & Registration Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-muted rounded w-3/4"></div>
-            <div className="h-4 bg-muted rounded w-1/2"></div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Inspection & Registration Status</CardTitle>
-          {(criticalReminders > 0 || warningReminders > 0) && (
-            <div className="flex gap-1">
-              {criticalReminders > 0 && (
-                <Badge variant="destructive" className="text-xs">
-                  {criticalReminders} Critical
-                </Badge>
-              )}
-              {warningReminders > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {warningReminders} Warning
-                </Badge>
-              )}
-            </div>
-          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -128,19 +90,8 @@ export function VehicleCompliancePanel({ vehicle }: VehicleCompliancePanelProps)
           </Badge>
         </div>
 
-        {/* Reminders Summary */}
-        {reminders.length > 0 && (
-          <div className="pt-2 border-t">
-            <Button asChild variant="ghost" size="sm" className="w-full text-xs">
-              <Link href={`/reminders?object_type=Vehicle&object_id=${vehicle.id}`}>
-                View {reminders.length} reminder{reminders.length !== 1 ? 's' : ''}
-              </Link>
-            </Button>
-          </div>
-        )}
-
         {/* All Clear State */}
-        {reminders.length === 0 && motStatus.state === 'ok' && taxStatus.state === 'ok' && (
+        {motStatus.state === 'ok' && taxStatus.state === 'ok' && (
           <div className="text-center pt-2 border-t">
             <div className="flex items-center justify-center gap-2 text-green-600">
               <CheckCircle className="h-4 w-4" />

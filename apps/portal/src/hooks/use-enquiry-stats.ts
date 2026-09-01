@@ -13,7 +13,7 @@ export interface EnquiryStats {
 
 /**
  * Counts of enquiries broken down by status, used for sidebar badge and stat
- * cards on the list page. Mirrors `useReminderStats` cadence (60s refetch).
+ * cards on the list page. Refetches on a 60s cadence.
  */
 export function useEnquiryStats() {
   const { tenant } = useTenant();

@@ -30,7 +30,6 @@ import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { DataCleanupDialog } from '@/components/settings/data-cleanup-dialog';
-import ReminderRulesConfig from '@/components/settings/reminder-rules-config';
 import { EmailNotificationSettings } from '@/components/settings/email-notification-settings';
 import { PushNotificationSettings } from '@/components/settings/push-notification-settings';
 import { ColorPicker } from '@/components/settings/color-picker';
@@ -2882,9 +2881,6 @@ const Settings = () => {
               </div>
             </CardContent>
           </Card>
-
-          {/* Advanced Reminder Rules Configuration */}
-          <ReminderRulesConfig />
 
           {/* Operator email notification preferences (per-category, in-app bell always on) */}
           <EmailNotificationSettings canEdit={canEditSettings('reminders')} />

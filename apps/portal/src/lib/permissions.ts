@@ -36,7 +36,6 @@ export const TAB_KEYS = [
   'expenses',
   'insurances',
   'agreements',
-  'reminders',
   'reports',
   'pl_dashboard',
   'cms',
@@ -106,7 +105,6 @@ export const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { key: 'insurances', label: 'Insurances', group: 'Insights', viewOnly: true },
       { key: 'agreements', label: 'Agreements', group: 'Insights', viewOnly: true },
-      { key: 'reminders', label: 'Reminders', group: 'Insights' },
       { key: 'reports', label: 'Reports', group: 'Insights', viewOnly: true },
       { key: 'pl_dashboard', label: 'P&L Dashboard', group: 'Insights', viewOnly: true },
     ],
@@ -153,7 +151,6 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/expenses': 'expenses',
   '/insurances': 'insurances',
   '/agreements': 'agreements',
-  '/reminders': 'reminders',
   '/reports': 'reports',
   '/pl-dashboard': 'pl_dashboard',
   '/cms': 'cms',
