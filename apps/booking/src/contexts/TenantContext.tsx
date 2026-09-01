@@ -212,16 +212,6 @@ export interface Tenant {
   // Web Push (PWA) notifications. Per-tenant rollout flag — the booking site
   // only offers to enable notifications when this is true.
   push_notifications_enabled: boolean | null;
-
-  /**
-   * Serve the booking-v2 landing design at `/` instead of the legacy home
-   * page. Super-admin controlled from the admin app; scoped to the home page
-   * only, so the booking funnel and every other route are untouched.
-   *
-   * NOT NULL DEFAULT false in the database — the `| null` here only covers the
-   * window where an older cached tenant row predates the column.
-   */
-  booking_v2_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -449,7 +439,6 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           min_rental_hours,
           max_rental_days,
           booking_lead_time_hours,
-          booking_v2_enabled,
           minimum_rental_age,
           require_identity_verification,
           require_insurance_upload,

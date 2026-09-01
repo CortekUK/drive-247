@@ -254,22 +254,6 @@ export async function isCustomerBlockedForLogin(
 }
 
 /**
- * Get tenant promotions
- * @param tenantId - The tenant ID
- */
-export function getTenantPromotions(tenantId: string) {
-  const now = new Date().toISOString();
-
-  return supabase
-    .from('promotions')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('is_active', true)
-    .lte('start_date', now)
-    .gte('end_date', now);
-}
-
-/**
  * Get tenant testimonials for display
  * @param tenantId - The tenant ID
  */

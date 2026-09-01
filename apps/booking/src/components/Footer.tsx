@@ -96,11 +96,6 @@ const Footer = () => {
                   Book a Vehicle
                 </Link>
               </li>
-              <li>
-                <Link href="/promotions" className="text-xs md:text-sm footer-link">
-                  Promotions
-                </Link>
-              </li>
             </ul>
           </div>
 

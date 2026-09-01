@@ -80,7 +80,6 @@ import {
   ShieldCheck,
   ArrowRightLeft,
   Coins,
-  LayoutTemplate,
 } from 'lucide-react';
 
 interface Tenant {
@@ -105,8 +104,6 @@ interface Tenant {
   bonzah_username: string | null;
   boldsign_mode: string;
   subscription_gate_disabled: boolean | null;
-  /** Serve the booking-v2 landing design on this tenant's home page. */
-  booking_v2_enabled: boolean | null;
 }
 
 /**
@@ -385,7 +382,6 @@ export default function TenantDetailsPage() {
   // Integration mode state
   const [modeUpdating, setModeUpdating] = useState(false);
   const [gateUpdating, setGateUpdating] = useState(false);
-  const [bookingV2Updating, setBookingV2Updating] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [pendingModeChange, setPendingModeChange] = useState<{ type: 'stripe' | 'bonzah' | 'boldsign' | 'subscription_stripe'; newMode: 'test' | 'live' } | null>(null);
   const [showSubscriptionDetail, setShowSubscriptionDetail] = useState(false);
@@ -1089,35 +1085,6 @@ export default function TenantDetailsPage() {
       toast.error(`Failed to update banner: ${error.message}`);
     } finally {
       setBannerSaving(false);
-    }
-  };
-
-  // Per-tenant booking-site design switch. When on, this tenant's booking
-  // home page (`/`) serves the booking-v2 landing instead of the legacy home.
-  // Scoped to that one page — /fleet, /booking and the customer portal are
-  // unaffected, so the booking funnel keeps working either way.
-  //
-  // Which design renders is resolved server-side per request, so an already-open
-  // booking tab does NOT swap on its own — it needs a reload. (TenantContext's
-  // realtime subscription does receive the new value, but nothing on the client
-  // consumes it to switch designs.)
-  const handleToggleBookingV2 = async (next: boolean) => {
-    if (!tenant) return;
-    setBookingV2Updating(true);
-    try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ booking_v2_enabled: next } as any)
-        .eq('id', tenant.id);
-      if (error) throw error;
-      setTenant({ ...tenant, booking_v2_enabled: next });
-      toast.success(next
-        ? 'New booking design enabled — this tenant\'s home page now serves booking-v2'
-        : 'Reverted to the current booking design');
-    } catch (error: any) {
-      toast.error(`Failed to update booking design: ${error.message}`);
-    } finally {
-      setBookingV2Updating(false);
     }
   };
 
@@ -2372,63 +2339,6 @@ export default function TenantDetailsPage() {
                   </div>
                   <Badge variant={tenant.subscription_gate_disabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
                     {tenant.subscription_gate_disabled ? 'Hidden' : 'Active'}
-                  </Badge>
-                </label>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Booking site design */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <LayoutTemplate className="h-6 w-6 text-violet-400 shrink-0" />
-                  <div>
-                    <h3 className="text-base font-semibold">Booking site design</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-                      Serve the new <span className="font-medium text-foreground">booking-v2</span> landing
-                      on this tenant&apos;s home page. Only the home page changes &mdash; the fleet,
-                      booking funnel and customer portal are untouched.
-                    </p>
-                    <p className="text-xs text-amber-400/90 mt-2 max-w-xl">
-                      The new design is still a visual prototype: it shows placeholder vehicles,
-                      rates and contact details, not this tenant&apos;s real inventory. Keep it off
-                      for any tenant taking live traffic.
-                    </p>
-                    {tenant.slug && (
-                      <a
-                        href={`${tenantBookingUrl(tenant.slug)}/booking-v2`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"
-                      >
-                        Preview it without switching <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-                <label className="flex items-center cursor-pointer shrink-0">
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={!!tenant.booking_v2_enabled}
-                      disabled={bookingV2Updating}
-                      onChange={(e) => handleToggleBookingV2(e.target.checked)}
-                      className="sr-only"
-                    />
-                    <div className={cn(
-                      "w-11 h-6 rounded-full transition-colors",
-                      tenant.booking_v2_enabled ? 'bg-violet-500' : 'bg-muted'
-                    )}>
-                      <div className={cn(
-                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
-                        tenant.booking_v2_enabled && 'translate-x-5'
-                      )} />
-                    </div>
-                  </div>
-                  <Badge variant={tenant.booking_v2_enabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
-                    {tenant.booking_v2_enabled ? 'booking-v2' : 'Current'}
                   </Badge>
                 </label>
               </div>

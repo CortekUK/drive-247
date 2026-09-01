@@ -74,7 +74,6 @@ const Navigation = () => {
     { path: '/about', label: 'About' },
     { path: '/fleet', label: 'Fleet & Pricing' },
     { path: '/testimonials', label: 'Reviews' },
-    { path: '/promotions', label: 'Promotions' },
     ...(hasFaqs ? [{ path: '/faq', label: 'FAQ' }] : []),
     { path: '/contact', label: 'Contact' },
     ...(blogEnabled ? [{ path: '/blog', label: 'Blog' }] : []),
