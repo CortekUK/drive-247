@@ -6,7 +6,6 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useTenant } from '@/contexts/TenantContext';
 import { CustomerPortalSidebar } from '@/components/customer-portal/CustomerPortalSidebar';
 import { CustomerPortalHeader } from '@/components/customer-portal/CustomerPortalHeader';
-import { TraxChatWidget } from '@/components/customer-portal/trax-chat';
 import {
   SidebarProvider,
   SidebarInset,
@@ -114,7 +113,6 @@ export default function CustomerPortalLayout({
           </main>
         </SidebarInset>
       </SidebarProvider>
-      <TraxChatWidget />
       <AnnouncementModalGate />
     </CustomerRealtimeChatProvider>
   );
