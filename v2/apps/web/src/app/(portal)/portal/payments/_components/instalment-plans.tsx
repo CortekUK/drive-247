@@ -1,16 +1,29 @@
 'use client';
 
 /**
- * Instalment plans, READ-ONLY.
+ * Instalment plans, READ-ONLY — and still read-only after balance payments were
+ * wired up on this page.
  *
  * v1's equivalent carries four money-moving buttons — Pay early, Pay off
  * remaining, Retry, Activate & pay upfront — plus a card-update dialog. None of
- * them is here. Each is a WRITE against a live card through
- * `pay-installment-early` / `create-upfront-checkout`, and on staging those
- * functions settle through a Stripe account whose webhooks fire into
- * PRODUCTION, so there is no environment in which the button could have been
- * exercised before shipping it. A payment button that has never been pressed is
- * not a feature. The schedule below states exactly what will be taken and when,
+ * them is here, and the original reason has since expired: staging now has its
+ * own Stripe webhook endpoint, so a card payment CAN be exercised end to end
+ * (see `pay-balances.tsx`, which does exactly that). These buttons stay absent
+ * for a different and more durable reason.
+ *
+ * A plan's instalments are collected server-side against the SAME
+ * `ledger_entries` charge rows a lump-sum payment would clear. Paying that
+ * charge off through the booking endpoint would settle the debt without
+ * touching `scheduled_installments`, leaving the schedule collecting money
+ * against a balance that is already zero — an operator then has to unwind it.
+ * Doing this properly needs `pay-installment-early` / `create-upfront-checkout`
+ * to be the path, and those move the schedule as well as the money. Wiring the
+ * generic balance endpoint here instead would be a button that appears to work
+ * and quietly corrupts the plan.
+ *
+ * So a booking on an active or pending plan is deliberately excluded from the
+ * Pay panel above (`PLAN_BLOCK_REASON` in `use-customer-payments.ts`) and says
+ * why on screen. The schedule below states exactly what will be taken and when,
  * which is the part a customer needs in order to keep money in the account.
  */
 

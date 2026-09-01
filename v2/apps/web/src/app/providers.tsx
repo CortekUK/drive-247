@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { Toaster } from "@/components/ui/sonner";
 import { CustomerAuthProvider } from "@/contexts/CustomerAuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 
@@ -44,6 +45,31 @@ export function Providers({
       <TenantProvider initialTenantSlug={tenantSlug}>
         <CustomerAuthProvider>{children}</CustomerAuthProvider>
       </TenantProvider>
+
+      {/*
+        THE TOAST MOUNT. `components/ui/sonner.tsx` has existed since the first
+        commit and was never rendered until now.
+
+        That was NOT leaving broken calls lying around: at the time of writing
+        there is not one `toast(...)` call site in this app. Three files —
+        `documents/upload-dialog.tsx`, `gig-driver/page.tsx` and
+        `use-customer-agreements.ts` — carry a comment noting the missing mount
+        and deliberately route their failures INLINE instead, which is the
+        better choice for a failure that belongs next to the control that
+        caused it. Those stay exactly as they are; this mount does not oblige
+        anyone to start using toasts, and their comments are now merely stale
+        rather than wrong.
+
+        It is mounted for one outcome that genuinely cannot be rendered inline:
+        a balance payment settles through a Stripe webhook SECONDS AFTER the
+        customer has closed the dialog and possibly left the page, so the
+        surface that would have shown the result no longer exists. See
+        `_components/settlement-watch.tsx`.
+
+        Outside both providers on purpose: a toast must still render if the
+        tenant or the session query throws.
+      */}
+      <Toaster />
     </QueryClientProvider>
   );
 }

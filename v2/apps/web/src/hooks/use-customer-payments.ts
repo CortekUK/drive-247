@@ -334,7 +334,85 @@ export interface CustomerBalance {
   nextDueDate: string | null;
   /** Charges excluded because their booking was cancelled — shown as a footnote. */
   cancelledCharges: number;
+  /**
+   * The part of `outstanding` that this page offers NO way to pay.
+   *
+   * Two causes, one consequence. A charge with no `rental_id` is account-level,
+   * and a charge whose rental is not in the customer's own rentals list cannot
+   * be named or checked for cancellation. Either way there is no booking to
+   * price against, and `create-booking-payment-intent` prices only from a
+   * booking — so no button can exist for this money.
+   *
+   * It is still OWED, so it stays inside `outstanding`. It is surfaced
+   * separately for one reason: without it the page shows a total that is larger
+   * than the sum of its Pay buttons and says nothing about the difference,
+   * which reads as a bug in the arithmetic rather than as a real category of
+   * charge. Deliberately EXCLUDES plan-blocked bookings — those do appear in
+   * `payableBalances`, carrying their own explanation on screen.
+   */
+  unpayable: number;
 }
+
+/**
+ * One booking's outstanding balance, as a thing that CAN BE PAID.
+ *
+ * ── WHY THE UNIT IS A BOOKING, NOT AN INVOICE AND NOT THE HEADLINE TOTAL ────
+ * Because that is the only unit `create-booking-payment-intent` accepts. It
+ * refuses a request without a `rentalId` — "the amount is computed from the
+ * rental, not supplied by the caller" — and it prices the charge by summing
+ * THAT rental's open `type='Charge'` ledger rows. There is no endpoint that
+ * takes an invoice id, and none that takes an amount. So a "pay everything"
+ * button would have to fan out into one PaymentIntent per booking and reconcile
+ * partial failures across them, and a "pay this invoice" button would charge an
+ * amount the server did not agree to. Splitting the balance by booking is not a
+ * UI preference; it is the shape of the only server contract that exists.
+ *
+ * `amount` is computed from the SAME ledger rows the server sums, so it can be
+ * sent as `expectedAmount` — the endpoint refuses the whole request if the two
+ * differ by more than a cent, which is what stops a customer being shown one
+ * figure and charged another.
+ *
+ * ── ONE KNOWN WAY THE TWO SUMS CAN DIVERGE ──────────────────────────────────
+ * `resolveAmountDue` sums EVERY `type='Charge'` row for the rental; the query
+ * above adds `.gt('remaining_amount', 0)`. Those agree on zero and on NULL
+ * (both contribute nothing), and differ only if a Charge row ever carries a
+ * NEGATIVE `remaining_amount` — an over-allocated settlement. If that happens
+ * the server figure is the lower one, the amounts disagree by more than a cent,
+ * and the endpoint answers 409 `amount_mismatch` with a sentence written for a
+ * human. That is the correct outcome and the reason `expectedAmount` is sent at
+ * all: the customer is stopped rather than charged the wrong number. The page
+ * refetches on that failure so the corrected figure replaces the stale one.
+ */
+export interface PayableBalance {
+  rentalId: string;
+  rental: CustomerRental | null;
+  /** Σ `remaining_amount` over this booking's open charges. Always > 0. */
+  amount: number;
+  /** Some part of it is past its due date. */
+  isOverdue: boolean;
+  /** Soonest due date among the open charges. DATE-only, or null. */
+  nextDueDate: string | null;
+  /**
+   * Non-null when this balance must NOT be paid from here, and why — rendered
+   * verbatim next to the amount instead of a button. See `PLAN_BLOCK_REASON`.
+   */
+  blockedReason: string | null;
+}
+
+/**
+ * Why a booking's balance is shown but not payable here.
+ *
+ * An instalment plan is the only case today. The plan's collections are driven
+ * server-side off `scheduled_installments`, and the ledger charge those
+ * instalments settle against is the SAME row this page would otherwise offer to
+ * take in one go. Paying it in full through the booking endpoint would clear
+ * the debt without touching the schedule, leaving the plan collecting money
+ * against a balance that is already zero. That is an operator's problem to
+ * unwind, so the button is withheld rather than shipped with a hopeful comment.
+ */
+const PLAN_BLOCK_REASON =
+  'This booking is on an instalment plan — each instalment is collected ' +
+  'automatically on its due date, so there is nothing to pay here.';
 
 export type InstallmentState =
   | 'paid'
@@ -419,14 +497,47 @@ function isCaptured(capture: string | null): boolean {
   return capture === null || capture === 'captured';
 }
 
+/**
+ * A LIVE CARD HOLD — reserved on the card, never taken.
+ *
+ * `capture_status = 'requires_capture'` alone is NOT the test, and reading it
+ * as one is a real misstatement about the customer's bank balance. EVERY
+ * payment-taking path pre-inserts its row with that value as a placeholder
+ * before the money moves — `create-checkout-session`, `create-extension-
+ * checkout`, the PAYG and auto-extend reminders, and `create-booking-payment-
+ * intent`, which is the one this portal's own Pay button uses. So a payment the
+ * customer has merely STARTED renders as "Reserved on your card, not charged"
+ * for the seconds before the webhook lands, and a pay-link they never opened
+ * renders that way forever.
+ *
+ * The platform's own definition is the second half of this: `void-payment-link`
+ * refuses to void a row when `capture_status === 'requires_capture' &&
+ * preauth_expires_at != null`, because that pair is what a real authorisation
+ * looks like. `create-preauth-checkout` writes a conservative expiry floor at
+ * SESSION-CREATION time (later reconciled from Stripe's `capture_before`), so a
+ * genuine pre-auth carries one from the moment it exists — while a placeholder
+ * row never does.
+ */
+function isLiveHold(row: PaymentQueryRow): boolean {
+  return row.capture_status === 'requires_capture' && row.preauth_expires_at !== null;
+}
+
 function paymentState(row: PaymentQueryRow): PaymentState {
   const status = key(row.status);
   if (status === 'reversed') return 'reversed';
+
   if (!isCaptured(row.capture_status)) {
-    // 'cancelled' / 'expired' holds are dead: the card was never charged and
-    // never will be on this row.
-    return row.capture_status === 'requires_capture' ? 'hold' : 'reversed';
+    if (row.capture_status === 'requires_capture') {
+      if (isLiveHold(row)) return 'hold';
+      // A placeholder row awaiting settlement. Fall through to the status
+      // ladder, which reads 'Pending' as "Processing" — the truth.
+    } else {
+      // 'cancelled' / 'expired' holds are dead: the card was never charged and
+      // never will be on this row.
+      return 'reversed';
+    }
   }
+
   if (NOT_RECEIVED_STATUSES.has(status)) return 'pending';
   if (positive(row.refund_amount) > 0) return 'refunded';
   return 'received';
@@ -820,6 +931,12 @@ function usePlanRows({ customerId, tenantId }: Scope) {
 
 export interface UseCustomerPaymentsResult {
   balance: CustomerBalance;
+  /**
+   * The outstanding balance split into things that can actually be paid, one
+   * per booking, largest first. Empty when nothing is owed. See
+   * `PayableBalance` for why a booking is the unit.
+   */
+  payableBalances: PayableBalance[];
   invoices: CustomerInvoice[];
   payments: CustomerPayment[];
   plans: CustomerInstallmentPlan[];
@@ -843,6 +960,7 @@ const EMPTY_BALANCE: CustomerBalance = {
   categories: [],
   nextDueDate: null,
   cancelledCharges: 0,
+  unpayable: 0,
 };
 
 /**
@@ -922,6 +1040,7 @@ export function useCustomerPayments(): UseCustomerPaymentsResult {
     let outstanding = 0;
     let overdue = 0;
     let cancelledCharges = 0;
+    let unpayable = 0;
     let nextDueDate: string | null = null;
     const byCategory = new Map<string, number>();
 
@@ -938,6 +1057,14 @@ export function useCustomerPayments(): UseCustomerPaymentsResult {
       }
 
       outstanding = round2(outstanding + amount);
+      // Mirrors the skip conditions in `payableBalances` below EXACTLY: no
+      // booking to price against, or a booking we cannot see and therefore
+      // cannot name or check for cancellation. Keep the two in step — this
+      // figure exists solely to account for the difference between the headline
+      // total and the sum of the Pay buttons.
+      if (row.rental_id === null || rental === undefined) {
+        unpayable = round2(unpayable + amount);
+      }
 
       if (row.due_date !== null && row.due_date < today) {
         overdue = round2(overdue + amount);
@@ -964,6 +1091,7 @@ export function useCustomerPayments(): UseCustomerPaymentsResult {
       categories,
       nextDueDate,
       cancelledCharges,
+      unpayable,
     };
   }, [ledgerQuery.data, payments, rentalsById]);
 
@@ -971,6 +1099,76 @@ export function useCustomerPayments(): UseCustomerPaymentsResult {
     () => plans.filter((plan) => plan.isActive || plan.isPending),
     [plans],
   );
+
+  /**
+   * The same ledger rows the headline balance is built from, regrouped into the
+   * only unit the payment endpoint accepts. See `PayableBalance`.
+   *
+   * The skip conditions here and the `unpayable` tally in the balance memo above
+   * are two halves of one rule and must stay identical: every open charge either
+   * lands in a row below or is counted as unpayable, so the page can always
+   * account for the whole total.
+   */
+  const payableBalances = useMemo<PayableBalance[]>(() => {
+    const rows = ledgerQuery.data;
+    if (!rows || rows.length === 0) return [];
+
+    // A plan's instalments settle against these very charge rows, so a booking
+    // driven by one must not also be offered as a lump sum. `isPending` counts:
+    // the operator has set the plan up and the upfront payment is what starts
+    // it, which is a different transaction from clearing the balance.
+    const planned = new Set<string>();
+    for (const plan of plans) {
+      if (plan.isActive || plan.isPending) planned.add(plan.rentalId);
+    }
+
+    const today = todayDateString();
+    const byRental = new Map<string, PayableBalance>();
+
+    for (const row of rows) {
+      const amount = positive(row.remaining_amount);
+      if (amount === 0) continue;
+
+      // No booking to price against.
+      if (row.rental_id === null) continue;
+      // A booking we cannot see is one we cannot name on the button, and — more
+      // importantly — one we cannot confirm is not cancelled. Offering to take
+      // money for it would be a guess.
+      const rental = rentalsById.get(row.rental_id);
+      if (rental === undefined) continue;
+      if (rental.lifecycle === 'cancelled') continue;
+
+      const existing = byRental.get(row.rental_id);
+      const overdue = row.due_date !== null && row.due_date < today;
+
+      if (existing === undefined) {
+        byRental.set(row.rental_id, {
+          rentalId: row.rental_id,
+          rental,
+          amount,
+          isOverdue: overdue,
+          nextDueDate: row.due_date,
+          blockedReason: planned.has(row.rental_id) ? PLAN_BLOCK_REASON : null,
+        });
+        continue;
+      }
+
+      existing.amount = round2(existing.amount + amount);
+      existing.isOverdue = existing.isOverdue || overdue;
+      if (
+        row.due_date !== null &&
+        (existing.nextDueDate === null || row.due_date < existing.nextDueDate)
+      ) {
+        existing.nextDueDate = row.due_date;
+      }
+    }
+
+    // Overdue first, then largest — the order a customer would work down.
+    return [...byRental.values()].sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+      return b.amount - a.amount;
+    });
+  }, [ledgerQuery.data, plans, rentalsById]);
 
   const nextInstallment = useMemo(() => {
     let best: {
@@ -1006,6 +1204,7 @@ export function useCustomerPayments(): UseCustomerPaymentsResult {
 
   return {
     balance,
+    payableBalances,
     invoices,
     payments,
     plans,

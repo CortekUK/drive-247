@@ -78,14 +78,31 @@ export interface PaymentReturn {
   publishableKey: string;
   connectAccountId: string | null;
   rentalNumber: string | null;
+  /**
+   * `rentals.id`, so a page that watches for settlement after the payment knows
+   * WHICH booking to watch once it has been reloaded from scratch.
+   *
+   * The booking page never needed it — it already knows the rental it just
+   * created. The portal does: a 3-D Secure hop is a full navigation, so the
+   * component that started the payment is gone and the returning page has only
+   * the query string and this stash to reconstruct what happened. Optional in
+   * practice (an older stash written before this field existed parses as null),
+   * which is why the reader tolerates its absence rather than rejecting the
+   * whole return.
+   */
+  rentalId: string | null;
 }
 
-function stashForReturn(intent: BookingPaymentIntentResponse): void {
+function stashForReturn(
+  intent: BookingPaymentIntentResponse,
+  rentalId: string | null,
+): void {
   const stash: PaymentReturn = {
     clientSecret: intent.clientSecret,
     publishableKey: intent.publishableKey,
     connectAccountId: intent.connectAccountId,
     rentalNumber: intent.rentalNumber,
+    rentalId,
   };
   try {
     window.sessionStorage.setItem(RETURN_STASH_KEY, JSON.stringify(stash));
@@ -148,6 +165,7 @@ export function readPaymentReturn(): PaymentReturn | null {
     connectAccountId:
       typeof body.connectAccountId === "string" ? body.connectAccountId : null,
     rentalNumber: typeof body.rentalNumber === "string" ? body.rentalNumber : null,
+    rentalId: typeof body.rentalId === "string" ? body.rentalId : null,
   };
 }
 
@@ -193,6 +211,66 @@ export interface BookingPaymentRequest extends BookingPaymentIntentRequest {
   expectedAmount: number;
 }
 
+/* ─────────────────────────────── the wording ─────────────────────────────── */
+
+/**
+ * Every sentence the panel puts on screen, so a second caller can be honest
+ * without a second dialog.
+ *
+ * The panel now serves two flows that are the same MECHANISM and completely
+ * different EVENTS: a new booking being paid for, and an existing booking's
+ * outstanding balance being settled from the customer portal. Rendering "Your
+ * booking is confirmed. We have emailed the details and what to bring on the
+ * day." to someone who just cleared a fuel charge on a rental they returned
+ * last week is not a cosmetic mismatch — it is a false statement about what
+ * just happened.
+ *
+ * Overrides are `Partial`, merged over `BOOKING_COPY`, so the booking flow is
+ * unchanged by construction: it passes nothing and gets exactly what it had.
+ */
+export interface PaymentPanelCopy {
+  /** Dialog title. */
+  title: string;
+  /** The button that closes without paying. */
+  cancelLabel: string;
+  succeededTitle: string;
+  succeededBody: string;
+  /** Taken, but the bank has not settled. A real Stripe state, not an error. */
+  processingTitle: string;
+  processingBody: string;
+  /** Prefix on the reference pill, e.g. "Booking" → "Booking R-42772e". */
+  referencePrefix: string;
+  /** Closes the outcome view. */
+  doneLabel: string;
+  /**
+   * The off-session mandate. NOT optional in either flow and not a formality:
+   * `create-booking-payment-intent` sets `setup_future_usage: 'off_session'`
+   * unconditionally, so the card really is vaulted for later charges on both
+   * paths, and card-network rules require that to be stated where the card is
+   * entered. Only the wording of "what you agreed to" differs.
+   */
+  mandate: string;
+}
+
+const BOOKING_COPY: PaymentPanelCopy = {
+  title: "Confirm and pay",
+  cancelLabel: "Back to my booking",
+  succeededTitle: "Payment received",
+  succeededBody:
+    "Your booking is confirmed. We have emailed the details and what to bring on the day.",
+  processingTitle: "Payment is being confirmed",
+  processingBody:
+    "Your bank has not settled this yet. We will email you the moment it clears — there is nothing more to do.",
+  referencePrefix: "Booking",
+  doneLabel: "Done",
+  mandate:
+    "to store this card securely and to charge it later, without you present, " +
+    "for the amounts you agreed to on this page — the security deposit, any " +
+    "instalments, and post-rental charges such as fuel, excess mileage, tolls, " +
+    "fines or damage. You can ask us to remove the card once the rental is " +
+    "closed and settled.",
+};
+
 /* ──────────────────────────────── the panel ──────────────────────────────── */
 
 export interface PaymentPanelProps {
@@ -203,8 +281,31 @@ export interface PaymentPanelProps {
    * rental it prices from. Null until the booking has actually been written —
    * the panel is never opened before that, because an intent cannot be minted
    * without a rental and an empty card dialog is worse than an honest error.
+   *
+   * Ignored when `prepared` is supplied: that caller has already minted.
    */
   request: BookingPaymentRequest | null;
+  /**
+   * An intent the CALLER already minted, mounted straight into `<Elements>`.
+   *
+   * The booking flow lets the panel do the minting because the request and the
+   * dialog open at the same moment. The portal cannot: its request type is the
+   * narrow subset `create-booking-payment-intent` actually reads (see
+   * `@/lib/stripe/create-balance-payment-intent`), and it wants a failure to
+   * mint to appear INLINE next to the balance it failed on, not inside a dialog
+   * the customer then has to dismiss. So it mints first and opens the dialog
+   * only when there is a real card form to show.
+   *
+   * Distinct from `resume`, which carries the same shape but also asks the panel
+   * to RESOLVE the intent before offering the form — a prepared intent is known
+   * to be fresh, a resumed one may already be paid.
+   */
+  prepared?: BookingPaymentIntentResponse | null;
+  /**
+   * `rentals.id`, stashed for a 3-D Secure return. Taken from `request` when the
+   * panel mints; supply it alongside `prepared`.
+   */
+  rentalId?: string | null;
   /**
    * Already formatted, e.g. "$1,215.00" — the page's own total, used only until
    * the intent lands. See `formatIntentAmount` for why the intent then wins.
@@ -214,6 +315,17 @@ export interface PaymentPanelProps {
   vehicleLabel: string;
   /** Non-null when this mount is a return from a Stripe redirect. */
   resume: PaymentReturn | null;
+  /** Overrides merged over the booking wording. See `PaymentPanelCopy`. */
+  copy?: Partial<PaymentPanelCopy>;
+  /**
+   * Rendered inside the success view, above the close button.
+   *
+   * Stripe saying "succeeded" and the money appearing on the customer's account
+   * are two different events separated by a webhook. The portal puts its
+   * settlement watch here so the customer sees the second one happen without
+   * leaving the dialog.
+   */
+  outcomeFooter?: React.ReactNode;
   onSucceeded?: (outcome: PaymentOutcome) => void;
 }
 
@@ -221,9 +333,13 @@ export function PaymentPanel({
   open,
   onOpenChange,
   request,
+  prepared = null,
+  rentalId = null,
   amountLabel,
   vehicleLabel,
   resume,
+  copy,
+  outcomeFooter,
   onSucceeded,
 }: PaymentPanelProps) {
   const { state, create, reset } = usePaymentIntent();
@@ -252,15 +368,16 @@ export function PaymentPanel({
       return;
     }
     // A resume already HAS a client secret; asking for another would create a
-    // second intent for a booking that may have just been paid.
-    if (resume !== null) return;
+    // second intent for a booking that may have just been paid. A prepared
+    // intent is likewise already minted — by the caller, deliberately.
+    if (resume !== null || prepared !== null) return;
     if (state.status !== "idle") return;
 
     const pending = requestRef.current;
     if (pending === null) return;
 
     void create(pending);
-  }, [open, resume, state.status, create, reset]);
+  }, [open, resume, prepared, state.status, create, reset]);
 
   const handleOutcome = useCallback(
     (next: PaymentOutcome) => {
@@ -295,8 +412,17 @@ export function PaymentPanel({
         currency: null,
       };
     }
+    if (prepared !== null) return prepared;
     return state.status === "ready" ? state.intent : null;
-  }, [resume, state]);
+  }, [resume, prepared, state]);
+
+  /** The booking the payment belongs to, whichever route supplied the intent. */
+  const paidRentalId = request?.rentalId ?? rentalId;
+
+  const text = useMemo<PaymentPanelCopy>(
+    () => ({ ...BOOKING_COPY, ...copy }),
+    [copy],
+  );
 
   const stripePromise = useMemo(
     () =>
@@ -339,11 +465,16 @@ export function PaymentPanel({
         className="flex max-h-[calc(100svh-1.5rem)] w-[calc(100%-1.5rem)] max-w-[440px] flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100svh-4rem)]"
         onInteractOutside={(event) => event.preventDefault()}
       >
-        <PanelHeader vehicleLabel={vehicleLabel} />
+        <PanelHeader vehicleLabel={vehicleLabel} title={text.title} />
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
           {outcome !== null ? (
-            <OutcomeView outcome={outcome} onClose={() => onOpenChange(false)} />
+            <OutcomeView
+              outcome={outcome}
+              text={text}
+              footer={outcomeFooter}
+              onClose={() => onOpenChange(false)}
+            />
           ) : loadError !== null ? (
             <FailureView
               title="We could not show the card form"
@@ -352,7 +483,11 @@ export function PaymentPanel({
                 "happening, get in touch and we will take your booking directly."
               }
               detail={loadError}
+              cancelLabel={text.cancelLabel}
               onRetry={
+                // Nothing to re-mint from when the caller owns the intent: the
+                // portal's retry is its own "Try again" beside the balance,
+                // which mints afresh and reopens this dialog.
                 request === null
                   ? null
                   : () => {
@@ -372,6 +507,7 @@ export function PaymentPanel({
               title={FAILURE_TITLES[state.failure.kind]}
               message={state.failure.message}
               detail={state.failure.detail}
+              cancelLabel={text.cancelLabel}
               onRetry={
                 /*
                   `reset()` alone is the retry: it drops the panel back to
@@ -395,7 +531,9 @@ export function PaymentPanel({
             >
               <CardForm
                 intent={intent}
+                rentalId={paidRentalId}
                 amountLabel={amountLabel}
+                text={text}
                 isResume={resume !== null}
                 onOutcome={handleOutcome}
                 onLoadError={setLoadError}
@@ -428,7 +566,13 @@ const FAILURE_TITLES: Readonly<Record<PaymentIntentFailureKind, string>> = {
  * the surrounding text colour; and it is deliberately NOT `BrandMark`, which is
  * a `<Link>` and would offer a one-tap route off a half-finished payment.
  */
-function PanelHeader({ vehicleLabel }: { vehicleLabel: string }) {
+function PanelHeader({
+  vehicleLabel,
+  title,
+}: {
+  vehicleLabel: string;
+  title: string;
+}) {
   return (
     <div className="border-b border-brand-border-soft px-4 pt-4 pb-3.5 sm:px-5 sm:pt-5">
       <div className="flex items-center gap-2 text-brand-text">
@@ -457,9 +601,7 @@ function PanelHeader({ vehicleLabel }: { vehicleLabel: string }) {
         </span>
       </div>
 
-      <DialogTitle className="mt-2.5 text-base sm:text-lg">
-        Confirm and pay
-      </DialogTitle>
+      <DialogTitle className="mt-2.5 text-base sm:text-lg">{title}</DialogTitle>
       <DialogDescription className="mt-0.5 text-xs sm:text-sm">
         {vehicleLabel}
       </DialogDescription>
@@ -503,14 +645,19 @@ function formatIntentAmount(amount: number | null, currency: string | null): str
 
 function CardForm({
   intent,
+  rentalId,
   amountLabel,
+  text,
   isResume,
   onOutcome,
   onLoadError,
   onCancel,
 }: {
   intent: BookingPaymentIntentResponse;
+  /** Stashed before confirming, so a 3-D Secure return knows what was paid. */
+  rentalId: string | null;
   amountLabel: string;
+  text: PaymentPanelCopy;
   /** True when this mount is a return from a redirect: check before asking. */
   isResume: boolean;
   onOutcome: (outcome: PaymentOutcome) => void;
@@ -585,7 +732,7 @@ function CardForm({
 
       // Written BEFORE confirming: if Stripe navigates away for 3-D Secure the
       // next line of this function never runs.
-      stashForReturn(intent);
+      stashForReturn(intent, rentalId);
 
       // Same page, so a returning customer lands on the booking they were on.
       const returnUrl = `${window.location.origin}${window.location.pathname}`;
@@ -622,7 +769,7 @@ function CardForm({
         "That payment was not completed. Nothing has been charged — please try again.",
       );
     },
-    [stripe, elements, processing, intent, onOutcome],
+    [stripe, elements, processing, intent, rentalId, onOutcome],
   );
 
   if (checkingReturn) {
@@ -663,12 +810,9 @@ function CardForm({
         not seen a card at that point.
       */}
       <p className="mt-3 rounded-[10px] border border-brand-border-soft bg-brand-stone/45 px-3 py-2.5 text-[11px] leading-relaxed text-brand-text-soft">
-        By paying you authorise <strong className="font-medium text-brand-text">Drive247</strong>{" "}
-        to store this card securely and to charge it later, without you present,
-        for the amounts you agreed to on this page — the security deposit, any
-        instalments, and post-rental charges such as fuel, excess mileage, tolls,
-        fines or damage. You can ask us to remove the card once the rental is
-        closed and settled.
+        By paying you authorise{" "}
+        <strong className="font-medium text-brand-text">Drive247</strong>{" "}
+        {text.mandate}
       </p>
 
       {error !== null ? (
@@ -714,7 +858,7 @@ function CardForm({
           disabled={processing}
           onClick={onCancel}
         >
-          Back to my booking
+          {text.cancelLabel}
         </Button>
       </div>
     </form>
@@ -739,6 +883,7 @@ function FailureView({
   title,
   message,
   detail,
+  cancelLabel,
   onRetry,
   onClose,
 }: {
@@ -746,6 +891,7 @@ function FailureView({
   message: string;
   /** Engineering detail. Logged, never rendered. */
   detail: string | null;
+  cancelLabel: string;
   onRetry: (() => void) | null;
   onClose: () => void;
 }) {
@@ -789,7 +935,7 @@ function FailureView({
           className={cn("w-full", onRetry === null ? "h-12" : "h-11")}
           onClick={onClose}
         >
-          Back to my booking
+          {cancelLabel}
         </Button>
       </div>
     </div>
@@ -798,9 +944,13 @@ function FailureView({
 
 function OutcomeView({
   outcome,
+  text,
+  footer,
   onClose,
 }: {
   outcome: PaymentOutcome;
+  text: PaymentPanelCopy;
+  footer: React.ReactNode;
   onClose: () => void;
 }) {
   const succeeded = outcome.kind === "succeeded";
@@ -826,20 +976,22 @@ function OutcomeView({
         </span>
 
         <h3 className="mt-3 text-sm font-semibold text-brand-text">
-          {succeeded ? "Payment received" : "Payment is being confirmed"}
+          {succeeded ? text.succeededTitle : text.processingTitle}
         </h3>
         <p className="mt-1.5 text-xs leading-relaxed text-brand-text-soft">
-          {succeeded
-            ? "Your booking is confirmed. We have emailed the details and what to bring on the day."
-            : "Your bank has not settled this yet. We will email you the moment it clears — there is nothing more to do."}
+          {succeeded ? text.succeededBody : text.processingBody}
         </p>
 
         {outcome.rentalNumber !== null ? (
           <p className="mt-3 rounded-full bg-brand-stone px-3 py-1 text-[11px] font-medium text-brand-text-soft">
-            Booking {outcome.rentalNumber}
+            {text.referencePrefix} {outcome.rentalNumber}
           </p>
         ) : null}
       </div>
+
+      {footer !== undefined && footer !== null ? (
+        <div className="mt-4">{footer}</div>
+      ) : null}
 
       <Button
         type="button"
@@ -848,7 +1000,7 @@ function OutcomeView({
         className="mt-5 h-12 w-full"
         onClick={onClose}
       >
-        Done
+        {text.doneLabel}
       </Button>
     </div>
   );

@@ -10,14 +10,31 @@
  * disagree eventually, and the customer has no way to tell which one to believe.
  * See the header of `use-customer-payments.ts` for which table answers what.
  *
- * ── READ-ONLY, ON PURPOSE ───────────────────────────────────────────────────
- * There is no "Pay now", no "Update card" and no statement download. Each is a
- * write against a live card or a Stripe-hosted redirect, and staging's Stripe
- * webhooks land in the production project — so none of them could be exercised
- * end-to-end before shipping. A payment button that has never been pressed is
- * worse than no button: it invites a customer to try, fails silently, and the
- * money question is still open. The page instead states the balance precisely
- * and points at the operator. The full list is in the handoff notes.
+ * ── WHAT CAN BE PAID FROM HERE, AND WHAT CANNOT ─────────────────────────────
+ * An outstanding balance can now be settled by card, one booking at a time —
+ * see `_components/pay-balances.tsx` for why a booking is the unit and
+ * `settlement-watch.tsx` for how the result is confirmed. This became possible
+ * when staging got its OWN Stripe webhook endpoint; before that, staging's
+ * webhooks fired into the production project and no payment button could be
+ * exercised end to end, which is why this page shipped read-only.
+ *
+ * Still deliberately absent, because each needs server work that does not
+ * exist yet rather than a button:
+ *
+ *   Update card    — needs a SetupIntent endpoint. There is none: every
+ *                    function here mints PAYMENT intents against a rental.
+ *                    Stripe's Billing Portal is not a substitute either — the
+ *                    tenant-facing portal session is for PLATFORM subscription
+ *                    billing on a different Stripe account entirely.
+ *   Pay an instalment early / activate a plan — the collections are driven
+ *                    server-side off `scheduled_installments`, and paying the
+ *                    underlying charge in one go would leave the schedule
+ *                    collecting against a zero balance. That is an operator
+ *                    action, not a customer one.
+ *   Statement download — no endpoint renders one.
+ *
+ * Each of those states its reason on screen rather than showing a control that
+ * does nothing.
  */
 
 import { useMemo, useState } from 'react';
@@ -54,12 +71,14 @@ import { cn } from '@/lib/utils';
 import { InstalmentPlans } from './_components/instalment-plans';
 import { InvoiceSheet } from './_components/invoice-sheet';
 import { INVOICE_CHIP, PAYMENT_CHIP } from './_components/invoice-state';
+import { PayBalances } from './_components/pay-balances';
 
 type Tab = 'invoices' | 'payments';
 
 export default function PortalPaymentsPage() {
   const {
     balance,
+    payableBalances,
     invoices,
     payments,
     activePlans,
@@ -112,6 +131,12 @@ export default function PortalPaymentsPage() {
           {balance.overdue > 0 ? <OverdueBanner amount={balance.overdue} /> : null}
 
           <BalancePanel balance={balance} />
+
+          <PayBalances
+            payable={payableBalances}
+            unpayable={balance.unpayable}
+            refetch={refetch}
+          />
 
           <InstalmentPlans plans={activePlans} next={nextInstallment} />
 
@@ -268,27 +293,25 @@ function BalancePanel({ balance }: { balance: CustomerBalance }) {
             bookings is excluded from this balance.
           </p>
         ) : null}
-        {!settled ? (
-          <>
-            <p className="text-xs leading-relaxed text-brand-text-subtle">
-              Paying a balance from this page is not available yet — get in touch
-              if you need to settle one, or if something here looks wrong.
-            </p>
-            {/* Its own row rather than a link inside the sentence: an inline
-                link in a 12px paragraph is a 17px-tall tap target. Suppressed
-                when the overdue banner is up — that already carries the same
-                link forty pixels higher, and two of them read as a dead end
-                rather than as help. */}
-            {balance.overdue === 0 ? (
-              <Link
-                href="/contact"
-                className="inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
-              >
-                Contact us
-                <ArrowRight aria-hidden className="size-3.5" />
-              </Link>
-            ) : null}
-          </>
+        {/* The "paying is not available yet" notice that used to sit here is
+            gone: the Pay panel directly below this one now takes the payment,
+            and leaving the sentence up would have told the customer the button
+            they can see does not exist. What remains is the route to a human,
+            which is still wanted — some of the balance may not be payable by
+            card, and something on this page may simply look wrong.
+
+            Its own row rather than a link inside a sentence: an inline link in
+            a 12px paragraph is a 17px-tall tap target. Suppressed when the
+            overdue banner is up — that already carries the same link forty
+            pixels higher, and two of them read as a dead end rather than help. */}
+        {!settled && balance.overdue === 0 ? (
+          <Link
+            href="/contact"
+            className="inline-flex min-h-11 w-fit items-center gap-1.5 text-sm font-medium text-brand-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/25"
+          >
+            Contact us
+            <ArrowRight aria-hidden className="size-3.5" />
+          </Link>
         ) : null}
       </div>
     </Panel>
