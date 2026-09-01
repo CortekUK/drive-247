@@ -503,7 +503,7 @@ export default function VerificationPage() {
                       <div>
                         <p className="text-sm text-muted-foreground">Verification Method</p>
                         <p className="font-medium capitalize">
-                          {currentVerification.verification_provider === 'ai' ? 'AI Verification' : 'Veriff'}
+                          {'AI Verification'}
                         </p>
                       </div>
                     </div>

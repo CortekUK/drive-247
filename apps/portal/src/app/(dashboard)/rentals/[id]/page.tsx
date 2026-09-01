@@ -6722,15 +6722,9 @@ const RentalDetail = () => {
                     </Badge>
                   )}
                   {/* Provider Badge */}
-                  {identityVerification.verification_provider === 'ai' ? (
-                    <Badge variant="outline" className="border-purple-500 text-purple-600">
-                      AI Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      Veriff
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="border-purple-500 text-purple-600">
+                    AI Verified
+                  </Badge>
                 </div>
                 {identityVerification.verification_completed_at && (
                   <span className="text-sm text-muted-foreground">
