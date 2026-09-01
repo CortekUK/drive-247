@@ -61,7 +61,6 @@ const BookingVehiclesContent = () => {
   // Turo-style per-day manual prices for the listed vehicles over the chosen dates,
   // so the "from $X" list total matches the checkout total (not just base+surcharge).
   const [dailyPriceMap, setDailyPriceMap] = useState<Record<string, { date: string; price: number }[]>>({});
-  const enquiriesEnabled = tenant?.enquiries_enabled !== false;
 
   // Extract booking context from URL
   const pickupDate = searchParams?.get("pickup") || "";
@@ -405,13 +404,6 @@ const BookingVehiclesContent = () => {
               <p className="text-lg text-muted-foreground mb-2">
                 No vehicles available for selected dates
               </p>
-              {enquiriesEnabled ? (
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Use the <strong>Submit enquiry</strong> button in the top navigation
-                  and our team will reach out about availability for the car and dates
-                  you'd like.
-                </p>
-              ) : null}
             </Card>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

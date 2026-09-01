@@ -21,7 +21,6 @@ import { vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity"
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { format } from "date-fns";
-import { isEnquiryBasedTenant } from "@/config/tenant-config";
 import { formatCurrency } from "@/lib/format-utils";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
@@ -307,18 +306,6 @@ export default function BookingCheckoutStep({
     return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + effectiveBonzahPremium + unlimitedMileageTotal + chargedSecurityDeposit();
   };
 
-  // Check if this is an enquiry-based tenant (e.g., Kedic Services)
-  // For enquiry tenants: only charge security deposit upfront (if any), rental fees collected later
-  const isEnquiry = isEnquiryBasedTenant(tenant?.id);
-
-  // For enquiry-based tenants: no upfront payment (deposit is placed as hold at key handover)
-  const getPayableAmount = (): number => {
-    if (isEnquiry) {
-      return 0; // No upfront charge — deposit hold placed at key handover
-    }
-    return calculateGrandTotal();
-  };
-
   // Calculate installment breakdown based on what_gets_split setting
   const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
   const { installUpfrontAmount, installableAmount } = (() => {
@@ -535,14 +522,13 @@ export default function BookingCheckoutStep({
       setIsProcessing(true);
 
       // Create Stripe checkout session
-      // For enquiry tenants, only charge the deposit (getPayableAmount handles this)
       const { data, error: functionError } = await supabase.functions.invoke('create-checkout-session', {
         body: {
           rentalId: createdRentalData.rental.id,
           customerId: createdRentalData.customer.id,
           customerEmail: formData.customerEmail,
           customerName: formData.customerName,
-          totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
+          totalAmount: calculateGrandTotal(),
           tenantSlug: tenant?.slug, // Pass tenant slug for Stripe Connect routing
           tenantId: tenant?.id,
           bonzahPolicyId: createdRentalData.bonzahPolicyId || null, // For Bonzah insurance confirmation after payment
@@ -557,7 +543,7 @@ export default function BookingCheckoutStep({
           (window as any).gtag('event', 'redirecting_to_stripe', {
             rental_id: createdRentalData.rental.id,
             customer_id: createdRentalData.customer.id,
-            total: getPayableAmount(),
+            total: calculateGrandTotal(),
           });
         }
         window.location.href = data.url;
@@ -582,7 +568,6 @@ export default function BookingCheckoutStep({
       setIsProcessing(true);
 
       // Create Stripe pre-auth checkout session
-      // For enquiry tenants, only charge the deposit (getPayableAmount handles this)
       const { data, error: functionError } = await supabase.functions.invoke('create-preauth-checkout', {
         body: {
           rentalId: createdRentalData.rental.id,
@@ -592,7 +577,7 @@ export default function BookingCheckoutStep({
           customerPhone: formData.customerPhone,
           vehicleId: selectedVehicle.id,
           vehicleName: vehicleDisplayName(selectedVehicle, tenant),
-          totalAmount: getPayableAmount(), // Use payable amount (deposit only for enquiry tenants)
+          totalAmount: calculateGrandTotal(),
           pickupDate: formData.pickupDate,
           returnDate: formData.dropoffDate,
           tenantId: tenant?.id, // Explicitly pass tenant_id
@@ -610,7 +595,7 @@ export default function BookingCheckoutStep({
           (window as any).gtag('event', 'redirecting_to_stripe_preauth', {
             rental_id: createdRentalData.rental.id,
             customer_id: createdRentalData.customer.id,
-            total: getPayableAmount(),
+            total: calculateGrandTotal(),
           });
         }
         window.location.href = data.url;
@@ -687,70 +672,52 @@ export default function BookingCheckoutStep({
     setSendingDocuSign(true);
 
     try {
-      // Skip agreement sending for enquiry-based tenants (agreement will be sent later by admin)
-      if (!isEnquiry) {
-        console.log('═════════════════════════════════════════════════════════');
-        console.log('CREATING DOCUSIGN ENVELOPE (via API route)');
-        console.log('═════════════════════════════════════════════════════════');
-        console.log('Rental ID:', createdRentalData.rental.id);
-        console.log('Customer ID:', createdRentalData.customer.id);
-        console.log('Customer Email:', formData.customerEmail);
-        console.log('Customer Name:', formData.customerName);
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('CREATING DOCUSIGN ENVELOPE (via API route)');
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('Rental ID:', createdRentalData.rental.id);
+      console.log('Customer ID:', createdRentalData.customer.id);
+      console.log('Customer Email:', formData.customerEmail);
+      console.log('Customer Name:', formData.customerName);
 
-        // Send agreement for signing via BoldSign
-        const response = await fetch('/api/esign', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            rentalId: createdRentalData.rental.id,
-            customerEmail: formData.customerEmail,
-            customerName: formData.customerName,
-            tenantId: tenant?.id, // Pass tenant ID for template lookup
-            vehicleId: selectedVehicle.id, // Fallback for tenant lookup
-          }),
-        });
+      // Send agreement for signing via BoldSign
+      const response = await fetch('/api/esign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rentalId: createdRentalData.rental.id,
+          customerEmail: formData.customerEmail,
+          customerName: formData.customerName,
+          tenantId: tenant?.id, // Pass tenant ID for template lookup
+          vehicleId: selectedVehicle.id, // Fallback for tenant lookup
+        }),
+      });
 
-        const data = await response.json();
-        const error = response.ok ? null : data;
+      const data = await response.json();
+      const error = response.ok ? null : data;
 
-        console.log('═════════════════════════════════════════════════════════');
-        console.log('DOCUSIGN RESPONSE');
-        console.log('═════════════════════════════════════════════════════════');
-        console.log('Error:', error);
-        console.log('Data:', JSON.stringify(data, null, 2));
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('DOCUSIGN RESPONSE');
+      console.log('═════════════════════════════════════════════════════════');
+      console.log('Error:', error);
+      console.log('Data:', JSON.stringify(data, null, 2));
 
-        if (error) {
-          console.error("eSign call failed:", error);
-          toast.error("Agreement signing unavailable. Agreement will be sent later.");
-        } else if (data?.ok) {
-          console.log('eSign document created!');
-          toast.success("Agreement sent to your email!", { duration: 4000 });
-        } else {
-          console.warn("eSign returned error:", data);
-          toast.error(data?.error || "Agreement failed to send. Will be sent later.");
-        }
+      if (error) {
+        console.error("eSign call failed:", error);
+        toast.error("Agreement signing unavailable. Agreement will be sent later.");
+      } else if (data?.ok) {
+        console.log('eSign document created!');
+        toast.success("Agreement sent to your email!", { duration: 4000 });
       } else {
-        console.log('Enquiry-based tenant — skipping agreement, will be sent by admin later');
+        console.warn("eSign returned error:", data);
+        toast.error(data?.error || "Agreement failed to send. Will be sent later.");
       }
 
-      // Proceed based on payable amount
+      // Proceed to payment
       setSendingDocuSign(false);
 
       setTimeout(async () => {
-        const payableAmount = getPayableAmount();
-
-        // For enquiry tenants with no security deposit, skip payment entirely
-        if (isEnquiry && payableAmount === 0) {
-          console.log('Enquiry booking with no deposit - redirecting to enquiry submitted page');
-          if (typeof window !== 'undefined' && (window as any).gtag) {
-            (window as any).gtag('event', 'enquiry_submitted', {
-              rental_id: createdRentalData.rental.id,
-              customer_id: createdRentalData.customer.id,
-            });
-          }
-          window.location.href = `/booking-enquiry-submitted?rental_id=${createdRentalData.rental.id}`;
-          return;
-        }
+        const payableAmount = calculateGrandTotal();
 
         // Route to installment checkout if an installment plan is selected
         if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
@@ -759,7 +726,7 @@ export default function BookingCheckoutStep({
           return;
         }
 
-        // Proceed to payment (either full amount or deposit only)
+        // Proceed to payment
         const bookingMode = await getBookingMode();
         console.log('Proceeding to payment, mode:', bookingMode, 'amount:', payableAmount);
         if (bookingMode === 'manual') {
@@ -775,15 +742,6 @@ export default function BookingCheckoutStep({
       setSendingDocuSign(false);
 
       setTimeout(async () => {
-        const payableAmount = getPayableAmount();
-
-        // For enquiry tenants with no security deposit, skip payment entirely
-        if (isEnquiry && payableAmount === 0) {
-          console.log('Enquiry booking with no deposit - redirecting to enquiry submitted page');
-          window.location.href = `/booking-enquiry-submitted?rental_id=${createdRentalData.rental.id}`;
-          return;
-        }
-
         // Route to installment checkout if an installment plan is selected
         if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
           redirectToInstallmentCheckout();
@@ -1073,9 +1031,6 @@ export default function BookingCheckoutStep({
       const rentalPeriodType = calculateRentalPeriodType();
       const grandTotal = calculateGrandTotal(); // Use grand total (includes taxes/fees) for rental amount
 
-      // For enquiry tenants with no deposit, mark payment as not required
-      const enquiryWithNoDeposit = isEnquiry && calculateSecurityDeposit() === 0;
-
       const rentalData: any = {
         customer_id: customer.id,
         vehicle_id: selectedVehicle.id,
@@ -1084,9 +1039,9 @@ export default function BookingCheckoutStep({
         rental_period_type: rentalPeriodType,
         monthly_amount: grandTotal, // Store grand total (rental + taxes + fees + protection)
         status: "Pending", // Derived from approval_status + payment_status
-        payment_mode: enquiryWithNoDeposit ? 'manual' : bookingMode, // Track payment mode
+        payment_mode: bookingMode, // Track payment mode
         approval_status: "pending", // Awaiting admin approval
-        payment_status: enquiryWithNoDeposit ? "fulfilled" : "pending", // Enquiry with no deposit: payment already satisfied
+        payment_status: "pending",
         // Location data
         pickup_location: formData.pickupLocation || null,
         pickup_location_id: formData.pickupLocationId || null,
@@ -1857,314 +1812,272 @@ export default function BookingCheckoutStep({
         <div className="lg:col-span-1">
           <Card className="p-6 bg-gradient-dark border-accent/30 lg:sticky lg:top-24">
             <h3 className="text-lg font-semibold text-gradient-metal mb-4">
-              {isEnquiry ? 'Booking Summary' : 'Price Summary'}
+              Price Summary
             </h3>
 
             <div className="space-y-3">
-              {/* ENQUIRY TENANT: Show info message and only deposit (if any) */}
-              {isEnquiry ? (
-                <>
-                  {/* Info message for enquiry booking */}
-                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                    <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                      This is an enquiry booking
-                    </p>
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                      Rental charges will be confirmed after your booking is approved.
-                    </p>
-                  </div>
+              {/* Rental price with unit breakdown */}
+              {(() => {
+                const days = rentalDuration.days;
+                const dailyRent = selectedVehicle?.daily_rent || 0;
+                const weeklyRent = selectedVehicle?.weekly_rent || 0;
+                const monthlyRent = selectedVehicle?.monthly_rent || 0;
 
-                  {/* Only show pre-authorization if > 0 */}
-                  {calculateSecurityDeposit() > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Pre-Authorization</span>
-                      <span className="font-medium">{fmt(calculateSecurityDeposit())}</span>
-                    </div>
-                  )}
+                // Surcharges apply across all tiers — show the per-day breakdown
+                // whenever any day carries a weekend/holiday surcharge.
+                const hasDynamicPricing = dayBreakdown.length > 0 &&
+                  dayBreakdown.some(d => d.type !== 'regular');
 
-                  {/* Total Due Now */}
-                  <div className="pt-3 border-t border-accent/30">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">Total Due Now</span>
-                      <span className="text-2xl font-bold text-accent">
-                        {fmt(getPayableAmount())}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground mt-4">
-                    {calculateSecurityDeposit() > 0
-                      ? "Pre-authorization will be collected now. Rental charges confirmed after approval."
-                      : "No payment required now. You'll be contacted to confirm your booking."}
-                  </p>
-                </>
-              ) : (
-                <>
-                  {/* STANDARD TENANT: Show full price breakdown */}
-                  {/* Rental price with unit breakdown */}
-                  {(() => {
-                    const days = rentalDuration.days;
-                    const dailyRent = selectedVehicle?.daily_rent || 0;
-                    const weeklyRent = selectedVehicle?.weekly_rent || 0;
-                    const monthlyRent = selectedVehicle?.monthly_rent || 0;
-
-                    // Surcharges apply across all tiers — show the per-day breakdown
-                    // whenever any day carries a weekend/holiday surcharge.
-                    const hasDynamicPricing = dayBreakdown.length > 0 &&
-                      dayBreakdown.some(d => d.type !== 'regular');
-
-                    // Group days by rate for a cleaner breakdown
-                    const buildDailyBreakdown = () => {
-                      if (!dayBreakdown.length) return null;
-                      // Group consecutive days with same rate
-                      const groups: { type: string; rate: number; count: number; label: string }[] = [];
-                      for (const day of dayBreakdown) {
-                        const last = groups[groups.length - 1];
-                        if (last && last.rate === day.effectiveRate && last.type === day.type) {
-                          last.count++;
-                        } else {
-                          const label = (day.appliedSurcharges && day.appliedSurcharges.length > 1)
-                            ? day.appliedSurcharges.map(s => s.label).join(' + ')
-                            : day.type === 'manual' ? 'Custom price'
-                            : day.type === 'holiday' ? (day.holidayName || 'Holiday')
-                            : day.type === 'weekend' ? 'Weekend' : 'Weekday';
-                          groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
-                        }
-                      }
-                      return groups;
-                    };
-
-                    let unitRate = 0;
-                    let unitLabel = '';
-                    let quantityLabel = '';
-
-                    if (pricingTier === 'monthly') {
-                      unitRate = monthlyRent;
-                      unitLabel = '/mo';
-                      const months = days / mtd;
-                      quantityLabel = months === Math.floor(months)
-                        ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
-                        : `${days} days`;
-                    } else if (pricingTier === 'weekly') {
-                      unitRate = weeklyRent;
-                      unitLabel = '/wk';
-                      const weeks = days / 7;
-                      quantityLabel = weeks === Math.floor(weeks)
-                        ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
-                        : `${days} days`;
-                    } else if (!hasDynamicPricing) {
-                      unitRate = dailyRent;
-                      unitLabel = '/day';
-                      quantityLabel = `${days} day${days !== 1 ? 's' : ''}`;
+                // Group days by rate for a cleaner breakdown
+                const buildDailyBreakdown = () => {
+                  if (!dayBreakdown.length) return null;
+                  // Group consecutive days with same rate
+                  const groups: { type: string; rate: number; count: number; label: string }[] = [];
+                  for (const day of dayBreakdown) {
+                    const last = groups[groups.length - 1];
+                    if (last && last.rate === day.effectiveRate && last.type === day.type) {
+                      last.count++;
+                    } else {
+                      const label = (day.appliedSurcharges && day.appliedSurcharges.length > 1)
+                        ? day.appliedSurcharges.map(s => s.label).join(' + ')
+                        : day.type === 'manual' ? 'Custom price'
+                        : day.type === 'holiday' ? (day.holidayName || 'Holiday')
+                        : day.type === 'weekend' ? 'Weekend' : 'Weekday';
+                      groups.push({ type: day.type, rate: day.effectiveRate, count: 1, label });
                     }
+                  }
+                  return groups;
+                };
 
-                    const dailyGroups = hasDynamicPricing ? buildDailyBreakdown() : null;
+                let unitRate = 0;
+                let unitLabel = '';
+                let quantityLabel = '';
 
-                    return (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
-                          <span className={`font-medium ${calculatePromoDiscount() > 0 ? 'line-through text-muted-foreground' : ''}`}>
-                            {fmt(vehicleTotal)}
-                          </span>
-                        </div>
-                        {/* Flat rate breakdown (monthly/weekly/daily without surcharges) */}
-                        {unitRate > 0 && !hasDynamicPricing && !hideBreakdown && (
-                          <div className="text-xs text-muted-foreground/70 pl-1">
-                            {fmt(unitRate)}{unitLabel} × {quantityLabel}
-                          </div>
-                        )}
-                        {/* Dynamic pricing per-day breakdown */}
-                        {!hideBreakdown && dailyGroups && dailyGroups.map((group, i) => (
-                          <div key={i} className="flex justify-between text-xs text-muted-foreground/70 pl-1">
-                            <span>
-                              {group.label} — {fmt(group.rate)}/day × {group.count} day{group.count !== 1 ? 's' : ''}
-                            </span>
-                            <span>{fmt(group.rate * group.count)}</span>
-                          </div>
-                        ))}
+                if (pricingTier === 'monthly') {
+                  unitRate = monthlyRent;
+                  unitLabel = '/mo';
+                  const months = days / mtd;
+                  quantityLabel = months === Math.floor(months)
+                    ? `${Math.floor(months)} month${Math.floor(months) !== 1 ? 's' : ''}`
+                    : `${days} days`;
+                } else if (pricingTier === 'weekly') {
+                  unitRate = weeklyRent;
+                  unitLabel = '/wk';
+                  const weeks = days / 7;
+                  quantityLabel = weeks === Math.floor(weeks)
+                    ? `${Math.floor(weeks)} week${Math.floor(weeks) !== 1 ? 's' : ''}`
+                    : `${days} days`;
+                } else if (!hasDynamicPricing) {
+                  unitRate = dailyRent;
+                  unitLabel = '/day';
+                  quantityLabel = `${days} day${days !== 1 ? 's' : ''}`;
+                }
+
+                const dailyGroups = hasDynamicPricing ? buildDailyBreakdown() : null;
+
+                return (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Rental ({rentalDuration.formatted})</span>
+                      <span className={`font-medium ${calculatePromoDiscount() > 0 ? 'line-through text-muted-foreground' : ''}`}>
+                        {fmt(vehicleTotal)}
+                      </span>
+                    </div>
+                    {/* Flat rate breakdown (monthly/weekly/daily without surcharges) */}
+                    {unitRate > 0 && !hasDynamicPricing && !hideBreakdown && (
+                      <div className="text-xs text-muted-foreground/70 pl-1">
+                        {fmt(unitRate)}{unitLabel} × {quantityLabel}
                       </div>
-                    );
-                  })()}
-
-                  {/* Promo discount line item - only show when applied */}
-                  {promoDetails && calculatePromoDiscount() > 0 && (
-                    <div className="flex justify-between text-sm text-green-600">
-                      <span>
-                        {promoDetails.source === 'duration' ? 'Long-rental discount' : `Promo (${promoDetails.code})`}
-                        <span className="text-xs ml-1">
-                          ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : fmt(promoDetails.value)} off)
+                    )}
+                    {/* Dynamic pricing per-day breakdown */}
+                    {!hideBreakdown && dailyGroups && dailyGroups.map((group, i) => (
+                      <div key={i} className="flex justify-between text-xs text-muted-foreground/70 pl-1">
+                        <span>
+                          {group.label} — {fmt(group.rate)}/day × {group.count} day{group.count !== 1 ? 's' : ''}
                         </span>
-                      </span>
-                      <span className="font-medium">-{fmt(calculatePromoDiscount())}</span>
-                    </div>
-                  )}
-
-                  {/* Discounted subtotal - show when promo is applied */}
-                  {promoDetails && calculatePromoDiscount() > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span className="font-medium text-green-600">{fmt(calculateDiscountedVehicleTotal())}</span>
-                    </div>
-                  )}
-
-                  {/* Delivery fees - only show when > 0 */}
-                  {pickupDeliveryFee > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Pickup Delivery</span>
-                      <span className="font-medium">{fmt(pickupDeliveryFee)}</span>
-                    </div>
-                  )}
-                  {returnDeliveryFee > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Return Collection</span>
-                      <span className="font-medium">{fmt(returnDeliveryFee)}</span>
-                    </div>
-                  )}
-
-                  {/* Extras line items - show each selected extra */}
-                  {Object.entries(selectedExtras).map(([extraId, qty]) => {
-                    const extra = extras.find((e: any) => e.id === extraId);
-                    if (!extra) return null;
-                    const isPerDay = extra.billing_type === 'per_day';
-                    const days = Math.max(1, Math.floor(Number(rentalDuration?.days) || 1));
-                    return (
-                      <div key={extraId} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {extra.name}{qty > 1 ? ` x${qty}` : ''}{isPerDay ? ` (per day × ${days} ${days === 1 ? 'day' : 'days'})` : ''}
-                        </span>
-                        <span className="font-medium">{fmt(extraLineTotal(extra.price, qty, extra.billing_type, rentalDuration?.days))}</span>
+                        <span>{fmt(group.rate * group.count)}</span>
                       </div>
-                    );
-                  })}
-
-                  {/* Border separator */}
-                  <div className="pb-3 border-b border-border" />
-
-                  {/* Tax line item - only show when tax is enabled */}
-                  {tenant?.tax_enabled && (tenant?.tax_percentage ?? 0) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Tax ({tenant.tax_percentage}%)</span>
-                      <span className="font-medium">{fmt(calculateTaxAmount())}</span>
-                    </div>
-                  )}
-
-                  {/* Service fee line item - only show when enabled */}
-                  {tenant?.service_fee_enabled && calculateServiceFee() > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Service Fee
-                        {(tenant as any)?.service_fee_type === 'percentage' && (
-                          <span className="text-xs ml-1">({(tenant as any)?.service_fee_value || 0}%)</span>
-                        )}
-                      </span>
-                      <span className="font-medium">{fmt(calculateServiceFee())}</span>
-                    </div>
-                  )}
-
-                  {/* Pre-authorization is intentionally NOT listed here — it is a
-                      refundable card-validation hold, not part of the total, so it is
-                      shown as a separate block BELOW the Grand Total (see below). */}
-
-                  {/* Bonzah Insurance line item - only show when > 0 */}
-                  {effectiveBonzahPremium > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Shield className="w-3 h-3" />
-                        Bonzah Insurance
-                      </span>
-                      <span className="font-medium">{fmt(effectiveBonzahPremium)}</span>
-                    </div>
-                  )}
-
-                  {/* Unlimited Mileage line item — only show when opted in */}
-                  {unlimitedMileageEffective && unlimitedMileageTotal > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <InfinityIcon className="w-3 h-3" />
-                        Unlimited Mileage
-                        <span className="text-xs text-muted-foreground/70 ml-1 capitalize">
-                          ({unlimitedOption.tier} tier)
-                        </span>
-                      </span>
-                      <span className="font-medium">{fmt(unlimitedMileageTotal)}</span>
-                    </div>
-                  )}
-
-                  {/* Available add-on hint — when the option exists but isn't opted in,
-                      surface it in the Price Summary so customers can discover and toggle
-                      it without scrolling back up. */}
-                  {unlimitedOption.available && !unlimitedMileageEffective && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddUnlimitedMileage(true);
-                        if (typeof document !== 'undefined') {
-                          const card = document.getElementById('unlimited-mileage-card');
-                          card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                      }}
-                      className="w-full flex items-center justify-between rounded-md border border-dashed border-accent/40 hover:border-accent hover:bg-accent/5 transition px-3 py-2 text-left"
-                    >
-                      <span className="flex items-center gap-1.5 text-sm text-accent">
-                        <InfinityIcon className="w-3.5 h-3.5" />
-                        Add Unlimited Mileage
-                      </span>
-                      <span className="text-sm font-semibold text-accent">
-                        +{fmt(unlimitedOption.flatAmount)}
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Charged deposit is part of what the customer pays now, so it
-                      belongs in the breakdown above the total like Tax or the
-                      service fee — not in the separate note below, which exists
-                      to explain money that is NOT part of the total. */}
-                  {depositIsCharged && chargedSecurityDeposit() > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Security deposit
-                        <span className="text-xs text-muted-foreground/70 ml-1">(refundable)</span>
-                      </span>
-                      <span className="font-medium">{fmt(chargedSecurityDeposit())}</span>
-                    </div>
-                  )}
-
-                  {/* Grand Total - Highlighted Section */}
-                  <div className="mt-3 bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="text-xs text-muted-foreground block">Amount Due</span>
-                        <span className="text-lg font-semibold">Grand Total</span>
-                      </div>
-                      <span className="text-3xl font-bold text-accent">
-                        {fmt(calculateGrandTotal())}
-                      </span>
-                    </div>
+                    ))}
                   </div>
+                );
+              })()}
 
-                  {/* Pre-Authorization — shown SEPARATELY below the total. It is a
-                      refundable hold placed on the card to validate it, NOT a charge,
-                      so it is deliberately excluded from the Grand Total above. */}
-                  {!depositIsCharged && calculateSecurityDeposit() > 0 && (
-                    <div className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
-                        <span className="font-semibold">{fmt(calculateSecurityDeposit())}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {tenant?.deposit_charge_enabled
-                          ? 'Charged with your booking and included in the total above. Refunded after your rental, less any damage or unpaid charges.'
-                          : 'A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.'}
-                      </p>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-muted-foreground mt-4">
-                    You'll receive a digital receipt immediately.
-                  </p>
-                </>
+              {/* Promo discount line item - only show when applied */}
+              {promoDetails && calculatePromoDiscount() > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>
+                    {promoDetails.source === 'duration' ? 'Long-rental discount' : `Promo (${promoDetails.code})`}
+                    <span className="text-xs ml-1">
+                      ({promoDetails.type === 'percentage' ? `${promoDetails.value}%` : fmt(promoDetails.value)} off)
+                    </span>
+                  </span>
+                  <span className="font-medium">-{fmt(calculatePromoDiscount())}</span>
+                </div>
               )}
+
+              {/* Discounted subtotal - show when promo is applied */}
+              {promoDetails && calculatePromoDiscount() > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium text-green-600">{fmt(calculateDiscountedVehicleTotal())}</span>
+                </div>
+              )}
+
+              {/* Delivery fees - only show when > 0 */}
+              {pickupDeliveryFee > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Pickup Delivery</span>
+                  <span className="font-medium">{fmt(pickupDeliveryFee)}</span>
+                </div>
+              )}
+              {returnDeliveryFee > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Return Collection</span>
+                  <span className="font-medium">{fmt(returnDeliveryFee)}</span>
+                </div>
+              )}
+
+              {/* Extras line items - show each selected extra */}
+              {Object.entries(selectedExtras).map(([extraId, qty]) => {
+                const extra = extras.find((e: any) => e.id === extraId);
+                if (!extra) return null;
+                const isPerDay = extra.billing_type === 'per_day';
+                const days = Math.max(1, Math.floor(Number(rentalDuration?.days) || 1));
+                return (
+                  <div key={extraId} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {extra.name}{qty > 1 ? ` x${qty}` : ''}{isPerDay ? ` (per day × ${days} ${days === 1 ? 'day' : 'days'})` : ''}
+                    </span>
+                    <span className="font-medium">{fmt(extraLineTotal(extra.price, qty, extra.billing_type, rentalDuration?.days))}</span>
+                  </div>
+                );
+              })}
+
+              {/* Border separator */}
+              <div className="pb-3 border-b border-border" />
+
+              {/* Tax line item - only show when tax is enabled */}
+              {tenant?.tax_enabled && (tenant?.tax_percentage ?? 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tax ({tenant.tax_percentage}%)</span>
+                  <span className="font-medium">{fmt(calculateTaxAmount())}</span>
+                </div>
+              )}
+
+              {/* Service fee line item - only show when enabled */}
+              {tenant?.service_fee_enabled && calculateServiceFee() > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Service Fee
+                    {(tenant as any)?.service_fee_type === 'percentage' && (
+                      <span className="text-xs ml-1">({(tenant as any)?.service_fee_value || 0}%)</span>
+                    )}
+                  </span>
+                  <span className="font-medium">{fmt(calculateServiceFee())}</span>
+                </div>
+              )}
+
+              {/* Pre-authorization is intentionally NOT listed here — it is a
+                  refundable card-validation hold, not part of the total, so it is
+                  shown as a separate block BELOW the Grand Total (see below). */}
+
+              {/* Bonzah Insurance line item - only show when > 0 */}
+              {effectiveBonzahPremium > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Shield className="w-3 h-3" />
+                    Bonzah Insurance
+                  </span>
+                  <span className="font-medium">{fmt(effectiveBonzahPremium)}</span>
+                </div>
+              )}
+
+              {/* Unlimited Mileage line item — only show when opted in */}
+              {unlimitedMileageEffective && unlimitedMileageTotal > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <InfinityIcon className="w-3 h-3" />
+                    Unlimited Mileage
+                    <span className="text-xs text-muted-foreground/70 ml-1 capitalize">
+                      ({unlimitedOption.tier} tier)
+                    </span>
+                  </span>
+                  <span className="font-medium">{fmt(unlimitedMileageTotal)}</span>
+                </div>
+              )}
+
+              {/* Available add-on hint — when the option exists but isn't opted in,
+                  surface it in the Price Summary so customers can discover and toggle
+                  it without scrolling back up. */}
+              {unlimitedOption.available && !unlimitedMileageEffective && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddUnlimitedMileage(true);
+                    if (typeof document !== 'undefined') {
+                      const card = document.getElementById('unlimited-mileage-card');
+                      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }}
+                  className="w-full flex items-center justify-between rounded-md border border-dashed border-accent/40 hover:border-accent hover:bg-accent/5 transition px-3 py-2 text-left"
+                >
+                  <span className="flex items-center gap-1.5 text-sm text-accent">
+                    <InfinityIcon className="w-3.5 h-3.5" />
+                    Add Unlimited Mileage
+                  </span>
+                  <span className="text-sm font-semibold text-accent">
+                    +{fmt(unlimitedOption.flatAmount)}
+                  </span>
+                </button>
+              )}
+
+              {/* Charged deposit is part of what the customer pays now, so it
+                  belongs in the breakdown above the total like Tax or the
+                  service fee — not in the separate note below, which exists
+                  to explain money that is NOT part of the total. */}
+              {depositIsCharged && chargedSecurityDeposit() > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Security deposit
+                    <span className="text-xs text-muted-foreground/70 ml-1">(refundable)</span>
+                  </span>
+                  <span className="font-medium">{fmt(chargedSecurityDeposit())}</span>
+                </div>
+              )}
+
+              {/* Grand Total - Highlighted Section */}
+              <div className="mt-3 bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-xs text-muted-foreground block">Amount Due</span>
+                    <span className="text-lg font-semibold">Grand Total</span>
+                  </div>
+                  <span className="text-3xl font-bold text-accent">
+                    {fmt(calculateGrandTotal())}
+                  </span>
+                </div>
+              </div>
+
+              {/* Pre-Authorization — shown SEPARATELY below the total. It is a
+                  refundable hold placed on the card to validate it, NOT a charge,
+                  so it is deliberately excluded from the Grand Total above. */}
+              {!depositIsCharged && calculateSecurityDeposit() > 0 && (
+                <div className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
+                    <span className="font-semibold">{fmt(calculateSecurityDeposit())}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {tenant?.deposit_charge_enabled
+                      ? 'Charged with your booking and included in the total above. Refunded after your rental, less any damage or unpaid charges.'
+                      : 'A temporary hold placed on your card to verify it — released after your rental. This is not part of your total.'}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground mt-4">
+                You'll receive a digital receipt immediately.
+              </p>
             </div>
 
             {/* Promo Code */}
@@ -2216,15 +2129,6 @@ export default function BookingCheckoutStep({
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Sending Agreement...
                   </>
-                ) : isEnquiry && getPayableAmount() === 0 ? (
-                  <>
-                    Submit Enquiry
-                  </>
-                ) : isEnquiry ? (
-                  <>
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Pay Deposit {fmt(getPayableAmount())}
-                  </>
                 ) : selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled ? (
                   <>
                     <CreditCard className="w-4 h-4 mr-2" />
@@ -2250,7 +2154,7 @@ export default function BookingCheckoutStep({
               </Button>
 
               {/* Only show Stripe security message if payment is required */}
-              {getPayableAmount() > 0 && (
+              {calculateGrandTotal() > 0 && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center pt-2">
                   {tenant?.logo_url ? (
                     <img src={tenant.logo_url} alt={tenant?.app_name || tenant?.company_name || ''} className="h-4 w-auto object-contain" />
@@ -2272,8 +2176,6 @@ export default function BookingCheckoutStep({
           onOpenChange={setShowInvoiceDialog}
           onSignAgreement={handleSendDocuSign}
           invoice={generatedInvoice}
-          isEnquiry={isEnquiry}
-          payableAmount={getPayableAmount()}
           promoDetails={promoDetails}
           customer={{
             name: formData.customerName,

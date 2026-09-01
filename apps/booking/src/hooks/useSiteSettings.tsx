@@ -29,7 +29,6 @@ export interface SiteSettings {
   accent_color: string;
   notification_emails: string[];
   notify_new_booking: boolean;
-  notify_new_enquiry: boolean;
   privacy_policy_url: string | null;
   terms_url: string | null;
   footer_tagline: string | null;
@@ -68,7 +67,6 @@ const defaultSettings: SiteSettings = {
   accent_color: "#F5B942",
   notification_emails: [],
   notify_new_booking: true,
-  notify_new_enquiry: true,
   privacy_policy_url: "/privacy",
   terms_url: "/terms",
   footer_tagline: null,
