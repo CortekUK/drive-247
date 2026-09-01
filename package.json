@@ -7,14 +7,16 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "cd v2/apps/web && npm run dev",
     "dev:booking": "turbo run dev --filter=booking",
     "dev:portal": "turbo run dev --filter=portal",
     "dev:web": "turbo run dev --filter=web",
     "dev:admin": "turbo run dev --filter=admin",
     "dev:bonzah": "turbo run dev --filter=bonzah",
     "build": "turbo run build",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "dev:v2": "cd v2/apps/web && npm run dev",
+    "dev:v1": "turbo run dev --filter=booking"
   },
   "devDependencies": {
     "pg": "^8.16.3",
