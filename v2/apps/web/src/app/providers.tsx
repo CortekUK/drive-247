@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { CustomerAuthProvider } from "@/contexts/CustomerAuthContext";
 import { TenantProvider } from "@/contexts/TenantContext";
 
 export function Providers({
@@ -33,7 +34,16 @@ export function Providers({
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TenantProvider initialTenantSlug={tenantSlug}>{children}</TenantProvider>
+      {/*
+        CustomerAuthProvider sits INSIDE TenantProvider, and the nesting is a
+        dependency rather than a preference: a customer account belongs to one
+        tenant, so "who is signed in" cannot be answered before "whose site is
+        this". Hoisting it out would resolve memberships against no tenant —
+        which is how v1 briefly admits one operator's customer to another's.
+      */}
+      <TenantProvider initialTenantSlug={tenantSlug}>
+        <CustomerAuthProvider>{children}</CustomerAuthProvider>
+      </TenantProvider>
     </QueryClientProvider>
   );
 }

@@ -38,7 +38,7 @@ export async function HeroSection() {
           )}
 
           <div className="pb-6 pt-6 sm:pb-8 sm:pt-10">
-            <LocationSearchForm />
+            <LocationSearchForm submitLabel={hero.book_cta_text} />
           </div>
 
           <div className="hidden pt-12 lg:block lg:pt-20">
