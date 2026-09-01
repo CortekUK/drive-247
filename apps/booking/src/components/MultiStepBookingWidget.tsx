@@ -5760,7 +5760,7 @@ const MultiStepBookingWidget = () => {
                               <div>
                                 <span className="text-muted-foreground">Verified via:</span>
                                 <p className="font-medium capitalize">
-                                  {customerVerification.verification_provider === 'ai' ? 'AI Verification' : 'Veriff'}
+                                  {'AI Verification'}
                                 </p>
                               </div>
                             )}

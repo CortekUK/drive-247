@@ -50,7 +50,6 @@ import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalD
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
 import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
-import { AccountingSyncStripe } from "@/components/rentals/accounting-sync-stripe";
 import { InstallmentSection } from "@/components/installments/InstallmentSection";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
@@ -82,7 +81,6 @@ import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-c
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
-import { InshurCoverageBlock } from "@/components/rentals/inshur-coverage-block";
 import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
@@ -6042,10 +6040,6 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* INSHUR Period Z — per-rental liability cover. Renders nothing unless the
-          tenant has the integration on; it explains its own absence otherwise. */}
-      <InshurCoverageBlock rentalId={id} rental={rental} canEdit={canEdit('rentals')} />
-
       {/* AI-verified insurance documents attached to this rental */}
       <RentalInsuranceVerificationsCard rentalId={id} />
 
@@ -6728,15 +6722,9 @@ const RentalDetail = () => {
                     </Badge>
                   )}
                   {/* Provider Badge */}
-                  {identityVerification.verification_provider === 'ai' ? (
-                    <Badge variant="outline" className="border-purple-500 text-purple-600">
-                      AI Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      Veriff
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="border-purple-500 text-purple-600">
+                    AI Verified
+                  </Badge>
                 </div>
                 {identityVerification.verification_completed_at && (
                   <span className="text-sm text-muted-foreground">
@@ -8060,7 +8048,6 @@ const RentalDetail = () => {
 
       {/* Finance Sync — per-rental sync stripe (Sprint 3). Renders nothing when
           no provider connected or no events for this rental yet. */}
-      <AccountingSyncStripe rentalId={id} />
     </div>
   );
 };
