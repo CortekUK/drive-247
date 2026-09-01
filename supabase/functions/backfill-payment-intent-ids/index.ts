@@ -36,12 +36,6 @@ serve(async (req) => {
     const { data: payments, error: queryError } = await supabase
       .from("payments")
       .select("id, stripe_checkout_session_id, tenant_id, platform_account")
-      // Defence in depth. A Square row is ALREADY excluded by the session-id
-      // filter below — the exclusivity CHECK forbids it carrying one — so this
-      // line changes no behaviour today. It is here so that the exclusion is a
-      // stated intent rather than a side effect of another predicate, which is
-      // what would quietly break if the handle columns were ever reshaped.
-      .eq("payment_provider", "stripe")
       .not("stripe_checkout_session_id", "is", null)
       .is("stripe_payment_intent_id", null);
 

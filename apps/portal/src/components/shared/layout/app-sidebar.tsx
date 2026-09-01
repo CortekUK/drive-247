@@ -119,10 +119,6 @@ const settingsTabGroups = [
       { value: 'payg', icon: Clock, label: 'Pay As You Go' },
       { value: 'promos', icon: Zap, label: 'Promo Codes' },
       { value: 'extras', icon: Package, label: 'Extras' },
-      // Provider-neutral: this tab holds whichever processor the tenant settled
-      // on, and they now choose that themselves. A hard-coded "Stripe Connect"
-      // sent a Square operator hunting for a menu item that does not describe
-      // what they would find behind it.
       { value: 'payments', icon: CreditCard, label: 'Payments' },
     ],
   },

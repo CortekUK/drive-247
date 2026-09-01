@@ -57,7 +57,7 @@ const PORTAL_SRC = resolve(__dirname, '../..');
  *     code once every line costs an extra byte, so a match that sits near the
  *     end of the window falls out of it.
  *
- * Both were live: two Square suites failed on a Windows checkout against source
+ * Both were live: suites failed on a Windows checkout against source
  * that was correct. Normalising here fixes every caller at once and cannot
  * weaken an assertion — no test in this repo asserts on a carriage return, and
  * a CR is not part of any pattern being matched.

@@ -25,30 +25,14 @@ serve(async (req) => {
     // The session lives on the platform account the payment was CREATED on
     // (payments.platform_account, default 'uk') — resolve from the record,
     // not the tenant's current payment model.
-    let paymentRecord: { platform_account?: string | null; payment_provider?: string | null } = {}
+    let paymentRecord: { platform_account?: string | null } = {}
     if (paymentId) {
       const { data: pr } = await supabase
         .from('payments')
-        .select('platform_account, payment_provider')
+        .select('platform_account')
         .eq('id', paymentId)
         .maybeSingle()
       if (pr) paymentRecord = pr
-
-      // This function takes an arbitrary paymentId from its caller, so unlike the
-      // sweepers it has no query-level fence protecting it. A Square row reaching
-      // the Stripe client below produces a confusing Stripe error about a
-      // PaymentIntent that never existed; say what is actually wrong instead.
-      if (paymentRecord.payment_provider === 'square') {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            skipped: true,
-            reason: 'square_payment',
-            error: 'This payment was taken through Square. It has no Stripe PaymentIntent to sync.',
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
     }
 
     // Get tenant info to determine correct Stripe account

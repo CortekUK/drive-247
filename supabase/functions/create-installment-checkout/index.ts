@@ -139,30 +139,9 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name')
         .eq('id', tenantId)
         .single()
-      // Square tenants cannot have installment plans. Every instalment after the
-      // first is an off-session charge against a stored card, and Square's
-      // hosted checkout cannot vault one — so installments_enabled is forced
-      // false for them at tenant creation.
-      //
-      // Refusing here rather than falling through: the Stripe path below would
-      // call Stripe for a tenant with no Stripe account, and the operator would
-      // see a Stripe error instead of the real reason.
-      if ((tenant as { payment_provider?: string } | null)?.payment_provider === 'square') {
-        console.error(`[create-installment-checkout] tenant ${tenantId} is on Square — installments are not supported.`)
-        return new Response(
-          JSON.stringify({
-            error:
-              'This tenant processes payments through Square, which cannot support installment plans. ' +
-              'Collect the full amount with a single payment link instead.',
-            code: 'square_no_installments',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-      }
-
       if (tenant) {
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test'
         tenantData = tenant

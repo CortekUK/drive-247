@@ -1,7 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode } from '../_shared/stripe-client.ts'
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts'
-import { tryProviderCheckout } from '../_shared/payments/checkout.ts'
 
 // Phase 3: server-authoritative extension checkout.
 //
@@ -206,66 +205,6 @@ Deno.serve(async (req) => {
     // caller links its ledger rows correctly and tells the operator the payment
     // link needs retrying. Non-2xx stays reserved for genuine pre-insert
     // failures, where there is no extension and nothing to link.
-    // ---- PROVIDER DISPATCH (Square) -------------------------------------
-    // Everything above is provider-neutral. Everything below is the Stripe rail
-    // and is byte-identical to what it was before Square existed — this is an
-    // insertion, not a refactor, which is why the Stripe path cannot regress.
-    //
-    // requiresStoredCredential is FALSE: this session does not set
-    // setup_future_usage, so nothing downstream charges this card again. A
-    // manual extension is a one-off payment and Square can serve it.
-    const routedExt = await tryProviderCheckout(supabaseClient, extRow.tenant_id, {
-      amountCents: Math.round(totalAmount * 100),
-      currency: currencyCode,
-      description: `Rental Extension — ${extensionDays} day${extensionDays !== 1 ? 's' : ''}`,
-      redirectUrl: `${origin}/booking-success?rental_id=${extRow.rental_id}&type=invoice`,
-      reference: { paymentId: String(extRow.id) },
-      requiresStoredCredential: false,
-      // Created BEFORE the Square call. Without a row carrying square_order_id
-      // the webhook cannot correlate the payment and the collection is lost.
-      paymentRow: customerId ? {
-        rental_id: extRow.rental_id,
-        customer_id: customerId,
-        ...(vehicleId ? { vehicle_id: vehicleId } : {}),
-        tenant_id: extRow.tenant_id,
-        amount: totalAmount,
-        remaining_amount: totalAmount,
-        payment_date: new Date().toISOString().split('T')[0],
-        method: 'Card',
-        payment_type: 'Payment',
-        extension_id: extRow.id,
-      } : undefined,
-    });
-
-    if (routedExt.error) {
-      // Post-INSERT, so the extension row already exists: return the same
-      // "created but no checkout" shape the Stripe failures below use rather
-      // than a non-2xx that would strand the charges.
-      return createdButNoCheckout(String(routedExt.reason ?? 'Square checkout failed'));
-    }
-    if (routedExt.handled) {
-      // SAME RESPONSE SHAPE AS THE STRIPE PATH.
-      //
-      // Every caller reads `checkoutUrl` — that is what the Stripe branch below
-      // returns. Passing the adapter's body through verbatim gave Square a `url`
-      // key instead, so `result.checkoutUrl` was undefined and an extension on
-      // Square produced no payable link at all while still reporting success.
-      //
-      // checkoutUrl points at OUR /checkout/{id} page rather than Square's
-      // hosted link: that link has no card fields in sandbox and is
-      // Square-branded in production. paymentId is passed through so a caller
-      // that wants to build its own URL can.
-      const sqBody = (routedExt.body ?? {}) as Record<string, unknown>;
-      const sqRowId = sqBody.paymentId ? String(sqBody.paymentId) : "";
-      const sqOrigin = `https://${tenantData.slug ?? ""}.drive-247.com`;
-      return jsonResponse({
-        ...sqBody,
-        checkoutUrl: sqRowId ? `${sqOrigin}/checkout/${sqRowId}` : (sqBody.url ?? null),
-        extensionId: extRow.id,
-        sequenceNumber: created.sequence_number,
-      });
-    }
-    // ---- END PROVIDER DISPATCH — Stripe code below is unchanged ------------
 
     let session: { id: string; url: string | null };
     let platformAccount: ReturnType<typeof getChargePlatformAccount>;

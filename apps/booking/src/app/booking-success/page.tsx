@@ -12,7 +12,6 @@ import { supabase, supabaseUntyped } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useTenant } from "@/contexts/TenantContext";
-import { verifyingLine, recordedButNotSavedLine } from "@/lib/payment-provider";
 import { useCustomerAuthStore } from "@/stores/customer-auth-store";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency } from "@/lib/format-utils";
@@ -71,15 +70,7 @@ const InvoicePaymentSuccess = () => {
         // process-pending-payment. A customer landing here without a session_id
         // could therefore settle a stranger's checkout at a different tenant.
         //
-        // That is a live cross-tenant defect on its own, and Square turns it
-        // from latent into routine: Square has a single redirect and appends no
-        // session identifier, so a Square customer arrives here with no
-        // session_id EVERY time and drops straight into this branch.
-        //
-        // Both fences are load-bearing. The tenant fence is the one that closes
-        // the cross-tenant reach; the provider fence keeps a Square tenant out
-        // of a Stripe-only recovery path, so the fallback is inert when it is
-        // reached by mistake rather than merely narrower. With no tenant
+        // The tenant fence closes that cross-tenant reach. With no tenant
         // resolved there is nothing safe to guess at, so it fails closed.
         let checkoutSessionId = sessionParam;
         if (!checkoutSessionId && tenant?.id) {
@@ -87,7 +78,6 @@ const InvoicePaymentSuccess = () => {
             .from('payments')
             .select('stripe_checkout_session_id')
             .eq('tenant_id', tenant.id)
-            .eq('payment_provider', 'stripe')
             .eq('status', 'Pending')
             .not('stripe_checkout_session_id', 'is', null)
             .order('created_at', { ascending: false })
@@ -152,7 +142,10 @@ const InvoicePaymentSuccess = () => {
           // Stripe didn't confirm within ~34s. Don't lie to the customer.
           // Their card may have been authorised; the webhook will land soon.
           console.warn('[INVOICE-SUCCESS] Could not confirm capture within retry window:', lastResult);
-          setError(verifyingLine(tenant?.payment_provider));
+          setError(
+            "Your payment is still being verified by Stripe. You'll see it reflect on your " +
+            "account shortly. If you don't see it within a few minutes, please contact support."
+          );
         } else {
           console.log('[INVOICE-SUCCESS] Final result:', lastResult);
 
@@ -409,7 +402,7 @@ const BookingSuccessContent = () => {
 
                 if (paymentError) {
                   console.error("Failed to create payment record:", paymentError);
-                  toast.error(recordedButNotSavedLine(tenant?.payment_provider));
+                  toast.error("Payment recorded by Stripe but failed to save locally. Please contact support.");
                 } else {
                   console.log('Payment record created successfully:', paymentRecord.id);
 

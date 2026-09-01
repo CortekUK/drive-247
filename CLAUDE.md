@@ -163,7 +163,7 @@ Uses Supabase Realtime channels (replaced Socket.io):
 
 **61** functions have `verify_jwt = false` in `supabase/config.toml` — i.e. they are
 publicly callable without a JWT. They fall into three groups: third-party webhooks
-that verify their own signatures (Stripe, BoldSign, Twilio, Square, GHL, provider
+that verify their own signatures (Stripe, BoldSign, Twilio, GHL, provider
 OAuth callbacks), cron targets invoked by pg_cron with a service-role bearer, and a
 handful of genuinely public endpoints (`submit-enquiry`, `submit-application`,
 `view-offer`, `validate-customer-invite`, `submit-customer-registration`).

@@ -5,7 +5,6 @@ import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, getStripeOptions } from "../_shared/stripe-client.ts";
 import { sendResendEmail, getTenantBranding, wrapWithBrandedTemplate } from "../_shared/resend-service.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
-import { tryProviderCheckout } from "../_shared/payments/checkout.ts";
 import { hidePlateForTenant, vehicleLabel } from "../_shared/vehicle-privacy.ts";
 
 Deno.serve(async (req) => {
@@ -47,7 +46,7 @@ Deno.serve(async (req) => {
     // Fetch tenant details for Stripe and branding
     const { data: tenantData, error: tenantError } = await supabase
       .from("tenants")
-      .select("slug, payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
+      .select("slug, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
       .eq("id", effectiveTenantId)
       .single();
 
@@ -71,72 +70,8 @@ Deno.serve(async (req) => {
 
     const bookingDomain = `${tenantData.slug}.drive-247.com`;
 
-    // ---- PROVIDER DISPATCH (Square) -------------------------------------
-    // A one-off charge for excess mileage. No setup_future_usage anywhere in
-    // this session, so nothing charges the card again later and Square serves
-    // it perfectly well.
-    const routedMileage = await tryProviderCheckout(supabase, effectiveTenantId, {
-      amountCents: Math.round(amount * 100),
-      currency: currencyCode.toLowerCase(),
-      description: "Excess Mileage Charge",
-      redirectUrl: `https://${bookingDomain}/booking-success?type=invoice&status=paid`,
-      reference: { paymentId: String(rentalId) },
-      requiresStoredCredential: false,
-      // Pre-inserted by the seam rather than written below.
-      //
-      // This function used to write its own row, correctly, but AFTER the link
-      // existed. The window is small and it is real: Square emits
-      // payment.created the instant the buyer pays, and a buyer who pays before
-      // this insert commits hits a webhook with nothing to match. Handing the
-      // row to the seam closes it — and makes every Square call site in the
-      // codebase follow one ordering rule instead of two.
-      paymentRow: {
-        rental_id: rentalId,
-        customer_id: rental.customer_id,
-        vehicle_id: rental.vehicle_id,
-        tenant_id: effectiveTenantId,
-        amount,
-        remaining_amount: amount,
-        payment_date: new Date().toISOString().split("T")[0],
-        apply_from_date: new Date().toISOString().split("T")[0],
-        method: "Card",
-        payment_type: "Excess Mileage",
-        platform_account: platformAccount,
-      },
-    });
-
-    if (routedMileage.error) {
-      return errorResponse(
-        String(routedMileage.reason ?? "Square checkout failed"),
-        routedMileage.httpStatus ?? 502,
-      );
-    }
-
-    // Deliberately NOT an early return. Everything below — the payments row and
-    // the customer email — is the point of this function, and both are
-    // provider-neutral. Returning here would create a Square link that nobody is
-    // ever sent and that no local row can correlate a webhook to.
-    //
-    // A SKIP IS NOT A LINK. skip() is handled:true with no error flag and a body
-    // of {skipped, reason} — no url. Treating it as a Square success set
-    // paymentUrl to "" and still sent the customer a branded "Pay Now" button
-    // pointing at nothing, while the `if (!squareBody)` fence below suppressed
-    // the Stripe row too. Refuse instead: no link is a failure, not a send.
-    if (routedMileage.skipped) {
-      return errorResponse(
-        `Square payment link NOT created: ${routedMileage.reason ?? "provider skipped"}. ` +
-          `No email has been sent.`,
-        409,
-      );
-    }
-
-    const squareBody = routedMileage.handled
-      ? ((routedMileage.body ?? {}) as Record<string, unknown>)
-      : null;
-    // ---- END PROVIDER DISPATCH — Stripe code below is unchanged ------------
-
     // Create Stripe Checkout Session
-    const session = squareBody ? null : await stripe.checkout.sessions.create(
+    const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
         line_items: [
@@ -169,36 +104,28 @@ Deno.serve(async (req) => {
       stripeOptions
     );
 
-    // One link, whichever rail produced it. Everything downstream uses this.
-    const paymentUrl = squareBody ? String(squareBody.url ?? "") : (session?.url ?? "");
-    console.log("[EXCESS-MILEAGE-LINK] Created checkout link:", squareBody ? "square" : session?.id);
+    const paymentUrl = session.url ?? "";
+    console.log("[EXCESS-MILEAGE-LINK] Created checkout link:", session.id);
 
-    // Create a payments record — STRIPE ONLY.
-    //
-    // The Square row already exists: the seam inserted it before creating the
-    // link, and stamped square_order_id / square_payment_link_id on it. Running
-    // this insert on that rail too would produce a second, duplicate Pending row
-    // for one collection, and payment_apply_fifo_v2 would happily allocate both.
-    if (!squareBody) {
-      const today = new Date().toISOString().split("T")[0];
-      const { error: paymentError } = await supabase.from("payments").insert({
-        rental_id: rentalId,
-        customer_id: rental.customer_id,
-        vehicle_id: rental.vehicle_id,
-        tenant_id: effectiveTenantId,
-        amount,
-        payment_date: today,
-        apply_from_date: today,
-        method: "Card",
-        payment_type: "Excess Mileage",
-        status: "Pending",
-        stripe_checkout_session_id: session!.id,
-        platform_account: platformAccount,
-      });
+    // Create a payments record
+    const today = new Date().toISOString().split("T")[0];
+    const { error: paymentError } = await supabase.from("payments").insert({
+      rental_id: rentalId,
+      customer_id: rental.customer_id,
+      vehicle_id: rental.vehicle_id,
+      tenant_id: effectiveTenantId,
+      amount,
+      payment_date: today,
+      apply_from_date: today,
+      method: "Card",
+      payment_type: "Excess Mileage",
+      status: "Pending",
+      stripe_checkout_session_id: session.id,
+      platform_account: platformAccount,
+    });
 
-      if (paymentError) {
-        console.error("[EXCESS-MILEAGE-LINK] Failed to create payment record:", paymentError);
-      }
+    if (paymentError) {
+      console.error("[EXCESS-MILEAGE-LINK] Failed to create payment record:", paymentError);
     }
 
     // Last line of defence, provider-neutral. Whatever produced paymentUrl, an
@@ -255,11 +182,8 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       success: true,
-      // `session` is null on the Square rail, so these must be optional rather
-      // than dereferenced. Existing Stripe callers keep the exact same two keys.
       sessionUrl: paymentUrl,
-      sessionId: session?.id ?? null,
-      provider: squareBody ? "square" : "stripe",
+      sessionId: session.id,
       emailSent: emailResult.success,
     });
   } catch (error: any) {
