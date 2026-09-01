@@ -40,9 +40,10 @@
 //     on the two paths where it demonstrably was not. Absent an assertion the
 //     alert says NOTHING about the money. See `DepositHoldMoneyState`.
 //
-// This deliberately does NOT build on `reminders-generate` / `reminders-digest`.
-// Those are dead code — `reminders-digest` is a literal TODO followed by a
-// console.log, so a reminder row raised there reaches nobody.
+// This deliberately does NOT build on `reminders-generate`. That pipeline has
+// no delivery leg — the digest that was meant to email the due rows was a
+// literal TODO followed by a console.log and has since been deleted, so a
+// reminder row raised there reaches nobody.
 
 import { notifyOperatorsInApp } from "./notify-inapp.ts";
 import { formatCurrency } from "./format-utils.ts";

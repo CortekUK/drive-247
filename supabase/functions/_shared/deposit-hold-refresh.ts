@@ -200,8 +200,8 @@ export const REFRESHABLE_HOLD_STATUSES = ["held", "failed"] as const;
 // PostgREST syntax note: both idioms used here have production precedent in
 // this repo — `col.not.is.null` inside `.or()` (reminders-generate/index.ts:288,
 // apps/portal insurances pages) and `and(...)` groups inside `.or()`
-// (reminders-digest/index.ts:58). Written as sibling `and(...)` groups rather
-// than a nested `or(...)` to keep it two levels deep.
+// (apps/portal/src/hooks/use-deposit-hold-alerts.ts). Written as sibling
+// `and(...)` groups rather than a nested `or(...)` to keep it two levels deep.
 const HOLD_HISTORY_PREDICATE = [
   "deposit_hold_status.eq.held",
   "and(deposit_hold_status.eq.failed,deposit_hold_payment_intent_id.not.is.null)",
