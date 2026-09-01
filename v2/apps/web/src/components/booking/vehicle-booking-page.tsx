@@ -80,8 +80,8 @@ import { VehicleCard } from "./vehicle-card";
  * What we keep about a payment that has already happened.
  *
  * ── WHY THIS EXISTS AT ALL ──────────────────────────────────────────────────
- * Paying no longer finishes a booking: the customer still has to send a photo
- * of their licence and a selfie, and an operator still has to approve. The route
+ * Paying no longer finishes a booking: the customer still has to send a copy of
+ * their insurance document, and an operator still has to approve. The route
  * to that step is a one-off token, and until this stash existed it lived in
  * ordinary `useState` — so a reload, an accidental back-navigation, or a phone
  * that killed the tab left the customer looking at a LIVE BOOKING FORM for a car
@@ -687,8 +687,8 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
         mistake in the other direction.
       */
       return paidHandoff.documentsToken !== null
-        ? "Payment for this booking has been taken. Your documents are still outstanding — upload them to finish confirming it."
-        : "Payment for this booking has been taken. We are emailing you a link to upload your documents, which is the last step before we confirm it.";
+        ? "Payment for this booking has been taken. Your insurance document is still outstanding — send it and we will review it before confirming."
+        : "Payment for this booking has been taken. We are emailing you a link to send your insurance document, which is the last step before we confirm it.";
     }
     if (creatingBooking) {
       return null;
@@ -782,7 +782,7 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
     setPaidHandoff(stashed);
     setCheckoutMessage(
       stashed.kind === "succeeded"
-        ? "Payment received for this booking. Your documents are the last step before we confirm it."
+        ? "Payment received for this booking. Your insurance document is the last step before we confirm it."
         : "Your bank is still confirming this payment. We will email you when it clears.",
     );
   }, [vehicleId]);
@@ -826,8 +826,8 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
           : ` Your booking reference is ${outcome.rentalNumber}.`;
       setCheckoutMessage(
         outcome.kind === "succeeded"
-          ? `Payment received.${reference} One step left: upload your driving licence and a selfie so we can confirm this booking.`
-          : `Payment is being confirmed by your bank.${reference} We will email you when it clears, with a link to upload your driving licence and a selfie.`,
+          ? `Payment received.${reference} One step left: send us your insurance document so we can review it and confirm this booking.`
+          : `Payment is being confirmed by your bank.${reference} We will email you when it clears, with a link to send your insurance document.`,
       );
     },
     [vehicleId, booking.state],
@@ -1287,8 +1287,8 @@ const FIELD_BY_DOM_ID: Readonly<Record<string, BookingField>> = {
  * link is never rendered.
  *
  * `processing` gets no link at all. The bank has not taken the money yet, and
- * inviting someone to photograph their licence for a payment that may still be
- * declined is work we should not be asking for.
+ * inviting someone to dig out their insurance certificate for a payment that may
+ * still be declined is work we should not be asking for.
  */
 function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
   const settled = handoff.kind === "succeeded";
@@ -1325,8 +1325,8 @@ function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
 
           <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
             {settled
-              ? "One step left before we can confirm this booking: a photo of your driving licence and a selfie. An operator checks them and we will email you as soon as it is confirmed."
-              : "Your bank has not settled this yet. We will email you the moment it clears, with a link to upload your driving licence and a selfie."}
+              ? "One step left before we can confirm this booking: a copy of your insurance document. An operator reviews it and we will email you as soon as your booking is confirmed."
+              : "Your bank has not settled this yet. We will email you the moment it clears, with a link to send your insurance document."}
           </p>
 
           {handoff.rentalNumber !== null ? (
@@ -1341,15 +1341,15 @@ function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
           {href !== null ? (
             <Button asChild variant="brand" size="lg" className="mt-3 h-11 w-full sm:w-auto">
               <Link href={href}>
-                Upload my documents
+                Send my insurance document
                 <ArrowRight aria-hidden strokeWidth={2} />
               </Link>
             </Button>
           ) : settled ? (
             <p className="mt-3 text-xs leading-relaxed text-brand-text-subtle">
-              We are sending a link to your email so you can upload them. It is
-              valid for seven days — if it expires, that page will send you a
-              fresh one.
+              We are sending a link to your email so you can send your insurance
+              document. It is valid for seven days — if it expires, that page will
+              send you a fresh one.
             </p>
           ) : null}
         </div>

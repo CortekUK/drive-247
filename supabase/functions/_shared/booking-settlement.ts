@@ -548,23 +548,88 @@ export async function settleBookingPayment(
         // (none was minted) and logs a spurious error every redelivery.
         if (isPortalInitiated) {
           // Not a booking, so no documents email. Nothing to log.
-        } else if (link?.token) {
-          // No `req` here on purpose — a Stripe webhook's Origin is Stripe's,
-          // not the customer's booking site. deriveBookingOrigin falls through
-          // to the tenant subdomain, which is the correct answer anyway.
-          const origin = deriveBookingOrigin((r as any)?.tenants?.slug ?? null);
-          await enqueueBookingEmail(supabase, {
-            tenantId,
-            rentalId,
-            emailKey: "booking_documents_required",
-            payload: { upload_url: buildDocumentsUrl(origin, link.token) },
-          });
         } else {
-          console.error(
-            `${logPrefix} No booking_document_links row for rental`,
-            rentalId,
-            "- documents email not enqueued",
-          );
+          // MINT THE LINK HERE IF THE BROWSER DID NOT.
+          //
+          // This used to log an error and give up, which left a PAID booking at
+          // documents_status 'pending' with no token and no email — a customer
+          // told (by the portal) to upload documents with nothing anywhere that
+          // could let them, and, because auto-cancel is deliberately off, no
+          // process that would ever resolve it. Reproduced live on staging:
+          // rental R-e4393b, payment_status 'fulfilled', documents_status
+          // 'pending', no booking_document_links row, and a
+          // booking_email_dispatch carrying only booking_pending.
+          //
+          // create-booking-payment-intent's mint is best-effort by design: it is
+          // wrapped in try/catch so a link failure can never fail a payment, and
+          // it also skips outright when the rental's tenant does not match the
+          // resolved tenant (index.ts:355-361). The hosted-checkout path does not
+          // run that function at all. So "a link exists by now" was never a
+          // guarantee, while step 1 above opens the gate unconditionally — the
+          // two must not be allowed to disagree.
+          //
+          // Settlement is the right place to close it: this is the authoritative
+          // "the money landed" moment, and tenantId is read off the RENTAL row
+          // above, so it cannot be mis-attributed the way a caller-supplied slug
+          // could. UNIQUE(rental_id) + ignoreDuplicates makes this idempotent
+          // against the browser's mint and against a Stripe redelivery; the
+          // read-back is what picks the winner, exactly as the browser mint does.
+          const origin = deriveBookingOrigin((r as any)?.tenants?.slug ?? null);
+          let token = link?.token ?? null;
+
+          if (!token) {
+            const nowIso = new Date().toISOString();
+            const { error: mintError } = await supabase
+              .from("booking_document_links")
+              .upsert(
+                {
+                  tenant_id: tenantId,
+                  rental_id: rentalId,
+                  token: `${crypto.randomUUID()}-${Date.now().toString(36)}`,
+                  // Same 7-day lifetime as the browser mint and as
+                  // booking-documents-link's slide. Kept literal here rather
+                  // than imported so this file has no new coupling; if that
+                  // number ever changes it must change in all three.
+                  expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                  // No trigger maintains updated_at on this table.
+                  updated_at: nowIso,
+                },
+                { onConflict: "rental_id", ignoreDuplicates: true },
+              );
+            if (mintError) {
+              console.error(`${logPrefix} Fallback documents-link mint failed:`, rentalId, mintError);
+            }
+
+            // Always read back. ON CONFLICT DO NOTHING updates nothing, so a row
+            // the browser wrote first keeps ITS token — emailing the one we just
+            // generated would send a link that is not in the table.
+            const { data: minted } = await supabase
+              .from("booking_document_links")
+              .select("token")
+              .eq("rental_id", rentalId)
+              .maybeSingle();
+            token = minted?.token ?? null;
+          }
+
+          if (token) {
+            // No `req` here on purpose — a Stripe webhook's Origin is Stripe's,
+            // not the customer's booking site. deriveBookingOrigin falls through
+            // to the tenant subdomain, which is the correct answer anyway.
+            await enqueueBookingEmail(supabase, {
+              tenantId,
+              rentalId,
+              emailKey: "booking_documents_required",
+              payload: { upload_url: buildDocumentsUrl(origin, token) },
+            });
+          } else {
+            // Nothing else can rescue this one; make it loud. The booking is
+            // findable via the (tenant_id, documents_status) index.
+            console.error(
+              `${logPrefix} No booking_document_links row for rental`,
+              rentalId,
+              "and the fallback mint produced none - documents email not enqueued",
+            );
+          }
         }
 
         // Best-effort inline drain. The outbox row is the GUARANTEE; this is

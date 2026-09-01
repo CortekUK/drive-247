@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The post-payment document gate, from the browser's side.
+ * The post-payment INSURANCE DOCUMENT upload, from the browser's side.
  *
  * A customer who has just paid inside Stripe Elements has NO account — the
  * booking flow writes a `customers` row and nothing else (see
@@ -10,49 +10,41 @@
  * whole surface has. Everything below is addressed by that token and nothing
  * below depends on being signed in.
  *
- * ── THE BROWSER NEVER WRITES A VERDICT ──────────────────────────────────────
- * `identity_verifications` has RLS off and `anon` holds SELECT *and UPDATE* on
- * it — probed live against staging, and written down at the top of
- * `use-customer-verification.ts`. v1's capture page writes
- * `verification_step` and `upload_progress` straight from the browser
- * (`apps/booking/src/app/verify/[token]/page.tsx:67-90` and `:265-275`). That
- * is a client writing the state its own gate is judged on, i.e. a client that
- * can be made to lie, so none of it is ported here.
+ * ── WHAT THIS SCREEN IS ─────────────────────────────────────────────────────
+ * An insurance certificate / declarations page upload. PDF, JPG or PNG, several
+ * files, drag-and-drop or a file picker. It is NOT the licence-and-selfie
+ * identity capture that used to live here: that flow, its AI verdict panel and
+ * its `process-ai-verification` call were removed rather than kept alongside —
+ * the reasoning is written down at the top of
+ * `components/booking/insurance-upload.tsx`.
  *
- * The consequence is deliberate and worth stating: there is no live
- * "step 2 of 3" panel mirrored to a second device, because building one would
- * require exactly those client writes. Nothing is lost — staging's
- * `supabase_realtime` publication is EMPTY, so the panel v1 renders could not
- * update there anyway.
+ * ── THE BROWSER NEVER MARKS ANYTHING DONE ───────────────────────────────────
+ * `rentals` has RLS OFF on staging and `anon` holds SELECT/INSERT/UPDATE/DELETE
+ * on it, so this file could stamp `documents_status` in one statement. It does
+ * not, and must not: that is a client writing the state its own gate is judged
+ * on. `customer_documents` — the table every operator screen actually reads —
+ * has RLS ON with no anon policy, so the browser could not file the row even if
+ * we wanted it to (an anon INSERT answers 401 42501; the "RLS is OFF on
+ * customer_documents" note at the top of `use-customer-documents.ts` is wrong,
+ * and its evidence is a false negative: RLS answers a SELECT with 200 and an
+ * empty array, not an error).
  *
- * The two things this file DOES write are the three photos (into a storage
- * bucket, under a path derived from a server-minted session id) and nothing
- * else. Every status transition is made server-side by
- * `process-ai-verification`.
+ * What this file writes is BYTES, into a bucket, under a prefix the SERVER
+ * issued. `booking-documents-link`'s `submit-insurance` action then verifies
+ * every path against a real storage listing before it files anything.
+ *
+ * ── AND IT NEVER SAYS "CONFIRMED" ───────────────────────────────────────────
+ * Uploading does not confirm a booking. The server's terminal state is
+ * `documents_status = 'submitted'` and `insurance_status = 'uploaded'`, never
+ * `verified`; an operator still reviews the documents and can still reject the
+ * booking, and `notify-booking-approved` remains the only thing in the product
+ * that says "confirmed".
  *
  * ── WHY THERE IS NO "HAS IT LANDED" POLL ────────────────────────────────────
- * The obvious follow-up to a `verified` verdict is to watch for
- * `rentals.documents_status` flipping, the way `settlement-watch.tsx` watches a
- * balance drop. It is NOT done here, and the reason is a side effect rather
- * than a preference.
- *
- * The only endpoint this surface can reach is `booking-documents-link`, and
- * that function MINTS OR REUSES an AI verification session on every call: once
- * the session it reused is `status = 'completed'` the reuse branch stops
- * matching, so each further call mints a fresh session AND repoints
- * `rentals.identity_verification_session_id` at it. Polling it every three
- * seconds would therefore (a) burn `create-ai-verification-session`'s 10-per-
- * hour cap in half a minute, (b) litter `identity_verifications` with empty
- * rows, and (c) — the serious one — move the rental's session pointer away from
- * the session whose verdict we are waiting for, so
- * `process-ai-verification`'s gate write would match zero rows and the booking
- * would silently never complete.
- *
- * That is: the failure mode of the safety check would CAUSE the failure it is
- * checking for. So there is no poll. If a read-only probe is ever added to
- * `booking-documents-link` (a `probe: true` body flag that skips steps 4-7),
- * this is the file that should grow the watcher, shaped like `useSettlementWatch`
- * — poll 3s, give up at 30s, three named states, never guess.
+ * There is nothing asynchronous left to wait for. The submit call returns only
+ * after the rows are written and the rental is stamped, so its own response IS
+ * the answer. (Staging's `supabase_realtime` publication is empty in any case,
+ * so a subscription could not have carried it.)
  */
 
 import { useCallback, useMemo } from 'react';
@@ -61,6 +53,8 @@ import { FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 
 import { supabase } from '@/integrations/supabase/client';
 import {
+  ACCEPTED_FILE_EXTENSIONS,
+  ACCEPTED_FORMATS_LABEL,
   ACCEPTED_MIME_TYPES,
   DOCUMENT_BUCKET,
   MAX_UPLOAD_BYTES,
@@ -73,9 +67,6 @@ import {
  * satisfies the gateway; the TOKEN is the real credential, not the JWT.
  */
 const LINK_FUNCTION = 'booking-documents-link';
-
-/** Runs the OCR + face match and writes the verdict. Service-role only, inside. */
-const VERIFY_FUNCTION = 'process-ai-verification';
 
 /* ─────────────────────── what the link function returns ────────────────── */
 
@@ -95,10 +86,19 @@ export interface BookingDocumentsTenant {
 
 export interface BookingDocumentsSession {
   /**
-   * `identity_verifications.session_id` — the string the storage path and
-   * `process-ai-verification` are both keyed on. NOT the row's `id`.
+   * The storage prefix this token is allowed to write to,
+   * `insurance/<tenantId>/<rentalId>`, issued by the server.
+   *
+   * NEVER derived in the browser. `customer-documents` is a PUBLIC bucket whose
+   * storage policies grant INSERT/UPDATE/DELETE to the `public` role, so a
+   * browser-chosen prefix is a browser-chosen place to put another customer's
+   * documents — and the server pins every submitted path against this exact
+   * value before it files anything.
    */
-  sessionId: string;
+  uploadPrefix: string;
+  /** The bucket the prefix belongs to. Diagnostics only. */
+  bucket: string;
+  /** When the LINK lapses, as the server left it after sliding the window. */
   expiresAt: string | null;
   rental: BookingDocumentsRental;
   tenant: BookingDocumentsTenant;
@@ -200,11 +200,12 @@ const OFFLINE_COPY =
  * The codes this file recognises by name.
  *
  * `booking-documents-link` emits MORE than these — `bad_request`,
- * `lookup_failed`, `no_customer`, `session_mint_failed`, `session_rate_limited`,
- * `not_paid`, `resend_rate_limited`, `resend_failed`, `unexpected`. Every one of
+ * `lookup_failed`, `no_customer`, `bad_files`, `files_missing`,
+ * `storage_unavailable`, `file_failed`, `not_paid`, `resend_rate_limited`,
+ * `resend_failed`, `unexpected`. Every one of
  * those carries customer-safe prose in `error`, so the unrecognised ones are
  * surfaced with the SERVER's sentence rather than being forced into one of the
- * four screens below. Guessing is how "we could not start the document check"
+ * four screens below. Guessing is how "we could not find the files you sent"
  * becomes "we already have your documents".
  */
 type LinkCode =
@@ -239,18 +240,29 @@ function asRecord(value: unknown): Record<string, unknown> {
 /**
  * Turn a 200 body into a session, or say what was missing.
  *
- * `sessionId` is the only field the flow genuinely cannot run without: it is
- * both the storage path segment and the key `process-ai-verification` looks the
- * row up by. Everything else is decoration and is allowed to be absent, so one
- * missing display field cannot take the whole upload screen down.
+ * `uploadPrefix` is the only field the flow genuinely cannot run without —
+ * without it there is nowhere to put a file, and guessing a prefix is exactly
+ * what the server refuses to accept. Everything else is decoration and is
+ * allowed to be absent, so one missing display field cannot take the whole
+ * upload screen down.
  */
 function parseSession(
   payload: unknown,
 ): { ok: true; session: BookingDocumentsSession } | { ok: false; reason: string } {
   const body = asRecord(payload);
 
-  const sessionId = asString(body.sessionId);
-  if (sessionId === null) return { ok: false, reason: 'no sessionId in the response' };
+  const uploadPrefix = asString(body.uploadPrefix);
+  if (uploadPrefix === null) {
+    // A server still running the OLD identity build answers with `sessionId`
+    // and no `uploadPrefix`. Saying which beats "we did not understand".
+    return {
+      ok: false,
+      reason:
+        asString(body.sessionId) !== null
+          ? 'returned an identity-capture session instead of an upload prefix — the edge function is out of date'
+          : 'returned no uploadPrefix',
+    };
+  }
 
   const rental = asRecord(body.rental);
   const tenant = asRecord(body.tenant);
@@ -258,7 +270,8 @@ function parseSession(
   return {
     ok: true,
     session: {
-      sessionId,
+      uploadPrefix,
+      bucket: asString(body.bucket) ?? DOCUMENT_BUCKET,
       expiresAt: asString(body.expiresAt),
       rental: {
         rentalNumber: asString(rental.rentalNumber),
@@ -272,10 +285,6 @@ function parseSession(
         logoUrl: asString(tenant.logoUrl),
       },
       documentsStatus: asString(body.documentsStatus),
-      // `qrToken` is deliberately NOT carried through. It is a bearer credential
-      // for v1's QR capture route and nothing on this screen needs it; holding
-      // it in browser memory and React Query's cache would be storing a secret
-      // for no purpose.
     },
   };
 }
@@ -305,9 +314,9 @@ async function loadState(token: string): Promise<BookingDocumentsState> {
 
     /*
       A code we do not recognise. Its `error` string is written for a customer in
-      every branch of the function ("Too many document check attempts. Please try
-      again in an hour.", "We could not start the document check for this
-      booking. Please get in touch."), so it is shown verbatim. That is strictly
+      every branch of the function ("We could not find the files you sent. Please
+      choose them again and re-send.", "We could not file these against your
+      booking. Please get in touch and we will take it from here."), so it is shown verbatim. That is strictly
       better than the generic copy AND strictly safer than guessing a screen.
     */
     if (code === null && serverMessage !== null) {
@@ -327,10 +336,11 @@ async function loadState(token: string): Promise<BookingDocumentsState> {
       terminal for this link, and `canResend` (false on a cancelled booking) is
       what keeps the button honest either way.
 
-      409 is deliberately NOT mapped any more. THREE different codes answer 409
-      — `already_complete`, `no_customer` and `not_paid` — and telling a customer
-      "we already have your documents" when the truth is "we could not start the
-      check" stops them doing the one thing that would fix it.
+      409 is deliberately NOT mapped any more. FOUR different codes answer 409
+      — `already_complete`, `no_customer`, `files_missing` and `not_paid` — and
+      telling a customer "we already have your documents" when the truth is "we
+      could not find the files you sent" stops them doing the one thing that
+      would fix it.
 
       404 is deliberately NOT mapped to `invalid_token` either. A Supabase
       Functions URL for a function that is not deployed also answers 404, so
@@ -550,59 +560,85 @@ export function useResendBookingDocumentsLink() {
 /* ───────────────────────── what may be uploaded ────────────────────────── */
 
 /**
- * The capture flow's own accept list: the bucket's types MINUS `application/pdf`.
+ * The bucket's OWN limits, re-exported under insurance-shaped names.
  *
- * Derived rather than retyped, so a change to the bucket's real limits in
- * `use-customer-documents.ts` cannot drift away from this one. A PDF is a
- * perfectly valid `customer-documents` object and a perfectly useless input to
- * a face match, so it is excluded here and nowhere else.
+ * All FOUR MIME types, PDF very much included — an insurance declarations page
+ * is normally a PDF, and the previous build of this screen deliberately filtered
+ * PDF out because a PDF is a useless input to a face match. There is no face
+ * match here any more, so the filter would only reject the commonest file a
+ * customer has.
+ *
+ * ── THE 5 MB CAP IS THE BUCKET'S, NOT A PREFERENCE ──────────────────────────
+ * v1's insurance dialog validates against 10 MB
+ * (`apps/booking/src/components/insurance-upload-dialog.tsx:20`) while
+ * `customer-documents` enforces `file_size_limit = 5242880` — confirmed by
+ * reading `storage.buckets` on staging, not assumed. So a 6 MB certificate
+ * passes v1's check and then dies at the storage layer with a 413 that v1
+ * swallows. Copying v1's number would copy that bug. If the product wants 10 MB
+ * the BUCKET has to be raised first, on every project, and this constant then
+ * follows it.
  */
-export const CAPTURE_MIME_TYPES: readonly string[] = ACCEPTED_MIME_TYPES.filter(
-  (type) => type !== 'application/pdf',
-);
+export const INSURANCE_MIME_TYPES: readonly string[] = ACCEPTED_MIME_TYPES;
 
-/** The bucket's real `file_size_limit`, not a guess. See the source constant. */
-export const CAPTURE_MAX_BYTES = MAX_UPLOAD_BYTES;
+export const INSURANCE_MAX_BYTES = MAX_UPLOAD_BYTES;
+
+/** Extensions, not MIME types: what a file input's `accept` wants. */
+export const INSURANCE_ACCEPT_ATTRIBUTE = ACCEPTED_FILE_EXTENSIONS;
+
+export const INSURANCE_FORMATS_LABEL = ACCEPTED_FORMATS_LABEL;
+
+/** Matches MAX_INSURANCE_FILES in `booking-documents-link`. Kept in step by hand. */
+export const MAX_INSURANCE_FILES = 12;
 
 /**
- * For the `accept` attribute. Naming the two MIME types (rather than `image/*`)
- * is what makes iOS hand back a JPEG instead of a HEIC from the photo library.
+ * The object name a file will be stored under.
+ *
+ * Deterministic — the sanitised original name, with NO timestamp. That is the
+ * deliberate difference from v1, which prefixes `Date.now()` and uploads with
+ * `upsert: false`, so every re-send of the same document leaves the previous
+ * object behind forever with nothing pointing at it and no cleanup anywhere in
+ * the repo. A stable name means "send policy.pdf again" REPLACES policy.pdf,
+ * which is also exactly what the server does with the matching row.
+ *
+ * It is also the client's identity for a file, so the picker dedupes on this
+ * rather than on the display name: two names that sanitise to the same object
+ * are the same object, and letting both into the list would silently drop one.
  */
-export const CAPTURE_ACCEPT_ATTRIBUTE = 'image/jpeg,image/png';
-
-export const CAPTURE_FORMATS_LABEL = 'JPG or PNG, up to 5 MB';
+export function insuranceObjectName(fileName: string): string {
+  const cleaned = fileName.trim().replace(/[^a-zA-Z0-9.-]/g, '_');
+  return cleaned === '' || cleaned === '.' ? 'document' : cleaned;
+}
 
 /**
  * Say which limit was hit, before anything is uploaded.
  *
- * v1 validates `image/*` up to 10 MB (`page.tsx:326-334`) against a bucket that
- * enforces 5 MB and four MIME types, then swallows the storage error and shows
- * "Failed to upload document" (`uploadImage` returns null at `:353-364`). A
- * phone photo is routinely over 5 MB, so that is not an edge case — it is the
- * common path, and the customer is given nothing to act on.
+ * Every message names the limit and what to do about it. "Failed to upload
+ * document" — v1's single message for all of these — is not something a
+ * customer can act on.
  */
-export function validateCaptureFile(file: File): string | null {
+export function validateInsuranceFile(file: File): string | null {
   const type = file.type.toLowerCase();
 
   if (type === 'image/heic' || type === 'image/heif') {
     return (
-      'That photo is in Apple’s HEIC format, which we cannot read. In Settings › ' +
-      'Camera › Formats choose “Most Compatible”, or take the photo with the ' +
-      'button above instead.'
+      `“${file.name}” is in Apple’s HEIC format, which this bucket does not ` +
+      'accept. In Settings › Camera › Formats choose “Most Compatible”, or open ' +
+      'the file and export it as a PDF or JPG.'
     );
   }
 
-  if (!CAPTURE_MIME_TYPES.includes(type)) {
-    return `That is a ${file.type || 'file of unknown type'}. Please use a JPG or PNG photo.`;
+  if (!INSURANCE_MIME_TYPES.includes(type)) {
+    return `“${file.name}” is a ${file.type || 'file of unknown type'}. Please send a PDF, JPG or PNG.`;
   }
 
   if (file.size === 0) {
-    return 'That photo came through empty. Please take or choose it again.';
+    return `“${file.name}” came through empty. Please choose it again.`;
   }
 
-  if (file.size > CAPTURE_MAX_BYTES) {
+  if (file.size > INSURANCE_MAX_BYTES) {
     const mb = (file.size / 1024 / 1024).toFixed(1);
-    return `That photo is ${mb} MB and the limit is 5 MB. Try taking it with the button above, which produces a smaller file.`;
+    const limitMb = Math.round(INSURANCE_MAX_BYTES / 1024 / 1024);
+    return `“${file.name}” is ${mb} MB and the limit is ${limitMb} MB per file. Try sending the pages as separate files, or save the PDF at a smaller size.`;
   }
 
   return null;
@@ -611,182 +647,160 @@ export function validateCaptureFile(file: File): string | null {
 /* ──────────────────────────── submitting them ──────────────────────────── */
 
 /**
- * The three object names, exactly.
- *
- * THIS IS A CONTRACT, not a naming choice. `ai-verification/<sessionId>/<kind>.jpg`
- * is what v1 writes (`apps/booking/src/app/verify/[token]/page.tsx:355`) and
- * what the portal's document viewers already read. Changing any part of it
- * makes the operator's copy of the licence disappear.
+ * The action name on `booking-documents-link`. Additive: a server too old to
+ * know it falls through to the `open` branch and answers with a session body,
+ * which `submitInsurance` reports as a failure rather than a phantom success.
  */
-type CaptureKind = 'document-front' | 'document-back' | 'selfie';
+const SUBMIT_ACTION = 'submit-insurance';
 
-function capturePath(sessionId: string, kind: CaptureKind): string {
-  return `ai-verification/${sessionId}/${kind}.jpg`;
+/** Where a single file has got to. Reported per file, in order. */
+export type InsuranceFileState = 'queued' | 'uploading' | 'stored' | 'failed';
+
+export interface SubmitBookingInsuranceInput {
+  token: string;
+  /** Server-issued. NEVER built in the browser — see the function's response. */
+  uploadPrefix: string;
+  files: readonly File[];
+  /**
+   * Per-file progress. `supabase-js` exposes no byte-level progress on an
+   * upload, so this reports STATE per file rather than a percentage — the
+   * screen turns "3 of 5 stored" into a determinate bar. Inventing a percentage
+   * would be inventing the one number the customer is watching.
+   */
+  onFileState?: (index: number, state: InsuranceFileState, error?: string) => void;
 }
 
-const KIND_LABEL: Record<CaptureKind, string> = {
-  'document-front': 'the front of your document',
-  'document-back': 'the back of your document',
-  selfie: 'your photo',
-};
-
-async function uploadCapture(
-  sessionId: string,
-  kind: CaptureKind,
-  blob: Blob,
-): Promise<string> {
-  /*
-    Re-checked here as well as at selection time. The component validates a
-    `File` (which carries a name, so the message can be specific); this checks
-    the `Blob` that actually goes over the wire, because that is the value the
-    bucket will judge. Cheap, and it closes the gap if a future caller skips the
-    component.
-  */
-  if (blob.size === 0) {
-    throw new Error(`We could not read ${KIND_LABEL[kind]}. Please take it again.`);
-  }
-  if (blob.size > CAPTURE_MAX_BYTES) {
-    const mb = (blob.size / 1024 / 1024).toFixed(1);
-    throw new Error(
-      `${KIND_LABEL[kind]} is ${mb} MB and the limit is 5 MB. Please take it again with the camera button.`,
-    );
-  }
-
-  const { data, error } = await supabase.storage
-    .from(DOCUMENT_BUCKET)
-    .upload(capturePath(sessionId, kind), blob, {
-      /*
-        `image/jpeg` and a `.jpg` name regardless of the real bytes, because that
-        is the contract above. A PNG therefore travels mislabelled — which is
-        v1's behaviour too, and it works because both consumers sniff the bytes:
-        `ai-face-match` base64s them for Rekognition, and `ai-document-ocr`
-        wraps them in a `data:image/jpeg;base64,` URI for OpenAI's vision model
-        (`ai-document-ocr/index.ts:137-141`). Worth knowing before anyone
-        "fixes" the content type: the FILENAME is the part the portal depends on.
-      */
-      contentType: 'image/jpeg',
-      // The customer may retake a photo and submit again; the second upload must
-      // replace the first rather than 409. This is also what makes "try again"
-      // after a rejection safe to press twice.
-      upsert: true,
-    });
-
-  if (error) {
-    console.error('[useSubmitBookingDocuments] storage upload failed', {
-      kind,
-      message: error.message,
-    });
-    // The bucket's own message is shown. It is the difference between "413
-    // EntityTooLarge" and "415 InvalidMimeType", which is the difference
-    // between two completely different things for the customer to do.
-    throw new Error(
-      `We could not store ${KIND_LABEL[kind]}. ${error.message}`,
-    );
-  }
-
-  return data.path;
-}
-
-/** The only three verdicts `process-ai-verification` produces. */
-export type BookingDocumentsVerdict = 'verified' | 'review_required' | 'rejected';
-
-function asVerdict(value: unknown): BookingDocumentsVerdict | null {
-  return value === 'verified' || value === 'review_required' || value === 'rejected'
-    ? value
-    : null;
-}
-
-export interface SubmitBookingDocumentsInput {
-  sessionId: string;
-  front: Blob;
-  /** The back of a passport does not exist. Skippable, and genuinely optional. */
-  back: Blob | null;
-  selfie: Blob;
-}
-
-export interface SubmitBookingDocumentsResult {
-  verdict: BookingDocumentsVerdict;
+export interface SubmitBookingInsuranceResult {
+  /** How many documents the server filed against the booking. */
+  submitted: number;
+  /** `rentals.documents_status` as the server left it. Expected: 'submitted'. */
+  documentsStatus: string | null;
 }
 
 const SUBMIT_FAILED_COPY =
-  'Your photos were saved, but we could not finish the check. Nothing about ' +
-  'your booking has changed — please try submitting again.';
+  'Your files were stored, but we could not attach them to your booking. ' +
+  'Nothing about your booking or your payment has changed — please try sending ' +
+  'them again.';
 
-export function useSubmitBookingDocuments() {
-  return useMutation<SubmitBookingDocumentsResult, Error, SubmitBookingDocumentsInput>({
-    // Never retried automatically: each attempt re-uploads three objects and
-    // re-runs a paid OCR + face-match pass. The customer presses the button.
+/**
+ * Put the files in the bucket, then ask the server to file them.
+ *
+ * ── THE BROWSER NEVER MARKS ANYTHING DONE ───────────────────────────────────
+ * `rentals` has RLS OFF on staging with a full anon DML grant, so this file
+ * could stamp `documents_status` itself in one statement. It does not, and must
+ * not: that is a client writing the state its own gate is judged on, i.e. a
+ * client that can be made to lie. It uploads bytes and reports paths. The
+ * server verifies every path against a real storage listing, writes the
+ * `customer_documents` rows the operator portal reads, and moves the rental.
+ *
+ * ── AND IT NEVER SAYS THE BOOKING IS CONFIRMED ──────────────────────────────
+ * The server's terminal state here is `submitted` / `uploaded`, never
+ * `verified`. An operator still reviews these and can still reject the booking.
+ */
+export function useSubmitBookingInsurance() {
+  return useMutation<SubmitBookingInsuranceResult, Error, SubmitBookingInsuranceInput>({
+    // Never retried automatically: each attempt re-uploads every file. The
+    // customer presses the button.
     retry: false,
-    mutationFn: async (input): Promise<SubmitBookingDocumentsResult> => {
-      // Sequential, not `Promise.all`. Three concurrent multi-megabyte uploads
-      // on a phone connection is how you get one of them timing out, and the
-      // progress copy would have nothing honest to say about which.
-      const documentFrontPath = await uploadCapture(
-        input.sessionId,
-        'document-front',
-        input.front,
-      );
+    mutationFn: async (input): Promise<SubmitBookingInsuranceResult> => {
+      if (input.files.length === 0) {
+        throw new Error('Please choose at least one file to send.');
+      }
+      if (input.files.length > MAX_INSURANCE_FILES) {
+        throw new Error(`Please send no more than ${MAX_INSURANCE_FILES} files at a time.`);
+      }
 
-      const documentBackPath = input.back
-        ? await uploadCapture(input.sessionId, 'document-back', input.back)
-        : undefined;
+      const stored: { path: string; name: string; size: number; mimeType: string }[] = [];
 
-      const selfiePath = await uploadCapture(input.sessionId, 'selfie', input.selfie);
+      // Sequential, not `Promise.all`. Several concurrent multi-megabyte uploads
+      // on a phone connection is how one of them times out, and a per-file
+      // progress list would have nothing honest to say about which.
+      for (let index = 0; index < input.files.length; index += 1) {
+        const file = input.files[index];
 
-      const { data, error } = await supabase.functions.invoke(VERIFY_FUNCTION, {
-        // PATHS, not URLs. The function resolves them against the bucket itself
-        // (`getStoragePublicUrl`), so handing it a URL would double-resolve.
-        body: {
-          sessionId: input.sessionId,
-          documentFrontPath,
-          documentBackPath,
-          selfiePath,
-        },
+        // Re-checked here as well as at selection time: this is the value the
+        // bucket will actually judge, and a caller that skipped the picker
+        // should still get a sentence rather than a raw 413.
+        const rejection = validateInsuranceFile(file);
+        if (rejection) {
+          input.onFileState?.(index, 'failed', rejection);
+          throw new Error(rejection);
+        }
+
+        input.onFileState?.(index, 'uploading');
+        const path = `${input.uploadPrefix}/${insuranceObjectName(file.name)}`;
+
+        const { error } = await supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
+          // The REAL content type, unlike the identity flow this replaced, which
+          // hardcoded image/jpeg. A PDF stored as image/jpeg is a PDF that will
+          // not open for the operator who has to read it.
+          contentType: file.type,
+          cacheControl: '3600',
+          // Re-sending the same document replaces it rather than 409-ing, which
+          // is what makes "try again" safe to press twice and is why the object
+          // name carries no timestamp.
+          upsert: true,
+        });
+
+        if (error) {
+          // The bucket's own message is kept: the difference between
+          // "EntityTooLarge" and "InvalidMimeType" is the difference between two
+          // completely different things for the customer to do.
+          const message = `We could not store “${file.name}”. ${error.message}`;
+          console.error('[useSubmitBookingInsurance] storage upload failed', {
+            path,
+            message: error.message,
+          });
+          input.onFileState?.(index, 'failed', message);
+          throw new Error(message);
+        }
+
+        input.onFileState?.(index, 'stored');
+        stored.push({
+          path,
+          // The ORIGINAL name, not the sanitised one: it is what the operator
+          // sees in the portal and what the server matches an existing row on.
+          name: file.name,
+          size: file.size,
+          mimeType: file.type,
+        });
+      }
+
+      const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
+        body: { token: input.token, action: SUBMIT_ACTION, files: stored },
       });
 
       if (error) {
-        /*
-          Only the transport failed. Note what did NOT happen: no verdict was
-          written, so the rental's `documents_status` is untouched and pressing
-          submit again is safe — the three uploads are `upsert: true` and the
-          function is keyed on the same session.
-        */
         const body = await readServerBody(error);
-        console.error('[useSubmitBookingDocuments] verification call failed', {
+        console.error('[useSubmitBookingInsurance] filing failed', {
           status: statusOf(error),
           serverError: body?.error,
           detail: describe(error),
         });
-        throw new Error(looksOffline() ? OFFLINE_COPY : SUBMIT_FAILED_COPY);
+        // Every failure branch of the action carries prose written for a
+        // customer — "we could not find the files you sent", "please get in
+        // touch" — so it is shown as written rather than flattened.
+        const serverMessage = asString(body?.error);
+        throw new Error(
+          serverMessage ?? (looksOffline() ? OFFLINE_COPY : SUBMIT_FAILED_COPY),
+        );
       }
 
-      /*
-        The success path is NOT `data.ok`. Two real code paths answer HTTP 200
-        with `{ ok: false, result: 'rejected' }` — an OCR failure
-        (`process-ai-verification/index.ts:174-181`) and a face-match failure
-        (`:216-223`) — and both have already written `review_result: 'RED'` to
-        the row. Those ARE verdicts; treating them as transport errors would show
-        a "try again" that silently disagreed with what the operator sees.
-
-        So the VERDICT is what is read, and `ok` is ignored when a verdict is
-        present.
-      */
       const body = asRecord(data);
-      const verdict = asVerdict(body.result);
-      if (verdict === null) {
-        console.error('[useSubmitBookingDocuments] no verdict in response', body);
+      if (body.ok !== true) {
+        // Includes the "server too old to know this action" case: it answers a
+        // 200 `open` body, which has no `submitted`, and must not be read as a
+        // successful filing.
+        console.error('[useSubmitBookingInsurance] unexpected response', body);
         throw new Error(SUBMIT_FAILED_COPY);
       }
 
-      /*
-        `details` is deliberately dropped on the floor and never returned to the
-        caller. It carries the OCR extraction and the face-match score, and its
-        sibling `rejection_reason` on one code path reads
-        "Blocked identity: <the operator's private note>". None of that is the
-        customer's to see, and the cheapest way to guarantee it never leaks into
-        a rendered string is for it never to leave this function.
-      */
-      return { verdict };
+      const submitted =
+        typeof body.submitted === 'number' && Number.isFinite(body.submitted)
+          ? body.submitted
+          : stored.length;
+
+      return { submitted, documentsStatus: asString(body.documentsStatus) };
     },
   });
 }

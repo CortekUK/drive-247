@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BookingDocumentsScreen } from "@/components/booking/document-capture";
+import { BookingDocumentsScreen } from "@/components/booking/insurance-upload";
 
 /**
  * /booking/documents/<token> — the surface a customer lands on after paying.
@@ -24,7 +24,7 @@ import { BookingDocumentsScreen } from "@/components/booking/document-capture";
  * The same reason as `booking/[vehicleId]/page.tsx` next door: `params` is a
  * Promise in Next 16 and a client component cannot await it. Everything below
  * the await is client-side, because resolving the token means calling an edge
- * function and then running a camera flow.
+ * function and then putting files in a storage bucket.
  *
  * Being a server component also buys the `robots` directive below, which a
  * client component cannot export — and on a bearer-token URL that is worth
@@ -32,14 +32,14 @@ import { BookingDocumentsScreen } from "@/components/booking/document-capture";
  */
 
 export const metadata: Metadata = {
-  title: "Send your documents",
+  title: "Send your insurance document",
   description:
-    "Upload your driving licence and a photo of yourself to finish your booking.",
+    "Send your insurance certificate so we can review it and confirm your booking.",
   /*
     Every URL in this route carries a live bearer token for a PAID booking, and
-    opening one has side effects: the edge function mints an AI verification
-    session and slides the link's expiry. Neither indexing it nor letting a
-    crawler walk it is wanted. `nocache` covers the archived-snapshot case,
+    opening one has side effects: the edge function moves the booking's
+    documents_status and slides the link's expiry. Neither indexing it nor
+    letting a crawler walk it is wanted. `nocache` covers the archived-snapshot case,
     which is the one that would keep a token readable after it expired.
   */
   robots: { index: false, follow: false, nocache: true },

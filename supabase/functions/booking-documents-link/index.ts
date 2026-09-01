@@ -1,28 +1,42 @@
 // booking-documents-link
 //
-// Redeems the DURABLE post-payment documents token into a PERISHABLE AI
-// verification session, and is the only surface the public upload page talks to.
+// The one endpoint behind the public post-payment screen: it redeems the
+// DURABLE documents token, re-sends it when it has lapsed, and files the
+// INSURANCE DOCUMENTS a customer uploads through it.
 //
-// WHY THIS FUNCTION EXISTS AT ALL — read before changing its shape.
+// WHY A DURABLE TOKEN — read before changing its shape.
 //
-// The AI verification session is hardcoded to a 3-hour TTL, twice
-// (create-ai-verification-session/index.ts:133 and :219), enforced in exactly one
-// place (validate-ai-session/index.ts:83-94, HTTP 410) and with no recovery path:
-// v1's expired screen (apps/booking/src/app/verify/[token]/page.tsx:463-477) just
-// reads "Please request a new verification link" and offers no button, and the
-// only re-send in the product needs operator staff auth
-// (send-additional-driver-invite/index.ts:88-102). Emailing a customer a 3-hour
-// link is therefore a broken feature.
+// The link goes in an email, and an email is read whenever it is read. v1's
+// equivalent credential was a 3-hour AI verification session with no recovery
+// path (its expired screen — apps/booking/src/app/verify/[token]/page.tsx:463-477
+// — reads "Please request a new verification link" and offers no button, and the
+// only re-send in the product needs operator staff auth). Emailing a customer a
+// 3-hour link is a broken feature.
 //
-// The fix is a split credential. The DURABLE token (booking_document_links, one
-// row per rental, UNIQUE(rental_id)) is what goes in the email. The perishable
-// 3-hour session is minted HERE, on arrival, and never leaves the building. A
-// customer who opens the email on day six gets a session that is three hours old,
-// not a link that expired five and a half days ago.
+// So the credential here is a row in booking_document_links: one per rental,
+// UNIQUE(rental_id), seven days, and the window SLIDES on every successful visit
+// and on every upload. A lapsed link is recoverable BY THE CUSTOMER through the
+// `resend` action. The real ceiling is "seven days of silence", not "seven days
+// from payment".
 //
-// Do NOT call validate-ai-session from this path. This function already returns
-// everything validate-ai-session would, and validate-ai-session's own 410 is the
-// precise failure mode we are routing around. It stays untouched for v1's QR flow.
+// ── WHAT THIS SCREEN IS, AND WHAT IT IS NOT ─────────────────────────────────
+// It is an INSURANCE DOCUMENT UPLOAD. It is not identity verification: there is
+// no OCR pass, no face match, and this function no longer mints an
+// identity_verifications session (see the note where that used to happen).
+//
+// Uploading does NOT confirm the booking. `submit-insurance` writes
+// documents_status = 'submitted' and insurance_status = 'uploaded' — never
+// 'verified' — because an operator still reviews the documents and can still
+// reject the booking. notify-booking-approved remains the only thing in the
+// product that says "confirmed".
+//
+// ── WHY EVERY WRITE IS HERE AND NOT IN THE BROWSER ──────────────────────────
+// `rentals` has RLS OFF on staging with a full anon DML grant, so a browser
+// trusted to stamp its own documents_status could simply claim to have
+// uploaded. `customer_documents` has RLS ON with no anon policy, so a browser
+// could not file the row even if we wanted it to (an anon INSERT answers
+// 401 42501). The browser puts BYTES in a bucket, under a prefix this function
+// hands it; this function decides what those bytes mean.
 //
 // AUTH: verify_jwt stays TRUE (the default — do not add this function to
 // supabase/config.toml). The browser calls it with the public anon key, which
@@ -34,6 +48,7 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
 import { deriveBookingOrigin, buildDocumentsUrl } from '../_shared/booking-origin.ts';
+import { enqueueBookingEmail } from '../_shared/email-outbox.ts';
 
 /**
  * How long a documents link stays usable.
@@ -87,7 +102,6 @@ interface RentalRow {
   tenant_id: string;
   customer_id: string | null;
   documents_status: string | null;
-  identity_verification_session_id: string | null;
   status: string | null;
   payment_status: string | null;
   vehicle: { make: string | null; model: string | null } | null;
@@ -109,127 +123,333 @@ function vehicleLabel(vehicle: RentalRow['vehicle']): string | null {
   return label === '' ? null : label;
 }
 
+/** The bucket every customer document in the product already lives in. */
+const DOCUMENT_BUCKET = 'customer-documents';
+
 /**
- * Reuse an unexpired session rather than minting another.
+ * The ONLY document_type the CHECK constraint admits for this flow.
  *
- * THIS IS THE RATE-LIMIT DEFENCE. create-ai-verification-session caps a customer
- * at 10 sessions per hour (index.ts:53-91) and answers a plain 400 past that, so
- * a customer who refreshes the upload page eleven times would otherwise lock
- * themselves out of their own booking for an hour.
- *
- * `.limit(1).maybeSingle()` rather than `.single()`: identity_verifications.session_id
- * carries no uniqueness constraint, and `.single()` on a duplicate throws — the
- * same latent fragility process-ai-verification/index.ts:115-119 already lives with.
+ * customer_documents_document_type_check accepts exactly six strings and this
+ * is the one every operator screen filters on — the /insurances list, the
+ * rental page's two document queries, the analytics pages and the reminder
+ * generator. Writing anything else 400s, and writing a valid-but-different type
+ * would make the upload invisible to the people who have to approve it.
  */
-async function findReusableSession(
-  supabase: SupabaseClient,
-  sessionId: string,
-): Promise<{ sessionId: string; qrToken: string; expiresAt: string } | null> {
-  const { data, error } = await supabase
-    .from('identity_verifications')
-    .select('id, session_id, qr_session_token, qr_session_expires_at, status')
-    .eq('session_id', sessionId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+const INSURANCE_DOCUMENT_TYPE = 'Insurance Certificate';
 
-  if (error) {
-    console.error('[documents-link] could not read existing verification:', error);
-    return null;
+/** A sane ceiling. A declarations page is one to three files, never twenty. */
+const MAX_INSURANCE_FILES = 12;
+
+/**
+ * Where a booking's insurance objects live.
+ *
+ * v1 writes `insurance/<Date.now()>-<name>` — one flat, unscoped prefix in a
+ * PUBLIC bucket whose storage policies grant SELECT/INSERT/UPDATE/DELETE to the
+ * `public` role. Two customers can therefore collide, and anyone holding the
+ * anon key can enumerate or delete the lot. The `insurance/` root is kept so
+ * everything that already greps for it still matches; the tenant and rental
+ * segments are the fix. The portal's downloader strips a `customer-documents/`
+ * prefix and then calls `.download(path)`, so a deeper path costs it nothing.
+ */
+function insurancePrefix(tenantId: string, rentalId: string): string {
+  return `insurance/${tenantId}/${rentalId}`;
+}
+
+interface SubmittedFile {
+  path: string;
+  name: string;
+  size: number | null;
+  mimeType: string | null;
+}
+
+/** Read the client's file list defensively. Never trust a shape, never trust a path. */
+function parseSubmittedFiles(
+  value: unknown,
+  prefix: string,
+): { ok: true; files: SubmittedFile[] } | { ok: false; message: string } {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { ok: false, message: 'No files were sent.' };
   }
-  if (!data) return null;
+  if (value.length > MAX_INSURANCE_FILES) {
+    return {
+      ok: false,
+      message: `Please send no more than ${MAX_INSURANCE_FILES} files at a time.`,
+    };
+  }
 
-  // process-ai-verification nulls qr_session_token when it completes
-  // (index.ts:275), so a completed session fails the token check anyway — the
-  // status check is belt and braces, and it is cheap.
-  if (data.status === 'completed') return null;
-  if (!data.qr_session_token) return null;
-  if (!data.qr_session_expires_at) return null;
-  if (new Date(data.qr_session_expires_at).getTime() <= Date.now()) return null;
+  const files: SubmittedFile[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') {
+      return { ok: false, message: 'One of the files was not sent correctly.' };
+    }
+    const record = entry as Record<string, unknown>;
+    const path = typeof record.path === 'string' ? record.path.trim() : '';
+    const name = typeof record.name === 'string' ? record.name.trim() : '';
 
-  return {
-    sessionId,
-    qrToken: data.qr_session_token as string,
-    expiresAt: data.qr_session_expires_at as string,
-  };
+    /*
+      THE AUTHORISATION CHECK, AND THERE IS ONLY ONE.
+
+      The token is a bearer credential and the bucket is world-writable, so a
+      body could otherwise name ANY object in the bucket — another customer's
+      licence scan — and have it filed against this booking under a document
+      type an operator will open. Pinning the prefix to the tenant and rental
+      this token resolved to is what makes that impossible. `..` is rejected
+      outright rather than normalised.
+    */
+    if (path === '' || !path.startsWith(`${prefix}/`) || path.includes('..')) {
+      return { ok: false, message: 'One of the files was not stored where we expected.' };
+    }
+    if (name === '') {
+      return { ok: false, message: 'One of the files arrived without a name.' };
+    }
+
+    files.push({
+      path,
+      name,
+      size: typeof record.size === 'number' && Number.isFinite(record.size) ? record.size : null,
+      mimeType: typeof record.mimeType === 'string' && record.mimeType !== '' ? record.mimeType : null,
+    });
+  }
+
+  return { ok: true, files };
 }
 
 /**
- * Mint a fresh AI verification session for this rental's customer.
+ * "I have uploaded my insurance documents."
  *
- * USE THE customerId BRANCH, NOT customerDetails. Its rate-limit filter is
- * `.eq('customer_id', customerId)` (create-ai-verification-session/index.ts:66-67);
- * the customerDetails branch filters with
- * `.like('external_user_id', '%'+email+'%')` (:69-73), where '_' is a single-char
- * LIKE wildcard, so one customer's attempts can be counted against another's.
+ * ── WHY THIS IS SERVER-SIDE AT ALL ──────────────────────────────────────────
+ * customer_documents has RLS ON with four policies, none of which admit `anon`
+ * — an anon INSERT answers 401 42501, probed live against staging. The browser
+ * physically cannot file the row, and that is the correct arrangement: `rentals`
+ * has RLS OFF with a full anon DML grant, so a browser that were trusted to
+ * stamp its own documents_status could simply claim to have uploaded. The
+ * browser puts BYTES in a bucket; this function decides what that means.
  *
- * The returned `qrUrl` is IGNORED on purpose: buildQRUrl (:44-48) builds it from
- * BOOKING_APP_URL or `{slug}.drive-247.com`, which on staging points at v1
- * PRODUCTION. Only sessionId / qrToken / expiresAt are taken.
+ * ── AND WHY IT VERIFIES THE OBJECTS EXIST ───────────────────────────────────
+ * The body is a list of paths, which is a list of claims. Every one is checked
+ * against a real `storage.objects` listing before a row is written, so a
+ * fabricated body files nothing.
  *
- * KNOWN AND ACCEPTED SIDE EFFECT: that branch also sets
- * customers.identity_verification_status = 'pending' (:167-171). It is true at
- * this moment — the customer has just been sent to upload — and
- * process-ai-verification mirrors the final verdict back over it (:314-335).
+ * ── WHAT IT DOES NOT DO ─────────────────────────────────────────────────────
+ * It does NOT write documents_status = 'verified' and it does NOT send an
+ * approval email. Uploading is not approval: an operator still reviews these
+ * and can still reject the booking, and `notify-booking-approved` remains the
+ * only thing in the product that says "confirmed".
  */
-async function mintSession(
-  customerId: string,
-  tenantId: string,
-  tenantSlug: string,
-): Promise<
-  | { ok: true; sessionId: string; qrToken: string; expiresAt: string }
-  | { ok: false; status: number; code: string; message: string }
-> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+async function handleSubmitInsurance(
+  supabase: SupabaseClient,
+  link: LinkRow,
+  rental: RentalRow,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  if (!rental.customer_id) {
+    // customer_documents.customer_id is NOT NULL with an FK, while
+    // rentals.customer_id is nullable. Fail with prose rather than a 23502.
+    console.error('[documents-link] insurance submit on a rental with no customer:', rental.id);
+    return fail(
+      409,
+      'no_customer',
+      'We could not file these against your booking. Please get in touch and we will take it from here.',
+    );
+  }
 
-  let payload: Record<string, unknown> = {};
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/create-ai-verification-session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({ customerId, tenantId, tenantSlug }),
-      signal: AbortSignal.timeout(15000),
+  const prefix = insurancePrefix(rental.tenant_id, rental.id);
+  const parsed = parseSubmittedFiles(body.files, prefix);
+  if (!parsed.ok) {
+    return fail(400, 'bad_files', parsed.message);
+  }
+
+  // ---- the objects have to actually be there ------------------------------
+  const { data: objects, error: listError } = await supabase.storage
+    .from(DOCUMENT_BUCKET)
+    .list(prefix, { limit: 200 });
+
+  if (listError) {
+    console.error('[documents-link] could not list uploaded objects:', listError);
+    return fail(
+      502,
+      'storage_unavailable',
+      'We could not read the files you just sent. Please try again in a moment.',
+    );
+  }
+
+  const stored = new Map<string, { size: number | null; mimeType: string | null }>();
+  for (const object of objects ?? []) {
+    const metadata = (object.metadata ?? {}) as Record<string, unknown>;
+    stored.set(object.name, {
+      size: typeof metadata.size === 'number' ? metadata.size : null,
+      mimeType: typeof metadata.mimetype === 'string' ? metadata.mimetype : null,
     });
-    payload = await response.json();
+  }
+
+  const missing = parsed.files.filter((file) => !stored.has(file.path.slice(prefix.length + 1)));
+  if (missing.length > 0) {
+    console.error('[documents-link] submitted paths not present in storage:', missing.map((f) => f.path));
+    return fail(
+      409,
+      'files_missing',
+      'We could not find the files you sent. Please choose them again and re-send.',
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+
+  // ---- what is already filed against this booking -------------------------
+  /*
+    A pre-read rather than an upsert, because the uniqueness that matters is a
+    PARTIAL index — idx_customer_documents_unique_rental_insurance, on
+    (tenant_id, rental_id, document_type, file_name) WHERE rental_id IS NOT NULL
+    AND document_type = 'Insurance Certificate'. PostgREST cannot express the
+    index predicate ON CONFLICT needs, so an upsert on those columns would not
+    infer that index and a second `scan.pdf` — a re-upload after a rejection, or
+    two phone scans with the same name — would raise 23505 and lose the whole
+    batch. Matching on file_name and UPDATING is also the behaviour a customer
+    expects: re-sending "policy.pdf" replaces it, it does not duplicate it.
+  */
+  const { data: existingRows, error: existingError } = await supabase
+    .from('customer_documents')
+    .select('id, file_name')
+    .eq('tenant_id', rental.tenant_id)
+    .eq('rental_id', rental.id)
+    .eq('document_type', INSURANCE_DOCUMENT_TYPE);
+
+  if (existingError) {
+    console.error('[documents-link] could not read existing documents:', existingError);
+    return fail(
+      500,
+      'file_failed',
+      'We could not file your documents. Please try again in a moment.',
+    );
+  }
+
+  const existingByName = new Map<string, string>();
+  for (const row of existingRows ?? []) {
+    if (typeof row.file_name === 'string') existingByName.set(row.file_name, row.id as string);
+  }
+
+  let filed = 0;
+  for (const file of parsed.files) {
+    const objectMeta = stored.get(file.path.slice(prefix.length + 1)) ?? { size: null, mimeType: null };
+    // The bucket's own numbers win over the body's. The body is a claim.
+    const size = objectMeta.size ?? file.size;
+    const mimeType = objectMeta.mimeType ?? file.mimeType;
+
+    const shared = {
+      // The BARE storage path, matching what the booking app already writes.
+      // The portal's downloader does file_url.replace('customer-documents/','')
+      // and then .download(path); a bucket-prefixed value would survive the
+      // replace only by luck, and a full public URL would 404.
+      file_url: file.path,
+      file_name: file.name,
+      file_size: size,
+      mime_type: mimeType,
+      uploaded_at: nowIso,
+      updated_at: nowIso,
+      // 'Pending' is one of the four values the status CHECK admits and it is
+      // the honest one: received, not approved. The operator's approve action
+      // is what moves it to 'Active' and sets verified.
+      status: 'Pending',
+      verified: false,
+      ai_scan_status: 'pending',
+    };
+
+    const existingId = existingByName.get(file.name);
+    const { error: writeError } = existingId
+      ? await supabase.from('customer_documents').update(shared).eq('id', existingId)
+      : await supabase.from('customer_documents').insert({
+          ...shared,
+          customer_id: rental.customer_id,
+          rental_id: rental.id,
+          tenant_id: rental.tenant_id,
+          document_type: INSURANCE_DOCUMENT_TYPE,
+          document_name: file.name,
+        });
+
+    if (writeError) {
+      console.error('[documents-link] could not file document:', file.path, writeError);
+      return fail(
+        500,
+        'file_failed',
+        'We stored your files but could not attach them to your booking. Please try sending them again.',
+      );
+    }
+    filed += 1;
+  }
+
+  // ---- move the booking on -------------------------------------------------
+  /*
+    'submitted', NOT 'verified'. The documents_status CHECK admits
+    ['not_required','pending','submitted','verified','rejected'], and 'verified'
+    is what booking-documents-link's own already_complete gate reads — claiming
+    it here would tell a returning customer their documents had been CHECKED
+    when nobody has looked at them. insurance_status 'uploaded' is the matching
+    value on its own CHECK; 'verified' there is likewise the operator's to set.
+
+    Filtered so a booking an operator has already verified cannot be knocked
+    back by a late re-send. (Step 2 above already 409s that case; this is the
+    same guarantee expressed where the write happens.)
+  */
+  const { error: stampError } = await supabase
+    .from('rentals')
+    .update({
+      documents_status: 'submitted',
+      documents_completed_at: nowIso,
+      insurance_status: 'uploaded',
+      updated_at: nowIso,
+    })
+    .eq('id', rental.id)
+    .neq('documents_status', 'verified');
+
+  if (stampError) {
+    // The rows are filed and the operator can see them, so this is not fatal to
+    // the customer — but it IS the thing that takes the booking off the
+    // "waiting for documents" list, so it is logged loudly.
+    console.error('[documents-link] could not stamp rental after insurance upload:', stampError);
+  }
+
+  // ---- tell them, once -----------------------------------------------------
+  /*
+    The CANONICAL outbox key, so a customer who sends a second batch does not
+    get a second "we have your documents" email. Deliberately different from the
+    resend path, which needs its own row per press.
+  */
+  await enqueueBookingEmail(supabase, {
+    tenantId: rental.tenant_id,
+    rentalId: rental.id,
+    emailKey: 'booking_documents_received',
+    payload: { documents: filed },
+  });
+
+  try {
+    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/sweep-booking-emails`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      },
+      body: JSON.stringify({ rentalId: rental.id }),
+      signal: AbortSignal.timeout(8000),
+    });
   } catch (error) {
-    console.error('[documents-link] create-ai-verification-session unreachable:', error);
-    return {
-      ok: false,
-      status: 502,
-      code: 'session_mint_failed',
-      message: 'We could not start the document check. Please try again in a moment.',
-    };
+    console.warn('[documents-link] inline sweep skipped after insurance upload:', error);
   }
 
-  if (payload?.ok === true && payload.sessionId && payload.qrToken && payload.expiresAt) {
-    return {
-      ok: true,
-      sessionId: String(payload.sessionId),
-      qrToken: String(payload.qrToken),
-      expiresAt: String(payload.expiresAt),
-    };
-  }
+  // Slide the window: a customer who has just engaged never loses their link,
+  // and they may well come back to add a page they missed.
+  await supabase
+    .from('booking_document_links')
+    .update({
+      expires_at: new Date(Date.now() + DOCUMENTS_LINK_TTL_MS).toISOString(),
+      updated_at: nowIso,
+    })
+    .eq('token', link.token);
 
-  // The rate limiter answers a plain 400 with a prose message, so it has to be
-  // recognised by its text. Surfacing it as 429 lets the page say "wait an
-  // hour" instead of "something went wrong".
-  const detail = String(payload?.error ?? payload?.detail ?? 'unknown error');
-  console.error('[documents-link] session mint refused:', detail);
-  if (/too many/i.test(detail)) {
-    return {
-      ok: false,
-      status: 429,
-      code: 'session_rate_limited',
-      message: 'Too many document check attempts. Please try again in an hour.',
-    };
-  }
-  return {
-    ok: false,
-    status: 502,
-    code: 'session_mint_failed',
-    message: 'We could not start the document check. Please try again in a moment.',
-  };
+  return jsonResponse({
+    ok: true,
+    submitted: filed,
+    documentsStatus: 'submitted',
+    insuranceStatus: 'uploaded',
+  });
 }
 
 /**
@@ -363,7 +583,12 @@ Deno.serve(async (req) => {
     }
 
     const token = typeof body.token === 'string' ? body.token.trim() : '';
-    const action = body.action === 'resend' ? 'resend' : 'open';
+    const action =
+      body.action === 'resend'
+        ? 'resend'
+        : body.action === 'submit-insurance'
+          ? 'submit-insurance'
+          : 'open';
     if (token === '') {
       return fail(400, 'bad_request', 'A token is required.');
     }
@@ -395,7 +620,7 @@ Deno.serve(async (req) => {
       .from('rentals')
       .select(
         'id, rental_number, start_date, end_date, tenant_id, customer_id, ' +
-          'documents_status, identity_verification_session_id, status, payment_status, ' +
+          'documents_status, status, payment_status, ' +
           'vehicle:vehicles(make, model)',
       )
       .eq('id', link.rental_id)
@@ -450,92 +675,37 @@ Deno.serve(async (req) => {
       return fail(410, 'link_expired', 'This link has expired.', { canResend: true });
     }
 
-    // ---- 4. Reuse an unexpired session before minting another --------------
-    let session: { sessionId: string; qrToken: string; expiresAt: string } | null = null;
-    let minted = false;
-    if (rental.identity_verification_session_id) {
-      session = await findReusableSession(supabase, rental.identity_verification_session_id);
+    // ---- The submit action -------------------------------------------------
+    // AFTER the expiry check, unlike `resend`: re-sending an expired link is the
+    // whole point of that action, whereas accepting an upload through a dead
+    // link would be accepting one from a credential that is supposed to be over.
+    if (action === 'submit-insurance') {
+      return await handleSubmitInsurance(supabase, link, rental, body);
     }
 
-    // ---- 5. Otherwise mint a fresh one -------------------------------------
-    if (!session) {
-      if (!rental.customer_id) {
-        // The customerId branch is the only one safe to use here (see mintSession),
-        // and it needs a customer row. Every rental this flow creates has one.
-        console.error('[documents-link] rental has no customer_id:', rental.id);
-        return fail(
-          409,
-          'no_customer',
-          'We could not start the document check for this booking. Please get in touch.',
-        );
-      }
-      if (!tenantSlug) {
-        // create-ai-verification-session hard-requires tenantSlug (index.ts:294-299).
-        console.error('[documents-link] tenant has no slug:', rental.tenant_id);
-        return fail(500, 'session_mint_failed', 'We could not start the document check.');
-      }
-      const result = await mintSession(rental.customer_id, rental.tenant_id, tenantSlug);
-      if (!result.ok) {
-        return fail(result.status, result.code, result.message);
-      }
-      session = { sessionId: result.sessionId, qrToken: result.qrToken, expiresAt: result.expiresAt };
-      minted = true;
-    }
+    /*
+      THE AI IDENTITY SESSION MINT USED TO LIVE HERE, AND IT IS GONE ON PURPOSE.
 
+      This screen is an INSURANCE DOCUMENT UPLOAD. There is no OCR pass and no
+      face match, so there was nothing left for an identity_verifications row to
+      be the key of — and minting one on every open was not free:
+
+        * create-ai-verification-session caps a customer at 10 sessions per hour
+          and answers a plain 400 past that, so a customer refreshing the page
+          could lock themselves out of their own paid booking;
+        * its customerId branch also sets
+          customers.identity_verification_status = 'pending', which for an
+          insurance upload is simply not true; and
+        * it repointed rentals.identity_verification_session_id, a column whose
+          only consumer (process-ai-verification) this flow no longer calls.
+
+      What replaced it is `uploadPrefix` below: a tenant- and rental-scoped
+      storage prefix, derived server-side, which is the only place this token's
+      holder is allowed to put bytes. If identity capture ever comes back it
+      belongs behind its own token action, not stapled to every page open —
+      see the note in the report accompanying this change.
+    */
     const nowIso = new Date().toISOString();
-
-    // ---- 6. Stamp the rental -----------------------------------------------
-    // Two statements on purpose: the session pointer and the documents_status
-    // move have different safety conditions, and neither may clobber the other.
-    if (minted) {
-      // COMPARE-AND-SWAP, not a blind write. rentals.identity_verification_session_id
-      // is the ONLY thing that connects an upload back to this booking
-      // (process-ai-verification filters on it), and it holds exactly one value.
-      // Two concurrent opens — two tabs, a phone and a laptop, a double-fetch —
-      // would each mint a session and the second blind write would orphan the
-      // first. Whichever customer then uploaded through the losing tab would
-      // match ZERO rows in the gate and their PAID booking would sit at
-      // 'pending' forever, with nothing in the product to catch it.
-      const previous = rental.identity_verification_session_id;
-      const { data: stampedRows, error: stampError } = await supabase
-        .from('rentals')
-        .update({ identity_verification_session_id: session.sessionId, updated_at: nowIso })
-        .eq('id', rental.id)
-        .or(
-          previous
-            ? `identity_verification_session_id.is.null,identity_verification_session_id.eq.${previous}`
-            : 'identity_verification_session_id.is.null',
-        )
-        .select('id');
-
-      if (stampError) {
-        console.error('[documents-link] could not stamp session on rental:', stampError);
-      } else if (!stampedRows || stampedRows.length === 0) {
-        // We lost the swap. Adopt the winner's session and let ours be an
-        // orphaned identity_verifications row — unused rows are harmless, a
-        // rental pointing at the wrong session is not.
-        const { data: fresh } = await supabase
-          .from('rentals')
-          .select('identity_verification_session_id')
-          .eq('id', rental.id)
-          .maybeSingle();
-        const winner = (fresh?.identity_verification_session_id as string | null) ?? null;
-        const winnerSession = winner ? await findReusableSession(supabase, winner) : null;
-        if (winnerSession) {
-          console.log('[documents-link] lost the session swap, adopting', winner);
-          session = winnerSession;
-        } else {
-          // The winner's session is not usable either, so nothing is lost by
-          // forcing ours on. Without this the rental would point at a dead
-          // session and the gate could never fire.
-          console.warn('[documents-link] lost the swap to an unusable session, forcing ours on');
-          await supabase
-            .from('rentals')
-            .update({ identity_verification_session_id: session.sessionId, updated_at: nowIso })
-            .eq('id', rental.id);
-        }
-      }
-    }
 
     const { data: stamped } = await supabase
       .from('rentals')
@@ -546,7 +716,7 @@ Deno.serve(async (req) => {
     const documentsStatus =
       stamped && stamped.length > 0 ? 'pending' : (rental.documents_status ?? 'pending');
 
-    // ---- 7. Slide the link window ------------------------------------------
+    // ---- 4. Slide the link window ------------------------------------------
     // A customer who keeps engaging never loses their link. Best-effort: failing
     // to extend must not deny a customer who is standing in front of us.
     const { error: slideError } = await supabase
@@ -560,9 +730,15 @@ Deno.serve(async (req) => {
 
     return jsonResponse({
       ok: true,
-      sessionId: session.sessionId,
-      qrToken: session.qrToken,
-      expiresAt: session.expiresAt,
+      /*
+        The ONLY prefix this token may write to, and the one the submit action
+        pins every claimed path against. Handed to the browser rather than
+        derived there, because a browser-derived prefix is a browser-chosen
+        prefix.
+      */
+      uploadPrefix: insurancePrefix(rental.tenant_id, rental.id),
+      bucket: DOCUMENT_BUCKET,
+      expiresAt: new Date(Date.now() + DOCUMENTS_LINK_TTL_MS).toISOString(),
       rental: {
         rentalNumber: rental.rental_number,
         startDate: rental.start_date,

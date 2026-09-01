@@ -195,7 +195,7 @@ export function readPaymentReturn(): PaymentReturn | null {
  * What the caller is told, and it is deliberately NOT "the booking is done".
  *
  * `documentsToken` is the route to the step that comes AFTER the money: the
- * licence photos and the selfie, which an operator then approves. Null means
+ * insurance document, which an operator then approves. Null means
  * there is no link to offer — the endpoint has not been redeployed, or this is
  * the portal's balance flow, which has no documents step. A null token must
  * degrade to today's plain "Done", never to a link that 404s.
@@ -263,7 +263,7 @@ export interface BookingPaymentRequest extends BookingPaymentIntentRequest {
  * different EVENTS: a new booking being paid for, and an existing booking's
  * outstanding balance being settled from the customer portal. Telling someone
  * who just cleared a fuel charge on a rental they returned last week to go and
- * photograph their driving licence is not a cosmetic mismatch — it is a false
+ * send an insurance certificate is not a cosmetic mismatch — it is a false
  * statement about what just happened.
  *
  * Overrides are `Partial`, merged over `BOOKING_COPY`, so the portal flow is
@@ -271,8 +271,8 @@ export interface BookingPaymentRequest extends BookingPaymentIntentRequest {
  * actually overrides. Checked, not assumed: `PORTAL_COPY`
  * (`app/(portal)/portal/payments/_components/pay-balances.tsx:76-92`) sets
  * `succeededTitle`, `succeededBody`, `processingTitle` and `processingBody` of
- * its own, so the booking flow's new "upload your licence" wording below can
- * never reach a balance payment. The two `documents*` labels need no override:
+ * its own, so the booking flow's new "send your insurance document" wording below
+ * can never reach a balance payment. The two `documents*` labels need no override:
  * that branch is unreachable without a token, and only the booking endpoint
  * mints one.
  */
@@ -315,9 +315,9 @@ export interface PaymentPanelCopy {
 /**
  * ── THE COPY THAT IS NOT ALLOWED TO SAY "CONFIRMED" ──────────────────────────
  * Taking the money is no longer the end of the booking. After payment the
- * customer must send a photo of their driving licence and a selfie, those are
- * checked, and an OPERATOR then approves — and it is that approval, not this
- * screen, that sends the "booking confirmed" email (`notify-booking-approved`).
+ * customer must send a copy of their insurance document, it is reviewed, and an
+ * OPERATOR then approves — and it is that approval, not this screen, that sends
+ * the "booking confirmed" email (`notify-booking-approved`).
  *
  * So the previous succeededBody, "Your booking is confirmed. We have emailed the
  * details and what to bring on the day.", is now false twice over: nothing is
@@ -336,13 +336,13 @@ const BOOKING_COPY: PaymentPanelCopy = {
   cancelLabel: "Back to my booking",
   succeededTitle: "Payment received",
   succeededBody:
-    "One step left — we need a photo of your driving licence and a selfie to confirm this booking. We are sending the same link to your email as well.",
+    "One step left — we need a copy of your insurance document before we can confirm this booking. We are sending the same link to your email as well.",
   processingTitle: "Payment is being confirmed",
   processingBody:
-    "Your bank has not settled this yet. We will email you the moment it clears, with a link to upload your driving licence and a selfie — we confirm the booking once we have checked those.",
+    "Your bank has not settled this yet. We will email you the moment it clears, with a link to send your insurance document — we confirm the booking once we have reviewed it.",
   referencePrefix: "Booking",
   doneLabel: "Done",
-  documentsCtaLabel: "Upload my documents",
+  documentsCtaLabel: "Send my insurance document",
   documentsDeferLabel: "I'll do this later",
   mandate:
     "to store this card securely and to charge it later, without you present, " +

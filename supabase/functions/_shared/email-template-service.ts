@@ -710,17 +710,17 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
   // plate leaves no empty row rather than an orphaned label.
   // ---------------------------------------------------------------------------
   booking_documents_required: {
-    subject: 'Action needed: upload your documents for {{rental_number}} | {{company_name}}',
+    subject: 'Action needed: send your insurance document for {{rental_number}} | {{company_name}}',
     content: `<h1>We've Received Your Payment — One Step Left</h1>
 
 <p>Dear {{customer_name}},</p>
 
-<p>Thank you — your payment to <strong>{{company_name}}</strong> has been received. Before we can confirm your booking, we need you to upload your driving licence and a photo of yourself. It takes about two minutes on your phone.</p>
+<p>Thank you — your payment to <strong>{{company_name}}</strong> has been received. Before we can confirm your booking, we need a copy of your insurance document. It takes about a minute: a PDF or a photo is fine.</p>
 
 <p><strong>Your booking is not confirmed yet.</strong> We'll review your documents and email you a separate confirmation once your booking has been approved.</p>
 
 <p style="text-align:center; margin:28px 0;">
-  <a href="{{verification_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Upload My Documents</a>
+  <a href="{{verification_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Send My Insurance Document</a>
 </p>
 
 <p style="font-size:12px; color:#64748b; text-align:center;">If the button doesn't work, copy and paste this link into your browser:<br>{{verification_url}}</p>
@@ -760,9 +760,9 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <h2>What You'll Need</h2>
 
 <ul>
-  <li>Your valid driving licence — the front, clearly readable</li>
-  <li>A quick selfie, so we can match it to the licence</li>
-  <li>Good light, and no glare across the card</li>
+  <li>Your insurance certificate or declarations page — PDF, JPG or PNG</li>
+  <li>The page that shows your coverage limits and deductibles</li>
+  <li>You can send more than one file if your policy runs to several pages</li>
 </ul>
 
 <hr>
@@ -770,9 +770,8 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <h2>What Happens Next?</h2>
 
 <ol>
-  <li>You upload your documents using the link above</li>
-  <li>We check them — usually within minutes</li>
-  <li>Our team reviews and approves your booking</li>
+  <li>You send your insurance document using the link above</li>
+  <li>Our team reviews it along with your booking</li>
   <li>You receive your booking confirmation and rental agreement</li>
 </ol>
 
@@ -791,14 +790,16 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <strong>The {{company_name}} Team</strong></p>`,
   },
   booking_documents_received: {
-    subject: 'Documents received for {{rental_number}} | {{company_name}}',
-    content: `<h1>Thanks — We've Got Your Documents</h1>
+    subject: 'Insurance document received for {{rental_number}} | {{company_name}}',
+    content: `<h1>Thanks — We've Got Your Insurance Document</h1>
 
 <p>Dear {{customer_name}},</p>
 
-<p>Your documents have passed our checks. There is nothing further for you to do right now.</p>
+<p>Your insurance document has arrived safely and is now under review. There is nothing further for you to do right now.</p>
 
-<p>Your booking is now with the <strong>{{company_name}}</strong> team for final approval. We'll email you a confirmation as soon as it's approved, along with your rental agreement to sign.</p>
+<p>Your booking is with the <strong>{{company_name}}</strong> team, who will check it and confirm shortly. We'll email you a separate confirmation once your booking has been approved, along with your rental agreement to sign.</p>
+
+<p><strong>Your booking is not confirmed yet.</strong> If anything about your insurance needs a second look, we'll be in touch first.</p>
 
 <hr>
 
@@ -829,8 +830,8 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <h2>What Happens Next?</h2>
 
 <ol>
-  <li>Our team reviews your booking details and confirms availability</li>
-  <li>You receive a confirmation email once approved</li>
+  <li>Our team reviews your insurance document and confirms availability</li>
+  <li>You receive a confirmation email once your booking is approved</li>
   <li>A rental agreement is sent for your electronic signature</li>
   <li>Bring your driving licence with you on pickup day</li>
 </ol>
