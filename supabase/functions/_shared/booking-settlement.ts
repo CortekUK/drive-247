@@ -190,6 +190,27 @@ export async function settleBookingPayment(
     } else {
       console.log(`${logPrefix} Rental payment_status updated to fulfilled`);
     }
+
+    // Open the document gate. A SECOND, NARROWLY FILTERED statement rather than
+    // another field on the update above: the filter is what makes it safe to
+    // re-run. `.eq("documents_status", "not_required")` means a redelivery
+    // arriving after the customer has already uploaded — or after
+    // process-ai-verification wrote a verdict — cannot knock a booking that has
+    // progressed to 'pending'/'submitted'/'verified'/'rejected' back to the
+    // start. Same compare-and-swap shape booking-documents-link uses for the
+    // same column, and for the same reason.
+    //
+    // Inside the !isPortalPayment guard on purpose: an operator-created rental
+    // paid from the portal must NOT gain a customer document gate.
+    const { error: docsGateError } = await supabase
+      .from("rentals")
+      .update({ documents_status: "pending", updated_at: new Date().toISOString() })
+      .eq("id", rentalId)
+      .eq("documents_status", "not_required");
+
+    if (docsGateError) {
+      console.error(`${logPrefix} Failed to open document gate:`, docsGateError);
+    }
   }
 
   // ---- 2. Locate the pre-inserted payments row ---------------------------

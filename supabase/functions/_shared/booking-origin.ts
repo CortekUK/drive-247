@@ -16,6 +16,29 @@
 // which is why that function needs no change.
 
 /**
+ * Is this caller-supplied Origin one of our own booking hosts?
+ *
+ * Parsed with `URL` rather than matched with a regex: a suffix test on the raw
+ * string accepts `https://evil-drive-247.com` and `https://drive-247.com.evil`,
+ * both of which are attacker hosts. localhost stays out on purpose — a real
+ * customer's email must never land on a host only one operator can reach.
+ */
+function originIsOnBookingDomain(origin: string, baseDomain: string): boolean {
+  let host: string;
+  let protocol: string;
+  try {
+    const parsed = new URL(origin);
+    host = parsed.hostname.toLowerCase();
+    protocol = parsed.protocol;
+  } catch {
+    return false;
+  }
+  if (protocol !== 'https:') return false;
+  const base = baseDomain.toLowerCase();
+  return host === base || host.endsWith(`.${base}`);
+}
+
+/**
  * Resolve the public origin (scheme + host, no trailing slash) for a tenant's
  * booking site.
  *
@@ -24,9 +47,9 @@
  *                              and staging set this and nothing else matters.
  *   2. https://{slug}.{BOOKING_BASE_DOMAIN ?? drive-247.com}
  *                            — the always-correct multi-tenant subdomain.
- *   3. the request's Origin header, when present and NOT localhost — so an
- *      operator testing in dev stays in dev, while a real customer email never
- *      lands on a host only that operator can reach.
+ *   3. the request's Origin header, but ONLY when it is an https host under
+ *      that same booking domain — the header is caller-controlled and the
+ *      result is emailed to a customer with a bearer token in it.
  *   4. BOOKING_APP_URL       — legacy single-host env, last resort.
  *   then 'https://drive-247.com'.
  *
@@ -40,9 +63,18 @@ export function deriveBookingOrigin(tenantSlug: string | null, req?: Request): s
   const baseDomain = Deno.env.get('BOOKING_BASE_DOMAIN') || 'drive-247.com';
   if (tenantSlug) return `https://${tenantSlug}.${baseDomain}`;
 
+  // Step 3 reads an ATTACKER-CONTROLLED HEADER, so it is fenced to the booking
+  // domain. This origin ends up inside the documents link that is EMAILED to the
+  // customer (booking-documents-link's resend path builds upload_url from it and
+  // stores it in the outbox payload), and that link carries a bearer token for a
+  // paid booking. An unfenced `Origin: https://evil.example` would therefore mail
+  // the customer their own token on a host the attacker controls. Only hosts
+  // under the configured booking domain are accepted; anything else falls
+  // through to the env-configured default below.
   const callerOrigin = req?.headers.get('origin') ?? '';
-  const callerIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1|.*\.localhost)(:|\/|$)/i.test(callerOrigin);
-  if (callerOrigin && !callerIsLocal) return callerOrigin.replace(/\/+$/, '');
+  if (callerOrigin && originIsOnBookingDomain(callerOrigin, baseDomain)) {
+    return callerOrigin.replace(/\/+$/, '');
+  }
 
   return (Deno.env.get('BOOKING_APP_URL') || 'https://drive-247.com').replace(/\/+$/, '');
 }

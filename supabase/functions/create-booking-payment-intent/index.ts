@@ -291,7 +291,7 @@ serve(async (req) => {
     // ---- Deposit disclosure — same rules as the hosted page ---------------
     const { data: rentalRow } = await supabaseClient
       .from('rentals')
-      .select('id, rental_number, customer_id, deposit_amount_override, auto_extend_enabled')
+      .select('id, rental_number, customer_id, tenant_id, deposit_amount_override, auto_extend_enabled')
       .eq('id', rentalId)
       .single()
 
@@ -341,10 +341,28 @@ serve(async (req) => {
     // (v2/apps/web/src/lib/stripe/create-balance-payment-intent.ts:237) — neither
     // is a new booking, and handing either a documentsToken would make the
     // payment panel tell someone paying a fuel charge to upload a licence.
+    //
+    // AND the rental must actually belong to the tenant we resolved. `tenantId`
+    // can come from a caller-supplied `tenantSlug`/`tenantId` while `rentalId`
+    // is a separate caller-supplied field, and nothing above cross-checks them.
+    // The documents token is a BEARER credential for the rental, so issuing one
+    // under a tenant the rental does not belong to would hand tenant A a live
+    // link into tenant B's booking. Skipping the mint is safe: the token is
+    // optional to the payment, and booking-settlement mints/reads its own row.
     const isPortalInitiated = source === 'portal' || source === 'customer_portal'
+    const rentalTenantId = (rentalRow as { tenant_id?: string | null }).tenant_id ?? null
+    const tenantMatchesRental = !!rentalTenantId && rentalTenantId === tenantId
+    if (!isPortalInitiated && !tenantMatchesRental) {
+      console.error(
+        'Refusing to mint a documents link: rental tenant',
+        rentalTenantId,
+        'does not match resolved tenant',
+        tenantId,
+      )
+    }
     let documentsToken: string | null = null
     let documentsUrl: string | null = null
-    if (!isPortalInitiated) {
+    if (!isPortalInitiated && tenantMatchesRental) {
       try {
         // Same shape as generateQRToken in create-ai-verification-session/index.ts:35-39.
         const token = `${crypto.randomUUID()}-${Date.now().toString(36)}`
@@ -353,7 +371,11 @@ serve(async (req) => {
           .from('booking_document_links')
           .upsert(
             {
-              tenant_id: tenantId,
+              // The RENTAL's tenant, never the resolved-from-slug one. They are
+              // guaranteed equal by the guard above; taking it from the rental
+              // means the row cannot be mis-attributed even if that guard is
+              // ever relaxed.
+              tenant_id: rentalTenantId,
               rental_id: rentalId,
               token,
               expires_at: new Date(Date.now() + DOCUMENTS_LINK_TTL_MS).toISOString(),

@@ -187,7 +187,21 @@ async function dispatchDocumentsEmail(
   if (!data.customer_email) return { ok: false, error: 'no customer email on rental' };
 
   const { subject, html } = await renderEmail(supabase, row.tenant_id, row.email_key, data);
-  if (!subject && !html) return { ok: false, error: `template ${row.email_key} rendered empty` };
+
+  // AN EMPTY SUBJECT IS THE SIGNATURE OF AN UNKNOWN TEMPLATE KEY.
+  // getEmailTemplate fails SILENTLY on a key it does not know
+  // (email-template-service.ts:808-819): it returns { subject:'', content:'' }
+  // and only console.errors. renderEmail then wraps that empty content in the
+  // branded shell, so `html` is NOT empty and cannot be the check — every tenant
+  // without a custom row would receive a blank, branded email and the outbox
+  // would record it as 'sent'. Refuse instead, and park it as failed so the
+  // reason is visible in last_error rather than in a log nobody reads.
+  if (!subject.trim()) {
+    return {
+      ok: false,
+      error: `template '${row.email_key}' rendered an empty subject — the key is missing from DEFAULT_EMAIL_TEMPLATES`,
+    };
+  }
 
   const result = await sendResendEmail(
     {

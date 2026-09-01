@@ -431,6 +431,27 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq('identity_verification_session_id', sessionId)
+          // NEVER MOVE A BOOKING BACKWARDS OUT OF 'verified'. This function has
+          // no guard against reprocessing a session that is already
+          // status='completed' (the lookup at :119-123 filters on session_id
+          // only), and it is reachable from the browser with the public anon
+          // key. So a plain resubmit of the same sessionId — a customer
+          // re-tapping submit on a stale tab, any client-side retry — runs OCR
+          // and face match a second time, and a near-threshold or newly-blocked
+          // second verdict would flip documents_status 'verified' -> 'rejected'
+          // and null documents_completed_at on a booking the operator may
+          // already have approved and emailed a confirmation for.
+          // Applied as a FILTER on the UPDATE, not read-then-write, so it is
+          // atomic against booking-documents-link restamping at the same moment
+          // — the same pattern as RESTAMPABLE_DOCUMENT_STATUSES over there.
+          // A repeat 'verified' verdict is still a no-op-shaped rewrite, which
+          // is fine; only the regression is refused.
+          .in(
+            'documents_status',
+            docsStatus === 'verified'
+              ? ['not_required', 'pending', 'submitted', 'rejected', 'verified']
+              : ['not_required', 'pending', 'submitted', 'rejected'],
+          )
           .select('id, tenant_id');
         gated = gateResult.data;
         gateError = gateResult.error;
