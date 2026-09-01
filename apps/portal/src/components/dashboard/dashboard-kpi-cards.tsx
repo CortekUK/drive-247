@@ -122,6 +122,9 @@ export const DashboardKPICards = ({ data, isLoading, error, visibleCards }: Dash
   if (!visibleCards || visibleCards.has('rentals')) {
     cards.push('rentals');
   }
+  if (!visibleCards || visibleCards.has('fines')) {
+    cards.push('fines');
+  }
   if (!visibleCards || visibleCards.has('pl_dashboard')) {
     cards.push('pl_dashboard');
   }
@@ -193,6 +196,21 @@ export const DashboardKPICards = ({ data, isLoading, error, visibleCards }: Dash
           onClick={() => router.push('/rentals?status=Active')}
           isEmpty={data.activeRentals.count === 0}
           emptyMessage="No active rentals"
+        />
+      )}
+
+      {/* Open Fines */}
+      {(!visibleCards || visibleCards.has('fines')) && (
+        <KPICard
+          title="Open Fines"
+          value={data.finesOpen.count}
+          subtitle={data.finesOpen.count > 0 ? formatCurrency(data.finesOpen.amount, currencyCode) : undefined}
+
+          variant={data.finesOpen.count > 0 ? "warning" : "default"}
+          badge={data.finesOpen.dueSoonCount > 0 ? `${data.finesOpen.dueSoonCount} due soon` : undefined}
+          onClick={() => router.push('/fines?status=open')}
+          isEmpty={data.finesOpen.count === 0}
+          emptyMessage="No open fines"
         />
       )}
 

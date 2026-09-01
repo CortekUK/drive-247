@@ -19,7 +19,7 @@ interface UpdateRoleRequest {
 const ALLOWED_TAB_KEYS = [
   'vehicles', 'rentals', 'pending_bookings', 'availability',
   'customers', 'blocked_customers', 'messages',
-  'payments', 'invoices',
+  'payments', 'invoices', 'fines',
   'documents', 'reminders', 'reports', 'pl_dashboard',
   'cms', 'audit_logs', 'settings',
   'settings.general', 'settings.locations', 'settings.branding',

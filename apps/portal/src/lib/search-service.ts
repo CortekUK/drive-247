@@ -16,6 +16,7 @@ export interface SearchResults {
   customers: SearchResult[];
   vehicles: SearchResult[];
   rentals: SearchResult[];
+  fines: SearchResult[];
   payments: SearchResult[];
   plates: SearchResult[];
   insurance: SearchResult[];
@@ -78,6 +79,7 @@ export const searchService = {
         customers: [],
         vehicles: [],
         rentals: [],
+        fines: [],
         payments: [],
         plates: [],
         insurance: [],
@@ -92,6 +94,7 @@ export const searchService = {
       customers: [],
       vehicles: [],
       rentals: [],
+      fines: [],
       payments: [],
       plates: [],
       insurance: [],
@@ -186,6 +189,41 @@ export const searchService = {
           }));
 
         results.rentals = rankResults(rentalResults, query);
+      }
+
+      // Search fines (if not filtered out)
+      if (entityFilter === 'all' || entityFilter === 'fines') {
+        let fineQuery = supabase
+          .from("fines")
+          .select(`
+            id,
+            reference_no,
+            type,
+            amount,
+            status,
+            customers!fines_customer_id_fkey(name),
+            vehicles!fines_vehicle_id_fkey(reg)
+          `)
+          .or(`reference_no.ilike.${searchTerm},type.ilike.${searchTerm}`);
+
+        if (tenantId) {
+          fineQuery = fineQuery.eq("tenant_id", tenantId);
+        }
+
+        const { data: fines } = await fineQuery
+          .order('issue_date', { ascending: false })
+          .limit(10);
+
+        const fineResults = (fines || []).map(fine => ({
+          id: fine.id,
+          title: fine.reference_no || `${fine.type} Fine`,
+          subtitle: `${formatCurrency(fine.amount, currencyCode)} • ${(fine.vehicles as any)?.reg} • ${(fine.customers as any)?.name || 'Unknown'} • ${fine.status}`,
+          category: "Fines",
+          url: `/fines/${fine.id}`,
+          icon: "alert-triangle",
+        }));
+
+        results.fines = rankResults(fineResults, query);
       }
 
       // Search payments (if not filtered out)

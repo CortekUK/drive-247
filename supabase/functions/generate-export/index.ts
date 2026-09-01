@@ -202,6 +202,32 @@ serve(async (req) => {
         break;
       }
 
+      case 'fines': {
+        let query = supabaseClient
+          .from('view_fines_export')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('issue_date', filters.fromDate)
+          .lte('issue_date', filters.toDate);
+
+        if (filters.customers.length > 0) {
+          query = query.in('customer_id', filters.customers);
+        }
+        if (filters.vehicles.length > 0) {
+          query = query.in('vehicle_id', filters.vehicles);
+        }
+
+        const { data: finesData, error } = await query;
+        if (error) throw error;
+
+        data = finesData || [];
+        headers = [
+          'Reference No', 'Type', 'Customer', 'Vehicle Reg', 'Issue Date', 'Due Date',
+          `Amount (${currSym})`, `Remaining (${currSym})`, 'Liability', 'Status', 'Appeal Status', 'Notes'
+        ];
+        break;
+      }
+
       case 'aging': {
         let query = supabaseClient
           .from('view_aging_receivables')
@@ -319,6 +345,22 @@ serve(async (req) => {
               formatCsvValue(row.customer_phone)
             );
             break;
+          case 'fines':
+            csvRow.push(
+              formatCsvValue(row.reference_no),
+              formatCsvValue(row.type),
+              formatCsvValue(row.customer_name),
+              formatCsvValue(row.vehicle_reg),
+              formatCsvValue(formatDate(row.issue_date)),
+              formatCsvValue(formatDate(row.due_date)),
+              formatCurrency(row.amount),
+              formatCurrency(row.remaining_amount),
+              formatCsvValue(row.liability),
+              formatCsvValue(row.status),
+              formatCsvValue(row.appeal_status),
+              formatCsvValue(row.notes)
+            );
+            break;
           case 'aging':
             csvRow.push(
               formatCsvValue(row.customer_name),
@@ -425,6 +467,20 @@ serve(async (req) => {
             excelRow[`Running Balance (${currSym})`] = formatCurrency(row.running_balance);
             excelRow['Customer Email'] = row.customer_email || '';
             excelRow['Customer Phone'] = row.customer_phone || '';
+            break;
+          case 'fines':
+            excelRow['Reference No'] = row.reference_no || '';
+            excelRow['Type'] = row.type || '';
+            excelRow['Customer'] = row.customer_name || '';
+            excelRow['Vehicle Reg'] = row.vehicle_reg || '';
+            excelRow['Issue Date'] = formatDate(row.issue_date);
+            excelRow['Due Date'] = formatDate(row.due_date);
+            excelRow[`Amount (${currSym})`] = formatCurrency(row.amount);
+            excelRow[`Remaining (${currSym})`] = formatCurrency(row.remaining_amount);
+            excelRow['Liability'] = row.liability || '';
+            excelRow['Status'] = row.status || '';
+            excelRow['Appeal Status'] = row.appeal_status || '';
+            excelRow['Notes'] = row.notes || '';
             break;
           case 'aging':
             excelRow['Customer'] = row.customer_name || '';

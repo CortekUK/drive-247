@@ -69,6 +69,19 @@ export const PAYMENT_TYPES = {
 export type PaymentType = typeof PAYMENT_TYPES[keyof typeof PAYMENT_TYPES];
 
 // ============================================
+// FINE STATUS CONSTANTS
+// ============================================
+
+export const FINE_STATUS = {
+  PENDING: "Pending",
+  PAID: "Paid",
+  OVERDUE: "Overdue",
+  DISPUTED: "Disputed",
+} as const;
+
+export type FineStatus = typeof FINE_STATUS[keyof typeof FINE_STATUS];
+
+// ============================================
 // USER ROLE CONSTANTS
 // ============================================
 
@@ -392,6 +405,7 @@ export const ROUTES = {
   VEHICLES: "/vehicles",
   RENTALS: "/rentals",
   PAYMENTS: "/payments",
+  FINES: "/fines",
   PLATES: "/plates",
   INSURANCE: "/insurance",
   INVOICES: "/invoices",

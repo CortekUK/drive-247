@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, Briefcase, ExternalLink, ImageIcon, Pencil, Check, X, RefreshCw, Shield, Scale } from "lucide-react";
+import { ArrowLeft, CreditCard, FileText, Plus, Upload, Car, AlertTriangle, Eye, Download, Edit, Trash2, User, Mail, Phone, CalendarPlus, DollarSign, FolderOpen, Receipt, CreditCard as PaymentIcon, Ban, CheckCircle, Users, Briefcase, ExternalLink, ImageIcon, Pencil, Check, X, RefreshCw, Shield, Scale } from "lucide-react";
 import { MetricItem, MetricDivider } from "@/components/vehicles/metric-card";
 import { useCustomerBlockingActions } from "@/hooks/use-customer-blocking";
 import { TruncatedCell } from "@/components/shared/data-display/truncated-cell";
@@ -27,12 +27,14 @@ import { useCustomerBalanceWithStatus } from "@/hooks/use-customer-balance";
 import { useCustomerActiveRentals } from "@/hooks/use-customer-active-rentals";
 import { useCustomerRentals } from "@/hooks/use-customer-rentals";
 import { useCustomerPayments, useCustomerPaymentStats } from "@/hooks/use-customer-payments";
+import { useCustomerFines, useCustomerFineStats } from "@/hooks/use-customer-fines";
 import { useCustomerVehicleHistory } from "@/hooks/use-customer-vehicle-history";
 import AddCustomerDocumentDialog from "@/components/customers/add-customer-document-dialog";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
 import { EditBalanceDialog } from "@/components/customers/edit-balance-dialog";
 import { CollectPaymentDialog } from "@/components/customers/collect-payment-dialog";
 import { AllocatePaymentDialog } from "@/components/customers/allocate-payment-dialog";
+import { AddFineDialog } from "@/components/fines/add-fine-dialog";
 import { CustomerFormModal } from "@/components/customers/customer-form-modal";
 import DocumentStatusBadge from "@/components/customers/document-status-badge";
 import { DocumentSigningStatusBadge } from "@/components/customers/document-signing-status-badge";
@@ -40,6 +42,7 @@ import { NextOfKinCard } from "@/components/customers/next-of-kin-card";
 import { PaymentStatusBadge } from "@/components/customers/payment-status-badge";
 import { PaymentLinksPanel } from "@/components/payments/payment-links-panel";
 import { useCustomerPaymentLinks } from "@/hooks/use-payment-links";
+import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -98,6 +101,7 @@ const CustomerDetail = () => {
   const [collectDialogOpen, setCollectDialogOpen] = useState(false);
   const [editBalanceOpen, setEditBalanceOpen] = useState(false);
   const [allocatePayment, setAllocatePayment] = useState<{ id: string; amount: number; remaining_amount: number } | null>(null);
+  const [fineDialogOpen, setFineDialogOpen] = useState(false);
   const [editCustomerOpen, setEditCustomerOpen] = useState(false);
   const [blockDialogOpen, setBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState("");
@@ -116,6 +120,7 @@ const CustomerDetail = () => {
   // Pagination state per tab
   const [rentalsPage, setRentalsPage] = useState(1);
   const [paymentsPage, setPaymentsPage] = useState(1);
+  const [finesPage, setFinesPage] = useState(1);
   const [statementOpen, setStatementOpen] = useState(false);
   const PAGE_SIZE = 10;
 
@@ -303,6 +308,8 @@ const CustomerDetail = () => {
   const { data: payments } = useCustomerPayments(id!);
   const { data: customerPaymentLinks, isLoading: customerPaymentLinksLoading } = useCustomerPaymentLinks(id!);
   const { data: paymentStats } = useCustomerPaymentStats(id!);
+  const { data: fines } = useCustomerFines(id!);
+  const { data: fineStats } = useCustomerFineStats(id!);
   const { data: vehicleHistory } = useCustomerVehicleHistory(id!);
   const { data: documents } = useCustomerDocuments(id!);
   const deleteDocument = useDeleteCustomerDocument();
@@ -477,6 +484,10 @@ const CustomerDetail = () => {
                 <Button size="sm" variant="outline" onClick={() => setEditBalanceOpen(true)}>
                   <Scale className="h-4 w-4 mr-1" />
                   Edit Balance
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setFineDialogOpen(true)}>
+                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  Fine
                 </Button>
               </>
             ) : (
@@ -750,6 +761,9 @@ const CustomerDetail = () => {
               </TabsTrigger>
               <TabsTrigger value="payments" variant="evenly-spaced" className="min-w-0">
                 Payments
+              </TabsTrigger>
+              <TabsTrigger value="fines" variant="evenly-spaced" className="min-w-0">
+                Fines
               </TabsTrigger>
               <TabsTrigger value="vehicles" variant="evenly-spaced" className="min-w-0">
                 Vehicle History
@@ -1088,6 +1102,111 @@ const CustomerDetail = () => {
           </Card>
         </TabsContent>
 
+        <TabsContent value="fines" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Fines</CardTitle>
+              <CardDescription>All fines associated with this customer</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {fines && fines.length > 0 ? (
+                <>
+                <div className="rounded-md border max-h-[500px] overflow-auto relative">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="font-semibold">Type</TableHead>
+                        <TableHead className="font-semibold">Reference</TableHead>
+                        <TableHead className="font-semibold">Vehicle</TableHead>
+                        <TableHead className="font-semibold text-right">Amount</TableHead>
+                        <TableHead className="font-semibold">Issue Date</TableHead>
+                        <TableHead className="font-semibold">Due Date</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
+                        <TableHead className="font-semibold">Liability</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fines.slice((finesPage - 1) * PAGE_SIZE, finesPage * PAGE_SIZE).map((fine) => (
+                        <TableRow key={fine.id} className="hover:bg-muted/50 transition-colors">
+                          <TableCell className="font-medium">{fine.type === "PCN" ? "Parking Citation" : fine.type}</TableCell>
+                          <TableCell>
+                            {fine.reference_no ? (
+                              <TruncatedCell
+                                content={fine.reference_no}
+                                maxLength={12}
+                                className="font-mono text-sm"
+                              />
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-semibold text-foreground">{fine.vehicle.reg}</div>
+                              <TruncatedCell
+                                content={`${fine.vehicle.make} ${fine.vehicle.model}`}
+                                maxLength={20}
+                                className="text-sm text-muted-foreground"
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(fine.amount, currencyCode)}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {format(parseLocalDate(fine.issue_date), "MM/dd/yyyy")}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {format(parseLocalDate(fine.due_date), "MM/dd/yyyy")}
+                          </TableCell>
+                          <TableCell>
+                            <FineStatusBadge
+                              status={fine.status}
+                              dueDate={fine.due_date}
+                              remainingAmount={fine.amount}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={fine.liability === 'Individual' || fine.liability === 'Customer' ? 'default' : 'secondary'}>
+                              {fine.liability === "Customer" ? "Individual" : fine.liability}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {fines.length > PAGE_SIZE && (
+                  <div className="flex items-center justify-between pt-4">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(finesPage - 1) * PAGE_SIZE + 1}-{Math.min(finesPage * PAGE_SIZE, fines.length)} of {fines.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setFinesPage(p => Math.max(1, p - 1))} disabled={finesPage === 1}>
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        Page {finesPage} of {Math.ceil(fines.length / PAGE_SIZE)}
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setFinesPage(p => Math.min(Math.ceil(fines.length / PAGE_SIZE), p + 1))} disabled={finesPage >= Math.ceil(fines.length / PAGE_SIZE)}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
+              ) : (
+                <EmptyState
+                  icon={AlertTriangle}
+                  title="No fines found"
+                  description="This customer doesn't have any fines associated with their account."
+                  actionLabel="Upload Fine"
+                  onAction={() => setFineDialogOpen(true)}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="vehicles" className="mt-6">
           <Card>
@@ -1485,6 +1604,12 @@ const CustomerDetail = () => {
         onOpenChange={(v) => { if (!v) setAllocatePayment(null); }}
         payment={allocatePayment}
         customerId={id!}
+      />
+
+      <AddFineDialog
+        open={fineDialogOpen}
+        onOpenChange={setFineDialogOpen}
+        preselectedCustomerId={id}
       />
 
       <CustomerStatementDialog

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { format, subDays } from 'date-fns';
-import { BarChart3, Download, FileText, TrendingUp, Users, Car, CreditCard, Clock, Info } from 'lucide-react';
+import { BarChart3, Download, FileText, TrendingUp, Users, Car, CreditCard, Clock, AlertTriangle, Info } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +34,7 @@ const REPORT_COLORS: Record<string, string> = {
   Unapplied: '#f59e0b',
   Payments: '#6366f1',
   Rentals: '#22c55e',
+  Fines: '#dc2626',
   Aging: '#f59e0b',
 };
 
@@ -232,6 +233,23 @@ const Reports = () => {
 
       const { data: aging } = await agingQuery;
 
+      // Get fines data with filters
+      let finesQuery: any = (supabase as any)
+        .from('view_fines_export')
+        .select('fine_id, amount, remaining_amount, customer_id, vehicle_id')
+        .eq('tenant_id', tenantId)
+        .gte('issue_date', fromDate)
+        .lte('issue_date', toDate);
+
+      if (filters.customers.length > 0) {
+        finesQuery = finesQuery.in('customer_id', filters.customers);
+      }
+      if (filters.vehicles.length > 0) {
+        finesQuery = finesQuery.in('vehicle_id', filters.vehicles);
+      }
+
+      const { data: fines } = await finesQuery;
+
       return {
         payments: {
           count: payments?.length || 0,
@@ -247,6 +265,10 @@ const Reports = () => {
         rentals: {
           count: rentals?.length || 0,
           totalBalance: rentals?.reduce((sum, r) => sum + Number(r.balance), 0) || 0
+        },
+        fines: {
+          count: fines?.length || 0,
+          totalOutstanding: fines?.reduce((sum, f) => sum + Number(f.remaining_amount), 0) || 0
         },
         aging: {
           count: aging?.length || 0,
@@ -294,6 +316,15 @@ const Reports = () => {
       metadata: `Outstanding: ${formatCurrency(reportStats?.rentals.totalBalance || 0, tenant?.currency_code || 'USD')}`
     },
     {
+      id: 'fines',
+      title: 'Fines Export',
+      description: 'Comprehensive fine data with status (CSV/XLSX)',
+      icon: AlertTriangle,
+      value: `${reportStats?.fines?.count || 0}`,
+      subtitle: 'Total fines',
+      metadata: `Outstanding: ${formatCurrency(reportStats?.fines?.totalOutstanding || 0, tenant?.currency_code || 'USD')}`
+    },
+    {
       id: 'aging',
       title: 'Aging Receivables',
       description: 'Age buckets 0-30/31-60/61-90/90+ days (CSV/XLSX)',
@@ -326,6 +357,7 @@ const Reports = () => {
     if (!reportStats) return [];
     return [
       { name: 'Rental Balance', value: reportStats.rentals.totalBalance, fill: REPORT_COLORS.Rentals },
+      { name: 'Fines Outstanding', value: reportStats.fines.totalOutstanding, fill: REPORT_COLORS.Fines },
       { name: 'Aging Due', value: reportStats.aging.totalDue, fill: REPORT_COLORS.Aging },
     ].filter((d) => d.value > 0);
   }, [reportStats]);

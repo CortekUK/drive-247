@@ -29,6 +29,7 @@ const CATEGORY_BY_TYPE: Record<string, string> = {
   payment_received: "payments",
   payment_failed: "payments",
   refund_processed: "payments",
+  fine_new: "fines",
   signing_completed: "verification",
   identity_verified: "verification",
   booking_approved: "bookings",

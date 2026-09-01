@@ -6,6 +6,7 @@ export interface DashboardKPIs {
   overdue: { count: number; amount: number };
   dueToday: { count: number; amount: number };
   activeRentals: { count: number };
+  finesOpen: { count: number; amount: number; dueSoonCount: number };
   monthlyRevenue: { amount: number };
   fleetUtilization: {
     total: number;

@@ -142,6 +142,7 @@ export default function DashboardPage() {
     if (canView('payments')) cards.add('payments');
     if (canView('vehicles')) cards.add('vehicles');
     if (canView('rentals')) cards.add('rentals');
+    if (canView('fines')) cards.add('fines');
     if (canView('pl_dashboard')) cards.add('pl_dashboard');
     return cards;
   }, [canView]);

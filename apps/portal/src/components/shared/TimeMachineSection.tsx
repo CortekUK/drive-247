@@ -386,6 +386,7 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
           ["rental-extension-totals"],
           ["rental-payments"],
           ["rental-payments-total"],
+          ["rental-fines"],
           ["rental-payment"],
           ["payg-invoices"],
           ["installment-plan"],

@@ -73,6 +73,8 @@ export const DEV_FILL_CUSTOMER_FORM_EVENT = 'dev-fill-customer-form'
 export const DEV_FILL_RENTAL_FORM_EVENT = 'dev-fill-rental-form'
 // Custom event for filling vehicle form
 export const DEV_FILL_VEHICLE_FORM_EVENT = 'dev-fill-vehicle-form'
+// Custom event for filling fine form
+export const DEV_FILL_FINE_FORM_EVENT = 'dev-fill-fine-form'
 // Custom event for filling payment form
 export const DEV_FILL_PAYMENT_FORM_EVENT = 'dev-fill-payment-form'
 
@@ -95,6 +97,7 @@ export default function DevPanel() {
     const [expandedSection, setExpandedSection] = useState<string | null>(null)
     const [isLoadingRental, setIsLoadingRental] = useState(false)
     const [isLoadingVehicle, setIsLoadingVehicle] = useState(false)
+    const [isLoadingFine, setIsLoadingFine] = useState(false)
     const [isLoadingPayment, setIsLoadingPayment] = useState(false)
     const [isLoadingCustomer, setIsLoadingCustomer] = useState(false)
     const router = useRouter()
@@ -283,6 +286,152 @@ export default function DevPanel() {
             toast.error(`Vehicle creation failed: ${error.message}`)
         } finally {
             setIsLoadingVehicle(false)
+        }
+    }
+
+    const createFine = async () => {
+        setIsLoadingFine(true)
+        console.log('DEV: Creating fine and filling form...')
+
+        try {
+            const tenantId = tenant?.id
+            if (!tenantId) {
+                toast.error('Tenant not found. Please wait for page to fully load.')
+                return
+            }
+
+            // First try to find the specific mock customer by email
+            let customer: { id: string; name: string } | null = null
+            const { data: mockCustomer } = await supabase
+                .from('customers')
+                .select('id, name')
+                .eq('tenant_id', tenantId)
+                .eq('email', MOCK_DATA.email) // ilyasghulam35@gmail.com
+                .eq('status', 'Active')
+                .limit(1)
+                .single()
+
+            if (mockCustomer) {
+                customer = mockCustomer
+                console.log('DEV: Found mock customer:', customer.name)
+            } else {
+                // Fallback: Fetch first available customer
+                const { data: customers, error: customerError } = await supabase
+                    .from('customers')
+                    .select('id, name')
+                    .eq('tenant_id', tenantId)
+                    .eq('status', 'Active')
+                    .limit(1)
+
+                if (customerError || !customers?.length) {
+                    toast.error('No active customers found. Create a customer first.')
+                    return
+                }
+                customer = customers[0]
+                console.log('DEV: Using fallback customer:', customer.name)
+            }
+
+            // Fetch first available vehicle
+            const { data: vehicles, error: vehicleError } = await supabase
+                .from('vehicles')
+                .select('id, reg, make, model')
+                .eq('tenant_id', tenantId)
+                .limit(1)
+
+            if (vehicleError || !vehicles?.length) {
+                toast.error('No vehicles found. Create a vehicle first.')
+                return
+            }
+
+            const vehicle = vehicles[0]
+
+            // Generate random fine data
+            const fineTypes = ['PCN', 'Speeding', 'Other'] as const
+            const randomType = fineTypes[Math.floor(Math.random() * fineTypes.length)]
+            const randomAmount = 50 + Math.floor(Math.random() * 200) // $50-$250
+            const randomRef = `DEV-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+            const issueDate = new Date()
+            const dueDate = new Date(issueDate.getTime() + 28 * 24 * 60 * 60 * 1000) // +28 days
+            const notes = `Dev test fine - auto-generated for ${vehicle.make} ${vehicle.model}`
+
+            // Prepare fine data for both insert and form fill
+            const fineData = {
+                type: randomType,
+                vehicle_id: vehicle.id,
+                customer_id: customer.id,
+                reference_no: randomRef,
+                issue_date: issueDate,
+                due_date: dueDate,
+                amount: randomAmount,
+                liability: 'Customer' as const,
+                notes: notes,
+                // Extra data for form display
+                customer_name: customer.name,
+                vehicle_reg: vehicle.reg,
+                vehicle_make: vehicle.make,
+                vehicle_model: vehicle.model,
+            }
+
+            // Insert fine directly into Supabase
+            const { data: insertedFine, error } = await supabase
+                .from('fines')
+                .insert({
+                    type: fineData.type,
+                    vehicle_id: fineData.vehicle_id,
+                    customer_id: fineData.customer_id,
+                    reference_no: fineData.reference_no,
+                    issue_date: issueDate.toISOString().split('T')[0],
+                    due_date: dueDate.toISOString().split('T')[0],
+                    amount: fineData.amount,
+                    liability: fineData.liability,
+                    notes: fineData.notes,
+                    status: 'Open',
+                    tenant_id: tenantId,
+                })
+                .select()
+                .single()
+
+            if (error) {
+                console.error('DEV: Fine insert error:', error)
+                toast.error(`Failed to create fine: ${error.message}`)
+                return
+            }
+
+            console.log('DEV: Fine created:', insertedFine)
+
+            // Navigate to fines/new page first if not there, then dispatch event
+            if (pathname === '/fines/new') {
+                // Already on fines/new page, dispatch event to fill form
+                const event = new CustomEvent(DEV_FILL_FINE_FORM_EVENT, {
+                    detail: fineData
+                })
+                window.dispatchEvent(event)
+            } else {
+                // Navigate to fines/new and dispatch event after navigation
+                router.push('/fines/new')
+                setTimeout(() => {
+                    const event = new CustomEvent(DEV_FILL_FINE_FORM_EVENT, {
+                        detail: fineData
+                    })
+                    window.dispatchEvent(event)
+                }, 1000)
+            }
+
+            toast.success(`Fine created: ${randomType} $${randomAmount} for ${customer.name}`)
+
+            // Invalidate fine queries to refresh the list
+            await queryClient.invalidateQueries({
+                predicate: (query) => {
+                    const key = query.queryKey[0]
+                    return key === 'fines-list' || key === 'fines-kpis' || key === 'fines-enhanced' || key === 'customer-fines'
+                }
+            })
+
+        } catch (error: any) {
+            console.error('DEV: Fine creation error:', error)
+            toast.error(`Fine creation failed: ${error.message}`)
+        } finally {
+            setIsLoadingFine(false)
         }
     }
 
@@ -788,6 +937,54 @@ export default function DevPanel() {
                             >
                                 <Car className="w-3 h-3 mr-1" />
                                 Go to Vehicles
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Add Fine Section */}
+                <div className="border border-border rounded-lg">
+                    <button
+                        onClick={() => toggleSection('fine')}
+                        className="w-full flex items-center justify-between p-2 hover:bg-muted/50 transition-colors"
+                    >
+                        <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-orange-500" />
+                            <span className="text-sm font-medium">Add Fine</span>
+                        </div>
+                        {expandedSection === 'fine' ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+                    {expandedSection === 'fine' && (
+                        <div className="px-2 pb-2 space-y-2">
+                            <div className="text-xs text-muted-foreground px-2">
+                                <p>Generates random:</p>
+                                <p>• Type (PCN/Speeding/Other)</p>
+                                <p>• Amount ($50-$250)</p>
+                                <p>• Reference (DEV-XXXX)</p>
+                                <p>• Uses first customer/vehicle</p>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs h-7"
+                                onClick={createFine}
+                                disabled={isLoadingFine}
+                            >
+                                {isLoadingFine ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                ) : (
+                                    <Zap className="w-3 h-3 mr-1 text-orange-500" />
+                                )}
+                                {isLoadingFine ? 'Creating...' : 'Create Fine'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full text-xs h-7"
+                                onClick={() => router.push('/fines')}
+                            >
+                                <AlertTriangle className="w-3 h-3 mr-1" />
+                                Go to Fines
                             </Button>
                         </div>
                     )}
