@@ -284,31 +284,6 @@ export function getTenantTestimonials(tenantId: string) {
 }
 
 /**
- * Create a contact request for a tenant
- * @param tenantId - The tenant ID
- * @param contactData - The contact form data
- */
-export async function createTenantContactRequest(
-  tenantId: string,
-  contactData: {
-    name: string;
-    email: string;
-    phone?: string;
-    message: string;
-  }
-) {
-  return supabase
-    .from('contact_requests')
-    .insert({
-      ...contactData,
-      tenant_id: tenantId,
-      status: 'pending',
-    })
-    .select()
-    .single();
-}
-
-/**
  * Generic tenant-scoped query builder
  * @param tableName - The name of the table
  * @param tenantId - The tenant ID
