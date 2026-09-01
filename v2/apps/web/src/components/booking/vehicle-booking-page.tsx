@@ -675,11 +675,20 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
    * the delivery question moot, and an unpriced quote makes all of it moot.
    */
   const hardBlockReason = useMemo<string | null>(() => {
-    if (bookingCompleted) {
-      // The rental is paid for. Pressing Continue again would try to book the
-      // same car for the same dates a second time and be refused by the overlap
-      // trigger — a confusing dead end after a successful payment.
-      return "This booking is confirmed. Start a new booking to reserve another vehicle.";
+    if (paidHandoff !== null) {
+      /*
+        The rental is PAID FOR — which is not the same as confirmed, and this
+        line used to say it was. Pressing Continue again would try to book the
+        same car for the same dates a second time and be refused by the overlap
+        trigger, so the button stays dead either way; the only question is
+        whether the sentence beside it is true. It now names the real state, and
+        which of the two sentences depends on whether there is a link to send
+        them to: promising an upload step we cannot route to would be the same
+        mistake in the other direction.
+      */
+      return paidHandoff.documentsToken !== null
+        ? "Payment for this booking has been taken. Your documents are still outstanding — upload them to finish confirming it."
+        : "Payment for this booking has been taken. We have emailed you a link to upload your documents, which is the last step before we confirm it.";
     }
     if (creatingBooking) {
       return null;
@@ -698,7 +707,7 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
     }
     return null;
   }, [
-    bookingCompleted,
+    paidHandoff,
     creatingBooking,
     vehicle?.isPaused,
     pricingRulesDegraded,
