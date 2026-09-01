@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -10813,8 +10838,10 @@ export type Database = {
           rejection_reason: string | null
           remaining_amount: number | null
           rental_id: string | null
+          square_idempotency_key: string | null
           square_order_id: string | null
           square_payment_id: string | null
+          square_payment_link_id: string | null
           square_refund_id: string | null
           status: string | null
           stripe_checkout_session_id: string | null
@@ -10855,8 +10882,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -10897,8 +10926,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -17340,7 +17371,6 @@ export type Database = {
           integration_tesla_fleet: boolean | null
           integration_twilio_sms: boolean | null
           integration_twilio_whatsapp: boolean | null
-          integration_veriff: boolean | null
           integration_whatsapp: boolean | null
           integration_xero: boolean
           integration_zoho_books: boolean
@@ -17399,6 +17429,7 @@ export type Database = {
           payment_mode: string | null
           payment_model: string
           payment_provider: string
+          payment_provider_locked_at: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
           pickup_area_radius_km: number | null
@@ -17607,7 +17638,6 @@ export type Database = {
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
-          integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
           integration_xero?: boolean
           integration_zoho_books?: boolean
@@ -17666,6 +17696,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -17874,7 +17905,6 @@ export type Database = {
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
-          integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
           integration_xero?: boolean
           integration_zoho_books?: boolean
@@ -17933,6 +17963,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -21013,7 +21044,10 @@ export type Database = {
           company_name: string | null
           issue_count: number | null
           overall_ready: boolean | null
+          payment_provider: string | null
+          payments_ready: boolean | null
           slug: string | null
+          square_ready: boolean | null
           status: string | null
           stripe_account_status: string | null
           stripe_mode: string | null
@@ -22866,6 +22900,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],

@@ -50,7 +50,6 @@ import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalD
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
 import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
-import { AccountingSyncStripe } from "@/components/rentals/accounting-sync-stripe";
 import { InstallmentSection } from "@/components/installments/InstallmentSection";
 import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
@@ -6723,15 +6722,9 @@ const RentalDetail = () => {
                     </Badge>
                   )}
                   {/* Provider Badge */}
-                  {identityVerification.verification_provider === 'ai' ? (
-                    <Badge variant="outline" className="border-purple-500 text-purple-600">
-                      AI Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">
-                      Veriff
-                    </Badge>
-                  )}
+                  <Badge variant="outline" className="border-purple-500 text-purple-600">
+                    AI Verified
+                  </Badge>
                 </div>
                 {identityVerification.verification_completed_at && (
                   <span className="text-sm text-muted-foreground">
@@ -8055,7 +8048,6 @@ const RentalDetail = () => {
 
       {/* Finance Sync — per-rental sync stripe (Sprint 3). Renders nothing when
           no provider connected or no events for this rental yet. */}
-      <AccountingSyncStripe rentalId={id} />
     </div>
   );
 };
