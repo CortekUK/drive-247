@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Search, X, Inbox, Wallet, AlertTriangle } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -612,27 +612,6 @@ export function AppSidebar() {
                     {collapsed && <AnimatedBlocks className="h-4 w-4 shrink-0" />}
                     <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
                       Dashboard
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Welcome pack. Deliberately NOT in ROUTE_TO_TAB: unmapped
-                  routes are allowed for every role, so a `viewer` or a
-                  restricted `manager` keeps it. They hit the same confusion
-                  as a head admin — gating the guide would silence exactly
-                  the people most likely to need it. */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/welcome")}
-                  tooltip={collapsed ? "Welcome Pack" : undefined}
-                  className="h-8 transition-all duration-200 ease-in-out"
-                >
-                  <Link href="/welcome" onClick={closeMobileOnNav} className="flex items-center gap-2">
-                    {collapsed && <BookOpen className="h-4 w-4 shrink-0" />}
-                    <span className={`text-[13px] transition-all duration-200 ease-in-out ${collapsed ? "sr-only opacity-0 w-0" : "opacity-100"}`}>
-                      Welcome Pack
                     </span>
                   </Link>
                 </SidebarMenuButton>

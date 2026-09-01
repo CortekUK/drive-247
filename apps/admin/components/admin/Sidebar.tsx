@@ -30,7 +30,6 @@ import {
   TrendingUp,
   Activity,
   HeartPulse,
-  BookOpen,
 } from 'lucide-react';
 
 interface NavItem {
@@ -91,7 +90,6 @@ function useNavigation() {
           badgeCount: bonzahPendingCount,
         },
         { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
-        { name: 'Welcome Pack', href: '/admin/welcome-pack', icon: BookOpen },
         { name: 'Feedbacks', href: '/admin/feedbacks', icon: MessageSquareText },
         { name: 'Audit Logs', href: '/admin/audit-logs', icon: ScrollText },
         { name: 'OpenAI Usage', href: '/admin/openai-usage', icon: Sparkles },
