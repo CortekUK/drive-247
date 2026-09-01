@@ -82,9 +82,6 @@ import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
 import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
-import { TeslaLogo } from "@/components/icons/tesla-logo";
-import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
-import { SuperchargerChargesDialog } from "@/components/rentals/supercharger-charges-dialog";
 
 // Parse a Postgres DATE string ("YYYY-MM-DD") as local midnight. `new Date("2026-05-20")`
 // is parsed as UTC midnight, which renders as the previous day in any timezone
@@ -362,7 +359,7 @@ interface Rental {
   cancellation_requested?: boolean;
   customer_id?: string;
   customers: { id: string; name: string; email?: string; phone?: string | null };
-  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null; daily_rent?: number | null; weekly_rent?: number | null; monthly_rent?: number | null; tesla_fleet_enabled?: boolean };
+  vehicles: { id: string; reg: string; make: string; model: string; status?: string; lockbox_code?: string | null; lockbox_instructions?: string | null; daily_rent?: number | null; weekly_rent?: number | null; monthly_rent?: number | null };
   // Location fields
   pickup_location?: string | null;
   pickup_location_id?: string | null;
@@ -645,10 +642,6 @@ const RentalDetail = () => {
   const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
   const { plan: installmentPlan, hasInstallmentPlan, retryPayment, isRetrying, markPaid, isMarkingPaid } = useInstallmentPlan(id);
 
-  // Tesla Supercharger state
-  const [showSuperchargerDialog, setShowSuperchargerDialog] = useState(false);
-  const [superchargerPaymentCharge, setSuperchargerPaymentCharge] = useState<any>(null);
-  const teslaCharges = useTeslaSuperchargerCharges(id);
   const { locations: allLocations } = usePickupLocations();
 
   const { data: rental, isLoading, error: rentalError } = useQuery({
@@ -661,7 +654,7 @@ const RentalDetail = () => {
         .select(`
           *,
           customers!rentals_customer_id_fkey(id, name, email, phone),
-          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions, daily_rent, weekly_rent, monthly_rent, tesla_fleet_enabled)
+          vehicles!rentals_vehicle_id_fkey(id, reg, make, model, status, lockbox_code, lockbox_instructions, daily_rent, weekly_rent, monthly_rent)
         `)
         .eq("id", id)
         .eq("tenant_id", tenant.id)
@@ -2667,21 +2660,6 @@ const RentalDetail = () => {
                   )}
                 </Badge>
               )}
-              {/* Tesla Fleet indicator */}
-              {rental.vehicles?.tesla_fleet_enabled && (
-                <Badge
-                  variant="outline"
-                  className="bg-red-500/10 text-red-600 border-red-500/30 gap-1"
-                >
-                  <TeslaLogo size={12} className="text-red-500" />
-                  Supercharger Tracking
-                  {teslaCharges.chargeCount > 0 && (
-                    <span className="ml-1 text-xs font-normal">
-                      · {teslaCharges.chargeCount} charge{teslaCharges.chargeCount !== 1 ? 's' : ''} (${teslaCharges.totalAmount.toFixed(2)})
-                    </span>
-                  )}
-                </Badge>
-              )}
             </div>
             <div className="flex flex-wrap gap-2 mt-1">
               <Badge
@@ -3715,20 +3693,6 @@ const RentalDetail = () => {
           });
         }
 
-        // Add Supercharger row if charges exist or vehicle is Tesla Fleet enabled
-        if (teslaCharges.chargeCount > 0) {
-          rows.push({
-            label: 'Supercharger',
-            category: 'Supercharger',
-            amount: teslaCharges.totalAmount,
-            detail: `${teslaCharges.chargeCount} session${teslaCharges.chargeCount !== 1 ? 's' : ''}${teslaCharges.pendingCount > 0 ? ` · ${teslaCharges.pendingCount} pending` : ''}`,
-            icon: TeslaLogo,
-            color: 'text-red-500',
-            bg: 'bg-red-500/10',
-            onClick: () => setShowSuperchargerDialog(true),
-          });
-        }
-
         // PAYG rentals: the accrued categories (Rental / Tax / Service Fee) live in the
         // PaygSection above. Strip them from this fixed-charges breakdown so the card
         // only shows one-off upfront items (Insurance, Delivery, Fines, etc.).
@@ -3890,10 +3854,6 @@ const RentalDetail = () => {
                               <img src="/bonzah-logo.svg" alt="Bonzah" className="h-5 w-auto dark:hidden" />
                               <img src="/bonzah-logo-dark.svg" alt="Bonzah" className="h-5 w-auto hidden dark:block" />
                             </div>
-                          ) : category === 'Supercharger' ? (
-                            <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
-                              <TeslaLogo size={14} className={applied ? color : 'text-muted-foreground/50'} />
-                            </div>
                           ) : (
                             <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
                               <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
@@ -3903,21 +3863,6 @@ const RentalDetail = () => {
                             <div className="text-sm font-medium flex items-center gap-1">
                               {label}
                               {effectiveOnClick && <ExternalLink className="h-3 w-3 inline-block ml-1.5 text-muted-foreground" />}
-                              {category === 'Supercharger' && (
-                                <button
-                                  className="ml-1 p-0.5 rounded hover:bg-muted/50 transition-colors"
-                                  title="Refresh charges from Tesla"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    teslaCharges.syncCharges.mutate(rental?.vehicle_id, {
-                                      onSuccess: (data: any) => toast({ title: 'Sync Complete', description: `${data?.synced || 0} new charge(s) found` }),
-                                      onError: (err: any) => toast({ title: 'Sync Failed', description: err.message, variant: 'destructive' }),
-                                    });
-                                  }}
-                                >
-                                  <RefreshCw className={`h-3 w-3 text-muted-foreground ${teslaCharges.syncCharges.isPending ? 'animate-spin' : ''}`} />
-                                </button>
-                              )}
                             </div>
                             <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
                             {/* Expiry of the Stripe authorisation. This was never
@@ -4105,28 +4050,6 @@ const RentalDetail = () => {
                             }
                             return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
                           }
-                          // Special handling for Supercharger — status from tesla charges, not ledger
-                          if (category === 'Supercharger' && teslaCharges.chargeCount > 0) {
-                            const allCharged = teslaCharges.charges.every(c => c.status === 'charged');
-                            const allWaived = teslaCharges.charges.every(c => c.status === 'waived');
-                            const someCharged = teslaCharges.charges.some(c => c.status === 'charged');
-                            const someWaived = teslaCharges.charges.some(c => c.status === 'waived');
-                            const allResolved = teslaCharges.charges.every(c => c.status === 'charged' || c.status === 'waived');
-                            if (allWaived) {
-                              return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Waived</Badge>;
-                            }
-                            if (allCharged) {
-                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
-                            }
-                            if (allResolved) {
-                              return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
-                            }
-                            if (someCharged || someWaived) {
-                              return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
-                            }
-                            return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
-                          }
-
                           // Check payment status from ledger breakdown
                           const catPayment = paymentBreakdown?.[category];
                           // Also check directly from rentalCharges (loaded with allocations)
@@ -7033,14 +6956,12 @@ const RentalDetail = () => {
           open={showTargetedPayment}
           onOpenChange={(open) => {
             setShowTargetedPayment(open);
-            if (!open) { setSelectedCategories(new Set()); setSuperchargerPaymentCharge(null); setDepositPaymentAmount(null); }
+            if (!open) { setSelectedCategories(new Set()); setDepositPaymentAmount(null); }
           }}
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
           defaultAmount={(() => {
-            // If charging from supercharger dialog, use individual charge amount
-            if (superchargerPaymentCharge) return Number(superchargerPaymentCharge.amount);
             // A deposit just raised via TakeDepositDialog: use the agreed amount
             // directly. categoryRemainingAmounts may not have refetched yet, and
             // falling back to 0 would open the dialog with nothing to pay.
@@ -7082,15 +7003,6 @@ const RentalDetail = () => {
               queryClient.invalidateQueries({ queryKey: ["fines-enhanced"] });
               queryClient.invalidateQueries({ queryKey: ["fines-kpis"] });
               queryClient.invalidateQueries({ queryKey: ["customer-fine-stats"] });
-            }
-
-            // Mark supercharger charge as "charged" after payment
-            if (superchargerPaymentCharge) {
-              teslaCharges.markCharged.mutate({
-                chargeId: superchargerPaymentCharge.id,
-                chargedAmount: Number(superchargerPaymentCharge.amount),
-              });
-              setSuperchargerPaymentCharge(null);
             }
           }}
         />
@@ -7524,40 +7436,6 @@ const RentalDetail = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Supercharger Charges Dialog */}
-      <SuperchargerChargesDialog
-        open={showSuperchargerDialog}
-        onOpenChange={setShowSuperchargerDialog}
-        charges={teslaCharges.charges}
-        totalAmount={teslaCharges.totalAmount}
-        pendingCount={teslaCharges.pendingCount}
-        currencyCode={tenant?.currency_code || 'USD'}
-        isSyncing={teslaCharges.syncCharges.isPending}
-        onSync={() => {
-          teslaCharges.syncCharges.mutate(rental?.vehicle_id, {
-            onSuccess: (data: any) => {
-              toast({ title: 'Sync Complete', description: `${data?.synced || 0} new charge(s) found` });
-            },
-            onError: (err: any) => {
-              toast({ title: 'Sync Failed', description: err.message, variant: 'destructive' });
-            },
-          });
-        }}
-        onWaive={(chargeId) => {
-          teslaCharges.waiveCharge.mutate(chargeId, {
-            onSuccess: () => toast({ title: 'Charge Waived' }),
-            onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
-          });
-        }}
-        onCharge={(charge) => {
-          // Close supercharger dialog, open targeted payment with individual charge amount
-          setShowSuperchargerDialog(false);
-          setSuperchargerPaymentCharge(charge);
-          setSelectedCategories(new Set(['Supercharger']));
-          setShowTargetedPayment(true);
-        }}
-      />
 
       {/* Rejection Dialog */}
       {rental && (

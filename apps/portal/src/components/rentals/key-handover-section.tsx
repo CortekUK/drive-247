@@ -19,8 +19,6 @@ import {
   Mail,
   MessageCircle,
   Phone,
-  Zap,
-  CheckCircle2,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
@@ -1045,43 +1043,6 @@ export const KeyHandoverSection = ({
                             )}
                           </div>
                         ) : null}
-
-                        {/* Tesla Supercharger Section — only when vehicle has tesla_fleet_enabled */}
-                        {s.supercharger !== undefined && s.supercharger !== null && (
-                          <>
-                            <div className="border-t pt-3 mt-1" />
-                            <div className="flex items-center gap-2 mb-2">
-                              <Zap className="h-4 w-4 text-red-500" />
-                              <span className="text-sm font-semibold text-foreground">Supercharger</span>
-                            </div>
-                            {s.supercharger.chargeCount > 0 ? (
-                              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm text-foreground font-medium">
-                                    {s.supercharger.chargeCount} charging session{s.supercharger.chargeCount !== 1 ? 's' : ''}
-                                  </span>
-                                  <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
-                                    {formatCurrency(s.supercharger.totalAmount, tenant?.currency_code || 'USD')}
-                                  </span>
-                                </div>
-                                {s.supercharger.pendingCount > 0 && (
-                                  <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                                    {s.supercharger.pendingCount} pending — review in the Supercharger section on the rental page.
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="p-3 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200 dark:border-green-900">
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                                    No Supercharger charges detected
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        )}
                       </>
                     );
                   })()}

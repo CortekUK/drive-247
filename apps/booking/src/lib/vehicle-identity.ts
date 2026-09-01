@@ -97,7 +97,6 @@ const VEHICLE_PUBLIC_COLUMN_LIST = [
   // `paused_reason` and is deliberately NOT in this allowlist.
   'is_paused',
   'pickup_location_id',
-  'tesla_fleet_enabled',
   // Pricing the customer is being quoted
   'daily_rent',
   'weekly_rent',
