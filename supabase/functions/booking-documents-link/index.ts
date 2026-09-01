@@ -19,16 +19,31 @@
 // `resend` action. The real ceiling is "seven days of silence", not "seven days
 // from payment".
 //
-// ── WHAT THIS SCREEN IS, AND WHAT IT IS NOT ─────────────────────────────────
-// It is an INSURANCE DOCUMENT UPLOAD. It is not identity verification: there is
-// no OCR pass, no face match, and this function no longer mints an
-// identity_verifications session (see the note where that used to happen).
+// ── WHAT THIS SCREEN IS: TWO STEPS, TWO STATUSES ────────────────────────────
+// The post-payment errand is v1's: the customer sends their IDENTITY DOCUMENTS
+// (licence front, licence back, a selfie) *and* their INSURANCE CERTIFICATE.
+// They are two steps here, not one widget, because they are genuinely different
+// shapes — a licence is photographed, an insurance certificate is a PDF already
+// sitting in an inbox — and because they end in different kinds of answer.
 //
-// Uploading does NOT confirm the booking. `submit-insurance` writes
+// They therefore keep SEPARATE STATE, and that separation is load-bearing:
+//
+//   identity  -> booking_document_links.identity_status  ('pending' ->
+//                'submitted' | 'rejected'), written only by `submit-identity`
+//   insurance -> rentals.documents_status / insurance_status, written only by
+//                `submit-insurance`
+//
+// One column with two writers is how a rejected licence photo ends up rendering
+// "we could not read your documents" over a perfectly good insurance PDF the
+// customer sent five minutes earlier. The screen requires both to be in before
+// it says it has everything.
+//
+// Neither step CONFIRMS the booking. `submit-insurance` writes
 // documents_status = 'submitted' and insurance_status = 'uploaded' — never
-// 'verified' — because an operator still reviews the documents and can still
-// reject the booking. notify-booking-approved remains the only thing in the
-// product that says "confirmed".
+// 'verified' — and `submit-identity` writes at most 'submitted', because an
+// operator still reviews all of it and can still reject the booking.
+// notify-booking-approved remains the only thing in the product that says
+// "confirmed".
 //
 // ── WHY EVERY WRITE IS HERE AND NOT IN THE BROWSER ──────────────────────────
 // `rentals` has RLS OFF on staging with a full anon DML grant, so a browser
@@ -92,6 +107,26 @@ interface LinkRow {
   token: string;
   expires_at: string;
   consumed_at: string | null;
+  /**
+   * The identity step's own state, kept HERE and nowhere else.
+   *
+   * booking_document_links has RLS ON with zero policies and no anon grant of
+   * any kind (probed live on staging: only postgres and service_role hold
+   * INSERT/SELECT/UPDATE/DELETE), so these four columns are writable by this
+   * function and by nothing a browser can reach. That is the whole point —
+   * `rentals` has RLS OFF with a full anon DML grant, so a browser trusted to
+   * record its own identity completion could simply claim one.
+   *
+   * They are deliberately NOT `rentals.documents_status`. That column has one
+   * meaning already — "the insurance paperwork is with the operator" — and two
+   * steps writing one column is how a rejected licence photo ends up erasing a
+   * perfectly good insurance PDF. Two facts, two columns.
+   */
+  identity_session_id: string | null;
+  /** null = never started, then 'pending' -> 'submitted' | 'rejected'. */
+  identity_status: string | null;
+  identity_started_at: string | null;
+  identity_completed_at: string | null;
 }
 
 interface RentalRow {
@@ -452,6 +487,397 @@ async function handleSubmitInsurance(
   });
 }
 
+/* ═══════════════════════════ the identity step ═══════════════════════════ */
+
+/**
+ * Where a booking's three identity photos live.
+ *
+ * `ai-verification/<sessionId>/<kind>.jpg` IS A CONTRACT, not a naming choice.
+ * It is what v1's QR capture page writes
+ * (`apps/booking/src/app/verify/[token]/page.tsx:355`) and what the portal's
+ * document viewers already read, so an operator opening this booking finds the
+ * licence exactly where every other identity flow puts it. Changing any segment
+ * makes the operator's copy of the licence disappear.
+ *
+ * The session id is the scoping segment, and it is minted HERE — the browser is
+ * handed one, never asked for one. `customer-documents` is a PUBLIC bucket whose
+ * storage policies grant INSERT/UPDATE/DELETE to `public`, so a
+ * browser-CHOSEN prefix is a browser-chosen place to put someone else's photos.
+ */
+function identityPrefix(sessionId: string): string {
+  return `ai-verification/${sessionId}`;
+}
+
+/** The three objects, exactly. `document-back.jpg` is genuinely optional. */
+const IDENTITY_OBJECTS = {
+  front: 'document-front.jpg',
+  back: 'document-back.jpg',
+  selfie: 'selfie.jpg',
+} as const;
+
+/**
+ * Ask `create-ai-verification-session` for a session, or reuse the live one.
+ *
+ * ── WHY THIS IS LAZY, AND WHY THAT IS THE WHOLE POINT ───────────────────────
+ * The FIRST build of this screen minted a session inside the `open` branch, on
+ * every single page load. That was not free:
+ *
+ *   * create-ai-verification-session caps a customer at TEN sessions an hour
+ *     and answers a plain 400 past that, so a customer refreshing their own
+ *     paid booking ten times locked themselves out of it;
+ *   * its customerId branch also sets
+ *     customers.identity_verification_status = 'pending' as a side effect — a
+ *     false statement about somebody who has opened a page and done nothing.
+ *
+ * So nothing is minted until the customer presses the button that starts step
+ * one. `open` reports the STATUS of the identity step and never touches it.
+ *
+ * ── AND WHY IT REUSES ───────────────────────────────────────────────────────
+ * A customer who starts, backs out and starts again must not burn two of their
+ * ten. The session id is remembered on the link row and handed back as long as
+ * the row it points at has not been processed. Once it is `completed` a fresh
+ * one is minted, because `process-ai-verification` looks a session up by
+ * `session_id` with NO status guard — re-submitting a completed session would
+ * re-run OCR and the face match over the top of a verdict that is already
+ * written.
+ */
+async function handleStartIdentity(
+  supabase: SupabaseClient,
+  link: LinkRow,
+  rental: RentalRow,
+  tenantSlug: string | null,
+): Promise<Response> {
+  if (!rental.customer_id) {
+    // create-ai-verification-session's customerId branch reads `customers` and
+    // 404s without one. Fail with prose rather than a relayed 400.
+    console.error('[documents-link] identity start on a rental with no customer:', rental.id);
+    return fail(
+      409,
+      'no_customer',
+      'We could not start the identity check for this booking. Please get in touch and we will take it from here.',
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+
+  // ---- reuse a session that has not been processed yet --------------------
+  if (link.identity_session_id) {
+    const { data: existing } = await supabase
+      .from('identity_verifications')
+      .select('id, status')
+      .eq('session_id', link.identity_session_id)
+      .maybeSingle();
+
+    if (existing && existing.status !== 'completed') {
+      await supabase
+        .from('booking_document_links')
+        .update({
+          identity_status: link.identity_status ?? 'pending',
+          identity_started_at: link.identity_started_at ?? nowIso,
+          updated_at: nowIso,
+        })
+        .eq('token', link.token);
+
+      return jsonResponse({
+        ok: true,
+        sessionId: link.identity_session_id,
+        uploadPrefix: identityPrefix(link.identity_session_id),
+        bucket: DOCUMENT_BUCKET,
+        identityStatus: link.identity_status ?? 'pending',
+        reused: true,
+      });
+    }
+  }
+
+  // ---- mint a new one ------------------------------------------------------
+  let minted: Record<string, unknown> | null = null;
+  let mintStatus = 0;
+  try {
+    const response = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/create-ai-verification-session`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          customerId: rental.customer_id,
+          tenantId: rental.tenant_id,
+          // The function REQUIRES a non-empty slug and only uses it to build a
+          // QR URL this flow never shows. A tenant with no slug must still be
+          // able to start, so a placeholder stands in rather than a 400.
+          tenantSlug: tenantSlug && tenantSlug !== '' ? tenantSlug : 'booking',
+        }),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    mintStatus = response.status;
+    minted = (await response.json()) as Record<string, unknown>;
+  } catch (error) {
+    console.error('[documents-link] could not reach create-ai-verification-session:', error);
+    return fail(
+      502,
+      'identity_unavailable',
+      'We could not start the identity check just now. Nothing about your booking has changed — please try again in a moment.',
+    );
+  }
+
+  const sessionId = typeof minted?.sessionId === 'string' ? minted.sessionId : '';
+  if (minted?.ok !== true || sessionId === '') {
+    const detail = typeof minted?.error === 'string' ? minted.error : '';
+    console.error('[documents-link] identity session mint refused:', mintStatus, detail);
+    // The ten-an-hour cap is the one refusal a customer can act on, and its
+    // message is the function's own prose about attempts. Everything else is
+    // ours, because the raw text is written for an operator.
+    if (/too many/i.test(detail)) {
+      return fail(
+        429,
+        'identity_rate_limited',
+        'You have started the identity check several times in the last hour. Please wait a little while and try again — nothing about your booking has changed.',
+      );
+    }
+    return fail(
+      502,
+      'identity_unavailable',
+      'We could not start the identity check just now. Nothing about your booking has changed — please try again in a moment.',
+    );
+  }
+
+  const { error: rememberError } = await supabase
+    .from('booking_document_links')
+    .update({
+      identity_session_id: sessionId,
+      identity_status: 'pending',
+      identity_started_at: link.identity_started_at ?? nowIso,
+      identity_completed_at: null,
+      updated_at: nowIso,
+    })
+    .eq('token', link.token);
+
+  if (rememberError) {
+    // Without the remembered id the submit action has nothing to pin the
+    // uploaded paths against, and pinning them is the only authorisation this
+    // step has. Refuse rather than hand out an unpinned prefix.
+    console.error('[documents-link] could not record identity session:', rememberError);
+    return fail(
+      500,
+      'identity_unavailable',
+      'We could not start the identity check just now. Nothing about your booking has changed — please try again in a moment.',
+    );
+  }
+
+  return jsonResponse({
+    ok: true,
+    sessionId,
+    uploadPrefix: identityPrefix(sessionId),
+    bucket: DOCUMENT_BUCKET,
+    identityStatus: 'pending',
+    reused: false,
+  });
+}
+
+/**
+ * "I have taken my three photos."
+ *
+ * The browser uploads BYTES under the prefix this function issued and then says
+ * so. This function checks the objects are really there, runs the AI pass
+ * server-side, and is the only thing that writes what the result MEANS for the
+ * booking. A browser that could stamp its own `identity_status` is a browser
+ * that can be made to lie, and the column it would be lying about is the one
+ * the screen's own gate reads.
+ *
+ * ── WHAT IT DELIBERATELY DOES NOT TOUCH ─────────────────────────────────────
+ * `rentals.documents_status`, `rentals.insurance_status` and
+ * `rentals.identity_verification_session_id`. The first two belong to the
+ * INSURANCE step and are written only by `submit-insurance`; the identity step
+ * having its own column is what stops one step's verdict overwriting the
+ * other's. The third is what `process-ai-verification`'s booking gate filters
+ * on (index.ts:419-424) — leaving it unset is precisely what keeps that gate
+ * matching ZERO rows here, so the AI pass cannot reach in and stamp
+ * documents_status = 'verified' on a booking whose insurance nobody has seen.
+ *
+ * ── AND IT SENDS NO EMAIL ───────────────────────────────────────────────────
+ * `booking_documents_received` is keyed canonically per rental
+ * (`email-outbox.ts` outboxKey), so sending it here would consume the one row
+ * the insurance step needs and the customer would never hear that their
+ * insurance arrived. One errand, one email, and it belongs to the step that
+ * finishes last.
+ */
+async function handleSubmitIdentity(
+  supabase: SupabaseClient,
+  link: LinkRow,
+  rental: RentalRow,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const sessionId = link.identity_session_id ?? '';
+  if (sessionId === '') {
+    // The customer never pressed "start", or started on a link row that has
+    // since been reset. Recoverable: the page starts the step again.
+    return fail(
+      409,
+      'identity_not_started',
+      'We could not match these photos to an identity check. Please start the identity step again.',
+    );
+  }
+
+  const prefix = identityPrefix(sessionId);
+
+  /*
+    THE AUTHORISATION CHECK, AND THERE IS ONLY ONE — the same shape as the
+    insurance one above. The token is a bearer credential and the bucket is
+    world-writable, so an unpinned body could name ANY object in the bucket and
+    have it run through OCR and a face match on this booking's behalf.
+  */
+  const readPath = (value: unknown, required: boolean): string | null | 'bad' => {
+    if (value === null || value === undefined || value === '') {
+      return required ? 'bad' : null;
+    }
+    if (typeof value !== 'string') return 'bad';
+    const path = value.trim();
+    if (!path.startsWith(`${prefix}/`) || path.includes('..')) return 'bad';
+    return path;
+  };
+
+  const frontPath = readPath(body.documentFrontPath, true);
+  const backPath = readPath(body.documentBackPath, false);
+  const selfiePath = readPath(body.selfiePath, true);
+
+  if (frontPath === 'bad' || backPath === 'bad' || selfiePath === 'bad') {
+    return fail(
+      400,
+      'bad_files',
+      'One of your photos was not stored where we expected. Please take them again.',
+    );
+  }
+
+  // ---- the objects have to actually be there ------------------------------
+  const { data: objects, error: listError } = await supabase.storage
+    .from(DOCUMENT_BUCKET)
+    .list(prefix, { limit: 20 });
+
+  if (listError) {
+    console.error('[documents-link] could not list identity objects:', listError);
+    return fail(
+      502,
+      'storage_unavailable',
+      'We could not read the photos you just sent. Please try again in a moment.',
+    );
+  }
+
+  const present = new Set((objects ?? []).map((object) => object.name));
+  const wanted = [frontPath, selfiePath, backPath].filter(
+    (path): path is string => typeof path === 'string',
+  );
+  const missing = wanted.filter((path) => !present.has(path.slice(prefix.length + 1)));
+  if (missing.length > 0) {
+    console.error('[documents-link] identity paths not present in storage:', missing);
+    return fail(
+      409,
+      'files_missing',
+      'We could not find the photos you sent. Please take them again and re-send.',
+    );
+  }
+
+  // ---- the AI pass, server-side -------------------------------------------
+  let verdictBody: Record<string, unknown> | null = null;
+  try {
+    const response = await fetch(
+      `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-ai-verification`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          sessionId,
+          // PATHS, not URLs. The function resolves them against the bucket
+          // itself (`getStoragePublicUrl`), so a URL would double-resolve.
+          documentFrontPath: frontPath,
+          documentBackPath: backPath ?? undefined,
+          selfiePath,
+        }),
+        // OCR plus a Rekognition round trip. Generous, and bounded so a hung
+        // provider cannot hold the customer's request open forever.
+        signal: AbortSignal.timeout(110000),
+      },
+    );
+    verdictBody = (await response.json()) as Record<string, unknown>;
+  } catch (error) {
+    console.error('[documents-link] process-ai-verification unreachable:', error);
+    return fail(
+      502,
+      'identity_unavailable',
+      'We could not check your photos just now. Nothing about your booking has changed — please try again in a moment.',
+    );
+  }
+
+  /*
+    THE VERDICT IS READ, NOT `ok`. Two real paths in process-ai-verification
+    answer HTTP 200 with `{ ok: false, result: 'rejected' }` — an OCR failure
+    (index.ts:174-181) and a face-match failure (:216-223) — and both have
+    ALREADY written review_result 'RED' to identity_verifications. Those are
+    verdicts. Treating them as transport errors would show a "try again" that
+    disagreed with what the operator can see.
+  */
+  const result = typeof verdictBody?.result === 'string' ? verdictBody.result : '';
+  if (result !== 'verified' && result !== 'review_required' && result !== 'rejected') {
+    console.error('[documents-link] no verdict from process-ai-verification:', verdictBody);
+    return fail(
+      502,
+      'identity_unavailable',
+      'We could not check your photos just now. Nothing about your booking has changed — please try again in a moment.',
+    );
+  }
+
+  /*
+    'verified' AND 'review_required' BOTH LAND AS 'submitted', and neither is
+    ever reported to the customer as a pass. What is true either way is that we
+    have the photos and a person will look at them; whether the face match was
+    GREEN or RETRY is the operator's to read off identity_verifications, and
+    saying "verified" to a customer an operator can still reject would be a
+    false statement made by a screen with no authority to make it.
+  */
+  const identityStatus = result === 'rejected' ? 'rejected' : 'submitted';
+  const nowIso = new Date().toISOString();
+
+  const { error: stampError } = await supabase
+    .from('booking_document_links')
+    .update({
+      identity_status: identityStatus,
+      identity_completed_at: identityStatus === 'submitted' ? nowIso : null,
+      updated_at: nowIso,
+    })
+    .eq('token', link.token);
+
+  if (stampError) {
+    // The photos and the verdict are already on identity_verifications, so the
+    // operator can see them — but this column is what the customer's own screen
+    // reads, so a failure here is loud.
+    console.error('[documents-link] could not record identity outcome:', stampError);
+  }
+
+  // Slide the window: a customer who has just engaged never loses their link,
+  // and they still have the insurance step in front of them.
+  await supabase
+    .from('booking_document_links')
+    .update({
+      expires_at: new Date(Date.now() + DOCUMENTS_LINK_TTL_MS).toISOString(),
+      updated_at: nowIso,
+    })
+    .eq('token', link.token);
+
+  /*
+    ONLY THE COARSE OUTCOME CROSSES THE WIRE. `details` on the verdict carries
+    the OCR extraction and the face-match score, and its sibling
+    `rejection_reason` reads "Blocked identity: <the operator's private note>"
+    on one path. None of that is the customer's to read, and the cheapest way to
+    guarantee it never reaches a rendered string is for it never to leave here.
+  */
+  return jsonResponse({ ok: true, identityStatus });
+}
+
 /**
  * "Email me a new link."
  *
@@ -583,12 +1009,17 @@ Deno.serve(async (req) => {
     }
 
     const token = typeof body.token === 'string' ? body.token.trim() : '';
+    /*
+      Four actions, and the two identity ones are ADDITIVE. A server too old to
+      know them falls through to `open` and answers a session body, which the
+      browser reports as a failure rather than as a phantom success — the same
+      contract `submit-insurance` already relies on.
+    */
+    const KNOWN_ACTIONS = ['resend', 'submit-insurance', 'start-identity', 'submit-identity'];
     const action =
-      body.action === 'resend'
-        ? 'resend'
-        : body.action === 'submit-insurance'
-          ? 'submit-insurance'
-          : 'open';
+      typeof body.action === 'string' && KNOWN_ACTIONS.includes(body.action)
+        ? body.action
+        : 'open';
     if (token === '') {
       return fail(400, 'bad_request', 'A token is required.');
     }
@@ -601,7 +1032,10 @@ Deno.serve(async (req) => {
     // ---- 1. The token ------------------------------------------------------
     const { data: linkRow, error: linkError } = await supabase
       .from('booking_document_links')
-      .select('id, tenant_id, rental_id, token, expires_at, consumed_at')
+      // ONE string literal, not a concatenation: supabase-js parses the select
+      // at the type level and infers GenericStringError from anything it cannot
+      // read statically, which turns the cast below into a TS2352.
+      .select('id, tenant_id, rental_id, token, expires_at, consumed_at, identity_session_id, identity_status, identity_started_at, identity_completed_at')
       .eq('token', token)
       .maybeSingle();
 
@@ -684,26 +1118,40 @@ Deno.serve(async (req) => {
     }
 
     /*
-      THE AI IDENTITY SESSION MINT USED TO LIVE HERE, AND IT IS GONE ON PURPOSE.
+      The identity step's two actions sit HERE, behind the same expiry gate as
+      the insurance one and for the same reason: accepting work through a dead
+      link is accepting it from a credential that is supposed to be over. They
+      are separate actions rather than a flag on `open` precisely so that
+      opening the page cannot mint anything — see handleStartIdentity.
+    */
+    if (action === 'start-identity') {
+      return await handleStartIdentity(supabase, link, rental, tenantSlug);
+    }
+    if (action === 'submit-identity') {
+      return await handleSubmitIdentity(supabase, link, rental, body);
+    }
 
-      This screen is an INSURANCE DOCUMENT UPLOAD. There is no OCR pass and no
-      face match, so there was nothing left for an identity_verifications row to
-      be the key of — and minting one on every open was not free:
+    /*
+      AN AI IDENTITY SESSION IS *NOT* MINTED HERE, AND THAT IS THE POINT.
+
+      The first build of this function minted one on every page open. It cost:
 
         * create-ai-verification-session caps a customer at 10 sessions per hour
           and answers a plain 400 past that, so a customer refreshing the page
-          could lock themselves out of their own paid booking;
-        * its customerId branch also sets
-          customers.identity_verification_status = 'pending', which for an
-          insurance upload is simply not true; and
-        * it repointed rentals.identity_verification_session_id, a column whose
-          only consumer (process-ai-verification) this flow no longer calls.
+          could lock themselves out of their own paid booking; and
+        * its customerId branch sets
+          customers.identity_verification_status = 'pending' as a side effect —
+          a false statement about somebody who has opened a page and done
+          nothing.
 
-      What replaced it is `uploadPrefix` below: a tenant- and rental-scoped
-      storage prefix, derived server-side, which is the only place this token's
-      holder is allowed to put bytes. If identity capture ever comes back it
-      belongs behind its own token action, not stapled to every page open —
-      see the note in the report accompanying this change.
+      Minting now lives behind the `start-identity` action, which fires when the
+      customer actually begins step one. Opening the page only REPORTS
+      `identityStatus`, below.
+
+      What `open` does issue is `uploadPrefix`: the tenant- and rental-scoped
+      INSURANCE prefix, derived server-side, which is the only place this
+      token's holder may put an insurance file. The identity prefix is issued
+      separately, by `start-identity`, and is scoped to the session it mints.
     */
     const nowIso = new Date().toISOString();
 
@@ -751,6 +1199,13 @@ Deno.serve(async (req) => {
         logoUrl: (tenantRow?.logo_url as string | null) ?? null,
       },
       documentsStatus,
+      /*
+        The identity step's state, READ ONLY. Opening the page reports where
+        that step has got to and changes nothing about it — no session is
+        minted, customers.identity_verification_status is not touched. `null`
+        means the customer has not started it.
+      */
+      identityStatus: link.identity_status,
     });
   } catch (error) {
     console.error('[documents-link] unhandled error:', error);
