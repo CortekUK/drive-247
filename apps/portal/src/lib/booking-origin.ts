@@ -4,11 +4,11 @@
  * WHY THIS IS NOT JUST `https://${slug}.${BASE_DOMAIN}`
  *
  * That formula is right in production and wrong everywhere else. Running the
- * portal locally on acme.portal.localhost:3001, it still produced
- * https://acme.drive-247.com — so a checkout button opened a tab on PRODUCTION,
- * which 404s because the local build is the only place the new page exists. The
- * operator sees a broken checkout and has no way to tell that the tab simply
- * went to the wrong deployment.
+ * portal locally on haris-square.portal.localhost:3001, it still produced
+ * https://haris-square.drive-247.com — so "Charge via Square" opened a tab on
+ * PRODUCTION, which 404s because the local build is the only place the new page
+ * exists. The operator sees a broken checkout and has no way to tell that the
+ * tab simply went to the wrong deployment.
  *
  * The portal and booking apps share a tenant subdomain and differ only by the
  * `.portal` label and the port, so the local origin can be derived from the
@@ -36,7 +36,7 @@ export function bookingOriginFor(tenantSlug: string | null | undefined): string 
     // slug in front of it, so the bare-host check that works for a single-tenant
     // app is never true here.
     if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost")) {
-      // acme.portal.localhost -> acme.localhost
+      // haris-square.portal.localhost -> haris-square.localhost
       const bookingHost = host.replace(/\.portal\./, ".");
       return `${window.location.protocol}//${bookingHost}:${LOCAL_BOOKING_PORT}`;
     }

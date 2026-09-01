@@ -22,19 +22,12 @@ import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
 import { useAuth } from "@/stores/auth-store";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useTenant } from "@/contexts/TenantContext";
-/** Stripe's mark, rendered inline so this file carries no provider indirection. */
-function StripeMark({ className = "w-4 h-4 shrink-0" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="#635BFF" aria-hidden="true">
-      <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
-    </svg>
-  );
-}
+import { ProviderMark, providerPresentation } from "@/lib/payment-provider";
 import { bookingOriginFor } from "@/lib/booking-origin";
 import { useCustomerVehicleRental } from "@/hooks/use-customer-vehicle-rental";
 import { useCustomerBalanceWithStatus, useRentalChargesAndPayments } from "@/hooks/use-customer-balance";
 import { createInvoice } from "@/lib/invoice-utils";
-import { extractFunctionError } from "@/lib/edge-error";
+import { extractFunctionError, extractFunctionErrorPayload } from "@/lib/edge-error";
 import { cn } from "@/lib/utils";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 
@@ -296,6 +289,10 @@ export const AddPaymentDialog = ({
   const chargeDuplicateOverridden = useRef<Set<string>>(new Set());
   const { toast } = useToast();
   const { tenant } = useTenant();
+  // Everything the operator reads about the processor comes from here, so a
+  // Square tenant is never offered a Stripe button it cannot use.
+  const pay = providerPresentation(tenant?.payment_provider);
+  const isSquare = tenant?.payment_provider === "square";
   const { logAction } = useAuditLog();
   const { appUser, hasRole } = useAuth();
   const { canEdit } = useManagerPermissions();
@@ -832,6 +829,11 @@ export const AddPaymentDialog = ({
     // Declared OUTSIDE the try so the catch can close it. A const inside the
     // try block is not in scope in the catch, which is exactly how the first
     // version of this fix failed to compile.
+    //
+    // This is NOT a Square-specific bug: Stripe took the same path and was
+    // equally blockable. It surfaced on Square because creating a payment link
+    // is a slower round trip, so it reliably exceeds the grace period the
+    // browser allows after a click, while Stripe usually slipped under it.
     const checkoutTab = window.open("", "_blank");
     try {
       const portalOrigin = window.location.origin;
@@ -862,6 +864,26 @@ export const AddPaymentDialog = ({
       });
 
       if (error) {
+        // ALREADY PAID IS NOT A FAILURE.
+        //
+        // createSquareCheckout refuses to mint a second link for a debt that is
+        // already settled — correctly, because a second link for one charge is a
+        // second collection. But the operator only ever saw that refusal as a red
+        // "Error" toast, because the rental page behind this dialog was still
+        // showing the pre-payment state that made them click Collect Payment in
+        // the first place. Show them the payment, not the refusal: re-read the
+        // rental from the database and let the settled state render.
+        const payload = await extractFunctionErrorPayload(error);
+        if (payload?.reason === 'square_payment_already_settled') {
+          if (checkoutTab) checkoutTab.close();
+          await invalidateAllPaymentQueries(finalCustomerId);
+          toast({
+            title: "Already paid",
+            description: "This payment has already been received. The rental has been refreshed to show it.",
+          });
+          onOpenChange(false);
+          return;
+        }
         throw new Error(await extractFunctionError(error, 'Failed to create checkout session'));
       }
       if (!data?.url) throw new Error('No checkout URL returned');
@@ -871,7 +893,23 @@ export const AddPaymentDialog = ({
         localStorage.setItem(`payment_target_categories_${rentalId}`, JSON.stringify(targetCategories));
       }
 
-      const checkoutUrl = data.url;
+      // WHERE THE NEW TAB GOES.
+      //
+      // Stripe: its own hosted Checkout, unchanged.
+      // Square: OUR /pay/{id} page, not Square's hosted link. Square's link has
+      // no card fields in sandbox — it 303-redirects to a simulator — so the
+      // operator could never complete a test payment, and in production it drops
+      // the customer onto a Square-branded page. Our page renders Square's Web
+      // Payments SDK card fields inside the business's own site, so the card
+      // still never touches our servers and the journey is identical in both
+      // modes.
+      //
+      // Falls back to whatever URL came back if no row id did: a payable link
+      // beats a dead tab.
+      const checkoutUrl =
+        isSquare && data.paymentId
+          ? `${bookingOriginFor(tenant?.slug)}/checkout/${data.paymentId}`
+          : data.url;
 
       if (checkoutTab) {
         checkoutTab.location.href = checkoutUrl;
@@ -881,7 +919,7 @@ export const AddPaymentDialog = ({
         window.location.href = checkoutUrl;
       }
 
-      toast({ title: "Stripe Checkout opened", description: "Payment link opened in a new tab. Payment will be recorded automatically when the customer completes checkout." });
+      toast({ title: pay.openedTitle, description: "Payment link opened in a new tab. Payment will be recorded automatically when the customer completes checkout." });
       // 'pending' — Stripe webhook will commit + settle the payment. Caller must NOT
       // flip any local "paid" state here.
       if (onPaymentSuccess) onPaymentSuccess('pending');
@@ -1173,7 +1211,20 @@ export const AddPaymentDialog = ({
           ...(invoiceToSend ? { invoiceId: invoiceToSend.id } : { rentalId, customerName, amount }),
           tenantId: tenant?.id,
           recipientEmail: customerEmail,
-          paymentUrl: checkoutData.url,
+          // THE LINK THE CUSTOMER RECEIVES.
+          //
+          // Square: OUR /checkout/{id} page, not checkoutData.url. Square's
+          // hosted link has no card fields in sandbox — it 303-redirects to a
+          // simulator — so an emailed link could never be paid in test, and in
+          // production it lands the customer on a Square-branded page.
+          //
+          // This overrides whatever send-invoice-email would compute, because
+          // the portal passes paymentUrl explicitly; leaving it as
+          // checkoutData.url meant the function's own correct URL was discarded.
+          paymentUrl:
+            isSquare && checkoutData.paymentId
+              ? `${bookingOriginFor(tenant?.slug)}/checkout/${checkoutData.paymentId}`
+              : checkoutData.url,
           overrideAmount: amount,
           // When the rental payment will also trigger a deposit hold, pass the
           // hold amount so the email template can render the transparency
@@ -1558,7 +1609,7 @@ export const AddPaymentDialog = ({
                     {stripeLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <StripeMark />
+                      <ProviderMark provider={tenant?.payment_provider} />
                     )}
                     {/* handleStripePayment creates a Checkout session and
                         window.open()s the URL — it opens Stripe in a new tab for
@@ -1567,7 +1618,7 @@ export const AddPaymentDialog = ({
                         "Email Stripe Link" button beside it, which is the one
                         that actually sends. Restored to the original wording at
                         the operator's request. */}
-                    <span className="text-sm">Charge via Stripe</span>
+                    <span className="text-sm">{pay.chargeLabel}</span>
                   </Button>
                   <Button
                     type="button"
@@ -1586,11 +1637,11 @@ export const AddPaymentDialog = ({
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        <StripeMark />
+                        <ProviderMark provider={tenant?.payment_provider} />
                         <Mail className="w-3.5 h-3.5 shrink-0 -ml-1" />
                       </>
                     )}
-                    <span className="text-sm">Email Stripe Link</span>
+                    <span className="text-sm">{pay.emailLabel}</span>
                   </Button>
 
                 </div>
@@ -1653,9 +1704,9 @@ export const AddPaymentDialog = ({
                 <div className="flex items-start gap-2">
                   <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <DialogTitle className="text-base">Charge via Stripe</DialogTitle>
+                    <DialogTitle className="text-base">{pay.chargeLabel}</DialogTitle>
                     <DialogDescription className="mt-1 text-xs">
-                      Opens Stripe Checkout in a new tab for the customer. Nothing is charged until they pay.
+                      Opens {pay.name} Checkout in a new tab for the customer. Nothing is charged until they pay.
                     </DialogDescription>
                   </div>
                 </div>
@@ -1688,9 +1739,9 @@ export const AddPaymentDialog = ({
                 <div className="flex items-start gap-2">
                   <Mail className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                   <div>
-                    <DialogTitle className="text-base">Email Stripe Link</DialogTitle>
+                    <DialogTitle className="text-base">{pay.emailLabel}</DialogTitle>
                     <DialogDescription className="mt-1 text-xs">
-                      Emails the customer a Stripe payment link they can pay at their convenience.
+                      Emails the customer a {pay.name} payment link they can pay at their convenience.
                     </DialogDescription>
                   </div>
                 </div>

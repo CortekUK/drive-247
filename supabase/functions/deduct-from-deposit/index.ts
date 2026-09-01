@@ -23,6 +23,7 @@ import {
   type StripeMode,
 } from "../_shared/stripe-client.ts";
 import { formatCurrency } from "../_shared/format-utils.ts";
+import { tryProviderRefund } from "../_shared/payments/refund.ts";
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -659,9 +660,12 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("rental_id", rentalId)
       // Widened to both rails. This is the CHARGED-deposit path, which is the
+      // only deposit path a Square tenant ever takes — they are created with
+      // deposit_charge_enabled=true because Square cannot place an
+      // authorisation hold. So this query is on the live Square route, not a
       // legacy one, and left unwidened it returns nothing and the deduction
       // silently becomes ledger-only.
-      .not("stripe_payment_intent_id", "is", null)
+      .or("stripe_payment_intent_id.not.is.null,square_payment_id.not.is.null")
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
@@ -721,6 +725,65 @@ Deno.serve(async (req) => {
       } catch (stripeError: any) {
         console.error("[DEDUCT-DEPOSIT] Stripe refund error:", stripeError.message);
         return errorResponse(`Stripe refund failed: ${stripeError.message}`);
+      }
+    } else if (payment?.payment_provider === "square") {
+      // SQUARE — the charged-deposit deduction.
+      //
+      // A sibling branch, so the Stripe condition above is unchanged. The DB
+      // CHECK payments_provider_handle_exclusivity_check guarantees a Square row
+      // fails that test, so this is the only branch it can reach.
+      //
+      // Deducting from a charged deposit is a partial refund of the deposit
+      // payment: the renter keeps the difference. That is arithmetically the
+      // same operation on either rail, which is why there is no Square-specific
+      // deposit logic anywhere — only a different processor call.
+      try {
+        const routed = await tryProviderRefund(supabase, effectiveTenantId, {
+          paymentRecord: payment as Record<string, unknown>,
+          amountCents: Math.round(amount * 100),
+          reason: "Deducted for excess mileage charge",
+        });
+
+        if (routed.error || routed.skipped) {
+          // Matches the Stripe branch's fail-loud posture. The ledger rows below
+          // would otherwise record a deduction the processor never made.
+          //
+          // `.skipped` is part of the same condition deliberately: a skip is
+          // handled:true with no error flag, so testing `.error` alone did
+          // exactly what this comment says it is preventing — it incremented
+          // refund_amount and stamped refund_processed_at for a deduction Square
+          // never performed.
+          return errorResponse(
+            routed.skipped
+              ? `Square refund NOT issued: ${routed.reason ?? "provider skipped"}. No money has been deducted.`
+              : `Square refund failed: ${routed.reason ?? "unknown error"}`,
+          );
+        }
+
+        const body = (routed.body ?? {}) as Record<string, unknown>;
+        const squareRefundId = (body.square_refund_id ?? body.refund_id ?? null) as string | null;
+        const currentRefundAmount = payment.refund_amount || 0;
+
+        await supabase
+          .from("payments")
+          .update({
+            refund_amount: currentRefundAmount + amount,
+            refund_reason: payment.refund_reason
+              ? `${payment.refund_reason}; Security Deposit: Deducted for excess mileage`
+              : "Security Deposit: Deducted for excess mileage",
+            // Deliberately NOT stripe_refund_id — the exclusivity CHECK forbids a
+            // stripe_* handle on a square row, and writing one would throw here,
+            // after Square had already moved the money.
+            square_refund_id: squareRefundId,
+            refund_processed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", payment.id);
+
+        console.log("[DEDUCT-DEPOSIT] Square refund submitted:", squareRefundId);
+      } catch (squareError: any) {
+        console.error("[DEDUCT-DEPOSIT] Square refund error:", squareError?.message ?? squareError);
+        return errorResponse(`Square refund failed: ${squareError?.message ?? squareError}`);
       }
     } else {
       console.log("[DEDUCT-DEPOSIT] No processor payment found, recording as manual deduction");

@@ -37,6 +37,7 @@ import { usePaygInvoices } from "@/hooks/use-payg-invoices";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { PaymentLinksPanel } from "@/components/payments/payment-links-panel";
 import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
+import { useSquarePaymentSync } from "@/hooks/use-square-payment-sync";
 import { KeyHandoverSection } from "@/components/rentals/key-handover-section";
 import { KeyHandoverActionBanner } from "@/components/rentals/key-handover-action-banner";
 import { DamageAnalysisCard } from "@/components/rentals/damage-analysis-card";
@@ -742,6 +743,19 @@ const RentalDetail = () => {
     depositHasLedgerCharge || (depositIsChargedTenant && !depositHoldPresent);
   const { data: paymentLinks, isLoading: paymentLinksLoading } = useRentalPaymentLinks(id);
 
+  // A Square collection is completed somewhere this page cannot see: our hosted
+  // /checkout page in another tab, or the customer's own phone. providers.tsx
+  // turns refetch-on-focus off portal-wide, so coming back here refetched
+  // nothing and the operator kept reading pre-payment state — a link still
+  // "Awaiting payment" next to a breakdown that already said Paid. Re-read the
+  // payment state from the database instead of trusting the cache.
+  const hasOpenSquareLink = (paymentLinks || []).some(
+    (link) => link.paymentProvider === "square" && link.status === "awaiting",
+  );
+  useSquarePaymentSync({
+    enabled: tenant?.payment_provider === "square",
+    hasOpenLink: hasOpenSquareLink,
+  });
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
@@ -2299,8 +2313,10 @@ const RentalDetail = () => {
   // rolling-invoice totals, everything else reads the allocation ledger.
   //
   // NOT from rentalPaymentsTotal. That query counts only status in
-  // ('Applied','Credit','Partial'), so money-received has to come from the
-  // allocation totals instead.
+  // ('Applied','Credit','Partial'), and a Square card payment is written
+  // 'Completed' by createSquareCardPayment — so a fully-paid Square rental
+  // scored zero there and the button stayed live. Money-received has to come
+  // from the allocation totals, which are provider-agnostic.
   const isPaygRental = rental?.is_pay_as_you_go === true;
   const collectedTotal = isPaygRental
     ? Math.max(paygInvoiceData?.totals?.collected ?? 0, rentalPaymentsTotal)

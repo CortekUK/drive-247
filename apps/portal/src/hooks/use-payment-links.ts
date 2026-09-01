@@ -39,6 +39,11 @@ export interface PaymentLink {
   paidAt: string | null;
   rentalId: string | null;
   stripeCheckoutSessionId: string | null;
+  /** Square's equivalents. Exactly one rail's handles are ever populated —
+   *  payments_provider_handle_exclusivity_check enforces that at the database. */
+  squarePaymentLinkId: string | null;
+  squareOrderId: string | null;
+  paymentProvider: "stripe" | "square";
   stripePaymentIntentId: string | null;
   extensionId: string | null;
   targetCategories: string[] | null;
@@ -47,7 +52,7 @@ export interface PaymentLink {
 }
 
 const LINK_SELECT =
-  "id, amount, status, capture_status, verification_status, payment_type, method, booking_source, created_at, paid_at, stripe_checkout_session_id, stripe_payment_intent_id, extension_id, target_categories, preauth_expires_at, rental_id, customer_id";
+  "id, amount, status, capture_status, verification_status, payment_type, method, booking_source, created_at, paid_at, stripe_checkout_session_id, stripe_payment_intent_id, square_payment_link_id, square_order_id, payment_provider, extension_id, target_categories, preauth_expires_at, rental_id, customer_id";
 
 // Stripe Checkout sessions expire ~24h after creation. The checkout.session.expired
 // webhook only cancels the rental — it never flips the payments row — so age is the
@@ -166,6 +171,9 @@ export function derivePaymentLinks(
       paidAt: r.paid_at ?? null,
       rentalId: r.rental_id ?? null,
       stripeCheckoutSessionId: r.stripe_checkout_session_id ?? null,
+      squarePaymentLinkId: r.square_payment_link_id ?? null,
+      squareOrderId: r.square_order_id ?? null,
+      paymentProvider: (r.payment_provider ?? "stripe") as "stripe" | "square",
       stripePaymentIntentId: r.stripe_payment_intent_id ?? null,
       extensionId: r.extension_id ?? null,
       targetCategories: Array.isArray(r.target_categories) ? r.target_categories : null,
@@ -185,7 +193,10 @@ async function fetchLinks(
     .select(LINK_SELECT)
     .eq(column, value)
     .eq("tenant_id", tenantId)
-    .not("stripe_checkout_session_id", "is", null)
+    // A payment link exists on EITHER rail. Filtering on the Stripe handle
+    // alone made every Square link invisible in this panel — the operator saw
+    // "no links sent" for a link the customer could already pay.
+    .or("stripe_checkout_session_id.not.is.null,square_payment_link_id.not.is.null")
     .order("created_at", { ascending: false });
   if (error) throw error;
   const rows = (data as any[]) || [];
@@ -241,7 +252,10 @@ async function fetchTenantPaymentRequests(tenantId: string): Promise<TenantPayme
     .from("payments")
     .select(`${LINK_SELECT}, customers:customer_id ( name )`)
     .eq("tenant_id", tenantId)
-    .not("stripe_checkout_session_id", "is", null)
+    // A payment link exists on EITHER rail. Filtering on the Stripe handle
+    // alone made every Square link invisible in this panel — the operator saw
+    // "no links sent" for a link the customer could already pay.
+    .or("stripe_checkout_session_id.not.is.null,square_payment_link_id.not.is.null")
     .order("created_at", { ascending: false })
     .limit(500);
   if (error) throw error;

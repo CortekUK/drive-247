@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell, ShieldAlert, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { providerPresentation } from "@/lib/payment-provider";
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
 import { useBonzahRetryAll } from '@/hooks/use-bonzah-retry-all';
@@ -48,6 +49,7 @@ export function BonzahSettings() {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { tenant: tenantContext, refetchTenant } = useTenant();
+  const pay = providerPresentation(tenantContext?.payment_provider);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -350,7 +352,7 @@ export function BonzahSettings() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary dark:text-blue-400 mt-0.5 font-medium">5.</span>
-                <span>{`Insurance premiums are included at checkout — customers pay you through your Stripe account`}</span>
+                <span>{`Insurance premiums are included at checkout — customers pay you through your ${pay.name} account`}</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-primary dark:text-blue-400 mt-0.5 font-medium">6.</span>

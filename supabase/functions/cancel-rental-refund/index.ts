@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { getConnectAccountId, getStripeClientForRecord, type StripeMode } from '../_shared/stripe-client.ts';
 import { getTenantBonzahCredentials, bonzahFetchWithCredentials } from '../_shared/bonzah-client.ts';
+import { tryProviderRefund } from '../_shared/payments/refund.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -144,8 +145,9 @@ serve(async (req) => {
         // Widened from `stripe_payment_intent_id IS NOT NULL`. That expression
         // meant "carries real electronic money" while Stripe was the only rail
         // and silently narrows to "is a Stripe payment" now that it is not.
+        // Unwidened, a Square charge is never selected and the cancellation
         // reports a refund the customer never receives.
-        .not("stripe_payment_intent_id", "is", null)
+        .or("stripe_payment_intent_id.not.is.null,square_payment_id.not.is.null")
         .order("created_at", { ascending: false });
 
       payment = (stripePayments && stripePayments[0]) || null;
@@ -211,6 +213,57 @@ serve(async (req) => {
       } catch (stripeError: any) {
         console.error("Stripe error:", stripeError);
         refundResult = { type: "error", message: stripeError.message };
+      }
+    } else if (payment?.payment_provider === "square" && refundType !== "none") {
+      // SQUARE — a sibling branch, so the Stripe condition above is byte-identical.
+      //
+      // Reaching here is guaranteed rather than hoped for: the DB CHECK
+      // payments_provider_handle_exclusivity_check forbids a square row from
+      // carrying a stripe_payment_intent_id, so a Square payment can only ever
+      // fail the test above.
+      //
+      // There is no pre-auth equivalent to handle. Square tenants never place an
+      // authorisation hold — place-deposit-hold refuses them outright — so the
+      // `requires_capture` / paymentIntents.cancel path above has no counterpart
+      // and its absence here is by design, not an omission.
+      const routed = await tryProviderRefund(supabase, tenantId, {
+        paymentRecord: payment as Record<string, unknown>,
+        amountCents:
+          refundType === "partial" && refundAmount
+            ? Math.round(refundAmount * 100)
+            : undefined,
+        reason: reason || "Rental cancelled",
+      });
+
+      // A skip is handled:true with NO error flag, so testing only `.error` let a
+      // "refund not actually issued" reach the success branch — the customer was
+      // told they were refunded while nothing left Square. Reachable whenever the
+      // connection is inactive (square_get_tokens filters status='active') or the
+      // payment has no square_payment_id yet because its webhook was missed.
+      if (routed.error || routed.skipped) {
+        refundResult = {
+          type: "error",
+          message: routed.skipped
+            ? `Square refund NOT issued: ${routed.reason ?? "provider skipped"}. No money has been returned to the customer.`
+            : `Square refund failed: ${routed.reason ?? "unknown error"}`,
+        };
+      } else {
+        const body = (routed.body ?? {}) as Record<string, unknown>;
+        // Reported as submitted, not settled. Square refunds are asynchronous and
+        // routinely sit PENDING; square-webhook writes the terminal state when
+        // refund.updated arrives. Saying "refunded" here would tell an operator
+        // the customer has their money back before Square has moved it.
+        refundResult = {
+          type: refundType,
+          refundId: body.square_refund_id ?? body.refund_id ?? null,
+          // Parenthesised: `a ?? b || c` is a SyntaxError in Deno, and this file
+          // therefore never bundled — the Square branch below it has never been
+          // deployed. Intent is unchanged: the requested amount if given,
+          // otherwise the payment's own amount, otherwise zero.
+          amount: refundAmount ?? (Number(payment.amount) || 0),
+          status: String(body.status ?? "processing"),
+          provider: "square",
+        };
       }
     }
 

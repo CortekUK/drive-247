@@ -19,9 +19,21 @@ interface StripeContext {
 async function getStripeContext(supabase: any, tenantId: string): Promise<StripeContext | null> {
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("id, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
+    .select("id, payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code")
     .eq("id", tenantId)
     .single();
+
+  // A Square tenant has no Stripe context to build. Returning null is the
+  // established "cannot build a context" signal here — the caller already
+  // handles it — so this degrades to a reminder without a payment link rather
+  // than throwing a Stripe error at an operator who pressed a button.
+  //
+  // PAYG for Square is switched off at tenant creation, so this is a backstop
+  // for the manual path rather than a route anyone should reach.
+  if ((tenant as { payment_provider?: string } | null)?.payment_provider === "square") {
+    console.warn(`[send-payg-manual-reminder] tenant ${tenantId} is on Square — no Stripe context.`);
+    return null;
+  }
 
   const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
   // NEW charges use the tenant's current platform account

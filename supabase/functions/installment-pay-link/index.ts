@@ -125,9 +125,26 @@ Deno.serve(async (req) => {
     // the email locally).
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('id, slug, company_name, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
+      .select('id, slug, company_name, payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
       .eq('id', plan.tenant_id)
       .single()
+
+    // Square tenants cannot have installment plans — installments_enabled is
+    // forced false for them at tenant creation, because every instalment after
+    // the first is an off-session charge against a card Square cannot vault.
+    //
+    // This endpoint is opened by a CUSTOMER from an email link, so the failure
+    // has to be a readable page rather than a JSON error or a Stripe exception.
+    if ((tenant as { payment_provider?: string } | null)?.payment_provider === 'square') {
+      console.error(`[installment-pay-link] tenant ${plan.tenant_id} is on Square but has an installment plan.`)
+      return htmlPage(
+        'Payment link unavailable',
+        `<h1>This payment link is not available</h1>
+         <p>We could not open this instalment payment. Please contact the rental company directly
+         and they will send you a new payment link.</p>`,
+        409,
+      )
+    }
 
     const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
     const currency = (tenant?.currency_code || 'USD').toLowerCase()

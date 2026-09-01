@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { hasProcessorHandle } from "../_shared/payments/predicates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,9 +62,17 @@ serve(async (req) => {
     // 2. Validate payment can be reversed
     //
     // Reversal is a BOOK-KEEPING correction for a payment that was recorded by
-    // hand: it rewrites the ledger and moves no money. Anything Stripe touched
-    // must go through refund instead, so the money actually comes back.
-    if (payment.stripe_payment_intent_id) {
+    // hand: it rewrites the ledger and moves no money. Anything a processor
+    // touched must go through refund instead, so the money actually comes back.
+    //
+    // This used to test `stripe_payment_intent_id` alone. That was the same
+    // question while Stripe was the only rail, but the live
+    // `payments_provider_handle_exclusivity_check` forbids a Square row from
+    // carrying any stripe_* handle — so every genuine Square charge read as
+    // "manual" and was reversible from one click, silently detaching the ledger
+    // from money still sitting at Square. See hasProcessorHandle() for why the
+    // widening cannot change the answer for a Stripe row.
+    if (hasProcessorHandle(payment)) {
       return new Response(
         JSON.stringify({
           success: false,

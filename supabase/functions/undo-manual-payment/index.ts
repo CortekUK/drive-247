@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { hasProcessorHandle } from "../_shared/payments/predicates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -128,6 +129,8 @@ serve(async (req) => {
         payments!inner (
           id,
           stripe_payment_intent_id,
+          square_payment_id,
+          square_order_id,
           status,
           refund_status
         )
@@ -140,9 +143,13 @@ serve(async (req) => {
     const manualApps = (applications || []).filter((a: any) => {
       const p = a.payments;
       if (!p) return false;
-      // Undo DELETES the payments row — no refund at Stripe, no trace. So a row
-      // Stripe ever touched must never be eligible.
-      if (p.stripe_payment_intent_id) return false;
+      // Undo DELETES the payments row — no refund at the processor, no trace.
+      // So "manual" here has to mean "no processor ever touched it", not "no
+      // Stripe PaymentIntent": the exclusivity CHECK guarantees a Square row
+      // has no stripe_* handle, which made every Square charge eligible for
+      // silent deletion. Provably unchanged for Stripe rows — see
+      // hasProcessorHandle().
+      if (hasProcessorHandle(p)) return false;
       if (p.status === "Reversed") return false;
       if (p.refund_status === "completed" || p.refund_status === "processing")
         return false;

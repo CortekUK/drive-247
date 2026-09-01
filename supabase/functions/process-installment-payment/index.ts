@@ -107,9 +107,21 @@ serve(async (req) => {
         // Get tenant for Stripe context
         const { data: tenant } = await supabase
           .from('tenants')
-          .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
+          .select('payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
           .eq('id', plan.tenant_id)
           .single()
+        // Square tenants cannot have installment plans — installments_enabled is
+        // forced false at tenant creation because this very function charges a
+        // saved card off-session, which Square's hosted checkout cannot vault.
+        //
+        // `continue`, not `return`: this is a multi-tenant batch. One anomalous
+        // plan must be skipped and counted, never allowed to abort the run and
+        // starve every Stripe tenant's instalments behind it.
+        if ((tenant as { payment_provider?: string } | null)?.payment_provider === 'square') {
+          console.error(`[process-installment-payment] skipping plan ${plan.id}: tenant ${plan.tenant_id} is on Square, which cannot hold an installment plan.`)
+          continue
+        }
+
         const stripeMode: StripeMode = (tenant?.stripe_mode as StripeMode) || 'test'
         const currency = (tenant?.currency_code || 'USD').toLowerCase()
 

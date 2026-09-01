@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
 
   const { data: tenant, error: tenantError } = await supabase
     .from('tenants')
-    .select(`${TENANT_STRIPE_COLUMNS}, currency_code`)
+    .select(`${TENANT_STRIPE_COLUMNS}, currency_code, payment_provider`)
     .eq('id', rental.tenant_id)
     .maybeSingle();
 
@@ -278,6 +278,25 @@ Deno.serve(async (req) => {
   }
 
   const tenantRow = tenant as Record<string, any>;
+
+  // Square cannot vault a card from a hosted payment link — it has no
+  // SetupIntent equivalent — so there is no stored credential to charge and no
+  // authorisation to place. This is designed out for Square, not merely
+  // unbuilt: these features are forced off at tenant creation and rendered
+  // disabled in the portal.
+  //
+  // A SKIP, not a throw. The same reasoning place-deposit-hold gives applies:
+  // several callers reach these paths, and turning a deliberately-absent
+  // feature into a 500 pages someone for working-as-designed behaviour.
+  if (tenantRow.payment_provider === 'square') {
+    console.log('[charge-saved-card] tenant is on Square — no saved card to charge.');
+    return jsonResponse({
+      success: true,
+      skipped: true,
+      reason: 'square_tenant',
+      message: 'This tenant processes payments through Square, which cannot store a card for later use. Collect this payment with a payment link instead.',
+    });
+  }
 
   const stripeMode: StripeMode = (tenantRow.stripe_mode as StripeMode) || 'test';
   const platformAccount: 'uk' | 'uae' = rental.platform_account === 'uae' ? 'uae' : 'uk';

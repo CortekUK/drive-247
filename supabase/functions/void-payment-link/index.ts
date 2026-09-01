@@ -6,6 +6,8 @@ import {
   getStripeClientForAccount,
   type StripeMode,
 } from "../_shared/stripe-client.ts";
+import { voidSquarePaymentLink } from "../_shared/payments/square-adapter.ts";
+import { resolveFromTenantRow } from "../_shared/payments/resolve.ts";
 
 // void-payment-link
 // -----------------
@@ -98,8 +100,10 @@ serve(async (req) => {
     // 2. GUARDS — fail closed. Only an unpaid, un-captured, un-applied checkout LINK
     //    may be voided here.
 
-    // Must be a payment link.
-    if (!payment.stripe_checkout_session_id) {
+    // Must be a payment link. A Square link carries square_payment_link_id
+    // instead of a Stripe session id — without this widening the button exists in
+    // the UI (which classifies by provider) and always errors here.
+    if (!payment.stripe_checkout_session_id && !payment.square_payment_link_id) {
       return json({
         success: false,
         error: "This payment is not a payment link and cannot be voided here.",
@@ -120,6 +124,9 @@ serve(async (req) => {
     const isCaptured =
       payment.capture_status === "captured" ||
       payment.stripe_payment_intent_id != null ||
+      // A settled Square charge is real money on the other rail. Omitting it
+      // would let this function "void" a link the customer has already paid.
+      payment.square_payment_id != null ||
       payment.paid_at != null ||
       (["Applied", "Completed", "Partial"].includes(payment.status) &&
         payment.capture_status !== "requires_capture");
@@ -171,12 +178,43 @@ serve(async (req) => {
       const { data: tenant } = await supabase
         .from("tenants")
         .select(
-          "id, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id",
+          "id, payment_provider, square_mode, country, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id",
         )
         .eq("id", payment.tenant_id)
         .single();
 
-      if (tenant) {
+      if (tenant && payment.payment_provider === "square") {
+        // Square's equivalent of checkout.sessions.expire is DELETE on the link.
+        //
+        // Unlike the Stripe path this is NOT best-effort. A Stripe session older
+        // than ~24h is already dead server-side, so a failed expire changes
+        // nothing. A Square link has no expiry at all — it stays payable until it
+        // is deleted — so swallowing a failure here would leave a live link behind
+        // a UI that says it is dead.
+        if (!payment.square_payment_link_id) {
+          return json({
+            success: false,
+            error:
+              "This Square payment link has no stored link id, so it cannot be revoked at Square. " +
+              "Voiding it here would mark it dead while it stays payable. Cancel it in the Square dashboard instead.",
+          }, 409);
+        }
+
+        const routed = await voidSquarePaymentLink(
+          supabase,
+          resolveFromTenantRow(tenant as Record<string, unknown>),
+          String(payment.square_payment_link_id),
+        );
+
+        if (routed.error) {
+          return json({
+            success: false,
+            error: `Could not revoke the Square payment link: ${routed.reason}. The link is still live, so the payment row was left untouched.`,
+          }, routed.httpStatus ?? 502);
+        }
+
+        stripeExpired = true; // shared flag: "the provider-side link is dead"
+      } else if (tenant) {
         const mode = (tenant.stripe_mode as StripeMode) || "test";
         const platformAccount = getChargePlatformAccount(tenant);
         const stripe = getStripeClientForAccount(platformAccount, mode);
@@ -200,8 +238,9 @@ serve(async (req) => {
 
     // 4. Soft-cancel the payment row ONLY. Never touch rental / vehicle / charges.
     //    The .is(...) filters are a concurrency guard: if a webhook captured this row
-    //    between our check and now, stripe_payment_intent_id / paid_at will be set
-    //    and the update matches zero rows — we then bail instead of voiding real money.
+    //    between our check and now, stripe_payment_intent_id / square_payment_id / paid_at
+    //    will be set and
+    //    the update matches zero rows — we then bail instead of voiding real money.
     const note = `[VOIDED]${reason ? " " + reason : ""}${voidedBy ? " (by " + voidedBy + ")" : ""}`;
 
     const { data: updated, error: updateError } = await supabase
@@ -215,6 +254,10 @@ serve(async (req) => {
       })
       .eq("id", paymentId)
       .is("stripe_payment_intent_id", null)
+      // Same guard on the Square rail. Without it, a square-webhook settlement
+      // landing between the check above and this update would be voided as if it
+      // were an unpaid link — the customer's money taken and the row marked dead.
+      .is("square_payment_id", null)
       .is("paid_at", null)
       .select("id");
 

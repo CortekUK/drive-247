@@ -1,6 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import PaymentProviderPicker, {
+  DEFAULT_PAYMENT_PROVIDER_SELECTION,
+  paymentProviderTenantColumns,
+  validatePaymentProviderSelection,
+  type PaymentProviderSelection,
+} from '@/components/tenants/payment-provider-picker';
 import { supabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/sonner';
 import { cn } from '@/lib/utils';
@@ -47,6 +53,16 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [credentials, setCredentials] = useState<TenantCredentials | null>(null);
   const [formErrors, setFormErrors] = useState<{ slug?: string }>({});
+  /**
+   * Payment provider is chosen ONCE, at creation, and is immutable afterwards.
+   * The lead was explicit that this is never a toggle: switching a live tenant
+   * between processors would strand in-flight payments, refunds and saved cards
+   * on a rail the tenant no longer has credentials for.
+   */
+  const [providerSelection, setProviderSelection] = useState<PaymentProviderSelection>(
+    DEFAULT_PAYMENT_PROVIDER_SELECTION,
+  );
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   // New clients get a simple, predictable first-login password derived from their
   // rental name: "<rentalname>123!" (e.g. slug "drive-hustle" -> "drivehustle123!").
@@ -75,6 +91,15 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
       return;
     }
 
+    // Square is only available in the countries Square actually operates in, and
+    // the tenants table carries a CHECK to match. Catching it here turns a raw
+    // constraint violation into a sentence the operator can act on.
+    const providerProblem = validatePaymentProviderSelection(providerSelection);
+    if (providerProblem) {
+      setProviderError(providerProblem);
+      return;
+    }
+    setProviderError(null);
     setFormErrors({});
     setCreating(true);
 
@@ -88,6 +113,26 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
           contact_email: formData.contactEmail,
           status: 'active',
           tenant_type: formData.tenantType,
+          ...paymentProviderTenantColumns(providerSelection),
+          // Square invariants, forced at creation rather than left to fail later.
+          //
+          // Square cannot vault a card from a hosted payment link, so every
+          // feature that charges a stored credential with nobody present is
+          // switched off for these tenants at birth. Doing it here — instead of
+          // relying on a guard at money time — is what keeps an operator from
+          // enabling installments in settings and discovering at the first
+          // charge that Square never had the card.
+          //
+          // deposit_charge_enabled=true is the counterpart: with holds
+          // unavailable, a Square deposit is collected as an ordinary charge.
+          ...(providerSelection.paymentProvider === 'square'
+            ? {
+                deposit_charge_enabled: true,
+                installments_enabled: false,
+                auto_extend_enabled: false,
+                payg_auto_reminders_enabled: false,
+              }
+            : {}),
         }])
         .select()
         .single();
@@ -135,6 +180,8 @@ export default function CreateTenantDialog({ open, onOpenChange, onCreated }: Cr
       setShowDetailsModal(true);
       onOpenChange(false);
       setFormData({ companyName: '', adminName: '', slug: '', contactEmail: '', tenantType: 'production' });
+      setProviderSelection(DEFAULT_PAYMENT_PROVIDER_SELECTION);
+      setProviderError(null);
       onCreated?.();
     } catch (error: any) {
       let errorMessage = error.message;
@@ -286,6 +333,13 @@ Access URLs:
                   Production = real customer, Test = internal/testing use
                 </p>
               </div>
+
+              <PaymentProviderPicker
+                value={providerSelection}
+                onChange={setProviderSelection}
+                disabled={creating}
+                error={providerError}
+              />
 
             </div>
 
