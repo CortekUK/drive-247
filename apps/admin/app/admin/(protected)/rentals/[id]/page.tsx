@@ -104,6 +104,7 @@ interface Tenant {
   stripe_account_status: string | null;
   bonzah_username: string | null;
   boldsign_mode: string;
+  integration_tesla_fleet: boolean;
   subscription_gate_disabled: boolean | null;
   /** Serve the booking-v2 landing design on this tenant's home page. */
   booking_v2_enabled: boolean | null;
@@ -1426,7 +1427,7 @@ export default function TenantDetailsPage() {
     }
   };
 
-  const handleToggleIntegration = async (integration: 'bonzah', enabled: boolean) => {
+  const handleToggleIntegration = async (integration: 'bonzah' | 'tesla_fleet', enabled: boolean) => {
     if (!tenant) return;
 
     const fieldName = `integration_${integration}` as keyof Tenant;
@@ -2593,6 +2594,40 @@ export default function TenantDetailsPage() {
                         </Button>
                       </>
                     )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tesla Fleet API */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-start justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <svg viewBox="0 0 278.7 300" width={24} height={24} fill="currentColor" className="text-red-500"><path d="M139.3 300L0 87.5c0 0 42.4-31.6 139.3-31.6S278.7 87.5 278.7 87.5L139.3 300zM139.3 38.5c-48.4 0-82.6 10.3-100.6 17.8l100.6 0 100.6 0C221.9 48.8 187.7 38.5 139.3 38.5zM252.1 44.8c-14.9-9.4-47.8-23.7-112.8-23.7S41.5 35.4 26.6 44.8C6.6 34.3 0 28.6 0 28.6 30.2 8.5 83.5 0 139.3 0c55.8 0 109.1 8.5 139.3 28.6C278.7 28.6 272.1 34.3 252.1 44.8z" /></svg>
+                  <div>
+                    <h3 className="text-base font-semibold">Tesla Fleet API</h3>
+                    <p className="text-xs text-muted-foreground">Supercharger billing tracking for Tesla vehicles</p>
+                  </div>
+                </div>
+                <Badge variant={tenant.integration_tesla_fleet ? 'success' : 'secondary'}>
+                  {tenant.integration_tesla_fleet ? 'Enabled' : 'Disabled'}
+                </Badge>
+              </div>
+              <Separator className="mb-5" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Integration</span>
+                  <div className="flex items-center gap-2">
+                    <span className={cn("inline-block h-2 w-2 rounded-full", tenant.integration_tesla_fleet ? "bg-emerald-400" : "bg-muted-foreground/40")} />
+                    <span className="text-sm font-medium">{tenant.integration_tesla_fleet ? 'Active' : 'Inactive'}</span>
+                    <Button
+                      variant="ghost" size="sm" className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => handleToggleIntegration('tesla_fleet', !tenant.integration_tesla_fleet)}
+                    >
+                      {tenant.integration_tesla_fleet ? 'Disable' : 'Enable'}
+                    </Button>
                   </div>
                 </div>
               </div>

@@ -45,6 +45,7 @@ import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { CommunicationSettings } from '@/components/settings/communication-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
+import { TeslaFleetSettings } from '@/components/settings/tesla-fleet-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
 import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
@@ -171,7 +172,7 @@ const Settings = () => {
     'requirements', 'duration', 'lockbox',
     'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
     'reminders', 'push', 'templates',
-    'messaging', 'insurance', 'esign', 'blacklist',
+    'messaging', 'insurance', 'esign', 'tesla', 'blacklist',
     'subscription',
   ];
   const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
@@ -1775,6 +1776,7 @@ const Settings = () => {
                 { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
                 { value: 'insurance', icon: Shield, label: 'Insurance' },
                 { value: 'esign', icon: FilePenLine, label: 'E-Sign' },
+                { value: 'tesla', icon: Zap, label: 'Tesla' },
                 { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
               ] as const).filter(item => canViewSettings(item.value)).map(item => (
@@ -5212,6 +5214,11 @@ const Settings = () => {
         {/* E-Signatures Tab */}
         <TabsContent value="esign" className="space-y-6">
           <ESignSettings />
+        </TabsContent>
+
+        {/* Tesla Fleet Tab */}
+        <TabsContent value="tesla" className="space-y-6">
+          <TeslaFleetSettings />
         </TabsContent>
 
         {/* Blacklist Tab */}
