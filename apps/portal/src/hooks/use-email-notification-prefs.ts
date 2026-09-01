@@ -21,7 +21,6 @@ export const EMAIL_NOTIFICATION_CATEGORIES = [
   "insurance",
   "returns",
   "verification",
-  "fines",
 ] as const;
 
 export type EmailNotificationCategory =

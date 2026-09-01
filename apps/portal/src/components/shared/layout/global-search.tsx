@@ -224,7 +224,6 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
                 <SelectItem value="customers">Customers</SelectItem>
                 <SelectItem value="vehicles">Vehicles</SelectItem>
                 <SelectItem value="rentals">Rentals</SelectItem>
-                <SelectItem value="fines">Fines</SelectItem>
                 <SelectItem value="payments">Payments</SelectItem>
                 {!hideInsurance && <SelectItem value="insurance">Insurance</SelectItem>}
                 <SelectItem value="plates">Plates</SelectItem>
@@ -281,7 +280,7 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold text-foreground">Search Everything</h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Instantly find customers, vehicles, rentals, fines, payments{!hideInsurance ? ', insurance,' : ','} invoices, agreements, and plates
+                  Instantly find customers, vehicles, rentals, payments{!hideInsurance ? ', insurance,' : ','} invoices, agreements, and plates
                 </p>
               </div>
 
@@ -335,7 +334,6 @@ export const GlobalSearch = ({ open, onOpenChange }: GlobalSearchProps) => {
               {renderGroup("Customers", results.customers, "")}
               {renderGroup("Vehicles", results.vehicles, "")}
               {renderGroup("Rentals", results.rentals, "")}
-              {renderGroup("Fines", results.fines, "")}
               {renderGroup("Payments", results.payments, "")}
               {!hideInsurance && renderGroup("Insurance", results.insurance, "")}
               {renderGroup("Plates", results.plates, "")}

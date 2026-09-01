@@ -69,16 +69,6 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
             .limit(10);
           break;
 
-        case 'fines':
-          query = supabase
-            .from('view_fines_export')
-            .select('*')
-            .eq('tenant_id', tenantId)
-            .gte('issue_date', fromDate)
-            .lte('issue_date', toDate)
-            .limit(10);
-          break;
-
         case 'customer-statements':
           // tenant_id is added to view_customer_statements by migration
           // 20260518143816_add_tenant_id_to_view_customer_statements.sql.
@@ -131,13 +121,6 @@ export const ReportPreviewModal: React.FC<ReportPreviewModalProps> = ({
           { key: 'customer_name', label: 'Customer' },
           { key: 'vehicle_reg', label: 'Vehicle' },
           { key: 'monthly_amount', label: 'Monthly', type: 'currency' },
-          { key: 'status', label: 'Status' }
-        ];
-      case 'fines':
-        return [
-          { key: 'reference_no', label: 'Reference' },
-          { key: 'customer_name', label: 'Customer' },
-          { key: 'amount', label: 'Amount', type: 'currency' },
           { key: 'status', label: 'Status' }
         ];
       case 'customer-statements':

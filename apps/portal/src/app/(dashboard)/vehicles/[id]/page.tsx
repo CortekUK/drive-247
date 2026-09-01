@@ -36,7 +36,6 @@ import { EditVehicleDialogEnhanced as EditVehicleDialog } from "@/components/veh
 import { VehicleFileUpload } from "@/components/vehicles/vehicle-file-upload";
 import { VehicleDisposalDialog } from "@/components/vehicles/vehicle-disposal-dialog";
 import { VehicleUndoDisposalDialog } from "@/components/vehicles/vehicle-undo-disposal-dialog";
-import { AddFineDialog } from "@/components/shared/dialogs/add-fine-dialog";
 import { DateRangeFilter } from "@/components/vehicles/date-range-filter";
 import { PLBreadcrumb } from "@/components/shared/data-display/pl-breadcrumb";
 import { VehiclePhotoGallery } from "@/components/vehicles/vehicle-photo-gallery";
@@ -315,7 +314,6 @@ export default function VehicleDetail() {
   const { canEdit } = useManagerPermissions();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'USD';
-  const [showAddFineDialog, setShowAddFineDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDisposeDialog, setShowDisposeDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -511,26 +509,6 @@ export default function VehicleDetail() {
   // an operator can find & close a forgotten rental that's silently locking the car.
   const activeRentals = (rentals ?? []).filter((r: any) => r.status === 'Active');
   const todayStr = new Date().toISOString().slice(0, 10);
-
-  // Fetch fines
-  const { data: fines } = useQuery({
-    queryKey: ["vehicle-fines", id],
-    queryFn: async () => {
-      if (!id) return [];
-      const { data, error } = await supabase
-        .from("fines")
-        .select(`
-          *,
-          customers!fines_customer_id_fkey(name)
-        `)
-        .eq("vehicle_id", id)
-        .order("issue_date", { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id,
-  });
 
   // Calculate P&L summary
   const plSummary = plEntries?.reduce(
@@ -1861,16 +1839,6 @@ export default function VehicleDetail() {
           </div>
 
         </div>
-
-      {/* Add Fine Dialog */}
-      {rentals?.some((r: any) => r.status === 'Active') && (
-        <AddFineDialog
-          open={showAddFineDialog}
-          onOpenChange={setShowAddFineDialog}
-          vehicle_id={id}
-          customer_id={rentals?.find((r: any) => r.status === 'Active')?.customer_id}
-        />
-      )}
 
       {/* Fleet Health Dialogs */}
       <RecordOdometerDialog
