@@ -169,6 +169,26 @@ export async function settleBookingPayment(
   }
 
   const isPortalPayment = metadata?.source === "portal";
+  // The DOCUMENTS gate needs a WIDER exclusion than `isPortalPayment`, and the
+  // two must not be merged.
+  //
+  // `isPortalPayment` ("portal" only) governs payment_status and the
+  // booking_pending email, and that classification is pre-existing behaviour a
+  // customer_portal balance payment depends on — it really does settle a
+  // rental's balance and really should mark it fulfilled.
+  //
+  // The documents gate is different. create-booking-payment-intent skips
+  // minting a booking_document_links row for BOTH 'portal' AND 'customer_portal'
+  // (index.ts:352), because neither is a new booking. If the gate opened on the
+  // wider set, a customer clearing a fuel charge on an existing rental would
+  // flip that rental's documents_status 'not_required' -> 'pending' with NO
+  // token minted and therefore NO email ever sent — a booking demanding
+  // documents that nothing on any surface can supply, and which (per the
+  // deliberate no-auto-cancel decision) would then sit in the
+  // (tenant_id, documents_status) "stuck paid booking" index forever as a false
+  // positive. The two conditions MUST name the same set; keep them in step.
+  const isPortalInitiated =
+    metadata?.source === "portal" || metadata?.source === "customer_portal";
   console.log(
     `${logPrefix} Booking settlement:`,
     rentalId,
@@ -200,16 +220,21 @@ export async function settleBookingPayment(
     // start. Same compare-and-swap shape booking-documents-link uses for the
     // same column, and for the same reason.
     //
-    // Inside the !isPortalPayment guard on purpose: an operator-created rental
-    // paid from the portal must NOT gain a customer document gate.
-    const { error: docsGateError } = await supabase
-      .from("rentals")
-      .update({ documents_status: "pending", updated_at: new Date().toISOString() })
-      .eq("id", rentalId)
-      .eq("documents_status", "not_required");
+    // Gated on !isPortalInitiated, NOT !isPortalPayment: an operator-created
+    // rental paid from the portal, AND an existing customer clearing a balance
+    // from the customer portal, must both be kept out of the customer document
+    // gate. See the note on isPortalInitiated above — this condition must stay
+    // identical to the mint's in create-booking-payment-intent.
+    if (!isPortalInitiated) {
+      const { error: docsGateError } = await supabase
+        .from("rentals")
+        .update({ documents_status: "pending", updated_at: new Date().toISOString() })
+        .eq("id", rentalId)
+        .eq("documents_status", "not_required");
 
-    if (docsGateError) {
-      console.error(`${logPrefix} Failed to open document gate:`, docsGateError);
+      if (docsGateError) {
+        console.error(`${logPrefix} Failed to open document gate:`, docsGateError);
+      }
     }
   }
 
@@ -518,7 +543,12 @@ export async function settleBookingPayment(
           .eq("rental_id", rentalId)
           .maybeSingle();
 
-        if (link?.token) {
+        // Same exclusion as the gate above and as the mint. Without it a
+        // customer_portal balance payment reaches this branch, finds no link
+        // (none was minted) and logs a spurious error every redelivery.
+        if (isPortalInitiated) {
+          // Not a booking, so no documents email. Nothing to log.
+        } else if (link?.token) {
           // No `req` here on purpose — a Stripe webhook's Origin is Stripe's,
           // not the customer's booking site. deriveBookingOrigin falls through
           // to the tenant subdomain, which is the correct answer anyway.
