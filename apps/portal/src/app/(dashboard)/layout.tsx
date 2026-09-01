@@ -30,7 +30,6 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { AppBannerStack } from "@/components/banners/app-banner-stack";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
@@ -330,7 +329,6 @@ export default function DashboardLayout({
             <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
               <HeaderSearch />
             </div>
-            <TraxAIDialog />
             <div className="ml-auto flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
               <div className="hidden min-[420px]:flex items-center gap-1 sm:gap-2">
                 <BonzahBalance />

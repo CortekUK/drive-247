@@ -44,8 +44,6 @@ import { BlockedDatesManager } from "@/components/blocked-dates/blocked-dates-ma
 import { VehicleExtrasManager } from "@/components/vehicles/vehicle-extras-manager";
 import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pricing";
 import { VehicleDailyPricingCalendar } from "@/components/vehicles/vehicle-daily-pricing-calendar";
-import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
-import { TraxIcon } from "@/components/chat/TraxIcon";
 import { Package, CalendarRange } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
@@ -1074,16 +1072,16 @@ export default function VehicleDetail() {
           )}
 
 
-          {/* Vehicle Pricing — Trax suggestions vs the network */}
+          {/* Vehicle Pricing */}
           <div className="mt-6">
             <Card className="shadow-card rounded-lg">
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <TraxIcon size={20} />
+                  <DollarSign className="h-5 w-5" />
                   Vehicle Pricing
                 </CardTitle>
                 <CardDescription>
-                  Trax compares your rates against similar vehicles across the Drive247 network.
+                  The daily, weekly and monthly rates quoted for this vehicle.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1095,34 +1093,14 @@ export default function VehicleDetail() {
                   ] as const).map(([tier, label, col]) => (
                     <div
                       key={tier}
-                      className="flex flex-col gap-1.5 border-b border-[#f1f5f9] dark:border-gray-800 pb-3 last:border-0 last:pb-0"
+                      className="flex items-center justify-between border-b border-[#f1f5f9] dark:border-gray-800 pb-3 last:border-0 last:pb-0"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-[#080812] dark:text-gray-100">
-                          {label}
-                        </span>
-                        <span className="text-sm tabular-nums text-[#404040] dark:text-gray-300">
-                          {vehicle[col] != null ? `$${vehicle[col]}` : "—"}
-                        </span>
-                      </div>
-                      <TraxPriceSuggestion
-                        vehicleId={vehicle.id}
-                        tier={tier}
-                        currentPrice={vehicle[col] ?? undefined}
-                        showEmpty
-                        onImplement={async (price) => {
-                          await supabase
-                            .from("vehicles")
-                            .update({ [col]: price })
-                            .eq("id", vehicle.id);
-                          queryClient.invalidateQueries({ queryKey: ["vehicle", id] });
-                          queryClient.invalidateQueries({ queryKey: ["trax-price"] });
-                          toast({
-                            title: "Price updated",
-                            description: `${label} rate set to $${price}.`,
-                          });
-                        }}
-                      />
+                      <span className="text-sm font-medium text-[#080812] dark:text-gray-100">
+                        {label}
+                      </span>
+                      <span className="text-sm tabular-nums text-[#404040] dark:text-gray-300">
+                        {vehicle[col] != null ? `$${vehicle[col]}` : "—"}
+                      </span>
                     </div>
                   ))}
                 </div>
