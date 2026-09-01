@@ -53,10 +53,6 @@ const CATEGORY_META: Record<
     label: 'Verification',
     description: 'Identity and document verification results',
   },
-  fines: {
-    label: 'Fines',
-    description: 'Fines and penalty charges recorded',
-  },
 };
 
 interface EmailNotificationSettingsProps {

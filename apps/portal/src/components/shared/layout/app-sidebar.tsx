@@ -12,7 +12,6 @@ import { CalendarDaysIcon } from "@/components/ui/calendar-days";
 import { UsersIcon } from "@/components/ui/users";
 import { BanIcon } from "@/components/ui/ban";
 import { MessageSquareIcon } from "@/components/ui/message-square";
-import { BadgeAlertIcon } from "@/components/ui/badge-alert";
 import { FolderOpenIcon } from "@/components/ui/folder-open";
 import { ChartBarIncreasingIcon } from "@/components/ui/chart-bar-increasing";
 import { TrendingUpIcon } from "@/components/ui/trending-up";
@@ -47,7 +46,6 @@ const AnimatedCalendarDays = wrapAnimatedIcon(CalendarDaysIcon);
 const AnimatedUsers = wrapAnimatedIcon(UsersIcon);
 const AnimatedBan = wrapAnimatedIcon(BanIcon);
 const AnimatedMessageSquare = wrapAnimatedIcon(MessageSquareIcon);
-const AnimatedBadgeAlert = wrapAnimatedIcon(BadgeAlertIcon);
 const AnimatedFolderOpen = wrapAnimatedIcon(FolderOpenIcon);
 const AnimatedChartBar = wrapAnimatedIcon(ChartBarIncreasingIcon);
 const AnimatedTrendingUp = wrapAnimatedIcon(TrendingUpIcon);
@@ -284,7 +282,6 @@ export function AppSidebar() {
       items: [
         { name: "Payments", href: "/payments", icon: AnimatedCreditCard },
         { name: "Invoices", href: "/invoices", icon: AnimatedReceipt },
-        { name: "Fines", href: "/fines", icon: AnimatedBadgeAlert },
         { name: "Expenses", href: "/expenses", icon: Wallet },
         { name: "Credits", href: "/credits", icon: CircleDollarSign },
       ],

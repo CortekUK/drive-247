@@ -102,7 +102,6 @@ const entityRoutes: Record<string, string> = {
   customer: '/customers',
   vehicle: '/fleet/vehicles',
   rental: '/rentals',
-  fine: '/fines',
   payment: '/payments',
 };
 

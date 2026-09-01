@@ -94,24 +94,6 @@ interface PaymentRecord {
   vehicle?: { reg: string } | null;
 }
 
-interface FineRecord {
-  id: string;
-  type: string;
-  amount: number;
-  issue_date: string;
-  due_date: string;
-  status?: string | null;
-  liability?: string | null;
-  reference_no?: string | null;
-  notes?: string | null;
-  vehicle_id: string;
-  customer_id?: string | null;
-  created_at?: string | null;
-  // Joined data
-  customer?: { name: string } | null;
-  vehicle?: { reg: string } | null;
-}
-
 interface PlateRecord {
   id: string;
   plate_number: string;
@@ -293,39 +275,6 @@ export function paymentToDocument(payment: PaymentRecord, currencyCode: string =
 }
 
 /**
- * Convert fine record to searchable text
- */
-export function fineToDocument(fine: FineRecord, currencyCode: string = 'USD'): DocumentResult {
-  const sym = getCurrencySymbol(currencyCode);
-  const parts: string[] = [
-    `Fine: ${fine.type}`,
-    `Amount: ${sym}${fine.amount}`,
-    `Issue date: ${formatDate(fine.issue_date)}`,
-    `Due date: ${formatDate(fine.due_date)}`,
-  ];
-
-  if (fine.status) parts.push(`Status: ${fine.status}`);
-  if (fine.liability) parts.push(`Liability: ${fine.liability}`);
-  if (fine.reference_no) parts.push(`Reference: ${fine.reference_no}`);
-  if (fine.customer?.name) parts.push(`Customer: ${fine.customer.name}`);
-  if (fine.vehicle?.reg) parts.push(`Vehicle: ${fine.vehicle.reg}`);
-  if (fine.notes) parts.push(`Notes: ${fine.notes}`);
-
-  return {
-    content: parts.join('. '),
-    metadata: {
-      entity_type: 'fine',
-      fine_id: fine.id,
-      type: fine.type,
-      amount: fine.amount,
-      vehicle_id: fine.vehicle_id,
-      customer_id: fine.customer_id,
-      status: fine.status,
-    },
-  };
-}
-
-/**
  * Convert plate record to searchable text
  */
 export function plateToDocument(plate: PlateRecord, currencyCode: string = 'USD'): DocumentResult {
@@ -392,7 +341,6 @@ export function getDocumentLoader(tableName: string, currencyCode: string = 'USD
     vehicles: (r) => vehicleToDocument(r as VehicleRecord, currencyCode),
     rentals: (r) => rentalToDocument(r as RentalRecord, currencyCode),
     payments: (r) => paymentToDocument(r as PaymentRecord, currencyCode),
-    fines: (r) => fineToDocument(r as FineRecord, currencyCode),
     plates: (r) => plateToDocument(r as PlateRecord, currencyCode),
     knowledge_articles: (r) => knowledgeArticleToDocument(r as KnowledgeArticleRecord),
   };
@@ -404,7 +352,7 @@ export function getDocumentLoader(tableName: string, currencyCode: string = 'USD
  * Get list of tables that are indexed for RAG
  */
 export function getIndexedTables(): string[] {
-  return ['customers', 'vehicles', 'rentals', 'payments', 'fines', 'plates', 'knowledge_articles'];
+  return ['customers', 'vehicles', 'rentals', 'payments', 'plates', 'knowledge_articles'];
 }
 
 /**
@@ -416,7 +364,6 @@ export function getSelectFields(tableName: string): string {
     vehicles: '*',
     rentals: '*, customer:customers(name, email), vehicle:vehicles(reg, make, model)',
     payments: '*, customer:customers(name), rental:rentals(rental_number), vehicle:vehicles(reg)',
-    fines: '*, customer:customers(name), vehicle:vehicles(reg)',
     plates: '*, vehicle:vehicles(reg)',
     knowledge_articles: 'id, category, title, content, tags',
   };

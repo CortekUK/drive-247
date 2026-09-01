@@ -85,9 +85,9 @@ ${metricsJson}
 \`\`\`
 
 ### Key fields explained:
-- **Counts**: total_customers, active_customers, inactive_customers, gig_driver_customers, blocked_customers, total_vehicles, available_vehicles, rented_vehicles, maintenance_vehicles, disposed_vehicles, total_rentals, active_rentals, pending_rentals, closed_rentals, cancelled_rentals, completed_rentals, gig_driver_rentals, lockbox_rentals, pending_extension_requests, pending_cancellation_requests, total_payments_count, pending_payments_count, refunded_payments_count, total_fines, paid_fines, unpaid_fines, waived_fines, total_invoices, pending_invoices, total_expenses_count, total_reviews, skipped_reviews, total_agreements, total_leads, total_reminders, pending_reminders, total_staff
+- **Counts**: total_customers, active_customers, inactive_customers, gig_driver_customers, blocked_customers, total_vehicles, available_vehicles, rented_vehicles, maintenance_vehicles, disposed_vehicles, total_rentals, active_rentals, pending_rentals, closed_rentals, cancelled_rentals, completed_rentals, gig_driver_rentals, lockbox_rentals, pending_extension_requests, pending_cancellation_requests, total_payments_count, pending_payments_count, refunded_payments_count, total_invoices, pending_invoices, total_expenses_count, total_reviews, skipped_reviews, total_agreements, total_leads, total_reminders, pending_reminders, total_staff
 - **Amounts** (in ${currencyCode}): total_fleet_value, total_payments_amount, pending_payments, completed_payments_amount, refunded_payments_amount, total_fine_amount, unpaid_fine_amount, total_invoiced_amount, pending_invoiced_amount, total_revenue, total_collected, total_refunds, outstanding_balance, total_expenses_amount, average_review_rating
-- **Breakdown arrays** (pre-built chart data — use directly as the "data" array in charts): vehicles_by_make, rentals_by_status, payments_by_status, fines_by_status, revenue_by_category, expenses_by_category, leads_by_status, staff_by_role
+- **Breakdown arrays** (pre-built chart data — use directly as the "data" array in charts): vehicles_by_make, rentals_by_status, payments_by_status, revenue_by_category, expenses_by_category, leads_by_status, staff_by_role
 
 You have access to search results from the database that will be provided as context. Use this data to answer questions accurately.
 
