@@ -406,7 +406,6 @@ export const ROUTES = {
   RENTALS: "/rentals",
   PAYMENTS: "/payments",
   FINES: "/fines",
-  PLATES: "/plates",
   INSURANCE: "/insurance",
   INVOICES: "/invoices",
   INSURANCES: "/insurances",
