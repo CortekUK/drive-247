@@ -648,8 +648,18 @@ function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
             </p>
           ) : (
             <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
-              Your documents were accepted and your booking is confirmed
-              {rental.documentsCompletedAt
+              {/*
+                Only claim the documents were accepted when they actually were.
+                An operator may approve over unverified documents ("Approve
+                Anyway"), which lands here with `documents_status` still
+                'pending' or 'submitted' — the booking is genuinely confirmed,
+                but saying their documents cleared would be a second, false
+                statement riding on a true one.
+              */}
+              {documents === 'verified'
+                ? 'Your documents were accepted and your booking is confirmed'
+                : 'Your booking is confirmed'}
+              {documents === 'verified' && rental.documentsCompletedAt
                 ? ` — documents cleared ${formatTimestamp(rental.documentsCompletedAt)}`
                 : ''}
               . We will be in touch with your pick-up details.

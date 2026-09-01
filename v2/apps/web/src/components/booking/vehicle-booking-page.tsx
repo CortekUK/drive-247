@@ -592,11 +592,11 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
    * Replaces the previous bare `bookingCompleted` boolean, and the two facts are
    * now derived from ONE value rather than tracked separately: "this car has
    * been paid for" and "here is the link to finish it" can no longer disagree.
-   * Rehydrated from sessionStorage on mount — see `PaidBookingHandoff`.
+   * Rehydrated from sessionStorage on mount — see `PaidBookingHandoff`. Non-null
+   * also means the CTA must not offer to book the same car for the same days
+   * again; `hardBlockReason` below is where that is enforced.
    */
   const [paidHandoff, setPaidHandoff] = useState<PaidBookingHandoff | null>(null);
-  /** Paid for. The CTA must not offer to book the same car for the same days again. */
-  const bookingCompleted = paidHandoff !== null;
 
   const validation = useMemo(
     () =>
@@ -763,21 +763,75 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
   }, []);
 
   /**
+   * Did this tab already pay for this car?
+   *
+   * The companion to the effect above, and the one that covers the case a
+   * 3-D Secure return does not: an ordinary reload, or a back-navigation, after
+   * an in-page payment. `paidHandoff` and `checkoutMessage` are ordinary
+   * `useState`, so without this the page would come back looking untouched and
+   * would happily offer to book the same car again.
+   *
+   * Runs once, and only adopts a stash written for THIS vehicle — see
+   * `readPaidHandoff`. It does NOT reopen the payment dialog: the money has
+   * already moved, and re-mounting Stripe over a paid booking is how a customer
+   * ends up paying twice. The page-level notice is the whole of the recovery.
+   */
+  useEffect(() => {
+    const stashed = readPaidHandoff(vehicleId);
+    if (stashed === null) return;
+    setPaidHandoff(stashed);
+    setCheckoutMessage(
+      stashed.kind === "succeeded"
+        ? "Payment received for this booking. Your documents are the last step before we confirm it."
+        : "Your bank is still confirming this payment. We will email you when it clears.",
+    );
+  }, [vehicleId]);
+
+  /**
    * What the page says once the dialog is dismissed.
    *
-   * The dialog itself carries the full confirmation; this leaves a trace on the
-   * page behind it, so closing the dialog does not look like nothing happened.
+   * The dialog is dismissible and the page behind it is the only durable
+   * surface, so this does two things rather than one: it writes the handoff to
+   * sessionStorage (so a reload cannot erase the evidence of a charge) and it
+   * leaves a sentence beside the total. The LINK lives in `PaidBookingNotice`
+   * below — `checkoutMessage` is rendered as plain text by `CheckoutTotal`, and
+   * a URL spelled out in prose is not a route anybody taps on a phone.
+   *
+   * NEITHER SENTENCE MAY SAY "CONFIRMED". The documents still have to be
+   * uploaded and an operator still has to approve; `notify-booking-approved` is
+   * what tells the customer they are confirmed, and it fires from the portal,
+   * not from here.
    */
-  const handlePaymentSucceeded = useCallback((outcome: PaymentOutcome) => {
-    setBookingCompleted(true);
-    const reference =
-      outcome.rentalNumber === null ? "" : ` Your booking reference is ${outcome.rentalNumber}.`;
-    setCheckoutMessage(
-      outcome.kind === "succeeded"
-        ? `Payment received — your booking is confirmed.${reference}`
-        : `Payment is being confirmed by your bank.${reference} We will email you when it clears.`,
-    );
-  }, []);
+  const handlePaymentSucceeded = useCallback(
+    (outcome: PaymentOutcome) => {
+      const handoff: PaidBookingHandoff = {
+        vehicleId,
+        // Read off the write hook rather than `paymentRequest`, which is
+        // declared further down this component and would be in its temporal
+        // dead zone in this dependency array. Null after a 3-D Secure hop —
+        // that is a fresh mount, so the booking hook is idle again — and the
+        // field is informational, so null is tolerated rather than asserted on.
+        rentalId:
+          booking.state.status === "ready" ? booking.state.booking.rentalId : null,
+        rentalNumber: outcome.rentalNumber,
+        documentsToken: outcome.documentsToken,
+        kind: outcome.kind,
+      };
+      setPaidHandoff(handoff);
+      stashPaidHandoff(handoff);
+
+      const reference =
+        outcome.rentalNumber === null
+          ? ""
+          : ` Your booking reference is ${outcome.rentalNumber}.`;
+      setCheckoutMessage(
+        outcome.kind === "succeeded"
+          ? `Payment received.${reference} One step left: upload your driving licence and a selfie so we can confirm this booking.`
+          : `Payment is being confirmed by your bank.${reference} We will email you when it clears, with a link to upload your driving licence and a selfie.`,
+      );
+    },
+    [vehicleId, booking.state],
+  );
 
   const handlePaymentOpenChange = useCallback((next: boolean) => {
     setPaymentOpen(next);
@@ -1081,6 +1135,16 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
       </Link>
 
       {/*
+        THE DURABLE SURFACE. The payment dialog is dismissible and the fixed
+        mobile bar is unmounted while it is open, so without this the only trace
+        of a completed payment was one grey sentence under the total — and the
+        route to the outstanding upload step existed nowhere on the page at all.
+        It sits above the form deliberately: the form is now the least useful
+        thing on screen.
+      */}
+      {paidHandoff !== null ? <PaidBookingNotice handoff={paidHandoff} /> : null}
+
+      {/*
         VEHICLE LEFT (~38%), FORM RIGHT (~62%) — and the vehicle is FIRST in the
         DOM, so the phone's single column reads car-then-form without an
         `order-*` utility divorcing the visual order from the tab order.
@@ -1203,6 +1267,95 @@ const FIELD_BY_DOM_ID: Readonly<Record<string, BookingField>> = {
   "agree-terms": "agreeTerms",
   "agree-charges": "agreeCharges",
 };
+
+/* ─────────────────────── the paid-but-not-confirmed notice ───────────────── */
+
+/**
+ * The block that stays on the page after the payment dialog is closed.
+ *
+ * ── EVERY SENTENCE HERE IS CHOSEN AGAINST ONE RULE ──────────────────────────
+ * It may not say the booking is confirmed, complete or booked. It is not:
+ * payment has been taken, the documents are outstanding, and an OPERATOR still
+ * has to approve. The confirmation email is sent by `notify-booking-approved`
+ * from the portal at that approval, and telling a customer otherwise is how
+ * somebody turns up at a depot for keys nobody is going to hand over.
+ *
+ * The primary action is the upload link when there is a token to build one
+ * from. When there is not — the endpoint has not been redeployed, or this is a
+ * stash from before the field existed — it says the link was emailed, which is
+ * true (the settlement path sends it) and is the one honest fallback. A dead
+ * link is never rendered.
+ *
+ * `processing` gets no link at all. The bank has not taken the money yet, and
+ * inviting someone to photograph their licence for a payment that may still be
+ * declined is work we should not be asking for.
+ */
+function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
+  const settled = handoff.kind === "succeeded";
+  const href =
+    settled && handoff.documentsToken !== null
+      ? bookingDocumentsHref(handoff.documentsToken)
+      : null;
+
+  return (
+    <div
+      // `role="status"` rather than `alert`: this is the outcome of something
+      // the customer just did on purpose, not an interruption.
+      role="status"
+      className={cn(
+        "mt-4 rounded-[18px] border px-4 py-4 sm:px-5",
+        settled
+          ? "border-success-med bg-success-light"
+          : "border-info-med bg-info-light",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 shrink-0">
+          {settled ? (
+            <CheckCircle2 aria-hidden strokeWidth={1.75} className="size-5 text-success" />
+          ) : (
+            <Clock aria-hidden strokeWidth={1.75} className="size-5 text-info" />
+          )}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-brand-text">
+            {settled ? "Payment received" : "Payment is being confirmed"}
+          </h2>
+
+          <p className="mt-1 text-sm leading-relaxed text-brand-text-soft">
+            {settled
+              ? "One step left before we can confirm this booking: a photo of your driving licence and a selfie. An operator checks them and we will email you as soon as it is confirmed."
+              : "Your bank has not settled this yet. We will email you the moment it clears, with a link to upload your driving licence and a selfie."}
+          </p>
+
+          {handoff.rentalNumber !== null ? (
+            <p className="mt-2 text-xs text-brand-text-subtle">
+              Booking reference{" "}
+              <span className="font-medium text-brand-text">
+                {handoff.rentalNumber}
+              </span>
+            </p>
+          ) : null}
+
+          {href !== null ? (
+            <Button asChild variant="brand" size="lg" className="mt-3 h-11 w-full sm:w-auto">
+              <Link href={href}>
+                Upload my documents
+                <ArrowRight aria-hidden strokeWidth={2} />
+              </Link>
+            </Button>
+          ) : settled ? (
+            <p className="mt-3 text-xs leading-relaxed text-brand-text-subtle">
+              We have emailed you the link to upload them. It is valid for seven
+              days — if it expires, that page will send you a fresh one.
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ───────────────────────────────── helpers ───────────────────────────── */
 

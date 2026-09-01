@@ -1,11 +1,15 @@
 // @ts-nocheck - This is a Deno Edge Function, not Node.js TypeScript
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { enqueueBookingEmail } from '../_shared/email-outbox.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+/** Shape guard for the booking document gate — see the note at its call site. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ProcessRequest {
   sessionId: string;
@@ -377,6 +381,97 @@ serve(async (req) => {
         }
 
         finalResult = 'rejected';
+      }
+    }
+
+    // ---- Booking document gate ---------------------------------------------
+    // Scoped by rentals.identity_verification_session_id, which only
+    // booking-documents-link ever writes. It therefore matches ZERO rows for the
+    // portal, QR and additional-driver flows that also land in this function —
+    // they are unaffected by construction, not by a flag.
+    //
+    // PLACED AFTER THE blocked_identities CHECK, DELIBERATELY. That check runs
+    // last and can flip a GREEN verdict to rejected (:379). Writing the gate
+    // earlier, next to the customers mirror, would stamp documents_status
+    // 'verified' and email "documents received" to a customer the operator has
+    // explicitly blocked. Reading `finalResult` here is what makes the block
+    // land on the booking too.
+    //
+    // GREEN *AND* RETRY BOTH COUNT AS VERIFIED. v1's own desktop component
+    // admits RETRY and lets the customer proceed
+    // (apps/booking/src/components/AIVerificationQR.tsx:142-147). More
+    // importantly, this function turns an OCR or Rekognition OUTAGE into
+    // review_result 'RED' (:159-183 and :196-225), so a GREEN-only gate would
+    // convert an infrastructure failure into "your identity was rejected, your
+    // booking is void". 'rejected' is retryable on the v2 page, not terminal.
+    // (Those two outage branches return early and never reach here, so they
+    // leave documents_status at 'pending' — still retryable, which is right.)
+    //
+    // The UUID guard is not cosmetic: rentals.identity_verification_session_id
+    // is a `uuid` column while identity_verifications.session_id is `text`, so
+    // PostgREST answers a hard 400 ("invalid input syntax for type uuid") rather
+    // than "no rows" if a non-UUID session id is ever filtered on. Every writer
+    // today uses crypto.randomUUID() (create-ai-verification-session/index.ts:136
+    // and :222), so this only ever skips a flow that could not have matched.
+    const docsStatus =
+      finalResult === 'verified' || finalResult === 'review_required' ? 'verified' : 'rejected';
+
+    let gated: { id: string; tenant_id: string }[] | null = null;
+    let gateError: unknown = null;
+    if (UUID_RE.test(String(sessionId))) {
+      const gateResult = await supabaseClient
+        .from('rentals')
+        .update({
+          documents_status: docsStatus,
+          documents_completed_at: docsStatus === 'verified' ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('identity_verification_session_id', sessionId)
+        .select('id, tenant_id');
+      gated = gateResult.data;
+      gateError = gateResult.error;
+    }
+
+    if (gateError) {
+      console.error('[ProcessAI] booking document gate update failed:', gateError);
+    } else if (gated && gated.length > 0) {
+      console.log('[ProcessAI] booking document gate ->', docsStatus, 'rentals:', gated.length);
+      if (docsStatus === 'verified') {
+        for (const row of gated) {
+          // "Documents received", NOT "booking confirmed". The confirmation
+          // email is a separate, later event fired by the operator's approval
+          // (notify-booking-approved). Saying confirmed here would tell a
+          // customer they are booked while an operator can still reject them.
+          await enqueueBookingEmail(supabaseClient, {
+            tenantId: row.tenant_id,
+            rentalId: row.id,
+            emailKey: 'booking_documents_received',
+          });
+        }
+        // Best-effort inline drain — the outbox row is the guarantee, this is
+        // only latency. Bounded so a slow mailer cannot hold the customer's
+        // upload request open.
+        try {
+          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/sweep-booking-emails`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ rentalId: gated[0].id }),
+            signal: AbortSignal.timeout(8000),
+          });
+        } catch (e) {
+          console.warn('[ProcessAI] inline sweep skipped:', e);
+        }
+
+        // Retire the durable link. The row is kept, not deleted: a pending
+        // booking_email_dispatch row still references this rental, and the
+        // record of when the customer finished is worth having.
+        await supabaseClient
+          .from('booking_document_links')
+          .update({ consumed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('rental_id', gated[0].id);
       }
     }
 

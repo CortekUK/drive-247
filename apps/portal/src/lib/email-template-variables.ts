@@ -201,7 +201,7 @@ export const EMAIL_TEMPLATE_VARIABLES: EmailTemplateVariable[] = [
     key: 'verification_url',
     label: 'Document Upload Link',
     description: 'Link the customer follows to upload their identity documents',
-    sample: 'https://acme.drive-247.com/booking/documents/3f9c2a17b4e84d0f',
+    sample: 'https://acme.drive-247.com/booking/documents/3f9c2a17-b4e8-4d0f-9a21-5c7e0b6d4812-m1k9x2',
     category: 'email',
   },
 ];
