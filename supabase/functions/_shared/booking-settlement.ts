@@ -40,6 +40,8 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import type { PlatformAccount } from "./stripe-client.ts";
+import { enqueueBookingEmail } from "./email-outbox.ts";
+import { deriveBookingOrigin, buildDocumentsUrl } from "./booking-origin.ts";
 
 /**
  * Stripe metadata as it reaches us. `session.metadata` on the hosted path,
@@ -454,68 +456,90 @@ export async function settleBookingPayment(
   // notify-operator-email dispatch on notifications), which fire from EVERY
   // settlement path — so nothing is emitted here.
 
-  // ---- 4. Customer booking notification ----------------------------------
-  // notify-booking-pending dedupes per rental on its own, but gate it anyway so a
-  // redelivery doesn't even make the call.
-  if (!isPortalPayment && finalPaymentId && !alreadySettled) {
+  // ---- 4. Booking emails (outbox) --------------------------------------
+  // NOT gated on !alreadySettled, deliberately, exactly like step 5 below: the
+  // UNIQUE idempotency_key on booking_email_dispatch absorbs a redelivery, while
+  // running on EVERY delivery is how an email lost to a crash after step 2 gets
+  // a second chance instead of being stranded behind the stale-read guard.
+  //
+  // WHAT THIS REPLACED, AND WHY. The old block here fetched the rental and
+  // POSTed notify-booking-pending inline, gated on
+  // `finalPaymentId && !alreadySettled`. That gate is a READ of the payments row
+  // (~:210) tested after a WRITE of it (~:240) — non-atomic, so two overlapping
+  // Stripe deliveries both saw "not settled" and both sent; and because the row
+  // flips to settled BEFORE the send, a crash in between lost the email with
+  // nothing in the product that would ever notice. Both holes are now the
+  // outbox's problem, where they are solved by a unique constraint and a
+  // re-drainable 'failed' state rather than by luck.
+  //
+  // The enqueue is ONE DB WRITE AND NO HTTP. Stripe abandons a delivery around
+  // 30s and retries (stripe-webhook-test/index.ts:100-101), which manufactures
+  // exactly the duplicate this outbox exists to absorb.
+  if (!isPortalPayment) {
     try {
-      const { data: rentalRow } = await supabase
+      const { data: r } = await supabase
         .from("rentals")
-        .select(`
-          id,
-          start_date,
-          end_date,
-          monthly_amount,
-          tenant_id,
-          customer:customers(id, name, email, phone),
-          vehicle:vehicles(id, make, model, reg)
-        `)
+        .select("tenant_id, tenants:tenant_id(slug)")
         .eq("id", rentalId)
         .single();
 
-      // See RentalNotificationRow: the to-one embeds really are objects at runtime.
-      const rentalWithDetails = rentalRow as unknown as RentalNotificationRow | null;
+      const tenantId = (r as any)?.tenant_id ?? null;
+      if (!tenantId) {
+        console.error(`${logPrefix} Rental has no tenant_id, booking emails not enqueued:`, rentalId);
+      } else {
+        await enqueueBookingEmail(supabase, { tenantId, rentalId, emailKey: "booking_pending" });
 
-      if (rentalWithDetails && rentalWithDetails.customer && rentalWithDetails.vehicle) {
-        const vehicleName = rentalWithDetails.vehicle.make && rentalWithDetails.vehicle.model
-          ? `${rentalWithDetails.vehicle.make} ${rentalWithDetails.vehicle.model}`
-          : rentalWithDetails.vehicle.reg;
+        // The DURABLE documents token, minted by create-booking-payment-intent.
+        // One row per rental (UNIQUE(rental_id)), so maybeSingle is exact.
+        const { data: link } = await supabase
+          .from("booking_document_links")
+          .select("token")
+          .eq("rental_id", rentalId)
+          .maybeSingle();
 
-        const notificationData = {
-          paymentId: finalPaymentId,
-          rentalId: rentalId,
-          tenantId: rentalWithDetails.tenant_id,
-          customerId: rentalWithDetails.customer.id,
-          customerName: rentalWithDetails.customer.name,
-          customerEmail: rentalWithDetails.customer.email,
-          customerPhone: rentalWithDetails.customer.phone,
-          vehicleName: vehicleName,
-          vehicleMake: rentalWithDetails.vehicle.make,
-          vehicleModel: rentalWithDetails.vehicle.model,
-          vehicleReg: rentalWithDetails.vehicle.reg,
-          pickupDate: new Date(rentalWithDetails.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          returnDate: new Date(rentalWithDetails.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-          amount: rentalWithDetails.monthly_amount || (amountMinorUnits ? amountMinorUnits / 100 : 0),
-          bookingRef: rentalId.substring(0, 8).toUpperCase(),
-          paymentMode: "auto",
-        };
-
-        console.log(`${logPrefix} Sending booking pending notification for auto mode:`, notificationData.bookingRef);
-
-        const notifyResponse = await fetch(`${FUNCTIONS_BASE()}/notify-booking-pending`, {
-          method: "POST",
-          headers: SERVICE_AUTH(),
-          body: JSON.stringify(notificationData),
-        });
-
-        if (notifyResponse.ok) {
-          console.log(`${logPrefix} Booking notification sent successfully`);
+        if (link?.token) {
+          // No `req` here on purpose — a Stripe webhook's Origin is Stripe's,
+          // not the customer's booking site. deriveBookingOrigin falls through
+          // to the tenant subdomain, which is the correct answer anyway.
+          const origin = deriveBookingOrigin((r as any)?.tenants?.slug ?? null);
+          await enqueueBookingEmail(supabase, {
+            tenantId,
+            rentalId,
+            emailKey: "booking_documents_required",
+            payload: { upload_url: buildDocumentsUrl(origin, link.token) },
+          });
         } else {
-          console.error(`${logPrefix} Failed to send booking notification:`, await notifyResponse.text());
+          console.error(
+            `${logPrefix} No booking_document_links row for rental`,
+            rentalId,
+            "- documents email not enqueued",
+          );
+        }
+
+        // Best-effort inline drain. The outbox row is the GUARANTEE; this is
+        // only LATENCY, so the customer sees the email in seconds rather than at
+        // the next sweep. Bounded at 8s so we never approach Stripe's ~30s
+        // abandon threshold, because exceeding it triggers the retry storm this
+        // outbox exists to absorb. A timeout here is harmless — the sweeper
+        // drains the row later.
+        //
+        // ONE round-trip no matter how many emails are queued: that is why the
+        // sweep is keyed on rentalId rather than dispatched per email.
+        try {
+          await fetch(`${FUNCTIONS_BASE()}/sweep-booking-emails`, {
+            method: "POST",
+            headers: SERVICE_AUTH(),
+            body: JSON.stringify({ rentalId }),
+            signal: AbortSignal.timeout(8000),
+          });
+        } catch (sweepError) {
+          console.warn(`${logPrefix} inline email sweep skipped:`, sweepError);
         }
       }
-    } catch (notifyError) {
-      console.error(`${logPrefix} Error sending booking notification:`, notifyError);
+    } catch (outboxError) {
+      // Money has already moved. A queueing problem must never fail the webhook
+      // and provoke a Stripe retry.
+      console.error(`${logPrefix} Booking email enqueue failed:`, outboxError);
     }
   }
 

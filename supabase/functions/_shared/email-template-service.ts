@@ -695,6 +695,158 @@ const DEFAULT_EMAIL_TEMPLATES: Record<string, { subject: string; content: string
 <p>Kind regards,<br>
 <strong>The {{company_name}} Team</strong></p>`,
   },
+  // ---------------------------------------------------------------------------
+  // The two post-payment document emails.
+  //
+  // COPY RULE, AND IT IS THE WHOLE POINT OF THESE TWO KEYS: neither may say the
+  // booking is "confirmed" or "complete". Money has been taken and the booking
+  // is NOT yet confirmed — documents are still outstanding and an operator has
+  // still to approve. The confirmation email is booking_approved above, sent by
+  // notify-booking-approved only once an operator approves.
+  //
+  // Both use {{vehicle_reg_row}} rather than a hardcoded "Registration:" row:
+  // resolveEmailData blanks that companion for tenants with
+  // hide_vehicle_registration = true (:1124-1132, :1184-1187), so a withheld
+  // plate leaves no empty row rather than an orphaned label.
+  // ---------------------------------------------------------------------------
+  booking_documents_required: {
+    subject: 'Action needed: upload your documents for {{rental_number}} | {{company_name}}',
+    content: `<h1>We've Received Your Payment — One Step Left</h1>
+
+<p>Dear {{customer_name}},</p>
+
+<p>Thank you — your payment to <strong>{{company_name}}</strong> has been received. Before we can confirm your booking, we need you to upload your driving licence and a photo of yourself. It takes about two minutes on your phone.</p>
+
+<p><strong>Your booking is not confirmed yet.</strong> We'll review your documents and email you a separate confirmation once your booking has been approved.</p>
+
+<p style="text-align:center; margin:28px 0;">
+  <a href="{{verification_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Upload My Documents</a>
+</p>
+
+<p style="font-size:12px; color:#64748b; text-align:center;">If the button doesn't work, copy and paste this link into your browser:<br>{{verification_url}}</p>
+
+<p style="font-size:12px; color:#64748b;">This link is valid for <strong>7 days</strong>. If it expires, you can request a fresh one from the same page.</p>
+
+<hr>
+
+<h2>Booking Summary</h2>
+
+<table>
+  <tr>
+    <td><strong>Booking Reference:</strong></td>
+    <td>{{rental_number}}</td>
+  </tr>
+  <tr>
+    <td><strong>Vehicle:</strong></td>
+    <td>{{vehicle_make}} {{vehicle_model}}</td>
+  </tr>
+{{vehicle_reg_row}}
+  <tr>
+    <td><strong>Pickup Date:</strong></td>
+    <td>{{rental_start_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Return Date:</strong></td>
+    <td>{{rental_end_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Amount Paid:</strong></td>
+    <td>{{rental_amount}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>What You'll Need</h2>
+
+<ul>
+  <li>Your valid driving licence — the front, clearly readable</li>
+  <li>A quick selfie, so we can match it to the licence</li>
+  <li>Good light, and no glare across the card</li>
+</ul>
+
+<hr>
+
+<h2>What Happens Next?</h2>
+
+<ol>
+  <li>You upload your documents using the link above</li>
+  <li>We check them — usually within minutes</li>
+  <li>Our team reviews and approves your booking</li>
+  <li>You receive your booking confirmation and rental agreement</li>
+</ol>
+
+<hr>
+
+<h2>Need Help?</h2>
+
+<p>If you have trouble uploading, or anything above looks wrong, please get in touch:</p>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
+  booking_documents_received: {
+    subject: 'Documents received for {{rental_number}} | {{company_name}}',
+    content: `<h1>Thanks — We've Got Your Documents</h1>
+
+<p>Dear {{customer_name}},</p>
+
+<p>Your documents have passed our checks. There is nothing further for you to do right now.</p>
+
+<p>Your booking is now with the <strong>{{company_name}}</strong> team for final approval. We'll email you a confirmation as soon as it's approved, along with your rental agreement to sign.</p>
+
+<hr>
+
+<h2>Booking Summary</h2>
+
+<table>
+  <tr>
+    <td><strong>Booking Reference:</strong></td>
+    <td>{{rental_number}}</td>
+  </tr>
+  <tr>
+    <td><strong>Vehicle:</strong></td>
+    <td>{{vehicle_make}} {{vehicle_model}}</td>
+  </tr>
+{{vehicle_reg_row}}
+  <tr>
+    <td><strong>Pickup Date:</strong></td>
+    <td>{{rental_start_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Return Date:</strong></td>
+    <td>{{rental_end_date}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>What Happens Next?</h2>
+
+<ol>
+  <li>Our team reviews your booking details and confirms availability</li>
+  <li>You receive a confirmation email once approved</li>
+  <li>A rental agreement is sent for your electronic signature</li>
+  <li>Bring your driving licence with you on pickup day</li>
+</ol>
+
+<hr>
+
+<h2>Need Help?</h2>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
 };
 
 export interface EmailTemplateData {
