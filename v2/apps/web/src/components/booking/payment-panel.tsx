@@ -320,18 +320,23 @@ export interface PaymentPanelCopy {
  * screen, that sends the "booking confirmed" email (`notify-booking-approved`).
  *
  * So the previous succeededBody, "Your booking is confirmed. We have emailed the
- * details and what to bring on the day.", is now a false statement twice over:
- * nothing is confirmed, and no email has been sent at the moment this renders.
- * Nothing in this object may say confirmed, complete, all done or booked — an
- * operator can still reject, and a customer who was told otherwise turns up at a
- * depot expecting keys.
+ * details and what to bring on the day.", is now false twice over: nothing is
+ * confirmed, and the email it promises is not the one that gets sent. Nothing in
+ * this object may say confirmed, complete, all done or booked — an operator can
+ * still reject, and a customer who was told otherwise turns up at a depot
+ * expecting keys.
+ *
+ * The email is described in the PRESENT CONTINUOUS ("we are sending"), not the
+ * past. It is sent server-side off settlement, which is a webhook away and may
+ * not have landed by the time this renders; "we have emailed you" would be a
+ * claim this screen cannot make.
  */
 const BOOKING_COPY: PaymentPanelCopy = {
   title: "Confirm and pay",
   cancelLabel: "Back to my booking",
   succeededTitle: "Payment received",
   succeededBody:
-    "One step left — we need a photo of your driving licence and a selfie to confirm this booking. We have also emailed you the link.",
+    "One step left — we need a photo of your driving licence and a selfie to confirm this booking. We are sending the same link to your email as well.",
   processingTitle: "Payment is being confirmed",
   processingBody:
     "Your bank has not settled this yet. We will email you the moment it clears, with a link to upload your driving licence and a selfie — we confirm the booking once we have checked those.",

@@ -89,6 +89,7 @@ interface RentalRow {
   documents_status: string | null;
   identity_verification_session_id: string | null;
   status: string | null;
+  payment_status: string | null;
   vehicle: { make: string | null; model: string | null } | null;
 }
 
@@ -255,6 +256,24 @@ async function handleResend(
   tenantSlug: string | null,
   req: Request,
 ): Promise<Response> {
+  // The email this queues states plainly that PAYMENT HAS BEEN RECEIVED, so it
+  // must not be sent for a booking that has not been paid or has been refunded.
+  //
+  // Note the deliberate asymmetry with the OPEN path, which does NOT check this:
+  // the browser is routed to the upload screen the instant Stripe reports
+  // success, which is BEFORE the webhook has flipped payment_status to
+  // 'fulfilled'. Blocking there would break the primary flow on a race. Nothing
+  // races here — a link only expires after seven days of silence, long after
+  // settlement.
+  if (rental.payment_status !== 'fulfilled') {
+    return fail(
+      409,
+      'not_paid',
+      'We have no completed payment on this booking, so there is nothing to send yet. Please get in touch if that is unexpected.',
+      { canResend: false },
+    );
+  }
+
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
@@ -376,7 +395,7 @@ Deno.serve(async (req) => {
       .from('rentals')
       .select(
         'id, rental_number, start_date, end_date, tenant_id, customer_id, ' +
-          'documents_status, identity_verification_session_id, status, ' +
+          'documents_status, identity_verification_session_id, status, payment_status, ' +
           'vehicle:vehicles(make, model)',
       )
       .eq('id', link.rental_id)
@@ -466,20 +485,55 @@ Deno.serve(async (req) => {
     const nowIso = new Date().toISOString();
 
     // ---- 6. Stamp the rental -----------------------------------------------
-    // Two statements on purpose. The session pointer is unconditional; the
-    // documents_status move is FILTERED so it can only ever go forwards from a
-    // resting state, never back over a 'submitted' or 'verified' that
-    // process-ai-verification wrote a moment ago.
+    // Two statements on purpose: the session pointer and the documents_status
+    // move have different safety conditions, and neither may clobber the other.
     if (minted) {
-      const { error: stampError } = await supabase
+      // COMPARE-AND-SWAP, not a blind write. rentals.identity_verification_session_id
+      // is the ONLY thing that connects an upload back to this booking
+      // (process-ai-verification filters on it), and it holds exactly one value.
+      // Two concurrent opens — two tabs, a phone and a laptop, a double-fetch —
+      // would each mint a session and the second blind write would orphan the
+      // first. Whichever customer then uploaded through the losing tab would
+      // match ZERO rows in the gate and their PAID booking would sit at
+      // 'pending' forever, with nothing in the product to catch it.
+      const previous = rental.identity_verification_session_id;
+      const { data: stampedRows, error: stampError } = await supabase
         .from('rentals')
         .update({ identity_verification_session_id: session.sessionId, updated_at: nowIso })
-        .eq('id', rental.id);
+        .eq('id', rental.id)
+        .or(
+          previous
+            ? `identity_verification_session_id.is.null,identity_verification_session_id.eq.${previous}`
+            : 'identity_verification_session_id.is.null',
+        )
+        .select('id');
+
       if (stampError) {
-        // The session exists but the rental does not point at it, so
-        // process-ai-verification's gate would match zero rows. Loud, because it
-        // strands a paid booking at documents_status 'pending'.
         console.error('[documents-link] could not stamp session on rental:', stampError);
+      } else if (!stampedRows || stampedRows.length === 0) {
+        // We lost the swap. Adopt the winner's session and let ours be an
+        // orphaned identity_verifications row — unused rows are harmless, a
+        // rental pointing at the wrong session is not.
+        const { data: fresh } = await supabase
+          .from('rentals')
+          .select('identity_verification_session_id')
+          .eq('id', rental.id)
+          .maybeSingle();
+        const winner = (fresh?.identity_verification_session_id as string | null) ?? null;
+        const winnerSession = winner ? await findReusableSession(supabase, winner) : null;
+        if (winnerSession) {
+          console.log('[documents-link] lost the session swap, adopting', winner);
+          session = winnerSession;
+        } else {
+          // The winner's session is not usable either, so nothing is lost by
+          // forcing ours on. Without this the rental would point at a dead
+          // session and the gate could never fire.
+          console.warn('[documents-link] lost the swap to an unusable session, forcing ours on');
+          await supabase
+            .from('rentals')
+            .update({ identity_verification_session_id: session.sessionId, updated_at: nowIso })
+            .eq('id', rental.id);
+        }
       }
     }
 

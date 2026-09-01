@@ -688,7 +688,7 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
       */
       return paidHandoff.documentsToken !== null
         ? "Payment for this booking has been taken. Your documents are still outstanding — upload them to finish confirming it."
-        : "Payment for this booking has been taken. We have emailed you a link to upload your documents, which is the last step before we confirm it.";
+        : "Payment for this booking has been taken. We are emailing you a link to upload your documents, which is the last step before we confirm it.";
     }
     if (creatingBooking) {
       return null;
@@ -1347,8 +1347,9 @@ function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
             </Button>
           ) : settled ? (
             <p className="mt-3 text-xs leading-relaxed text-brand-text-subtle">
-              We have emailed you the link to upload them. It is valid for seven
-              days — if it expires, that page will send you a fresh one.
+              We are sending a link to your email so you can upload them. It is
+              valid for seven days — if it expires, that page will send you a
+              fresh one.
             </p>
           ) : null}
         </div>

@@ -366,9 +366,25 @@ serve(async (req) => {
 
         const { data: link } = await supabaseClient
           .from('booking_document_links')
-          .select('token')
+          .select('token, expires_at')
           .eq('rental_id', rentalId)
           .maybeSingle()
+
+        // A row that already existed keeps its old expiry, because
+        // ON CONFLICT DO NOTHING updates nothing. That is wrong for a booking
+        // abandoned and then paid for days later: the token we are about to put
+        // in the email would already be dead on arrival. Sliding it here costs
+        // one write in a rare path and removes a guaranteed dead link.
+        if (link?.expires_at && new Date(link.expires_at).getTime() <= Date.now()) {
+          await supabaseClient
+            .from('booking_document_links')
+            .update({
+              expires_at: new Date(Date.now() + DOCUMENTS_LINK_TTL_MS).toISOString(),
+              updated_at: nowIso,
+            })
+            .eq('rental_id', rentalId)
+        }
+
         documentsToken = link?.token ?? null
         documentsUrl = documentsToken
           ? buildDocumentsUrl(deriveBookingOrigin(slug, req), documentsToken)

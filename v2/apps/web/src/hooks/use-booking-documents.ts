@@ -109,17 +109,31 @@ export interface BookingDocumentsSession {
 /**
  * Every outcome of asking about a token, as ONE closed union.
  *
- * The three server codes are values, not errors, because each of them is a
+ * The server's codes are values, not errors, because each of them is a
  * different true sentence to put in front of the customer — "this link was
- * never valid", "this link has run out" and "we already have these" are not
- * interchangeable, and flattening them into a single red box is what makes an
- * expired link feel like a dead end.
+ * never valid", "this link has run out", "we already have these" and "this
+ * booking is gone" are not interchangeable, and flattening them into a single
+ * red box is what makes an expired link feel like a dead end.
  */
 export type BookingDocumentsState =
   | { kind: 'ready'; session: BookingDocumentsSession }
   | { kind: 'invalid_token' }
-  | { kind: 'link_expired' }
+  /**
+   * `canResend` is the SERVER's word, never a guess. `booking-documents-link`
+   * answers 410 `link_expired` with `canResend: true` and 410
+   * `booking_cancelled` with `canResend: false` (index.ts:417-423, :448), so
+   * the page can offer the "email me a new link" button ONLY where a resend
+   * would actually succeed. A button that always fails is worse than no button.
+   */
+  | { kind: 'link_expired'; canResend: boolean }
   | { kind: 'already_complete' }
+  /**
+   * The booking itself is cancelled or rejected, so there is nothing to upload
+   * — a different fact from an expired link, and one no resend can fix. The
+   * message is the server's own prose, which names the booking rather than the
+   * link.
+   */
+  | { kind: 'booking_cancelled'; message: string }
   /** We could not get an answer at all. Distinct from any answer we got. */
   | { kind: 'unavailable'; message: string; detail: string | null };
 
@@ -182,15 +196,35 @@ const OFFLINE_COPY =
 
 /* ─────────────────────── reading the link function ─────────────────────── */
 
-type LinkCode = 'invalid_token' | 'link_expired' | 'already_complete';
+/**
+ * The codes this file recognises by name.
+ *
+ * `booking-documents-link` emits MORE than these — `bad_request`,
+ * `lookup_failed`, `no_customer`, `session_mint_failed`, `session_rate_limited`,
+ * `not_paid`, `resend_rate_limited`, `resend_failed`, `unexpected`. Every one of
+ * those carries customer-safe prose in `error`, so the unrecognised ones are
+ * surfaced with the SERVER's sentence rather than being forced into one of the
+ * four screens below. Guessing is how "we could not start the document check"
+ * becomes "we already have your documents".
+ */
+type LinkCode =
+  | 'invalid_token'
+  | 'link_expired'
+  | 'already_complete'
+  | 'booking_cancelled';
 
 function asLinkCode(value: unknown): LinkCode | null {
   return value === 'invalid_token' ||
     value === 'link_expired' ||
-    value === 'already_complete'
+    value === 'already_complete' ||
+    value === 'booking_cancelled'
     ? value
     : null;
 }
+
+const BOOKING_GONE_COPY =
+  'This booking is no longer active, so there is nothing to upload. Please get ' +
+  'in touch if that is unexpected.';
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
@@ -257,22 +291,55 @@ async function loadState(token: string): Promise<BookingDocumentsState> {
     const status = statusOf(error);
     const body = await readServerBody(error);
     const code = asLinkCode(body?.code);
+    // Only ever sent as a literal `false`; absent means "the server did not say".
+    const canResend = body?.canResend !== false;
+    const serverMessage = asString(body?.error);
 
-    // The body's own code is authoritative when it is one of the three we know.
-    if (code !== null) return { kind: code };
+    // The body's own code is authoritative when it is one of the four we know.
+    if (code === 'invalid_token') return { kind: 'invalid_token' };
+    if (code === 'link_expired') return { kind: 'link_expired', canResend };
+    if (code === 'already_complete') return { kind: 'already_complete' };
+    if (code === 'booking_cancelled') {
+      return { kind: 'booking_cancelled', message: serverMessage ?? BOOKING_GONE_COPY };
+    }
 
     /*
-      Falling back to the STATUS is only safe for 410 and 409. Nothing else in
-      this app answers either of those, so they are unambiguous.
-
-      404 is deliberately NOT mapped to `invalid_token`. A Supabase Functions URL
-      for a function that is not deployed also answers 404, so treating a bare
-      404 as an invalid token would tell a customer holding a perfectly good link
-      that it was never valid — when the truth is that the backend is missing.
-      A real invalid token always carries `code: 'invalid_token'` in the body.
+      A code we do not recognise. Its `error` string is written for a customer in
+      every branch of the function ("Too many document check attempts. Please try
+      again in an hour.", "We could not start the document check for this
+      booking. Please get in touch."), so it is shown verbatim. That is strictly
+      better than the generic copy AND strictly safer than guessing a screen.
     */
-    if (status === 410) return { kind: 'link_expired' };
-    if (status === 409) return { kind: 'already_complete' };
+    if (code === null && serverMessage !== null) {
+      return {
+        kind: 'unavailable',
+        message: serverMessage,
+        detail: `${LINK_FUNCTION} answered ${status ?? '?'} with code ${
+          asString(body?.code) ?? 'none'
+        }.`,
+      };
+    }
+
+    /*
+      No usable body at all, so all we have is the status.
+
+      410 is the only one still worth mapping: both codes that use it are
+      terminal for this link, and `canResend` (false on a cancelled booking) is
+      what keeps the button honest either way.
+
+      409 is deliberately NOT mapped any more. THREE different codes answer 409
+      — `already_complete`, `no_customer` and `not_paid` — and telling a customer
+      "we already have your documents" when the truth is "we could not start the
+      check" stops them doing the one thing that would fix it.
+
+      404 is deliberately NOT mapped to `invalid_token` either. A Supabase
+      Functions URL for a function that is not deployed also answers 404, so
+      treating a bare 404 as an invalid token would tell a customer holding a
+      perfectly good link that it was never valid — when the truth is that the
+      backend is missing. A real invalid token always carries
+      `code: 'invalid_token'` in the body.
+    */
+    if (status === 410) return { kind: 'link_expired', canResend };
 
     if (status === 404) {
       return {
@@ -389,20 +456,32 @@ export function useBookingDocumentsSession(
  * path in the product needs operator staff auth).
  *
  * The call is `POST booking-documents-link { token, action: 'resend' }`, and the
- * answer we expect is:
+ * deployed function answers (index.ts:255-350, :387-445):
  *
- *     200 { ok: true, resent: true, emailedTo?: string }   // masked address
+ *     200 { ok: true, resent: true, expiresAt }
  *     404 { ok: false, code: 'invalid_token' }
  *     409 { ok: false, code: 'already_complete' }
+ *     409 { ok: false, code: 'not_paid',           canResend: false }
+ *     410 { ok: false, code: 'booking_cancelled',  canResend: false }
+ *     429 { ok: false, code: 'resend_rate_limited' }   // 5 per rental per hour
+ *     500 { ok: false, code: 'resend_failed' }
  *
- * `action` is additive: a server that does not know the field ignores it and
+ * `emailedTo` is NOT among them — the function does not disclose the address —
+ * so the success copy must not promise to name it. It is still read below
+ * because reading a field the server may add later costs nothing.
+ *
+ * `action` is additive: a server too old to know the field ignores it and
  * answers 410 for the expired token, which this mutation reports honestly as
  * "we could not send it" rather than claiming a send that did not happen.
  */
 const RESEND_ACTION = 'resend';
 
 export interface ResendLinkResult {
-  /** A masked address, e.g. `j••••@gmail.com`, when the server tells us one. */
+  /**
+   * A masked address, e.g. `j••••@gmail.com`, IF the server ever volunteers one.
+   * Today's function does not, so callers must render a message that reads
+   * correctly when this is null — never "sent to " + emailedTo.
+   */
   emailedTo: string | null;
 }
 
@@ -433,6 +512,20 @@ export function useResendBookingDocumentsLink() {
             'We already have your documents — there is no new link to send.',
           );
         }
+        if (code === 'booking_cancelled') {
+          throw new Error(asString(body?.error) ?? BOOKING_GONE_COPY);
+        }
+
+        /*
+          `not_paid`, `resend_rate_limited` and `resend_failed` all carry prose
+          written for a customer, and each says something different and useful —
+          "check your inbox and spam folder, then try again later" is not the
+          same instruction as "get in touch". Shown verbatim rather than
+          collapsed into the fallback below.
+        */
+        const serverMessage = asString(body?.error);
+        if (serverMessage !== null) throw new Error(serverMessage);
+
         throw new Error(
           'We could not send a new link just now. Please try again in a ' +
             'moment, or reply to your booking email and we will send one.',
