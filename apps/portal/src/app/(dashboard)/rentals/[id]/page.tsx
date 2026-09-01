@@ -64,11 +64,6 @@ import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuth } from "@/stores/auth-store";
-import { ReviewDisplayCard } from "@/components/reviews/review-display-card";
-import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
-import { useFeedbackAfterReview } from "@/hooks/use-feedback-after-review";
-import { ApprovalReviewSummary } from "@/components/reviews/approval-review-summary";
-import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
@@ -599,14 +594,6 @@ const RentalDetail = () => {
   const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
   const [extensionPaymentCategories, setExtensionPaymentCategories] = useState<string[]>([]);
   const [extensionPaymentExtensionId, setExtensionPaymentExtensionId] = useState<string | undefined>();
-
-  // Review dialog state
-  const [showReviewDialog, setShowReviewDialog] = useState(false);
-  // Set when the review dialog was opened by CLOSING a rental (not by the
-  // "Leave a review" / "Edit" buttons). Only that path earns the software
-  // feedback follow-up — prompting after a manual edit would be ambush.
-  const [promptFeedbackAfterReview, setPromptFeedbackAfterReview] = useState(false);
-  const maybePromptFeedback = useFeedbackAfterReview();
 
   // Buy Insurance dialog state
   const [showBuyInsurance, setShowBuyInsurance] = useState(false);
@@ -2916,23 +2903,6 @@ const RentalDetail = () => {
           )}
         </div>
       </div>
-
-      {/* Review Card for Completed Rentals */}
-      {displayStatus === 'Completed' && (
-        <ReviewDisplayCard
-          rentalId={id}
-          onEdit={() => setShowReviewDialog(true)}
-          onLeaveReview={() => setShowReviewDialog(true)}
-        />
-      )}
-
-      {/* Customer Review Summary for non-completed rentals (helps with approval decisions) */}
-      {displayStatus !== 'Completed' && rental?.customers?.id && (
-        <CustomerReviewSummaryCard
-          customerId={rental.customers.id}
-          customerName={rental.customers.name}
-        />
-      )}
 
       {/* Cancellation Requested Alert */}
       {rental.cancellation_requested && (
@@ -7324,12 +7294,6 @@ const RentalDetail = () => {
                 </span>
               )}
             </AlertDialogDescription>
-            {rental?.customers?.id && (
-              <ApprovalReviewSummary
-                customerId={rental.customers.id}
-                customerName={rental.customers.name}
-              />
-            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isApproving}>Cancel</AlertDialogCancel>
@@ -7489,16 +7453,6 @@ const RentalDetail = () => {
                     description: "Rental has been closed and vehicle is now available.",
                   });
 
-                  // Prompt review after a short delay
-                  setTimeout(() => {
-                    toast({
-                      title: "Leave a Review?",
-                      description: "Rate this customer's rental experience.",
-                    });
-                    setPromptFeedbackAfterReview(true);
-                    setShowReviewDialog(true);
-                  }, 1500);
-
                   queryClient.invalidateQueries({ queryKey: ["rental", id, tenant?.id] });
                   queryClient.invalidateQueries({ queryKey: ["rentals-list"] });
                   queryClient.invalidateQueries({ queryKey: ["enhanced-rentals"] });
@@ -7594,26 +7548,6 @@ const RentalDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Rental Review Dialog */}
-      {rental?.customers?.id && (
-        <RentalReviewDialog
-          open={showReviewDialog}
-          onOpenChange={(next) => {
-            setShowReviewDialog(next);
-            // Sequenced, never stacked: the software-feedback dialog only opens
-            // once the customer review is off screen, and only when this review
-            // came from closing a rental.
-            if (!next && promptFeedbackAfterReview) {
-              setPromptFeedbackAfterReview(false);
-              setTimeout(() => maybePromptFeedback(), 400);
-            }
-          }}
-          rentalId={id}
-          customerId={rental.customers.id}
-          customerName={rental.customers.name}
-          rentalNumber={rental.rental_number}
-        />
-      )}
 
       {/* Finance Sync — per-rental sync stripe (Sprint 3). Renders nothing when
           no provider connected or no events for this rental yet. */}

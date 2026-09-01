@@ -58,7 +58,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CustomerReviewSummaryCard } from "@/components/reviews/customer-review-summary-card";
 import { StartVerificationDialog } from "@/components/customers/start-verification-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -736,9 +735,6 @@ const CustomerDetail = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Customer Review Summary */}
-      <CustomerReviewSummaryCard customerId={id} customerName={customer?.name} />
 
       {/* Complete Tabbed Interface */}
       <div className="relative">

@@ -29,7 +29,6 @@ export const TAB_KEYS = [
   'messages',
   'payments',
   'invoices',
-  'expenses',
   'insurances',
   'agreements',
   'reports',
@@ -84,7 +83,6 @@ export const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { key: 'payments', label: 'Payments', group: 'Finance' },
       { key: 'invoices', label: 'Invoices', group: 'Finance' },
-      { key: 'expenses', label: 'Expenses', group: 'Finance' },
     ],
   },
   {
@@ -131,7 +129,6 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/messages': 'messages',
   '/payments': 'payments',
   '/invoices': 'invoices',
-  '/expenses': 'expenses',
   '/insurances': 'insurances',
   '/agreements': 'agreements',
   '/reports': 'reports',
