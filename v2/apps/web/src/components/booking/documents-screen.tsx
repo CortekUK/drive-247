@@ -262,7 +262,7 @@ function ReadyScreen({
               ) : (
                 <>
                   Your booking is{' '}
-                  <span className="font-medium text-brand-text">not confirmed yet</span>.
+                  <span className="font-medium text-brand-text">not confirmed yet</span>.{' '}
                   {operator} needs two things from you first — photos of your driving
                   licence, and a copy of your insurance. It takes a couple of minutes.
                 </>

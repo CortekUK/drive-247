@@ -1339,12 +1339,28 @@ function PaidBookingNotice({ handoff }: { handoff: PaidBookingHandoff }) {
           ) : null}
 
           {href !== null ? (
-            <Button asChild variant="brand" size="lg" className="mt-3 h-11 w-full sm:w-auto">
-              <Link href={href}>
-                Send my insurance document
-                <ArrowRight aria-hidden strokeWidth={2} />
-              </Link>
-            </Button>
+            <>
+              <Button asChild variant="brand" size="lg" className="mt-3 h-11 w-full sm:w-auto">
+                <Link href={href}>
+                  Send my insurance document
+                  <ArrowRight aria-hidden strokeWidth={2} />
+                </Link>
+              </Button>
+              {/*
+                Shown ALONGSIDE the button, not instead of it. Someone who has the
+                button in front of them is exactly the person who does not yet know
+                they may leave and come back — the certificate is usually in another
+                app, or an email from their insurer, or on paper. Without this they
+                either abandon the page hunting for it or assume the booking dies if
+                they close the tab. Naming the seven days here is the point: an
+                unbounded "later" reads as "never actually required".
+              */}
+              <p className="mt-3 text-xs leading-relaxed text-brand-text-subtle">
+                Don&rsquo;t have it to hand? You can do this later — we have emailed
+                you the same link. It is valid for seven days, and if it expires that
+                page will send you a fresh one.
+              </p>
+            </>
           ) : settled ? (
             <p className="mt-3 text-xs leading-relaxed text-brand-text-subtle">
               We are sending a link to your email so you can send your insurance

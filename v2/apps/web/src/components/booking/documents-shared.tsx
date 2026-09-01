@@ -16,6 +16,7 @@
  * received, under review, we will confirm shortly.
  */
 
+import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 
 import { Panel } from '@/components/portal/primitives';
@@ -96,14 +97,31 @@ export function BrandHeader({ session }: { session: BookingDocumentsSession | nu
   if (!name && !logo) return null;
 
   return (
+    // The mark links home. This page is usually reached from an email, so it is
+    // often the customer's FIRST page of the session — with no history to go back
+    // to and no site nav around it. Without this the only exits are the browser's
+    // address bar or closing the tab, which reads as a dead end on a page that
+    // just told them their booking is not finished yet.
+    //
+    // `/` is deliberately relative: the link function resolves the tenant from the
+    // rental, and this page can legitimately be served from the apex host as well
+    // as the tenant subdomain, so a hardcoded absolute host would send some
+    // customers to the wrong site — which is the exact bug that sent testers to
+    // the old production UI.
     <div className="mb-6 flex items-center gap-3">
-      {logo ? (
-        // A plain <img>, matching `auth-brand.tsx`. next/image is not configured
-        // with a remote pattern for tenant logo hosts in this app.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" className="h-9 w-auto max-w-[160px] object-contain" />
-      ) : null}
-      {name ? <span className="text-sm font-medium text-brand-text">{name}</span> : null}
+      <Link
+        href="/"
+        aria-label={name ? `${name} — go to the home page` : 'Go to the home page'}
+        className="flex min-h-11 items-center gap-3 rounded-[10px] transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-forest"
+      >
+        {logo ? (
+          // A plain <img>, matching `auth-brand.tsx`. next/image is not configured
+          // with a remote pattern for tenant logo hosts in this app.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logo} alt="" className="h-9 w-auto max-w-[160px] object-contain" />
+        ) : null}
+        {name ? <span className="text-sm font-medium text-brand-text">{name}</span> : null}
+      </Link>
     </div>
   );
 }
