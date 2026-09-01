@@ -413,7 +413,6 @@ export const ROUTES = {
   AGREEMENTS: "/agreements",
   SETTINGS: "/settings",
   PENDING_BOOKINGS: "/pending-bookings",
-  TESTIMONIALS: "/testimonials",
   BLOCKED_DATES: "/blocked-dates",
   PL_DASHBOARD: "/pl-dashboard",
 } as const;
