@@ -128,23 +128,6 @@ describe("D2 — rule selection is deterministic", () => {
 });
 
 describe("cross-tenant scoping in the client", () => {
-  const reminders = () =>
-    readRepoSource("supabase/functions/send-reminder-notifications/index.ts");
-
-  it("matches admins to their own tenant's reminders", () => {
-    const s = reminders();
-    expect(s).toContain("adminsByTenant");
-    expect(s).toContain("remindersByTenant");
-  });
-
-  it("no longer brands every digest from pendingReminders[0]", () => {
-    expect(reminders()).not.toContain("const emailTenantId = pendingReminders[0]?.tenant_id");
-  });
-
-  it("excludes NULL-tenant users rather than matching them to anything", () => {
-    expect(reminders()).toContain(".not('tenant_id', 'is', null)");
-  });
-
   it("a calendar block cannot be deleted across tenants", () => {
     const s = readPortalSource("hooks/use-calendar-blocks.ts");
     const remove = s.slice(s.indexOf("const removeBlock"));

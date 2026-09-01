@@ -14,7 +14,6 @@ import { BanIcon } from "@/components/ui/ban";
 import { MessageSquareIcon } from "@/components/ui/message-square";
 import { BadgeAlertIcon } from "@/components/ui/badge-alert";
 import { FolderOpenIcon } from "@/components/ui/folder-open";
-import { BellIcon } from "@/components/ui/bell";
 import { ChartBarIncreasingIcon } from "@/components/ui/chart-bar-increasing";
 import { TrendingUpIcon } from "@/components/ui/trending-up";
 import { HistoryIcon } from "@/components/ui/history";
@@ -26,7 +25,6 @@ import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarHead
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
@@ -51,7 +49,6 @@ const AnimatedBan = wrapAnimatedIcon(BanIcon);
 const AnimatedMessageSquare = wrapAnimatedIcon(MessageSquareIcon);
 const AnimatedBadgeAlert = wrapAnimatedIcon(BadgeAlertIcon);
 const AnimatedFolderOpen = wrapAnimatedIcon(FolderOpenIcon);
-const AnimatedBell = wrapAnimatedIcon(BellIcon);
 const AnimatedChartBar = wrapAnimatedIcon(ChartBarIncreasingIcon);
 const AnimatedTrendingUp = wrapAnimatedIcon(TrendingUpIcon);
 const AnimatedHistory = wrapAnimatedIcon(HistoryIcon);
@@ -160,7 +157,6 @@ export function AppSidebar() {
   const closeMobileOnNav = useCallback(() => {
     if (isMobile) setOpenMobile(false);
   }, [isMobile, setOpenMobile]);
-  const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { tenant } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
@@ -304,7 +300,6 @@ export function AppSidebar() {
       items: [
         { name: "Insurances", href: "/insurances", icon: ShieldCheck },
         { name: "Agreements", href: "/agreements", icon: FileSignature },
-        { name: "Reminders", href: "/reminders", icon: AnimatedBell, badge: reminderStats?.due || 0 },
         { name: "Reports", href: "/reports", icon: AnimatedChartBar },
         { name: "P&L Dashboard", href: "/pl-dashboard", icon: AnimatedTrendingUp },
       ],

@@ -21,7 +21,6 @@ import {
 import { DashboardKPICards } from "@/components/dashboard/dashboard-kpi-cards";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { FleetOverview } from "@/components/dashboard/fleet-overview";
-import { ComplianceOverviewCard } from "@/components/dashboard/compliance-overview-card";
 import { ActionItems } from "@/components/dashboard/action-items";
 import { CalendarWidget } from "@/components/dashboard/calendar-widget";
 import { AIInsightsPanel } from "@/components/rentals/calendar/ai-insights-panel";

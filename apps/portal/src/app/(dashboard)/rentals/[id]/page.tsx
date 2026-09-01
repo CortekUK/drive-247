@@ -14,7 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Bell, Eye, EyeOff, Pencil, MoreHorizontal } from "lucide-react";
+import { FileText, ArrowLeft, DollarSign, Plus, X, Send, Download, Ban, Check, AlertTriangle, AlertCircle, Loader2, Shield, ShieldCheck, CheckCircle, XCircle, ExternalLink, UserCheck, IdCard, Camera, FileSignature, Clock, Mail, RefreshCw, Trash2, Receipt, Percent, Car, Undo2, Truck, MapPin, Key, KeyRound, CalendarPlus, Package, Banknote, CreditCard, Calendar, Info, Copy, Gauge, Briefcase, Eye, EyeOff, Pencil, MoreHorizontal } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -82,7 +82,6 @@ import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policie
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
 import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
-import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
 import { SuperchargerChargesDialog } from "@/components/rentals/supercharger-charges-dialog";
@@ -632,10 +631,6 @@ const RentalDetail = () => {
   // Amount agreed in TakeDepositDialog, carried into the payment dialog so it
   // does not depend on the breakdown query having refetched yet.
   const [depositPaymentAmount, setDepositPaymentAmount] = useState<number | null>(null);
-
-  // Add reminder dialog state (from breakdown rows)
-  const [showRowReminder, setShowRowReminder] = useState(false);
-  const [reminderRowTitle, setReminderRowTitle] = useState('');
 
   // Excess mileage deduction dialog state
   const [showDeductFromDepositDialog, setShowDeductFromDepositDialog] = useState(false);
@@ -4841,19 +4836,6 @@ const RentalDetail = () => {
                           </>
                         )}
 
-                        {applied && (
-                          <button
-                            className="text-muted-foreground hover:text-amber-500 transition-colors"
-                            title="Add Reminder"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReminderRowTitle(`${label} - Rental #${rental.id?.slice(0, 8)}`);
-                              setShowRowReminder(true);
-                            }}
-                          >
-                            <Bell className="h-3.5 w-3.5" />
-                          </button>
-                        )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -4879,18 +4861,6 @@ const RentalDetail = () => {
                   <span className="font-semibold text-foreground">{formatCurrencyUtil(selectedTotal, tenant?.currency_code || 'USD')}</span>
                 </p>
                 <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const cats = Array.from(selectedCategories).join(', ');
-                      setReminderRowTitle(`${cats} - Rental #${rental.id?.slice(0, 8)}`);
-                      setShowRowReminder(true);
-                    }}
-                  >
-                    <Bell className="h-3.5 w-3.5 mr-1.5" />
-                    Set Reminder
-                  </Button>
                   <Button
                     size="sm"
                     onClick={() => setShowTargetedPayment(true)}
@@ -5233,18 +5203,6 @@ const RentalDetail = () => {
                           <Check className="h-4 w-4 text-green-500 inline-block" />
                         ) : (
                           <span className="text-muted-foreground/30">-</span>
-                        )}
-                        {applied && (
-                          <button
-                            className="text-muted-foreground hover:text-amber-500 transition-colors"
-                            title="Add Reminder"
-                            onClick={() => {
-                              setReminderRowTitle(`${label} (Ext #${group.extensionNumber}) - Rental #${rental.id?.slice(0, 8)}`);
-                              setShowRowReminder(true);
-                            }}
-                          >
-                            <Bell className="h-3.5 w-3.5" />
-                          </button>
                         )}
                         </div>
                       </TableCell>
@@ -8027,14 +7985,6 @@ const RentalDetail = () => {
           rentalNumber={rental.rental_number}
         />
       )}
-
-      {/* Add Reminder Dialog (from breakdown rows) */}
-      <AddReminderDialog
-        open={showRowReminder}
-        onOpenChange={setShowRowReminder}
-        defaultTitle={reminderRowTitle}
-        defaultObjectType="Rental"
-      />
 
       {/* Add Fine Dialog */}
       <AddFineDialog

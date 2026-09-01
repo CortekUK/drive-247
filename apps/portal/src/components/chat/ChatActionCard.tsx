@@ -99,7 +99,6 @@ export function ChatActionCard({ action, onConfirm, onReject, isLoading }: ChatA
 
 // Map entity types to portal routes
 const entityRoutes: Record<string, string> = {
-  reminder: '/reminders',
   customer: '/customers',
   vehicle: '/fleet/vehicles',
   rental: '/rentals',
