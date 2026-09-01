@@ -1,8 +1,6 @@
 // AI Chatbot components
-export { ChatSidebar } from './ChatSidebar';
 export { TraxAIDialog, TraxHeaderButton } from './TraxAIDialog';
 export { ChatMessage } from './ChatMessage';
-export { ChatInput } from './ChatInput';
 export { ChatChart } from './ChatChart';
 export { ChatRentalCards } from './ChatRentalCards';
 export { ChatActionCard, ActionResultBadge } from './ChatActionCard';
