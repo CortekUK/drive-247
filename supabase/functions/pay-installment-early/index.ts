@@ -60,24 +60,9 @@ serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
+        .select('stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code')
         .eq('id', tenantId)
         .single()
-
-      // Square tenants cannot have installment plans (installments_enabled is
-      // forced false at creation — Square cannot vault a card for the later
-      // instalments), so there is no plan here to pay early.
-      if ((tenant as { payment_provider?: string } | null)?.payment_provider === 'square') {
-        console.error(`[pay-installment-early] tenant ${tenantId} is on Square but has an installment plan — refusing.`)
-        return new Response(
-          JSON.stringify({
-            error:
-              'This tenant processes payments through Square, which cannot support installment plans.',
-            code: 'square_no_installments',
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        )
-      }
 
       if (tenant) {
         stripeMode = (tenant.stripe_mode as StripeMode) || 'test'

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -114,10 +114,6 @@ const settingsTabGroups = [
       { value: 'payg', icon: Clock, label: 'Pay As You Go' },
       { value: 'promos', icon: Zap, label: 'Promo Codes' },
       { value: 'extras', icon: Package, label: 'Extras' },
-      // Provider-neutral: this tab holds whichever processor the tenant settled
-      // on, and they now choose that themselves. A hard-coded "Stripe Connect"
-      // sent a Square operator hunting for a menu item that does not describe
-      // what they would find behind it.
       { value: 'payments', icon: CreditCard, label: 'Payments' },
     ],
   },
@@ -135,7 +131,6 @@ const settingsTabGroups = [
       { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
       { value: 'insurance', icon: Shield, label: 'Insurance' },
       { value: 'esign', icon: FileSignature, label: 'E-Signatures' },
-      { value: 'tesla', icon: Bolt, label: 'Tesla Fleet' },
       { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
     ],
   },

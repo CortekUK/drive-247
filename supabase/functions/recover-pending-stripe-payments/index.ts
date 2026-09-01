@@ -50,21 +50,6 @@ Deno.serve(async (req) => {
       .from('payments')
       .select('id, rental_id, tenant_id, amount, stripe_checkout_session_id, target_categories, extension_id, platform_account')
       .eq('status', 'Pending')
-      // Stripe-only fence. This is the only webhook-miss recovery in the system
-      // and it runs every minute, so it is also the most dangerous place to get a
-      // provider filter wrong in EITHER direction.
-      //
-      // Provably a no-op today: payments.payment_provider is NOT NULL DEFAULT
-      // 'stripe' and all 1,026 rows carry 'stripe', so this matches exactly the
-      // same set it did before. Had the column been nullable with no default —
-      // as it easily could have been — this same line would match ZERO rows and
-      // silently switch off real Stripe money recovery. The predicate and the
-      // DDL are one decision; do not copy this line to a table whose provider
-      // column is nullable.
-      //
-      // Square gets its own recovery path (Events API), because Square has no
-      // equivalent of a checkout session to re-read.
-      .eq('payment_provider', 'stripe')
       .not('stripe_checkout_session_id', 'is', null)
       .gte('created_at', cutoffIso)
       .order('created_at', { ascending: false })
@@ -149,10 +134,6 @@ Deno.serve(async (req) => {
       .select('id, rental_id, customer_id, amount, remaining_amount')
       .eq('status', 'Credit')
       .eq('capture_status', 'captured')
-      // Second pass, same fence and the same reasoning as the first. Fencing one
-      // pass and not the other is how a Square row reaches Stripe-shaped healing
-      // logic through the back door.
-      .eq('payment_provider', 'stripe')
       .not('rental_id', 'is', null)
       .not('stripe_checkout_session_id', 'is', null)
       .gt('remaining_amount', 0)

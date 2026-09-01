@@ -125,29 +125,10 @@ Deno.serve(async (req) => {
     // Stripe config.
     const { data: tenant, error: tenantError } = await supabase
       .from('tenants')
-      .select(`payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name, deposit_charge_enabled, ${DEPOSIT_AMOUNT_TENANT_COLUMNS}`)
+      .select(`stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id, currency_code, company_name, deposit_charge_enabled, ${DEPOSIT_AMOUNT_TENANT_COLUMNS}`)
       .eq('id', rental.tenant_id)
       .single()
     if (tenantError || !tenant) return errorResponse('Tenant not found', 404)
-
-    // Square cannot vault a card from a hosted payment link — it has no
-    // SetupIntent equivalent — so there is no stored credential to charge and no
-    // authorisation to place. This is designed out for Square, not merely
-    // unbuilt: these features are forced off at tenant creation and rendered
-    // disabled in the portal.
-    //
-    // A SKIP, not a throw. The same reasoning place-deposit-hold gives applies:
-    // several callers reach these paths, and turning a deliberately-absent
-    // feature into a 500 pages someone for working-as-designed behaviour.
-    if ((tenant as { payment_provider?: string }).payment_provider === 'square') {
-      console.log('[create-hold-checkout] tenant is on Square — holds are not supported.')
-      return jsonResponse({
-        success: true,
-        skipped: true,
-        reason: 'square_tenant',
-        message: 'This tenant processes payments through Square, which cannot place an authorisation hold. Collect the deposit as a charge instead.',
-      })
-    }
 
     // A tenant on CHARGED deposits takes the deposit as a real payment against a
     // 'Security Deposit' ledger charge. Authorising the card as well ring-fences

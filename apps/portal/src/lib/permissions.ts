@@ -219,7 +219,6 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   messaging: 'settings.integrations',
   insurance: 'settings.integrations',
   esign: 'settings.integrations',
-  tesla: 'settings.integrations',
   blacklist: 'settings.integrations',
   // Account
   subscription: 'settings.subscription',

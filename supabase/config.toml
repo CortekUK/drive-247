@@ -125,15 +125,6 @@ verify_jwt = true
 [functions.submit-enquiry]
 verify_jwt = false
 
-# OAuth callback (Tesla 302-redirects to this endpoint, so it can't carry a JWT).
-# The POST actions in this function still verify the JWT in code.
-[functions.tesla-fleet-api]
-verify_jwt = false
-
-# Hourly Tesla Supercharger sync (called by pg_cron with a service-role bearer).
-[functions.sync-tesla-charges-cron]
-verify_jwt = false
-
 # Lead Management — public application form submission (Spec §6.2).
 [functions.submit-application]
 verify_jwt = false
@@ -330,52 +321,3 @@ verify_jwt = true
 # pg_net, which carries no user JWT; protected by x-platform-secret.
 [functions.expire-link-session]
 verify_jwt = false
-
-# ---------------------------------------------------------------------------
-# Square integration
-# ---------------------------------------------------------------------------
-
-# Square redirects the operator's BROWSER here after consent, so there is no
-# Authorization header to verify. Protected instead by a single-use, expiring
-# nonce row in square_oauth_state, which is deleted on first read.
-[functions.square-oauth-callback]
-verify_jwt = false
-
-# ONE application-level subscription serves every OAuth-connected merchant, so
-# this endpoint is public by construction; the tenant is resolved from the
-# payload's merchant_id.
-#
-# verify_jwt MUST be false BEFORE the subscription is created: Square probes the
-# notification URL for reachability at create time and a 401 makes creation fail
-# outright.
-#
-# Auth is the Square signature: base64(HMAC-SHA256(key, notification_url + raw_body)).
-# The URL is part of the signed message, so it must match the registered value
-# byte for byte. Fails closed — a missing or bad signature is a 401 with no DB write.
-[functions.square-webhook]
-verify_jwt = false
-
-# Started from the portal by an authenticated head_admin/admin (or a super
-# admin), so the JWT is both present and load-bearing: without it any holder of a
-# project JWT could bind their own Square account to a victim tenant.
-[functions.square-oauth-start]
-verify_jwt = true
-
-# Same reasoning as square-oauth-start, and the stakes are higher in the other
-# direction: this one STOPS a live merchant taking money. JWT plus the in-function
-# super-admin / own-tenant-admin check.
-[functions.square-disconnect]
-verify_jwt = true
-
-# Flips tenants.square_mode between sandbox and production. JWT plus the same
-# super-admin / own-tenant-admin check, and a server-side readiness gate: it
-# refuses to go live without a verified production connection whose location
-# currency matches the tenant's.
-[functions.set-square-mode]
-verify_jwt = true
-
-# pg_cron invokes this with the service-role key, which satisfies JWT
-# verification, so it stays true. Square access tokens expire after 30 days and
-# this is the only thing that stops a silent expiry.
-[functions.refresh-square-tokens]
-verify_jwt = true

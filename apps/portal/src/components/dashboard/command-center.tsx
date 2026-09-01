@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/tooltip";
 import type { ChecklistItem } from "@/hooks/use-platform-status";
 import { useTenant } from "@/contexts/TenantContext";
-import { providerPresentation } from "@/lib/payment-provider";
 import { useGoLiveRequests } from "@/hooks/use-go-live-request";
 import { useToast } from "@/hooks/use-toast";
 
@@ -260,8 +259,7 @@ export function CommandCenter({
 }: CommandCenterProps) {
   const router = useRouter();
   const { tenant } = useTenant();
-  const infoTooltips = infoTooltipsFor(providerPresentation(tenant?.payment_provider).name);
-  const pay = providerPresentation(tenant?.payment_provider);
+  const infoTooltips = infoTooltipsFor("Stripe");
   const { submitRequest } = useGoLiveRequests();
   const { toast } = useToast();
   const collapseKey = `command-center-collapsed-${tenant?.id}`;

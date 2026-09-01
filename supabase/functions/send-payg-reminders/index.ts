@@ -460,21 +460,9 @@ Deno.serve(async (req) => {
   try {
     console.log(`[PaygReminderCron] Running at ${now.toISOString()}`);
 
-    // Stripe-only fence, applied to the TENANT prefetch rather than the rentals
-    // query, because the loop below already skips-and-counts any rental whose
-    // tenant is absent from this map (`if (!tenant) { skipped++; continue; }`).
-    // Fencing here therefore satisfies "skipped, counted, never processed and
-    // never thrown out of the loop" without restructuring the query.
-    //
-    // A fence is genuinely needed here — unlike auto-extend, PAYG is NOT
-    // excluded by data. `rentals.payg_auto_reminders_enabled` defaults to TRUE,
-    // so a Square tenant's PAYG rental would otherwise be picked up and driven
-    // down a Stripe payment-link path. The tenant-level flag is forced false at
-    // creation, but the SQL filter above reads the RENTAL column, not that one.
     const { data: tenants, error: tenantErr } = await supabase
       .from("tenants")
-      .select("id, slug, payg_auto_reminders_enabled, payg_reminder_interval_days, currency_code, company_name, contact_email, contact_phone, hide_vehicle_registration")
-      .eq("payment_provider", "stripe");
+      .select("id, slug, payg_auto_reminders_enabled, payg_reminder_interval_days, currency_code, company_name, contact_email, contact_phone, hide_vehicle_registration");
 
     if (tenantErr) throw tenantErr;
 

@@ -13,7 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { providerPresentation } from "@/lib/payment-provider";
 import {
   Loader2,
   AlertTriangle,
@@ -78,7 +77,6 @@ export default function RejectionDialog({
 }: RejectionDialogProps) {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
-  const pay = providerPresentation(tenant?.payment_provider);
   const { logAction } = useAuditLog();
 
   useAuditLogOnOpen({
@@ -479,7 +477,7 @@ export default function RejectionDialog({
                           {p.capture_status === 'requires_capture'
                             ? 'Hold will be released'
                             : p.capture_status === 'captured'
-                              ? `Will be refunded via ${pay.name}`
+                              ? "Will be refunded via Stripe"
                               : 'Will need manual refund'}
                         </p>
                       </div>
@@ -498,7 +496,7 @@ export default function RejectionDialog({
                       </div>
                       <div className="text-right">
                         <span className="font-medium">{formatCurrency(inst.amount || 0, currencyCode)}</span>
-                        <p className="text-xs text-muted-foreground">{`Will be refunded via ${pay.name}`}</p>
+                        <p className="text-xs text-muted-foreground">{"Will be refunded via Stripe"}</p>
                       </div>
                     </div>
                   ))}

@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
     // needs this row.
     const { data: tenant, error: tenantError } = await supabase
       .from("tenants")
-      .select("payment_provider, global_deposit_amount, security_deposit_enabled, deposit_charge_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
+      .select("global_deposit_amount, security_deposit_enabled, deposit_charge_enabled, deposit_mode, currency_code, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
       .eq("id", effectiveTenantId)
       .single();
 
@@ -206,27 +206,6 @@ Deno.serve(async (req) => {
     // (the Stripe webhook's place_deposit_hold flag, charge-saved-card, key
     // handover, the booking success page x2, and the manual portal buttons) and
     // any one of them missed would silently double-charge a live customer.
-    // A Square tenant never places an authorisation hold. Square has no
-    // SetupIntent and cannot vault a card from a hosted link, so there is
-    // nothing to authorise against — this is designed-out, not unimplemented.
-    //
-    // It returns a SKIP rather than throwing for the same reason the charged-
-    // deposit refusal below does: six callers reach this function, including the
-    // Stripe webhook and the booking success page, and a throw would turn a
-    // deliberately-absent feature into a failed booking. Square tenants are
-    // created with deposit_charge_enabled=true, so the refusal below would also
-    // catch them — this one states the actual reason instead of implying the
-    // operator configured it that way.
-    if ((tenant as { payment_provider?: string }).payment_provider === "square") {
-      console.log(`[place-deposit-hold] tenant ${effectiveTenantId} is on Square — holds are not supported on this provider.`);
-      return jsonResponse({
-        success: true,
-        skipped: true,
-        reason: "square_tenant",
-        message: "This tenant processes payments through Square, which cannot place an authorisation hold. Deposits are collected as a charge instead.",
-      });
-    }
-
     if ((tenant as { deposit_charge_enabled?: boolean }).deposit_charge_enabled === true) {
       console.log(`[place-deposit-hold] tenant ${effectiveTenantId} is on charged deposits — no authorisation placed.`);
       return jsonResponse({

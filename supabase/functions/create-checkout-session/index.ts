@@ -3,7 +3,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, type StripeMode, type PlatformAccount } from '../_shared/stripe-client.ts'
 import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
-import { tryProviderCheckout } from '../_shared/payments/checkout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -182,14 +181,6 @@ serve(async (req) => {
       ? `After payment, a ${formattedDeposit} security deposit hold (not a charge) will be authorised on the same card. Released when your rental ends.`
       : null;
 
-    // Customer resolution — HOISTED above the dispatch, not duplicated.
-    //
-    // It used to sit further down, inside the Stripe section. It is entirely
-    // provider-neutral (a rentals lookup), and payments.customer_id is NOT NULL,
-    // so the Square pre-insert cannot happen without it.
-    //
-    // Moving rather than copying keeps the Stripe path's behaviour identical: it
-    // reads the same value from the same query, just computed earlier.
     let resolvedCustomerId = customerId;
     if (!resolvedCustomerId && referenceId) {
       const { data: rental } = await supabaseClient
@@ -200,116 +191,6 @@ serve(async (req) => {
       resolvedCustomerId = rental?.customer_id;
     }
 
-    // ---- PROVIDER DISPATCH (Square) -------------------------------------
-    // Everything above this line is provider-neutral: request parsing, tenant
-    // resolution, currency and the deposit disclosure. Everything below is the
-    // Stripe rail and is BYTE-IDENTICAL to what it was before Square existed.
-    //
-    // handled === false means "this tenant is on Stripe" and execution simply
-    // continues into the untouched body below. That is why this is an insertion
-    // and not a refactor: the Stripe path cannot regress because it was not
-    // edited.
-    //
-    // WHY requiresStoredCredential IS COMPUTED, NOT HARDCODED
-    //
-    // The Stripe session below sets setup_future_usage:'off_session'
-    // unconditionally, so a first reading says "this flow always vaults, and
-    // Square cannot vault, therefore Square can never use it". Hardcoding true
-    // on that reading is what made the whole booking flow unavailable to Square
-    // tenants — and this is the function the booking app calls to take payment,
-    // so it meant their customers could not book at all.
-    //
-    // The vault is not needed by the payment itself. It exists for what happens
-    // AFTER it, and there are exactly three such consumers:
-    //   * a later deposit HOLD  — only when the tenant is on held deposits
-    //   * an instalment charge  — only when installmentId is present
-    //   * a PAYG accrual charge — only when paygAccrualId is present
-    //
-    // A Square tenant has none of them. They are created with
-    // deposit_charge_enabled = true (their deposit is an ordinary charge, not an
-    // authorisation) and with installments, auto-extend and PAYG forced off,
-    // because Square cannot vault a card. So for a Square tenant this is a plain
-    // one-off payment, which Square serves perfectly well.
-    //
-    // Expressed as a property of THIS REQUEST rather than a test of the provider
-    // name, so a third processor needs no new branch here.
-    const needsStoredCredential =
-      !depositChargeEnabled || !!installmentId || !!paygAccrualId || !!holdAsCredit
-
-    if (tenantId) {
-      const routed = await tryProviderCheckout(supabaseClient, tenantId, {
-        amountCents: Math.round(amountNum * 100),
-        currency: currencyCode,
-        description: `Payment${referenceId ? ` for ${referenceId}` : ''}`,
-        redirectUrl: successUrl,
-        reference: { paymentId: String(referenceId ?? '') },
-        requiresStoredCredential: needsStoredCredential,
-        // The payments row the seam must create BEFORE calling Square.
-        //
-        // Mirrors the Stripe insert further down this file, minus the Stripe
-        // handle. It is passed rather than written here because the row has to
-        // exist before the link does: square-webhook correlates on
-        // square_order_id, and a buyer who pays immediately would otherwise hit
-        // a webhook with no row to match.
-        //
-        // capture_status is 'requires_capture' on the Stripe path because that
-        // session authorises first. A Square payment link charges outright, so
-        // the row starts with no capture state and the webhook sets it.
-        paymentRow: resolvedCustomerId ? {
-          // payments.customer_id is NOT NULL, so a row cannot be created without
-          // it. Passing no paymentRow at all (the ternary's else) makes the seam
-          // create a link with no row — which is now caught below rather than
-          // silently producing an uncorrelatable payment.
-          ...(rentalId ? { rental_id: rentalId } : {}),
-          customer_id: resolvedCustomerId,
-          tenant_id: tenantId,
-          amount: Math.round(amountNum * 100) / 100,
-          remaining_amount: Math.round(amountNum * 100) / 100,
-          payment_date: new Date().toISOString().split('T')[0],
-          method: 'Card',
-          payment_type: 'Payment',
-          verification_status: 'pending',
-          booking_source: source === 'portal' ? 'admin' : 'website',
-          ...(targetCategories && targetCategories.length > 0 ? { target_categories: targetCategories } : {}),
-          ...(extensionId ? { extension_id: extensionId } : {}),
-        } : undefined,
-      })
-      if (routed.error) {
-        return new Response(
-          JSON.stringify({ error: routed.reason, ...(routed.body ?? {}) }),
-          { status: routed.httpStatus ?? 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-      // A SKIP here is not a success. skip() is shaped for crons, which want a
-      // quiet no-op; this endpoint's entire job is to return a payment link, so
-      // returning 200 with no link would show the operator — or the customer
-      // mid-booking — a success that did not happen.
-      //
-      // Reaching this means the request needs a vaulted card (an instalment, a
-      // PAYG accrual, or a tenant on held deposits) on a provider that cannot
-      // vault one. Those features are switched off for Square at tenant
-      // creation, so this is a backstop, and it names the actual reason.
-      if (routed.handled && routed.skipped) {
-        return new Response(
-          JSON.stringify({
-            error:
-              'This payment needs a saved card, which this tenant\'s payment provider cannot store. ' +
-              'Instalments, pay-as-you-go and held deposits are not available on this provider.',
-            code: routed.reason ?? 'provider_cannot_store_credential',
-            ...(routed.body ?? {}),
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      if (routed.handled) {
-        return new Response(
-          JSON.stringify(routed.body ?? {}),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-    }
-    // ---- END PROVIDER DISPATCH — Stripe code below is unchanged ------------
 
     // Get Stripe client for the tenant's platform account + mode
     // ('managed' tenants → legacy UK platform, 'own' tenants → UAE platform)

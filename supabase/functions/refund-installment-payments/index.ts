@@ -79,33 +79,9 @@ Deno.serve(async (req) => {
     if (tenantId) {
       const { data: tenant } = await supabase
         .from("tenants")
-        .select("payment_provider, stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
+        .select("stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id")
         .eq("id", tenantId)
         .single();
-
-      // A Square tenant cannot have an installment plan, so reaching here means
-      // something upstream is wrong — refuse rather than proceed.
-      //
-      // Installments require charging a stored card with nobody present, which
-      // Square's hosted checkout cannot do. Square tenants are therefore created
-      // with installments_enabled=false and the capability is off in
-      // capabilities.ts. This is NOT a port of the flow: there is nothing to
-      // port, because the plan that would be refunded cannot exist.
-      //
-      // Refusing loudly rather than falling through is the whole point. The
-      // per-installment loop below keys on stripe_payment_intent_id, which a
-      // Square row never has, so every installment would silently record
-      // "no_stripe_charge" and the customer would be told they were refunded
-      // while their money stayed at Square.
-      if ((tenant as { payment_provider?: string } | null)?.payment_provider === "square") {
-        console.error(`[REFUND-INSTALLMENTS] tenant ${tenantId} is on Square but has an installment plan — refusing.`);
-        return errorResponse(
-          "This tenant processes payments through Square, which cannot support installment plans. " +
-            "An installment plan should not exist for this tenant — refund the payments individually " +
-            "and report this, because it indicates a plan was created that should have been blocked.",
-          409,
-        );
-      }
 
       if (tenant) {
         tenantData = tenant;
