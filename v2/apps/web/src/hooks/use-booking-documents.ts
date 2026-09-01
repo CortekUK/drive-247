@@ -102,8 +102,20 @@ export interface BookingDocumentsSession {
   expiresAt: string | null;
   rental: BookingDocumentsRental;
   tenant: BookingDocumentsTenant;
-  /** Raw `rentals.documents_status`, for display only. Never branched on here. */
+  /** Raw `rentals.documents_status`. The INSURANCE step's state, and only that. */
   documentsStatus: string | null;
+  /**
+   * The IDENTITY step's state, from `booking_document_links.identity_status`.
+   *
+   * `null` = never started, then 'pending' -> 'submitted' | 'rejected'. It is a
+   * separate column from `documentsStatus` on purpose: two steps writing one
+   * column is how a rejected licence photo ends up rendering "we could not read
+   * your documents" over an insurance PDF the customer sent five minutes ago.
+   *
+   * A server too old to know the identity step omits the field entirely, which
+   * parses to `null` — the same as "not started", which is the safe reading.
+   */
+  identityStatus: string | null;
 }
 
 /**
@@ -285,6 +297,7 @@ function parseSession(
         logoUrl: asString(tenant.logoUrl),
       },
       documentsStatus: asString(body.documentsStatus),
+      identityStatus: asString(body.identityStatus),
     },
   };
 }
@@ -801,6 +814,318 @@ export function useSubmitBookingInsurance() {
           : stored.length;
 
       return { submitted, documentsStatus: asString(body.documentsStatus) };
+    },
+  });
+}
+
+/* ═════════════════════════ step one: identity ═════════════════════════════ */
+
+/**
+ * What may be sent as an identity photo.
+ *
+ * PDF IS EXCLUDED HERE AND ONLY HERE. A PDF is a perfectly good insurance
+ * certificate and a useless input to a face match — `ai-face-match` hands the
+ * bytes to Rekognition, which wants an image. The insurance step keeps all four
+ * of the bucket's MIME types; this step takes the three that are pictures.
+ */
+export const IDENTITY_MIME_TYPES: readonly string[] = ACCEPTED_MIME_TYPES.filter(
+  (type) => type !== 'application/pdf',
+);
+
+/** The bucket's own 5 MB `file_size_limit`, same as everywhere else. */
+export const IDENTITY_MAX_BYTES = MAX_UPLOAD_BYTES;
+
+export const IDENTITY_ACCEPT_ATTRIBUTE = '.jpg,.jpeg,.png';
+
+export const IDENTITY_FORMATS_LABEL = 'JPG or PNG, up to 5 MB';
+
+/**
+ * Say which limit was hit, before anything is uploaded.
+ *
+ * Same rule as `validateInsuranceFile`: every message names the limit and what
+ * to do about it. "Failed to upload document" is not something a customer can
+ * act on.
+ */
+export function validateIdentityPhoto(file: File): string | null {
+  const type = file.type.toLowerCase();
+
+  if (type === 'image/heic' || type === 'image/heif') {
+    return (
+      'That photo is in Apple’s HEIC format, which this bucket does not accept. ' +
+      'In Settings › Camera › Formats choose “Most Compatible”, then take it again.'
+    );
+  }
+
+  if (type === 'application/pdf') {
+    return 'This step needs a photo rather than a PDF. Take a picture of the document itself.';
+  }
+
+  if (!IDENTITY_MIME_TYPES.includes(type)) {
+    return `That file is a ${file.type || 'file of unknown type'}. Please send a JPG or PNG photo.`;
+  }
+
+  if (file.size === 0) {
+    return 'That photo came through empty. Please take or choose it again.';
+  }
+
+  if (file.size > IDENTITY_MAX_BYTES) {
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    const limitMb = Math.round(IDENTITY_MAX_BYTES / 1024 / 1024);
+    return `That photo is ${mb} MB and the limit is ${limitMb} MB. Taking it with the camera button usually produces a smaller file.`;
+  }
+
+  return null;
+}
+
+/**
+ * The three object names, exactly.
+ *
+ * `ai-verification/<sessionId>/<kind>.jpg` IS A CONTRACT. It is what v1's QR
+ * capture writes (`apps/booking/src/app/verify/[token]/page.tsx:355`) and what
+ * the portal's document viewers read, and `booking-documents-link` pins every
+ * submitted path against the prefix it issued. The session id is never
+ * constructed here — it is whatever `start-identity` handed back.
+ */
+export type IdentitySlot = 'front' | 'back' | 'selfie';
+
+const IDENTITY_OBJECT: Record<IdentitySlot, string> = {
+  front: 'document-front.jpg',
+  back: 'document-back.jpg',
+  selfie: 'selfie.jpg',
+};
+
+const IDENTITY_LABEL: Record<IdentitySlot, string> = {
+  front: 'the front of your document',
+  back: 'the back of your document',
+  selfie: 'your photo',
+};
+
+const START_IDENTITY_ACTION = 'start-identity';
+const SUBMIT_IDENTITY_ACTION = 'submit-identity';
+
+export interface BookingIdentitySession {
+  /** Minted server-side. The scoping segment of every upload path below. */
+  sessionId: string;
+  /** `ai-verification/<sessionId>`. Issued by the server, never derived here. */
+  uploadPrefix: string;
+}
+
+const IDENTITY_UNAVAILABLE_COPY =
+  'We could not start the identity check just now. Nothing about your booking ' +
+  'has changed — please try again in a moment.';
+
+/**
+ * "I am starting the identity step."
+ *
+ * ── CALL THIS ON A PRESS, NEVER ON A RENDER ─────────────────────────────────
+ * This is the only thing in the flow that mints an `identity_verifications`
+ * session, and minting is not free: `create-ai-verification-session` caps a
+ * customer at TEN an hour and sets `customers.identity_verification_status =
+ * 'pending'` as a side effect. The first build of this screen called the
+ * equivalent on every page open, which meant ten refreshes locked a customer
+ * out of their own paid booking and left a false status on their record. So
+ * there is no `useEffect` anywhere near this hook: the customer presses "Start",
+ * and only then does a session exist.
+ *
+ * The server reuses an unprocessed session rather than minting a second one, so
+ * pressing Start, going back and pressing it again costs nothing.
+ */
+export function useStartBookingIdentity() {
+  return useMutation<BookingIdentitySession, Error, { token: string }>({
+    // Not retried behind the customer's back: every attempt can consume one of
+    // their ten sessions an hour.
+    retry: false,
+    mutationFn: async ({ token }): Promise<BookingIdentitySession> => {
+      const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
+        body: { token, action: START_IDENTITY_ACTION },
+      });
+
+      if (error) {
+        const body = await readServerBody(error);
+        console.error('[useStartBookingIdentity] start failed', {
+          status: statusOf(error),
+          serverError: body?.error,
+          detail: describe(error),
+        });
+        // `identity_rate_limited`, `identity_unavailable` and `no_customer` all
+        // carry prose written for a customer, and each says something different
+        // and useful. Shown as written.
+        const serverMessage = asString(body?.error);
+        throw new Error(
+          serverMessage ?? (looksOffline() ? OFFLINE_COPY : IDENTITY_UNAVAILABLE_COPY),
+        );
+      }
+
+      const body = asRecord(data);
+      const sessionId = asString(body.sessionId);
+      const uploadPrefix = asString(body.uploadPrefix);
+      if (body.ok !== true || sessionId === null || uploadPrefix === null) {
+        // Includes the "server too old to know this action" case: it falls
+        // through to `open` and answers a session body with no sessionId, which
+        // must not be read as a started identity step.
+        console.error('[useStartBookingIdentity] unexpected response', body);
+        throw new Error(IDENTITY_UNAVAILABLE_COPY);
+      }
+
+      return { sessionId, uploadPrefix };
+    },
+  });
+}
+
+/** Where a single photo has got to. Reported per slot. */
+export type IdentityPhotoState = 'queued' | 'uploading' | 'stored' | 'failed';
+
+export interface SubmitBookingIdentityInput {
+  token: string;
+  /** Server-issued. NEVER built in the browser — see `useStartBookingIdentity`. */
+  uploadPrefix: string;
+  front: File;
+  /** The back of a passport does not exist. Genuinely optional. */
+  back: File | null;
+  selfie: File;
+  onPhotoState?: (slot: IdentitySlot, state: IdentityPhotoState, error?: string) => void;
+}
+
+/**
+ * What the identity step ends in, as the SERVER recorded it.
+ *
+ * There is no 'verified' here and there never will be. `process-ai-verification`
+ * answers 'verified' or 'review_required' for a pass, and
+ * `booking-documents-link` collapses both to 'submitted' before they reach the
+ * browser — because what is true either way is that we have the photos and a
+ * person will look at them. Whether the face match was GREEN or RETRY is the
+ * operator's to read; a screen that told a customer they were "verified" would
+ * be making a promise an operator can still take back.
+ */
+export type BookingIdentityOutcome = 'submitted' | 'rejected';
+
+export interface SubmitBookingIdentityResult {
+  identityStatus: BookingIdentityOutcome;
+}
+
+const IDENTITY_SUBMIT_FAILED_COPY =
+  'Your photos were stored, but we could not finish the check. Nothing about ' +
+  'your booking or your payment has changed — please try again.';
+
+/**
+ * Put the three photos in the bucket, then ask the server what they mean.
+ *
+ * ── THE BROWSER NEVER WRITES THE OUTCOME ────────────────────────────────────
+ * v1's capture page writes `verification_step` and `upload_progress` straight
+ * from the browser (`apps/booking/src/app/verify/[token]/page.tsx:67-90`,
+ * `:265-275`), and `anon` can reach `identity_verifications`. That is a client
+ * writing the state its own gate is judged on. None of it is ported.
+ *
+ * It is also why this does NOT call `process-ai-verification` directly, which
+ * is what the deleted version of this file did. Going through
+ * `booking-documents-link` means the server pins every path against the prefix
+ * it issued, runs the AI pass itself, and is the only writer of
+ * `booking_document_links.identity_status` — a column no browser can reach.
+ *
+ * ── AND IT NEVER SAYS THE BOOKING IS CONFIRMED ──────────────────────────────
+ * The best answer this returns is 'submitted'. An operator still reviews the
+ * booking and can still reject it, and `notify-booking-approved` is the only
+ * thing in the product that says "confirmed".
+ */
+export function useSubmitBookingIdentity() {
+  return useMutation<SubmitBookingIdentityResult, Error, SubmitBookingIdentityInput>({
+    // Never retried automatically: each attempt re-uploads three objects and
+    // re-runs a paid OCR and face-match pass. The customer presses the button.
+    retry: false,
+    mutationFn: async (input): Promise<SubmitBookingIdentityResult> => {
+      const queue: { slot: IdentitySlot; file: File }[] = [
+        { slot: 'front', file: input.front },
+        ...(input.back ? [{ slot: 'back' as const, file: input.back }] : []),
+        { slot: 'selfie', file: input.selfie },
+      ];
+
+      const paths: Partial<Record<IdentitySlot, string>> = {};
+
+      // Sequential, not `Promise.all`. Three concurrent multi-megabyte uploads
+      // on a phone connection is how one of them times out, and a per-photo
+      // status list would have nothing honest to say about which.
+      for (const { slot, file } of queue) {
+        // Re-checked here as well as at capture time: this is the value the
+        // bucket will actually judge.
+        const rejection = validateIdentityPhoto(file);
+        if (rejection) {
+          input.onPhotoState?.(slot, 'failed', rejection);
+          throw new Error(rejection);
+        }
+
+        input.onPhotoState?.(slot, 'uploading');
+        const path = `${input.uploadPrefix}/${IDENTITY_OBJECT[slot]}`;
+
+        const { error } = await supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
+          /*
+            `image/jpeg` and a `.jpg` name regardless of the real bytes, because
+            the path is a CONTRACT (see IDENTITY_OBJECT). A PNG therefore travels
+            mislabelled — which is v1's behaviour too, and it works because both
+            consumers sniff the bytes: `ai-face-match` base64s them for
+            Rekognition and `ai-document-ocr` wraps them in a
+            `data:image/jpeg;base64,` URI. Worth knowing before anyone "fixes"
+            the content type: the FILENAME is the part the portal depends on.
+          */
+          contentType: 'image/jpeg',
+          // A retake must replace the first attempt rather than 409, which is
+          // what makes "try again" safe to press twice.
+          upsert: true,
+        });
+
+        if (error) {
+          const message = `We could not store ${IDENTITY_LABEL[slot]}. ${error.message}`;
+          console.error('[useSubmitBookingIdentity] storage upload failed', {
+            path,
+            message: error.message,
+          });
+          input.onPhotoState?.(slot, 'failed', message);
+          throw new Error(message);
+        }
+
+        input.onPhotoState?.(slot, 'stored');
+        paths[slot] = path;
+      }
+
+      const { data, error } = await supabase.functions.invoke(LINK_FUNCTION, {
+        body: {
+          token: input.token,
+          action: SUBMIT_IDENTITY_ACTION,
+          // PATHS, not URLs. The server resolves them against the bucket.
+          documentFrontPath: paths.front,
+          documentBackPath: paths.back ?? null,
+          selfiePath: paths.selfie,
+        },
+      });
+
+      if (error) {
+        const body = await readServerBody(error);
+        console.error('[useSubmitBookingIdentity] check failed', {
+          status: statusOf(error),
+          serverError: body?.error,
+          detail: describe(error),
+        });
+        /*
+          `identity_unavailable` is the one worth knowing about: the server
+          answers it when the AI pass could not RUN (its OCR or face-match
+          provider was unusable) rather than when it judged the photos. Its
+          prose says "we could not check your photos just now", not "we could
+          not read them", and the identity step stays where it was — so it is
+          shown verbatim rather than flattened into a rejection.
+        */
+        const serverMessage = asString(body?.error);
+        throw new Error(
+          serverMessage ?? (looksOffline() ? OFFLINE_COPY : IDENTITY_SUBMIT_FAILED_COPY),
+        );
+      }
+
+      const body = asRecord(data);
+      const outcome = body.identityStatus;
+      if (body.ok !== true || (outcome !== 'submitted' && outcome !== 'rejected')) {
+        console.error('[useSubmitBookingIdentity] unexpected response', body);
+        throw new Error(IDENTITY_SUBMIT_FAILED_COPY);
+      }
+
+      return { identityStatus: outcome };
     },
   });
 }

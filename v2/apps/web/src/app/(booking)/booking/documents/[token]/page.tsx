@@ -1,9 +1,16 @@
 import type { Metadata } from "next";
 
-import { BookingDocumentsScreen } from "@/components/booking/insurance-upload";
+import { BookingDocumentsScreen } from "@/components/booking/documents-screen";
 
 /**
  * /booking/documents/<token> — the surface a customer lands on after paying.
+ *
+ * It carries the WHOLE post-payment errand, which is two steps and not one:
+ * the identity photos (`components/booking/identity-capture.tsx`) and the
+ * insurance certificate (`components/booking/insurance-upload.tsx`), sequenced
+ * by `components/booking/documents-screen.tsx`. Read that file's header before
+ * changing either — in particular, why the identity session is minted only when
+ * the customer presses Start and never on a page open.
  *
  * ── WHY THIS ROUTE IS WHERE IT IS ───────────────────────────────────────────
  * It sits under `(booking)`, and it MUST. `(portal)/layout.tsx` computes
@@ -32,9 +39,9 @@ import { BookingDocumentsScreen } from "@/components/booking/insurance-upload";
  */
 
 export const metadata: Metadata = {
-  title: "Send your insurance document",
+  title: "Send your documents",
   description:
-    "Send your insurance certificate so we can review it and confirm your booking.",
+    "Send your identity and insurance documents so we can review them and confirm your booking.",
   /*
     Every URL in this route carries a live bearer token for a PAID booking, and
     opening one has side effects: the edge function moves the booking's

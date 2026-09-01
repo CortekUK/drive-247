@@ -813,14 +813,6 @@ async function handleSubmitIdentity(
     );
   }
 
-  /*
-    THE VERDICT IS READ, NOT `ok`. Two real paths in process-ai-verification
-    answer HTTP 200 with `{ ok: false, result: 'rejected' }` — an OCR failure
-    (index.ts:174-181) and a face-match failure (:216-223) — and both have
-    ALREADY written review_result 'RED' to identity_verifications. Those are
-    verdicts. Treating them as transport errors would show a "try again" that
-    disagreed with what the operator can see.
-  */
   const result = typeof verdictBody?.result === 'string' ? verdictBody.result : '';
   if (result !== 'verified' && result !== 'review_required' && result !== 'rejected') {
     console.error('[documents-link] no verdict from process-ai-verification:', verdictBody);
@@ -828,6 +820,41 @@ async function handleSubmitIdentity(
       502,
       'identity_unavailable',
       'We could not check your photos just now. Nothing about your booking has changed — please try again in a moment.',
+    );
+  }
+
+  /*
+    A VERDICT AND AN OUTAGE ARE NOT THE SAME THING, AND `ok` IS WHAT SEPARATES
+    THEM.
+
+    process-ai-verification answers HTTP 200 `{ ok: false, result: 'rejected' }`
+    from exactly two places, and neither is a judgement about the customer: OCR
+    being unusable (index.ts:178-185) and the face matcher being unusable
+    (:219-226). A GENUINE no-match answers `{ ok: true, result: 'rejected' }`.
+
+    This is not hypothetical. Probed live on staging on 2026-09-01, a real
+    submission came back with
+    rejection_reason = "Face matching failed: AWS credentials are invalid or
+    expired" — an outage in our own account. Recording that as `rejected` would
+    put "we could not read your documents, try again in better light" in front
+    of a customer whose photos were fine, and leave a RED-looking identity step
+    on a booking for the operator to read. So an `ok: false` answer is reported
+    as "we could not check them just now", the step stays 'pending', and the
+    customer can try again. It costs one of their ten sessions an hour, which is
+    the honest price of a retry.
+
+    The trade is deliberate: an image so poor that OCR gives up also lands here
+    and gets "we could not check your photos" rather than "take a better photo".
+    That sentence is true in both cases; the alternative sentence is false in
+    one of them.
+  */
+  if (verdictBody?.ok !== true) {
+    const detail = typeof verdictBody?.detail === 'string' ? verdictBody.detail : '';
+    console.error('[documents-link] identity check could not run:', detail || verdictBody);
+    return fail(
+      502,
+      'identity_unavailable',
+      'We could not check your photos just now. Nothing about your booking has changed — please try again in a moment, and get in touch if it keeps happening.',
     );
   }
 
