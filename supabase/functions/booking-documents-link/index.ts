@@ -879,10 +879,26 @@ async function handleSubmitIdentity(
     .eq('token', link.token);
 
   if (stampError) {
-    // The photos and the verdict are already on identity_verifications, so the
-    // operator can see them — but this column is what the customer's own screen
-    // reads, so a failure here is loud.
+    /*
+      FAIL THE REQUEST. This used to log and fall through to `ok: true`, which is
+      the one outcome worse than an error: the client only calls `onSubmitted()`
+      on a truthy `ok`, so the customer would watch step 1 turn to "Received"
+      while the column their own screen gates on stayed 'pending' — and the step
+      would silently revert the next time they loaded the page. A customer who
+      believes they are finished does not come back, and the booking stalls with
+      nobody aware of it.
+
+      Returning 503 instead is honest and costs nothing: the photos and the
+      verdict are already safely on identity_verifications, so retrying re-runs
+      the stamp against work that is already done, and the operator can see the
+      documents either way.
+    */
     console.error('[documents-link] could not record identity outcome:', stampError);
+    return fail(
+      503,
+      'identity_not_recorded',
+      'Your photos reached us, but we could not finish recording them. Please try again in a moment — nothing has been lost.',
+    );
   }
 
   // Slide the window: a customer who has just engaged never loses their link,
