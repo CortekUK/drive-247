@@ -85,6 +85,21 @@ export type CustomerRentalRow = Pick<
   | 'payment_status'
   | 'approval_status'
   | 'document_status'
+  // ── `documents_status` IS NOT `document_status` ────────────────────────
+  // One character apart, two unrelated pipelines, and both appear in this
+  // very select:
+  //   `document_status`  (singular) — the BOLDSIGN e-signature envelope:
+  //                       pending | sent | delivered | signed | completed |
+  //                       declined | voided.
+  //   `documents_status` (plural)   — the post-payment IDENTITY-DOCUMENT
+  //                       gate added for the upload flow:
+  //                       not_required | pending | submitted | verified |
+  //                       rejected (CHECK `rentals_documents_status_check`).
+  // Reading one where the other was meant misreports both, silently, so
+  // never auto-complete between them. Neither may be repurposed for the
+  // other's job.
+  | 'documents_status'
+  | 'documents_completed_at'
   | 'rental_period_type'
   | 'monthly_amount'
   | 'created_at'
@@ -202,6 +217,9 @@ export const RENTAL_COLUMNS = [
   'payment_status',
   'approval_status',
   'document_status',
+  // Plural. See the note on the Pick above before touching either of these.
+  'documents_status',
+  'documents_completed_at',
   'rental_period_type',
   'monthly_amount',
   'created_at',
@@ -290,7 +308,21 @@ export interface CustomerRental {
   paymentStatusRaw: string | null;
   paymentState: RentalPaymentState;
   approvalStatus: string | null;
+  /** BoldSign e-signature state. NOT the identity-document gate below. */
   documentStatus: string | null;
+  /**
+   * The identity-document gate: 'not_required' | 'pending' | 'submitted' |
+   * 'verified' | 'rejected'.
+   *
+   * Typed `string | null` rather than a union because the column is `text`
+   * with a CHECK rather than a Postgres enum, so `types.ts` generates it as
+   * a bare `string` and a union here would be a claim the type system cannot
+   * back. `null` is the honest representation of "the value that came back is
+   * not one this build knows about" — see `bookingCompletionState`.
+   */
+  documentsStatus: string | null;
+  /** When the documents were accepted. Null until then. */
+  documentsCompletedAt: string | null;
 
   periodType: string | null;
   /** `monthly_amount` — the column name lies; it is the grand total. */
@@ -388,6 +420,97 @@ export function rentalPaymentState(status: string | null): RentalPaymentState {
   return 'unpaid';
 }
 
+/* ─────────────────────── how far a booking has got ─────────────────────── */
+
+/**
+ * The single question "is this booking done yet, and whose move is it?".
+ *
+ * Six answers, in the order the customer meets them. Only two of the six are a
+ * move for the CUSTOMER (`awaiting_payment`, `awaiting_documents`); the rest are
+ * with us, and the copy must say so rather than implying they are stuck.
+ */
+export type BookingCompletionState =
+  | 'awaiting_payment'
+  | 'awaiting_documents'
+  | 'documents_in_review'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'cancelled';
+
+/**
+ * Statuses that end a booking.
+ *
+ * DELIBERATELY NOT `CANCELLED_STATUSES` above: that set also contains 'closed',
+ * because for the LIFECYCLE buckets a closed rental reads as finished. Here
+ * 'Closed' means the car came back from a booking that completed normally, and
+ * calling that "cancelled" would tell a customer their finished rental fell
+ * through. Only the two statuses the CHECK on `rentals.status` uses for a dead
+ * booking belong here ('canceled' is the migrated single-l spelling).
+ */
+const COMPLETION_DEAD_STATUSES = new Set(['cancelled', 'canceled', 'rejected']);
+
+/**
+ * Where a booking has got to, across all four status columns at once.
+ *
+ * Takes the normalised rental rather than the raw row so the two portal pages
+ * and any future caller derive this ONE way — a second copy of the ladder is a
+ * second chance to tell a customer their booking is confirmed when it is not.
+ *
+ * The ladder, and why it is in this order:
+ *
+ *   1. dead        — a cancelled or operator-rejected booking is not awaiting
+ *                    anything, and must never render an "action needed" prompt.
+ *   2. money       — nothing else matters until the payment has landed.
+ *   3. approved    — the operator's approval is the LAST word and is what the
+ *                    confirmation email is keyed on. An operator may approve a
+ *                    booking whose documents are unverified ("Approve Anyway"),
+ *                    and after that the customer has already been emailed
+ *                    "booking confirmed": continuing to ask them for documents
+ *                    would contradict an email we sent, so this is checked
+ *                    BEFORE the document rungs rather than after them.
+ *   4-6. documents — pending/rejected is the customer's move, submitted is ours
+ *                    to review, verified/not_required hands over to approval.
+ *
+ * Note what this deliberately does NOT do: `documents_status === 'verified'`
+ * never means confirmed. Uploading documents does not confirm a booking; only
+ * the operator's approval does.
+ */
+export function bookingCompletionState(rental: {
+  statusRaw: string | null;
+  paymentStatusRaw: string | null;
+  approvalStatus: string | null;
+  documentsStatus: string | null;
+}): BookingCompletionState {
+  const status = (rental.statusRaw ?? '').trim().toLowerCase();
+  const approval = (rental.approvalStatus ?? '').trim().toLowerCase();
+  const documents = (rental.documentsStatus ?? '').trim().toLowerCase();
+
+  // 1.
+  if (COMPLETION_DEAD_STATUSES.has(status) || approval === 'rejected') {
+    return 'cancelled';
+  }
+
+  // 2. Reuses `rentalPaymentState` rather than testing `=== 'fulfilled'` so the
+  // migrated 'paid' spelling is not read as an unpaid booking, and so this and
+  // the payment chip can never disagree on screen about whether money landed.
+  if (rentalPaymentState(rental.paymentStatusRaw) !== 'paid') {
+    return 'awaiting_payment';
+  }
+
+  // 3.
+  if (approval === 'approved') return 'approved';
+
+  // 4-6.
+  if (documents === 'pending' || documents === 'rejected') return 'awaiting_documents';
+  if (documents === 'submitted') return 'documents_in_review';
+
+  // 'verified' and 'not_required' both land here, as does anything this build
+  // does not recognise. The fallback is deliberately the state where WE owe the
+  // customer something: an unknown document value must never be presented to
+  // them as work they have to go and do.
+  return 'awaiting_approval';
+}
+
 const MS_PER_DAY = 86_400_000;
 
 function nightsBetween(startDate: string, endDate: string | null): number | null {
@@ -462,6 +585,8 @@ export function normalizeCustomerRental(
     paymentState: rentalPaymentState(row.payment_status),
     approvalStatus: row.approval_status,
     documentStatus: row.document_status,
+    documentsStatus: row.documents_status ?? null,
+    documentsCompletedAt: row.documents_completed_at,
 
     periodType: row.rental_period_type,
     total: row.monthly_amount,

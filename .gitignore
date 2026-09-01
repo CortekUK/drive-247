@@ -66,3 +66,4 @@ testing-qa.env
 
 # root build artifact
 tsconfig.tsbuildinfo
+.build-partitions.json

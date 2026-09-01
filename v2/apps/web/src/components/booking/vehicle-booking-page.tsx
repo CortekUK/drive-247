@@ -1,6 +1,14 @@
 "use client";
 
-import { ArrowLeft, CarFront, RotateCw, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CarFront,
+  CheckCircle2,
+  Clock,
+  RotateCw,
+  TriangleAlert,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -48,6 +56,7 @@ import {
 import { BookingForm } from "./booking-form";
 import { deriveBookingRules, resolveDeliveryModes } from "./booking-rules";
 import {
+  bookingDocumentsHref,
   PaymentPanel,
   readPaymentReturn,
   type BookingPaymentRequest,
@@ -64,6 +73,97 @@ import {
 import { usePromoCode } from "./use-promo-code";
 import { validateBooking, type BookingField } from "./validation";
 import { VehicleCard } from "./vehicle-card";
+
+/* ────────────────── surviving a reload after the money moved ─────────────── */
+
+/**
+ * What we keep about a payment that has already happened.
+ *
+ * ── WHY THIS EXISTS AT ALL ──────────────────────────────────────────────────
+ * Paying no longer finishes a booking: the customer still has to send a photo
+ * of their licence and a selfie, and an operator still has to approve. The route
+ * to that step is a one-off token, and until this stash existed it lived in
+ * ordinary `useState` — so a reload, an accidental back-navigation, or a phone
+ * that killed the tab left the customer looking at a LIVE BOOKING FORM for a car
+ * they had already paid for, with no evidence of the charge and no way back to
+ * the upload screen. The email carries the same link, but "check your email" is
+ * not an answer to "did my card just get charged twice?".
+ *
+ * sessionStorage, not local, and it mirrors the payment-return stash idiom in
+ * `payment-panel.tsx` (:96-122) on purpose: this is tab-scoped evidence of
+ * something that happened in THIS tab, not a durable record. The durable record
+ * is the rental row, and the customer portal is where it is read from.
+ *
+ * `vehicleId` is stored and CHECKED on the way back out. Without it, a customer
+ * who paid for car A and then browsed to car B would find car B's page insisting
+ * it had been paid for and its button dead — a much worse bug than the one this
+ * fixes.
+ */
+interface PaidBookingHandoff {
+  /** `vehicles.id` this handoff belongs to. A different car ignores it. */
+  vehicleId: string;
+  /** `rentals.id` — what the token unlocks. Null only if we never learned it. */
+  rentalId: string | null;
+  /** `rentals.rental_number`, for the reference line. */
+  rentalNumber: string | null;
+  /** The upload token. Null = no link to offer; the email is the only route. */
+  documentsToken: string | null;
+  /** Whether the bank settled, or is still settling. Never "confirmed". */
+  kind: PaymentOutcome["kind"];
+}
+
+const PAID_HANDOFF_KEY = "drive247.booking.documents-token";
+
+function stashPaidHandoff(handoff: PaidBookingHandoff): void {
+  try {
+    window.sessionStorage.setItem(PAID_HANDOFF_KEY, JSON.stringify(handoff));
+  } catch {
+    // Private mode, or storage full. The in-session path still works — only the
+    // survive-a-reload part degrades, and it degrades to the emailed link.
+  }
+}
+
+/**
+ * Read it back, for THIS vehicle only.
+ *
+ * Everything is re-validated rather than trusted: this is attacker-writable
+ * browser storage, and the worst outcome of believing a forged one would be a
+ * customer told they had paid when they had not. Nothing here grants anything —
+ * the token is checked server-side by the documents route — so validation is
+ * about honesty on screen, not authorisation.
+ */
+function readPaidHandoff(vehicleId: string): PaidBookingHandoff | null {
+  if (typeof window === "undefined") return null;
+
+  let raw: string | null = null;
+  try {
+    raw = window.sessionStorage.getItem(PAID_HANDOFF_KEY);
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object") return null;
+
+  const body: Record<string, unknown> = { ...parsed };
+  if (body.vehicleId !== vehicleId) return null;
+  if (body.kind !== "succeeded" && body.kind !== "processing") return null;
+
+  return {
+    vehicleId,
+    rentalId: typeof body.rentalId === "string" ? body.rentalId : null,
+    rentalNumber: typeof body.rentalNumber === "string" ? body.rentalNumber : null,
+    documentsToken:
+      typeof body.documentsToken === "string" ? body.documentsToken : null,
+    kind: body.kind,
+  };
+}
 
 /**
  * /booking/[vehicleId] — one vehicle, one page.
@@ -486,8 +586,17 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
   // on the hook's result object, which is new on every render.
   const { create: createBooking } = booking;
   const creatingBooking = booking.state.status === "creating";
+  /**
+   * The payment that has already happened on this page, if one has.
+   *
+   * Replaces the previous bare `bookingCompleted` boolean, and the two facts are
+   * now derived from ONE value rather than tracked separately: "this car has
+   * been paid for" and "here is the link to finish it" can no longer disagree.
+   * Rehydrated from sessionStorage on mount — see `PaidBookingHandoff`.
+   */
+  const [paidHandoff, setPaidHandoff] = useState<PaidBookingHandoff | null>(null);
   /** Paid for. The CTA must not offer to book the same car for the same days again. */
-  const [bookingCompleted, setBookingCompleted] = useState(false);
+  const bookingCompleted = paidHandoff !== null;
 
   const validation = useMemo(
     () =>

@@ -35,6 +35,7 @@ import {
 } from '../_shared/stripe-client.ts'
 import { getCustomerIdForAccount, setCustomerIdForAccount, CUSTOMER_ACCOUNT_COLUMNS } from '../_shared/customer-account.ts'
 import { formatCurrency } from '../_shared/format-utils.ts'
+import { deriveBookingOrigin, buildDocumentsUrl } from '../_shared/booking-origin.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,6 +68,20 @@ interface TenantRow {
   deposit_charge_enabled: boolean | null
   payment_provider: string | null
 }
+
+/**
+ * How long the emailed documents link stays usable.
+ *
+ * SEVEN days, not thirty — an explicit product decision. The link is a bearer
+ * credential for a paid booking, so the window is the exposure; seven days
+ * still comfortably covers a customer who books on a Friday and deals with it
+ * the following weekend. booking-documents-link slides this window forward on
+ * every visit and can re-send an expired one, so the ceiling is "seven days of
+ * silence", not "seven days from payment".
+ *
+ * Kept in step with DOCUMENTS_LINK_TTL_MS in booking-documents-link/index.ts.
+ */
+const DOCUMENTS_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 /** PaymentIntent statuses whose client_secret is still usable by the browser. */
 const REUSABLE_PI_STATUSES = new Set([
@@ -308,6 +323,65 @@ serve(async (req) => {
     let resolvedCustomerId: string | null = customerId ?? null
     if (!resolvedCustomerId) resolvedCustomerId = rentalRow.customer_id ?? null
 
+    // ---- Durable documents link -------------------------------------------
+    // Minted HERE, before the card is confirmed, for one reason: the browser and
+    // the Stripe webhook must be able to name the SAME link without talking to
+    // each other. The browser gets it in this response so it can route the
+    // customer straight to the upload screen; booking-settlement reads the same
+    // row out of the table when it enqueues the "upload your documents" email.
+    // UNIQUE(rental_id) on booking_document_links plus `ignoreDuplicates` is
+    // what makes those two agree — a second call (a refresh, a retry after a
+    // declined card, the reusable-intent branch below) inserts nothing and the
+    // read-back returns the ORIGINAL token, not the one we just generated.
+    // Always use the read-back value; the generated one loses the race.
+    //
+    // Portal-initiated payments are deliberately excluded. `source: 'portal'`
+    // is an operator taking a payment and `source: 'customer_portal'` is an
+    // existing customer clearing an outstanding balance
+    // (v2/apps/web/src/lib/stripe/create-balance-payment-intent.ts:237) — neither
+    // is a new booking, and handing either a documentsToken would make the
+    // payment panel tell someone paying a fuel charge to upload a licence.
+    const isPortalInitiated = source === 'portal' || source === 'customer_portal'
+    let documentsToken: string | null = null
+    let documentsUrl: string | null = null
+    if (!isPortalInitiated) {
+      try {
+        // Same shape as generateQRToken in create-ai-verification-session/index.ts:35-39.
+        const token = `${crypto.randomUUID()}-${Date.now().toString(36)}`
+        const nowIso = new Date().toISOString()
+        const { error: linkError } = await supabaseClient
+          .from('booking_document_links')
+          .upsert(
+            {
+              tenant_id: tenantId,
+              rental_id: rentalId,
+              token,
+              expires_at: new Date(Date.now() + DOCUMENTS_LINK_TTL_MS).toISOString(),
+              // No trigger maintains updated_at on this table, so writers set it.
+              updated_at: nowIso,
+            },
+            { onConflict: 'rental_id', ignoreDuplicates: true },
+          )
+        if (linkError) console.error('Could not mint booking documents link:', linkError)
+
+        const { data: link } = await supabaseClient
+          .from('booking_document_links')
+          .select('token')
+          .eq('rental_id', rentalId)
+          .maybeSingle()
+        documentsToken = link?.token ?? null
+        documentsUrl = documentsToken
+          ? buildDocumentsUrl(deriveBookingOrigin(slug, req), documentsToken)
+          : null
+      } catch (linkErr) {
+        // Never fail a payment because the follow-up link could not be written.
+        // The customer can still pay; booking-settlement logs the missing row
+        // and the operator can see the booking sitting at documents_status
+        // 'pending' via the (tenant_id, documents_status) index.
+        console.error('Documents link minting threw, continuing without it:', linkErr)
+      }
+    }
+
     // ---- Stripe account / mode -------------------------------------------
     const platformAccount: PlatformAccount = getChargePlatformAccount(tenant)
     const stripe = getStripeClientForAccount(platformAccount, stripeMode)
@@ -414,6 +488,10 @@ serve(async (req) => {
             companyName,
             depositNotice: depositNoticeText,
             reused: true,
+            // Additive. The reusable branch returns the SAME token as the mint
+            // branch because the read-back above is keyed on rental_id.
+            documentsToken,
+            documentsUrl,
           })
         }
         console.log('Existing PaymentIntent not reusable:', existing.id, `status=${existing.status}`, `amount=${existing.amount}`)
@@ -548,6 +626,10 @@ serve(async (req) => {
       companyName,
       depositNotice: depositNoticeText,
       reused: false,
+      // Additive — existing callers that ignore these are unaffected. Null on a
+      // portal-initiated payment, and null if the link could not be written.
+      documentsToken,
+      documentsUrl,
     })
   } catch (error) {
     console.error('Error creating booking PaymentIntent:', error)

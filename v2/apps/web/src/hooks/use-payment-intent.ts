@@ -26,7 +26,7 @@ import type { DeliveryOption } from "@/lib/stores/booking-store";
  * Response shape required (see `BookingPaymentIntentResponse`):
  *
  *   { clientSecret, publishableKey, connectAccountId, rentalNumber,
- *     amount?, currency? }
+ *     amount?, currency?, documentsToken?, documentsUrl? }
  *
  * `connectAccountId` MUST be present, even as null. These are Connect DIRECT
  * charges: a secret minted on a connected account can only be confirmed by a
@@ -108,6 +108,42 @@ export interface BookingPaymentIntentResponse {
   /** Minor units, what will actually be taken. Optional: display only. */
   amount: number | null;
   currency: string | null;
+
+  /**
+   * ── THE DOCUMENT-UPLOAD HANDOFF ──────────────────────────────────────────
+   * A bearer token for `/booking/documents/<token>`, minted alongside the
+   * PaymentIntent and good for SEVEN DAYS. Paying does NOT confirm a booking
+   * any more: the customer still has to send a photo of their licence and a
+   * selfie, an operator still has to approve it, and only then is the
+   * confirmation email sent. This token is how the browser reaches that screen
+   * without waiting for the email.
+   *
+   * `documentsUrl` is the same destination as an absolute URL, built by the
+   * server from the request's own origin. Kept because the server, not the
+   * browser, is the authority on which host a tenant's booking site is served
+   * from; nothing in this app renders it today.
+   *
+   * ── WHY OPTIONAL, AND WHY THAT IS NOT LAZINESS ───────────────────────────
+   * Two independent reasons, both load-bearing:
+   *
+   *   1. This shape is also constructed by
+   *      `@/lib/stripe/create-balance-payment-intent` (:172-182), which settles
+   *      an EXISTING booking's outstanding balance from the customer portal.
+   *      That path has no documents step — the booking was made weeks ago — so
+   *      it has nothing to put here, and making the field required would force
+   *      a fabricated `null` into a file that has no business knowing this
+   *      feature exists.
+   *   2. `create-booking-payment-intent` gained these fields ADDITIVELY. Until
+   *      that deploy lands, every response is missing them, and a parser that
+   *      insisted on their presence would reject a perfectly good client
+   *      secret and block payment outright.
+   *
+   * Consumers must therefore read it as `?? null` and must NEVER render a link
+   * from a token they do not have.
+   */
+  documentsToken?: string | null;
+  /** Absolute form of the same link. Display/telemetry only — see above. */
+  documentsUrl?: string | null;
 }
 
 /* ──────────────────────────────── the states ─────────────────────────────── */
@@ -245,6 +281,14 @@ function parseIntent(
       rentalNumber: asString(body.rentalNumber),
       amount,
       currency: asString(body.currency),
+      // Additive, and NOT validated the way `connectAccountId` is: a response
+      // without them is a valid response from a function that has not been
+      // redeployed yet, and refusing it would stop the customer paying at all.
+      // Absent, empty and null all collapse to null here, which is exactly the
+      // value that makes the UI fall back to "we have emailed you the link"
+      // instead of rendering a dead one.
+      documentsToken: asString(body.documentsToken),
+      documentsUrl: asString(body.documentsUrl),
     },
   };
 }

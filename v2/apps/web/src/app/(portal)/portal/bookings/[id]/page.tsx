@@ -26,7 +26,10 @@ import {
   ArrowLeft,
   CalendarDays,
   CircleAlert,
+  CircleCheck,
+  Clock,
   Gauge,
+  IdCard,
   Package,
   Receipt,
 } from 'lucide-react';
@@ -53,8 +56,13 @@ import {
 import { VehiclePhoto } from '@/components/fleet/vehicle-photo';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCustomer } from '@/hooks/use-customer';
 import { useCustomerRental } from '@/hooks/use-customer-rental';
 import type { CustomerRentalDetail } from '@/hooks/use-customer-rental';
+import {
+  bookingCompletionState,
+  type BookingCompletionState,
+} from '@/hooks/use-customer-rentals';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
 import { calculateTotalMileageAllowance } from '@/lib/domain';
@@ -184,6 +192,8 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
           already paid.
         </Notice>
       ) : null}
+
+      <DocumentsPanel rental={rental} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         {/* ── Left column ───────────────────────────────────────────────── */}
@@ -454,6 +464,200 @@ function BookingDetail({ rental }: { rental: CustomerRentalDetail }) {
         </div>
       </div>
     </>
+  );
+}
+
+/* ─────────────────────────── the document gate ─────────────────────────── */
+
+/**
+ * Copy per completion state.
+ *
+ * ── THE COPY RULE, AND WHY IT IS ABSOLUTE ───────────────────────────────────
+ * Uploading documents does NOT confirm a booking. The operator can still reject
+ * it, and the confirmation email is sent from the APPROVAL step, not from the
+ * upload. So nothing on the `submitted` rung may say "confirmed", "complete",
+ * "all done" or any synonym — a customer who reads that and stops watching
+ * their inbox will not see a rejection. Only `approved` — which is the state
+ * the confirmation email is keyed on — is allowed to use the word.
+ *
+ * `awaiting_payment` and `cancelled` are absent by design: the payment notice
+ * above already owns the first, and a dead booking is not waiting on anything.
+ */
+const DOCUMENT_STEP: Partial<
+  Record<
+    BookingCompletionState,
+    {
+      title: string;
+      tone: 'warning' | 'info' | 'success';
+      icon: typeof IdCard;
+      /** Chip text mirroring the state, so the panel says it as well as shows it. */
+      chip: string;
+    }
+  >
+> = {
+  awaiting_documents: {
+    title: 'We need your documents',
+    tone: 'warning',
+    icon: IdCard,
+    chip: 'Action needed',
+  },
+  documents_in_review: {
+    // Not "Documents complete". Received is a fact; complete is a verdict we
+    // have not reached yet.
+    title: 'Documents received — being checked',
+    tone: 'info',
+    icon: Clock,
+    chip: 'Under review',
+  },
+  awaiting_approval: {
+    title: 'Documents accepted — with our team',
+    tone: 'info',
+    icon: Clock,
+    chip: 'Under review',
+  },
+  approved: {
+    title: 'Booking confirmed',
+    tone: 'success',
+    icon: CircleCheck,
+    chip: 'Confirmed',
+  },
+};
+
+/**
+ * Where the booking has got to on the document gate, and whose move it is.
+ *
+ * ── NO UPLOAD BUTTON HERE, DELIBERATELY ─────────────────────────────────────
+ * The upload surface is the tokenised public route from the emailed link, and
+ * this page has no token — it is reached from a session. A button here could
+ * not mint one, so it would either dead-end or need this page to become a
+ * writer of verification state, which it must never be (`identity_verifications`
+ * has RLS off and grants anon UPDATE, so anything the browser writes there can
+ * be made to lie). Pointing at the email is the only honest option.
+ *
+ * ── ONLY FOR BOOKINGS THAT ACTUALLY HAVE A GATE ─────────────────────────────
+ * `documents_status` defaults to 'not_required', which is what every rental an
+ * operator creates in the portal carries, and what every booking taken before
+ * this flow existed carries. Rendering "your booking is not complete until we
+ * have your documents" against one of those would invent a requirement that
+ * was never asked of that customer, so the panel is silent unless the gate is
+ * really open on this booking.
+ */
+function DocumentsPanel({ rental }: { rental: CustomerRentalDetail }) {
+  const { email } = useCustomer();
+
+  const documents = (rental.documentsStatus ?? '').trim().toLowerCase();
+  // 'not_required' and anything unrecognised: no gate, so nothing to say.
+  const gated =
+    documents === 'pending' ||
+    documents === 'submitted' ||
+    documents === 'verified' ||
+    documents === 'rejected';
+  if (!gated) return null;
+
+  const state = bookingCompletionState(rental);
+  const step = DOCUMENT_STEP[state];
+  // 'awaiting_payment' and 'cancelled' fall out here — see DOCUMENT_STEP.
+  if (!step) return null;
+
+  // Don't celebrate a rental that is already over. 'approved' stays true for
+  // the life of the row, so without this a booking returned six months ago
+  // still leads with "Booking confirmed". The three states that are still
+  // waiting on somebody are shown whatever the dates say — a paid booking
+  // whose documents never arrived stays open on purpose, and hiding the ask
+  // once its start date slips past would bury exactly the rows that need
+  // chasing.
+  if (
+    state === 'approved' &&
+    (rental.lifecycle === 'completed' || rental.lifecycle === 'cancelled')
+  ) {
+    return null;
+  }
+
+  const Icon = step.icon;
+
+  // The address the link was sent to. `useCustomer` reads `customers.email`,
+  // which is the same row the booking hangs off (`rentals.customer_id`), so
+  // this really is where it went. Falls back to a description rather than a
+  // blank when the profile has no email on it.
+  const sentTo = email && email.trim() !== '' ? email.trim() : null;
+
+  return (
+    <Panel
+      className={cn(
+        step.tone === 'warning' && 'border-warning-med',
+        step.tone === 'success' && 'border-success-med',
+      )}
+    >
+      <div className="flex items-start gap-3 px-4 py-4 sm:px-5">
+        <Icon
+          aria-hidden
+          strokeWidth={1.75}
+          className={cn(
+            'mt-0.5 size-5 shrink-0',
+            step.tone === 'warning' && 'text-warning',
+            step.tone === 'info' && 'text-info',
+            step.tone === 'success' && 'text-success',
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-medium text-brand-text">{step.title}</h2>
+            <StatusChip
+              tone={step.tone === 'warning' ? 'warning' : step.tone === 'success' ? 'success' : 'info'}
+            >
+              {step.chip}
+            </StatusChip>
+          </div>
+
+          {state === 'awaiting_documents' ? (
+            <div className="mt-1.5 flex flex-col gap-1.5 text-sm leading-relaxed text-brand-text-soft">
+              <p>
+                Your booking is paid, but it is <strong className="font-medium text-brand-text">not complete</strong>{' '}
+                until we have your driving licence and a photo of yourself. We
+                sent a secure upload link to{' '}
+                {sentTo ? (
+                  <span className="font-medium text-brand-text">{sentTo}</span>
+                ) : (
+                  'the email address on your booking'
+                )}
+                .
+              </p>
+              {/*
+                7 days, per the product decision — and an expired link is a
+                recoverable state, not a dead end: the page it opens offers to
+                send a fresh one. Saying so here stops a customer who is a week
+                late from assuming they have to start again.
+              */}
+              <p className="text-brand-text-subtle">
+                The link lasts 7 days. If yours has expired, open it anyway and
+                it will offer to email you a new one. Cannot find it? Check your
+                spam folder, or contact us and we will send it again.
+              </p>
+            </div>
+          ) : state === 'documents_in_review' ? (
+            <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+              Thank you — we have your documents and are checking them now.
+              There is nothing else for you to do. We will email you as soon as
+              your booking is confirmed.
+            </p>
+          ) : state === 'awaiting_approval' ? (
+            <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+              Your documents have been accepted. Your booking is with our team
+              for a final check, and we will email you as soon as it is
+              confirmed.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-sm leading-relaxed text-brand-text-soft">
+              Your documents were accepted and your booking is confirmed
+              {rental.documentsCompletedAt
+                ? ` — documents cleared ${formatTimestamp(rental.documentsCompletedAt)}`
+                : ''}
+              . We will be in touch with your pick-up details.
+            </p>
+          )}
+        </div>
+      </div>
+    </Panel>
   );
 }
 

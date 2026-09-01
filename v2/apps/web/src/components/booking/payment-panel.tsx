@@ -9,12 +9,14 @@ import {
 import type { StripeElementsOptions } from "@stripe/stripe-js";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Clock,
   Loader2,
   Lock,
   RotateCw,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -91,6 +93,19 @@ export interface PaymentReturn {
    * whole return.
    */
   rentalId: string | null;
+  /**
+   * The document-upload token that came back with the intent.
+   *
+   * WHY IT IS IN THE STASH AT ALL: a 3-D Secure hop is a full navigation, so the
+   * `<Elements>` tree that held the minted intent is gone, and the only things
+   * that survive are the query string and this stash. Without the token here, a
+   * customer who happened to be sent to their bank would come back to a success
+   * screen with no route to the upload step — the one customer who has just been
+   * through the most friction would get the least help. Null for an older stash
+   * written before this field existed, and for the portal's balance flow, which
+   * has no documents step.
+   */
+  documentsToken: string | null;
 }
 
 function stashForReturn(
@@ -103,6 +118,7 @@ function stashForReturn(
     connectAccountId: intent.connectAccountId,
     rentalNumber: intent.rentalNumber,
     rentalId,
+    documentsToken: intent.documentsToken ?? null,
   };
   try {
     window.sessionStorage.setItem(RETURN_STASH_KEY, JSON.stringify(stash));
@@ -166,15 +182,41 @@ export function readPaymentReturn(): PaymentReturn | null {
       typeof body.connectAccountId === "string" ? body.connectAccountId : null,
     rentalNumber: typeof body.rentalNumber === "string" ? body.rentalNumber : null,
     rentalId: typeof body.rentalId === "string" ? body.rentalId : null,
+    // Tolerated rather than required, exactly like `rentalId`: a stash written
+    // before this field existed must still resume a payment, not be discarded.
+    documentsToken:
+      typeof body.documentsToken === "string" ? body.documentsToken : null,
   };
 }
 
 /* ─────────────────────────────── the outcome ─────────────────────────────── */
 
+/**
+ * What the caller is told, and it is deliberately NOT "the booking is done".
+ *
+ * `documentsToken` is the route to the step that comes AFTER the money: the
+ * licence photos and the selfie, which an operator then approves. Null means
+ * there is no link to offer — the endpoint has not been redeployed, or this is
+ * the portal's balance flow, which has no documents step. A null token must
+ * degrade to today's plain "Done", never to a link that 404s.
+ */
 export type PaymentOutcome =
-  | { kind: "succeeded"; rentalNumber: string | null }
+  | { kind: "succeeded"; rentalNumber: string | null; documentsToken: string | null }
   /** Taken, but the bank has not settled — a real Stripe state, not an error. */
-  | { kind: "processing"; rentalNumber: string | null };
+  | { kind: "processing"; rentalNumber: string | null; documentsToken: string | null };
+
+/**
+ * The in-app route for a document-upload token.
+ *
+ * Exported so the panel and the booking page behind it cannot drift apart on
+ * the path — `(booking)` is a route GROUP, so the segment is `/booking/...`
+ * with no group name in it. `encodeURIComponent` is not decoration: the token
+ * is an opaque bearer string minted server-side, and a path segment is the one
+ * place a stray `/` or `#` in it would silently point somewhere else.
+ */
+export function bookingDocumentsHref(token: string): string {
+  return `/booking/documents/${encodeURIComponent(token)}`;
+}
 
 /* ─────────────────── what the deployed endpoint actually reads ───────────── */
 
@@ -219,14 +261,20 @@ export interface BookingPaymentRequest extends BookingPaymentIntentRequest {
  *
  * The panel now serves two flows that are the same MECHANISM and completely
  * different EVENTS: a new booking being paid for, and an existing booking's
- * outstanding balance being settled from the customer portal. Rendering "Your
- * booking is confirmed. We have emailed the details and what to bring on the
- * day." to someone who just cleared a fuel charge on a rental they returned
- * last week is not a cosmetic mismatch — it is a false statement about what
- * just happened.
+ * outstanding balance being settled from the customer portal. Telling someone
+ * who just cleared a fuel charge on a rental they returned last week to go and
+ * photograph their driving licence is not a cosmetic mismatch — it is a false
+ * statement about what just happened.
  *
- * Overrides are `Partial`, merged over `BOOKING_COPY`, so the booking flow is
- * unchanged by construction: it passes nothing and gets exactly what it had.
+ * Overrides are `Partial`, merged over `BOOKING_COPY`, so the portal flow is
+ * unaffected by changes here BY CONSTRUCTION — but only for the keys it
+ * actually overrides. Checked, not assumed: `PORTAL_COPY`
+ * (`app/(portal)/portal/payments/_components/pay-balances.tsx:76-92`) sets
+ * `succeededTitle`, `succeededBody`, `processingTitle` and `processingBody` of
+ * its own, so the booking flow's new "upload your licence" wording below can
+ * never reach a balance payment. The two `documents*` labels need no override:
+ * that branch is unreachable without a token, and only the booking endpoint
+ * mints one.
  */
 export interface PaymentPanelCopy {
   /** Dialog title. */
@@ -243,6 +291,18 @@ export interface PaymentPanelCopy {
   /** Closes the outcome view. */
   doneLabel: string;
   /**
+   * The primary action when the outcome carries a document-upload token.
+   *
+   * Only the booking flow ever reaches this branch — the portal's balance
+   * payment has no token — but the label lives here rather than inline so the
+   * promise of this type ("every sentence the panel puts on screen") stays
+   * true, and so a second flow that one day mints a token cannot inherit
+   * booking wording by accident.
+   */
+  documentsCtaLabel: string;
+  /** The demoted close button beside it. Deferring is allowed; it is not done. */
+  documentsDeferLabel: string;
+  /**
    * The off-session mandate. NOT optional in either flow and not a formality:
    * `create-booking-payment-intent` sets `setup_future_usage: 'off_session'`
    * unconditionally, so the card really is vaulted for later charges on both
@@ -252,17 +312,33 @@ export interface PaymentPanelCopy {
   mandate: string;
 }
 
+/**
+ * ── THE COPY THAT IS NOT ALLOWED TO SAY "CONFIRMED" ──────────────────────────
+ * Taking the money is no longer the end of the booking. After payment the
+ * customer must send a photo of their driving licence and a selfie, those are
+ * checked, and an OPERATOR then approves — and it is that approval, not this
+ * screen, that sends the "booking confirmed" email (`notify-booking-approved`).
+ *
+ * So the previous succeededBody, "Your booking is confirmed. We have emailed the
+ * details and what to bring on the day.", is now a false statement twice over:
+ * nothing is confirmed, and no email has been sent at the moment this renders.
+ * Nothing in this object may say confirmed, complete, all done or booked — an
+ * operator can still reject, and a customer who was told otherwise turns up at a
+ * depot expecting keys.
+ */
 const BOOKING_COPY: PaymentPanelCopy = {
   title: "Confirm and pay",
   cancelLabel: "Back to my booking",
   succeededTitle: "Payment received",
   succeededBody:
-    "Your booking is confirmed. We have emailed the details and what to bring on the day.",
+    "One step left — we need a photo of your driving licence and a selfie to confirm this booking. We have also emailed you the link.",
   processingTitle: "Payment is being confirmed",
   processingBody:
-    "Your bank has not settled this yet. We will email you the moment it clears — there is nothing more to do.",
+    "Your bank has not settled this yet. We will email you the moment it clears, with a link to upload your driving licence and a selfie — we confirm the booking once we have checked those.",
   referencePrefix: "Booking",
   doneLabel: "Done",
+  documentsCtaLabel: "Upload my documents",
+  documentsDeferLabel: "I'll do this later",
   mandate:
     "to store this card securely and to charge it later, without you present, " +
     "for the amounts you agreed to on this page — the security deposit, any " +
@@ -410,6 +486,11 @@ export function PaymentPanel({
         // page's own label until the intent is retrieved.
         amount: null,
         currency: null,
+        // The stash DOES carry this one, deliberately — see `PaymentReturn`.
+        documentsToken: resume.documentsToken,
+        // Only the relative token survives a hop; the absolute URL is the
+        // server's own and is not needed to build the in-app link.
+        documentsUrl: null,
       };
     }
     if (prepared !== null) return prepared;
@@ -692,12 +773,23 @@ function CardForm({
           setCheckingReturn(false);
           return;
         }
+        // `intent` on a resume is rebuilt from the sessionStorage stash, so the
+        // token here is the one that was minted before the hop, not a fresh one.
+        const documentsToken = intent.documentsToken ?? null;
         if (paymentIntent.status === "succeeded") {
-          onOutcome({ kind: "succeeded", rentalNumber: intent.rentalNumber });
+          onOutcome({
+            kind: "succeeded",
+            rentalNumber: intent.rentalNumber,
+            documentsToken,
+          });
           return;
         }
         if (paymentIntent.status === "processing") {
-          onOutcome({ kind: "processing", rentalNumber: intent.rentalNumber });
+          onOutcome({
+            kind: "processing",
+            rentalNumber: intent.rentalNumber,
+            documentsToken,
+          });
           return;
         }
         // requires_payment_method / requires_confirmation: the hop failed and
@@ -720,7 +812,14 @@ function CardForm({
     return () => {
       cancelled = true;
     };
-  }, [isResume, stripe, intent.clientSecret, intent.rentalNumber, onOutcome]);
+  }, [
+    isResume,
+    stripe,
+    intent.clientSecret,
+    intent.rentalNumber,
+    intent.documentsToken,
+    onOutcome,
+  ]);
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -735,6 +834,14 @@ function CardForm({
       stashForReturn(intent, rentalId);
 
       // Same page, so a returning customer lands on the booking they were on.
+      //
+      // DELIBERATELY NOT the documents page, tempting as that is now there is
+      // one. The stash above is keyed to this URL: `readPaymentReturn()` only
+      // fires where Stripe's `payment_intent_client_secret` and the stash meet,
+      // and the whole resume path — re-checking whether the hop actually
+      // succeeded before offering the form again — lives on the booking page.
+      // Sending 3-D Secure straight to `/booking/documents/…` would strand that
+      // stash, skip the "did this actually pay?" check, and lose the outcome.
       const returnUrl = `${window.location.origin}${window.location.pathname}`;
 
       const result = await stripe.confirmPayment({
@@ -754,12 +861,23 @@ function CardForm({
       }
 
       const paymentIntent = result.paymentIntent;
+      // Straight off the intent that was just paid, so the handoff link and the
+      // charge provably belong to the same rental.
+      const documentsToken = intent.documentsToken ?? null;
       if (paymentIntent.status === "succeeded") {
-        onOutcome({ kind: "succeeded", rentalNumber: intent.rentalNumber });
+        onOutcome({
+          kind: "succeeded",
+          rentalNumber: intent.rentalNumber,
+          documentsToken,
+        });
         return;
       }
       if (paymentIntent.status === "processing") {
-        onOutcome({ kind: "processing", rentalNumber: intent.rentalNumber });
+        onOutcome({
+          kind: "processing",
+          rentalNumber: intent.rentalNumber,
+          documentsToken,
+        });
         return;
       }
 
@@ -955,6 +1073,22 @@ function OutcomeView({
 }) {
   const succeeded = outcome.kind === "succeeded";
 
+  /**
+   * The upload step, offered only when there is a real link to offer.
+   *
+   * SUCCEEDED ONLY, on purpose. A `processing` payment has not been taken yet;
+   * pushing that customer into an upload flow invites them to do work on a
+   * booking their bank may still decline, so they are told the link is coming
+   * by email and nothing more. And a null token — the endpoint not yet
+   * redeployed, or an older 3-D Secure stash — falls back to the plain Done
+   * button rather than a link that would 404. The email carries the same link,
+   * so no customer is stranded by that fallback.
+   */
+  const documentsHref =
+    succeeded && outcome.documentsToken !== null
+      ? bookingDocumentsHref(outcome.documentsToken)
+      : null;
+
   return (
     <div className="pt-5">
       <div className="flex flex-col items-center text-center">
@@ -993,15 +1127,40 @@ function OutcomeView({
         <div className="mt-4">{footer}</div>
       ) : null}
 
-      <Button
-        type="button"
-        variant="brand"
-        size="lg"
-        className="mt-5 h-12 w-full"
-        onClick={onClose}
-      >
-        {text.doneLabel}
-      </Button>
+      {documentsHref !== null ? (
+        <div className="mt-5 space-y-2">
+          {/*
+            The link is the PRIMARY action and closing is the demoted one,
+            because the booking is not finished and the screen must not offer
+            "Done" as the obvious next tap.
+          */}
+          <Button asChild variant="brand" size="lg" className="h-12 w-full">
+            <Link href={documentsHref}>
+              {text.documentsCtaLabel}
+              <ArrowRight aria-hidden strokeWidth={2} />
+            </Link>
+          </Button>
+          <Button
+            type="button"
+            variant="brand-ghost"
+            size="lg"
+            className="h-11 w-full"
+            onClick={onClose}
+          >
+            {text.documentsDeferLabel}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="brand"
+          size="lg"
+          className="mt-5 h-12 w-full"
+          onClick={onClose}
+        >
+          {text.doneLabel}
+        </Button>
+      )}
     </div>
   );
 }

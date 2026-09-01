@@ -31,6 +31,14 @@ import { useTenant } from '@/contexts/TenantContext';
 import { todayDateString } from '@/lib/domain';
 import type { Database } from '@/integrations/supabase/types';
 
+// The rental column list, the row type and the normaliser all live in
+// `use-customer-rentals` and are imported whole. That includes the
+// post-payment document gate (`documents_status`, `documents_completed_at`)
+// and the `bookingCompletionState` ladder derived from it: this file adds the
+// invoice and the extras to that select and nothing else, so a column added
+// there is fetched here for free and must NOT be listed a second time. Callers
+// that need the completion state import `bookingCompletionState` from
+// `use-customer-rentals` directly — one definition, one import path.
 import {
   RENTAL_COLUMNS,
   RENTAL_VEHICLE_EMBED,

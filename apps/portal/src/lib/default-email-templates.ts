@@ -1,6 +1,20 @@
 // Default Email Templates
 // These are the default templates used when a tenant hasn't customized their email templates
 // Templates are designed to be professional and ready-to-use with minimal changes needed
+//
+// MIRROR, NOT SOURCE OF TRUTH. The emails that actually go out are rendered by
+// DEFAULT_EMAIL_TEMPLATES in supabase/functions/_shared/email-template-service.ts.
+// This copy exists so the portal editor can show an operator the default and so
+// "Reset to default" can write one back. When the two drift, an operator resets a
+// template and saves something the system never sends. That is exactly what
+// happened with the vehicle plate: this file hardcoded a
+// `Registration: {{vehicle_reg}}` row while the edge copy had moved to the
+// privacy-aware {{vehicle_reg_row}} / {{vehicle_reg_suffix}} pair, which
+// resolveEmailData renders as an empty string for tenants with
+// hide_vehicle_registration = true. A tenant who reset a template got back a row
+// whose value was then blanked - an empty "Registration:" row - or, worse, the
+// plate reinstated in a template the edge had already made conditional.
+// If you change a default here, change it in the edge file too, byte for byte.
 
 export interface DefaultEmailTemplate {
   key: string;
@@ -35,10 +49,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Pickup Date:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -83,6 +94,155 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 <strong>The {{company_name}} Team</strong></p>`,
   },
   {
+    key: 'booking_documents_required',
+    name: 'Booking Documents Required',
+    // Sent server-side the moment payment settles, NOT from the browser. Payment
+    // is taken but the booking is deliberately NOT confirmed yet: confirmation is
+    // the operator's decision and travels in booking_approved. Never let this copy
+    // drift towards "confirmed" or "complete".
+    subject: 'Action needed: upload your documents for {{rental_number}}',
+    content: `<h1>Action Needed: Upload Your Documents</h1>
+
+<p>Dear {{customer_name}},</p>
+
+<p>Thank you — we have received your payment for booking <strong>{{rental_number}}</strong> with <strong>{{company_name}}</strong>.</p>
+
+<p><strong>Your booking is not confirmed yet.</strong> Before we can confirm it, we need to verify your identity and your driving licence. It takes about two minutes.</p>
+
+<hr>
+
+<h2>Upload Your Documents</h2>
+
+<p>Use the button below to upload a photo of the front and back of your driving licence, plus a short selfie so we can match it to your licence.</p>
+
+<p style="text-align:center; margin:24px 0;">
+  <a href="{{verification_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Upload My Documents</a>
+</p>
+
+<p style="font-size:12px; color:#64748b;">This link is valid for 7 days and is unique to your booking — please do not forward it. If it has expired, open it anyway and you can ask us to email you a fresh one.</p>
+
+<hr>
+
+<h2>Booking Summary</h2>
+
+<table>
+  <tr>
+    <td><strong>Booking Reference:</strong></td>
+    <td>{{rental_number}}</td>
+  </tr>
+  <tr>
+    <td><strong>Vehicle:</strong></td>
+    <td>{{vehicle_make}} {{vehicle_model}}</td>
+  </tr>
+{{vehicle_reg_row}}
+  <tr>
+    <td><strong>Pickup Date:</strong></td>
+    <td>{{rental_start_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Return Date:</strong></td>
+    <td>{{rental_end_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Rental Amount:</strong></td>
+    <td>{{rental_amount}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>What Happens Next?</h2>
+
+<ol>
+  <li>Upload your driving licence and selfie using the button above</li>
+  <li>Our team reviews your documents together with your booking</li>
+  <li>You will receive a separate email confirming your booking once it has been approved</li>
+  <li>Bring the same driving licence with you on pickup day</li>
+</ol>
+
+<hr>
+
+<h2>Need Help?</h2>
+
+<p>If you have any questions, or you have trouble uploading your documents, please contact us:</p>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
+  {
+    key: 'booking_documents_received',
+    name: 'Booking Documents Received',
+    // Sent once the customer has uploaded their documents. Acknowledges receipt
+    // and says "under review" only — an operator can still reject, so this email
+    // must never read as a confirmation.
+    subject: 'Documents received for {{rental_number}}',
+    content: `<h1>We Have Your Documents</h1>
+
+<p>Dear {{customer_name}},</p>
+
+<p>Thank you — we have received the identity documents for your booking <strong>{{rental_number}}</strong> with <strong>{{company_name}}</strong>. There is nothing further you need to do.</p>
+
+<p><strong>Your booking is now under review.</strong> It is not confirmed yet. Our team is checking your documents alongside your booking details, and we will email you again as soon as it has been approved.</p>
+
+<hr>
+
+<h2>Booking Summary</h2>
+
+<table>
+  <tr>
+    <td><strong>Booking Reference:</strong></td>
+    <td>{{rental_number}}</td>
+  </tr>
+  <tr>
+    <td><strong>Vehicle:</strong></td>
+    <td>{{vehicle_make}} {{vehicle_model}}</td>
+  </tr>
+{{vehicle_reg_row}}
+  <tr>
+    <td><strong>Pickup Date:</strong></td>
+    <td>{{rental_start_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Return Date:</strong></td>
+    <td>{{rental_end_date}}</td>
+  </tr>
+  <tr>
+    <td><strong>Rental Amount:</strong></td>
+    <td>{{rental_amount}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>What Happens Next?</h2>
+
+<ol>
+  <li>Our team reviews your documents and your booking details</li>
+  <li>You will receive a separate email confirming your booking once it has been approved</li>
+  <li>A rental agreement will be sent for your electronic signature</li>
+  <li>Bring the same driving licence with you on pickup day</li>
+</ol>
+
+<hr>
+
+<h2>Need Help?</h2>
+
+<p>If you have any questions about your booking while it is being reviewed, please contact us:</p>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
+  {
     key: 'booking_approved',
     name: 'Booking Approved',
     subject: 'Booking Confirmed - {{rental_number}} | {{company_name}}',
@@ -105,10 +265,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Pickup Date:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -258,7 +415,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Original Rental Period:</strong></td>
@@ -319,10 +476,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Rental Start:</strong></td>
     <td>{{rental_start_date}}</td>
@@ -395,7 +549,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Return Date:</strong></td>
@@ -458,7 +612,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Rental Period:</strong></td>
@@ -523,10 +677,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
     <td><strong>Vehicle:</strong></td>
     <td>{{vehicle_make}} {{vehicle_model}}</td>
   </tr>
-  <tr>
-    <td><strong>Registration:</strong></td>
-    <td>{{vehicle_reg}}</td>
-  </tr>
+{{vehicle_reg_row}}
   <tr>
     <td><strong>Return Date:</strong></td>
     <td>{{rental_end_date}}</td>
@@ -809,7 +960,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
   </tr>
   <tr>
     <td><strong>Vehicle:</strong></td>
-    <td>{{vehicle_make}} {{vehicle_model}} ({{vehicle_reg}})</td>
+    <td>{{vehicle_make}} {{vehicle_model}}{{vehicle_reg_suffix}}</td>
   </tr>
   <tr>
     <td><strong>Previous End Date:</strong></td>

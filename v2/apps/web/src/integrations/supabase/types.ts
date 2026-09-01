@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -2926,6 +2926,134 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      booking_document_links: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          rental_id: string
+          tenant_id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          rental_id: string
+          tenant_id: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          rental_id?: string
+          tenant_id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_document_links_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_document_links_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "booking_document_links_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: true
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+        ]
+      }
+      booking_email_dispatch: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          created_at: string
+          email_key: string
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          payload: Json
+          provider_message_id: string | null
+          rental_id: string
+          sent_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          email_key: string
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          payload?: Json
+          provider_message_id?: string | null
+          rental_id: string
+          sent_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          created_at?: string
+          email_key?: string
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          payload?: Json
+          provider_message_id?: string | null
+          rental_id?: string
+          sent_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_email_dispatch_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_email_dispatch_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "booking_email_dispatch_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+        ]
       }
       call_logs: {
         Row: {
@@ -10813,8 +10941,10 @@ export type Database = {
           rejection_reason: string | null
           remaining_amount: number | null
           rental_id: string | null
+          square_idempotency_key: string | null
           square_order_id: string | null
           square_payment_id: string | null
+          square_payment_link_id: string | null
           square_refund_id: string | null
           status: string | null
           stripe_checkout_session_id: string | null
@@ -10855,8 +10985,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -10897,8 +11029,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -14190,6 +14324,8 @@ export type Database = {
           disclosed_hold_version: string | null
           discount_applied: number | null
           document_status: string | null
+          documents_completed_at: string | null
+          documents_status: string
           docusign_envelope_id: string | null
           driver_age_range: string | null
           end_date: string | null
@@ -14206,6 +14342,7 @@ export type Database = {
           id_verification_waived_at: string | null
           id_verification_waived_by: string | null
           id_verification_waived_reason: string | null
+          identity_verification_session_id: string | null
           installment_plan_id: string | null
           insurance_premium: number | null
           insurance_status: string | null
@@ -14336,6 +14473,8 @@ export type Database = {
           disclosed_hold_version?: string | null
           discount_applied?: number | null
           document_status?: string | null
+          documents_completed_at?: string | null
+          documents_status?: string
           docusign_envelope_id?: string | null
           driver_age_range?: string | null
           end_date?: string | null
@@ -14352,6 +14491,7 @@ export type Database = {
           id_verification_waived_at?: string | null
           id_verification_waived_by?: string | null
           id_verification_waived_reason?: string | null
+          identity_verification_session_id?: string | null
           installment_plan_id?: string | null
           insurance_premium?: number | null
           insurance_status?: string | null
@@ -14482,6 +14622,8 @@ export type Database = {
           disclosed_hold_version?: string | null
           discount_applied?: number | null
           document_status?: string | null
+          documents_completed_at?: string | null
+          documents_status?: string
           docusign_envelope_id?: string | null
           driver_age_range?: string | null
           end_date?: string | null
@@ -14498,6 +14640,7 @@ export type Database = {
           id_verification_waived_at?: string | null
           id_verification_waived_by?: string | null
           id_verification_waived_reason?: string | null
+          identity_verification_session_id?: string | null
           installment_plan_id?: string | null
           insurance_premium?: number | null
           insurance_status?: string | null
@@ -17340,7 +17483,6 @@ export type Database = {
           integration_tesla_fleet: boolean | null
           integration_twilio_sms: boolean | null
           integration_twilio_whatsapp: boolean | null
-          integration_veriff: boolean | null
           integration_whatsapp: boolean | null
           integration_xero: boolean
           integration_zoho_books: boolean
@@ -17399,6 +17541,7 @@ export type Database = {
           payment_mode: string | null
           payment_model: string
           payment_provider: string
+          payment_provider_locked_at: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
           pickup_area_radius_km: number | null
@@ -17607,7 +17750,6 @@ export type Database = {
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
-          integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
           integration_xero?: boolean
           integration_zoho_books?: boolean
@@ -17666,6 +17808,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -17874,7 +18017,6 @@ export type Database = {
           integration_tesla_fleet?: boolean | null
           integration_twilio_sms?: boolean | null
           integration_twilio_whatsapp?: boolean | null
-          integration_veriff?: boolean | null
           integration_whatsapp?: boolean | null
           integration_xero?: boolean
           integration_zoho_books?: boolean
@@ -17933,6 +18075,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -21013,7 +21156,10 @@ export type Database = {
           company_name: string | null
           issue_count: number | null
           overall_ready: boolean | null
+          payment_provider: string | null
+          payments_ready: boolean | null
           slug: string | null
+          square_ready: boolean | null
           status: string | null
           stripe_account_status: string | null
           stripe_mode: string | null
