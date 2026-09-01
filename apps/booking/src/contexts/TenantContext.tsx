@@ -180,8 +180,6 @@ export interface Tenant {
   // Google tag / GA4 measurement ID for the public booking site (null = off)
   ga_measurement_id: string | null;
 
-  // Lead capture
-  enquiries_enabled: boolean | null;
 
   // PAYG upfront payment gate
   payg_upfront_required: boolean | null;
@@ -517,7 +515,6 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           maintenance_banner_enabled,
           maintenance_banner_message,
           buffer_time_minutes,
-          enquiries_enabled,
           payg_upfront_required,
           gig_driver_enabled,
           ga_measurement_id,

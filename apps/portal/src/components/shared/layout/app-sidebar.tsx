@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Search, X, Wallet, AlertTriangle, BookOpen } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -28,7 +28,6 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
-import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
@@ -151,7 +150,6 @@ export function AppSidebar() {
   const { settings } = useOrgSettings();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
-  const { data: enquiryStats } = useEnquiryStats();
   const { appUser } = useAuthStore();
   const {
     isTrialing,
@@ -251,7 +249,6 @@ export function AppSidebar() {
       items: [
         { name: "Customers", href: "/customers", icon: AnimatedUsers },
         { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
-        { name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 },
         { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
       ],
     },

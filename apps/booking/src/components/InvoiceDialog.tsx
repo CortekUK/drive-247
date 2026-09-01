@@ -47,9 +47,6 @@ interface InvoiceDialogProps {
     end_date: string;
     monthly_amount: number;
   };
-  // Enquiry-based booking props
-  isEnquiry?: boolean;
-  payableAmount?: number;
   // Promo details for display
   promoDetails?: {
     code: string;
@@ -282,8 +279,6 @@ export const InvoiceDialog = ({
   customer,
   vehicle,
   rental,
-  isEnquiry = false,
-  payableAmount,
   promoDetails,
   selectedExtras,
   rentalDays,
@@ -305,8 +300,7 @@ export const InvoiceDialog = ({
   const discountAmount = invoice.discount_amount || 0;
   const originalRentalFee = invoice.subtotal + discountAmount;
   const rentalFee = invoice.subtotal;
-  // For enquiry tenants, display the payable amount (deposit only or $0)
-  const displayTotal = isEnquiry && payableAmount !== undefined ? payableAmount : invoice.total_amount;
+  const displayTotal = invoice.total_amount;
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -418,54 +412,37 @@ export const InvoiceDialog = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {/* For enquiry tenants, show rental fee as TBD */}
-                  {isEnquiry ? (
-                    <tr className="border-b">
-                      <td className="p-3 text-sm">
-                        <div>
-                          <p className="font-medium">Rental Fee</p>
-                          <p className="text-xs text-muted-foreground">
-                            {vehicleName}{vehicle.reg ? ` (${vehicle.reg})` : ''}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="p-3 text-sm text-right font-medium text-muted-foreground italic">
-                        To be confirmed
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr className="border-b">
-                      <td className="p-3 text-sm">
-                        <div>
-                          <p className="font-medium">Rental Fee</p>
-                          <p className="text-xs text-muted-foreground">
-                            {vehicleName}{vehicle.reg ? ` (${vehicle.reg})` : ''}
-                          </p>
-                          {rentalBreakdown && rentalBreakdown.length > 0 && (
-                            <div className="mt-1 space-y-0.5">
-                              {rentalBreakdown.map((item, i) => (
-                                <div key={i} className="flex justify-between text-xs text-muted-foreground/70">
-                                  <span>{item.label}</span>
-                                  {item.amount !== undefined && <span>{fmt(item.amount)}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-sm text-right font-medium align-top">
-                        {discountAmount > 0 ? (
-                          <span className="line-through text-muted-foreground">
-                            {fmt(originalRentalFee)}
-                          </span>
-                        ) : (
-                          fmt(rentalFee)
+                  <tr className="border-b">
+                    <td className="p-3 text-sm">
+                      <div>
+                        <p className="font-medium">Rental Fee</p>
+                        <p className="text-xs text-muted-foreground">
+                          {vehicleName}{vehicle.reg ? ` (${vehicle.reg})` : ''}
+                        </p>
+                        {rentalBreakdown && rentalBreakdown.length > 0 && (
+                          <div className="mt-1 space-y-0.5">
+                            {rentalBreakdown.map((item, i) => (
+                              <div key={i} className="flex justify-between text-xs text-muted-foreground/70">
+                                <span>{item.label}</span>
+                                {item.amount !== undefined && <span>{fmt(item.amount)}</span>}
+                              </div>
+                            ))}
+                          </div>
                         )}
-                      </td>
-                    </tr>
-                  )}
+                      </div>
+                    </td>
+                    <td className="p-3 text-sm text-right font-medium align-top">
+                      {discountAmount > 0 ? (
+                        <span className="line-through text-muted-foreground">
+                          {fmt(originalRentalFee)}
+                        </span>
+                      ) : (
+                        fmt(rentalFee)
+                      )}
+                    </td>
+                  </tr>
                   {/* Promo Discount Line */}
-                  {!isEnquiry && discountAmount > 0 && promoDetails && (
+                  {discountAmount > 0 && promoDetails && (
                     <tr className="border-b bg-green-50 dark:bg-green-950/30">
                       <td className="p-3 text-sm">
                         <div>
@@ -481,7 +458,7 @@ export const InvoiceDialog = ({
                     </tr>
                   )}
                   {/* Discounted Subtotal */}
-                  {!isEnquiry && discountAmount > 0 && (
+                  {discountAmount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm font-medium">Subtotal (after discount)</td>
                       <td className="p-3 text-sm text-right font-medium">{fmt(rentalFee)}</td>
@@ -524,14 +501,13 @@ export const InvoiceDialog = ({
                       <td className="p-3 text-sm text-right font-medium">{fmt(invoice.insurance_premium ?? 0)}</td>
                     </tr>
                   )}
-                  {/* Hide tax and service fee for enquiry tenants */}
-                  {!isEnquiry && invoice.tax_amount > 0 && (
+                  {invoice.tax_amount > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Tax</td>
                       <td className="p-3 text-sm text-right">{fmt(invoice.tax_amount)}</td>
                     </tr>
                   )}
-                  {!isEnquiry && (invoice.service_fee ?? 0) > 0 && (
+                  {(invoice.service_fee ?? 0) > 0 && (
                     <tr className="border-b">
                       <td className="p-3 text-sm">Service Fee</td>
                       <td className="p-3 text-sm text-right">{fmt(invoice.service_fee ?? 0)}</td>
@@ -545,28 +521,14 @@ export const InvoiceDialog = ({
                     </tr>
                   )}
                   <tr className="bg-muted/50">
-                    <td className="p-3 text-sm font-bold">
-                      {isEnquiry ? 'Total Due Now' : 'Total'}
-                    </td>
-                    <td className={`p-3 text-lg font-bold text-right ${!isEnquiry && discountAmount > 0 ? 'text-green-600 dark:text-green-400' : 'text-accent'}`}>
+                    <td className="p-3 text-sm font-bold">Total</td>
+                    <td className={`p-3 text-lg font-bold text-right ${discountAmount > 0 ? 'text-green-600 dark:text-green-400' : 'text-accent'}`}>
                       {fmt(displayTotal)}
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-
-            {/* Enquiry booking note */}
-            {isEnquiry && (
-              <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                  ENQUIRY BOOKING
-                </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                  Rental charges will be confirmed after your booking is approved.
-                </p>
-              </div>
-            )}
 
             {/* Notes */}
             {invoice.notes && (
@@ -598,17 +560,8 @@ export const InvoiceDialog = ({
               }}
               className="gradient-accent w-full sm:w-auto"
             >
-              {isEnquiry ? (
-                <>
-                  {displayTotal === 0 ? 'Continue to Submit Enquiry' : 'Continue to Payment'}
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </>
-              ) : (
-                <>
-                  Continue to Sign Agreement
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </>
-              )}
+              Continue to Sign Agreement
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
         </DialogContent>

@@ -47,18 +47,6 @@ export const isBonzahSellable = (tenant: BonzahSellableTenant | null | undefined
 };
 
 /**
- * Check if a tenant uses enquiry-based booking
- * For these tenants:
- * - Only security deposit is charged upfront (if any)
- * - If no security deposit, no payment at all - rental created as enquiry
- * - Rental charges are collected later (not upfront)
- */
-export const isEnquiryBasedTenant = (tenantId: string | undefined | null): boolean => {
-  if (!tenantId) return false;
-  return tenantId === KEDIC_TENANT_ID;
-};
-
-/**
  * Per-tenant legal-entity notation shown on the server-rendered compliance
  * pages (/privacy, /terms, /sms-opt-in). Carrier A2P 10DLC reviewers must be
  * able to connect the public brand name on the page to the legal entity on

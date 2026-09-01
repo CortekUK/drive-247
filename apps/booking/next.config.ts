@@ -29,8 +29,7 @@ const nextConfig: NextConfig = {
   },
   // The multi-page /booking flow is deprecated — the only booking path is the
   // home-page widget. Redirect any stray link into that dead flow back home so
-  // customers can never get stranded in it. (Note: /booking-enquiry-submitted is
-  // a separate route and is intentionally NOT matched here.)
+  // customers can never get stranded in it.
   async redirects() {
     return [
       { source: '/booking', destination: '/', permanent: false },

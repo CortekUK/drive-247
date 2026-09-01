@@ -28,7 +28,7 @@ export default function MessagesPage() {
     setSelectedChannel(channel);
   };
 
-  // Auto-select the channel for ?customerId=… (e.g. coming from Enquiries detail).
+  // Auto-select the channel for ?customerId=… (e.g. coming from a customer page).
   // If no channel exists yet, ask the realtime context to create one, then pick it
   // up the next time `channels` refreshes. Strip the query param once selected so
   // back/forward navigation doesn't keep re-applying it.
