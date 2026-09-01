@@ -103,8 +103,8 @@ function useWelcomePackContent() {
  * Resolve any `required_flag` that TenantContext does not already carry.
  *
  * TenantContext selects a FIXED column list — it has `lead_management_enabled`,
- * `automations_enabled` and `gig_driver_enabled`, but NOT `lockbox_enabled`.
- * A super admin can type any boolean tenant column into
+ * `automations_enabled`, `vehicle_owners_enabled` and `gig_driver_enabled`, but
+ * NOT `lockbox_enabled`. A super admin can type any boolean tenant column into
  * `required_flag` when authoring, so the set of flags the document references
  * is not knowable at build time. Fetch exactly the missing ones in one query.
  *

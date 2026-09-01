@@ -206,6 +206,33 @@ const Settings = () => {
   // Get tenant context for ID and refetch
   const { tenant, refetchTenant } = useTenant();
 
+  // Vehicle Owners + Owner Payouts feature toggle
+  const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
+  const [savingVehicleOwners, setSavingVehicleOwners] = useState(false);
+  const handleToggleVehicleOwners = async (next: boolean) => {
+    if (!tenant?.id) return;
+    setSavingVehicleOwners(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({ vehicle_owners_enabled: next })
+        .eq("id", tenant.id);
+      if (error) throw error;
+      await refetchTenant();
+      toast({
+        title: next ? "Vehicle Owners enabled" : "Vehicle Owners disabled",
+        description: next
+          ? "Vehicle Owners and Owner Payouts now appear in your sidebar."
+          : "The Vehicle Owners and Owner Payouts entries have been hidden.",
+      });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({ title: "Failed to update", description: msg, variant: "destructive" });
+    } finally {
+      setSavingVehicleOwners(false);
+    }
+  };
+
   // Gig Driver booking option toggle (shows "Are you a gig driver?" on the booking page)
   // Optimistic, for the same reason as the theme control below: without it the
   // switch cannot move until an update AND a full tenant refetch have both
@@ -1909,6 +1936,23 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Vehicle Owners &amp; Owner Payouts</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Adds the &quot;Vehicle Owners&quot; and &quot;Owner Payouts&quot; entries to the Fleet &amp; Bookings sidebar group.
+                    Lets you manage per-vehicle ownership splits and run scheduled payouts.
+                  </p>
+                </div>
+                <Switch
+                  checked={vehicleOwnersEnabled}
+                  onCheckedChange={handleToggleVehicleOwners}
+                  disabled={savingVehicleOwners}
+                  className="flex-shrink-0"
+                  aria-label="Toggle Vehicle Owners feature"
+                />
+              </div>
+
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">
                   <h4 className="font-medium">Fleet Health</h4>

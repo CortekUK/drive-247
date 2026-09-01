@@ -46,6 +46,7 @@ import { VehicleDynamicPricing } from "@/components/vehicles/vehicle-dynamic-pri
 import { VehicleDailyPricingCalendar } from "@/components/vehicles/vehicle-daily-pricing-calendar";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { TraxIcon } from "@/components/chat/TraxIcon";
+import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -1176,6 +1177,11 @@ export default function VehicleDetail() {
               </Card>
             </div>
           )}
+
+          {/* Ownership Section */}
+          <div className="mt-6">
+            <VehicleOwnershipPanel vehicleId={vehicle.id} />
+          </div>
 
           {/* Vehicle Pricing — Trax suggestions vs the network */}
           <div className="mt-6">

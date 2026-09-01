@@ -165,6 +165,7 @@ export function AppSidebar() {
   const { tenant } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
+  const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
@@ -256,6 +257,10 @@ export function AppSidebar() {
       icon: AnimatedCar,
       items: [
         { name: "Vehicles", href: "/vehicles", icon: AnimatedCar },
+        ...(vehicleOwnersEnabled ? [
+          { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
+          { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
+        ] : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
