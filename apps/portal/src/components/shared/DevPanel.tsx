@@ -12,6 +12,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { addMonths, format } from "date-fns"
 import { TimeMachineSection } from "./TimeMachineSection"
+import { TestCallsSection } from "./TestCallsSection"
 
 // Only render in development
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -1071,6 +1072,12 @@ export default function DevPanel() {
                 <TimeMachineSection
                     expanded={expandedSection === 'sim'}
                     onToggle={() => toggleSection('sim')}
+                />
+
+                {/* Twilio call-forwarding test (name + business line) */}
+                <TestCallsSection
+                    expanded={expandedSection === 'testcalls'}
+                    onToggle={() => toggleSection('testcalls')}
                 />
 
                 {/* Clear All */}

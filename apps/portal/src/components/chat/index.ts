@@ -13,3 +13,5 @@ export { CustomerChatInput } from './CustomerChatInput';
 export { BulkMessageModal } from './BulkMessageModal';
 export { UnreadBadge } from './UnreadBadge';
 export { TypingIndicator } from './TypingIndicator';
+export { LinkUnknownThreadDialog } from './LinkUnknownThreadDialog';
+export { VoiceCallBar } from './VoiceCallBar';
