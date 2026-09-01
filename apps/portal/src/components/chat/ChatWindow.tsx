@@ -6,8 +6,6 @@ import { useChatMessages, type ChatMessage } from '@/hooks/use-chat-messages';
 import { ChatMessageBubble, DateSeparator } from './ChatMessageBubble';
 import { CustomerChatInput } from './CustomerChatInput';
 import { TypingIndicator } from './TypingIndicator';
-import { VoiceCallBar } from './VoiceCallBar';
-import { useVoiceCall } from '@/hooks/use-voice-call';
 import { useSocket, type MessageChannel } from '@/contexts/RealtimeChatContext';
 import { useAuthStore } from '@/stores/auth-store';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,7 +31,7 @@ function TwilioIcon({ className }: { className?: string }) {
 /* ── Channel Configuration ───────────────────────────────── */
 
 interface ChannelConfig {
-  key: MessageChannel | 'call';
+  key: MessageChannel;
   label: string;
   icon: React.ReactNode;
   color: string;
@@ -77,17 +75,6 @@ const CHANNELS: ChannelConfig[] = [
     ringColor: 'ring-blue-500/20',
     sendBg: 'bg-blue-500',
     sendHover: 'hover:bg-blue-600',
-  },
-  {
-    key: 'call',
-    label: 'Call',
-    icon: <PhoneIcon className="h-4 w-4" />,
-    color: 'text-amber-500',
-    bgActive: 'bg-amber-500/10 border-amber-500/30',
-    bgHover: 'hover:bg-amber-500/5',
-    ringColor: 'ring-amber-500/20',
-    sendBg: 'bg-amber-500',
-    sendHover: 'hover:bg-amber-600',
   },
 ];
 
@@ -139,8 +126,7 @@ export function ChatWindow({
   const [isCustomerOnline, setIsCustomerOnline] = useState(false);
   const [customerLastSeen, setCustomerLastSeen] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [activeChannel, setActiveChannel] = useState<MessageChannel | 'call'>(lastChannel);
-  const voiceCall = useVoiceCall();
+  const [activeChannel, setActiveChannel] = useState<MessageChannel>(lastChannel);
 
   // Phone number management for SMS
   const [phone, setPhone] = useState(customerPhone || '');
@@ -241,7 +227,6 @@ export function ChatWindow({
     in_app: true,
     sms: smsEnabled,
     email: true,
-    call: true,
   };
 
   const activeChannelConfig = CHANNELS.find((ch) => ch.key === activeChannel) || CHANNELS[0];
@@ -397,19 +382,6 @@ export function ChatWindow({
                       <button
                         onClick={() => {
                           if (!isEnabled) return;
-                          if (ch.key === 'call') {
-                            const phoneToCall = effectivePhone;
-                            if (!phoneToCall) {
-                              toast({ title: 'No phone number', description: 'Add a phone number to call this customer.', variant: 'destructive' });
-                              return;
-                            }
-                            if (voiceCall.status !== 'idle') {
-                              toast({ title: 'Call in progress', description: 'End the current call before starting a new one.' });
-                              return;
-                            }
-                            voiceCall.makeCall(phoneToCall);
-                            return;
-                          }
                           setActiveChannel(ch.key);
                         }}
                         disabled={!isEnabled}
@@ -431,8 +403,6 @@ export function ChatWindow({
                     <TooltipContent side="bottom" className="text-xs">
                       {!isEnabled
                         ? `${ch.label} not configured — enable in Settings`
-                        : ch.key === 'call'
-                        ? `Call ${customerName}`
                         : `Send via ${ch.label}`}
                     </TooltipContent>
                   </Tooltip>
@@ -446,23 +416,6 @@ export function ChatWindow({
         {/* Phone/email editing moved to customer header above */}
       </div>
 
-      {/* ── Voice Call Bar ─────────────────────────────────── */}
-      {voiceCall.status !== 'idle' && (
-        <VoiceCallBar
-          status={voiceCall.status}
-          duration={voiceCall.duration}
-          isMuted={voiceCall.isMuted}
-          isOnHold={voiceCall.isOnHold}
-          callerNumber={voiceCall.callerNumber}
-          callerName={voiceCall.incomingCall ? undefined : customerName}
-          incomingCall={voiceCall.incomingCall ? { from: voiceCall.incomingCall.from } : null}
-          onEndCall={voiceCall.endCall}
-          onToggleMute={voiceCall.toggleMute}
-          onToggleHold={voiceCall.toggleHold}
-          onAcceptCall={voiceCall.acceptCall}
-          onRejectCall={voiceCall.rejectCall}
-        />
-      )}
 
       {/* ── Messages area ───────────────────────────────────── */}
       <div className="flex-1 relative overflow-hidden min-w-0">
@@ -557,7 +510,7 @@ export function ChatWindow({
       {/* ── Input ───────────────────────────────────────────── */}
       <CustomerChatInput
         customerId={customerId}
-        activeChannel={activeChannel === 'call' ? 'in_app' : activeChannel}
+        activeChannel={activeChannel}
         channelConfig={activeChannelConfig}
         customerPhone={customerPhone || phone || null}
       />
