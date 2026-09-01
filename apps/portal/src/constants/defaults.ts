@@ -22,6 +22,9 @@ export const PAGINATION_DEFAULTS = {
   /** Default page size for rental listings */
   RENTALS_PAGE_SIZE: 25,
 
+  /** Default page size for plate listings */
+  PLATES_PAGE_SIZE: 50,
+
   /** Default page size for fines listings */
   FINES_PAGE_SIZE: 25,
 } as const;

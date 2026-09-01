@@ -112,6 +112,21 @@ interface FineRecord {
   vehicle?: { reg: string } | null;
 }
 
+interface PlateRecord {
+  id: string;
+  plate_number: string;
+  status?: string | null;
+  cost?: number | null;
+  order_date?: string | null;
+  supplier?: string | null;
+  notes?: string | null;
+  vehicle_id?: string | null;
+  assigned_vehicle_id?: string | null;
+  created_at?: string | null;
+  // Joined data
+  vehicle?: { reg: string } | null;
+}
+
 /**
  * Convert customer record to searchable text
  */
@@ -310,6 +325,34 @@ export function fineToDocument(fine: FineRecord, currencyCode: string = 'USD'): 
   };
 }
 
+/**
+ * Convert plate record to searchable text
+ */
+export function plateToDocument(plate: PlateRecord, currencyCode: string = 'USD'): DocumentResult {
+  const sym = getCurrencySymbol(currencyCode);
+  const parts: string[] = [
+    `Plate: ${plate.plate_number}`,
+  ];
+
+  if (plate.status) parts.push(`Status: ${plate.status}`);
+  if (plate.cost) parts.push(`Cost: ${sym}${plate.cost}`);
+  if (plate.supplier) parts.push(`Supplier: ${plate.supplier}`);
+  if (plate.order_date) parts.push(`Order date: ${formatDate(plate.order_date)}`);
+  if (plate.vehicle?.reg) parts.push(`Assigned to vehicle: ${plate.vehicle.reg}`);
+  if (plate.notes) parts.push(`Notes: ${plate.notes}`);
+
+  return {
+    content: parts.join('. '),
+    metadata: {
+      entity_type: 'plate',
+      plate_id: plate.id,
+      plate_number: plate.plate_number,
+      vehicle_id: plate.vehicle_id || plate.assigned_vehicle_id,
+      status: plate.status,
+    },
+  };
+}
+
 // Knowledge article record
 interface KnowledgeArticleRecord {
   id: string;
@@ -350,6 +393,7 @@ export function getDocumentLoader(tableName: string, currencyCode: string = 'USD
     rentals: (r) => rentalToDocument(r as RentalRecord, currencyCode),
     payments: (r) => paymentToDocument(r as PaymentRecord, currencyCode),
     fines: (r) => fineToDocument(r as FineRecord, currencyCode),
+    plates: (r) => plateToDocument(r as PlateRecord, currencyCode),
     knowledge_articles: (r) => knowledgeArticleToDocument(r as KnowledgeArticleRecord),
   };
 
@@ -360,7 +404,7 @@ export function getDocumentLoader(tableName: string, currencyCode: string = 'USD
  * Get list of tables that are indexed for RAG
  */
 export function getIndexedTables(): string[] {
-  return ['customers', 'vehicles', 'rentals', 'payments', 'fines', 'knowledge_articles'];
+  return ['customers', 'vehicles', 'rentals', 'payments', 'fines', 'plates', 'knowledge_articles'];
 }
 
 /**
@@ -373,6 +417,7 @@ export function getSelectFields(tableName: string): string {
     rentals: '*, customer:customers(name, email), vehicle:vehicles(reg, make, model)',
     payments: '*, customer:customers(name), rental:rentals(rental_number), vehicle:vehicles(reg)',
     fines: '*, customer:customers(name), vehicle:vehicles(reg)',
+    plates: '*, vehicle:vehicles(reg)',
     knowledge_articles: 'id, category, title, content, tags',
   };
 
