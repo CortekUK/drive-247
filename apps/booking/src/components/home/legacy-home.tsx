@@ -8,6 +8,8 @@ import EnhancedServiceHighlights from '@/components/EnhancedServiceHighlights';
 import EnhancedTestimonials from '@/components/EnhancedTestimonials';
 import Footer from '@/components/Footer';
 import SEO from '@/components/SEO';
+import { TraxChatWidget } from '@/components/customer-portal/trax-chat';
+import { CustomerRealtimeChatProvider } from '@/contexts/CustomerRealtimeChatContext';
 import ContactCard from '@/components/ContactCard';
 import MultiStepBookingWidget from '@/components/MultiStepBookingWidget';
 import HeroCarousel from '@/components/HeroCarousel';
@@ -235,6 +237,9 @@ export default function LegacyHome() {
 
       <ContactCard />
       <Footer />
+      <CustomerRealtimeChatProvider>
+        <TraxChatWidget />
+      </CustomerRealtimeChatProvider>
     </div>
   );
 }

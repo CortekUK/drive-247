@@ -72,6 +72,7 @@ import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { useTenantHolidays } from "@/hooks/use-tenant-holidays";
 import { useVehiclePricingOverrides } from "@/hooks/use-vehicle-pricing-overrides";
 import { useVehicleDailyPrices } from "@/hooks/use-vehicle-daily-prices";
+import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { calculateRentalPriceBreakdown, type DayBreakdown } from "@/lib/calculate-rental-price";
 import { calcExtrasTotal, extraLineTotal } from "@/lib/calculate-extras-total";
 import { useAuditLog } from "@/hooks/use-audit-log";
@@ -4307,6 +4308,16 @@ const CreateRental = () => {
                                   ? `Customer is billed this amount every ${periodType.toLowerCase().replace(/ly$/, '')} on a rolling basis.`
                                   : "Auto-filled from vehicle rates."}
                               </FormDescription>
+                              {selectedVehicleId && (
+                                <div className="mt-1.5">
+                                  <TraxPriceSuggestion
+                                    vehicleId={selectedVehicleId}
+                                    tier={periodType.toLowerCase() as "daily" | "weekly" | "monthly"}
+                                    currentPrice={perPeriodRate ?? undefined}
+                                    onImplement={(price) => setPerPeriodRate(price)}
+                                  />
+                                </div>
+                              )}
                             </FormItem>
                             {!isPayAsYouGo && (
                               <div>
