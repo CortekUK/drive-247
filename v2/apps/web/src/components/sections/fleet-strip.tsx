@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { VehicleCard } from "@/components/cards/vehicle-card";
 import { FleetCardSkeleton } from "@/components/fleet/fleet-skeletons";
@@ -17,6 +17,37 @@ const PREVIEW_LIMIT = 8;
 const ALL_MAKES = "__all__";
 
 /**
+ * One card's width, per breakpoint.
+ *
+ * Deliberately narrower than the viewport at every size so the next card always
+ * peeks past the right edge — that peek is what tells a phone user the row
+ * scrolls. It was a flat 210px before, which was both cramped on a 360px phone
+ * and pointlessly small on a 1280px desktop.
+ *
+ * Shared by the real cards and the skeletons so nothing resizes when the data
+ * lands, and measured back off the DOM by `scrollByPage` so an arrow click
+ * moves a whole number of cards.
+ */
+const CARD_WIDTH = "w-[250px] shrink-0 snap-start sm:w-[240px] lg:w-[260px] xl:w-[280px]";
+
+/** The `gap-3` on the track below, in px. Kept in sync by hand — see `stride`. */
+const CARD_GAP = 12;
+
+type ScrollState = {
+  /** Is there anything off-screen at all? Nothing to drive if not. */
+  overflows: boolean;
+  atStart: boolean;
+  atEnd: boolean;
+};
+
+/**
+ * Pre-measurement default. `overflows: false` keeps the arrows out of the first
+ * paint: rendering them and then yanking them away is a worse flash than
+ * letting them appear once we know they are needed.
+ */
+const UNMEASURED: ScrollState = { overflows: false, atStart: true, atEnd: true };
+
+/**
  * The interactive body of the home-page fleet strip: the make pills, the
  * horizontal card scroller and the link out to /fleet.
  *
@@ -26,7 +57,7 @@ const ALL_MAKES = "__all__";
  * browser — `activeMake` is local state — so the client boundary starts here
  * and no lower.
  *
- * Two prototype bugs died in this component:
+ * Five prototype bugs died in this component:
  *
  *  1. the brand pills were decorative — the strip mapped the whole static
  *     `FLEET` fixture regardless of which pill was active, so clicking one
@@ -35,12 +66,27 @@ const ALL_MAKES = "__all__";
  *     list of six luxury marques;
  *  2. `BrandIcon` switched on six hardcoded slugs and returned `null` for
  *     anything else, so every real make — Tesla, Toyota, Ford, Rolls-Royce —
- *     rendered an invisible icon. Unknown makes now get the house mark.
+ *     rendered an invisible icon. Unknown makes now get the house mark;
+ *  3. the row was a bare `overflow-x-auto` with the scrollbar hidden on every
+ *     platform and nothing put back in its place. There was no arrow, no dot,
+ *     no gradient — the eighth card just stopped mid-air and the strip read as
+ *     broken rather than scrollable. It now has real prev/next buttons, which
+ *     appear only when the content actually overflows and disable at each end
+ *     rather than dead-clicking;
+ *  4. no scroll-snap, so a swipe left cards stranded half-off both edges. The
+ *     track snaps to card starts now, and `scroll-px-6` puts the snapped card
+ *     against the same left edge as the padding rather than underneath it;
+ *  5. changing the filter kept the old scroll offset. Picking a make with two
+ *     cars while parked at the right-hand end of eight left the strip looking
+ *     empty. Every filter change jumps back to the first card.
  */
 export function FleetStrip() {
   const { tenant } = useTenant();
   const { vehicles, isLoading, isError } = useVehicles();
   const [activeMake, setActiveMake] = useState<string>(ALL_MAKES);
+
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [scroll, setScroll] = useState<ScrollState>(UNMEASURED);
 
   const fleet = useMemo(() => vehicles.map(toFleetVehicle), [vehicles]);
 
@@ -66,6 +112,75 @@ export function FleetStrip() {
 
   const showSkeleton = isLoading && fleet.length === 0;
   const showEmpty = !isLoading && fleet.length === 0;
+
+  const syncScrollState = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    const max = el.scrollWidth - el.clientWidth;
+    // A pixel of slack at both ends. Sub-pixel layout means `scrollLeft` lands
+    // on 249.6 rather than 250 and on `max - 0.4` rather than `max`, and a
+    // "next" button that can never disable is worse than one that disables a
+    // pixel early.
+    setScroll({
+      overflows: max > 1,
+      atStart: el.scrollLeft <= 1,
+      atEnd: el.scrollLeft >= max - 1,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    syncScrollState();
+    el.addEventListener("scroll", syncScrollState, { passive: true });
+
+    // The track is observed as well as the viewport: filtering swaps the cards
+    // without resizing the scroller itself, and that is exactly the case where
+    // the arrows have to disappear.
+    const observer = new ResizeObserver(syncScrollState);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+
+    return () => {
+      el.removeEventListener("scroll", syncScrollState);
+      observer.disconnect();
+    };
+  }, [syncScrollState]);
+
+  // Bug 5. Jump rather than animate: a filter change is a new list, not a
+  // journey through the old one, and an instant reset also sidesteps
+  // prefers-reduced-motion entirely.
+  useEffect(() => {
+    scrollerRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, [activeMake]);
+
+  const scrollByPage = useCallback((direction: -1 | 1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    // scroller -> track -> first card. Measured rather than hardcoded because
+    // `CARD_WIDTH` changes at four breakpoints and a stale constant would drift
+    // the arrows off the snap points.
+    const card = el.firstElementChild?.firstElementChild as HTMLElement | null;
+    const stride = card ? card.offsetWidth + CARD_GAP : el.clientWidth;
+    // Whole cards only, so a click always lands on a snap point. At least one,
+    // in case a card ever ends up wider than the viewport.
+    const perPage = Math.max(1, Math.floor(el.clientWidth / stride));
+
+    el.scrollBy({
+      left: direction * perPage * stride,
+      // Read at click time instead of held in state: no hydration mismatch to
+      // reconcile, and it follows an OS-level change with no listener.
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  }, []);
+
+  // Hidden while the skeletons are up: there is nothing there worth driving to.
+  const showControls = scroll.overflows && !showSkeleton;
 
   return (
     <>
@@ -93,23 +208,60 @@ export function FleetStrip() {
         </div>
       )}
 
-      <div className="-mx-6 mt-10 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        <div className="flex w-max gap-3">
-          {showSkeleton
-            ? Array.from({ length: 5 }, (_, index) => (
-                <div key={index} className="w-[210px] shrink-0">
-                  <FleetCardSkeleton />
-                </div>
-              ))
-            : visible.map((vehicle) => (
-                <VehicleCard
-                  key={vehicle.id}
-                  vehicle={vehicle}
-                  currencyCode={tenant?.currency_code ?? null}
-                  distanceUnit={tenant?.distance_unit ?? null}
-                  className="w-[210px] shrink-0"
-                />
-              ))}
+      <div className="mt-10">
+        {/* Above the track, not floating over it. Overlaid arrows would sit on
+            top of a card's photo on desktop and directly on top of "Book Now"
+            at 360px, where a card is most of the viewport wide. */}
+        {showControls && (
+          <div className="mb-4 flex items-center justify-end gap-2">
+            <ScrollButton
+              direction="prev"
+              disabled={scroll.atStart}
+              onClick={() => scrollByPage(-1)}
+            />
+            <ScrollButton
+              direction="next"
+              disabled={scroll.atEnd}
+              onClick={() => scrollByPage(1)}
+            />
+          </div>
+        )}
+
+        {/*
+          `tabIndex`/`role`/`aria-label` together, never one without the others:
+          a hidden scrollbar leaves the arrow keys as the only way a keyboard
+          user reaches a card that is scrolled out of view, and a focusable
+          element with no role and no name is just an unexplained tab stop. Tab
+          still moves straight on, so this is a stop, not a trap.
+
+          `-outline-offset-2` draws the focus ring *inside* the box. The
+          `-mx-6` full bleed puts this element's edges flush with the viewport
+          on a phone, where an outset ring would be clipped away to nothing.
+        */}
+        <div
+          ref={scrollerRef}
+          tabIndex={0}
+          role="group"
+          aria-label="Fleet, scrollable"
+          className="-mx-6 snap-x snap-mandatory scroll-px-6 overflow-x-auto px-6 pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-forest"
+        >
+          <div className="flex w-max gap-3">
+            {showSkeleton
+              ? Array.from({ length: 5 }, (_, index) => (
+                  <div key={index} className={CARD_WIDTH}>
+                    <FleetCardSkeleton />
+                  </div>
+                ))
+              : visible.map((vehicle) => (
+                  <VehicleCard
+                    key={vehicle.id}
+                    vehicle={vehicle}
+                    currencyCode={tenant?.currency_code ?? null}
+                    distanceUnit={tenant?.distance_unit ?? null}
+                    className={CARD_WIDTH}
+                  />
+                ))}
+          </div>
         </div>
       </div>
 
@@ -134,6 +286,42 @@ export function FleetStrip() {
   );
 }
 
+/**
+ * One end of the carousel.
+ *
+ * 44px at every breakpoint, unlike `GalleryArrow` in `vehicle-gallery.tsx`
+ * which drops to 36px on `lg`. That arrow overlays a photo and pixels are
+ * scarce; this one sits in its own row where there is nothing to crowd, so
+ * there is no reason to go under the tap-target floor on a large touchscreen.
+ */
+function ScrollButton({
+  direction,
+  disabled,
+  onClick,
+}: {
+  direction: "prev" | "next";
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const Icon = direction === "prev" ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={direction === "prev" ? "Previous vehicles" : "Next vehicles"}
+      className="grid size-11 place-items-center rounded-full border border-brand-border bg-white text-brand-text transition-colors hover:bg-brand-stone focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-forest/25 disabled:cursor-default disabled:border-brand-border-soft disabled:bg-transparent disabled:text-brand-placeholder"
+    >
+      <Icon aria-hidden className="size-4" strokeWidth={2} />
+    </button>
+  );
+}
+
+/**
+ * `h-11` on touch, `h-9` once there is a pointer: 36px was under the 44px tap
+ * target floor, and this row is the first thing a phone user aims at. The
+ * desktop pill is unchanged.
+ */
 function MakePill({
   label,
   count,
@@ -151,7 +339,7 @@ function MakePill({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/30",
+        "inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm transition-all sm:h-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/30",
         active
           ? "border border-brand-border-soft bg-white text-brand-text shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
           : "border border-transparent text-brand-text-subtle hover:text-brand-text",
