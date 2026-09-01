@@ -121,10 +121,6 @@ function TwilioMark() {
   return <img src="/twilio-logo.svg" alt="" className="h-[18px] w-auto" />;
 }
 
-function WhatsAppMark() {
-  return <img src="/whatsapp-logo.svg" alt="" className="h-[18px] w-auto" />;
-}
-
 const brandMarks: Record<string, React.ReactNode> = {
   subscription: <StripeMark />,
   "stripe-connect": <StripeMark />,
@@ -135,7 +131,6 @@ const brandMarks: Record<string, React.ReactNode> = {
 
 const comingSoonBrands: Record<string, React.ReactNode> = {
   twilio: <TwilioMark />,
-  whatsapp: <WhatsAppMark />,
 };
 
 // --- Info tooltips for integrations ---

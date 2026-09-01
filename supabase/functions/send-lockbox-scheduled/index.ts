@@ -112,7 +112,6 @@ Deno.serve(async (req) => {
             : ["email"];
           const shouldEmail = methods.includes("email");
           const shouldSms = methods.includes("sms");
-          const shouldWhatsapp = methods.includes("whatsapp");
 
           const { data: notifyResult, error: notifyError } = await supabase.functions.invoke(
             "notify-lockbox-code",
@@ -131,12 +130,11 @@ Deno.serve(async (req) => {
                 defaultInstructions: tenant.lockbox_default_instructions || null,
                 sendEmail: shouldEmail,
                 sendSms: shouldSms,
-                sendWhatsapp: shouldWhatsapp,
               },
             }
           );
 
-          const channelsSent = [shouldEmail && "email", shouldSms && "sms", shouldWhatsapp && "whatsapp"].filter(Boolean).join(", ") || "email";
+          const channelsSent = [shouldEmail && "email", shouldSms && "sms"].filter(Boolean).join(", ") || "email";
 
           if (notifyError) {
             console.error(`[LockboxCron] notify-lockbox-code error for rental ${rental.id}:`, notifyError);

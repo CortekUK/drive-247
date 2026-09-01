@@ -41,7 +41,6 @@ import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
-import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { CommunicationSettings } from '@/components/settings/communication-settings';
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
@@ -2870,7 +2869,7 @@ const Settings = () => {
               <div className="bg-muted/50 p-4 rounded-lg">
                 <h4 className="font-medium mb-2">Delivery Mode</h4>
                 <p className="text-sm text-muted-foreground">
-                  Currently set to "In-App Only". Email and WhatsApp delivery options will be available in future updates.
+                  Currently set to "In-App Only". Email delivery options will be available in future updates.
                 </p>
               </div>
             </CardContent>
@@ -4811,21 +4810,6 @@ const Settings = () => {
                           </div>
                         </label>
 
-                        {/* WhatsApp — requires Twilio WhatsApp configured */}
-                        <label className={cn(
-                          "flex items-center gap-3 p-3 border rounded-lg transition-colors",
-                          !(tenant as any)?.integration_twilio_whatsapp ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-                          rentalForm.lockbox_notification_methods[0] === 'whatsapp' ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                        )}>
-                          <RadioGroupItem value="whatsapp" id="lockbox-method-whatsapp" disabled={!(tenant as any)?.integration_twilio_whatsapp} />
-                          <svg className="h-4 w-4 text-muted-foreground" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.612.612l4.458-1.495A11.943 11.943 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.319 0-4.476-.67-6.313-1.822l-.44-.264-2.645.887.887-2.645-.264-.44A9.952 9.952 0 012 12C2 6.486 6.486 2 12 2s10 4.486 10 10-4.486 10-10 10z"/></svg>
-                          <div>
-                            <span className="text-sm font-medium">WhatsApp</span>
-                            {!(tenant as any)?.integration_twilio_whatsapp && (
-                              <p className="text-xs text-amber-600 dark:text-amber-400">Configure WhatsApp in Messaging settings first</p>
-                            )}
-                          </div>
-                        </label>
                       </div>
                     </RadioGroup>
                   </div>
