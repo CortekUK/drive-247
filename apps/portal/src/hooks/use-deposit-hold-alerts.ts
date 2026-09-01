@@ -648,8 +648,7 @@ export function useDepositHoldAlerts() {
 
       /**
        * The problem predicate. Kept to two levels of nesting, which is the depth
-       * this repo already uses in `.or()` elsewhere (reminders-digest,
-       * deposit-hold-refresh).
+       * this repo already uses in `.or()` elsewhere (deposit-hold-refresh).
        */
       const branches = [
         // Broken or human-blocked states. `released` and `expired` are in here
