@@ -52,10 +52,6 @@ interface Tenant {
   // When true the deposit is taken as a real captured charge (ledger category
   // 'Security Deposit') instead of a Stripe authorization hold.
   deposit_charge_enabled: boolean | null;
-  lead_management_enabled: boolean | null;
-  automations_enabled: boolean | null;
-  lead_stale_threshold_hours: number | null;
-  lead_auto_lost_threshold_hours: number | null;
   communication_tone: string | null;
   subscription_gate_disabled: boolean | null;
   subscription_billing_anchor: string | null;
@@ -95,7 +91,7 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 const TENANT_CORE_COLUMNS =
-  'id, slug, company_name, status, contact_email, phone, admin_name, integration_bonzah, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
+  'id, slug, company_name, status, contact_email, phone, admin_name, integration_bonzah, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];

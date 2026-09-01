@@ -99,22 +99,6 @@
     "authType": "none",
     "expectedRef": "hviqoaokxvlancmftwuo"
   },
-  "lead-stale-poll": {
-    "kind": "fn",
-    "path": "lead-stale-poll",
-    "cronJobName": "lead-stale-poll-hourly",
-    "schedule": "23 * * * *",
-    "authType": "service",
-    "expectedRef": "hviqoaokxvlancmftwuo"
-  },
-  "automation-poll-pending": {
-    "kind": "fn",
-    "path": "automation-poll-pending",
-    "cronJobName": "automation-poll-pending-every-minute",
-    "schedule": "* * * * *",
-    "authType": "service",
-    "expectedRef": "hviqoaokxvlancmftwuo"
-  },
   "accounting-oauth-state-reap": {
     "kind": "sql",
     "rpc": "accounting_oauth_state_reap",

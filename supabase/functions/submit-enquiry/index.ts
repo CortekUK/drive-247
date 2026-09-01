@@ -1,27 +1,17 @@
 /**
- * submit-enquiry — routes a quick enquiry to the right store based on the tenant.
+ * submit-enquiry — writes a quick enquiry to the tenant's enquiries inbox.
  *
- * The quick-enquiry path is the lighter alternative to /apply (no driver details,
- * no documents, no financial info — just contact + dates + free-text description).
- *
- *   - lead_management_enabled = true  → write to `leads` (source='quick_enquiry'),
- *     full leads pipeline (conversation, lead_activity, lead.created trigger).
- *   - lead_management_enabled != true → write to `enquiries` (the simpler inbox the
- *     portal Enquiries page reads). This is the default for tenants not yet on Leads.
- *
- * Both paths notify tenant staff (in-portal notification + admin email).
+ * A quick enquiry is contact details + dates + a free-text description. It lands
+ * in `enquiries`, which is the table the portal Enquiries page reads.
  *
  * Behaviour:
  *  - Honeypot check (silent success)
- *  - Tenant resolution by slug; rejects only if BOTH lead_management_enabled and
- *    enquiries_enabled are off
+ *  - Tenant resolution by slug; rejects if enquiries_enabled is off
  *  - Lightweight validation
- *  - Rate-limit by IP (5/hour, mirrors prior pattern, now using leads.ip_address)
- *  - Dedup: if same tenant + (phone or email) has a non-terminal lead, append submission
- *  - Insert lead with stage='new', source='quick_enquiry'
- *  - Insert conversation row
- *  - lead.created emits automatically via DB trigger
- *  - Tenant admin notification (broadcast + email — kept for parity with old behaviour)
+ *  - Rate-limit by IP (5/hour, against enquiries.ip_address)
+ *  - Link to an existing customer on the same tenant when the email matches
+ *  - Insert the enquiry with status='new'
+ *  - Tenant admin notification (in-portal broadcast + admin email)
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
@@ -44,27 +34,6 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DESCRIPTION = 2000;
 const RATE_LIMIT_PER_HOUR = 5;
 
-const NON_TERMINAL_STAGES = [
-  "new",
-  "contacted",
-  "docs_requested",
-  "docs_submitted",
-  "docs_verified",
-  "docs_failed",
-  "approved",
-  "vehicle_offered",
-  "offer_accepted",
-  "agreement_sent",
-  "agreement_signed",
-  "deposit_paid",
-  "pickup_scheduled",
-  "waitlist",
-];
-
-function normalisePhone(raw: string): string {
-  return raw.replace(/\D/g, "");
-}
-
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -83,7 +52,7 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as EnquiryPayload;
 
     if (body.hpField && body.hpField.trim().length > 0) {
-      return jsonResponse({ success: true, leadId: null });
+      return jsonResponse({ success: true, enquiryId: null });
     }
 
     const slug = (req.headers.get("x-tenant-slug") || body.tenantSlug || "").toLowerCase().trim();
@@ -96,14 +65,12 @@ Deno.serve(async (req) => {
 
     const { data: tenant, error: tErr } = await supabase
       .from("tenants")
-      .select("id, slug, lead_management_enabled, enquiries_enabled, admin_email, company_name")
+      .select("id, slug, enquiries_enabled, admin_email, company_name")
       .eq("slug", slug)
       .maybeSingle();
 
     if (tErr || !tenant) return errorResponse("Tenant not found", 404);
-    // Accept if either flag is enabled — lead_management_enabled supersedes enquiries_enabled.
-    // Reject only if both are explicitly off.
-    if (tenant.lead_management_enabled === false && tenant.enquiries_enabled === false) {
+    if (tenant.enquiries_enabled === false) {
       return errorResponse("Enquiries are not accepted at this time", 409);
     }
 
@@ -154,7 +121,7 @@ Deno.serve(async (req) => {
     const ipAddress = fwd.split(",")[0]?.trim() || null;
     const userAgent = req.headers.get("user-agent")?.slice(0, 500) || null;
 
-    // Fire-and-forget admin email — shared by both the enquiries and leads paths.
+    // Fire-and-forget admin email — never blocks the response.
     const sendAdminEmail = async () => {
       if (!tenant.admin_email) return;
       try {
@@ -180,86 +147,11 @@ Deno.serve(async (req) => {
       }
     };
 
-    // ── Enquiries mode (Leads/Automations OFF) ───────────────────────────────
-    // When lead_management is not enabled, this tenant uses the simpler enquiries
-    // inbox: write to the `enquiries` table (which the portal Enquiries page reads)
-    // rather than the leads pipeline. Leads mode keeps the original behaviour below.
-    if (tenant.lead_management_enabled !== true) {
-      // Rate-limit by IP against the enquiries table.
-      if (ipAddress) {
-        const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        const { count } = await supabase
-          .from("enquiries")
-          .select("id", { count: "exact", head: true })
-          .eq("ip_address", ipAddress)
-          .gte("created_at", since);
-        if (count !== null && count >= RATE_LIMIT_PER_HOUR) {
-          return errorResponse("Too many enquiries from this address. Please try again later.", 429);
-        }
-      }
-
-      let enqCustomerId: string | null = null;
-      const { data: existingEnqCustomer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("email", email)
-        .eq("tenant_id", tenant.id)
-        .limit(1)
-        .maybeSingle();
-      if (existingEnqCustomer?.id) enqCustomerId = existingEnqCustomer.id;
-
-      const { data: enq, error: enqErr } = await supabase
-        .from("enquiries")
-        .insert({
-          tenant_id: tenant.id,
-          customer_id: enqCustomerId,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          vehicle_id: vehicleId,
-          start_date: startDate,
-          end_date: endDate,
-          description,
-          status: "new",
-          source: sourceMeta,
-          ip_address: ipAddress,
-          user_agent: userAgent,
-        })
-        .select("id")
-        .single();
-
-      if (enqErr || !enq) {
-        console.error("submit-enquiry enquiries insert error:", enqErr);
-        return errorResponse("Failed to save enquiry. Please try again.", 500);
-      }
-
-      const titleSnippet = name.length > 60 ? name.slice(0, 57) + "..." : name;
-      const messageSnippet = description.length > 140 ? description.slice(0, 137) + "..." : description;
-      await supabase.from("notifications").insert({
-        user_id: null,
-        tenant_id: tenant.id,
-        title: `New enquiry from ${titleSnippet}`,
-        message: messageSnippet,
-        type: "enquiry",
-        link: `/enquiries`,
-        metadata: {
-          enquiryId: enq.id,
-          vehicleId: vehicleId ?? null,
-          customerEmail: email,
-          startDate,
-          endDate,
-        },
-      });
-
-      await sendAdminEmail();
-
-      return jsonResponse({ success: true, enquiryId: enq.id });
-    }
-
+    // Rate-limit by IP against the enquiries table.
     if (ipAddress) {
       const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       const { count } = await supabase
-        .from("leads")
+        .from("enquiries")
         .select("id", { count: "exact", head: true })
         .eq("ip_address", ipAddress)
         .gte("created_at", since);
@@ -268,98 +160,41 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Try to link to existing customer (preserve prior behaviour)
-    let customerId: string | null = null;
-    const { data: existingCustomer } = await supabase
+    let enqCustomerId: string | null = null;
+    const { data: existingEnqCustomer } = await supabase
       .from("customers")
-      .select("id, tenant_id")
+      .select("id")
       .eq("email", email)
       .eq("tenant_id", tenant.id)
       .limit(1)
       .maybeSingle();
-    if (existingCustomer?.id) customerId = existingCustomer.id;
+    if (existingEnqCustomer?.id) enqCustomerId = existingEnqCustomer.id;
 
-    const applicationData = {
-      description,
-      submissions: [{ submittedAt: new Date().toISOString(), source: "quick_enquiry", sourceMeta }],
-    };
-
-    // Dedup
-    const phoneNorm = normalisePhone(phone);
-    const { data: existing } = await supabase
-      .from("leads")
-      .select("id, application_data")
-      .eq("tenant_id", tenant.id)
-      .or(`phone_normalised.eq.${phoneNorm},email_lower.eq.${email}`)
-      .in("stage", NON_TERMINAL_STAGES)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existing?.id) {
-      const data = (existing.application_data ?? {}) as Record<string, unknown>;
-      const submissions = Array.isArray(data.submissions)
-        ? [...(data.submissions as unknown[])]
-        : [];
-      submissions.push({
-        submittedAt: new Date().toISOString(),
-        source: "quick_enquiry",
-        sourceMeta,
-        payload: { description, startDate, endDate, vehicleId },
-      });
-      await supabase
-        .from("leads")
-        .update({
-          application_data: { ...data, submissions },
-          last_activity_at: new Date().toISOString(),
-        })
-        .eq("id", existing.id);
-      return jsonResponse({ success: true, leadId: existing.id, status: "duplicate_merged" });
-    }
-
-    // Insert new lead
-    const { data: inserted, error: insertErr } = await supabase
-      .from("leads")
+    const { data: enq, error: enqErr } = await supabase
+      .from("enquiries")
       .insert({
         tenant_id: tenant.id,
-        customer_id: customerId,
-        full_name: name,
-        email,
-        phone,
-        application_data: applicationData,
+        customer_id: enqCustomerId,
+        customer_name: name,
+        customer_email: email,
+        customer_phone: phone,
         vehicle_id: vehicleId,
         start_date: startDate,
         end_date: endDate,
-        stage: "new",
-        source: "quick_enquiry",
-        source_metadata: { channel: sourceMeta },
+        description,
+        status: "new",
+        source: sourceMeta,
         ip_address: ipAddress,
         user_agent: userAgent,
       })
       .select("id")
       .single();
 
-    if (insertErr || !inserted) {
-      console.error("submit-enquiry leads insert error:", insertErr);
+    if (enqErr || !enq) {
+      console.error("submit-enquiry enquiries insert error:", enqErr);
       return errorResponse("Failed to save enquiry. Please try again.", 500);
     }
 
-    // Insert conversation
-    await supabase.from("conversations").insert({
-      tenant_id: tenant.id,
-      lead_id: inserted.id,
-    });
-
-    // Insert lead_activity
-    await supabase.from("lead_activity").insert({
-      tenant_id: tenant.id,
-      lead_id: inserted.id,
-      actor_type: "lead",
-      event_type: "quick_enquiry_submitted",
-      payload: { sourceMeta, vehicleId, startDate, endDate },
-    });
-
-    // Broadcast notification to tenant staff (preserve prior behaviour; route to /leads now)
     const titleSnippet = name.length > 60 ? name.slice(0, 57) + "..." : name;
     const messageSnippet = description.length > 140 ? description.slice(0, 137) + "..." : description;
     await supabase.from("notifications").insert({
@@ -368,9 +203,9 @@ Deno.serve(async (req) => {
       title: `New enquiry from ${titleSnippet}`,
       message: messageSnippet,
       type: "enquiry",
-      link: `/leads/${inserted.id}`,
+      link: `/enquiries`,
       metadata: {
-        leadId: inserted.id,
+        enquiryId: enq.id,
         vehicleId: vehicleId ?? null,
         customerEmail: email,
         startDate,
@@ -378,10 +213,9 @@ Deno.serve(async (req) => {
       },
     });
 
-    // Optional admin email via Resend (fire-and-forget — never block the response)
     await sendAdminEmail();
 
-    return jsonResponse({ success: true, leadId: inserted.id, enquiryId: inserted.id });
+    return jsonResponse({ success: true, enquiryId: enq.id });
   } catch (error) {
     console.error("submit-enquiry function error:", error);
     return errorResponse(error instanceof Error ? error.message : "Internal server error", 500);
