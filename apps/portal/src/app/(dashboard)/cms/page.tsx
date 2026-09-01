@@ -12,7 +12,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatDistanceToNow } from "date-fns";
 
 // Order pages to match website navigation
-const PAGE_ORDER = ["home", "about", "fleet", "reviews", "promotions", "contact", "privacy", "terms", "site-settings"];
+const PAGE_ORDER = ["home", "about", "fleet", "reviews", "contact", "privacy", "terms", "site-settings"];
 
 export default function CMS() {
   const router = useRouter();
@@ -23,10 +23,13 @@ export default function CMS() {
   // Debug logging
   console.log("CMS Debug:", { tenant: tenant?.slug, tenantId: tenant?.id, pagesCount: pages.length, error });
 
-  // Sort pages according to navigation order, exclude blog (managed separately)
+  // Sort pages according to navigation order. Exclude blog (managed separately)
+  // and promotions (the page and its editor were removed — the `cms_pages` row
+  // may still exist for older tenants, and must not render a card that links to
+  // a route that no longer exists).
   const sortedPages = useMemo(() => {
     return [...pages]
-      .filter((p) => p.slug !== "blog")
+      .filter((p) => p.slug !== "blog" && p.slug !== "promotions")
       .sort((a, b) => {
         const indexA = PAGE_ORDER.indexOf(a.slug);
         const indexB = PAGE_ORDER.indexOf(b.slug);
