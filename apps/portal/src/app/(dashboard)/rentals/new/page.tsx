@@ -64,6 +64,8 @@ import type { DistanceUnit } from "@/lib/format-utils";
 import { getMileageTier, getTierMileage, calculateTotalMileageAllowance, isUnlimitedMileage } from "@/lib/mileage-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuth } from "@/stores/auth-store";
+import { useCustomerReviewSummary } from "@/hooks/use-customer-review-summary";
+import { useCustomerReviews } from "@/hooks/use-customer-reviews";
 import { useCustomerInsurance } from "@/hooks/use-customer-insurance";
 import { useCustomerDocuments, getDocumentStatus } from "@/hooks/use-customer-documents";
 import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
@@ -980,7 +982,9 @@ const CreateRental = () => {
   // Get active rentals count for selected customer to enforce rules
   const { data: activeRentalsCount } = useCustomerActiveRentals(selectedCustomerId);
 
-  // Insurance for the selected customer
+  // Customer review summary + insurance for the selected customer
+  const { data: reviewSummary } = useCustomerReviewSummary(selectedCustomerId || undefined);
+  const { data: customerReviews } = useCustomerReviews(selectedCustomerId || undefined);
   const { data: customerInsurance } = useCustomerInsurance(selectedCustomerId || "");
   const { data: customerDocuments } = useCustomerDocuments(selectedCustomerId || "");
 
@@ -3360,6 +3364,74 @@ const CreateRental = () => {
                             </>
                           )}
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Customer Reviews */}
+                  {selectedCustomerId && (
+                    <div className="p-4 border rounded-lg bg-muted/30 space-y-3 mt-5">
+                      <div className="flex items-center gap-2">
+                        <Star className="h-4 w-4 text-amber-500" />
+                        <h3 className="font-medium text-sm">Customer Reviews</h3>
+                      </div>
+
+                      {reviewSummary ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 10 }, (_, i) => (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "h-2 w-2 rounded-full",
+                                    i < Math.round(reviewSummary.average_rating || 0)
+                                      ? "bg-amber-500"
+                                      : "bg-muted-foreground/20"
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-sm font-semibold">
+                              {(reviewSummary.average_rating || 0).toFixed(1)}/10
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ({reviewSummary.total_reviews} {reviewSummary.total_reviews === 1 ? 'review' : 'reviews'})
+                            </span>
+                          </div>
+                          {reviewSummary.summary && (
+                            <p className="text-xs text-muted-foreground leading-relaxed italic">
+                              "{reviewSummary.summary}"
+                            </p>
+                          )}
+                          {customerReviews && customerReviews.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : customerReviews && customerReviews.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="text-xs text-muted-foreground">
+                            {customerReviews.length} {customerReviews.length === 1 ? 'review' : 'reviews'} — avg{' '}
+                            {(customerReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / customerReviews.length).toFixed(1)}/10
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[...new Set(customerReviews.flatMap(r => r.tags))].slice(0, 6).map(tag => (
+                              <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          No reviews yet. Reviews will appear here after completed rentals are reviewed.
+                        </p>
                       )}
                     </div>
                   )}

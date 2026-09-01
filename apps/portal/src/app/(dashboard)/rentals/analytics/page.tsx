@@ -70,6 +70,18 @@ const areaChartConfig = {
   count: { label: "Rentals", color: "#6366f1" },
 } satisfies ChartConfig;
 
+const reviewChartConfig = {
+  Reviewed: { label: "Reviewed", color: "#10b981" },
+  "Pending Review": { label: "Pending Review", color: "#f59e0b" },
+  Skipped: { label: "Skipped", color: "#9ca3af" },
+} satisfies ChartConfig;
+
+const REVIEW_COLORS: Record<string, string> = {
+  Reviewed: "#10b981",
+  "Pending Review": "#f59e0b",
+  Skipped: "#9ca3af",
+};
+
 export default function RentalsAnalyticsPage() {
   const { tenant } = useTenant();
   const { data, isLoading } = useEnhancedRentals({});
@@ -151,6 +163,28 @@ export default function RentalsAnalyticsPage() {
       week,
       count,
     }));
+  }, [allRentals]);
+
+  // Chart 5: Review status breakdown (donut — completed rentals only)
+  const reviewDonutData = useMemo(() => {
+    if (!allRentals?.length) return [];
+    const completedRentals = allRentals.filter(
+      (r) => r.computed_status === "Completed"
+    );
+    if (!completedRentals.length) return [];
+    const counts: Record<string, number> = {
+      Reviewed: 0,
+      "Pending Review": 0,
+      Skipped: 0,
+    };
+    completedRentals.forEach((r) => {
+      if (r.review_status === "reviewed") counts["Reviewed"]++;
+      else if (r.review_status === "skipped") counts["Skipped"]++;
+      else counts["Pending Review"]++;
+    });
+    return Object.entries(counts)
+      .filter(([, v]) => v > 0)
+      .map(([name, value]) => ({ name, value }));
   }, [allRentals]);
 
   if (isLoading) {
@@ -292,10 +326,10 @@ export default function RentalsAnalyticsPage() {
             </Card>
           </div>
 
-          {/* Row 2: Area chart (full width) */}
+          {/* Row 2: Area chart (2/3) + Review donut (1/3) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Chart 4: Rentals Created Over Time (Area) */}
-            <Card className="rounded-lg border border-border/60 bg-card/50 p-4 md:col-span-3">
+            <Card className={`rounded-lg border border-border/60 bg-card/50 p-4 ${reviewDonutData.length > 0 ? "md:col-span-2" : "md:col-span-3"}`}>
               <div className="flex items-center gap-1.5 mb-3">
                 <h3 className="text-sm font-medium">Rentals Over Time</h3>
                 <Tooltip>
@@ -334,6 +368,47 @@ export default function RentalsAnalyticsPage() {
               )}
             </Card>
 
+            {/* Chart 5: Review Status Breakdown (Donut) */}
+            {reviewDonutData.length > 0 && (
+              <Card className="rounded-lg border border-border/60 bg-card/50 p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <h3 className="text-sm font-medium">Review Status</h3>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Review status of completed rentals</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <ChartContainer config={reviewChartConfig} className="h-[200px] w-full">
+                  <PieChart>
+                    <Pie
+                      data={reviewDonutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      nameKey="name"
+                    >
+                      {reviewDonutData.map((entry) => (
+                        <Cell key={entry.name} fill={REVIEW_COLORS[entry.name] || "#6b7280"} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground text-2xl font-bold">
+                      {reviewDonutData.reduce((s, d) => s + d.value, 0)}
+                    </text>
+                    <text x="50%" y="62%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground text-xs">
+                      Completed
+                    </text>
+                  </PieChart>
+                </ChartContainer>
+              </Card>
+            )}
           </div>
         </TooltipProvider>
       ) : (
