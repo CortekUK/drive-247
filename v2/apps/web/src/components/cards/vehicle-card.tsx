@@ -13,6 +13,7 @@ import {
   type RatePeriod,
 } from "@/components/fleet/fleet-vehicle";
 import { VehiclePhoto } from "@/components/fleet/vehicle-photo";
+import type { TripIntent } from "@/lib/booking/trip-intent";
 import { cn } from "@/lib/utils";
 
 type VehicleCardProps = {
@@ -23,6 +24,15 @@ type VehicleCardProps = {
   distanceUnit: string | null;
   /** Which rate to headline. Defaults to the daily rate. */
   period?: RatePeriod;
+  /**
+   * The addresses the customer typed on the home page, if any.
+   *
+   * Threaded onto BOTH links below so the intent survives the click. Without it
+   * the customer is asked for an address they have already given — which is the
+   * exact hop where their input used to die. Omitted (`/fleet` reached directly,
+   * the home-page strip) it changes nothing: `vehicleHref` returns the bare path.
+   */
+  tripIntent?: TripIntent | null;
   className?: string;
 };
 
@@ -41,9 +51,10 @@ export function VehicleCard({
   currencyCode,
   distanceUnit,
   period = "day",
+  tripIntent = null,
   className,
 }: VehicleCardProps) {
-  const href = vehicleHref(vehicle);
+  const href = vehicleHref(vehicle, tripIntent);
   const rate = rateForPeriod(vehicle, period);
   const mileage = mileageForPeriod(vehicle, period);
 

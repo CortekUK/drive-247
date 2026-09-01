@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CarFront, SearchX, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -16,12 +16,19 @@ import {
 import { VehicleCard } from '@/components/cards/vehicle-card';
 import { useTenant } from '@/contexts/TenantContext';
 import { useVehicles } from '@/hooks/use-vehicles';
+import {
+  EMPTY_TRIP_INTENT,
+  readTripIntentFromLocation,
+  stripTripIntent,
+  type TripIntent,
+} from '@/lib/booking/trip-intent';
 import { canSearchByRegistration } from '@/lib/domain';
 
 import { ActiveFilterChips } from './active-filter-chips';
 import { FleetFilterPanel } from './fleet-filter-panel';
 import { FleetGridSkeleton, FleetRowSkeleton } from './fleet-skeletons';
 import { FleetToolbar } from './fleet-toolbar';
+import { TripIntentBanner } from './trip-intent-banner';
 import { VehicleListRow } from './vehicle-list-row';
 import { formatMoney, formatResultCount } from './format';
 import {
@@ -62,6 +69,36 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
   // render so folding the rail can never become a hydration mismatch.
   const [railOpen, setRailOpen] = useState(true);
   const { view, setView } = useFleetView();
+
+  /* ── the home page's addresses ──────────────────────────────────────────
+   * `?pickup=` / `?dropoff=`, put there by the hero form and forwarded here by
+   * /booking's redirect. Read AFTER mount, from `window.location`, for two
+   * reasons: `useSearchParams()` would force a `<Suspense>` boundary around a
+   * page whose whole point is a server-rendered first paint, and seeding the
+   * state to `EMPTY_TRIP_INTENT` keeps the server HTML and the hydration pass
+   * byte-identical. The only cost is that the very first painted frame carries
+   * bare `/booking/<id>` hrefs; the intent is on them by the time anything can
+   * be clicked.
+   *
+   * The intent is context, NOT a filter — see `TripIntentBanner` for why the
+   * grid below is deliberately untouched by it.
+   */
+  const [tripIntent, setTripIntent] = useState<TripIntent>(EMPTY_TRIP_INTENT);
+
+  useEffect(() => {
+    setTripIntent(readTripIntentFromLocation());
+  }, []);
+
+  const clearTripIntent = useCallback(() => {
+    setTripIntent(EMPTY_TRIP_INTENT);
+    if (typeof window === 'undefined') return;
+    // The params have to leave the address bar too: they are what a refresh,
+    // a back-navigation or a shared link would replay. `replaceState` rather
+    // than a router push so dismissing a banner does not add a history entry
+    // the back button then has to walk through.
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(null, '', `${pathname}${stripTripIntent(search)}${hash}`);
+  }, []);
 
   const live = useMemo(() => vehicles.map(toFleetVehicle), [vehicles]);
 
@@ -201,6 +238,8 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
       </Sheet>
 
       <div className="min-w-0 flex-1 space-y-5">
+        <TripIntentBanner intent={tripIntent} onClear={clearTripIntent} />
+
         <FleetToolbar
           search={filters.search}
           onSearchChange={(value) => setFilters((current) => ({ ...current, search: value }))}
@@ -273,6 +312,7 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
                 currencyCode={currencyCode}
                 distanceUnit={distanceUnit}
                 period={period}
+                tripIntent={tripIntent}
               />
             ))}
           </div>
@@ -285,6 +325,7 @@ export function FleetBrowser({ seed = null }: FleetBrowserProps) {
                 currencyCode={currencyCode}
                 distanceUnit={distanceUnit}
                 period={period}
+                tripIntent={tripIntent}
               />
             ))}
           </div>

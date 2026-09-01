@@ -1,10 +1,14 @@
 import { ShieldCheck } from "lucide-react";
 import Image from "next/image";
 
-import { ReadinessCard } from "@/components/cards/readiness-card";
+import {
+  ReadinessCard,
+  type ReadinessVehicle,
+} from "@/components/cards/readiness-card";
+import { loadFleetSeed } from "@/components/fleet/fleet-seed";
 import { LocationSearchForm } from "@/components/forms/location-search-form";
 import { DEFAULT_HOME_HERO } from "@/lib/cms/defaults";
-import { loadSection } from "@/lib/cms/server";
+import { getTenantSlug, loadSection } from "@/lib/cms/server";
 
 /**
  * The home hero. Copy comes from the portal's `home / home_hero` section.
@@ -20,8 +24,39 @@ import { loadSection } from "@/lib/cms/server";
  * layout is untouched when they have not.
  */
 export async function HeroSection() {
-  const hero = await loadSection("home", "home_hero", DEFAULT_HOME_HERO);
+  const tenantSlug = await getTenantSlug();
+
+  /*
+    The fleet is loaded here for ONE reason: the readiness card floating over
+    the car needs a real vehicle to link to. It used to say "Lexus RX" and its
+    "View Details" was `href="#"` — a dead control on the home page's most
+    prominent card, and one that could not be fixed inside the card itself
+    because the card had no idea which vehicle it was describing.
+
+    `loadFleetSeed` is already the server-side vehicle reader for /fleet, and
+    both awaits run in parallel with the CMS read, so this costs one concurrent
+    query rather than a second serial round-trip on the LCP path. It returns
+    null rather than throwing on any failure, and the card falls back to its
+    shipped copy and a /fleet link — so an operator with no cars published, or
+    a momentary query failure, still gets exactly the hero they get today.
+  */
+  const [hero, seed] = await Promise.all([
+    loadSection("home", "home_hero", DEFAULT_HOME_HERO),
+    loadFleetSeed(tenantSlug),
+  ]);
+
   const subheading = hero.subheading.trim();
+
+  /*
+    First of the seed, which `fleet-seed` orders by daily rate ascending — the
+    most accessible car in the fleet, which is the right one to headline on a
+    page whose job is to get someone into the flow.
+  */
+  const featured = seed?.vehicles[0];
+  const readinessVehicle: ReadinessVehicle | null =
+    featured === undefined
+      ? null
+      : { id: featured.id, name: featured.name, categoryLabel: featured.categoryLabel };
 
   return (
     <section className="relative overflow-hidden bg-brand-cream">
@@ -59,7 +94,10 @@ export async function HeroSection() {
             />
           </div>
 
-          <ReadinessCard className="absolute -bottom-2 -right-2 z-10 origin-bottom-right scale-75 sm:scale-90 lg:-bottom-3 lg:-right-5 lg:scale-100" />
+          <ReadinessCard
+            vehicle={readinessVehicle}
+            className="absolute -bottom-2 -right-2 z-10 origin-bottom-right scale-75 sm:scale-90 lg:-bottom-3 lg:-right-5 lg:scale-100"
+          />
         </div>
 
         <div className="lg:hidden">

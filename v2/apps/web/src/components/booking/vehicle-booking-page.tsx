@@ -14,6 +14,10 @@ import { useVehicle } from "@/hooks/use-vehicle";
 import { useVehicleBookedDates } from "@/hooks/use-vehicle-availability";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useCreateBooking } from "@/hooks/use-create-booking";
+import {
+  readTripIntentFromLocation,
+  sameTripAddress,
+} from "@/lib/booking/trip-intent";
 import type { BookingLocationLeg } from "@/lib/booking/types";
 import {
   getTierFeeRange,
@@ -122,8 +126,68 @@ export function VehicleBookingPage({ vehicleId }: { vehicleId: string }) {
     if (state.customerTimezone === "") {
       patch.customerTimezone = resolveBrowserTimezone();
     }
-    if (state.deliveryOption === null) {
-      patch.deliveryOption = modes.enabled[0] ?? "fixed";
+
+    /* ── the addresses the customer typed on the home page ─────────────────
+     * `?pickup=` / `?dropoff=`, carried here from the hero by /fleet's vehicle
+     * links. Read from `window.location` for the same reason `readPaymentReturn`
+     * is a few hundred lines below: `useSearchParams` would put this whole page
+     * behind a Suspense boundary.
+     *
+     * PRECEDENCE IS STORE > URL > TENANT DEFAULT, and the order matters more
+     * than it looks. This store is PERSISTED: a customer who filled half a
+     * booking yesterday, then clicked a stale link (their own, from a bookmark,
+     * or one somebody sent them), must not have the address they typed replaced
+     * by one they no longer mean. So every branch below is guarded on the field
+     * being genuinely untouched, and the URL only ever fills a hole.
+     */
+    const intent = readTripIntentFromLocation();
+
+    /* Which arrangement the sidebar opens on.
+     *
+     * A typed address only implies "deliver it to me", and that is the `area`
+     * mode — which many operators do not offer. Selecting a mode the tenant has
+     * switched off would put the customer in a state `resolveDeliveryModes`
+     * says does not exist and the form has no controls for, so the intent is
+     * allowed to influence this choice ONLY when `area` is genuinely enabled.
+     * Otherwise the tenant's own first enabled mode stands, exactly as before.
+     */
+    const seededMode: DeliveryOption =
+      state.deliveryOption ??
+      (intent.pickup !== null && modes.area ? "area" : (modes.enabled[0] ?? "fixed"));
+
+    if (state.deliveryOption === null) patch.deliveryOption = seededMode;
+
+    /* Only two of the three arrangements have a free-text address to fill.
+     * `location` is a picker over the operator's own rows and a typed string
+     * cannot pick one; `fixed` WITH a configured address renders that address
+     * as a read-only panel and `bookingLegs` prefers it over anything in the
+     * store, so seeding there would write a value nothing shows and nothing
+     * uses. This mirrors `canChooseReturn` in booking-form.tsx.
+     */
+    const acceptsTypedAddress =
+      seededMode === "area" ||
+      (seededMode === "fixed" && rules.fixedPickupAddress === null);
+
+    if (acceptsTypedAddress && intent.pickup !== null && state.pickupAddress === "") {
+      patch.pickupAddress = intent.pickup;
+
+      /* The return leg rides with the pickup leg or not at all.
+       *
+       * Filling it means flipping `sameAsPickup` to false, and that flag
+       * DEFAULTS to true — so a stored `true` is indistinguishable from one the
+       * customer chose. Flipping it is only safe in the pass where we are also
+       * the ones filling the pickup address, i.e. where there is demonstrably
+       * no customer input to contradict. A customer who already has a pickup
+       * address keeps their whole "where" section untouched.
+       */
+      if (
+        intent.dropoff !== null &&
+        state.returnAddress === "" &&
+        !sameTripAddress(intent.pickup, intent.dropoff)
+      ) {
+        patch.returnAddress = intent.dropoff;
+        patch.sameAsPickup = false;
+      }
     }
 
     /* The seeded pickup must satisfy the lead time as an INSTANT, not as a day

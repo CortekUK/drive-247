@@ -21,6 +21,7 @@
  * The two mappers below are the only places that know how to build one.
  */
 
+import { withTripIntent, type TripIntent } from '@/lib/booking/trip-intent';
 import {
   customerPhotoUrl,
   displayRegistration,
@@ -299,7 +300,19 @@ export function mileageForPeriod(
   }
 }
 
-/** Where a card or row links to. One place, so the two cannot disagree. */
-export function vehicleHref(vehicle: FleetVehicle): string {
-  return `/booking/${vehicle.id}`;
+/**
+ * Where a card or row links to. One place, so the two cannot disagree.
+ *
+ * The optional trip intent is what carries the home-page hero's addresses
+ * across the fleet grid and into the booking sidebar. It is threaded through
+ * this function rather than appended at each call site for the same reason the
+ * href itself lives here: the card and the list row are two renderings of one
+ * decision, and a link that drops the customer's addresses in one view but not
+ * the other is the bug this feature exists to fix.
+ *
+ * With no intent the result is byte-identical to what it was before — see
+ * `withTripIntent`.
+ */
+export function vehicleHref(vehicle: FleetVehicle, intent?: TripIntent | null): string {
+  return withTripIntent(`/booking/${vehicle.id}`, intent);
 }

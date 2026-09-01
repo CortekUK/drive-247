@@ -1,6 +1,7 @@
 import { Check, Fuel, Gauge, Hash } from 'lucide-react';
 import Link from 'next/link';
 
+import type { TripIntent } from '@/lib/booking/trip-intent';
 import { cn } from '@/lib/utils';
 
 import { formatMileage, formatMoney } from './format';
@@ -23,6 +24,8 @@ interface VehicleListRowProps {
   currencyCode: string | null;
   distanceUnit: string | null;
   period: RatePeriod;
+  /** The home-page addresses, carried onto this row's link. See `VehicleCard`. */
+  tripIntent?: TripIntent | null;
 }
 
 /**
@@ -46,8 +49,9 @@ export function VehicleListRow({
   currencyCode,
   distanceUnit,
   period,
+  tripIntent = null,
 }: VehicleListRowProps) {
-  const href = vehicleHref(vehicle);
+  const href = vehicleHref(vehicle, tripIntent);
   const active = rateForPeriod(vehicle, period);
   const mileage = mileageForPeriod(vehicle, period);
 

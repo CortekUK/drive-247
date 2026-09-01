@@ -19,6 +19,15 @@ export const metadata = { title: "Fleet and Pricing" };
  * crawler, and an empty frame for anyone on a slow connection. The client query
  * still runs and takes over the moment it lands; this only decides what the
  * first paint contains.
+ *
+ * ── `?pickup=` / `?dropoff=` ─────────────────────────────────────────────────
+ * The home-page hero's addresses arrive here (via /booking's redirect) and are
+ * read in `FleetBrowser`, not in this Server Component. The banner that shows
+ * them is dismissable and the same value is threaded onto every vehicle link,
+ * so the intent and the control over it have to live in one client component
+ * — handing it down as a prop would fix it at request time and leave the
+ * "clear" button with nothing to clear. `lib/booking/trip-intent.ts` owns the
+ * param contract that both ends of that hop share.
  */
 export default async function FleetPage() {
   // The middleware resolves the tenant from the subdomain (or a custom booking

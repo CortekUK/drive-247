@@ -4,6 +4,7 @@ import { MapPin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { sanitizeTripAddress, withTripIntent } from "@/lib/booking/trip-intent";
 import { cn } from "@/lib/utils";
 
 /** Shipped copy, used only when the operator has written nothing. */
@@ -35,12 +36,28 @@ export function LocationSearchForm({
 
   const label = submitLabel?.trim() ? submitLabel.trim() : DEFAULT_SUBMIT_LABEL;
 
+  /**
+   * ── WHAT HAPPENS WITH TWO EMPTY FIELDS ───────────────────────────────────
+   * It still navigates. This is the home page's primary call to action and the
+   * flow is vehicle-first: nobody can be asked where they want a car delivered
+   * before they have chosen one, so neither field is required to start. An
+   * empty submit is simply "show me the cars" and lands on the fleet with no
+   * banner — which is the page the CTA would have gone to anyway. Blocking it
+   * would put a validation error in front of a customer whose only mistake was
+   * pressing the button that says "book".
+   *
+   * The addresses go through `sanitizeTripAddress` on the way OUT as well as on
+   * the way in, so the link we generate is one our own parser accepts intact —
+   * no trailing-space "address" that survives here and reads as blank on /fleet.
+   */
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const params = new URLSearchParams();
-    if (pickup) params.set("pickup", pickup);
-    if (dropoff) params.set("dropoff", dropoff);
-    router.push(`/booking${params.size ? `?${params.toString()}` : ""}`);
+    router.push(
+      withTripIntent("/booking", {
+        pickup: sanitizeTripAddress(pickup),
+        dropoff: sanitizeTripAddress(dropoff),
+      }),
+    );
   }
 
   return (
