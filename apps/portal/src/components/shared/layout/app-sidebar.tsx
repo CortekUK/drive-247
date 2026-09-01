@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen, Wrench } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -28,6 +28,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
+import { useRentalSettings } from "@/hooks/use-rental-settings";
+import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
 import { UserPlus, Workflow } from "lucide-react";
@@ -165,6 +167,17 @@ export function AppSidebar() {
   const { tenant } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
+  // `fleet_health_enabled` is not in TenantContext's explicit column list, so it is
+  // read from the rental-settings row (a SELECT * on `tenants`) — which is also the
+  // cache the settings toggle writes through, so flipping it moves this entry with
+  // no refetch. `=== true` keeps the item hidden while that query is still in flight
+  // rather than flashing a nav entry the tenant has not turned on.
+  const { settings: rentalSettings } = useRentalSettings();
+  const fleetHealthEnabled =
+    (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true;
+  // Fleet Health alerting is pull-only by design — nothing is emailed or pushed —
+  // so this badge is the only standing signal that work has come due.
+  const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
@@ -256,6 +269,15 @@ export function AppSidebar() {
       icon: AnimatedCar,
       items: [
         { name: "Vehicles", href: "/vehicles", icon: AnimatedCar },
+        ...(fleetHealthEnabled
+          ? [{
+              name: "Fleet Health",
+              href: "/fleet-health",
+              icon: Wrench,
+              badge: fleetNeedsAttention || 0,
+              badgeTone: "amber" as const,
+            }]
+          : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },

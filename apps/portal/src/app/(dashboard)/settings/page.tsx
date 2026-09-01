@@ -1913,9 +1913,9 @@ const Settings = () => {
                 <div className="min-w-0 flex-1 space-y-1">
                   <h4 className="font-medium">Fleet Health</h4>
                   <p className="text-sm text-muted-foreground">
-                    Adds a Fleet Health section to each vehicle&apos;s page, and a health column and filter
-                    to your vehicle list. Every night your vehicles are checked against your service
-                    intervals and expiry dates, and anything due soon or already overdue is shown there.
+                    Adds a &quot;Fleet Health&quot; entry to the Fleet &amp; Bookings sidebar group. Every night
+                    your vehicles are checked against your service intervals and expiry dates, and anything
+                    due soon or already overdue is listed there with a count in the sidebar.
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Nothing is emailed or texted — to you or to your customers. You see it when you open the

@@ -138,6 +138,16 @@ export const SETTINGS_SUB_TABS: TabDefinition[] = [
 // Route → Tab key mapping (used by sidebar filtering and route protection)
 export const ROUTE_TO_TAB: Record<string, string> = {
   '/vehicles': 'vehicles',
+  // Fleet Health deliberately INHERITS the 'vehicles' tab key rather than owning
+  // one. getTabKeyForRoute() returns null for any unlisted route and canAccessRoute()
+  // treats null as "allowed", so leaving it out would expose the page to every
+  // manager regardless of their grants — the omission, not the entry, is the risk.
+  // A dedicated key would also have to be mirrored into the hardcoded
+  // ALLOWED_TAB_KEYS arrays in the update-manager-permissions and admin-create-user
+  // edge functions (both already behind this file) plus backfilled, to serve the
+  // handful of manager/ops users on the platform. Anyone who may see a vehicle may
+  // see that vehicle's service state.
+  '/fleet-health': 'vehicles',
   '/rentals': 'rentals',
   '/pending-bookings': 'pending_bookings',
   '/blocked-dates': 'availability',
