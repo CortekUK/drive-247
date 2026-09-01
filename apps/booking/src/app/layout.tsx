@@ -20,7 +20,6 @@ import DevJumpPanel from '@/components/DevJumpPanel';
 import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 import { SuspendedGate } from '@/components/SuspendedGate';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
-import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -31,7 +30,7 @@ export const dynamic = 'force-dynamic';
 // `manifest` and `appleWebApp` belong on EVERY branch, including the fallbacks.
 // iOS reads them only at "Add to Home Screen"; if the tenant lookup happens to
 // fail on the visit where someone installs, the icon is created without them and
-// the install is permanently a bookmark that can never receive push.
+// the install is permanently a plain bookmark.
 const PWA_METADATA = {
   manifest: '/manifest.webmanifest',
   appleWebApp: {
@@ -176,8 +175,6 @@ export default async function RootLayout({
                 reads ga_measurement_id from TenantContext, so it must sit inside
                 TenantProvider. Renders nothing when unset. */}
             <GoogleAnalytics />
-            {/* Installs the service worker that receives push while the app is closed. */}
-            <ServiceWorkerRegistrar />
             <CustomerAuthProvider>
               <BookingPersistenceGuard>
               <ThemeProvider
