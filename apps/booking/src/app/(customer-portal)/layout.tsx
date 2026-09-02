@@ -66,7 +66,17 @@ export default function CustomerPortalLayout({
     if (!customerUser || !session || tenantMismatch) {
       // Store the intended destination
       const returnUrl = encodeURIComponent(pathname || '/portal');
-      router.replace(`/?auth=login&from=${returnUrl}`);
+      // Two sites share this portal. Send the visitor back to the one they came
+      // from — the custom site marks itself in sessionStorage as it loads — so
+      // nobody is dropped onto a site they have never seen, and the login they
+      // meet is the one styled like the site they were using.
+      let base = '/';
+      try {
+        if (sessionStorage.getItem('cbp-site') === '1') base = '/custom-booking-page';
+      } catch {
+        // Storage blocked; the existing site is the safe default.
+      }
+      router.replace(`${base}?auth=login&from=${returnUrl}`);
       return;
     }
 

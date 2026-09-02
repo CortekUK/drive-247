@@ -107,8 +107,10 @@ interface Tenant {
   boldsign_mode: string;
   integration_tesla_fleet: boolean;
   subscription_gate_disabled: boolean | null;
-  /** Serve the booking-v2 landing design on this tenant's home page. */
+  /** Serve this tenant's custom booking site instead of the legacy one. */
   booking_v2_enabled: boolean | null;
+  /** Whether the platform allows this tenant to run the custom site at all. */
+  custom_site_eligible: boolean | null;
 }
 
 /**
@@ -1114,8 +1116,8 @@ export default function TenantDetailsPage() {
       if (error) throw error;
       setTenant({ ...tenant, booking_v2_enabled: next });
       toast.success(next
-        ? 'New booking design enabled — this tenant\'s home page now serves booking-v2'
-        : 'Reverted to the current booking design');
+        ? 'Custom site enabled — this tenant\'s home page now serves their custom website'
+        : 'Reverted to the legacy booking website');
     } catch (error: any) {
       toast.error(`Failed to update booking design: ${error.message}`);
     } finally {
@@ -2381,7 +2383,10 @@ export default function TenantDetailsPage() {
             </CardContent>
           </Card>
 
-          {/* Booking site design */}
+          {/* Booking site design. Only offered to tenants the platform has made
+              eligible; everyone else stays on the legacy site with no switch to
+              find. The database refuses the change regardless. */}
+          {tenant.custom_site_eligible && (
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-start justify-between gap-4">
@@ -2390,18 +2395,19 @@ export default function TenantDetailsPage() {
                   <div>
                     <h3 className="text-base font-semibold">Booking site design</h3>
                     <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
-                      Serve the new <span className="font-medium text-foreground">booking-v2</span> landing
-                      on this tenant&apos;s home page. Only the home page changes &mdash; the fleet,
-                      booking funnel and customer portal are untouched.
+                      Serve this tenant&apos;s <span className="font-medium text-foreground">custom website</span>{' '}
+                      instead of the legacy booking site. It draws its fleet, rates, content and
+                      branding from this tenant&apos;s own portal data, and shares the same booking
+                      funnel and customer portal.
                     </p>
-                    <p className="text-xs text-amber-400/90 mt-2 max-w-xl">
-                      The new design is still a visual prototype: it shows placeholder vehicles,
-                      rates and contact details, not this tenant&apos;s real inventory. Keep it off
-                      for any tenant taking live traffic.
+                    <p className="text-xs text-muted-foreground mt-2 max-w-xl">
+                      Turning this on also reveals{' '}
+                      <span className="font-medium text-foreground">Website Content &rarr; New Website Content</span>{' '}
+                      in their portal, where they edit the custom site.
                     </p>
                     {tenant.slug && (
                       <a
-                        href={`${tenantBookingUrl(tenant.slug)}/booking-v2`}
+                        href={`${tenantBookingUrl(tenant.slug)}/custom-booking-page`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-2"
@@ -2431,12 +2437,13 @@ export default function TenantDetailsPage() {
                     </div>
                   </div>
                   <Badge variant={tenant.booking_v2_enabled ? 'success' : 'outline'} className="ml-2 whitespace-nowrap">
-                    {tenant.booking_v2_enabled ? 'booking-v2' : 'Current'}
+                    {tenant.booking_v2_enabled ? 'Custom site' : 'Legacy'}
                   </Badge>
                 </label>
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Credits */}
           <Card>

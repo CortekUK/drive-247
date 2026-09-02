@@ -192,6 +192,10 @@ export interface Tenant {
 
   // Lead capture
   enquiries_enabled: boolean | null;
+  /** Accent for the custom booking site only. NULL = its approved default. */
+  custom_site_accent_color: string | null;
+  /** Optional palette overrides for the custom site: soft / deep / surfaceDark. */
+  custom_site_theme: Record<string, string> | null;
 
   // PAYG upfront payment gate
   payg_upfront_required: boolean | null;
@@ -224,9 +228,11 @@ export interface Tenant {
   push_notifications_enabled: boolean | null;
 
   /**
-   * Serve the booking-v2 landing design at `/` instead of the legacy home
-   * page. Super-admin controlled from the admin app; scoped to the home page
-   * only, so the booking funnel and every other route are untouched.
+   * DORMANT. This once selected an alternative landing design at `/` instead
+   * of the legacy home page. That design has been removed and nothing reads
+   * this flag any more — the home page serves the legacy design to every
+   * tenant. The column is still here, and still selected, only because it
+   * still exists on `tenants`; flipping it has no effect.
    *
    * NOT NULL DEFAULT false in the database — the `| null` here only covers the
    * window where an older cached tenant row predates the column.
@@ -356,6 +362,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }, [tenant?.id]);
 
   const loadTenant = async (silent = false) => {
+    // Declared outside the try so the catch below can name the tenant it was
+    // loading; an error report that cannot say which slug failed is much
+    // harder to act on.
+    let slug: string | null = null;
     try {
       // Only run on client side
       if (typeof window === 'undefined') {
@@ -365,7 +375,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       // Extract subdomain from current URL
       const hostname = window.location.hostname;
-      let slug = extractSubdomain(hostname);
+      slug = extractSubdomain(hostname);
 
       // If no subdomain and not a platform domain, try custom domain lookup
       if (!slug && !isPlatformDomain(hostname)) {
@@ -541,6 +551,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           maintenance_banner_message,
           buffer_time_minutes,
           enquiries_enabled,
+          custom_site_accent_color,
+          custom_site_theme,
           payg_upfront_required,
           gig_driver_enabled,
           ga_measurement_id,
@@ -563,23 +575,44 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           console.warn(`[TenantContext] No active tenant found for slug: ${slug}`);
           if (!silent) setError(`Tenant "${slug}" not found or inactive`);
         } else {
-          // Log the fields explicitly. Passing the raw error straight to
-          // console.error renders as an unhelpful `{}` in the dev overlay
-          // whenever the fields are undefined -- which is exactly the case for
-          // a transport failure (aborted/offline fetch), where nothing is a
-          // PostgrestError at all. Keep a fallback so `error` is never blank.
+          // Build ONE string rather than passing an object. Logging an object
+          // here rendered as a bare `{}` in the Next dev overlay -- the
+          // overlay serialises it across the dev boundary and drops the
+          // fields -- so the operator saw "Error loading tenant: {}" with
+          // nothing to act on. A flat message always survives.
           const detail =
             queryError.message ||
             (queryError as unknown as Error)?.toString?.() ||
             'Network request failed while loading tenant';
-          console.error('[TenantContext] Error loading tenant:', {
-            slug,
-            message: queryError.message,
-            details: queryError.details,
-            hint: queryError.hint,
-            code: queryError.code,
-          });
-          if (!silent) setError(detail);
+
+          // A fetch aborted because the page navigated or the provider
+          // unmounted is not a failure -- it is the request we no longer
+          // wanted. It surfaces with no PostgREST code at all, and reporting
+          // it as an error made ordinary navigation look broken. Same for a
+          // refresh that lost the network: the tenant already on screen stays
+          // valid, so say it quietly and keep serving it.
+          const aborted =
+            (queryError as unknown as Error)?.name === 'AbortError' ||
+            /abort/i.test(detail);
+          const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+          if (aborted || offline || silent) {
+            console.warn(
+              `[TenantContext] Tenant load did not complete for "${slug}" ` +
+              `(${aborted ? 'request aborted' : offline ? 'offline' : 'background refresh'}): ${detail}`,
+            );
+            // Nothing on screen changes: a background or abandoned load must
+            // never tear down the tenant the page is already rendering.
+            return;
+          }
+
+          console.error(
+            `[TenantContext] Error loading tenant "${slug}": ${detail}` +
+            (queryError.code ? ` [code ${queryError.code}]` : '') +
+            (queryError.details ? ` — ${queryError.details}` : '') +
+            (queryError.hint ? ` (hint: ${queryError.hint})` : ''),
+          );
+          setError(detail);
         }
         if (!silent) { setTenant(null); setLoading(false); }
         return;
@@ -590,7 +623,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setTenant(data as Tenant);
       setError(null);
     } catch (err) {
-      console.error('[TenantContext] Unexpected error:', err);
+      // Flattened for the same reason as the query error above: an object
+      // logged here renders as a bare `{}` in the dev overlay.
+      const why = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      console.error(`[TenantContext] Unexpected error loading tenant "${slug}": ${why}`);
       // A background refresh must never tear the page down. If it fails we
       // simply keep serving the tenant we already have.
       if (!silent) {

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -10813,8 +10813,10 @@ export type Database = {
           rejection_reason: string | null
           remaining_amount: number | null
           rental_id: string | null
+          square_idempotency_key: string | null
           square_order_id: string | null
           square_payment_id: string | null
+          square_payment_link_id: string | null
           square_refund_id: string | null
           status: string | null
           stripe_checkout_session_id: string | null
@@ -10855,8 +10857,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -10897,8 +10901,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -17285,6 +17291,9 @@ export type Database = {
           currency_code: string | null
           custom_booking_domain: string | null
           custom_portal_domain: string | null
+          custom_site_accent_color: string | null
+          custom_site_eligible: boolean
+          custom_site_theme: Json | null
           customer_theme_mode: string
           dark_accent_color: string | null
           dark_background_color: string | null
@@ -17399,6 +17408,7 @@ export type Database = {
           payment_mode: string | null
           payment_model: string
           payment_provider: string
+          payment_provider_locked_at: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
           pickup_area_radius_km: number | null
@@ -17552,6 +17562,9 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          custom_site_accent_color?: string | null
+          custom_site_eligible?: boolean
+          custom_site_theme?: Json | null
           customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
@@ -17666,6 +17679,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -17819,6 +17833,9 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          custom_site_accent_color?: string | null
+          custom_site_eligible?: boolean
+          custom_site_theme?: Json | null
           customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
@@ -17933,6 +17950,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -18250,6 +18268,134 @@ export type Database = {
           },
           {
             foreignKeyName: "testimonials_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_bridge_reservations: {
+        Row: {
+          created_at: string
+          currency: string | null
+          ends_at: string | null
+          guest_name: string | null
+          id: string
+          raw: Json
+          reservation_id: string
+          source: string
+          starts_at: string | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          total_amount: number | null
+          updated_at: string
+          vehicle_label: string | null
+        }
+        Insert: {
+          created_at?: string
+          currency?: string | null
+          ends_at?: string | null
+          guest_name?: string | null
+          id?: string
+          raw?: Json
+          reservation_id: string
+          source?: string
+          starts_at?: string | null
+          status?: string
+          synced_at?: string
+          tenant_id: string
+          total_amount?: number | null
+          updated_at?: string
+          vehicle_label?: string | null
+        }
+        Update: {
+          created_at?: string
+          currency?: string | null
+          ends_at?: string | null
+          guest_name?: string | null
+          id?: string
+          raw?: Json
+          reservation_id?: string
+          source?: string
+          starts_at?: string | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          total_amount?: number | null
+          updated_at?: string
+          vehicle_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_bridge_reservations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_bridge_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          last_used_at: string | null
+          revoked_at: string | null
+          tenant_id: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+          tenant_id: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+          tenant_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_bridge_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_tokens_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -21013,7 +21159,10 @@ export type Database = {
           company_name: string | null
           issue_count: number | null
           overall_ready: boolean | null
+          payment_provider: string | null
+          payments_ready: boolean | null
           slug: string | null
+          square_ready: boolean | null
           status: string | null
           stripe_account_status: string | null
           stripe_mode: string | null
@@ -22756,12 +22905,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22785,11 +22934,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22810,11 +22959,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22835,11 +22984,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22852,11 +23001,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
