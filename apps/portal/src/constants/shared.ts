@@ -12,6 +12,3 @@ export * from './pnl';
 
 // Re-export general constants
 export * from './constants';
-
-// Re-export CMS/Website Content constants (includes CMS defaults)
-export * from './website-content';
