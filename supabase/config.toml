@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.boldsign-webhook]
 verify_jwt = false
 
-[functions.customer-chat]
-verify_jwt = false
-
 [functions.validate-customer-invite]
 verify_jwt = false
 
@@ -50,15 +47,6 @@ verify_jwt = false
 [functions.sim-control]
 verify_jwt = true
 
-[functions.twilio-inbound-sms]
-verify_jwt = false
-
-[functions.twilio-sms-status]
-verify_jwt = false
-
-[functions.twilio-inbound-whatsapp]
-verify_jwt = false
-
 [functions.send-lockbox-scheduled]
 verify_jwt = false
 
@@ -89,24 +77,6 @@ verify_jwt = false
 [functions.retry-credit-failed-agreements]
 verify_jwt = false
 
-[functions.twilio-voice-connect]
-verify_jwt = false
-
-[functions.twilio-voice-inbound]
-verify_jwt = false
-
-[functions.twilio-voice-whisper]
-verify_jwt = false
-
-[functions.twilio-voice-status]
-verify_jwt = false
-
-[functions.twilio-voicemail-handler]
-verify_jwt = false
-
-[functions.process-call-recording]
-verify_jwt = false
-
 [functions.accrue-payg-charges]
 verify_jwt = false
 
@@ -122,61 +92,10 @@ verify_jwt = false
 [functions.finalize-payg-rental]
 verify_jwt = true
 
-[functions.submit-enquiry]
-verify_jwt = false
-
-# Lead Management — public application form submission (Spec §6.2).
-[functions.submit-application]
-verify_jwt = false
-
-# Lead Management — presigned upload URL for applicant documents (pre-auth).
-[functions.lead-document-presign]
-verify_jwt = false
-
-# Lead Management — customer opens an offer link (no auth, lead-side).
-[functions.view-offer]
-verify_jwt = false
-
-# Lead Management — customer accepts an offer (no auth, lead-side).
-[functions.accept-offer]
-verify_jwt = false
-
-# Lead Management — hourly cron: stale reminders + auto-lost + offer expiry.
-# Authorised via X-Cron-Secret header (env: AUTOMATION_CRON_SECRET).
-[functions.lead-stale-poll]
-verify_jwt = false
-
-# Automations engine — minute-by-minute cron polling automation_event_queue
-# and resuming waiting runs. Same X-Cron-Secret auth as lead-stale-poll.
-[functions.automation-poll-pending]
-verify_jwt = false
-
-# Lead Management — inbound SMS (AWS SNS / generic JSON envelope).
-[functions.lead-inbound-sms-webhook]
-verify_jwt = false
-
-# Lead Management — inbound email (SES / Resend).
-[functions.lead-inbound-email-webhook]
-verify_jwt = false
-
-# Phase 4 scaffold — public read of per-tenant Apply form config.
-[functions.get-apply-form-config]
-verify_jwt = false
-
 # Own Stripe OAuth callback (Stripe 302-redirects the browser here, so it
 # can't carry a JWT). State is HMAC-verified in code before any DB write.
 [functions.stripe-oauth-callback]
 verify_jwt = false
-
-# Phase 3 AI layer.
-[functions.ai-rank-matches]
-verify_jwt = true
-
-[functions.ai-extract-from-conversation]
-verify_jwt = true
-
-[functions.ai-draft-message]
-verify_jwt = true
 
 # Onboarding daily digest — called by pg_cron with x-platform-secret header;
 # manual "send now" from the admin UI is verified as super-admin JWT in code.
@@ -200,19 +119,6 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.dispatch-strategy-call-emails]
-verify_jwt = true
-
-# Automations engine support functions.
-[functions.automation-test-run]
-verify_jwt = true
-
-[functions.automation-trigger-event]
-verify_jwt = true
-
-[functions.automation-execute-step]
-verify_jwt = true
-
-[functions.automation-publish]
 verify_jwt = true
 
 # Reconciles rentals.deposit_hold_* against the real PaymentIntent at Stripe.
@@ -261,38 +167,6 @@ verify_jwt = true
 # (head_admin/admin) only runs after the gateway has established a valid JWT.
 [functions.charge-saved-card]
 verify_jwt = true
-
-# Records the Web Push subscription a browser hands us.
-#
-# verify_jwt = false because device-scoped push must work for a visitor who has
-# never signed in — that is the entire point of reaching someone who abandoned a
-# booking. The function grades its own auth instead: the STAFF audience requires
-# a valid portal JWT belonging to the tenant, while the CUSTOMER audience accepts
-# anonymous callers and opportunistically back-links the row when a token is
-# present. Anonymous writes are constrained by shape, not identity — the endpoint
-# host must be a real push service, the tenant must exist with the feature flag
-# on, and `endpoint` is UNIQUE so replays update one row instead of growing the
-# table.
-[functions.save-push-subscription]
-verify_jwt = false
-
-# Fans a notification out to enrolled devices. Listed explicitly at the default
-# verify_jwt = true: it writes to customers' lock screens, so the gateway
-# establishes a session before the function's own RBAC gate (head_admin/admin,
-# or a manager with editor on settings.reminders) runs. The tenant is taken from
-# the caller's app_users row and never from the request body.
-[functions.send-push]
-verify_jwt = true
-
-# Turns one audit_logs row into a push on every super admin's phone that asked
-# for that action. Driven by the trg_audit_log_platform_push trigger via pg_net,
-# which carries no user JWT — hence verify_jwt = false. It is NOT anonymously
-# callable: the caller must present x-platform-secret (validated by the
-# platform_verify_secret() RPC) or a super-admin JWT for manual dispatch. The
-# trigger passes only a row id; this function re-reads the row and never trusts
-# caller-supplied content.
-[functions.notify-platform-activity]
-verify_jwt = false
 
 # Anonymous subscription payment link. The prospect has no Supabase session;
 # authorisation is a 256-bit token resolved against a stored sha256 hash, and

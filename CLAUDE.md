@@ -161,12 +161,12 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Reviews**: `generate-review-summary` — AI-generated customer review summaries via OpenAI
 - **Shared utilities** in `supabase/functions/_shared/`: `cors.ts`, `stripe-client.ts`, `aws-config.ts`, `email-template-service.ts`, `openai.ts`, `bonzah-client.ts`, `resend-service.ts`, `document-loaders.ts`
 
-**61** functions have `verify_jwt = false` in `supabase/config.toml` — i.e. they are
+**29** functions have `verify_jwt = false` in `supabase/config.toml` — i.e. they are
 publicly callable without a JWT. They fall into three groups: third-party webhooks
-that verify their own signatures (Stripe, BoldSign, Twilio, GHL, provider
-OAuth callbacks), cron targets invoked by pg_cron with a service-role bearer, and a
-handful of genuinely public endpoints (`submit-enquiry`, `submit-application`,
-`view-offer`, `validate-customer-invite`, `submit-customer-registration`).
+that verify their own signatures (Stripe, BoldSign, GHL, provider OAuth
+callbacks), cron targets invoked by pg_cron with a service-role bearer, and a
+handful of genuinely public endpoints (`subscription-link`,
+`validate-customer-invite`, `submit-customer-registration`).
 Run `grep -B1 'verify_jwt = false' supabase/config.toml` for the current list rather
 than trusting a hardcoded enumeration here — this line has drifted before.
 All other functions require JWT auth by default.
