@@ -1,215 +1,932 @@
 /* =============================================================================
- * popup.css
+ * popup.css — Drive247 · Turo Listing Exporter
  *
- * One rule governs the palette: COLOUR IS RESERVED FOR TELLING THE TRUTH ABOUT
- * DATA QUALITY, never for decoration. Green means the row came from the page's
- * own JSON. Amber means it was inferred by shape-matching the DOM and could be
- * wrong. An unrecognised strategy falls through to grey rather than borrowing a
- * colour that would read as trustworthy.
+ * TWO RULES GOVERN THE PALETTE.
  *
- * Flat surfaces, 1px borders, no shadows or gradients.
+ *   1. Brand violet (#4818fc, sampled from the Drive247 logo) means
+ *      "Drive247 action". It dresses the wordmark and the two primary buttons.
+ *      It is NEVER a data-quality signal — if violet could also mean
+ *      "trustworthy row", the honesty scale would be borrowing brand equity.
+ *
+ *   2. Green / blue / amber / slate mean, and only ever mean, WHERE A VALUE
+ *      CAME FROM. Green = the page's own data. Blue = labelled markup.
+ *      Amber = guessed from the page layout. Slate = source not recognised.
+ *      An unrecognised strategy falls through to slate rather than borrowing a
+ *      colour that would read as trustworthy.
+ *
+ * Flat surfaces, 1px borders, no shadows. The single gradient in the file is
+ * the brand gradient on the two primary buttons.
+ *
+ * NO EXTERNAL RESOURCES. No @import, no font service, no CDN, no remote image.
+ * "DM Sans" and "Inter" are named first and render only where the operator
+ * already has them; every size, weight and tracking value below is chosen to
+ * hold up on the system fallback stack.
  * ========================================================================== */
 
 :root {
-  --accent: #5b3df5;
-  --accent-dark: #4325d6;
-  --accent-soft: #eef0fe;
-  --ink: #0f1020;
-  --ink-2: #404052;
-  --muted: #737382;
-  --surface: #ffffff;
-  --surface-2: #f8f9fc;
-  --line: #e4e7f0;
-  --ok: #0f8a4a;
-  --ok-soft: #e7f6ed;
-  --warn: #a35c04;
-  --warn-soft: #fdf3e3;
-  --bad: #c2261f;
-  --bad-soft: #fdeceb;
-  --radius: 8px;
+  color-scheme: light dark;
+
+  /* ---- brand (sampled from the logo) ------------------------------------ */
+  --brand-600:#4818fc;          /* links / focus ring.   7.47:1 on white     */
+  --brand-700:#3a0fd6;          /* ghost-button text.     9.04:1 on #f8fafc  */
+  --brand-busy:#3a0fd6;         /* engaged button ground. #fff on it 9.46:1  */
+  --brand-500:#6c24fc;
+  --brand-050:#f2eeff;          /* ghost hover                               */
+  --brand-100:#e3daff;
+  --brand-grad:       linear-gradient(135deg,#3c18fc 0%,#6c24fc 100%);
+  --brand-grad-hover: linear-gradient(135deg,#3410e0 0%,#5c18e0 100%);
+  --focus:#4818fc;
+
+  /* ---- neutrals (portal system) ----------------------------------------- */
+  --ink:#080812;  --ink-2:#404040;  --muted:#6b6b6b;
+  --surface:#ffffff;  --surface-2:#f8fafc;  --surface-3:#f1f5f9;
+  --line:#f1f5f9;               /* portal value: hairlines inside panels     */
+  --line-strong:#e3e8ef;        /* the structural seams — see note below     */
+  --line-control:#878f9c;       /* the EDGE OF A BUTTON — see note below     */
+  --line-control-hover:#6b7480;
+
+  /* ---- status: MARK and TEXT are deliberately different values ----------
+   * Amber TEXT is #92400e. The MARK is #cf7106, not the portal's #d97706:
+   * a mark still has to clear 3:1 (WCAG 1.4.11) against the ground it sits
+   * on, and the amber marks in this popup sit on TINTED grounds — the host
+   * chip's #f1f5f9, and the dashed edge of a badge that is itself on an amber
+   * "guessed" row. #d97706 clears 3:1 on white (3.19) and fails everywhere
+   * else it is actually used: 2.91 on the host chip, 2.94 on that badge.
+   * #cf7106 is the nearest value clearing 3:1 on every one (worst 3.08).
+   * Same mark/text split for green and red.                                */
+  --ok:#16a34a;   --ok-text:#15803d;   --ok-bg:#effaf3;  --ok-line:#c9ecd7;
+  --info:#2563eb; --info-text:#1d4ed8; --info-bg:#eef4ff; --info-line:#cfe0fd;
+  --warn:#cf7106; --warn-text:#92400e; --warn-bg:#fdf5e7; --warn-line:#f0dcb6;
+  --warn-solid:#92400e;         /* filled amber pill. #fff on it 7.09:1      */
+  --warn-bg-2:#fdefd8;          /* is-low row hover                          */
+  --bad:#dc2626;  --bad-text:#b91c1c;  --bad-bg:#fdecec; --bad-line:#f6c9c9;
+  --neutral-bg:#f4f4f6; --neutral-text:#525252; --neutral-line:#e5e5ea;
+
+  /* ---- type ------------------------------------------------------------- */
+  --font:"DM Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,
+         "Helvetica Neue",Arial,sans-serif;
+  --font-ui:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,
+         "Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --fs-micro:9.5px;   /* uppercase stat labels, section titles               */
+  --fs-cap:10.5px;    /* pills, footnote, chip detail line                   */
+  --fs-sm:11.5px;     /* meta line, host chip, trace list                    */
+  --fs-body:12.5px;   /* body copy, table names, buttons                     */
+  --fs-ui:13px;
+  --fs-title:15px;    /* placeholder h2                                      */
+  --fs-stat:18px;     /* stat tile values                                    */
+  --ls-caps:.06em;    --ls-tight:-.01em;
+  --lh-tight:1.25;    --lh-body:1.45;   --lh-list:1.5;
+
+  /* ---- space (4px base) ------------------------------------------------- */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px;
+  --pad-x:14px;                 /* the one horizontal gutter every bar uses  */
+
+  /* ---- radius ----------------------------------------------------------- */
+  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-pill:999px;
+
+  /* ---- motion ----------------------------------------------------------- */
+  --dur-fast:120ms; --dur:180ms; --dur-slow:220ms;
+  --ease:cubic-bezier(.2,.6,.3,1);
 }
 
-* { box-sizing: border-box; }
+/* NOTE ON --muted. The portal system specifies #737373. That value clears 4.5:1
+ * on pure white (4.74) and almost nowhere else: on the tinted grounds this
+ * popup actually uses it lands at 4.32 (#f4f4f6), 4.38 (an amber "guessed"
+ * row) and 4.33 (the disabled primary button). #6b6b6b is the nearest value
+ * that clears 4.5:1 against EVERY ground in this file — worst case 4.67:1 —
+ * and is visually indistinguishable from the portal token.
+ *
+ * NOTE ON --line-control. A .btn-secondary is white on a white footer: its 1px
+ * border is the ONLY thing that says "this is a button", so WCAG 1.4.11 applies
+ * to it at 3:1. --line-strong (#e3e8ef) is 1.23:1 and fails outright.
+ * --line-control (3.26:1 on white, 3.12:1 on #f8fafc) is used on interactive
+ * edges ONLY. Decorative seams keep --line-strong, which is correct: a divider
+ * carries no information and carries no contrast requirement with it.
+ *
+ * NOTE ON --line-strong. The portal system specifies #f1f5f9 for borders. At
+ * this density — 51px rows inside a 420px window — #f1f5f9 on white is
+ * invisible and the list reads as a wall of text. --line keeps the portal
+ * value for hairlines inside panels; --line-strong is used on exactly six
+ * structural seams: header bottom, status bottom, summary bottom, details
+ * top/bottom, footer top, and the table row separators. A deliberate and
+ * minimal deviation. */
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* #8b6bff clears 4.5:1 on the plain dark surface (4.91) but only 3.79:1 on
+     * an amber "guessed" row and 3.17:1 on that row hovered — and the listing
+     * link sits on exactly those rows. #ab95ff clears all three: 7.37 plain,
+     * 5.70 on a guessed row, 4.76 hovered. */
+    --brand-600:#ab95ff; --brand-700:#b3a0ff;
+    /* #fff on the old busy ground (--brand-700, #a68cff) was 2.69:1 — a white
+     * label on a pale violet button. #5c34ff carries white at 6.19:1. */
+    --brand-busy:#5c34ff;
+    --brand-050:rgba(139,107,255,.14); --brand-100:rgba(139,107,255,.24);
+    --brand-grad:       linear-gradient(135deg,#4a20ff 0%,#7b35ff 100%);
+    --brand-grad-hover: linear-gradient(135deg,#5c34ff 0%,#8c4aff 100%);
+    --focus:#ab95ff;
+
+    /* #8a8a9c fell to 4.16:1 on an amber row and 3.48:1 on that row hovered. */
+    --ink:#f2f2f7; --ink-2:#c8c8d4; --muted:#a0a0b2;
+    --surface:#14141f;            /* bars, cards   */
+    --surface-2:#0b0b12;          /* page ground   */
+    --surface-3:#1c1c2b;          /* fills, chips  */
+    --line:#20202f; --line-strong:#2e2e46;
+    --line-control:#66668d; --line-control-hover:#7c7ca6;
+
+    --ok:#4ade80;   --ok-text:#6ee7a0;   --ok-bg:rgba(74,222,128,.13);   --ok-line:rgba(74,222,128,.30);
+    --info:#60a5fa; --info-text:#7fb8ff; --info-bg:rgba(96,165,250,.13); --info-line:rgba(96,165,250,.30);
+    --warn:#fbbf24; --warn-text:#fcd34d; --warn-bg:rgba(251,191,36,.13); --warn-line:rgba(251,191,36,.30);
+    --warn-solid:#fbbf24;         /* on a dark ground the pill takes DARK text */
+    --warn-bg-2:rgba(251,191,36,.20);
+    --bad:#f87171;  --bad-text:#fca5a5;  --bad-bg:rgba(248,113,113,.13); --bad-line:rgba(248,113,113,.30);
+    --neutral-bg:#1f1f2e; --neutral-text:#9a9aad; --neutral-line:#2e2e46;
+  }
+}
+
+/* =============================================================================
+ * 1. SHELL — what is fixed, what scrolls
+ * ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Author rules beat the UA's [hidden]{display:none} regardless of specificity,
+ * and several elements popup.js hides with the `hidden` property carry an
+ * author `display` (.summary, .stat, .world, .btn). Without this they would
+ * stay on screen while the code believed them gone. */
+[hidden] { display: none !important; }
+
+/* 420x600 is what this popup ASKS Chrome for. The max-* clamps are what make
+ * it degrade instead of clip: a hard `width:420px` alone kept every child 420
+ * wide in a 320 viewport, so the whole document overflowed horizontally and
+ * the right-hand edge — including the Scrape button — was cut off. Chrome
+ * still sizes the popup from the preferred width; the clamp only bites when
+ * the viewport is genuinely smaller (page zoom, a short screen). */
 html, body {
-  width: 800px;
+  width: 420px;
+  max-width: 100vw;
   height: 600px;
+  max-height: 100vh;
   margin: 0;
-  font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 13px;
+  overflow: hidden;
+  overflow-x: hidden;   /* a stray wide element must never clip the popup */
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  font: 400 var(--fs-body)/var(--lh-body) var(--font);
   color: var(--ink);
   background: var(--surface);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Fixed header and footer, scrolling middle. */
-body { display: flex; flex-direction: column; overflow: hidden; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+}
 
-h1, h2 { margin: 0; font-weight: 600; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+:focus:not(:focus-visible) { outline: none; }
 
-/* ---------------------------------------------------------------- bars --- */
+/* ---- the one scroll region ------------------------------------------------
+ * Everything between the fixed header and the fixed footer scrolls together
+ * under ONE scrollbar. Previously #status, #summary, #details, #placeholder
+ * and #table-wrap each had their own max-height + overflow-y:auto, which meant
+ * a long explanation was sliced mid-sentence inside a ~100px box that gave no
+ * hint more text existed. `order` runs <main> ahead of #details so the reason
+ * a scrape found nothing always precedes the diagnostics that explain it. */
+/* tabindex="0" in popup.html. A scroll container that cannot take focus cannot
+ * be scrolled from a keyboard (WCAG 2.1.1), and this one can legitimately hold
+ * nothing focusable at all — a results table of plain rows under a placeholder
+ * with no action button. One tab stop covers the whole region. The ring is
+ * drawn inside, or the fixed bars above and below would clip it. */
+.scroll:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
-.bar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 12px 16px;
-  border-bottom: 1px solid var(--line);
+.scroll {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   background: var(--surface);
+}
+.scroll::-webkit-scrollbar { width: 8px; }
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--line-strong); border-radius: 4px; border: 2px solid var(--surface);
+}
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+#status  { order: 1; }
+#summary { order: 2; }
+.results { order: 3; }
+.details { order: 4; }
+
+/* =============================================================================
+ * 2. HEADER
+ * ========================================================================== */
+
+header.bar {
   flex: 0 0 auto;
+  position: relative;
+  padding: 10px var(--pad-x);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-strong);
 }
-.bar-footer { border-bottom: none; border-top: 1px solid var(--line); }
 
-.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mark {
-  width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto;
-  background: var(--accent);
+.brand { display: flex; align-items: center; gap: 9px; height: 20px; }
+
+/* Both attributes are set in the HTML (79x18 from an 855x195 source, ratio
+ * 4.3846) so the header cannot reflow on the first frame. Never width:100%. */
+.wordmark { display: block; width: 79px; height: 18px; }
+.wordmark-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  .wordmark-light { display: none; }
+  .wordmark-dark  { display: block; }
 }
-.brand-text { min-width: 0; }
-.brand h1 { font-size: 15px; letter-spacing: -0.01em; }
-.sub {
-  margin: 2px 0 0; font-size: 11.5px; color: var(--muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px;
+
+.brand-div { width: 1px; height: 14px; background: var(--line-strong); flex: 0 0 auto; }
+.product {
+  font: 500 var(--fs-body)/1 var(--font);
+  color: var(--ink-2);
+  letter-spacing: var(--ls-tight);
 }
-.footnote { margin: 0; font-size: 11.5px; color: var(--muted); }
-.actions { display: flex; gap: 8px; }
 
-/* -------------------------------------------------------------- buttons --- */
+.tabrow { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
 
-.btn {
-  font-family: inherit; font-size: 13px; font-weight: 500;
-  padding: 8px 14px; border-radius: var(--radius);
-  border: 1px solid transparent; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 7px;
-  transition: background-color .12s ease, border-color .12s ease;
+/* Host chip. Ellipsis cuts the END, so the host — the part that matters —
+ * always survives. popup.js mirrors the full string into the title. */
+.host {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  font: 400 var(--fs-sm)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
-.btn-secondary { background: var(--surface); color: var(--ink-2); border-color: var(--line); }
-.btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
-.btn-ghost { background: transparent; color: var(--accent-dark); padding: 5px 8px; }
-.btn-ghost:hover:not(:disabled) { background: var(--accent-soft); }
-.btn-sm { font-size: 12px; padding: 5px 10px; }
+.host::before {
+  content: ""; flex: 0 0 auto;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted);
+}
+/* The dot is driven by an explicit data-state, not by :has(), so it is
+ * correct on every engine. State tinting elsewhere is :has()-based and is
+ * enhancement only. */
+.host[data-state="ok"]::before      { background: var(--ok); }
+.host[data-state="blocked"]::before { background: var(--bad); }
+.host[data-state="offsite"]::before { background: var(--warn); }
+.host[data-state="idle"]::before    { background: var(--muted); }
 
-.spinner { display: none; width: 13px; height: 13px; flex: 0 0 auto;
-  border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
-  border-radius: 50%; animation: spin .7s linear infinite; }
-.is-busy .spinner { display: inline-block; }
-@keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation: none !important; } }
+#scrape { flex: 0 0 auto; min-width: 118px; }
 
-/* --------------------------------------------------------------- status --- */
+/* Indeterminate progress rail, sitting on the header's bottom border. */
+.progress {
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px; overflow: hidden; opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.progress .bar-fill {
+  display: block; width: 40%; height: 100%;
+  background: var(--brand-grad);
+  transform: translateX(-100%);
+  animation: slide 1.1s var(--ease) infinite;
+}
+@keyframes slide { to { transform: translateX(350%); } }
+
+body:has(#scrape.is-busy) .progress   { opacity: 1; }
+body:has(#scrape.is-busy) #table-wrap { opacity: .45; pointer-events: none; }
+
+/* =============================================================================
+ * 3. STATUS BAR
+ *
+ * popup.js assigns `className = "status tone-" + tone` wholesale, so every
+ * structural rule here hangs off .status or a tone class — never an extra
+ * class in the HTML, which would be destroyed on the first update.
+ * ========================================================================== */
 
 .status {
-  padding: 9px 16px; font-size: 12.5px; line-height: 1.45;
-  border-bottom: 1px solid var(--line); flex: 0 0 auto;
+  flex: 0 0 auto;
+  padding: 8px var(--pad-x) 8px 11px;
+  border-left: 3px solid var(--muted);
+  border-bottom: 1px solid var(--line-strong);
+  font: 400 var(--fs-body)/var(--lh-body) var(--font);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  /* no max-height: the shared scroller carries any overflow now. */
 }
-.status.tone-ok   { background: var(--ok-soft);   color: var(--ok); }
-.status.tone-warn { background: var(--warn-soft); color: var(--warn); }
-.status.tone-bad  { background: var(--bad-soft);  color: var(--bad); }
-.status.tone-info { background: var(--surface-2); color: var(--ink-2); }
+/* This element is a live region, so it must NEVER leave the accessibility
+ * tree: a region that appears and is populated in the same frame is not
+ * reliably announced, and toggling `hidden` did exactly that. popup.js now
+ * empties it instead, and :empty collapses it to nothing. Empty means empty —
+ * no text node — so it contributes nothing to be read either. */
+.status:empty { padding: 0; border-width: 0; }
 
-/* -------------------------------------------------------------- summary --- */
+/* The tone glyph is decoration. The `/ ""` alternative text stops a screen
+ * reader announcing "check mark Found 12 listings"; the plain declaration
+ * ahead of it is the fallback for any engine that cannot parse the alt form. */
+.status::before { font-weight: 600; margin-right: 6px; }
+
+.status.tone-ok   { border-left-color: var(--ok);   background: var(--ok-bg);   color: var(--ok-text); }
+.status.tone-info { border-left-color: var(--info); background: var(--info-bg); color: var(--info-text); }
+.status.tone-warn { border-left-color: var(--warn); background: var(--warn-bg); color: var(--warn-text); }
+.status.tone-bad  { border-left-color: var(--bad);  background: var(--bad-bg);  color: var(--bad-text); }
+
+.status.tone-ok::before   { content: "\2713"; content: "\2713" / ""; }
+.status.tone-info::before { content: "i"; content: "i" / ""; font-style: italic; }
+.status.tone-warn::before { content: "!"; content: "!" / ""; }
+.status.tone-bad::before  { content: "\00D7"; content: "\00D7" / ""; }
+
+/* =============================================================================
+ * 4. SUMMARY STRIP
+ * ========================================================================== */
 
 .summary {
-  display: flex; align-items: center; gap: 22px;
-  padding: 10px 16px; border-bottom: 1px solid var(--line);
-  background: var(--surface-2); flex: 0 0 auto;
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 9px var(--pad-x);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-strong);
 }
-.stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.stat-wide { flex: 1 1 auto; min-width: 0; }
-.stat-value { font-size: 15px; font-weight: 600; line-height: 1.2; }
-.stat-label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.summary:not([hidden]) { animation: rowIn var(--dur) var(--ease) both; }
 
-/* The honesty badge. Unknown strategies keep the neutral grey base. */
+.stats { display: flex; }
+.stat {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 0 12px;
+  border-left: 1px solid var(--line-strong);
+}
+.stat:first-child { padding-left: 0; border-left: 0; }
+
+.stat-value {
+  font: 600 var(--fs-stat)/var(--lh-tight) var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.stat-label {
+  font: 500 var(--fs-micro)/1 var(--font-ui);
+  text-transform: uppercase; letter-spacing: var(--ls-caps);
+  color: var(--muted);
+}
+/* A literal count of guessed rows. A number is a harder honesty signal than a
+ * chip, and it cannot be ellipsised away the way a mixed-run label can. */
+.stat-low .stat-value { color: var(--warn-text); }
+
+.tierrow { display: flex; align-items: flex-start; gap: 8px; }
+#details-toggle { flex: 0 0 auto; margin-top: 2px; }
+#details-toggle::after {
+  content: "\25BE"; content: "\25BE" / ""; margin-left: 5px; display: inline-block;
+  transition: transform var(--dur) var(--ease);
+}
+#details-toggle[aria-expanded="true"]::after { transform: rotate(180deg); }
+
+/* ---- the two-line honesty chip ----------------------------------------- *
+ * popup.js overwrites #stat-tier's className entirely on every scrape, so
+ * all of this hangs off .stat-tier and .tier-* only. Built from two child
+ * spans with createElement/textContent — never markup assignment. */
 .stat-tier {
-  font-size: 12px; padding: 3px 9px; border-radius: 20px;
-  background: #eceef4; color: var(--ink-2);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 100%; align-self: flex-start;
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 7px 10px 7px 12px;
+  border-radius: var(--r-md);
+  background: var(--neutral-bg);
+  border: 1px solid var(--neutral-line);
+  border-left: 3px solid var(--muted);
+  font-size: var(--fs-body);      /* .stat-value's 18px must not apply here */
+  font-weight: 400;
 }
-.stat-tier.tier-json      { background: var(--ok-soft);     color: var(--ok); }
-.stat-tier.tier-semantic  { background: var(--accent-soft); color: var(--accent-dark); }
-.stat-tier.tier-heuristic { background: var(--warn-soft);   color: var(--warn); }
+.tier-plain {
+  display: flex; align-items: baseline; gap: 6px;
+  font: 600 var(--fs-body)/1.3 var(--font);
+  color: var(--neutral-text);
+}
+.tier-plain::before {
+  content: ""; flex: 0 0 auto;
+  width: 7px; height: 7px;
+  border: 2px solid var(--muted);
+  background: transparent;
+}
+.tier-detail {
+  font: 400 var(--fs-cap)/1.3 var(--font);
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
-/* -------------------------------------------------------------- details --- */
+/* Four families. Word + colour + mark SHAPE: three redundant encodings, so
+ * the meaning survives colour-blindness and forced-colors, where tints are
+ * flattened and only the word is left. */
+.stat-tier.tier-json      { background: var(--ok-bg);   border-color: var(--ok-line);   border-left-color: var(--ok); }
+.stat-tier.tier-json .tier-plain { color: var(--ok-text); }
+.stat-tier.tier-json .tier-plain::before { border-radius: 50%; border-color: var(--ok); background: var(--ok); }
+
+.stat-tier.tier-semantic  { background: var(--info-bg); border-color: var(--info-line); border-left-color: var(--info); }
+.stat-tier.tier-semantic .tier-plain { color: var(--info-text); }
+.stat-tier.tier-semantic .tier-plain::before { border-radius: 50%; border-color: var(--info); background: transparent; }
+
+.stat-tier.tier-heuristic { background: var(--warn-bg); border-color: var(--warn-line); border-left-color: var(--warn); }
+.stat-tier.tier-heuristic .tier-plain { color: var(--warn-text); }
+.stat-tier.tier-heuristic .tier-plain::before { border: 0; background: var(--warn); transform: rotate(45deg); }
+
+.stat-tier.tier-unknown   { background: var(--neutral-bg); border-color: var(--neutral-line); border-left-color: var(--muted); }
+.stat-tier.tier-unknown .tier-plain { color: var(--neutral-text); }
+
+/* ---- degraded injection gets its own object, not a suffix on a sentence -- */
+.world {
+  margin: 0; display: flex; align-items: baseline; gap: 7px;
+  padding: 6px 9px;
+  border-radius: var(--r-sm);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  font: 400 var(--fs-sm)/1.4 var(--font);
+  color: var(--warn-text);
+}
+.world-tag {
+  flex: 0 0 auto;
+  font: 600 10px/1 var(--font-ui);
+  text-transform: uppercase; letter-spacing: .05em;
+  padding: 3px 7px; border-radius: var(--r-pill);
+  /* #fff on --warn (#d97706) is 3.19:1 — a fail at 10px. --warn-solid is the
+   * filled-pill amber: #fff on #92400e is 7.09:1. On a dark ground the pill
+   * inverts instead: #14141f on #fbbf24 is 10.94:1. */
+  background: var(--warn-solid); color: #fff;
+}
+@media (prefers-color-scheme: dark) { .world-tag { color: #14141f; } }
+.world-text { flex: 1 1 auto; min-width: 0; }
+
+/* =============================================================================
+ * 5. DETAILS PANEL
+ * ========================================================================== */
 
 .details {
-  padding: 12px 16px; border-bottom: 1px solid var(--line);
-  background: var(--surface-2); flex: 0 0 auto;
-  max-height: 210px; overflow-y: auto;
+  flex: 0 0 auto;
+  /* no max-height: this panel scrolls with everything else. */
+  padding: 12px var(--pad-x);
+  background: var(--surface-2);
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
 }
 .details-title {
-  font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--muted); margin: 0 0 6px;
+  font: 600 var(--fs-micro)/1 var(--font-ui);
+  text-transform: uppercase; letter-spacing: var(--ls-caps);
+  color: var(--muted);
+  margin: 0 0 8px;
 }
-.details-title + * { margin-bottom: 12px; }
-.strategy-list { margin: 0 0 12px; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--ink-2); }
-.strategy-list .s-ok   { color: var(--ok); font-weight: 500; }
-.strategy-list .s-none { color: var(--muted); }
-.strategy-list .s-bad  { color: var(--bad); }
+.details-title + * { margin-top: 0; }
+.legend + .details-title,
+.strategy-list + .details-title,
+.facts + .details-title,
+#raw-message + .details-title { margin-top: var(--s3); }
+#raw-title { margin-top: var(--s3); }
 
-.facts { margin: 0 0 12px; font-size: 12px; display: grid;
-  grid-template-columns: max-content 1fr; gap: 3px 14px; }
+.legend { margin: 0 0 var(--s3); font-size: var(--fs-sm); }
+.legend dt {
+  font: 600 10.5px/1 var(--font-ui);
+  text-transform: uppercase; letter-spacing: .05em;
+  display: inline-block; padding: 3px 7px; border-radius: var(--r-pill);
+  margin-bottom: 3px;
+  background: var(--neutral-bg); color: var(--neutral-text);
+}
+.legend dt.tier-json      { background: var(--ok-bg);   color: var(--ok-text); }
+.legend dt.tier-semantic  { background: var(--info-bg); color: var(--info-text); }
+.legend dt.tier-heuristic { background: var(--warn-bg); color: var(--warn-text); }
+.legend dd {
+  margin: 0 0 9px; color: var(--ink-2);
+  font: 400 var(--fs-sm)/var(--lh-list) var(--font);
+}
+
+.strategy-list { list-style: none; padding: 0; margin: 0 0 var(--s3); }
+.strategy-list li {
+  display: flex; gap: 8px; align-items: baseline;
+  font: 400 var(--fs-sm)/var(--lh-list) var(--font);
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+}
+/* Colour the MARK, never the line. Green or amber body text at 11.5px is
+ * unreadable, so the tone classes are overridden back to normal ink. */
+.strategy-list li.s-ok,
+.strategy-list li.s-none,
+.strategy-list li.s-bad { color: var(--ink-2); }
+.strategy-list li::before { flex: 0 0 auto; font-size: 10px; line-height: inherit; }
+.strategy-list li.s-ok::before   { content: "\25CF"; content: "\25CF" / ""; color: var(--ok); }
+.strategy-list li.s-none::before { content: "\25CB"; content: "\25CB" / ""; color: var(--muted); }
+.strategy-list li.s-bad::before  { content: "\00D7"; content: "\00D7" / ""; color: var(--bad); }
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
 .facts dt { color: var(--muted); }
-.facts dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere; }
+.facts dd {
+  margin: 0; color: var(--ink-2);
+  overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
+}
 
-/* -------------------------------------------------------------- results --- */
+/* The extractor's own words live here and nowhere else. */
+.raw {
+  margin: 0;
+  padding: 8px 9px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  font: 400 11px/1.45 var(--font-mono);
+  color: var(--ink-2);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 120px; overflow-y: auto;
+}
 
-.results { flex: 1 1 auto; overflow: hidden; min-height: 0; display: flex; }
+#copy-diag { margin-top: 10px; }
 
+/* =============================================================================
+ * 6. RESULTS REGION
+ * ========================================================================== */
+
+.results {
+  /* Grows to fill the scroller when content is short, so a placeholder does
+   * not float against the footer. It must NOT absorb the free space while the
+   * diagnostics panel is open, or the panel is pushed off the bottom. */
+  flex: 1 0 auto; min-height: 0;
+  display: flex;
+  background: var(--surface);
+}
+body:has(#details:not([hidden])) .results { flex: 0 0 auto; }
+
+/* Vertical scrolling belongs to .scroll. This keeps only the horizontal axis,
+ * so an unexpectedly wide row scrolls in place instead of widening the popup. */
+.table-wrap {
+  flex: 1 1 auto; width: 100%;
+  overflow-x: auto; overflow-y: visible;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+/* ---- placeholder -------------------------------------------------------- */
 .placeholder {
-  margin: auto; padding: 28px 34px; text-align: center; max-width: 480px;
+  flex: 1 1 auto;
+  padding: 22px var(--s5) var(--s5);
+  text-align: center;
 }
-.placeholder h2 { font-size: 14.5px; margin-bottom: 6px; }
-.placeholder p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.ph-icon { display: flex; justify-content: center; margin-bottom: 12px; }
+.ph-ic { width: 44px; height: 44px; }
+svg.ph-ic {
+  padding: 10px; border-radius: var(--r-lg);
+  background: var(--neutral-bg); color: var(--neutral-text);
+}
+.ph-mark { border-radius: var(--r-lg); }
+
+.placeholder h2 {
+  margin: 0 0 6px;
+  font: 500 var(--fs-title)/1.3 var(--font);
+  letter-spacing: var(--ls-tight);
+  color: var(--ink);
+}
+.placeholder p {
+  margin: 0;
+  font: 400 var(--fs-body)/var(--lh-body) var(--font);
+  color: var(--ink-2);
+}
 .hints {
-  margin: 12px 0 0; padding: 0; list-style: none;
-  font-size: 12px; color: var(--ink-2); text-align: left; line-height: 1.55;
+  list-style: none; margin: var(--s4) 0 0; padding: 12px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
 }
-.hints li { padding: 4px 0 4px 16px; position: relative; }
-.hints li::before { content: "·"; position: absolute; left: 5px; color: var(--muted); }
-.placeholder .btn { margin-top: 14px; }
-
-.table-wrap { flex: 1 1 auto; overflow: auto; min-height: 0; width: 100%; }
-
-.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.grid thead th {
-  position: sticky; top: 0; z-index: 1;
-  background: var(--accent-soft); color: var(--accent-dark);
-  text-align: left; font-weight: 600; font-size: 11px;
-  text-transform: uppercase; letter-spacing: .03em;
-  padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+.hints li {
+  position: relative;
+  padding-left: 14px; margin-bottom: 7px;
+  font: 400 var(--fs-sm)/var(--lh-list) var(--font);
+  color: var(--ink-2);
 }
-.grid td {
-  padding: 8px 10px; border-bottom: 1px solid var(--line);
-  vertical-align: top; color: var(--ink-2);
+.hints li:last-child { margin-bottom: 0; }
+.hints li::before {
+  content: "\00B7"; content: "\00B7" / ""; position: absolute; left: 3px; top: -1px;
+  font-weight: 700; color: var(--muted);
 }
-.grid tbody tr:hover td { background: var(--surface-2); }
-.col-num { text-align: right; font-variant-numeric: tabular-nums; }
-td.col-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.col-conf { white-space: nowrap; }
+#placeholder-action { margin-top: var(--s4); }
 
-.v-name { color: var(--ink); font-weight: 500; }
-.v-sub { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
-.grid a { color: var(--accent-dark); text-decoration: none; }
-.grid a:hover { text-decoration: underline; }
+/* State tinting is enhancement only: on an engine without :has() the copy is
+ * unchanged, just less coloured. No required state's meaning depends on it. */
+body:has(#status.tone-warn) .placeholder svg.ph-ic { background: var(--warn-bg); color: var(--warn-text); }
+body:has(#status.tone-bad)  .placeholder svg.ph-ic { background: var(--bad-bg);  color: var(--bad-text); }
+body:has(#status.tone-warn) .hints { border-color: var(--warn-line); background: var(--warn-bg); }
+body:has(#status.tone-bad)  .hints { border-color: var(--bad-line);  background: var(--bad-bg); }
 
-/* A missing value is an em dash, never a zero. */
+/* =============================================================================
+ * 7. THE TABLE, REFLOWED
+ *
+ * Content width is 420 - 2x12 row padding = 396px. Seven columns cannot fit,
+ * so the SEVEN-CELL <tr> popup.js emits is reflowed with CSS Grid named areas
+ * mapped through td:nth-child(n). The DOM is untouched.
+ *
+ * display:grid on table parts removes the implicit ARIA table roles in Chrome,
+ * which is why popup.js sets role="row"/"cell" explicitly and the <thead> is
+ * visually hidden rather than deleted — screen readers still get the headers.
+ * ========================================================================== */
+
+.grid { display: block; width: 100%; border-collapse: collapse; }
+.grid caption { display: block; }
+.grid thead {
+  position: absolute; width: 1px; height: 1px;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+}
+.grid tbody { display: block; }
+
+.grid tbody tr {
+  display: grid;
+  grid-template-columns: minmax(20px, auto) auto auto minmax(0,1fr) auto;
+  grid-template-areas:
+    "idx name name name price"
+    "idx year rate sect  src";
+  /* column-gap cannot be waived per item, so a display:none cell would still
+   * leave its gap. Cells own their right padding instead. */
+  column-gap: 0;
+  row-gap: 3px;
+  padding: 8px var(--s3);
+  border-bottom: 1px solid var(--line-strong);
+  align-items: baseline;
+  border-left: 3px solid transparent;
+}
+.grid tbody td { display: block; padding: 0; border: 0; }
+
+.grid tbody td:nth-child(1) { grid-area: idx; }
+.grid tbody td:nth-child(2) { grid-area: name; }
+.grid tbody td:nth-child(3) { grid-area: year; }
+.grid tbody td:nth-child(4) { grid-area: rate; }
+.grid tbody td:nth-child(5) { grid-area: price; }
+.grid tbody td:nth-child(6) { grid-area: sect; }
+.grid tbody td:nth-child(7) { grid-area: src; }
+
+.grid tbody td:nth-child(3),
+.grid tbody td:nth-child(4),
+.grid tbody td:nth-child(6) { padding-right: var(--s2); }
+.grid tbody td:nth-child(5),
+.grid tbody td:nth-child(7) { justify-self: end; text-align: right; }
+
+.grid tbody tr:hover { background: var(--surface-2); }
+
+/* An em dash on the meta line is noise, so an empty year/rating/section cell
+ * collapses. NEVER the price cell (5) — a hidden price is a wrong number.
+ *
+ * THE CELL ITSELF MUST SURVIVE. display:none on a <td> takes it out of the
+ * accessibility tree, and because these rows are display:grid — which strips
+ * the implicit table roles, hence the explicit role="cell" — a missing cell
+ * shifts every later cell one column left: a row with no year announced its
+ * RATING under the heading "Year", and its price under "Rating". So the span
+ * goes and the cell stays, collapsing to nothing because its grid column is
+ * auto-sized and it now has no width and no padding. */
+.grid tbody td:not(:nth-child(5)) > span.muted:only-child { display: none; }
+.grid tbody td:has(> span.muted:only-child):not(:nth-child(5)) { padding-right: 0; }
+
+/* ---- cell typography ---------------------------------------------------- */
+.grid tbody td:nth-child(1) {
+  font: 400 var(--fs-sm)/1.3 var(--font);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  text-align: right; padding-right: var(--s2);
+}
+/* The name cell is a wrapping flex row so the listing glyph rides beside the
+ * name instead of dropping to a line of its own (.v-name is a -webkit-box,
+ * which is block-level and would push the anchor down 22px on EVERY row).
+ * .v-city keeps its own line by claiming a full basis. */
+.grid tbody td:nth-child(2) {
+  display: flex; flex-wrap: wrap;
+  align-items: flex-start; column-gap: 2px;
+}
+.v-name {
+  /* Reserve the glyph's width so a name that fills the line cannot push the
+   * link onto a line of its own — flex-wrap would otherwise cost 22px on
+   * every long-named row. */
+  flex: 0 1 auto; min-width: 0; max-width: calc(100% - 15px);
+  font: 500 var(--fs-body)/1.3 var(--font);
+  color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+/* The listing link is an inline glyph immediately after the name, so it costs
+ * no row height. The city fallback keeps its own line. */
+.v-link {
+  flex: 0 0 auto;
+  font-size: 11px; line-height: 1.3; color: var(--brand-600);
+  text-decoration: none; padding: 0 3px;
+}
+.v-link:hover { text-decoration: underline; }
+.v-city {
+  flex: 1 0 100%; margin-top: 2px;
+  font: 400 var(--fs-sm)/1.3 var(--font); color: var(--muted);
+}
+
+.grid tbody td:nth-child(3) {
+  font: 400 var(--fs-sm)/1.3 var(--font);
+  font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.grid tbody td:nth-child(4) {
+  font: 400 var(--fs-sm)/1.3 var(--font); color: var(--ink-2);
+}
+.col-rating:not(:has(.pill-new)):not(:has(.muted))::before {
+  content: "\2605"; content: "\2605" / ""; color: var(--warn); margin-right: 3px;
+}
+/* Price NEVER truncates. It shares column 5 with the badge, both auto, and
+ * the name column absorbs the loss. */
+.grid tbody td:nth-child(5) {
+  font: 600 var(--fs-body)/1.3 var(--font);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; padding-left: var(--s2);
+  color: var(--ink);
+}
+/* The section pill is the only element allowed to ellipsise early, and it is
+ * the least load-bearing field on screen. It is still exported in full. */
+.sect-pill {
+  display: inline-block; max-width: 100%;
+  padding: 1px 7px; border-radius: var(--r-pill);
+  background: var(--surface-3); color: var(--ink-2);
+  font: 400 var(--fs-cap)/1.5 var(--font);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: bottom;
+}
+
 .muted { color: var(--muted); }
+
+/* A new listing is a fact about data, not a brand moment — blue, not violet. */
 .pill-new {
-  display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px;
-  background: var(--accent-soft); color: var(--accent-dark); white-space: nowrap;
+  display: inline-block; padding: 2px 6px; border-radius: var(--r-pill);
+  font: 600 10px/1.2 var(--font-ui);
+  text-transform: uppercase; letter-spacing: .05em;
+  background: var(--info-bg); color: var(--info-text);
 }
 
-/* Rows found by shape-matching the DOM are visibly flagged, so they can never
-   be mistaken for rows lifted from the page's own JSON. */
-tr.is-low td { background: #fffcf5; }
-tr.is-low:hover td { background: #fff8ea; }
-
+/* ---- the per-row source badge ------------------------------------------- *
+ * The badge shows the FAMILY, not the tier. The extractor's precise label
+ * ("Page JSON (embedded state)") is too long for a 420px row and lives in the
+ * tooltip, the summary chip and the CSV instead. No border: repeated 24 times
+ * down the list it is noise. */
 .src {
-  font-size: 10.5px; padding: 2px 7px; border-radius: 20px;
-  background: #eceef4; color: var(--ink-2); white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 18px; padding: 0 7px;
+  border-radius: var(--r-pill);
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: .05em; text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--neutral-bg); color: var(--neutral-text);
 }
-.src.tier-json      { background: var(--ok-soft);     color: var(--ok); }
-.src.tier-semantic  { background: var(--accent-soft); color: var(--accent-dark); }
-.src.tier-heuristic { background: var(--warn-soft);   color: var(--warn); }
+.src::before { content: ""; flex: 0 0 auto; width: 7px; height: 7px; border: 2px solid currentColor; }
+
+.src.tier-json      { background: var(--ok-bg);   color: var(--ok-text); }
+.src.tier-json::before      { border-radius: 50%; border-color: var(--ok); background: var(--ok); }
+.src.tier-semantic  { background: var(--info-bg); color: var(--info-text); }
+.src.tier-semantic::before  { border-radius: 50%; border-color: var(--info); background: transparent; }
+.src.tier-heuristic { background: var(--warn-bg); color: var(--warn-text); }
+.src.tier-heuristic::before { border: 0; background: var(--warn); transform: rotate(45deg); }
+.src.tier-unknown::before   { border-color: var(--muted); background: transparent; }
+
+/* Some fields in THIS row were filled from a weaker source than the badge
+ * word claims. That used to be a 1px inset shadow along the bottom of the
+ * badge: invisible at this size, and flattened away completely under forced
+ * colours — an honesty signal nobody would ever see. It is now a dashed amber
+ * edge AND a "+" on the badge, so it survives greyscale and forced colours,
+ * and popup.js puts a visually-hidden phrase inside the badge so a screen
+ * reader hears it rather than inferring it from a border. */
+.src--mixed { border: 1px dashed var(--warn); }
+.src--mixed::after { content: "+"; content: "+" / ""; margin-left: 1px; font-weight: 700; }
+
+/* A continuous amber rail down the left edge makes a block of guessed rows
+ * scannable without reading a single badge. */
+.grid tbody tr.is-low {
+  background: var(--warn-bg);
+  border-left-color: var(--warn);
+}
+.grid tbody tr.is-low:hover { background: var(--warn-bg-2); }
+
+/* Rows rise and fade on arrival, staggered across the first eight only — the
+ * rest are below the fold. Nice-to-have; no state depends on it. */
+@keyframes rowIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+#rows tr { animation: rowIn var(--dur-slow) var(--ease) both; }
+#rows tr:nth-child(1) { animation-delay: 0ms; }
+#rows tr:nth-child(2) { animation-delay: 18ms; }
+#rows tr:nth-child(3) { animation-delay: 36ms; }
+#rows tr:nth-child(4) { animation-delay: 54ms; }
+#rows tr:nth-child(5) { animation-delay: 72ms; }
+#rows tr:nth-child(6) { animation-delay: 90ms; }
+#rows tr:nth-child(7) { animation-delay: 108ms; }
+#rows tr:nth-child(n+8) { animation-delay: 126ms; }
+
+/* =============================================================================
+ * 8. FOOTER
+ * ========================================================================== */
+
+footer.bar {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  padding: 10px var(--pad-x) 11px;
+  background: var(--surface);
+  border-top: 1px solid var(--line-strong);
+}
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.footnote {
+  margin: 0;
+  font: 400 var(--fs-cap)/1.4 var(--font);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* =============================================================================
+ * 9. BUTTONS
+ *
+ * The brand gradient appears on exactly two surfaces in the whole popup: the
+ * Scrape button and Download CSV. Everything else is flat, per the portal
+ * system. The opacity:.45 disabled treatment is deliberately dropped — a 45%
+ * violet button reads as a rendering bug, which is fatal in the two states
+ * where the button is SUPPOSED to be off.
+ * ========================================================================== */
+
+.btn {
+  font: 500 var(--fs-body)/1 var(--font-ui);
+  height: 32px; padding: 0 12px;
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer; white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.btn-sm { height: 26px; font-size: var(--fs-sm); padding: 0 9px; }
+.btn-block { width: 100%; }
+
+.btn-primary { background: var(--brand-grad); color: #fff; }
+.btn-primary:hover:not(:disabled)  { background: var(--brand-grad-hover); }
+.btn-primary:active:not(:disabled) { filter: brightness(.94); }
+.btn-primary:disabled {
+  background: var(--surface-3); color: var(--muted);
+  border-color: var(--line-strong); opacity: 1; cursor: not-allowed;
+}
+/* Engaged, not clickable: flat brand instead of the gradient. --brand-busy is
+ * its own token and not --brand-700, which is a TEXT colour: on a dark ground
+ * --brand-700 is pale (#b3a0ff) and carried the white label at 2.69:1. */
+.btn-primary.is-busy, .btn-primary.is-busy:disabled {
+  background: var(--brand-busy); color: #fff;
+  border-color: transparent; cursor: progress;
+}
+
+/* A white button on a white footer: its border is the ONLY thing identifying
+ * the control, so it takes --line-control (3:1) rather than a decorative seam
+ * at 1.23:1. The hover border was a hard-coded #d6dee8, which stayed pale grey
+ * in dark mode; it is a token now and inverts with everything else. */
+.btn-secondary { background: var(--surface); color: var(--ink-2); border-color: var(--line-control); }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-control-hover); }
+.btn-secondary:disabled { background: var(--surface-2); color: var(--muted); opacity: 1; cursor: not-allowed; }
+
+.btn-ghost { background: transparent; color: var(--brand-700); border-color: transparent; }
+.btn-ghost:hover:not(:disabled) { background: var(--brand-050); }
+
+.spinner {
+  display: none; flex: 0 0 auto;
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  animation: spin .7s linear infinite;
+}
+.is-busy .spinner { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* =============================================================================
+ * 10. NARROW DEGRADATION, FORCED COLOURS, REDUCED MOTION
+ * ========================================================================== */
+
+/* Chrome can clamp below 420px at high OS zoom. Drop the least load-bearing
+ * column first, then stack the footer. Nothing is ever clipped. */
+@media (max-width: 379px) { .grid tbody td:nth-child(6) { display: none; } }
+@media (max-width: 339px) { .actions { grid-template-columns: 1fr; } }
+
+/* Forced colours flattens every tint and every ::before mark, so the WORD is
+ * all that survives — which is exactly why the badge is never reduced to a
+ * mark-only dot to save width. */
+@media (forced-colors: active) {
+  .src, .stat-tier, .pill-new, .sect-pill, .world-tag {
+    border: 1px solid CanvasText; forced-color-adjust: none;
+  }
+  .grid tbody tr { border-bottom-color: CanvasText; }
+  .btn { border-color: CanvasText; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    /* Without this the row stagger still holds rows at opacity 0 for up to
+     * 126ms — a flicker, which is the thing this query exists to prevent. */
+    animation-delay: 0ms !important;
+    transition-duration: .001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* The spinner keeps its 3/4 ring but stops — it still reads as "loading". */
+  .spinner { animation: none !important; }
+  /* State change without movement. */
+  .progress .bar-fill { animation: none; width: 100%; transform: none; opacity: .5; }
+}

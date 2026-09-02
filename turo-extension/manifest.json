@@ -4,8 +4,20 @@
   "version": "1.0.0",
   "description": "Reads the public Turo page you already have open and exports the visible listing data to a sheet. No login, no crawling, no network calls.",
   "permissions": ["activeTab", "scripting"],
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Export the Turo listings on this page"
+    "default_title": "Export the Turo listings on this page",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "32": "assets/icon32.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
   }
 }

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Drive247 · Turo Listing Exporter</title>
 <link rel="stylesheet" href="popup.css">
+<script src="_mock.js"></script>
 </head>
 <body>
 
@@ -19,8 +20,6 @@
   behaviour is wired in popup.js with addEventListener.
 -->
 
-<h1 class="sr-only">Drive247 Listing Exporter</h1>
-
 <header class="bar">
   <div class="brand">
     <img class="wordmark wordmark-light" src="assets/drive247-logo.png"
@@ -34,6 +33,7 @@
   <div class="tabrow">
     <p class="host" id="page-context" data-state="idle">Checking this tab&hellip;</p>
     <button id="scrape" class="btn btn-primary" type="button" disabled
+            aria-label="Read the listings on the page you have open"
             title="Read the listings on the page you have open">
       <span class="spinner" aria-hidden="true"></span>
       <span class="btn-label">Scrape page</span>
@@ -52,13 +52,9 @@
   affordance that more text existed. CSS `order` puts <main> ahead of
   #details so the "why" always precedes the diagnostics.
 -->
-<div class="scroll" id="scroll" tabindex="0" role="region"
-     aria-label="Results and explanation">
+<div class="scroll" id="scroll">
 
-<!-- Never carries `hidden`: a live region that appears and fills in the same
-     frame is not reliably announced. popup.js empties it instead, and
-     .status:empty collapses it to nothing. -->
-<div id="status" class="status" role="status" aria-live="polite"></div>
+<div id="status" class="status" role="status" aria-live="polite" hidden></div>
 
 <section id="summary" class="summary" hidden>
   <div class="stats">
@@ -84,12 +80,8 @@
 
   <p class="world" id="world-chip" hidden>
     <span class="world-tag">Limited access</span>
-    <!-- Every other message in this popup ends with what to do next. This one
-         described a degraded run and then stopped, which left the operator
-         holding a warning and no move. -->
     <span class="world-text">Some of the page's own data was out of reach on this run,
-      so only weaker sources could be tried. Reload the Turo tab and scrape again
-      for the fullest reading.</span>
+      so only weaker sources could be tried.</span>
   </p>
 </section>
 
@@ -161,8 +153,10 @@
 <footer class="bar bar-footer">
   <div class="actions">
     <button id="copy" class="btn btn-secondary" type="button" disabled
+            aria-label="Copy all rows to the clipboard, ready to paste into a spreadsheet"
             title="Scrape a page first">Copy for Sheets</button>
     <button id="download" class="btn btn-primary" type="button" disabled
+            aria-label="Download all rows as a CSV file"
             title="Scrape a page first">Download CSV</button>
   </div>
   <p class="footnote" id="footnote">Reads only the page you have open. Nothing is uploaded.</p>
