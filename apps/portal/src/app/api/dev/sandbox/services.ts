@@ -24,6 +24,7 @@ export const DESIGNATED_TEST_TENANT_ID = "8b434359-3ad1-491e-9593-b0ef381f5b21";
 //    route.ts refuses to operate on anything not in this set. ────────────────
 // NOTE: rental_number is derived as 'R-' || LEFT(id, 6), so each fixture id must
 // differ within its FIRST SIX hex chars or the unique rental_number collides.
+export const AUTO_EXTEND_RENTAL = "a3000003-0000-4000-8000-000000000001";
 export const DEPOSIT_RENTAL = "a4000004-0000-4000-8000-000000000001";
 export const RETURN_REMINDER_RENTAL = "a5000005-0000-4000-8000-000000000001";
 export const DAILY_REMINDER_RENTAL = "a6000006-0000-4000-8000-000000000001";
@@ -131,13 +132,54 @@ export const SERVICES: SbService[] = [
       }
       await s.from("rentals").update({
         status: "Active", deposit_hold_status: "held",
+        // auto-extend must stay OFF here: the refresh fn RELEASES holds on
+        // auto-extend rentals instead of refreshing them.
+        auto_extend_enabled: false,
         deposit_hold_placed_at: new Date().toISOString(), deposit_hold_expires_at: inDaysIso(7),
       }).eq("id", DEPOSIT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       return svc("deposit").status(s);
     },
   },
 
-  // 2. Return reminder (real email → notify-rental-reminder) ─────────────────
+  // 2. Auto-extension (real TEST PI, settles inline; order-coupled) ──────────
+  {
+    key: "auto_extend",
+    label: "Auto-extension",
+    order: 40,
+    scopeRentalId: AUTO_EXTEND_RENTAL,
+    cronFns: ["sandbox-auto-extend-rentals"],
+    stepping: "dayloop",
+    progressKey: "renewed",
+    backdate: async (prod, days) => {
+      await shiftTs(prod, AUTO_EXTEND_RENTAL, "auto_extend_next_charge_at", days);
+      await shiftDate(prod, AUTO_EXTEND_RENTAL, "end_date", days);
+    },
+    status: async (s) => {
+      const { data } = await s.from("rentals")
+        .select("auto_extend_status, auto_extend_charge_count, auto_extend_next_charge_at, end_date, auto_extend_failed_attempts")
+        .eq("id", AUTO_EXTEND_RENTAL).maybeSingle();
+      return {
+        autoExtendStatus: data?.auto_extend_status ?? null,
+        chargeCount: data?.auto_extend_charge_count ?? 0,
+        nextChargeAt: data?.auto_extend_next_charge_at ?? null,
+        endDate: data?.end_date ?? null,
+        failedAttempts: data?.auto_extend_failed_attempts ?? 0,
+      };
+    },
+    reset: async (s) => {
+      await s.from("rentals").update({
+        status: "Active", auto_extend_enabled: true, auto_extend_paused: false,
+        // Pin auto_charge: with no saved card the fn falls through to the PAY-LINK
+        // branch, which emails a real Stripe Checkout link to the customer.
+        auto_extend_charge_mode: "auto_charge",
+        auto_extend_status: "active", auto_extend_charge_count: 0, auto_extend_failed_attempts: 0,
+        auto_extend_pending_extension_id: null, auto_extend_next_charge_at: inDaysIso(7),
+      }).eq("id", AUTO_EXTEND_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
+      return svc("auto_extend").status(s);
+    },
+  },
+
+  // 3. Return reminder (real email → notify-rental-reminder) ─────────────────
   {
     key: "return_reminder",
     label: "Return reminder",
@@ -169,7 +211,7 @@ export const SERVICES: SbService[] = [
     },
   },
 
-  // 3. Daily ledger reminder (in-app reminder_events only) ───────────────────
+  // 4. Daily ledger reminder (in-app reminder_events only) ───────────────────
   {
     key: "daily_reminder",
     label: "Daily ledger reminder",

@@ -203,7 +203,7 @@ async function allStatus(p: SupabaseClient) {
 // ═════════════════════════════ FAST-FORWARD ═════════════════════════════════
 // The Dev Panel is a pure TIME control: pressing +Nd makes it THIS rental's cron
 // for N days. It shifts the rental's own time anchors back N days, runs the
-// rental's applicable cron jobs (reminders, deposit, daily), then
+// rental's applicable cron jobs (reminders, auto-extend, deposit, daily), then
 // hands every anchor the crons did NOT consume back to its
 // pre-shift value — so the REAL cron never sees a backdated anchor and never
 // churns the rental on its own. Results land in the rental's ledger; the
@@ -217,7 +217,7 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   await assertDesignated(p, rentalId);
 
   const { data: r0 } = await p.from("rentals")
-    .select("status, deposit_hold_status, deposit_hold_expires_at, end_date")
+    .select("status, auto_extend_enabled, deposit_hold_status, auto_extend_next_charge_at, deposit_hold_expires_at, end_date")
     .eq("id", rentalId).maybeSingle();
   if (!r0) throw new Error("rental not found");
   const rr = r0 as any;
@@ -239,6 +239,7 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   // ── snapshot every anchor we are about to shift ───────────────────────────
   const snap: FfSnapshot = {
     rentals: {
+      auto_extend_next_charge_at: rr.auto_extend_next_charge_at,
       deposit_hold_expires_at: rr.deposit_hold_expires_at,
       end_date: rr.end_date,
     },
@@ -246,6 +247,7 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
 
   // ── shift the clock: N days pass for THIS rental ──────────────────────────
   const u: Record<string, unknown> = {};
+  if (rr.auto_extend_next_charge_at) u.auto_extend_next_charge_at = backDays(rr.auto_extend_next_charge_at, days);
   if (rr.deposit_hold_expires_at) u.deposit_hold_expires_at = backDays(rr.deposit_hold_expires_at, days);
   if (rr.end_date) {
     const base = new Date(`${rr.end_date}T00:00:00Z`).getTime();
@@ -264,7 +266,11 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   };
 
   try {
-    if (rr.deposit_hold_status === "held") {
+    if (rr.auto_extend_enabled) {
+      await step("autoExtensions", () => drainRental(p, "sandbox-auto-extend-rentals", rentalId, "renewed", 8));
+    }
+    if (rr.deposit_hold_status === "held" && !rr.auto_extend_enabled) {
+      // (with auto-extend enabled the refresh fn RELEASES the hold instead — skip)
       await step("depositRefreshes", async () => progressOf(await fireOne(p, "sandbox-refresh-deposit-holds", rentalId), "refreshed"));
     }
     await step("returnReminders", async () => progressOf(await fireOne(p, "sandbox-send-return-reminders", rentalId), "processed"));
@@ -273,21 +279,25 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
     // ── hand the clock back so the REAL cron never sees backdated anchors, and
     //    restore business date fields we only shifted for the simulation. ─────
     const { data: after } = await p.from("rentals")
-      .select("deposit_hold_expires_at, end_date")
+      .select("auto_extend_next_charge_at, deposit_hold_expires_at, end_date")
       .eq("id", rentalId).maybeSingle();
     const a = (after ?? {}) as any;
     const nowMs = Date.now();
     const inst = (ts: unknown) => (ts ? new Date(ts as string).getTime() : NaN);
     const restore: Record<string, unknown> = {};
 
-    // deposit anchor: if the cron did NOT advance it past now (compare as
-    // INSTANTS, not strings — DB returns +00:00, we wrote Z), restore the real
-    // future value so the real cron won't immediately re-fire.
+    // auto-extend / deposit anchors: if the cron did NOT advance them past now
+    // (compare as INSTANTS, not strings — DB returns +00:00, we wrote Z), restore
+    // the real future value so the real cron won't immediately re-fire.
+    if (u.auto_extend_next_charge_at && inst(a.auto_extend_next_charge_at) <= nowMs) {
+      restore.auto_extend_next_charge_at = snap.rentals.auto_extend_next_charge_at;
+    }
     if (u.deposit_hold_expires_at && inst(a.deposit_hold_expires_at) <= nowMs) {
       restore.deposit_hold_expires_at = snap.rentals.deposit_hold_expires_at;
     }
 
-    // end_date: undo the artificial `days` shift. +days cancels the -days shift exactly.
+    // end_date: undo the artificial `days` shift while PRESERVING any legitimate
+    // roll a cron did (auto-extend renewal). +days cancels the -days shift exactly.
     if (u.end_date && a.end_date) {
       const base = new Date(`${a.end_date}T00:00:00Z`).getTime();
       restore.end_date = new Date(base + days * DAY_MS).toISOString().split("T")[0];

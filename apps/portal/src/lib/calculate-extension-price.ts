@@ -1,0 +1,317 @@
+/**
+ * Extension Pricing Calculation
+ *
+ * Calculates extension cost with weekend/holiday surcharges.
+ * Extensions always use daily-tier pricing (day-by-day iteration).
+ *
+ * Logic mirrors apps/booking/src/lib/calculate-rental-price.ts
+ */
+
+export interface WeekendConfig {
+  weekend_surcharge_percent: number;
+  weekend_days: number[]; // JS day numbers: 0=Sun, 1=Mon, ..., 6=Sat
+  stack_surcharges?: boolean; // when true, weekend + holiday surcharges apply additively
+}
+
+export interface Holiday {
+  id: string;
+  name: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;
+  surcharge_percent: number;
+  excluded_vehicle_ids: string[];
+  recurs_annually: boolean;
+}
+
+export interface VehicleOverride {
+  id: string;
+  vehicle_id: string;
+  rule_type: 'weekend' | 'holiday';
+  holiday_id: string | null;
+  override_type: 'fixed_price' | 'custom_percent' | 'excluded';
+  fixed_price: number | null;
+  custom_percent: number | null;
+}
+
+// Turo-style per-day manual price (overrides base rate + all surcharges for the day).
+export interface VehicleDailyPrice {
+  date: string; // YYYY-MM-DD
+  price: number;
+}
+
+export interface DayBreakdown {
+  date: string; // YYYY-MM-DD
+  dayOfWeek: number;
+  type: 'regular' | 'weekend' | 'holiday' | 'manual';
+  holidayName?: string;
+  baseRate: number;
+  surchargePercent: number;
+  effectiveRate: number;
+  appliedSurcharges?: { label: string; percent: number }[]; // populated in stacking mode
+}
+
+export interface ExtensionPriceResult {
+  totalCost: number;
+  days: number;
+  dayBreakdown: DayBreakdown[];
+  hasSurcharges: boolean;
+}
+
+function parseDateString(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function findMatchingHoliday(
+  date: Date,
+  holidays: Holiday[],
+  vehicleId?: string
+): Holiday | null {
+  const dateStr = formatDate(date);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+
+  for (const holiday of holidays) {
+    if (vehicleId && holiday.excluded_vehicle_ids?.includes(vehicleId)) {
+      continue;
+    }
+
+    if (holiday.recurs_annually) {
+      const start = parseDateString(holiday.start_date);
+      const end = parseDateString(holiday.end_date);
+      const startMonth = start.getMonth() + 1;
+      const startDay = start.getDate();
+      const endMonth = end.getMonth() + 1;
+      const endDay = end.getDate();
+
+      if (startMonth === endMonth) {
+        if (month === startMonth && day >= startDay && day <= endDay) {
+          return holiday;
+        }
+      } else {
+        if (
+          (month === startMonth && day >= startDay) ||
+          (month === endMonth && day <= endDay) ||
+          (month > startMonth && month < endMonth)
+        ) {
+          return holiday;
+        }
+      }
+    } else {
+      if (dateStr >= holiday.start_date && dateStr <= holiday.end_date) {
+        return holiday;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getDayRate(
+  date: Date,
+  baseRate: number,
+  weekendConfig: WeekendConfig | null,
+  holidays: Holiday[],
+  overrides: VehicleOverride[],
+  vehicleId?: string,
+  dailyPriceMap?: Record<string, number>
+): DayBreakdown {
+  const dayOfWeek = date.getDay();
+  const dateStr = formatDate(date);
+
+  // ── MANUAL PER-DAY PRICE (Turo mode) ──────────────────────────────────────
+  // An operator-set price for this exact calendar day wins absolutely over every
+  // surcharge/tier rate. Skipped entirely when no manual price is set for the day.
+  // Mirrors apps/portal/src/lib/calculate-rental-price.ts.
+  if (dailyPriceMap) {
+    const manual = dailyPriceMap[dateStr];
+    if (manual != null) {
+      return { date: dateStr, dayOfWeek, type: 'manual', baseRate, surchargePercent: 0, effectiveRate: manual, appliedSurcharges: [] };
+    }
+  }
+
+  // ── STACKING MODE ─────────────────────────────────────────────────────────
+  // When enabled (weekendConfig.stack_surcharges), EVERY applicable surcharge
+  // applies additively: effectiveRate = base * (1 + sum(weekend% + holiday%)/100).
+  // A fixed_price override is absolute (holiday wins over weekend); 'excluded'
+  // drops that rule. Skipped when off, so the default path below is unchanged.
+  // Mirrors apps/portal/src/lib/calculate-rental-price.ts.
+  if (weekendConfig?.stack_surcharges) {
+    const applied: { label: string; percent: number }[] = [];
+    let type: DayBreakdown['type'] = 'regular';
+    let holidayNameOut: string | undefined;
+
+    const stackHoliday = findMatchingHoliday(date, holidays, vehicleId);
+    const stackHolidayOv = stackHoliday
+      ? overrides.find(o => o.rule_type === 'holiday' && o.holiday_id === stackHoliday.id)
+      : undefined;
+    const stackWeekendMatch = !!(
+      weekendConfig &&
+      weekendConfig.weekend_surcharge_percent > 0 &&
+      weekendConfig.weekend_days?.includes(dayOfWeek)
+    );
+    const stackWeekendOv = stackWeekendMatch
+      ? overrides.find(o => o.rule_type === 'weekend')
+      : undefined;
+
+    // Fixed-price overrides are absolute → they win the day, no stacking (holiday first).
+    if (stackHoliday && stackHolidayOv?.override_type === 'fixed_price' && stackHolidayOv.fixed_price != null) {
+      return { date: dateStr, dayOfWeek, type: 'holiday', holidayName: stackHoliday.name, baseRate, surchargePercent: 0, effectiveRate: stackHolidayOv.fixed_price, appliedSurcharges: [] };
+    }
+    if (stackWeekendMatch && stackWeekendOv?.override_type === 'fixed_price' && stackWeekendOv.fixed_price != null) {
+      return { date: dateStr, dayOfWeek, type: 'weekend', baseRate, surchargePercent: 0, effectiveRate: stackWeekendOv.fixed_price, appliedSurcharges: [] };
+    }
+
+    // Holiday percentage (skip if excluded).
+    if (stackHoliday && stackHolidayOv?.override_type !== 'excluded') {
+      const pct = (stackHolidayOv?.override_type === 'custom_percent' && stackHolidayOv.custom_percent != null)
+        ? stackHolidayOv.custom_percent
+        : stackHoliday.surcharge_percent;
+      type = 'holiday';
+      holidayNameOut = stackHoliday.name;
+      if (pct) applied.push({ label: stackHoliday.name, percent: pct });
+    }
+
+    // Weekend percentage (skip if excluded/fixed).
+    if (stackWeekendMatch && weekendConfig && stackWeekendOv?.override_type !== 'excluded' && stackWeekendOv?.override_type !== 'fixed_price') {
+      const pct = (stackWeekendOv?.override_type === 'custom_percent' && stackWeekendOv.custom_percent != null)
+        ? stackWeekendOv.custom_percent
+        : weekendConfig.weekend_surcharge_percent;
+      if (type === 'regular') type = 'weekend';
+      if (pct) applied.push({ label: 'Weekend', percent: pct });
+    }
+
+    const totalPct = applied.reduce((s, a) => s + a.percent, 0);
+    return {
+      date: dateStr,
+      dayOfWeek,
+      type,
+      holidayName: holidayNameOut,
+      baseRate,
+      surchargePercent: totalPct,
+      effectiveRate: Math.round(baseRate * (1 + totalPct / 100) * 100) / 100,
+      appliedSurcharges: applied,
+    };
+  }
+  // ── DEFAULT (highest/priority wins) — unchanged ───────────────────────────
+
+  // 1. Check for holiday match
+  const holiday = findMatchingHoliday(date, holidays, vehicleId);
+  if (holiday) {
+    const override = overrides.find(
+      o => o.rule_type === 'holiday' && o.holiday_id === holiday.id
+    );
+
+    if (override) {
+      if (override.override_type === 'excluded') {
+        return { date: dateStr, dayOfWeek, type: 'regular', baseRate, surchargePercent: 0, effectiveRate: baseRate };
+      }
+      if (override.override_type === 'fixed_price' && override.fixed_price != null) {
+        return { date: dateStr, dayOfWeek, type: 'holiday', holidayName: holiday.name, baseRate, surchargePercent: 0, effectiveRate: override.fixed_price };
+      }
+      if (override.override_type === 'custom_percent' && override.custom_percent != null) {
+        const effectiveRate = baseRate * (1 + override.custom_percent / 100);
+        return { date: dateStr, dayOfWeek, type: 'holiday', holidayName: holiday.name, baseRate, surchargePercent: override.custom_percent, effectiveRate: Math.round(effectiveRate * 100) / 100 };
+      }
+    }
+
+    const effectiveRate = baseRate * (1 + holiday.surcharge_percent / 100);
+    return { date: dateStr, dayOfWeek, type: 'holiday', holidayName: holiday.name, baseRate, surchargePercent: holiday.surcharge_percent, effectiveRate: Math.round(effectiveRate * 100) / 100 };
+  }
+
+  // 2. Check for weekend match
+  const isWeekend = weekendConfig &&
+    weekendConfig.weekend_surcharge_percent > 0 &&
+    weekendConfig.weekend_days?.includes(dayOfWeek);
+
+  if (isWeekend && weekendConfig) {
+    const override = overrides.find(o => o.rule_type === 'weekend');
+
+    if (override) {
+      if (override.override_type === 'excluded') {
+        return { date: dateStr, dayOfWeek, type: 'regular', baseRate, surchargePercent: 0, effectiveRate: baseRate };
+      }
+      if (override.override_type === 'fixed_price' && override.fixed_price != null) {
+        return { date: dateStr, dayOfWeek, type: 'weekend', baseRate, surchargePercent: 0, effectiveRate: override.fixed_price };
+      }
+      if (override.override_type === 'custom_percent' && override.custom_percent != null) {
+        const effectiveRate = baseRate * (1 + override.custom_percent / 100);
+        return { date: dateStr, dayOfWeek, type: 'weekend', baseRate, surchargePercent: override.custom_percent, effectiveRate: Math.round(effectiveRate * 100) / 100 };
+      }
+    }
+
+    const effectiveRate = baseRate * (1 + weekendConfig.weekend_surcharge_percent / 100);
+    return { date: dateStr, dayOfWeek, type: 'weekend', baseRate, surchargePercent: weekendConfig.weekend_surcharge_percent, effectiveRate: Math.round(effectiveRate * 100) / 100 };
+  }
+
+  // 3. Regular day
+  return { date: dateStr, dayOfWeek, type: 'regular', baseRate, surchargePercent: 0, effectiveRate: baseRate };
+}
+
+/**
+ * Calculate extension price with dynamic pricing.
+ * Always uses daily-tier iteration regardless of extension length.
+ */
+export function calculateExtensionPrice(
+  startDate: string, // current end date (extension starts day after)
+  endDate: string,   // new end date
+  dailyRate: number,
+  weekendConfig?: WeekendConfig | null,
+  holidays?: Holiday[],
+  overrides?: VehicleOverride[],
+  vehicleId?: string,
+  dailyPrices?: VehicleDailyPrice[]
+): ExtensionPriceResult {
+  const start = parseDateString(startDate);
+  const end = parseDateString(endDate);
+  const days = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+
+  if (days <= 0 || dailyRate <= 0) {
+    return { totalCost: 0, days, dayBreakdown: [], hasSurcharges: false };
+  }
+
+  const safeHolidays = holidays || [];
+  const safeOverrides = overrides || [];
+  // Coerce with Number(): Postgres numeric arrives as a JSON string over PostgREST.
+  const safeDailyPrices = dailyPrices || [];
+  const dailyPriceMap: Record<string, number> = {};
+  for (const dp of safeDailyPrices) dailyPriceMap[dp.date] = Number(dp.price);
+  const dailyPriceLookup = safeDailyPrices.length > 0 ? dailyPriceMap : undefined;
+  const breakdown: DayBreakdown[] = [];
+  let totalCost = 0;
+
+  for (let i = 0; i < days; i++) {
+    const currentDate = new Date(start);
+    currentDate.setDate(currentDate.getDate() + i);
+
+    const dayInfo = getDayRate(
+      currentDate,
+      dailyRate,
+      weekendConfig || null,
+      safeHolidays,
+      safeOverrides,
+      vehicleId,
+      dailyPriceLookup
+    );
+
+    breakdown.push(dayInfo);
+    totalCost += dayInfo.effectiveRate;
+  }
+
+  const hasSurcharges = breakdown.some(d => d.type !== 'regular');
+
+  return {
+    totalCost: Math.round(totalCost * 100) / 100,
+    days,
+    dayBreakdown: breakdown,
+    hasSurcharges,
+  };
+}

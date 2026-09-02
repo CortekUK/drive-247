@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, X, Calendar, ChevronDown, Ban, AlertTriangle } from "lucide-react";
+import { Search, X, Calendar, ArrowRightLeft, ChevronDown, Ban, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -45,6 +45,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
   const hasActiveFilters =
     (filters.status && filters.status !== "all") ||
     filters.bonzahStatus ||
+    filters.extensionRequested ||
     filters.cancellationRequested ||
     filters.startDateFrom ||
     filters.startDateTo ||
@@ -178,6 +179,25 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
         {/* Requests group */}
         <div className="flex items-center border rounded-md overflow-hidden">
           <span className="text-xs text-muted-foreground px-2.5 shrink-0">Requests</span>
+          <div className="h-5 w-px bg-border" />
+          {(() => {
+            const isActive = !!filters.extensionRequested;
+            const color = '#f97316';
+            return (
+              <button
+                onClick={() => updateFilter('extensionRequested', isActive ? undefined : true)}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 text-xs font-medium whitespace-nowrap transition-colors"
+                style={{
+                  backgroundColor: isActive ? `${color}25` : 'transparent',
+                  color: color,
+                }}
+              >
+                <ArrowRightLeft className="h-3 w-3" />
+                Extension
+                {isActive && <X className="ml-1 h-3 w-3" />}
+              </button>
+            );
+          })()}
           <div className="h-5 w-px bg-border" />
           {(() => {
             const isActive = !!filters.cancellationRequested;

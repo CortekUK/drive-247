@@ -310,6 +310,9 @@ const CreateRental = () => {
 
   // Auto-extension state. An auto-extend rental is a REGULAR rental (real end_date)
   // that auto-renews each period and is charged UPFRONT — handled by the auto-extend cron.
+  const [isAutoExtend, setIsAutoExtend] = useState(false);
+  const [autoExtendChargeMode, setAutoExtendChargeMode] = useState<'auto_charge' | 'pay_link'>('pay_link');
+  const [autoExtendMaxPeriods, setAutoExtendMaxPeriods] = useState<number | null>(null);
 
   // Per-rental gig-driver flag. Defaults to the selected customer's flag, but the
   // operator can override per-rental (e.g., a customer who hasn't yet self-declared
@@ -1251,9 +1254,12 @@ const CreateRental = () => {
       vehiclePricingOverrides,
       selectedVehicleId,
       mtd,
-      false,
+      // Auto-extend rentals advertise a flat "set price" — skip weekend/holiday
+      // surcharges so they don't ride into the stored monthly_amount (which the
+      // renewal cron then bills every cycle). Markups stay on short-term rentals.
+      isAutoExtend,
       false, // stackSurcharges is also resolved from weekendConfig.stack_surcharges
-      vehicleDailyPrices, // Turo-style per-day manual prices
+      vehicleDailyPrices, // Turo-style per-day manual prices (ignored when isAutoExtend)
     );
     const amount = breakdown.rentalPrice;
 
@@ -1261,7 +1267,7 @@ const CreateRental = () => {
       form.setValue("monthly_amount", amount, { shouldValidate: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings, tenantHolidays, vehiclePricingOverrides, vehicleDailyPrices]);
+  }, [perPeriodRate, selectedVehicleId, watchedStartDate?.getTime(), watchedEndDate?.getTime(), vehicles, weekendPricingSettings, tenantHolidays, vehiclePricingOverrides, vehicleDailyPrices, isAutoExtend]);
 
   // Note: End date is no longer auto-calculated from period type since period type
   // is now auto-determined from the date range. The admin picks both start and end dates manually.
@@ -1658,6 +1664,16 @@ const CreateRental = () => {
 
       setCreationProgress(2); // Step 2: Creating rental record
 
+      // Auto-extension: the first upfront charge is due when the first paid period
+      // ends (the form's end_date). The cron renews from there each period.
+      let autoExtendNextChargeAt: string | null = null;
+      if (isAutoExtend && data.end_date) {
+        const leadHours = Number((rentalSettings as any)?.auto_extend_default_lead_hours ?? 0);
+        const periodEnd = new Date(`${format(data.end_date, 'yyyy-MM-dd')}T00:00:00Z`);
+        periodEnd.setUTCHours(periodEnd.getUTCHours() - leadHours);
+        autoExtendNextChargeAt = periodEnd.toISOString();
+      }
+
       // Record the waiver ON THE RENTAL, not only in the audit log, so this
       // rental stays identifiable as unverified for its whole life — for
       // disputes, insurance questions and reporting — without anyone having to
@@ -1728,7 +1744,13 @@ const CreateRental = () => {
         has_installment_plan: false,
         is_pay_as_you_go: false,
         // Auto-extension (regular rental that auto-renews + bills upfront each period).
-        auto_extend_enabled: false,
+        auto_extend_enabled: isAutoExtend,
+        auto_extend_charge_mode: isAutoExtend ? autoExtendChargeMode : 'pay_link',
+        auto_extend_period_unit: isAutoExtend ? data.rental_period_type : 'Weekly',
+        auto_extend_next_charge_at: autoExtendNextChargeAt,
+        auto_extend_lead_hours: isAutoExtend ? Number((rentalSettings as any)?.auto_extend_default_lead_hours ?? 0) : 0,
+        auto_extend_max_periods: isAutoExtend ? autoExtendMaxPeriods : null,
+        auto_extend_status: 'active',
         // Gig-driver snapshot for this rental. Distinct from customers.is_gig_driver
         // (which can change after this rental is signed). The agreement merge
         // variable {{is_gig_driver}} prefers this rental-level value.
@@ -3394,6 +3416,85 @@ const CreateRental = () => {
                   primaryCustomerEmail={selectedCustomer?.email}
                   disabled={loading}
                 />
+              )}
+
+              {/* ── Payment Mode: Regular vs Auto-Extend (positioned after Customer & Vehicle) ──────── */}
+              {(rentalSettings as any)?.auto_extend_enabled && selectedVehicleId && (
+                <div className="rounded-xl border bg-card shadow-sm">
+                  <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
+                    <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
+                      <CreditCard className="h-4 w-4" />
+                    </div>
+                    <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Mode</h2>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <RadioGroup
+                      value={isAutoExtend ? 'auto_extend' : 'regular'}
+                      onValueChange={(val) => {
+                        setIsAutoExtend(val === 'auto_extend');
+                        if (val === 'auto_extend') {
+                          // Auto-extend bills per-period upfront: Weekly/Monthly with an
+                          // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
+                          if (form.getValues('rental_period_type') === 'Daily') {
+                            form.setValue('rental_period_type', 'Weekly');
+                          }
+                          setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
+                        }
+                      }}
+                      className="space-y-2"
+                    >
+                      <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", !isAutoExtend ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                        <RadioGroupItem value="regular" />
+                        <div>
+                          <span className="text-sm font-medium">Regular</span>
+                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront</p>
+                        </div>
+                      </label>
+                      {(rentalSettings as any)?.auto_extend_enabled && (
+                        <label className={cn("flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors", isAutoExtend ? "border-primary bg-primary/5" : "hover:bg-muted/50")}>
+                          <RadioGroupItem value="auto_extend" />
+                          <div>
+                            <span className="text-sm font-medium">Auto-Extend</span>
+                            <p className="text-xs text-muted-foreground">Renews each period automatically and charges the customer upfront. Set the end date to the first period's end.</p>
+                          </div>
+                        </label>
+                      )}
+                    </RadioGroup>
+
+                    {isAutoExtend && (
+                      <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Charge method</Label>
+                          <Select value={autoExtendChargeMode} onValueChange={(v) => setAutoExtendChargeMode(v as 'auto_charge' | 'pay_link')}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pay_link">Pay-link — email the customer a checkout link each period</SelectItem>
+                              <SelectItem value="auto_charge">Auto-charge — charge the saved card automatically</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">Auto-charge needs the customer's card saved on file (via booking / deposit hold).</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">Max periods (optional)</Label>
+                          <Input
+                            type="number" min={1} max={520}
+                            placeholder="No limit"
+                            value={autoExtendMaxPeriods ?? ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setAutoExtendMaxPeriods(v === '' ? null : Math.max(1, Math.min(520, parseInt(v) || 1)));
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">Stop auto-renewing after this many periods. Leave empty for open-ended (until returned).</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Set <strong>Rental Period Type</strong> and the per-period <strong>rate</strong> below, and an <strong>end date</strong> one period out (e.g. +7 days for weekly). The system renews and charges from there.
+                        </p>
+                      </div>
+                    )}
+
+                  </div>
+                </div>
               )}
 
               {/* ── Section 2: Rental Period & Pricing ────────────── */}

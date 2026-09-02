@@ -56,6 +56,8 @@ export const useCalendarRentals = (
           discount_applied,
           status,
           payment_mode,
+          auto_extend_enabled,
+          auto_extend_status,
           customers!rentals_customer_id_fkey(id, name),
           vehicles!rentals_vehicle_id_fkey(id, reg, make, model, vehicle_photos(photo_url))
         `
@@ -129,6 +131,8 @@ export const useCalendarRentals = (
             rental.status,
             {
               returnTime: rental.return_time,
+              autoExtendEnabled: rental.auto_extend_enabled,
+              autoExtendStatus: rental.auto_extend_status,
             }
           ),
           customer: rental.customers as any,

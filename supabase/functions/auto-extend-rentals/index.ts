@@ -1,0 +1,944 @@
+// Auto-Extend Rentals cron.
+//
+// For each rental with auto_extend_enabled=true whose current paid period is ending
+// (auto_extend_next_charge_at <= now), renew the rental for one more period and charge
+// the customer UPFRONT. Built on the existing rental_extensions rails:
+//
+//   1. create a rental_extensions row for the next period (+ Extension* ledger charges)
+//   2a. auto_charge mode: off-session PaymentIntent on the saved card -> settle FIFO
+//       (payment_apply_fifo_v2, isolated by extension_id) -> finalize_rental_extension
+//       rolls rentals.end_date forward.
+//   2b. pay_link mode (or no saved card): create a Checkout session, email the customer a
+//       "pay for next period" link, park auto_extend_pending_extension_id. The existing
+//       stripe webhook -> finalize path rolls the date forward when they pay.
+//
+// Idempotent: only acts when next_charge_at <= now and advances the pointer in the same
+// write. A pending unpaid pay-link extension blocks creating another (no double-billing).
+//
+// See docs/AUTO_EXTENSION.md.
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
+import { getConnectAccountId, getChargePlatformAccount, getStripeClientForAccount, getStripeClientForRecord, type PlatformAccount } from "../_shared/stripe-client.ts";
+// Vendored inline so the function deploys as a single self-contained file.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-tenant-slug",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+};
+async function sendEmailInline(to: string, subject: string, html: string, slug: string): Promise<{ success: boolean; error?: string }> {
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) { console.log("[auto-extend] RESEND_API_KEY not set — simulating send"); return { success: true }; }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: `Drive247 <${slug || "noreply"}@drive-247.com>`, to: [to], subject, html }),
+    });
+    if (!res.ok) return { success: false, error: `Resend ${res.status}` };
+    return { success: true };
+  } catch (e: any) { return { success: false, error: e.message }; }
+}
+
+// ---------------------------------------------------------------------------
+// Stripe context (mirrors send-payg-reminders / place-deposit-hold resolution)
+// ---------------------------------------------------------------------------
+interface StripeContext {
+  stripe: Stripe;
+  mode: "test" | "live";
+  platformAccount: PlatformAccount;
+  connectAccountId: string | null;
+  options: { stripeAccount: string } | undefined;
+  currencyCode: string;
+}
+
+async function getStripeContext(supabase: any, tenant: any): Promise<StripeContext | null> {
+  const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
+  // NEW charges go to the tenant's current platform account
+  // ('managed' → legacy UK keys, 'own' → UAE keys).
+  const platformAccount = getChargePlatformAccount(tenant ?? {});
+  let stripe: Stripe;
+  try {
+    stripe = getStripeClientForAccount(platformAccount, mode);
+  } catch (keyErr: any) {
+    console.warn(`[auto-extend] ${keyErr?.message ?? keyErr}`);
+    return null;
+  }
+  const connectAccountId = tenant ? getConnectAccountId(tenant) : null;
+  const options = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+  return { stripe, mode, platformAccount, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
+}
+
+// Stripe context for charging a SAVED CARD stored on an EXISTING rental record.
+// The saved card/customer live on the platform the rental was CREATED on
+// (rentals.platform_account) — NOT the tenant's current model. After a UK→UAE
+// flip, a pre-flip rental's card still lives on UK; charging it with UAE keys
+// throws "No such customer". Mirror capture-deposit-hold / refresh-deposit-holds.
+function getRecordStripeContext(tenant: any, record: any): StripeContext | null {
+  const mode: "test" | "live" = tenant?.stripe_mode === "live" ? "live" : "test";
+  const platformAccount: PlatformAccount = record?.platform_account === "uae" ? "uae" : "uk";
+  let stripe: Stripe;
+  let connectAccountId: string | null;
+  try {
+    stripe = getStripeClientForRecord(record ?? {}, mode);
+    // Derive the connected account from the RECORD's platform, not the tenant's
+    // current model (payment_model may have flipped since the rental was created).
+    connectAccountId = getConnectAccountId({
+      ...(tenant ?? {}),
+      payment_model: platformAccount === "uae" ? "own" : "managed",
+    });
+  } catch (keyErr: any) {
+    console.warn(`[auto-extend] ${keyErr?.message ?? keyErr}`);
+    return null;
+  }
+  const options = connectAccountId ? { stripeAccount: connectAccountId } : undefined;
+  return { stripe, mode, platformAccount, connectAccountId, options, currencyCode: tenant?.currency_code || "USD" };
+}
+
+function deriveBookingOrigin(tenantSlug: string): string {
+  const fullOverride = Deno.env.get("BOOKING_BASE_URL");
+  if (fullOverride) return fullOverride.replace(/\/+$/, "");
+  const baseDomain = Deno.env.get("BOOKING_BASE_DOMAIN") || "drive-247.com";
+  return `https://${tenantSlug}.${baseDomain}`;
+}
+
+// ---------------------------------------------------------------------------
+// Period math + money helpers
+// ---------------------------------------------------------------------------
+function addPeriod(endDate: string, unit: string, count = 1): { newEndDate: string; days: number } {
+  // endDate is a YYYY-MM-DD DATE. Advance by `count` units (e.g. 2 weeks, 10 days, 3 months).
+  const n = Math.max(1, Math.floor(count || 1));
+  const d = new Date(`${endDate}T00:00:00Z`);
+  const before = d.getTime();
+  if (unit === "Daily") {
+    d.setUTCDate(d.getUTCDate() + n);
+  } else if (unit === "Monthly") {
+    d.setUTCMonth(d.getUTCMonth() + n);
+  } else {
+    d.setUTCDate(d.getUTCDate() + n * 7); // Weekly
+  }
+  const days = Math.round((d.getTime() - before) / (24 * 60 * 60 * 1000));
+  return { newEndDate: d.toISOString().split("T")[0], days };
+}
+
+// Apply per-occurrence schedule exceptions to the next renewal's grid date:
+// skip past skipped dates (advancing one period each time), then relocate if moved.
+function applyExceptions(gridYmd: string, unit: string, count: number, ex: any): string {
+  let g = gridYmd, guard = 0;
+  const skips: string[] = Array.isArray(ex?.skips) ? ex.skips : [];
+  const moves: Record<string, string> = (ex && typeof ex.moves === "object") ? ex.moves : {};
+  while (skips.includes(g) && guard < 500) { g = addPeriod(g, unit, count).newEndDate; guard++; }
+  return moves[g] || g;
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function computeBreakdown(rentalAmount: number, tenant: any): {
+  rental: number; tax: number; serviceFee: number; total: number;
+} {
+  const rental = round2(Number(rentalAmount) || 0);
+  const taxPct = tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0;
+  const tax = round2(rental * (taxPct / 100));
+  let serviceFee = 0;
+  if (tenant?.service_fee_enabled) {
+    if (tenant?.service_fee_type === "percentage") {
+      serviceFee = round2(rental * (Number(tenant?.service_fee_value || 0) / 100));
+    } else {
+      serviceFee = round2(Number(tenant?.service_fee_value ?? tenant?.service_fee_amount ?? 0));
+    }
+  }
+  return { rental, tax, serviceFee, total: round2(rental + tax + serviceFee) };
+}
+
+/**
+ * The per-period rate actually owed: the headline rate less the agreed discount.
+ * Flat currency amount, same period scope as monthly_amount (it is computed from
+ * it at booking time), and the same subtraction the e-sign templates already do.
+ */
+function discountedRate(r: { monthly_amount?: number | null; discount_applied?: number | null }): number {
+  return Math.max(0, (Number(r?.monthly_amount) || 0) - (Number(r?.discount_applied) || 0));
+}
+
+function fmtCurrency(amount: number, code: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: code || "USD" }).format(amount);
+  } catch {
+    return `${code || "USD"} ${Number(amount).toFixed(2)}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  // Optional sandbox scoping — restrict to one rental so a manual dispatch can
+  // never charge another tenant. Null = global cron (unchanged).
+  let onlyRentalId: string | null = null;
+  try {
+    const reqBody = await req.json();
+    onlyRentalId = typeof reqBody?.only_rental_id === "string" ? reqBody.only_rental_id : null;
+  } catch { /* no body — global cron run */ }
+
+  let renewed = 0, linked = 0, paused = 0, skipped = 0, failed = 0;
+  const errors: string[] = [];
+
+  try {
+    console.log(`[auto-extend] run at ${nowIso}`);
+
+    // ── RECONCILE PASS ───────────────────────────────────────────────────────
+    // Heal rentals whose parked renewal was PAID on the ledger but never
+    // finalized. A renewal is two things: a rental_extensions record and its
+    // Extension* ledger charges. finalize_rental_extension — which flips the
+    // record to 'paid', rolls end_date, and is the precondition for un-pausing —
+    // only runs when a payment carries the extension_id. But money paid via a
+    // GENERIC payment (extension_id=NULL — e.g. an operator-recorded offline
+    // payment, or any non-extension checkout) FIFO-settles the extension's ledger
+    // charges WITHOUT ever finalizing the record. The record stays 'approved',
+    // this cron pauses on the record status (never the ledger), and — because the
+    // main query below skips paused rentals — never revisits it: a paid week stuck
+    // paused forever. This pass finds "ledger fully settled by REAL payments AND
+    // record still not paid" (find_autoextend_reconcile_candidates is NOT filtered
+    // by auto_extend_paused, so it reaches paused rentals), finalizes each, and
+    // un-pauses — mirroring the apply-payment un-pause block. It only ever acts when
+    // money is already collected, so it can never charge anyone; the RPC's guards
+    // skip a charge-less or write-off-zeroed extension. Best-effort: a failure here
+    // must never break the normal renewal run below.
+    try {
+      const { data: reconcileCandidates, error: reconcileErr } = await supabase.rpc(
+        "find_autoextend_reconcile_candidates",
+        { p_only_rental_id: onlyRentalId },
+      );
+      if (reconcileErr) {
+        console.error("[auto-extend][reconcile] candidate query failed:", reconcileErr.message);
+      } else {
+        for (const c of (reconcileCandidates ?? []) as any[]) {
+          try {
+            const { error: finErr } = await supabase.rpc("finalize_rental_extension", {
+              p_extension_id: c.pending_ext_id,
+              p_payment_id: c.paying_payment_id,
+            });
+            if (finErr) {
+              console.error("[auto-extend][reconcile] finalize failed", c.rental_id, finErr.message);
+              continue;
+            }
+            // Un-pause only AFTER finalize succeeds (mirrors apply-payment's
+            // finalizeOk gate). Gated on the still-parked pending id so a
+            // concurrent webhook/apply-payment that already cleared it no-ops —
+            // this is the latch that prevents any double charge_count increment.
+            const { error: syncErr } = await supabase
+              .from("rentals")
+              .update({
+                auto_extend_pending_extension_id: null,
+                auto_extend_status: "active",
+                auto_extend_paused: false,
+                auto_extend_paused_at: null,
+                auto_extend_charge_count: (c.charge_count || 0) + 1,
+                auto_extend_failed_attempts: 0,
+                updated_at: nowIso,
+              })
+              .eq("id", c.rental_id)
+              .eq("auto_extend_pending_extension_id", c.pending_ext_id);
+            if (syncErr) {
+              console.error("[auto-extend][reconcile] un-pause update failed", c.rental_id, syncErr.message);
+            } else {
+              console.log(`[auto-extend][reconcile] healed ${c.rental_id}: ext ${c.pending_ext_id} finalized, end_date -> ${c.new_end_date}, un-paused`);
+            }
+          } catch (perErr: any) {
+            console.error("[auto-extend][reconcile] error healing", c.rental_id, perErr?.message ?? perErr);
+          }
+        }
+      }
+    } catch (reconcileFatal: any) {
+      console.error("[auto-extend][reconcile] pass failed (non-fatal):", reconcileFatal?.message ?? reconcileFatal);
+    }
+    // ── end reconcile pass ───────────────────────────────────────────────────
+
+    let rentalQuery = supabase
+      .from("rentals")
+      .select(`
+        id, tenant_id, customer_id, vehicle_id, end_date, monthly_amount, discount_applied,
+        auto_extend_enabled, auto_extend_charge_mode, auto_extend_period_unit, auto_extend_interval_count, auto_extend_exceptions, auto_extend_overrides,
+        auto_extend_next_charge_at, auto_extend_lead_hours, auto_extend_charge_count,
+        auto_extend_max_periods, auto_extend_failed_attempts, auto_extend_pending_extension_id,
+        auto_extend_status, status, platform_account,
+        deposit_hold_stripe_customer_id, deposit_hold_payment_method_id,
+        customers!rentals_customer_id_fkey ( id, name, email, address_state, stripe_customer_id ),
+        vehicles ( make, model, reg )
+      `)
+      .eq("auto_extend_enabled", true)
+      .eq("status", "Active")
+      .eq("auto_extend_paused", false)
+      .not("auto_extend_next_charge_at", "is", null)
+      .lte("auto_extend_next_charge_at", nowIso);
+    // Sandbox scoping — hard-restrict to one rental when requested.
+    if (onlyRentalId) rentalQuery = rentalQuery.eq("id", onlyRentalId);
+    const { data: rentals, error: rentalErr } = await rentalQuery;
+
+    if (rentalErr) throw rentalErr;
+    if (!rentals || rentals.length === 0) {
+      return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed, errors }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Tenant config cache
+    const tenantIds = [...new Set(rentals.map((r: any) => r.tenant_id))];
+    const { data: tenants } = await supabase
+      .from("tenants")
+      .select(`id, slug, company_name, contact_email, contact_phone, currency_code,
+               tax_enabled, tax_percentage, service_fee_enabled, service_fee_type, service_fee_value, service_fee_amount,
+               stripe_mode, stripe_account_id, stripe_onboarding_complete, payment_model, own_stripe_account_id, own_stripe_test_account_id,
+               auto_extend_grace_hours, auto_extend_max_retries, deposit_charge_enabled`)
+      .in("id", tenantIds);
+    const tenantMap = new Map<string, any>((tenants ?? []).map((t: any) => [t.id, t]));
+
+    for (const r of rentals as any[]) {
+      try {
+        const tenant = tenantMap.get(r.tenant_id);
+        if (!tenant) { skipped++; continue; }
+
+        // Terminal rentals.update writes GATE re-selection (auto_charge sets no pending
+        // flag, so a silently-failed advance/pause re-charges the card next tick).
+        // .update() returns {error} and never throws — retry once and surface on failure.
+        const writeRentalState = async (patch: Record<string, unknown>, tag: string): Promise<boolean> => {
+          let { error } = await supabase.from("rentals").update(patch).eq("id", r.id);
+          if (error) ({ error } = await supabase.from("rentals").update(patch).eq("id", r.id));
+          if (error) {
+            console.error(`[auto-extend] ${tag} state-write FAILED ${r.id}: ${error.message}`);
+            errors.push(`${String(r.id).slice(0, 8)}: ${tag} state-write failed (may reprocess — manual review)`);
+            return false;
+          }
+          return true;
+        };
+
+        // Safety cap: max periods reached -> stop auto-extending.
+        if (r.auto_extend_max_periods && r.auto_extend_charge_count >= r.auto_extend_max_periods) {
+          await supabase.from("rentals").update({ auto_extend_status: "ended", updated_at: nowIso }).eq("id", r.id);
+          skipped++; continue;
+        }
+
+        // A pay-link extension is still awaiting payment -> don't create another.
+        if (r.auto_extend_pending_extension_id) {
+          const { data: pending } = await supabase
+            .from("rental_extensions").select("id, status, created_at").eq("id", r.auto_extend_pending_extension_id).maybeSingle();
+          if (pending && pending.status === "paid") {
+            // Webhook already settled it; clear the flag and let next cron renew.
+            await supabase.from("rentals").update({
+              auto_extend_pending_extension_id: null, auto_extend_status: "active", updated_at: nowIso,
+            }).eq("id", r.id);
+          } else {
+            // Still unpaid. Pause past the grace window; otherwise leave it parked.
+            //
+            // Grace runs from when the customer was last actually ASKED to pay,
+            // not from auto_extend_next_charge_at. That pointer is derived from
+            // the rental END DATE, which only advances when a week is paid, so a
+            // rental that had fallen behind carried a due-date weeks in the past
+            // and burned its whole 48h window before the email had even gone out.
+            // On live data two RevTek rentals were paused 15 minutes — one cron
+            // tick — after their link was minted, and one of those customers had
+            // paid 26 minutes earlier.
+            //
+            // "Last asked" is the later of the extension's creation and the most
+            // recent reminder actually sent for it. Creation alone is not enough:
+            // the portal's Resume button clears auto_extend_paused but leaves the
+            // pending extension in place, so a rental resumed against a >48h-old
+            // extension was re-paused on the very next tick — the operator's
+            // click silently undone. A resend or resume-then-remind now restores
+            // a real window.
+            const graceMs = (Number(tenant.auto_extend_grace_hours) || 48) * 3600 * 1000;
+            const { data: lastNudge } = await supabase
+              .from("auto_extension_reminders")
+              .select("sent_at")
+              .eq("extension_id", r.auto_extend_pending_extension_id)
+              .eq("status", "sent")
+              .order("sent_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const askedAtMs = Math.max(
+              pending?.created_at
+                ? new Date(pending.created_at).getTime()
+                : new Date(r.auto_extend_next_charge_at).getTime(),
+              lastNudge?.sent_at ? new Date(lastNudge.sent_at).getTime() : 0,
+            );
+            if (now.getTime() - askedAtMs > graceMs) {
+              await supabase.from("rentals").update({
+                auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
+              }).eq("id", r.id);
+              paused++;
+            } else {
+              skipped++;
+            }
+          }
+          continue;
+        }
+
+        if (!r.end_date) { skipped++; continue; }
+
+        const customer = r.customers;
+        if (!customer?.email) { skipped++; continue; }
+
+        // 1. Next period + breakdown
+        const { newEndDate, days } = addPeriod(r.end_date, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1);
+
+        // Per-occurrence override (keyed by the current renewal date = end_date):
+        // custom price, extras, insurance, and email content for just this renewal.
+        const occ = (r.auto_extend_overrides && r.auto_extend_overrides[r.end_date]) || {};
+
+        // Price: when overridden, the value is tax-inclusive — back out the pre-tax rental.
+        let bd: { rental: number; tax: number; serviceFee: number; total: number };
+        if (occ.priceOverride != null && Number(occ.priceOverride) >= 0) {
+          const taxPct = tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0;
+          const incl = round2(Number(occ.priceOverride));
+          const rental = taxPct > 0 ? round2(incl / (1 + taxPct / 100)) : incl;
+          bd = { rental, tax: round2(incl - rental), serviceFee: 0, total: incl };
+        } else {
+          // Renewals bill the DISCOUNTED rate. monthly_amount is the pre-discount
+          // per-period rate and the discount sits in its own column, so billing
+          // monthly_amount raw charged the full price forever. The signed
+          // BoldSign agreement has always quoted the discounted figure
+          // (api/esign/route.ts, create-boldsign-document) — so every renewal
+          // charged more than the contract the customer signed. RevTek: contract
+          // $333.84, cron charged $417.30.
+          bd = computeBreakdown(discountedRate(r), tenant);
+        }
+
+        // Extras + insurance ride on top of the period price (all tax-inclusive flat amounts).
+        const occExtras: { label: string; amount: number }[] = Array.isArray(occ.extras)
+          ? occ.extras.filter((e: any) => e && Number(e.amount) > 0).map((e: any) => ({ label: String(e.label || "Extra"), amount: round2(Number(e.amount)) }))
+          : [];
+        const extrasTotal = round2(occExtras.reduce((s, e) => s + e.amount, 0));
+
+        // Insurance: the operator pre-selected which Bonzah coverage to buy; price it
+        // NOW (at creation) for this period's trip dates, then bill it on this renewal.
+        const cov = (occ.buyInsurance && occ.insuranceCoverage) ? occ.insuranceCoverage : null;
+        let insurancePremium = 0;
+        if (cov && (cov.cdw || cov.rcli || cov.sli || cov.pai)) {
+          try {
+            const { data: prem } = await supabase.functions.invoke("bonzah-calculate-premium", {
+              body: {
+                trip_start_date: r.end_date,
+                trip_end_date: newEndDate,
+                pickup_state: customer?.address_state || "FL",
+                cdw_cover: !!cov.cdw, rcli_cover: !!cov.rcli, sli_cover: !!cov.sli, pai_cover: !!cov.pai,
+              },
+            });
+            insurancePremium = round2(Number(prem?.total_premium) || 0);
+          } catch (premErr: any) {
+            console.error(`[auto-extend] bonzah premium failed ${r.id}: ${premErr?.message}`);
+            insurancePremium = 0;
+          }
+        }
+        const chargeTotal = round2(bd.total + extrasTotal + insurancePremium);
+        if (chargeTotal <= 0) { skipped++; continue; }
+
+        // 2. rental_extensions row (next sequence number)
+        const { data: maxRow } = await supabase
+          .from("rental_extensions").select("sequence_number")
+          .eq("rental_id", r.id).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+        const seq = (maxRow?.sequence_number ?? 0) + 1;
+
+        const { data: ext, error: extErr } = await supabase
+          .from("rental_extensions")
+          .insert({
+            rental_id: r.id, tenant_id: r.tenant_id, sequence_number: seq, status: "approved",
+            previous_end_date: r.end_date, new_end_date: newEndDate, extension_days: days,
+            rental_amount: bd.rental, tax_amount: bd.tax, service_fee_amount: bd.serviceFee, insurance_amount: insurancePremium,
+            requested_at: nowIso, approved_at: nowIso,
+          })
+          .select("id").single();
+        if (extErr) throw extErr;
+
+        // 3. Extension* ledger charges (mirror AdminExtendRentalDialog)
+        const today = nowIso.split("T")[0];
+        const baseLedger = {
+          rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
+          type: "Charge" as const, entry_date: today, due_date: newEndDate, extension_id: ext.id,
+        };
+        const ledgerRows: any[] = [
+          { ...baseLedger, category: "Extension Rental", reference: `Auto-extend #${seq}: ${days}d (${r.end_date} → ${newEndDate})`, amount: bd.rental, remaining_amount: bd.rental },
+        ];
+        if (bd.tax > 0) ledgerRows.push({ ...baseLedger, category: "Extension Tax", reference: `Auto-extend #${seq}: Tax`, amount: bd.tax, remaining_amount: bd.tax });
+        if (bd.serviceFee > 0) ledgerRows.push({ ...baseLedger, category: "Extension Service Fee", reference: `Auto-extend #${seq}: Service Fee`, amount: bd.serviceFee, remaining_amount: bd.serviceFee });
+        for (const ex of occExtras) ledgerRows.push({ ...baseLedger, category: "Extension Add-on", reference: `Auto-extend #${seq}: ${ex.label}`, amount: ex.amount, remaining_amount: ex.amount });
+        if (insurancePremium > 0) ledgerRows.push({ ...baseLedger, category: "Extension Insurance", reference: `Auto-extend #${seq}: Insurance`, amount: insurancePremium, remaining_amount: insurancePremium });
+        const { error: ledgerErr } = await supabase.from("ledger_entries").insert(ledgerRows);
+        if (ledgerErr) throw ledgerErr;
+
+        const ctx = await getStripeContext(supabase, tenant);
+        // Next renewal grid date is newEndDate; apply skip/move exceptions to it.
+        const nextGrid = applyExceptions(newEndDate, r.auto_extend_period_unit || "Weekly", r.auto_extend_interval_count || 1, r.auto_extend_exceptions);
+        const nextChargeAt = new Date(`${nextGrid}T00:00:00Z`);
+        nextChargeAt.setUTCHours(nextChargeAt.getUTCHours() - (Number(r.auto_extend_lead_hours) || 0));
+
+        // ── Apply prepaid credit to this renewal ─────────────────────────────
+        // The auto_allocate trigger on ledger_entries only fires for base
+        // 'Rental' charges, NOT 'Extension Rental' — so a prepaid customer's
+        // credit is never auto-applied to auto-extension weeks. Apply it here,
+        // mirroring that trigger's FIFO logic (oldest captured credit first),
+        // so we never bill (or email a pay-link for) a week the customer's
+        // existing credit already covers. FIFO honours category priority, so any
+        // older non-extension debt is paid before this week — as it should be.
+        const readExtRemaining = async (): Promise<{ rows: any[]; rem: number }> => {
+          const { data, error } = await supabase
+            .from("ledger_entries").select("id, remaining_amount")
+            .eq("extension_id", ext.id).eq("type", "Charge");
+          if (error) throw error; // never treat a failed read as "$0 / settled"
+          const rows = data ?? [];
+          return { rows, rem: round2(rows.reduce((s: number, c: any) => s + Number(c.remaining_amount || 0), 0)) };
+        };
+        let freshExtChg: any[];
+        let extRemaining: number;
+        try {
+          const { data: creditPays, error: cpErr } = await supabase
+            .from("payments").select("id")
+            .eq("customer_id", r.customer_id)
+            .in("status", ["Credit", "Partial"])
+            .gt("remaining_amount", 0)
+            .order("payment_date", { ascending: true }).order("id", { ascending: true });
+          if (cpErr) throw cpErr;
+          for (const cp of (creditPays ?? []) as any[]) {
+            const { rem } = await readExtRemaining();
+            if (rem <= 0.001) break;
+            const { error: fifoErr } = await supabase.rpc("payment_apply_fifo_v2", { p_id: cp.id });
+            if (fifoErr) throw fifoErr;
+          }
+          const fresh = await readExtRemaining();
+          freshExtChg = fresh.rows;
+          extRemaining = fresh.rem;
+        } catch (creditErr: any) {
+          // A transient read/allocate failure must NEVER fall through to billing a
+          // prepaid week at full price (fail-open). First un-apply any credit the loop
+          // applied so the delete below cannot cascade-orphan it. supabase-js .rpc()
+          // returns {error} and does NOT throw, so check it explicitly: if reverse
+          // fails we must NOT delete (that would silently lose the credit) — pause the
+          // rental for manual review instead.
+          const { error: revErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
+          if (revErr) {
+            await supabase.from("rentals").update({
+              auto_extend_paused: true, auto_extend_paused_at: nowIso,
+              auto_extend_status: "paused", updated_at: nowIso,
+            }).eq("id", r.id);
+            paused++;
+            console.error(`[auto-extend] credit-apply + reverse both failed ${r.id} ext#${seq}: ${revErr.message} — PAUSED for manual review`);
+            errors.push(`${String(r.id).slice(0, 8)}: credit-apply+reverse failed — PAUSED (manual review)`);
+            continue;
+          }
+          const { error: caLedgerDelErr } = await supabase.from("ledger_entries").delete().eq("extension_id", ext.id);
+          const { error: caExtDelErr } = await supabase.from("rental_extensions").delete().eq("id", ext.id);
+          if (caLedgerDelErr || caExtDelErr) {
+            await writeRentalState({
+              auto_extend_paused: true, auto_extend_paused_at: nowIso,
+              auto_extend_status: "paused", updated_at: nowIso,
+            }, "credit-apply rollback-delete-failed pause");
+            paused++;
+            errors.push(`${String(r.id).slice(0, 8)}: credit-apply rollback delete failed — PAUSED (orphan ext, manual review)`);
+            continue;
+          }
+          console.error(`[auto-extend] credit-apply failed ${r.id} ext#${seq}: ${creditErr?.message} — rolled back, will retry`);
+          errors.push(`${String(r.id).slice(0, 8)}: credit-apply failed (rolled back)`);
+          failed++;
+          continue;
+        }
+
+        // (A) FULLY covered by credit → finalize + advance now; no charge, no
+        //     pay-link, no email. Finalize WITHOUT stamping a payment: stamping a
+        //     multi-week credit payment would strand its remainder under the FIFO
+        //     extension-isolation guard. The RPC re-verifies settlement server-side.
+        if (freshExtChg.length > 0 && extRemaining <= 0.001) {
+          const { error: finErr } = await supabase.rpc("finalize_credit_covered_extension", { p_extension_id: ext.id });
+          if (!finErr) {
+            await writeRentalState({
+              auto_extend_pending_extension_id: null,
+              auto_extend_charge_count: (r.auto_extend_charge_count || 0) + 1,
+              auto_extend_last_charge_at: nowIso,
+              auto_extend_next_charge_at: nextChargeAt.toISOString(),
+              auto_extend_failed_attempts: 0,
+              auto_extend_status: "active",
+              updated_at: nowIso,
+            }, "credit-covered advance");
+            renewed++;
+            console.log(`[auto-extend] renewed-by-credit ${r.id} ext#${seq}`);
+            continue;
+          }
+          // Settled but finalize failed (should not happen — it only does guarded
+          // UPDATEs). Fail closed: park it, no email/charge; a human can finalize.
+          await writeRentalState({
+            auto_extend_pending_extension_id: ext.id,
+            auto_extend_status: "active",
+            auto_extend_next_charge_at: nextChargeAt.toISOString(),
+            updated_at: nowIso,
+          }, "credit-cover finalize-fail park");
+          skipped++;
+          console.error(`[auto-extend] credit-cover finalize failed ${r.id} ext#${seq}: ${finErr.message} — parked, no email`);
+          errors.push(`${String(r.id).slice(0, 8)}: credit-cover finalize failed`);
+          continue;
+        }
+
+        // (B) PARTIALLY covered (or not at all) → bill ONLY the remaining amount.
+        //     dueNow == chargeTotal when no credit applied.
+        const dueNow = extRemaining > 0.001 && extRemaining < chargeTotal ? extRemaining : chargeTotal;
+
+        const mode = r.auto_extend_charge_mode || "pay_link";
+
+        // Card resolution. The deposit_hold_* columns are written ONLY by the
+        // hold path, and a charged-deposit tenant never gets a hold — so a card
+        // the customer saved at checkout was invisible here and every renewal
+        // silently degraded to a pay link. Fall back to the customer's Stripe
+        // customer and resolve the card at charge time, as charge-saved-card does.
+        //
+        // Everything below fails CLOSED: any problem leaves savedCard null and we
+        // take the pay-link path, which is exactly the current behaviour. This can
+        // therefore only recover renewals, never break one that works today.
+        const chargeCtx = mode === "auto_charge" ? getRecordStripeContext(tenant, r) : null;
+
+        let savedCard: { customer: string; paymentMethod: string } | null =
+          (r.deposit_hold_stripe_customer_id && r.deposit_hold_payment_method_id)
+            ? {
+                customer: r.deposit_hold_stripe_customer_id as string,
+                paymentMethod: r.deposit_hold_payment_method_id as string,
+              }
+            : null;
+
+        // Scoped to charged-deposit tenants ONLY. A hold tenant whose hold simply
+        // failed also has empty deposit_hold_* columns, and letting the fallback
+        // run for them would turn a rental that sends a pay link today into one
+        // that auto-charges — a behaviour change nobody asked for. Charged tenants
+        // are the ones for whom those columns are structurally always empty.
+        if (!savedCard && chargeCtx && tenant?.deposit_charge_enabled === true) {
+          const custId = ((r.customers as any) || {}).stripe_customer_id as string | null;
+          if (custId) {
+            try {
+              const cust: any = await chargeCtx.stripe.customers.retrieve(
+                custId,
+                { expand: ["invoice_settings.default_payment_method"] },
+                chargeCtx.options,
+              );
+              const dpm = cust?.invoice_settings?.default_payment_method;
+              let pmId: string | null = typeof dpm === "string" ? dpm : (dpm?.id ?? null);
+              if (!pmId) {
+                const pms = await chargeCtx.stripe.paymentMethods.list(
+                  { customer: custId, type: "card", limit: 1 },
+                  chargeCtx.options,
+                );
+                pmId = pms?.data?.[0]?.id ?? null;
+              }
+              if (pmId) savedCard = { customer: custId, paymentMethod: pmId };
+            } catch (cardErr: any) {
+              console.warn(
+                `[auto-extend] no saved card resolved for rental ${r.id}: ${cardErr?.message ?? cardErr}`,
+              );
+            }
+          }
+        }
+
+        const hasSavedCard = !!savedCard;
+
+        // 4a. AUTO-CHARGE path — off-session on the SAVED CARD. The card/customer
+        // live on the platform the RENTAL was created on (r.platform_account), so
+        // resolve the client + connected account from the RECORD, not the tenant's
+        // current model — otherwise a post-flip charge fails "No such customer".
+        if (mode === "auto_charge" && hasSavedCard && chargeCtx && savedCard) {
+          let piId: string | null = null;
+          let piCaptured = false;
+          let payId: string | null = null;
+          try {
+            const pi = await chargeCtx.stripe.paymentIntents.create({
+              amount: Math.round(dueNow * 100),
+              currency: chargeCtx.currencyCode.toLowerCase(),
+              customer: savedCard.customer,
+              payment_method: savedCard.paymentMethod,
+              off_session: true,
+              confirm: true,
+              description: `Auto-extension #${seq} for rental ${String(r.id).slice(0, 8).toUpperCase()}`,
+              metadata: { rental_id: r.id, tenant_id: r.tenant_id, extension_id: ext.id, type: "auto_extension" },
+            }, chargeCtx.options);
+            piId = pi.id;
+
+            if (pi.status !== "succeeded") throw new Error(`PaymentIntent status ${pi.status}`);
+            piCaptured = true;
+
+            const { data: pay, error: payErr } = await supabase
+              .from("payments").insert({
+                rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
+                extension_id: ext.id, amount: dueNow, remaining_amount: dueNow,
+                payment_date: today, method: "Card", payment_type: "Payment",
+                status: "Completed", verification_status: "approved", capture_status: "captured",
+                stripe_payment_intent_id: pi.id, booking_source: "website", platform_account: chargeCtx.platformAccount,
+                target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
+                created_at: nowIso, updated_at: nowIso,
+              }).select("id").single();
+            if (payErr) throw payErr;
+            payId = pay.id;
+
+            // Settle FIFO (isolated to this extension via payment.extension_id) then roll the date.
+            // .rpc() returns {error} and does NOT throw — check both so a settlement/finalize
+            // failure runs the money-safe rollback catch instead of stamping a false "renewed".
+            const { error: fifoApplyErr } = await supabase.rpc("payment_apply_fifo_v2", { p_id: pay.id });
+            if (fifoApplyErr) throw fifoApplyErr;
+            const { error: finalizeErr } = await supabase.rpc("finalize_rental_extension", { p_extension_id: ext.id, p_payment_id: pay.id });
+            if (finalizeErr) throw finalizeErr;
+
+            if (!(await writeRentalState({
+              auto_extend_charge_count: (r.auto_extend_charge_count || 0) + 1,
+              auto_extend_last_charge_at: nowIso,
+              auto_extend_next_charge_at: nextChargeAt.toISOString(),
+              auto_extend_failed_attempts: 0,
+              auto_extend_status: "active",
+              updated_at: nowIso,
+            }, "post-charge advance"))) {
+              // Money captured + extension finalized (end_date already rolled). NEVER roll
+              // back; hard-pause so the un-advanced schedule can't become a premature
+              // re-charge next tick. Ops reconciles the one paid-but-un-advanced period.
+              await writeRentalState({
+                auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                auto_extend_status: "paused", updated_at: nowIso,
+              }, "post-charge advance-fail pause");
+              paused++;
+              errors.push(`${String(r.id).slice(0, 8)}: post-charge advance failed — PAUSED (charged+finalized, reconcile)`);
+              continue;
+            }
+            renewed++;
+            console.log(`[auto-extend] renewed ${r.id} ext#${seq} ${fmtCurrency(chargeTotal, chargeCtx.currencyCode)}`);
+            continue;
+          } catch (chargeErr: any) {
+            // If money was captured but a later step threw, refund it so the customer is
+            // never charged for an extension we are rolling back. If the REFUND itself
+            // fails, the money is out — pause + flag and do NOT delete/retry (a retry
+            // would create a SECOND charge). Only proceed to rollback once money is back.
+            if (piCaptured && piId) {
+              let refundOk = false;
+              try {
+                await chargeCtx.stripe.refunds.create({ payment_intent: piId }, chargeCtx.options);
+                refundOk = true;
+              } catch (rfErr: any) {
+                console.error(`[auto-extend] refund FAILED ${r.id} pi=${piId}: ${rfErr?.message}`);
+              }
+              if (!refundOk) {
+                await writeRentalState({
+                  auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                  auto_extend_status: "paused", updated_at: nowIso,
+                }, "refund-failed pause");
+                paused++;
+                errors.push(`${String(r.id).slice(0, 8)}: auto-charge refund FAILED pi=${piId} — PAUSED (money captured, manual review)`);
+                continue;
+              }
+              // Refunded → remove the now-refunded card payment row (and its FIFO
+              // applications via FK cascade) so it can't be re-used as store credit.
+              // .delete() returns {error} and does NOT throw; if it fails (e.g. FK-blocked)
+              // the refunded payment must NOT survive for the reverse step below to
+              // reclassify as reusable credit — pause for manual review instead.
+              if (payId) {
+                const { error: delErr } = await supabase.from("payments").delete().eq("id", payId);
+                if (delErr) {
+                  await writeRentalState({
+                    auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                    auto_extend_status: "paused", updated_at: nowIso,
+                  }, "delete-failed pause");
+                  paused++;
+                  console.error(`[auto-extend] refunded-payment delete FAILED ${r.id} pay=${payId}: ${delErr.message} — PAUSED for manual review`);
+                  errors.push(`${String(r.id).slice(0, 8)}: refunded-payment delete failed — PAUSED (manual review)`);
+                  continue;
+                }
+              }
+            }
+            // Un-apply any prepaid store-credit the loop applied to this renewal BEFORE
+            // deleting its charges, so it isn't orphaned. .rpc() returns {error} and does
+            // NOT throw: on failure do NOT delete (would cascade-lose credit) — pause.
+            const { error: revErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
+            if (revErr) {
+              await writeRentalState({
+                auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                auto_extend_status: "paused", updated_at: nowIso,
+              }, "reverse-failed pause");
+              paused++;
+              console.error(`[auto-extend] auto-charge credit-reverse failed ${r.id} ext#${seq}: ${revErr.message} — PAUSED for manual review`);
+              errors.push(`${String(r.id).slice(0, 8)}: auto-charge credit-reverse failed — PAUSED (manual review)`);
+              continue;
+            }
+            // Roll back the unpaid extension + its charges so we retry cleanly. If a
+            // delete fails, the extension would linger as an orphan and the retry below
+            // would create a duplicate — pause instead so a human resolves the orphan.
+            const { error: ledgerDelErr } = await supabase.from("ledger_entries").delete().eq("extension_id", ext.id);
+            const { error: extDelErr } = await supabase.from("rental_extensions").delete().eq("id", ext.id);
+            if (ledgerDelErr || extDelErr) {
+              await writeRentalState({
+                auto_extend_paused: true, auto_extend_paused_at: nowIso,
+                auto_extend_status: "paused", updated_at: nowIso,
+              }, "rollback-delete-failed pause");
+              paused++;
+              errors.push(`${String(r.id).slice(0, 8)}: auto-charge rollback delete failed — PAUSED (orphan ext, manual review)`);
+              continue;
+            }
+            const attempts = (r.auto_extend_failed_attempts || 0) + 1;
+            const maxRetries = Number(tenant.auto_extend_max_retries) || 3;
+            if (attempts >= maxRetries) {
+              await writeRentalState({
+                auto_extend_failed_attempts: attempts, auto_extend_paused: true,
+                auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso,
+              }, "max-retries pause");
+              paused++;
+            } else {
+              // Space out retries across the grace window instead of every cron tick.
+              const graceHrs = Number(tenant.auto_extend_grace_hours) || 48;
+              const retry = new Date(now.getTime() + (graceHrs / maxRetries) * 3600 * 1000);
+              await writeRentalState({
+                auto_extend_failed_attempts: attempts,
+                auto_extend_next_charge_at: retry.toISOString(), updated_at: nowIso,
+              }, "retry-advance");
+              failed++;
+            }
+            console.error(`[auto-extend] charge failed ${r.id}: ${chargeErr?.message}`);
+            errors.push(`${String(r.id).slice(0, 8)}: ${chargeErr?.message ?? chargeErr}`);
+            continue;
+          }
+        }
+
+        // 4b. PAY-LINK path — email a checkout link, park the pending extension
+        if (ctx) {
+          const origin = deriveBookingOrigin(tenant.slug || "app");
+          const session = await ctx.stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            line_items: [{
+              price_data: {
+                currency: ctx.currencyCode.toLowerCase(),
+                product_data: { name: "Rental Renewal", description: `Renew ${r.end_date} → ${newEndDate}` },
+                unit_amount: Math.round(dueNow * 100),
+              },
+              quantity: 1,
+            }],
+            mode: "payment",
+            customer_email: customer.email,
+            payment_intent_data: { setup_future_usage: "off_session" },
+            client_reference_id: r.id,
+            success_url: `${origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${r.id}&type=invoice`,
+            cancel_url: `${origin}/portal/bookings/${r.id}`,
+            metadata: {
+              type: "extension", extension_id: ext.id, rental_id: r.id, customer_id: r.customer_id,
+              tenant_id: r.tenant_id, extension_days: String(days), new_end_date: newEndDate,
+              previous_end_date: r.end_date, source: "auto_extend",
+              target_categories: JSON.stringify(["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"]),
+            },
+          }, ctx.options);
+
+          await supabase.from("rental_extensions").update({
+            stripe_checkout_session_id: session.id, checkout_url: session.url,
+          }).eq("id", ext.id);
+
+          // booking_source MUST be 'website': payments_booking_source_check permits
+          // only admin|website, so the previous value 'auto_extend' meant this
+          // insert failed EVERY time and the error was thrown away. Without this
+          // row, stripe-webhook-live's lookup by session id finds nothing, so a
+          // customer could pay the link and nothing settled, allocated, rolled the
+          // end date, or un-paused the rental. 'website' is also the value the
+          // webhook already settles under.
+          const { error: payErr } = await supabase.from("payments").insert({
+            rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
+            extension_id: ext.id, amount: dueNow, remaining_amount: dueNow,
+            payment_date: today, method: "Card", payment_type: "Payment",
+            status: "Pending", verification_status: "pending", capture_status: "requires_capture",
+            stripe_checkout_session_id: session.id, booking_source: "website", platform_account: ctx.platformAccount,
+            target_categories: ["Extension Rental", "Extension Tax", "Extension Service Fee", "Extension Add-on", "Extension Insurance"],
+            created_at: nowIso, updated_at: nowIso,
+          });
+          if (payErr) {
+            // Never silent again: a missing row means the customer cannot be
+            // credited for a payment they are about to be asked to make.
+            console.error(`[auto-extend] payments insert FAILED for ${r.id} ext#${seq}: ${payErr.message}`);
+            errors.push(`${String(r.id).slice(0, 8)}: payments row not created — ${payErr.message}`);
+          }
+
+          const total = fmtCurrency(dueNow, ctx.currencyCode);
+          const vehicle = r.vehicles ? `${r.vehicles.make ?? ""} ${r.vehicles.model ?? ""}`.trim() : "your vehicle";
+          // Per-occurrence override email (subject/body) was resolved above as `occ`.
+          if (occ.sendEmail !== false) {
+            const bodyHtml = occ.emailBody
+              ? String(occ.emailBody).split("\n").map((p: string) => `<p>${p}</p>`).join("")
+              : `<p>Hi ${customer.name || "there"},</p><p>Your rental of <strong>${vehicle}</strong> with <strong>${tenant.company_name || "us"}</strong> is due to renew for another period (<strong>${r.end_date} → ${newEndDate}</strong>).</p><p>Please pay <strong>${total}</strong> upfront to continue:</p>`;
+            // Itemised breakdown when extras / insurance ride on this renewal.
+            const breakdownRows: string[] = [];
+            if (occExtras.length > 0 || insurancePremium > 0) {
+              breakdownRows.push(`<tr><td style="padding:4px 0;">Period</td><td style="padding:4px 0;text-align:right;">${fmtCurrency(bd.total, ctx.currencyCode)}</td></tr>`);
+              for (const ex of occExtras) breakdownRows.push(`<tr><td style="padding:4px 0;color:#64748b;">${ex.label}</td><td style="padding:4px 0;text-align:right;color:#64748b;">${fmtCurrency(ex.amount, ctx.currencyCode)}</td></tr>`);
+              if (insurancePremium > 0) breakdownRows.push(`<tr><td style="padding:4px 0;color:#64748b;">Insurance</td><td style="padding:4px 0;text-align:right;color:#64748b;">${fmtCurrency(insurancePremium, ctx.currencyCode)}</td></tr>`);
+              // Credit already applied to this renewal (dueNow < gross) — show it so the
+              // line items reconcile to the amount the customer is actually asked to pay.
+              if (dueNow < chargeTotal - 0.001) breakdownRows.push(`<tr><td style="padding:4px 0;color:#16a34a;">Credit applied</td><td style="padding:4px 0;text-align:right;color:#16a34a;">-${fmtCurrency(round2(chargeTotal - dueNow), ctx.currencyCode)}</td></tr>`);
+              breakdownRows.push(`<tr><td style="padding:6px 0;border-top:1px solid #e2e8f0;font-weight:600;">Total</td><td style="padding:6px 0;border-top:1px solid #e2e8f0;text-align:right;font-weight:600;">${total}</td></tr>`);
+            }
+            const breakdownHtml = breakdownRows.length
+              ? `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">${breakdownRows.join("")}</table>`
+              : "";
+            const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#374151;">${bodyHtml}${breakdownHtml}<p style="text-align:center;margin:24px 0;"><a href="${session.url}" style="display:inline-block;background:#0f172a;color:#fff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Pay ${total} & Renew</a></p><p style="font-size:12px;color:#64748b;">If you've returned the vehicle, you can ignore this message.</p></div>`;
+            await sendEmailInline(customer.email, occ.emailSubject || `Renew your rental — ${total} due`, html, tenant.slug || "noreply");
+          }
+
+          // Retry+surface: a silent failure here (after the email already went out)
+          // would re-send a duplicate pay-link next tick since pending wouldn't be set.
+          await writeRentalState({
+            auto_extend_pending_extension_id: ext.id,
+            auto_extend_status: "awaiting_payment",
+            auto_extend_next_charge_at: nextChargeAt.toISOString(),
+            // Reset the nudge counter per WEEK. It was only ever incremented and
+            // never reset anywhere, making it a lifetime cap — three of RevTek's
+            // four paused rentals sat at or OVER their max (one at 3/1) and could
+            // never be reminded again about any future week.
+            auto_extend_reminder_count: 0,
+            // nowIso, NOT null. The park email IS the first payment ask, so the
+            // nudge interval starts from it. null means epoch, so `now - 0 >=
+            // interval` is trivially true and the 14:00 sweep would nudge a
+            // rental parked at 13:50 ten minutes later.
+            auto_extend_last_reminder_at: nowIso,
+            updated_at: nowIso,
+          }, "pay-link park");
+          linked++;
+          console.log(`[auto-extend] pay-link sent ${r.id} ext#${seq} ${total}`);
+          continue;
+        }
+
+        // No Stripe context — roll back and skip. Un-apply any prepaid credit FIRST
+        // (else the ledger delete cascades its applications and silently loses it).
+        const { error: ncRevErr } = await supabase.rpc("reverse_extension_credit", { p_extension_id: ext.id });
+        if (ncRevErr) {
+          await writeRentalState({ auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso }, "no-ctx reverse-failed pause");
+          paused++;
+          errors.push(`${String(r.id).slice(0, 8)}: no-Stripe-context reverse failed — PAUSED (manual review)`);
+          continue;
+        }
+        const { error: ncLedgerDelErr } = await supabase.from("ledger_entries").delete().eq("extension_id", ext.id);
+        const { error: ncExtDelErr } = await supabase.from("rental_extensions").delete().eq("id", ext.id);
+        if (ncLedgerDelErr || ncExtDelErr) {
+          await writeRentalState({ auto_extend_paused: true, auto_extend_paused_at: nowIso, auto_extend_status: "paused", updated_at: nowIso }, "no-ctx rollback-delete-failed pause");
+          paused++;
+          errors.push(`${String(r.id).slice(0, 8)}: no-Stripe-context rollback delete failed — PAUSED (manual review)`);
+          continue;
+        }
+        skipped++;
+      } catch (perRentalErr: any) {
+        console.error(`[auto-extend] error on rental ${r.id}:`, perRentalErr?.message ?? perRentalErr);
+        failed++;
+      }
+    }
+
+    console.log(`[auto-extend] done renewed=${renewed} linked=${linked} paused=${paused} skipped=${skipped} failed=${failed}`);
+    return new Response(JSON.stringify({ success: true, renewed, linked, paused, skipped, failed, errors }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    console.error("[auto-extend] fatal:", error);
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

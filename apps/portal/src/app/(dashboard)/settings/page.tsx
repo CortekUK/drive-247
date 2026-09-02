@@ -163,7 +163,7 @@ const Settings = () => {
   const allSettingsTabs = [
     'general', 'locations', 'branding',
     'requirements', 'duration', 'lockbox',
-    'pricing', 'fees', 'preauth', 'promos', 'extras', 'payments',
+    'pricing', 'fees', 'preauth', 'auto-extend', 'promos', 'extras', 'payments',
     'reminders', 'templates',
     'messaging', 'insurance', 'esign', 'blacklist',
     'subscription',
@@ -487,6 +487,11 @@ const Settings = () => {
     buffer_time_minutes: number;
     return_reminder_enabled: boolean;
     return_reminder_hours: number;
+    auto_extend_enabled: boolean;
+    auto_extend_default_charge_mode: 'auto_charge' | 'pay_link';
+    auto_extend_default_lead_hours: number;
+    auto_extend_grace_hours: number;
+    auto_extend_max_retries: number;
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -522,6 +527,11 @@ const Settings = () => {
     return_reminder_hours: 24,
     // Pay As You Go
     // Auto-extension
+    auto_extend_enabled: false,
+    auto_extend_default_charge_mode: 'pay_link',
+    auto_extend_default_lead_hours: 0,
+    auto_extend_grace_hours: 48,
+    auto_extend_max_retries: 3,
   });
 
   // Sync rental form with loaded settings
@@ -563,6 +573,11 @@ const Settings = () => {
         return_reminder_enabled: (rentalSettings as any).return_reminder_enabled ?? false,
         return_reminder_hours: (rentalSettings as any).return_reminder_hours ?? 24,
         // Pay As You Go
+        auto_extend_enabled: (rentalSettings as any).auto_extend_enabled ?? false,
+        auto_extend_default_charge_mode: (rentalSettings as any).auto_extend_default_charge_mode ?? 'pay_link',
+        auto_extend_default_lead_hours: (rentalSettings as any).auto_extend_default_lead_hours ?? 0,
+        auto_extend_grace_hours: (rentalSettings as any).auto_extend_grace_hours ?? 48,
+        auto_extend_max_retries: (rentalSettings as any).auto_extend_max_retries ?? 3,
       });
     }
   }, [rentalSettings]);
@@ -1628,6 +1643,7 @@ const Settings = () => {
                 { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
                 { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
                 { value: 'preauth', icon: CreditCard, label: 'Deposit' },
+                { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
                 { value: 'promos', icon: Zap, label: 'Promos' },
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
@@ -3863,6 +3879,132 @@ const Settings = () => {
 
         </TabsContent>
 
+        {/* Auto-Extend Tab */}
+        <TabsContent value="auto-extend" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5 text-primary" />
+                Auto-Extension
+              </CardTitle>
+              <CardDescription>
+                Long-term rentals that automatically renew each period and charge the customer UPFRONT. The vehicle stays marked as rented until it's returned.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
+                <div className="space-y-1 min-w-0">
+                  <h4 className="font-medium">Enable Auto-Extension</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Allow rentals on this account to auto-renew weekly/monthly and be charged in advance for each period.
+                  </p>
+                </div>
+                <Switch
+                  className="shrink-0 mt-0.5"
+                  checked={rentalForm.auto_extend_enabled ?? false}
+                  onCheckedChange={async (checked) => {
+                    setRentalForm(prev => ({ ...prev, auto_extend_enabled: checked }));
+                    try {
+                      await updateRentalSettings({ auto_extend_enabled: checked } as any);
+                    } catch (error: any) {
+                      console.error('Failed to update auto-extend toggle:', error);
+                      toast({ title: 'Save failed', description: error?.message || 'Could not update auto-extension', variant: 'destructive' });
+                    }
+                  }}
+                  disabled={isUpdatingRentalSettings}
+                />
+              </div>
+
+              {rentalForm.auto_extend_enabled && (
+                <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                  <p className="text-sm font-medium">How it works</p>
+                  <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
+                    <li>When creating a rental, choose <strong>Auto-Extend</strong> and a period (weekly/monthly)</li>
+                    <li>Each period the customer is billed <strong>upfront</strong> — either auto-charged on their saved card, or emailed a pay-link</li>
+                    <li>On payment the rental's end date rolls forward one period; the car keeps showing as rented</li>
+                    <li>It keeps renewing until the rental is returned/closed (or an optional max-period cap is reached)</li>
+                    <li>This is the opposite of Pay As You Go, which bills in arrears after the period is used</li>
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {rentalForm.auto_extend_enabled && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  Billing Defaults
+                </CardTitle>
+                <CardDescription>
+                  Defaults applied to new auto-extend rentals. Each rental can override these at creation.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  <Label>Default charge method</Label>
+                  <Select
+                    value={rentalForm.auto_extend_default_charge_mode}
+                    onValueChange={async (value) => {
+                      const mode = value as 'auto_charge' | 'pay_link';
+                      setRentalForm(prev => ({ ...prev, auto_extend_default_charge_mode: mode }));
+                      try { await updateRentalSettings({ auto_extend_default_charge_mode: mode } as any); }
+                      catch (error: any) { toast({ title: 'Save failed', description: error?.message, variant: 'destructive' }); }
+                    }}
+                    disabled={isUpdatingRentalSettings}
+                  >
+                    <SelectTrigger className="max-w-md"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pay_link">Pay-link — email the customer a checkout link each period</SelectItem>
+                      <SelectItem value="auto_charge">Auto-charge — charge the saved card automatically (no action needed)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-charge requires the customer's card to be on file in your Stripe account (saved at booking / deposit hold).
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Charge lead time (hours)</Label>
+                    <Input
+                      type="number" min={0} max={168}
+                      value={rentalForm.auto_extend_default_lead_hours}
+                      onChange={(e) => setRentalForm(prev => ({ ...prev, auto_extend_default_lead_hours: Number(e.target.value) }))}
+                      onBlur={async (e) => { try { await updateRentalSettings({ auto_extend_default_lead_hours: Number(e.target.value) } as any); } catch (err: any) { toast({ title: 'Save failed', description: err?.message, variant: 'destructive' }); } }}
+                      disabled={isUpdatingRentalSettings}
+                    />
+                    <p className="text-xs text-muted-foreground">How long before the period ends to charge (0 = exactly at the boundary).</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Grace window (hours)</Label>
+                    <Input
+                      type="number" min={0} max={720}
+                      value={rentalForm.auto_extend_grace_hours}
+                      onChange={(e) => setRentalForm(prev => ({ ...prev, auto_extend_grace_hours: Number(e.target.value) }))}
+                      onBlur={async (e) => { try { await updateRentalSettings({ auto_extend_grace_hours: Number(e.target.value) } as any); } catch (err: any) { toast({ title: 'Save failed', description: err?.message, variant: 'destructive' }); } }}
+                      disabled={isUpdatingRentalSettings}
+                    />
+                    <p className="text-xs text-muted-foreground">How long to keep retrying a failed charge / unpaid link before pausing.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Max retries</Label>
+                    <Input
+                      type="number" min={0} max={20}
+                      value={rentalForm.auto_extend_max_retries}
+                      onChange={(e) => setRentalForm(prev => ({ ...prev, auto_extend_max_retries: Number(e.target.value) }))}
+                      onBlur={async (e) => { try { await updateRentalSettings({ auto_extend_max_retries: Number(e.target.value) } as any); } catch (err: any) { toast({ title: 'Save failed', description: err?.message, variant: 'destructive' }); } }}
+                      disabled={isUpdatingRentalSettings}
+                    />
+                    <p className="text-xs text-muted-foreground">Failed auto-charges before the rental is paused.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         {/* Promos Tab */}
         <TabsContent value="promos" className="space-y-6">
           {/* Promo Code Card UI */}
@@ -4023,7 +4165,7 @@ const Settings = () => {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
+                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only — never to auto-extension renewals. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -4275,7 +4417,7 @@ const Settings = () => {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Auto duration discounts apply to fixed rentals paid in full only.
+                      Auto duration discounts apply to fixed rentals paid in full only — never to auto-extension bookings.
                     </p>
                   </div>
 

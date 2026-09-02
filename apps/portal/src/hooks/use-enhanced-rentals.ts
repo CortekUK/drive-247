@@ -29,6 +29,7 @@ export interface RentalFilters {
    * count is unverifiable and the CTA is a dead end.
    */
   depositHold?: string;
+  extensionRequested?: boolean;
   cancellationRequested?: boolean;
 }
 
@@ -53,6 +54,9 @@ export interface EnhancedRental {
   initial_payment: number | null;
   payment_mode?: string;
   created_at?: string;
+  is_extended?: boolean;
+  auto_extend_enabled?: boolean;
+  auto_extend_status?: string | null;
   previous_end_date?: string | null;
   cancellation_requested?: boolean;
   bonzah_status?: string | null;
@@ -97,6 +101,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     captureStatus,
     bonzahStatus,
     depositHold,
+    extensionRequested,
     cancellationRequested
   } = filters;
 
@@ -120,6 +125,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     captureStatus,
     bonzahStatus,
     depositHold,
+    extensionRequested,
     cancellationRequested
   ];
 
@@ -145,6 +151,9 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           payment_status,
           payment_mode,
           created_at,
+          is_extended,
+          auto_extend_enabled,
+          auto_extend_status,
           previous_end_date,
           cancellation_requested,
           deposit_hold_status,
@@ -212,6 +221,8 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
           const durationMonths = calculateDuration(rental.start_date, rental.end_date, periodType);
           const computedStatus = getRentalStatus(rental.start_date, rental.end_date, rental.status, {
             returnTime: rental.return_time,
+            autoExtendEnabled: rental.auto_extend_enabled,
+            autoExtendStatus: rental.auto_extend_status,
           });
           const initialPaymentData = initialPaymentMap.get(rental.id);
           const initialPaymentAmount = initialPaymentData?.amount || null;
@@ -241,6 +252,9 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
             payment_capture_status: paymentCaptureStatus,
             created_at: rental.created_at,
             payment_mode: rental.payment_mode,
+            is_extended: rental.is_extended,
+            auto_extend_enabled: rental.auto_extend_enabled,
+            auto_extend_status: rental.auto_extend_status,
             previous_end_date: rental.previous_end_date,
             cancellation_requested: rental.cancellation_requested,
             bonzah_status: bonzahPolicyMap.get(rental.id) || null,
@@ -346,6 +360,11 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
               if (String(rental.status).toLowerCase() !== 'pending') return false;
               if (hs === 'held') return false;
             }
+          }
+
+          // Apply extension requested filter
+          if (extensionRequested) {
+            if (!rental.is_extended) return false;
           }
 
           // Apply cancellation requested filter

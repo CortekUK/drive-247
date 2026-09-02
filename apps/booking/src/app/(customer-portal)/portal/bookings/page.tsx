@@ -254,6 +254,7 @@ export default function BookingsPage() {
               const photoUrl = customerPhotoUrl(vehicle?.vehicle_photos?.[0], tenant) || vehicle?.photo_url;
               const hasInsuranceAlert = insuranceReuploadRentalIds.has(rental.id);
               const needsSignature = rental.document_status === 'sent' || rental.document_status === 'delivered';
+              const hasPendingExtension = rental.is_extended && rental.extension_checkout_url;
 
               return (
                 <div
@@ -313,6 +314,11 @@ export default function BookingsPage() {
                     {needsSignature && (
                       <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400 dark:border-indigo-800 hidden sm:inline-flex">
                         Sign Agreement
+                      </Badge>
+                    )}
+                    {hasPendingExtension && (
+                      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800 hidden sm:inline-flex">
+                        Extension Pending
                       </Badge>
                     )}
                   </div>
