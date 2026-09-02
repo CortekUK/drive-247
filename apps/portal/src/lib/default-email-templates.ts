@@ -705,6 +705,90 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 <strong>The {{company_name}} Team</strong></p>`,
   },
   {
+    key: 'payg_reminder',
+    name: 'PAYG Payment Reminder',
+    subject: 'Payment Reminder — {{outstanding_amount}} outstanding ({{rental_number}})',
+    content: `<h1>Payment Reminder</h1>
+
+<p>Dear {{customer_name}},</p>
+
+<p>This is a friendly reminder that your Pay-As-You-Go rental with <strong>{{company_name}}</strong> currently has an outstanding balance. With Pay-As-You-Go, charges accrue automatically each day the vehicle is in your possession and are added to a single rolling invoice until you pay.</p>
+
+<hr>
+
+<h2>Outstanding Balance</h2>
+
+<table>
+  <tr>
+    <td><strong>Current Balance:</strong></td>
+    <td>{{outstanding_amount}}</td>
+  </tr>
+  <tr>
+    <td><strong>Latest Invoice:</strong></td>
+    <td>{{invoice_ref}}</td>
+  </tr>
+  <tr>
+    <td><strong>Days Active:</strong></td>
+    <td>{{days_active}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>Rental Details</h2>
+
+<table>
+  <tr>
+    <td><strong>Rental Reference:</strong></td>
+    <td>{{rental_number}}</td>
+  </tr>
+  <tr>
+    <td><strong>Vehicle:</strong></td>
+    <td>{{vehicle_make}} {{vehicle_model}}</td>
+  </tr>
+  <tr>
+    <td><strong>Registration:</strong></td>
+    <td>{{vehicle_reg}}</td>
+  </tr>
+</table>
+
+<hr>
+
+<h2>Pay Now</h2>
+
+<p>Click the button below to settle invoice <strong>{{invoice_ref}}</strong> for <strong>{{outstanding_amount}}</strong>. Your saved card on file will be used.</p>
+
+<p style="text-align:center; margin:24px 0;">
+  <a href="{{payment_url}}" style="display:inline-block; background:#0f172a; color:#ffffff; padding:14px 28px; border-radius:8px; font-weight:600; text-decoration:none;">Pay {{outstanding_amount}} Now</a>
+</p>
+
+<p style="font-size:12px; color:#64748b;">This payment link is valid until your next reminder is sent. After that, this link is suspended and you'll need to use the latest reminder or log into your customer portal.</p>
+
+<p><em>Already paid? You can disregard this message — your payment may still be processing and will reconcile shortly.</em></p>
+
+<hr>
+
+<h2>What Happens If I Don't Pay?</h2>
+
+<p>Daily charges will continue to accrue and your outstanding balance will grow. Persistent non-payment may result in suspension of the rental. Pay early to avoid larger amounts later.</p>
+
+<hr>
+
+<h2>Need Help?</h2>
+
+<p>If you have any questions about your balance or need assistance:</p>
+
+<ul>
+  <li><strong>Email:</strong> {{company_email}}</li>
+  <li><strong>Phone:</strong> {{company_phone}}</li>
+</ul>
+
+<p>Thank you for renting with {{company_name}}.</p>
+
+<p>Kind regards,<br>
+<strong>The {{company_name}} Team</strong></p>`,
+  },
+  {
     key: 'rental_extended',
     name: 'Rental Extended',
     subject: 'Rental Extended - {{rental_number}} | {{company_name}}',

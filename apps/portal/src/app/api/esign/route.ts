@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, PDFPage, PDFFont, StandardFonts, rgb } from 'pdf-lib';
 import { parseLocalDate } from '@/lib/date-utils';
 import { raiseEsignCreditAlert } from '@/lib/esign-credit-alert';
+import { computePaygDailyRate } from '@/lib/payg-rate';
 import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
@@ -26,7 +27,7 @@ interface ESignRequest {
     customerEmail: string;
     customerName: string;
     tenantId: string;
-    agreementType?: 'original' | 'extension';
+    agreementType?: 'original' | 'extension' | 'payg';
     extensionPreviousEndDate?: string;
     extensionNewEndDate?: string;
     extensionNumber?: number;
@@ -223,6 +224,46 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             (rental as any)?.is_gig_driver ?? (customer as any)?.is_gig_driver
                 ? 'Yes'
                 : 'No',
+
+        // PAYG variables. All six are used by the SHIPPED PAYG template and are
+        // offered in the editor's variable picker, but none was ever added to
+        // this map — so every Pay-As-You-Go agreement printed six literal
+        // "{{payg_*}}" strings into the customer's contract. Empty on non-PAYG
+        // rentals, which removeEmptyFields() then strips.
+        ...(() => {
+            const isPayg = !!(rental as any)?.is_pay_as_you_go;
+            if (!isPayg) {
+                return {
+                    payg_daily_rate: '', payg_weekly_rate: '', payg_monthly_rate: '',
+                    payg_billing_amount: '', payg_period_label: '', payg_reminder_interval: '',
+                };
+            }
+            const periodType = (rental as any)?.rental_period_type || 'Monthly';
+            // Net of discount, so payg_daily/weekly/monthly_rate agree with
+            // payg_billing_amount and with monthly_amount/rental_amount below.
+            const daily = computePaygDailyRate(
+                Math.max(0, (Number((rental as any)?.monthly_amount) || 0) - (Number((rental as any)?.discount_applied) || 0)),
+                periodType,
+            );
+            const intervalDays =
+                (rental as any)?.payg_reminder_interval_days ??
+                (tenant as any)?.payg_reminder_interval_days ?? null;
+            return {
+                payg_daily_rate: daily > 0 ? formatCurrency(daily, currencyCode) : '',
+                payg_weekly_rate: daily > 0 ? formatCurrency(daily * 7, currencyCode) : '',
+                payg_monthly_rate: daily > 0 ? formatCurrency(daily * 30, currencyCode) : '',
+                // Net of discount, matching monthly_amount/rental_amount above — this
+                // figure goes into the SIGNED agreement.
+                payg_billing_amount: formatCurrency(
+                    Math.max(0, (Number((rental as any)?.monthly_amount) || 0) - (Number((rental as any)?.discount_applied) || 0)),
+                    currencyCode,
+                ),
+                payg_period_label: String(periodType),
+                payg_reminder_interval: intervalDays
+                    ? `every ${intervalDays} day${Number(intervalDays) === 1 ? '' : 's'}`
+                    : '',
+            };
+        })(),
 
         // LEGACY placeholder, kept for templates that already reference it.
         // It used to return the literal 'Unlimited' whenever a vehicle had no
@@ -1228,7 +1269,9 @@ export async function POST(request: NextRequest) {
         const isExtensionAgreement = body.agreementType === 'extension' && body.extensionNumber;
         const agreementTypeLabel = isExtensionAgreement
             ? `EXTENSION AGREEMENT #${body.extensionNumber}`
-            : 'ORIGINAL RENTAL AGREEMENT';
+            : body.agreementType === 'payg'
+                ? 'PAYG RENTAL AGREEMENT'
+                : 'ORIGINAL RENTAL AGREEMENT';
         // Draw a visible banner box
         const bannerHeight = 32;
         const bannerY = ctx.y - bannerHeight;
@@ -1258,7 +1301,14 @@ export async function POST(request: NextRequest) {
             // Honor the explicit agreementType picked in the dialog. When the caller
             // passed 'original' (or nothing), fall back to the auto-detect chain so
             // older callers and PDFs without an explicit pick still resolve correctly.
-            const templateCategory = body.agreementType === 'extension' ? 'extension' : 'standard';
+            // PAYG is a TEMPLATE variant of the original — we still
+            // store agreement_type='original' downstream (see normalizedAgreementType).
+            const explicit = body.agreementType;
+            const templateCategory = explicit === 'extension'
+                ? 'extension'
+                : explicit === 'payg'
+                    ? 'payg'
+                    : rental?.is_pay_as_you_go ? 'payg' : 'standard';
             let { data: templateData } = await supabase
                 .from('agreement_templates')
                 .select('template_content')
@@ -1465,8 +1515,9 @@ export async function POST(request: NextRequest) {
 
             if (deductResult?.success === false) {
                 console.warn('Insufficient credits for esign:', deductResult);
-                // Record the failed agreement. Normalize so the DB CHECK
-                // constraint (agreement_type IN ('original','extension')) holds.
+                // Record the failed agreement. PAYG is a template
+                // variant of the original — normalize so the DB CHECK constraint
+                // (agreement_type IN ('original','extension')) holds.
                 const rawType = body.agreementType || 'original';
                 const agreementType = rawType === 'extension' ? 'extension' : 'original';
                 await supabase.from('rental_agreements').insert({
@@ -1544,8 +1595,9 @@ export async function POST(request: NextRequest) {
 
         const boldSignResult = await boldSignResponse.json();
         const documentId = boldSignResult.documentId;
-        // Only 'extension' is distinct; everything else stores as 'original'
-        // (one per rental, tracked on rentals.document_status).
+        // PAYG is a template variant of the original — it shares
+        // the same downstream lifecycle (one per rental, tracked on rentals.document_status),
+        // so we collapse them to 'original' for storage. Only 'extension' is distinct.
         const rawType = body.agreementType || 'original';
         const agreementType = rawType === 'extension' ? 'extension' : 'original';
         const now = new Date().toISOString();

@@ -66,6 +66,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
+import { PaygSection } from '@/components/customer-portal/payg-section';
 import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCard';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
@@ -460,6 +461,9 @@ export default function BookingDetailPage() {
           extension_checkout_url, extension_amount, delivery_method, delivery_address, delivery_fee,
           collection_fee, deposit_hold_status, deposit_hold_amount,
           document_status, docusign_envelope_id, signed_document_id,
+          is_pay_as_you_go, payg_start_ts, payg_next_accrual_at, payg_last_reminder_sent_at,
+          payg_reminder_count, payg_reminder_interval_days, payg_paused, payg_closed_at,
+          payg_accrual_day_count,
           is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total,
           auto_extend_enabled,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, ${VEHICLE_PHOTO_COLUMNS})
@@ -504,9 +508,9 @@ export default function BookingDetailPage() {
     enabled: !!id,
   });
 
-  // Direct payments-table sum (Applied + Credit + Partial): a prepayment lands
-  // as 'Credit' (no charges yet to allocate against), so the Applied-only
-  // `payments` query above misses it.
+  // Direct payments-table sum (Applied + Credit + Partial) for the PAYG
+  // upfront banner. A fresh PAYG prepayment lands as 'Credit' (no charges yet
+  // to allocate against), so the Applied-only `payments` query above misses it.
   const { data: rentalPaymentsTotal = 0 } = useQuery({
     queryKey: ['customer-rental-payments-total', id],
     queryFn: async () => {
@@ -705,7 +709,9 @@ export default function BookingDetailPage() {
   const [extendDialogOpen, setExtendDialogOpen] = useState(false);
   const [showCancelExtension, setShowCancelExtension] = useState(false);
 
-  const canExtend = rental?.status === 'Active' && !rental?.is_extended;
+  // PAYG rentals are open-ended by definition — the customer "extends" by simply
+  // continuing to rent (daily accrual), so the extension flow doesn't apply.
+  const canExtend = rental?.status === 'Active' && !rental?.is_extended && !(rental as any)?.is_pay_as_you_go;
   const hasExtensionPending = rental?.is_extended === true;
 
   const cancelExtension = useMutation({
@@ -997,6 +1003,79 @@ export default function BookingDetailPage() {
         />
       )}
 
+      {/* PAYG Upfront Payment banner — shown when tenant requires first-period
+          prepayment and the customer hasn't paid it yet. Uses the same
+          create-checkout-session flow PaygSection uses for incremental payments. */}
+      {(rental as any)?.is_pay_as_you_go && (tenant as any)?.payg_upfront_required && !(rental as any)?.lockbox_sent_at && (() => {
+        const periodType = String((rental as any).rental_period_type || 'Weekly');
+        const periodLabel = periodType === 'Monthly' ? 'month' : periodType === 'Daily' ? 'day' : 'week';
+        const firstPeriodRental = Number((rental as any).monthly_amount) || 0;
+        const taxPct = tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0;
+        const svcPct = tenant?.service_fee_enabled && tenant?.service_fee_type === 'percentage'
+          ? Number(tenant?.service_fee_value || 0) : 0;
+        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
+        const upfrontSatisfied = rentalPaymentsTotal >= upfrontAmount - 0.01;
+
+        const handlePayUpfront = async () => {
+          if (!tenant?.id || upfrontAmount <= 0) return;
+          try {
+            const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+              body: {
+                rentalId: (rental as any).id,
+                totalAmount: upfrontAmount,
+                tenantId: tenant.id,
+                customerEmail: customerUser?.customer?.email,
+                source: 'booking',
+                targetCategories: ['Rental', 'Tax', 'Service Fee'],
+                successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${(rental as any).id}&type=invoice`,
+                cancelUrl: `${window.location.origin}/portal/bookings/${(rental as any).id}`,
+              },
+            });
+            if (error) throw error;
+            if (data?.url) window.location.href = data.url;
+            else toast.error('Could not start checkout');
+          } catch (err: any) {
+            toast.error(err?.message || 'Could not start checkout');
+          }
+        };
+
+        return (
+          <Card className={`border ${upfrontSatisfied ? 'border-green-200 bg-green-50' : 'border-indigo-200 bg-indigo-50'}`}>
+            <CardContent className="pt-4 pb-4 flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3 min-w-0">
+                {upfrontSatisfied ? (
+                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <p className={`font-medium text-sm ${upfrontSatisfied ? 'text-green-900' : 'text-indigo-900'}`}>
+                    {upfrontSatisfied
+                      ? `First ${periodLabel} paid — your keys will be released on collection day`
+                      : `First ${periodLabel} payment required before pickup`}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${upfrontSatisfied ? 'text-green-700' : 'text-indigo-700'}`}>
+                    {upfrontSatisfied
+                      ? `Daily charges will draw down from this prepayment for the first ${periodLabel}.`
+                      : `Pay ${formatCurrency(upfrontAmount, currencyCode)} now to confirm your rental. Daily charges start once your prepaid ${periodLabel} is used.`}
+                  </p>
+                </div>
+              </div>
+              {!upfrontSatisfied && (
+                <Button
+                  size="sm"
+                  onClick={handlePayUpfront}
+                  className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Pay {formatCurrency(upfrontAmount, currencyCode)}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* Tabs: Payments / Agreements / Insurance */}
       <Tabs defaultValue="payments" className="w-full">
         <TabsList className="grid grid-cols-3 w-full max-w-md">
           <TabsTrigger value="payments">Payments</TabsTrigger>
@@ -1005,7 +1084,56 @@ export default function BookingDetailPage() {
         </TabsList>
 
         <TabsContent value="payments" className="mt-4 space-y-4">
-
+          {(rental as any)?.is_pay_as_you_go && (
+            <PaygSection
+              rentalId={(rental as any).id}
+              isPayg
+              currencyCode={currencyCode}
+              customerName={customerUser?.customer?.name || ''}
+              customerEmail={customerUser?.customer?.email || undefined}
+              customerPhone={customerUser?.customer?.phone || undefined}
+              vehicle={{
+                // ?? undefined because this prop models "no plate" as undefined,
+                // while displayRegistration returns null for it.
+                reg: displayRegistration((rental as any).vehicles, tenant) ?? undefined,
+                make: (rental as any).vehicles?.make,
+                model: (rental as any).vehicles?.model,
+              }}
+              rental={{
+                start_date: (rental as any).start_date,
+                end_date: (rental as any).end_date,
+                monthly_amount: (rental as any).monthly_amount,
+                rental_number: (rental as any).rental_number,
+                payg_closed_at: (rental as any).payg_closed_at,
+              }}
+              onTakePayment={async ({ amount, paygAccrualId }) => {
+                if (!tenant?.id || amount <= 0) return;
+                try {
+                  const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                    body: {
+                      rentalId: (rental as any).id,
+                      totalAmount: amount,
+                      tenantId: tenant.id,
+                      customerEmail: customerUser?.customer?.email,
+                      source: 'booking',
+                      targetCategories: ['Rental', 'Tax', 'Service Fee'],
+                      paygAccrualId,
+                      successUrl: `${window.location.origin}/booking-success?session_id={CHECKOUT_SESSION_ID}&rental_id=${(rental as any).id}&type=invoice`,
+                      cancelUrl: `${window.location.origin}/portal/bookings/${(rental as any).id}`,
+                    },
+                  });
+                  if (error) throw error;
+                  if (data?.url) {
+                    window.location.href = data.url;
+                  } else {
+                    toast.error('Failed to create payment link');
+                  }
+                } catch (e: any) {
+                  toast.error(e?.message || 'Failed to create payment link');
+                }
+              }}
+            />
+          )}
           <PaymentBreakdown
             rental={rental as any}
             customerEmail={customerUser?.customer?.email}
@@ -1154,8 +1282,8 @@ export default function BookingDetailPage() {
         </Card>
       )}
 
-      {/* Extend Rental Dialog */}
-      {rental && (
+      {/* Extend Rental Dialog — not mounted for PAYG (open-ended, no end_date to extend) */}
+      {rental && !(rental as any).is_pay_as_you_go && (
         <ExtendRentalDialog
           open={extendDialogOpen}
           onOpenChange={setExtendDialogOpen}

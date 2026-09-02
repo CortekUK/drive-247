@@ -32,6 +32,8 @@ import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { useRentalManualPaidBreakdown } from "@/hooks/use-rental-manual-paid-breakdown";
+import { usePaygLedger } from "@/hooks/use-payg-ledger";
+import { usePaygInvoices } from "@/hooks/use-payg-invoices";
 import { RentalLedger } from "@/components/rentals/rental-ledger";
 import { PaymentLinksPanel } from "@/components/payments/payment-links-panel";
 import { useRentalPaymentLinks } from "@/hooks/use-payment-links";
@@ -62,6 +64,9 @@ import { useAuth } from "@/stores/auth-store";
 import { useRentalAgreements } from "@/hooks/use-rental-agreements";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
+import { PaygSection } from "@/components/rentals/payg-section";
+import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
+import { PaygUpfrontCollectPopover, type PaygUpfrontLineItem } from "@/components/rentals/payg-upfront-collect-popover";
 import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-card";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
@@ -372,6 +377,7 @@ interface Rental {
   // Gig driver
   is_gig_driver?: boolean;
   // Pay As You Go
+  is_pay_as_you_go?: boolean;
   // Security deposit pre-auth hold. These live on the rental, NOT on payments —
   // which is exactly why an expiring Stripe authorisation goes unnoticed (the
   // webhooks only look PaymentIntents up in payments.stripe_payment_intent_id).
@@ -534,6 +540,15 @@ const RentalDetail = () => {
   const { data: extensionTotals = [] } = useRentalExtensionTotals(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [showPaygUpfrontDialog, setShowPaygUpfrontDialog] = useState(false);
+  // Bundle the staff member picks in the Collect Now popover (first period +
+  // delivery/collection/insurance/extras). Set when they hit "Continue to
+  // payment", consumed by the AddPaymentDialog instance further down the tree.
+  const [paygUpfrontBundle, setPaygUpfrontBundle] = useState<{
+    amount: number;
+    targetCategories: string[];
+    paygAccrualId?: string;
+  } | null>(null);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
   const [checkingDocuSignStatus, setCheckingDocuSignStatus] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -656,12 +671,15 @@ const RentalDetail = () => {
     return Number(tenant?.global_deposit_amount) || 0;
   })();
   // Direct payments-table sum — counts received money regardless of allocation.
-  // Counts received money regardless of allocation.
+  // Needed for the PAYG upfront banner: a fresh PAYG rental has no charges yet
+  // (cron hasn't fired), so allocation-based totals would stay at $0 even after
+  // a successful prepayment. This catches that case.
   const { data: rentalPaymentsTotal = 0 } = useQuery({
     queryKey: ['rental-payments-total', tenant?.id, id],
     queryFn: async () => {
       if (!id) return 0;
-      // Count only money actually received. 'Credit' = unallocated prepayment.
+      // Count only money actually received. 'Credit' = unallocated prepayment
+      // (the PAYG upfront case — no charges yet to allocate against).
       // 'Pending' = Stripe checkout created but not paid, do NOT count.
       const { data, error } = await supabase
         .from('payments')
@@ -703,7 +721,15 @@ const RentalDetail = () => {
   const extensionCategoryRefunds = refundData?.extensionCategoryRefunds || {};
   const { data: manualPaidByCategory } = useRentalManualPaidBreakdown(id);
 
-  // Auto-extension rentals have no upfront invoice — synthesise an
+  // PAYG daily ledger
+  const { ledger: paygLedger, isLoading: isPaygLedgerLoading } = usePaygLedger(id, rental?.is_pay_as_you_go === true);
+
+  // PAYG rolling invoice totals (Collected / Balance Due / Refunded / Net Received).
+  // Driven by the same hook that powers the PAYG section below — Realtime + 5s polling
+  // mean the four header cards stay in sync with the latest accrual / payment.
+  const { data: paygInvoiceData } = usePaygInvoices(id, rental?.is_pay_as_you_go === true);
+
+  // PAYG and auto-extension rentals have no upfront invoice — synthesise an
   // invoice-shaped object from the ledger-entry sums so the regular Payment
   // Breakdown card (incl. the per-extension accordion) can render with all the
   // same categories, refund controls, pay-selected buttons, etc. Regular rentals
@@ -711,8 +737,8 @@ const RentalDetail = () => {
   const invoiceBreakdown = useMemo(() => {
     if (rawInvoiceBreakdown) return rawInvoiceBreakdown;
     // No real invoice: synthesise from the ledger when this rental bills via the
-    // ledger (auto-extension extensions) rather than an upfront invoice.
-    const billsViaLedger = (rental as any)?.auto_extend_enabled
+    // ledger (PAYG accruals or auto-extension extensions) rather than an upfront invoice.
+    const billsViaLedger = rental?.is_pay_as_you_go || (rental as any)?.auto_extend_enabled
       || (rentalCharges && rentalCharges.length > 0);
     if (!billsViaLedger) return null;
 
@@ -729,7 +755,7 @@ const RentalDetail = () => {
     const extrasTotal = sumBy('Extras');
 
     return {
-      id: 'ledger-synthetic',
+      id: 'payg-synthetic',
       rentalFee,
       taxAmount,
       serviceFee,
@@ -738,7 +764,9 @@ const RentalDetail = () => {
       deliveryFee,
       extrasTotal,
       totalAmount: rentalFee + taxAmount + serviceFee + insurancePremium + deliveryFee + extrasTotal,
-      status: 'active',
+      // payg_closed_at only means "closed" for actual PAYG rentals; on a migrated
+      // auto-extension rental it's a leftover flag, so don't treat it as closed.
+      status: ((rental as any)?.payg_closed_at && rental?.is_pay_as_you_go) ? 'closed' : 'active',
     } as typeof rawInvoiceBreakdown;
   }, [rawInvoiceBreakdown, rental, rentalCharges]);
 
@@ -1037,6 +1065,106 @@ const RentalDetail = () => {
       }
     })();
   }, [searchParams, id, tenant?.id, holdSynced, queryClient, toast, router]);
+
+  // PAYG: poll for pending reminder-link Stripe payment completion.
+  // Mirrors the regular Email-Stripe-Link polling below — same cadence, same
+  // process-pending-payment fallback, same query invalidation. Difference: the
+  // session id source is `payg_reminder_log.stripe_checkout_session_id`
+  // (stamped by the send-payg-reminders cron) instead of `localStorage`
+  // (stamped by AddPaymentDialog when admin clicks Email Stripe Link).
+  // Re-runs on each new reminder (Realtime postgres_changes on payg_reminder_log).
+  useEffect(() => {
+    if (!id || !tenant?.id || !rental?.is_pay_as_you_go) return;
+    let pollInterval: any = null;
+    let cancelled = false;
+
+    const startPolling = async () => {
+      if (cancelled) return;
+      const { data: latestReminder } = await supabase
+        .from('payg_reminder_log')
+        .select('id, stripe_checkout_session_id')
+        .eq('rental_id', id)
+        .eq('tenant_id', tenant.id)
+        .not('stripe_checkout_session_id', 'is', null)
+        .is('stripe_session_expired_at', null)
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const sessionId = latestReminder?.stripe_checkout_session_id;
+      if (!sessionId) return;
+
+      // Don't stack poll loops if a previous one is still running
+      if (pollInterval) clearInterval(pollInterval);
+
+      let attempts = 0;
+      const maxAttempts = 60; // 5 min × 12 ticks/min
+      pollInterval = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          return;
+        }
+        // Fast path: payment row already moved off Pending (booking-success page,
+        // portal redirect, or our own poll committed it on a prior tick).
+        const { data: payment } = await supabase
+          .from('payments')
+          .select('id, status')
+          .eq('stripe_checkout_session_id', sessionId)
+          .maybeSingle();
+        if (payment?.status && payment.status !== 'Pending') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+            queryClient.invalidateQueries({ queryKey: ['rental', id] }),
+          ]);
+          setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
+          return;
+        }
+        // Active fallback: poll Stripe via process-pending-payment, same as regular flow.
+        try {
+          const { data: result } = await supabase.functions.invoke('process-pending-payment', {
+            body: { checkoutSessionId: sessionId },
+          });
+          if (result?.ok && !result?.alreadyProcessed) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ['payg-invoices'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-totals'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
+              queryClient.invalidateQueries({ queryKey: ['rental', id] }),
+            ]);
+            setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
+          }
+        } catch { /* ignore transient errors, retry next tick */ }
+      }, 5000);
+    };
+
+    // Kick off immediately on mount (covers reminders sent before the page loaded)
+    startPolling();
+
+    // Restart whenever a new reminder lands so we pick up the freshest session id
+    const channel = supabase
+      .channel(`payg-poll:${id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payg_reminder_log', filter: `rental_id=eq.${id}` }, () => {
+        startPolling();
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [id, tenant?.id, rental?.is_pay_as_you_go, queryClient]);
 
   // Poll for pending email payment completion (when admin sent Stripe link via email)
   useEffect(() => {
@@ -1960,6 +2088,44 @@ const RentalDetail = () => {
     return originalCategories + extensionOutstanding;
   }, [categoryRemainingAmounts, extensionTotals]);
 
+  // PAYG upfront requirement, hoisted to component scope so the GENERIC "Record
+  // Payment" dialog can surface it too — not just the Collect Now flow. Mirrors
+  // the Collect Now banner's firstPeriodTotal (~line 2722): a PAYG rental owes its
+  // first period (+ % tax + % service fee) BEFORE key handover, but nothing has
+  // accrued to the ledger yet, so `outstandingBalance` is 0 and the dialog wrongly
+  // showed "No outstanding balance". `unmetDue` is what still must be collected
+  // toward that requirement (drops to 0 once satisfied, so the accrued ledger then
+  // takes over naturally). Guarded to the exact same condition as the banner, so
+  // it is 0 for non-PAYG, post-key-handover, or upfront-not-required rentals.
+  const paygUpfront = useMemo(() => {
+    const active =
+      !!rental &&
+      !!(rental as any).is_pay_as_you_go &&
+      !!(rentalSettings as any)?.payg_upfront_required &&
+      !isKeyHandoverCompleted;
+    if (!active) return { required: 0, satisfied: true, unmetDue: 0 };
+    const base = Number((rental as any)?.monthly_amount) || 0;
+    const taxPct = (rentalSettings as any)?.tax_enabled
+      ? Number((rentalSettings as any)?.tax_percentage || 0)
+      : 0;
+    const svcPct =
+      (rentalSettings as any)?.service_fee_enabled &&
+      (rentalSettings as any)?.service_fee_type === "percentage"
+        ? Number((rentalSettings as any)?.service_fee_value || 0)
+        : 0;
+    // Identical formula to firstPeriodTotal at ~line 2720-2722.
+    const required =
+      Math.round(
+        (base + Math.round(base * taxPct) / 100 + Math.round(base * svcPct) / 100) *
+          100,
+      ) / 100;
+    const satisfied = rentalPaymentsTotal >= required - 0.01;
+    const unmetDue = satisfied
+      ? 0
+      : Math.round((required - rentalPaymentsTotal) * 100) / 100;
+    return { required, satisfied, unmetDue };
+  }, [rental, rentalSettings, isKeyHandoverCompleted, rentalPaymentsTotal]);
+
   if (isLoading) {
     return <div>Loading rental details...</div>;
   }
@@ -2055,16 +2221,23 @@ const RentalDetail = () => {
   //
   // Read from the SAME two numbers the "Collected" and "Balance Due" cards print
   // (~line 3115), so the Collect Payment button can never contradict the card
-  // three inches below it — the allocation ledger.
+  // three inches below it. Both branches are the cards' own: PAYG reads the
+  // rolling-invoice totals, everything else reads the allocation ledger.
   //
   // NOT from rentalPaymentsTotal. That query counts only status in
   // ('Applied','Credit','Partial'), so money-received has to come from the
   // allocation totals instead.
-  const collectedTotal = totalPayments;
-  const balanceDueTotal = outstandingBalance;
-  // Money has arrived and the ledger wants nothing more. Sub-penny tolerance
-  // because these are summed floats.
-  const rentalFullyPaid = collectedTotal > 0 && balanceDueTotal <= 0.01;
+  const isPaygRental = rental?.is_pay_as_you_go === true;
+  const collectedTotal = isPaygRental
+    ? Math.max(paygInvoiceData?.totals?.collected ?? 0, rentalPaymentsTotal)
+    : totalPayments;
+  const balanceDueTotal = isPaygRental
+    ? (paygInvoiceData?.totals?.balanceDue ?? 0)
+    : outstandingBalance;
+  // Money has arrived, the ledger wants nothing more, and any PAYG upfront
+  // requirement is met. Sub-penny tolerance because these are summed floats.
+  const rentalFullyPaid =
+    collectedTotal > 0 && balanceDueTotal <= 0.01 && paygUpfront.unmetDue <= 0;
 
   // Compute rental status based on approval_status, payment_status, AND key handover
   const computeStatus = (rental: Rental): string => {
@@ -2378,6 +2551,25 @@ const RentalDetail = () => {
             </p>
             {/* Key Status Badges */}
             <div className="flex flex-wrap gap-2 mt-2">
+              {/* PAYG indicator */}
+              {rental.is_pay_as_you_go && (
+                <Badge
+                  variant="outline"
+                  className="bg-indigo-500/10 text-indigo-600 border-indigo-500/30 gap-1"
+                >
+                  <Clock className="h-3 w-3" />
+                  Pay As You Go
+                  {(rental as any).payg_paused && (
+                    <span className="ml-1 text-xs font-normal text-amber-500">· Paused</span>
+                  )}
+                  {(rental as any).payg_closed_at && (
+                    <span className="ml-1 text-xs font-normal text-green-500">· Closed</span>
+                  )}
+                  {!(rental as any).payg_paused && !(rental as any).payg_closed_at && (
+                    <span className="ml-1 text-xs font-normal">· Day {(rental as any).payg_accrual_day_count || 0}</span>
+                  )}
+                </Badge>
+              )}
               {/* Auto-Extension indicator */}
               {(rental as any).auto_extend_enabled && (
                 <Badge
@@ -2520,7 +2712,7 @@ const RentalDetail = () => {
           {/* Active Rental - Show Add Payment, Close, Cancel, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Active' && (
             <>
-              {rental.is_extended && (
+              {rental.is_extended && !rental.is_pay_as_you_go && (
                 <Button
                   variant="default"
                   className="bg-amber-600 hover:bg-amber-700"
@@ -2530,10 +2722,97 @@ const RentalDetail = () => {
                   Review Extension
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setShowAdminExtendDialog(true)}>
-                <CalendarPlus className="h-4 w-4 mr-2" />
-                Extend Rental
-              </Button>
+              {/* R11: Extend Rental hidden for PAYG — open-ended rentals can't be extended */}
+              {!rental.is_pay_as_you_go && (
+                <Button variant="outline" onClick={() => setShowAdminExtendDialog(true)}>
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Extend Rental
+                </Button>
+              )}
+              {/* PAYG-specific actions: Pause/Resume + Close */}
+              {rental.is_pay_as_you_go && !(rental as any).payg_closed_at && (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const isPaused = (rental as any).payg_paused === true;
+                        if (!isPaused) {
+                          if (!window.confirm('Pause PAYG billing for this rental? Daily accrual will stop until you resume.')) return;
+                        }
+                        const updates: any = { payg_paused: !isPaused };
+                        if (isPaused) {
+                          // Resuming: reset next accrual to 24h from now (R13: don't backfill)
+                          updates.payg_next_accrual_at = new Date(
+                            Date.now() + 24 * 60 * 60 * 1000,
+                          ).toISOString();
+                          updates.payg_paused_at = null; // Clear stale pause timestamp
+                        } else {
+                          updates.payg_paused_at = new Date().toISOString();
+                        }
+                        const { error } = await (supabase as any)
+                          .from('rentals')
+                          .update(updates)
+                          .eq('id', rental.id);
+                        if (error) throw error;
+                        toast({
+                          title: isPaused ? 'PAYG Resumed' : 'PAYG Paused',
+                          description: isPaused
+                            ? 'Daily accrual will resume; the next charge fires in 24 hours.'
+                            : 'Daily accrual is paused. Resume from this page when ready.',
+                        });
+                        await queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                      } catch (err: any) {
+                        toast({ title: 'Error', description: err.message, variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    {(rental as any).payg_paused ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Resume PAYG
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-4 w-4 mr-2" />
+                        Pause PAYG
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                    onClick={async () => {
+                      const isPaused = (rental as any).payg_paused === true;
+                      const confirmMsg = isPaused
+                        ? 'Close this paused PAYG rental? No final partial-day charge will be posted.'
+                        : 'Close this PAYG rental? A final pro-rated partial day will be posted, then the rental will be marked Closed.';
+                      if (!window.confirm(confirmMsg)) return;
+                      try {
+                        const { data, error } = await supabase.functions.invoke(
+                          'finalize-payg-rental',
+                          { body: { rental_id: rental.id } },
+                        );
+                        if (error || !(data as any)?.success) {
+                          throw new Error(error?.message || (data as any)?.error || 'Finalize failed');
+                        }
+                        toast({
+                          title: 'PAYG Rental Closed',
+                          description: (data as any)?.partial_day_posted
+                            ? 'Final partial-day charge posted; rental is now closed.'
+                            : 'Rental closed without a partial-day charge.',
+                        });
+                        await queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+                      } catch (err: any) {
+                        toast({ title: 'Error closing rental', description: err.message, variant: 'destructive' });
+                      }
+                    }}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Close PAYG Rental
+                  </Button>
+                </>
+              )}
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
@@ -2694,10 +2973,28 @@ const RentalDetail = () => {
               return sum + val;
             }, 0)
           : 0;
-        const collectedDisplay = totalPayments;
-        const balanceDueDisplay = outstandingBalance;
-        const refundedDisplay = legacyRefunded;
-        const netReceivedDisplay = totalPayments - legacyRefunded;
+        // For PAYG rentals, the four cards must reflect the rolling-invoice
+        // state (sum of OPEN accrual day-totals), not the legacy ledger-based
+        // outstandingBalance. usePaygInvoices polls every 5s + Realtime-subscribes
+        // to payg_accruals / payments / payg_reminder_log so the values rerender
+        // the moment the accrual cron posts a new day or admin records a payment.
+        const isPaygSummary = rental?.is_pay_as_you_go === true;
+        const paygTotals = paygInvoiceData?.totals;
+        // For PAYG, paygTotals.collected is allocation-based — it misses
+        // unallocated prepayments (status='Credit') that land before the cron
+        // has created any charges (e.g. PAYG upfront payment). Take the larger
+        // of paygTotals.collected and the raw payments-table sum so prepayments
+        // show as Collected immediately, and the two converge once the cron
+        // starts allocating from the Credit balance.
+        const paygCollectedRaw = paygTotals?.collected ?? 0;
+        const collectedDisplay = isPaygSummary
+          ? Math.max(paygCollectedRaw, rentalPaymentsTotal)
+          : totalPayments;
+        const balanceDueDisplay = isPaygSummary ? (paygTotals?.balanceDue ?? 0) : outstandingBalance;
+        const refundedDisplay = isPaygSummary ? (paygTotals?.refunded ?? 0) : legacyRefunded;
+        const netReceivedDisplay = isPaygSummary
+          ? Math.max(paygTotals?.netReceived ?? 0, rentalPaymentsTotal - refundedDisplay)
+          : (totalPayments - legacyRefunded);
         const cur = tenant?.currency_code || 'USD';
         return (
           <div className={`grid gap-4 grid-cols-2 lg:grid-cols-4 ${isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -2857,8 +3154,276 @@ const RentalDetail = () => {
         />
       )}
 
+      {/* PAYG Upfront Payment banner — gates key handover until the first period
+          (week or month) is paid. Tenant must opt in via Settings → PAYG.
+          The Collect Now popover lets staff bundle the first-period rental
+          (+ tax + service fee) with one-off upfront items (delivery, collection,
+          insurance, extras) into a single payment, addressing the long-standing
+          gap where one-time fees fell through the cracks for PAYG rentals. */}
+      {rental && (rental as any).is_pay_as_you_go && (rentalSettings as any)?.payg_upfront_required && !isKeyHandoverCompleted && (() => {
+        const periodType = String((rental as any).rental_period_type || 'Weekly');
+        const periodLabel = periodType === 'Monthly' ? 'month' : periodType === 'Daily' ? 'day' : 'week';
+        const currency = tenant?.currency_code || 'USD';
+        const firstPeriodRental = Number(rental.monthly_amount) || 0;
+        const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
+        const svcEnabled = !!(rentalSettings as any)?.service_fee_enabled;
+        const svcType = (rentalSettings as any)?.service_fee_type as 'percentage' | 'fixed_amount' | undefined;
+        const svcValue = Number((rentalSettings as any)?.service_fee_value || 0);
+        const svcPct = svcEnabled && svcType === 'percentage' ? svcValue : 0;
+        // Fixed-amount service fee is collected as its own line item (so staff
+        // can see and tick/untick it independently of the percentage-based one
+        // that's baked into the first-period rental total).
+        const svcFixedAmount = svcEnabled && svcType === 'fixed_amount' ? svcValue : 0;
+        const firstPeriodTax = Math.round(firstPeriodRental * taxPct) / 100;
+        const firstPeriodSvc = Math.round(firstPeriodRental * svcPct) / 100;
+        const firstPeriodTotal = Math.round((firstPeriodRental + firstPeriodTax + firstPeriodSvc) * 100) / 100;
+        const upfrontSatisfied = rentalPaymentsTotal >= firstPeriodTotal - 0.01;
+
+        // Description suffix for the first-period line item — only mentions
+        // the components that actually apply, so a tax-only tenant sees
+        // "+ 7.0% tax" instead of the misleading "+ 7.0% tax/fees".
+        const firstPeriodDescriptionParts: string[] = [];
+        if (taxPct > 0) firstPeriodDescriptionParts.push(`${taxPct.toFixed(1)}% tax`);
+        if (svcPct > 0) firstPeriodDescriptionParts.push(`${svcPct.toFixed(1)}% service fee`);
+        const firstPeriodDescription = firstPeriodDescriptionParts.length > 0
+          ? `${formatCurrency(firstPeriodRental, currency)} rental + ${firstPeriodDescriptionParts.join(' + ')}`
+          : `${formatCurrency(firstPeriodRental, currency)} rental`;
+
+        // Build the line items the popover offers. Only items with amount > 0
+        // are pre-checked; zero-amount rows still render so the staff member
+        // can see at a glance "no delivery fee on this rental".
+        const insuranceLedgerCharge = (rentalCharges || []).find(c => c.category === 'Insurance');
+        const insuranceUpfrontAmount = insuranceLedgerCharge ? Number(insuranceLedgerCharge.amount) : (invoiceBreakdown?.insurancePremium ?? 0);
+        const deliveryUpfrontAmount = Number(rental.delivery_fee) || Number(invoiceBreakdown?.deliveryFee) || 0;
+        const collectionUpfrontAmount = Number((rental as any).collection_fee) || 0;
+        const extrasUpfrontAmount = Number(extrasTotal) || 0;
+
+        const upfrontLineItems: PaygUpfrontLineItem[] = [
+          {
+            key: 'first_period',
+            label: `First ${periodLabel} rental`,
+            description: firstPeriodDescription,
+            amount: firstPeriodTotal,
+            categories: ['Rental', ...(taxPct > 0 ? ['Tax'] : []), ...(svcPct > 0 ? ['Service Fee'] : [])],
+            defaultChecked: true,
+          },
+          // Only render the fixed-amount service-fee row when the tenant has
+          // actually configured one. Percentage-based service fees are already
+          // baked into the first-period total above, and tenants with service
+          // fee disabled shouldn't see a confusing $0.00 placeholder.
+          ...(svcFixedAmount > 0 ? [{
+            key: 'service_fee_fixed',
+            label: 'Service fee',
+            description: 'Platform fee (flat amount)',
+            amount: svcFixedAmount,
+            categories: ['Service Fee'],
+            defaultChecked: true,
+          }] : []),
+          {
+            key: 'delivery_fee',
+            label: 'Delivery fee',
+            description: 'Vehicle delivery to customer',
+            amount: deliveryUpfrontAmount,
+            categories: ['Delivery Fee'],
+            defaultChecked: true,
+          },
+          {
+            key: 'collection_fee',
+            label: 'Collection fee',
+            description: 'Vehicle collection from customer',
+            amount: collectionUpfrontAmount,
+            categories: ['Collection Fee'],
+            defaultChecked: true,
+          },
+          {
+            key: 'insurance',
+            label: 'Insurance',
+            description: bonzahPolicy ? 'Bonzah policy premium' : 'Insurance coverage',
+            amount: insuranceUpfrontAmount,
+            categories: ['Insurance'],
+            defaultChecked: true,
+          },
+          {
+            key: 'extras',
+            label: 'Extras',
+            description: (extrasDetails?.length || 0) > 0
+              ? `${extrasDetails!.length} item${extrasDetails!.length > 1 ? 's' : ''}`
+              : 'Add-ons',
+            amount: extrasUpfrontAmount,
+            categories: ['Extras'],
+            defaultChecked: true,
+          },
+        ];
+
+        return (
+          <div className="mb-4">
+            <div className={`rounded-lg border p-4 flex items-start justify-between gap-4 ${upfrontSatisfied ? 'bg-green-50 border-green-200 dark:bg-green-950/40 dark:border-green-900' : 'bg-indigo-50 border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-900'}`}>
+              <div className="flex items-start gap-3 min-w-0">
+                {upfrontSatisfied ? (
+                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <p className={`font-medium text-sm ${upfrontSatisfied ? 'text-green-900 dark:text-green-200' : 'text-indigo-900 dark:text-indigo-200'}`}>
+                    {upfrontSatisfied ? `First ${periodLabel} prepaid — keys ready to release` : `Upfront payment required — at least ${formatCurrency(firstPeriodTotal, currency)} due before key handover`}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${upfrontSatisfied ? 'text-green-700 dark:text-green-300' : 'text-indigo-700 dark:text-indigo-300'}`}>
+                    {upfrontSatisfied
+                      ? `Daily PAYG charges will draw down from the upfront payment. Standard PAYG billing resumes once the first ${periodLabel} is consumed.`
+                      : `Bundle the first ${periodLabel} with any delivery, collection, insurance, or extras due upfront — pick what to include in the Collect Now popover.`}
+                  </p>
+                </div>
+              </div>
+              {!upfrontSatisfied && canEdit('rentals') && (
+                <PaygUpfrontCollectPopover
+                  currencyCode={currency}
+                  lineItems={upfrontLineItems}
+                  onConfirm={({ amount, targetCategories }) => {
+                    setPaygUpfrontBundle({
+                      amount,
+                      targetCategories,
+                      paygAccrualId: paygInvoiceData?.latestOpenInvoice?.id,
+                    });
+                    setShowPaygUpfrontDialog(true);
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PAYG billing summary — recap of what the customer is being charged,
+          shown above the rolling-invoice ledger so anyone opening the rental
+          sees the high-level "$X per week/month" framing first. */}
+      {rental && (rental as any).is_pay_as_you_go && (
+        <div className="mb-4">
+          <PaygSchedulePreview
+            periodType={(rental as any).rental_period_type}
+            amount={Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0))}
+            startDate={rental.start_date}
+            currencyCode={tenant?.currency_code || 'USD'}
+            tenantReminderIntervalDays={(rentalSettings as any)?.payg_reminder_interval_days ?? null}
+            reminderIntervalOverride={(rental as any).payg_reminder_interval_days ?? null}
+            tenantGracePeriodDays={(rentalSettings as any)?.payg_grace_period_days ?? null}
+            // Pricing config drives the "Daily breakdown" math. These come
+            // straight from the tenant row via useRentalSettings — same source
+            // the accrue-payg-charges cron reads to bill the customer, so the
+            // UI and the cron stay in lockstep.
+            taxEnabled={(rentalSettings as any)?.tax_enabled ?? null}
+            taxPercentage={(rentalSettings as any)?.tax_percentage ?? null}
+            serviceFeeEnabled={(rentalSettings as any)?.service_fee_enabled ?? null}
+            serviceFeeType={(rentalSettings as any)?.service_fee_type ?? null}
+            serviceFeeValue={(rentalSettings as any)?.service_fee_value ?? null}
+            // Inline edit only for users with rental edit access. NULL = revert
+            // to tenant default. send-payg-reminders reads this column on its
+            // next pass so a change here takes effect on the next reminder
+            // window without any cron restart.
+            onSaveReminderInterval={canEdit('rentals') ? async (newInterval) => {
+              const { error: updErr } = await supabase
+                .from('rentals')
+                .update({ payg_reminder_interval_days: newInterval })
+                .eq('id', rental.id);
+              if (updErr) throw updErr;
+              await queryClient.invalidateQueries({ queryKey: ['rental', id] });
+              toast({
+                title: 'Reminder cadence updated',
+                description: newInterval == null
+                  ? `Reverted to tenant default.`
+                  : `Reminders now fire every ${newInterval} day${newInterval === 1 ? '' : 's'}.`,
+              });
+            } : undefined}
+          />
+        </div>
+      )}
+
+      {/* Additional drivers — only renders when the rental actually has any.
+          Card auto-hides on rentals with zero additional drivers so it
+          doesn't clutter the layout for the common single-driver case. */}
+      {rental && (
+        <div className="mb-4">
+          <AdditionalDriversCard rentalId={rental.id} />
+        </div>
+      )}
+
+      {/* PAYG section — inline rolling-invoice view, above the fixed-charges Payment Breakdown. */}
+      {rental && (rental as any).is_pay_as_you_go && (
+        <PaygSection
+          rentalId={rental.id}
+          isPayg
+          showAdminActions
+          customerName={rental.customers?.name || ''}
+          customerEmail={rental.customers?.email || undefined}
+          customerPhone={(rental.customers as any)?.phone || undefined}
+          customerId={rental.customers?.id}
+          vehicleId={(rental as any).vehicle_id ?? rental.vehicles?.id}
+          vehicle={{
+            reg: rental.vehicles?.reg,
+            make: rental.vehicles?.make,
+            model: rental.vehicles?.model,
+          }}
+          rental={{
+            start_date: rental.start_date,
+            end_date: rental.end_date,
+            monthly_amount: rental.monthly_amount,
+            rental_number: (rental as any).rental_number ?? null,
+            payg_closed_at: (rental as any).payg_closed_at ?? null,
+          }}
+          currencyCode={tenant?.currency_code || 'USD'}
+          onTakePayment={async ({ amount, paygAccrualId }) => {
+            try {
+              const portalOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+              const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+                body: {
+                  rentalId: rental.id,
+                  customerEmail: rental.customers?.email || undefined,
+                  customerName: rental.customers?.name || '',
+                  totalAmount: amount,
+                  tenantId: tenant?.id,
+                  successUrl: `${portalOrigin}/rentals/${rental.id}?payment=success`,
+                  cancelUrl: `${portalOrigin}/rentals/${rental.id}?payment=cancelled`,
+                  source: 'portal',
+                  targetCategories: ['Rental', 'Tax', 'Service Fee'],
+                  paygAccrualId,
+                },
+              });
+              if (error) throw new Error(await extractFunctionError(error, 'Failed to create checkout session'));
+              if (!data?.url) throw new Error('No checkout URL returned');
+              window.open(data.url, '_blank');
+              toast({
+                title: 'Checkout opened',
+                description: 'Payment link opened in a new tab. Invoice will settle automatically when the customer completes checkout.',
+              });
+            } catch (err: any) {
+              toast({ title: 'Checkout failed', description: err.message || 'Unknown error', variant: 'destructive' });
+            }
+          }}
+          onRefresh={() => {
+            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+          }}
+        />
+      )}
+
+      {/* Payment Links — history of every Stripe payment link / request sent for
+          this rental (renewals, balances, tolls, deposits) with live status, so
+          staff can see what was sent and whether it was paid without opening Stripe. */}
+      {rental && (
+        <PaymentLinksPanel
+          links={paymentLinks || []}
+          isLoading={paymentLinksLoading}
+          categoryLedger={paymentBreakdown ?? undefined}
+          categoryRefunds={refundBreakdown ?? undefined}
+          currencyCode={tenant?.currency_code || 'USD'}
+          allowVoid={canEdit('rentals')}
+        />
+      )}
+
       {/* Payment Breakdown — upfront fixed charges (Insurance, Delivery, Extras, etc.).
-          */}
+          For PAYG rentals, the PAYG-accrued categories (Rental, Tax, Service Fee) are
+          handled by the PaygSection above and are filtered out here. */}
       {invoiceBreakdown && (() => {
         const canRefund = totalPayments > 0 && rental.status !== 'Cancelled';
         // Determine insurance amount: prefer ledger charge, fall back to invoice
@@ -2871,6 +3436,17 @@ const RentalDetail = () => {
         // Use rental record as source of truth for delivery/collection split
         const deliveryFeeAmount = rental.delivery_fee || invoiceBreakdown.deliveryFee || 0;
         const collectionFeeAmount = collectionLedgerCharge ? Number(collectionLedgerCharge.amount) : (rental.collection_fee ?? 0);
+
+        // Pay As You Go detection. Base the category list on tenant settings so PAYG rows
+        // still get the blue treatment + PAYG badge even before any charges have accrued
+        // (a fresh PAYG rental has $0 everywhere but the UI should still flag what WILL be
+        // accrued daily by the cron vs what's a one-off upfront charge).
+        const isPayg = rental?.is_pay_as_you_go === true;
+        const paygCategories = isPayg ? [
+          'Rental',
+          ...((rentalSettings?.tax_percentage ?? 0) > 0 ? ['Tax'] : []),
+          ...(rentalSettings?.service_fee_type === 'percentage' && (rentalSettings?.service_fee_value ?? 0) > 0 ? ['Service Fee'] : []),
+        ] : [];
 
         const rows: { label: string; category: string; amount: number; detail: string; icon: any; color: string; bg: string; nonRefundable?: boolean; onClick?: () => void; isDepositDeducted?: boolean }[] = [
           { label: 'Rental', category: 'Rental', amount: invoiceBreakdown.rentalFee, detail: rental.rental_period_type || 'Monthly', icon: Car, color: 'text-green-500', bg: 'bg-green-500/10' },
@@ -2981,10 +3557,22 @@ const RentalDetail = () => {
           });
         }
 
+        // PAYG rentals: the accrued categories (Rental / Tax / Service Fee) live in the
+        // PaygSection above. Strip them from this fixed-charges breakdown so the card
+        // only shows one-off upfront items (Insurance, Delivery, Extras, etc.).
+        if (isPayg) {
+          for (let i = rows.length - 1; i >= 0; i--) {
+            if (paygCategories.includes(rows[i].category)) {
+              rows.splice(i, 1);
+            }
+          }
+        }
+
         // Payment Breakdown card renders unconditionally for every rental.
         // All-zero upfront rows render dimmed ("$0.00 · Not applied") so the
         // card is not cluttered when there's genuinely nothing to bill
-        // up-front.
+        // up-front. The PAYG section above this card is the canonical home
+        // for PAYG balance + payment actions on PAYG rentals.
 
         // Compute which rows have unpaid charges (selectable for targeted payment)
         // Don't allow payments on cancelled/rejected rentals
@@ -3065,12 +3653,24 @@ const RentalDetail = () => {
                   // with nothing raised yet, so an operator who skipped it at
                   // creation can still take one without unwinding the rental.
                   const isChargedDepositRow = depositIsCharged && category === 'Security Deposit';
+                  // Section grouping for PAYG: detect first PAYG row + first non-PAYG row after a PAYG block
+                  // so we can add subtle "section header" + "section divider" treatment within the same table.
+                  const thisIsPayg = isPayg && paygCategories.includes(category);
+                  const prevRow = idx > 0 ? rows[idx - 1] : null;
+                  const prevIsPayg = isPayg && prevRow && paygCategories.includes(prevRow.category);
+                  const isFirstPaygRow = thisIsPayg && !prevIsPayg;
+                  const isFirstNonPaygAfterPayg = isPayg && !thisIsPayg && prevIsPayg;
+
+                  // Billing mode for this row: PAYG > Regular.
+                  const rowMode: 'PAYG' | 'Regular' = thisIsPayg ? 'PAYG' : 'Regular';
+                  // PAYG rows are filtered out of this breakdown (shown in PaygSection above),
+                  // so the click-to-open-dialog branch is no longer needed here.
                   const effectiveOnClick = onClick;
                   const isSelected = selectedCategories.has(category);
 
                   return (
                     <Fragment key={category}>
-                    <TableRow className={`${(!applied || isDepositDeducted) && !isChargedDepositRow ? 'opacity-40' : ''} ${effectiveOnClick ? 'cursor-pointer hover:bg-muted/30' : ''}`} onClick={effectiveOnClick}>
+                    <TableRow className={`${(!applied || isDepositDeducted) && !isChargedDepositRow && !(isPayg && paygCategories.includes(category)) ? 'opacity-40' : ''} ${effectiveOnClick ? 'cursor-pointer hover:bg-muted/30' : ''} ${isPayg && paygCategories.includes(category) ? 'bg-indigo-50 dark:bg-indigo-950/20' : ''} ${isFirstNonPaygAfterPayg ? 'border-t-4 border-t-indigo-200 dark:border-t-indigo-800/60' : ''}`} onClick={effectiveOnClick}>
                       <TableCell className="pl-6 w-10">
                         {isSelectable ? (
                           <Checkbox
@@ -3194,9 +3794,13 @@ const RentalDetail = () => {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className="text-muted-foreground border-muted-foreground/20 text-[11px]"
+                          className={
+                            rowMode === 'PAYG'
+                              ? 'text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[11px]'
+                              : 'text-muted-foreground border-muted-foreground/20 text-[11px]'
+                          }
                         >
-                          Regular
+                          {rowMode}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -3888,6 +4492,14 @@ const RentalDetail = () => {
               </TableBody>
             </Table>
 
+            {/* PAYG cumulative payment footer + "Add PAYG Payment" button —
+                removed per operator request. The PAYG section above already
+                surfaces the rolling balance (Balance Due card) and exposes a
+                Pay button on each rolling invoice row in its own timeline, so
+                duplicating the same Add Payment affordance inside the Payment
+                Breakdown was redundant. Keep the operator's workflow anchored
+                on the PAYG section. */}
+
             {/* Selection footer for targeted payment */}
             {selectedCategories.size > 0 && (
               <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
@@ -4428,6 +5040,23 @@ const RentalDetail = () => {
                 }
 
                 // Calculate expected amount from vehicle rate.
+                // PAYG rentals have no end_date — render the daily rate without a units multiplier.
+                if ((rental as any).is_pay_as_you_go) {
+                  const paygUnitLabel = periodType === 'weekly' ? 'week' : periodType === 'monthly' ? 'month' : 'day';
+                  const paygRateLabel = `${rental.rental_period_type || 'Daily'} Rate`;
+                  return (
+                    <>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">{paygRateLabel}</p>
+                      <p className="text-lg font-semibold">{formatCurrencyUtil(totalAmount, currCode)}<span className="text-sm font-normal text-muted-foreground">/{paygUnitLabel}</span></p>
+                      <p className="text-xs text-muted-foreground">
+                        {discountAmt > 0
+                          ? `${formatCurrencyUtil(grossAmount, currCode)} less ${formatCurrencyUtil(discountAmt, currCode)} discount · Pay-As-You-Go`
+                          : "Pay-As-You-Go — accrued daily by the cron"}
+                      </p>
+                    </>
+                  );
+                }
+
                 const startDate = parseLocalDate(rental.start_date);
                 const endDate = parseLocalDate(rental.end_date);
                 const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
@@ -4545,7 +5174,9 @@ const RentalDetail = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Return</p>
-                {(
+                {(rental as any).is_pay_as_you_go ? (
+                  <p className="text-base font-medium text-muted-foreground italic">Open-ended (PAYG)</p>
+                ) : (
                   <>
                     <p className="text-base font-medium">{rental.end_date ? parseLocalDate(rental.end_date).toLocaleDateString('en-US') : '—'}</p>
                     {formatTimeOfDay(rental.return_time) && (
@@ -4748,6 +5379,21 @@ const RentalDetail = () => {
 
       {/* Key Handover Section - Operations */}
       {id && (() => {
+        // PAYG upfront-payment gate. Blocks "Confirm Collection" until the first
+        // period (week/month) is paid. Tenant must opt in via Settings → PAYG.
+        const paygUpfrontEnabled = (rental as any)?.is_pay_as_you_go === true
+          && (rentalSettings as any)?.payg_upfront_required === true;
+        const periodType = String((rental as any)?.rental_period_type || 'Weekly');
+        const periodLabel = periodType === 'Monthly' ? 'month' : periodType === 'Daily' ? 'day' : 'week';
+        const firstPeriodRental = Number(rental?.monthly_amount || 0);
+        const taxPct = (rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0;
+        const svcPct = (rentalSettings as any)?.service_fee_enabled && (rentalSettings as any)?.service_fee_type === 'percentage'
+          ? Number((rentalSettings as any)?.service_fee_value || 0) : 0;
+        const upfrontAmount = Math.round((firstPeriodRental + firstPeriodRental * (taxPct + svcPct) / 100) * 100) / 100;
+        const paygUpfrontBlocked = paygUpfrontEnabled && rentalPaymentsTotal < upfrontAmount - 0.01;
+        const paygUpfrontMessage = paygUpfrontBlocked
+          ? `First ${periodLabel} (${formatCurrency(upfrontAmount, tenant?.currency_code || 'USD')}) must be paid before key handover.`
+          : '';
         return (
           <KeyHandoverSection
             rentalId={id}
@@ -4767,6 +5413,8 @@ const RentalDetail = () => {
             bookingRef={rental?.id?.slice(0, 8)?.toUpperCase() || ''}
             approvalStatus={rental?.approval_status || null}
             startDate={rental?.start_date || null}
+            paygUpfrontBlocked={paygUpfrontBlocked}
+            paygUpfrontMessage={paygUpfrontMessage}
           />
         );
       })()}
@@ -4824,8 +5472,8 @@ const RentalDetail = () => {
         onViewAgreement={handleViewAgreementById}
       />
 
-      {/* Insurance Policies Timeline */}
-      {(insurancePolicies.length > 0 || isLoadingInsurancePolicies || rental?.original_end_date || rental?.previous_end_date) && (
+      {/* Insurance Policies Timeline — Bonzah is not offered for PAYG per spec */}
+      {!(rental as any)?.is_pay_as_you_go && (insurancePolicies.length > 0 || isLoadingInsurancePolicies || rental?.original_end_date || rental?.previous_end_date) && (
         <InsuranceTimeline
           rentalId={id}
           rental={rental}
@@ -4852,8 +5500,8 @@ const RentalDetail = () => {
       <RentalInsuranceVerificationsCard rentalId={id} />
 
       {/* Insurance Verification Card - Compact when no documents, full when documents exist.
-          */}
-      {(insuranceDocuments && insuranceDocuments.length > 0 ? (
+          Hidden for PAYG: per spec, PAYG does not offer Bonzah and does not require upfront docs. */}
+      {!(rental as any)?.is_pay_as_you_go && (insuranceDocuments && insuranceDocuments.length > 0 ? (
       <Card id="insurance-section">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -5800,12 +6448,91 @@ const RentalDetail = () => {
           customer_id={rental.customers?.id}
           vehicle_id={rental.vehicles?.id}
           rental_id={rental.id}
-          outstandingBalanceOverride={outstandingBalance}
+          // Surface the PAYG upfront requirement when nothing has accrued yet, so
+          // Record Payment agrees with the Collect Now banner instead of wrongly
+          // saying "No outstanding balance". Editable (override, not defaultAmount).
+          outstandingBalanceOverride={Math.max(outstandingBalance, paygUpfront.unmetDue)}
         />
       )}
 
-      {/* Buy Insurance Dialog */}
+      {/* PAYG Upfront Payment Dialog — consumes the bundle the staff member
+          curated in the Collect Now popover. `amount` and `targetCategories`
+          come from whichever line items they ticked (first period, delivery,
+          collection, insurance, extras). `paygAccrualId` is the latest open
+          rolling invoice if one exists, so the Stripe path settles it via
+          payg_settle_invoice once payment lands. */}
+      {rental && (rental as any).is_pay_as_you_go && paygUpfrontBundle && (
+        <AddPaymentDialog
+          open={showPaygUpfrontDialog}
+          onOpenChange={(nextOpen) => {
+            setShowPaygUpfrontDialog(nextOpen);
+            if (!nextOpen) setPaygUpfrontBundle(null);
+          }}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={paygUpfrontBundle.amount}
+          outstandingBalanceOverride={paygUpfrontBundle.amount}
+          targetCategories={paygUpfrontBundle.targetCategories}
+          paygAccrualId={paygUpfrontBundle.paygAccrualId}
+          onPaymentSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['rental', rental.id] });
+            queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payments-total'] });
+            queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
+            queryClient.invalidateQueries({ queryKey: ['payg-invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['payments'] });
+          }}
+        />
+      )}
+
+      {/* Targeted Payment Dialog (Pay Selected categories) */}
       {rental && (
+        <AddPaymentDialog
+          open={showTargetedPayment}
+          onOpenChange={(open) => {
+            setShowTargetedPayment(open);
+            if (!open) { setSelectedCategories(new Set()); setDepositPaymentAmount(null); }
+          }}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={(() => {
+            // A deposit just raised via TakeDepositDialog: use the agreed amount
+            // directly. categoryRemainingAmounts may not have refetched yet, and
+            // falling back to 0 would open the dialog with nothing to pay.
+            if (depositPaymentAmount !== null && selectedCategories.size === 1 && selectedCategories.has('Security Deposit')) {
+              return depositPaymentAmount;
+            }
+            if (selectedCategories.size === 0) return undefined;
+            const raw = Array.from(selectedCategories).reduce((sum, c) => sum + (categoryRemainingAmounts[c] ?? 0), 0);
+            return Math.round(raw * 100) / 100;
+          })()}
+          targetCategories={Array.from(selectedCategories)}
+        />
+      )}
+
+      {/* Extension Payment Dialog */}
+      {rental && (
+        <AddPaymentDialog
+          open={showExtensionPayment}
+          onOpenChange={(open) => {
+            setShowExtensionPayment(open);
+            if (!open) { setExtensionPaymentCategories([]); setExtensionPaymentExtensionId(undefined); }
+          }}
+          customer_id={rental.customers?.id}
+          vehicle_id={rental.vehicles?.id}
+          rental_id={rental.id}
+          defaultAmount={extensionPaymentAmount}
+          targetCategories={extensionPaymentCategories.length > 0 ? extensionPaymentCategories : undefined}
+          extensionId={extensionPaymentExtensionId}
+        />
+      )}
+
+      {/* Buy Insurance Dialog — never mount for PAYG (no Bonzah for open-ended rentals) */}
+      {rental && !(rental as any).is_pay_as_you_go && (
         <BuyInsuranceDialog
           open={showBuyInsurance}
           onOpenChange={(v) => {
@@ -6200,8 +6927,8 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* Extension Request Dialog */}
-      {rental && (
+      {/* Extension Request Dialog — not mounted for PAYG (open-ended, no end_date to extend) */}
+      {rental && !rental.is_pay_as_you_go && (
         <ExtensionRequestDialog
           open={showExtensionDialog}
           onOpenChange={setShowExtensionDialog}
@@ -6220,8 +6947,8 @@ const RentalDetail = () => {
         />
       )}
 
-      {/* Admin Extend Rental Dialog */}
-      {rental && (
+      {/* Admin Extend Rental Dialog — not mounted for PAYG */}
+      {rental && !rental.is_pay_as_you_go && (
         <AdminExtendRentalDialog
           open={showAdminExtendDialog}
           onOpenChange={setShowAdminExtendDialog}

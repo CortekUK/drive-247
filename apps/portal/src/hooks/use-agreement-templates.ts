@@ -5,7 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { getDefaultTemplateForCategory } from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
-export type TemplateCategory = 'standard' | 'extension';
+export type TemplateCategory = 'standard' | 'payg' | 'extension';
 
 export interface AgreementTemplate {
   id: string;
@@ -327,7 +327,7 @@ export const useActiveAgreementTemplate = () => {
 
 /**
  * Hook specifically for managing the two-template system (Default vs Custom)
- * @param category - 'standard' (default) or 'extension'
+ * @param category - 'standard' (default) or 'payg' for Pay As You Go templates
  */
 export const useTemplateSelection = (category: TemplateCategory = 'standard') => {
   const { tenant } = useTenant();

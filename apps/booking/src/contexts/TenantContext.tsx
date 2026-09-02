@@ -176,6 +176,8 @@ export interface Tenant {
   ga_measurement_id: string | null;
 
 
+  // PAYG upfront payment gate
+  payg_upfront_required: boolean | null;
 
   // Gig driver booking option (hide the "Are you a gig driver?" checkbox when false)
   gig_driver_enabled: boolean | null;
@@ -502,6 +504,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           maintenance_banner_enabled,
           maintenance_banner_message,
           buffer_time_minutes,
+          payg_upfront_required,
           gig_driver_enabled,
           ga_measurement_id,
           customer_theme_mode,

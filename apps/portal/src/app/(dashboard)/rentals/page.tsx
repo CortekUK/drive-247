@@ -442,10 +442,14 @@ const RentalsList = () => {
                                 )}
                               </>
                             )
+                            : rental.is_pay_as_you_go
+                            ? <span className="text-indigo-500 text-xs font-medium">Ongoing</span>
                             : "—"}
                         </TableCell>
                         <TableCell>
-                          {formatRentalDuration(rental.start_date, rental.end_date)}
+                          {rental.is_pay_as_you_go && !rental.end_date
+                            ? <span className="text-xs text-muted-foreground">PAYG</span>
+                            : formatRentalDuration(rental.start_date, rental.end_date)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -467,6 +471,11 @@ const RentalsList = () => {
                             >
                               {rental.computed_status}
                             </Badge>
+                            {rental.is_pay_as_you_go && (
+                              <Badge variant="outline" className="text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[10px]">
+                                PAYG
+                              </Badge>
+                            )}
                             {(rental as any).auto_extend_enabled && (
                               <Badge variant="outline" className="text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[10px]">
                                 Auto-Extend

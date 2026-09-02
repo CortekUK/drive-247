@@ -47,6 +47,7 @@ export const RentalsFilters = ({ filters, onFiltersChange, onClearFilters }: Ren
     filters.bonzahStatus ||
     filters.extensionRequested ||
     filters.cancellationRequested ||
+    filters.paymentType ||
     filters.startDateFrom ||
     filters.startDateTo ||
     filters.search;

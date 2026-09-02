@@ -163,7 +163,7 @@ const Settings = () => {
   const allSettingsTabs = [
     'general', 'locations', 'branding',
     'requirements', 'duration', 'lockbox',
-    'pricing', 'fees', 'preauth', 'auto-extend', 'promos', 'extras', 'payments',
+    'pricing', 'fees', 'preauth', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
     'reminders', 'templates',
     'messaging', 'insurance', 'esign', 'blacklist',
     'subscription',
@@ -487,6 +487,14 @@ const Settings = () => {
     buffer_time_minutes: number;
     return_reminder_enabled: boolean;
     return_reminder_hours: number;
+    pay_as_you_go_enabled: boolean;
+    payg_auto_reminders_enabled: boolean;
+    payg_reminder_interval_days: number;
+    payg_grace_period_days: number;
+    payg_max_reminders: number;
+    payg_preauth_days: number;
+    payg_max_duration_days: number;
+    payg_upfront_required: boolean;
     auto_extend_enabled: boolean;
     auto_extend_default_charge_mode: 'auto_charge' | 'pay_link';
     auto_extend_default_lead_hours: number;
@@ -526,6 +534,14 @@ const Settings = () => {
     return_reminder_enabled: false,
     return_reminder_hours: 24,
     // Pay As You Go
+    pay_as_you_go_enabled: false,
+    payg_auto_reminders_enabled: true,
+    payg_reminder_interval_days: 4,
+    payg_grace_period_days: 2,
+    payg_max_reminders: 10,
+    payg_preauth_days: 2,
+    payg_max_duration_days: 90,
+    payg_upfront_required: false,
     // Auto-extension
     auto_extend_enabled: false,
     auto_extend_default_charge_mode: 'pay_link',
@@ -573,6 +589,14 @@ const Settings = () => {
         return_reminder_enabled: (rentalSettings as any).return_reminder_enabled ?? false,
         return_reminder_hours: (rentalSettings as any).return_reminder_hours ?? 24,
         // Pay As You Go
+        pay_as_you_go_enabled: rentalSettings.pay_as_you_go_enabled ?? false,
+        payg_auto_reminders_enabled: (rentalSettings as any).payg_auto_reminders_enabled ?? true,
+        payg_reminder_interval_days: (rentalSettings as any).payg_reminder_interval_days ?? 4,
+        payg_grace_period_days: (rentalSettings as any).payg_grace_period_days ?? 2,
+        payg_max_reminders: (rentalSettings as any).payg_max_reminders ?? 10,
+        payg_preauth_days: (rentalSettings as any).payg_preauth_days ?? 2,
+        payg_max_duration_days: (rentalSettings as any).payg_max_duration_days ?? 90,
+        payg_upfront_required: (rentalSettings as any).payg_upfront_required ?? false,
         auto_extend_enabled: (rentalSettings as any).auto_extend_enabled ?? false,
         auto_extend_default_charge_mode: (rentalSettings as any).auto_extend_default_charge_mode ?? 'pay_link',
         auto_extend_default_lead_hours: (rentalSettings as any).auto_extend_default_lead_hours ?? 0,
@@ -1643,6 +1667,7 @@ const Settings = () => {
                 { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
                 { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
                 { value: 'preauth', icon: CreditCard, label: 'Deposit' },
+                { value: 'payg', icon: Clock, label: 'Pay As You Go' },
                 { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
                 { value: 'promos', icon: Zap, label: 'Promos' },
                 { value: 'extras', icon: Package, label: 'Extras' },
@@ -3879,6 +3904,142 @@ const Settings = () => {
 
         </TabsContent>
 
+        {/* Pay As You Go Tab */}
+        <TabsContent value="payg" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                Pay As You Go
+              </CardTitle>
+              <CardDescription>
+                Allow customers to pay rental charges incrementally instead of upfront
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
+                <div className="space-y-1 min-w-0">
+                  <h4 className="font-medium">Enable Pay As You Go</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Rental amount, tax, and percentage-based service fees are paid incrementally
+                  </p>
+                </div>
+                <Switch
+                  className="shrink-0 mt-0.5"
+                  checked={rentalForm.pay_as_you_go_enabled ?? false}
+                  onCheckedChange={async (checked) => {
+                    setRentalForm(prev => ({ ...prev, pay_as_you_go_enabled: checked }));
+                    try {
+                      await updateRentalSettings({ pay_as_you_go_enabled: checked });
+                    } catch (error) {
+                      console.error('Failed to update PAYG toggle:', error);
+                    }
+                  }}
+                />
+              </div>
+
+              {rentalForm.pay_as_you_go_enabled && (
+                <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                  <p className="text-sm font-medium">How it works</p>
+                  <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
+                    <li>When creating a rental, admins can choose <strong>Pay As You Go</strong> instead of regular payment</li>
+                    <li>Rental amount, tax, and percentage-based service fees are marked as PAYG charges and accrue daily</li>
+                    <li>Fixed-amount fees, the security deposit, insurance, and delivery charges are handled separately upfront</li>
+                    <li>Charges accrue automatically every 24 hours from the rental start time</li>
+                    <li>Payment reminders are sent automatically on the configured interval if the customer has an outstanding balance</li>
+                    <li>Payments are recorded manually from the rental detail page</li>
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Upfront Payment toggle — gates key handover until first period (week/month) is paid. */}
+          {rentalForm.pay_as_you_go_enabled && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  Upfront Payment
+                </CardTitle>
+                <CardDescription>
+                  Collect the first rental period (week or month) before handing over keys. Daily PAYG charges automatically draw down from the upfront payment.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
+                  <div className="space-y-1 min-w-0">
+                    <h4 className="font-medium">Require upfront payment</h4>
+                    <p className="text-sm text-muted-foreground">
+                      When on, PAYG rentals must have the first {`{week|month}`} paid before the "Confirm Collection" button unlocks.
+                    </p>
+                  </div>
+                  <Switch
+                    className="shrink-0 mt-0.5"
+                    checked={rentalForm.payg_upfront_required ?? false}
+                    onCheckedChange={async (checked) => {
+                      setRentalForm(prev => ({ ...prev, payg_upfront_required: checked }));
+                      try {
+                        await updateRentalSettings({ payg_upfront_required: checked } as any);
+                      } catch (error: any) {
+                        console.error('Failed to update PAYG upfront toggle:', error);
+                        toast({
+                          title: 'Save failed',
+                          description: error?.message || 'Could not update upfront setting',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                    disabled={isUpdatingRentalSettings}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PAYG Reminder toggle — everything else is hardcoded (daily cadence, open-ended). */}
+          {rentalForm.pay_as_you_go_enabled && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                  PAYG Reminders
+                </CardTitle>
+                <CardDescription>
+                  Reminders fire once every 24 hours from rental activation while there's an outstanding balance. Manual reminders can always be sent from the PAYG dialog regardless of this setting.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-4 py-2">
+                  <div className="space-y-0.5">
+                    <Label>Send automated reminders</Label>
+                    <p className="text-xs text-muted-foreground">
+                      When on, customers with an outstanding balance get a daily reminder email.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={rentalForm.payg_auto_reminders_enabled}
+                    onCheckedChange={async (checked) => {
+                      setRentalForm(prev => ({ ...prev, payg_auto_reminders_enabled: checked }));
+                      try {
+                        await updateRentalSettings({ payg_auto_reminders_enabled: checked } as any);
+                      } catch (error: any) {
+                        console.error('Failed to update PAYG reminders toggle:', error);
+                        toast({
+                          title: 'Save failed',
+                          description: error?.message || 'Could not update reminders setting',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                    disabled={isUpdatingRentalSettings}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         {/* Auto-Extend Tab */}
         <TabsContent value="auto-extend" className="space-y-6">
           <Card>
@@ -4165,7 +4326,7 @@ const Settings = () => {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only — never to auto-extension renewals. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
+                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only — never to pay-as-you-go or auto-extension renewals. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -4417,7 +4578,7 @@ const Settings = () => {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Auto duration discounts apply to fixed rentals paid in full only — never to auto-extension bookings.
+                      Auto duration discounts apply to fixed rentals paid in full only — never to pay-as-you-go or auto-extension bookings.
                     </p>
                   </div>
 
@@ -4721,6 +4882,13 @@ const Settings = () => {
                             buffer_time_minutes: 0,
                             return_reminder_enabled: false,
                             return_reminder_hours: 24,
+                            pay_as_you_go_enabled: false,
+                            payg_auto_reminders_enabled: true,
+                            payg_reminder_interval_days: 4,
+                            payg_grace_period_days: 2,
+                            payg_max_reminders: 10,
+                            payg_preauth_days: 2,
+                            payg_max_duration_days: 90,
                           }));
                           toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
                         } catch (error: any) {

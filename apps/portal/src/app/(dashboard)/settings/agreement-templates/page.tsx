@@ -361,7 +361,7 @@ function TemplateCategorySection({ category }: { category: TemplateCategory }) {
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <div className="text-sm text-muted-foreground">
           <p>
-            The active template will be used when sending {category === 'extension' ? 'extension' : ''} rental agreements for electronic signing.
+            The active template will be used when sending {category === 'payg' ? 'Pay As You Go' : category === 'extension' ? 'extension' : ''} rental agreements for electronic signing.
             You can edit either template to customize the content using dynamic variables.
           </p>
         </div>
@@ -376,6 +376,7 @@ export default function AgreementTemplatesPage() {
   const { settings: rentalSettings } = useRentalSettings();
   const initialCategory = (searchParams.get('category') as TemplateCategory) || 'standard';
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>(initialCategory);
+  const paygEnabled = rentalSettings?.pay_as_you_go_enabled;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -406,6 +407,12 @@ export default function AgreementTemplatesPage() {
             <CalendarPlus className="h-3.5 w-3.5" />
             Extension
           </TabsTrigger>
+          {paygEnabled && (
+            <TabsTrigger value="payg" className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Pay As You Go
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="standard" className="mt-4">
           <TemplateCategorySection category="standard" />
@@ -413,6 +420,11 @@ export default function AgreementTemplatesPage() {
         <TabsContent value="extension" className="mt-4">
           <TemplateCategorySection category="extension" />
         </TabsContent>
+        {paygEnabled && (
+          <TabsContent value="payg" className="mt-4">
+            <TemplateCategorySection category="payg" />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

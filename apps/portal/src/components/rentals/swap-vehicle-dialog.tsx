@@ -32,6 +32,7 @@ interface RentalForSwap {
   end_date?: string | null;
   status?: string | null;
   rental_period_type?: string | null;
+  is_pay_as_you_go?: boolean | null;
   vehicles?: { reg?: string | null; make?: string | null; model?: string | null } | null;
 }
 
@@ -70,7 +71,7 @@ export function SwapVehicleDialog({ open, onOpenChange, rental }: SwapVehicleDia
     rentalId: rental?.id || "",
     currentVehicleId: rental?.vehicle_id,
     startDate: rental?.start_date,
-    endDate: rental?.end_date,
+    endDate: rental?.is_pay_as_you_go ? null : rental?.end_date,
     enabled: open && !!rental,
   });
 

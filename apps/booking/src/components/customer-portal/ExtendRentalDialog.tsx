@@ -40,7 +40,7 @@ export function ExtendRentalDialog({ open, onOpenChange, rental }: ExtendRentalD
   const isSubmittingRef = useRef(false);
 
   // Calculate minimum date (must be after current end date).
-  // Open-ended rentals have no end_date — the parent route should never
+  // PAYG rentals have no end_date (open-ended) — the parent route should never
   // mount this dialog for them, but guard anyway so a null end_date can't crash
   // the whole customer portal via the error boundary.
   const currentEndDate = rental.end_date ? parseISO(rental.end_date) : new Date();
