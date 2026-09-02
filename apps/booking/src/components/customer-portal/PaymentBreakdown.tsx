@@ -54,6 +54,7 @@ interface Rental {
   deposit_hold_status?: string | null;
   status?: string | null;
   approval_status?: string | null;
+  has_installment_plan?: boolean | null;
   // PAYG fields — present on PAYG rentals, null/false otherwise.
   is_pay_as_you_go?: boolean | null;
   payg_start_ts?: string | null;
@@ -711,8 +712,12 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
               // PAYG rows are filtered out of this breakdown (handled in PaygSection),
               // so no click handler is needed here.
               const rowOnClick = undefined;
-              // Mode badge: PAYG > Regular.
-              const rowMode: 'PAYG' | 'Regular' = thisIsPayg ? 'PAYG' : 'Regular';
+              // Mode badge: PAYG > Installments > Regular.
+              const rowMode: 'PAYG' | 'Installments' | 'Regular' = thisIsPayg
+                ? 'PAYG'
+                : (!thisIsPayg && rental.has_installment_plan && ['Rental', 'Tax', 'Extras'].includes(category))
+                  ? 'Installments'
+                  : 'Regular';
               const applied = amount > 0;
               // Scope by extension_id when rendering an extension table so two
               // extensions with the same "Extension Rental" category don't
@@ -797,7 +802,9 @@ export default function PaymentBreakdown({ rental, customerEmail, customerName }
                       className={
                         rowMode === 'PAYG'
                           ? 'text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[11px]'
-                          : 'text-muted-foreground border-muted-foreground/20 text-[11px]'
+                          : rowMode === 'Installments'
+                            ? 'text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[11px]'
+                            : 'text-muted-foreground border-muted-foreground/20 text-[11px]'
                       }
                     >
                       {rowMode}

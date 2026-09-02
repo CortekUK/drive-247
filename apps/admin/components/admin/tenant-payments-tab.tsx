@@ -573,7 +573,7 @@ export function TenantPaymentsTab({ tenantId }: { tenantId: string }) {
       // platform, they don't exist on the operator's own account). Clear them
       // on flip so charge functions transparently recreate customers on the
       // new platform. Readiness blocks flips with active saved-card flows
-      // (auto-extend), so this is safe.
+      // (installment plans / auto-extend), so this is safe.
       if (next === 'own') {
         const { error: custErr } = await supabase
           .from('customers')

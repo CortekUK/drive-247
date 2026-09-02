@@ -27,7 +27,7 @@ interface ESignRequest {
     customerEmail: string;
     customerName: string;
     tenantId: string;
-    agreementType?: 'original' | 'extension' | 'payg';
+    agreementType?: 'original' | 'extension' | 'payg' | 'installment';
     extensionPreviousEndDate?: string;
     extensionNewEndDate?: string;
     extensionNumber?: number;
@@ -59,6 +59,51 @@ function formatCurrency(amount: number | null, currencyCode: string = 'USD'): st
 // ============================================================================
 // TEMPLATE PROCESSING
 // ============================================================================
+
+interface InstallmentData {
+    plan_type: string;
+    total_installable_amount: number;
+    number_of_installments: number;
+    installment_amount: number;
+    upfront_amount: number;
+    status: string;
+    unit?: 'week' | 'month';
+    payments_per_unit?: number;
+    collection_mode?: 'auto' | 'manual';
+    stripe_payment_method_id?: string | null;
+    scheduled_installments: Array<{
+        installment_number: number;
+        amount: number;
+        due_date: string;
+        status: string;
+    }>;
+}
+
+function frequencyLabel(unit: 'week' | 'month' | undefined, ppu: number | undefined, planType: string): string {
+    if (unit) {
+        if (unit === 'week') return ppu === 2 ? 'Twice weekly' : 'Weekly';
+        return ppu === 4 ? 'Weekly via monthly' : ppu === 2 ? 'Twice monthly' : 'Monthly';
+    }
+    return planType.charAt(0).toUpperCase() + planType.slice(1);
+}
+
+function buildPaymentScheduleText(installment: InstallmentData, currencyCode: string): string {
+    return installment.scheduled_installments
+        .sort((a, b) => a.installment_number - b.installment_number)
+        .map(si => `${si.installment_number}. ${formatDate(si.due_date)} - ${formatCurrency(si.amount, currencyCode)}`)
+        .join('\n');
+}
+
+function buildInstallmentScheduleHtml(installment: InstallmentData, currencyCode: string): string {
+    const rows = installment.scheduled_installments
+        .sort((a, b) => a.installment_number - b.installment_number)
+        .map(si => `<tr><td>Payment ${si.installment_number}</td><td>${formatCurrency(si.amount, currencyCode)}</td><td>${formatDate(si.due_date)}</td></tr>`)
+        .join('');
+
+    // Use inline formatting only (no block-level h2/h3) to avoid breaking PDF parser
+    // when the variable is injected inside a <p> tag from the TipTap editor
+    return `</p><p><strong>PAYMENT SCHEDULE</strong></p><p>This rental is set up with an installment payment plan. <strong>You will NOT be charged the full amount upfront.</strong></p><table><tr><td><strong>Plan Type</strong></td><td>${installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1)}</td></tr><tr><td><strong>Total Rental Amount</strong></td><td>${formatCurrency(installment.total_installable_amount, currencyCode)}</td></tr><tr><td><strong>Upfront Amount</strong></td><td>${formatCurrency(installment.upfront_amount, currencyCode)}</td></tr><tr><td><strong>Number of Installments</strong></td><td>${installment.number_of_installments}</td></tr><tr><td><strong>Per Installment</strong></td><td>${formatCurrency(installment.installment_amount, currencyCode)}</td></tr></table><p><strong>Scheduled Payments</strong></p><table><tr><th>Payment</th><th>Amount</th><th>Due Date</th></tr>${rows}</table><p`;
+}
 
 interface AdditionalDriverRow {
     id: string;
@@ -108,7 +153,7 @@ function buildAdditionalDriverSlotFields(drivers: AdditionalDriverRow[]): Record
     return fields;
 }
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, termsBlock: string = ''): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, installment?: InstallmentData | null, termsBlock: string = ''): string {
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -339,6 +384,23 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         extension_amount: extensionData?.extensionAmount != null ? formatCurrency(extensionData.extensionAmount, currencyCode) : '',
         extension_total: extensionData?.extensionAmount != null ? formatCurrency(extensionData.extensionAmount, currencyCode) : '',
 
+        // Installment payment schedule (legacy variables — kept for old templates)
+        installment_schedule: installment ? buildInstallmentScheduleHtml(installment, currencyCode) : '',
+        has_installments: installment ? 'true' : 'false',
+        installment_plan_type: installment ? installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1) : '',
+        installment_total_amount: installment ? formatCurrency(installment.total_installable_amount, currencyCode) : '',
+        installment_upfront_amount: installment ? formatCurrency(installment.upfront_amount, currencyCode) : '',
+        installment_count: installment ? installment.number_of_installments.toString() : '',
+        installment_per_payment: installment ? formatCurrency(installment.installment_amount, currencyCode) : '',
+
+        // Installment redesign variables (new template)
+        plan_type: installment ? installment.plan_type.charAt(0).toUpperCase() + installment.plan_type.slice(1) : '',
+        frequency_label: installment ? frequencyLabel(installment.unit, installment.payments_per_unit, installment.plan_type) : '',
+        total_installments: installment ? installment.number_of_installments.toString() : '',
+        installment_amount: installment ? formatCurrency(installment.installment_amount, currencyCode) : '',
+        upfront_amount: installment ? formatCurrency(installment.upfront_amount, currencyCode) : '',
+        upfront_breakdown: installment ? `${formatCurrency(installment.upfront_amount, currencyCode)} fees + ${formatCurrency(installment.installment_amount, currencyCode)} first installment` : '',
+        splittable_amount: installment ? formatCurrency(installment.total_installable_amount, currencyCode) : '',
         // Deposit clause wording + amount.
         //
         // Two bugs fixed here. (1) This read `rental.security_deposit_amount`,
@@ -365,6 +427,14 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         deposit_terms_clause: depositIsChargedTenant && depositResolved > 0
             ? `<h2>Security deposit</h2><p>A refundable security deposit of <strong>${depositDisplay}</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold &mdash; the funds are taken and held by the Rental Company. The deposit, less any deductions for damage, fines, unpaid charges or other amounts owed under this Agreement, is refunded to the original payment method after the vehicle is returned and inspected. Refunds are typically received within 5&ndash;10 business days, depending on the Renter&rsquo;s bank.</p>`
             : '',
+        payment_schedule: installment ? buildPaymentScheduleText(installment, currencyCode) : '',
+        first_payment_date: installment?.scheduled_installments?.[0]?.due_date ? formatDate(installment.scheduled_installments[0].due_date) : '',
+        last_payment_date: installment?.scheduled_installments?.[installment.scheduled_installments.length - 1]?.due_date ? formatDate(installment.scheduled_installments[installment.scheduled_installments.length - 1].due_date) : '',
+        collection_mode: installment?.collection_mode === 'manual' ? 'Manual collection' : 'Automatic card charging',
+        payment_method_label: installment?.stripe_payment_method_id ? `card on file (ending ${String(installment.stripe_payment_method_id).slice(-4)})` : 'card to be saved at checkout',
+        reminder_policy: 'If a scheduled payment cannot be collected, an email reminder will be sent every 24 hours with a secure link to settle the outstanding balance.',
+        cumulative_clause: 'Where two or more scheduled payments remain outstanding, all unpaid amounts are bundled into a single cumulative charge. Settling the cumulative balance clears every prior unpaid installment in one go.',
+        rental_total: installment ? formatCurrency(installment.total_installable_amount + installment.upfront_amount, currencyCode) : '',
         tenant_name: tenant?.company_name || 'Drive 247',
 
         // Additional drivers — synthetic fields merged onto the rental object
@@ -1231,6 +1301,28 @@ export async function POST(request: NextRequest) {
         // appears whether or not this renter bought coverage. See bonzah-addendum.ts.
         const isBonzahTenant = (tenant as any)?.integration_bonzah === true;
 
+        // Fetch installment plan if rental has one
+        let installment: InstallmentData | null = null;
+        if (body.rentalId) {
+            const { data: plan } = await supabase
+                .from('installment_plans')
+                .select('plan_type, total_installable_amount, number_of_installments, installment_amount, upfront_amount, status, unit, payments_per_unit, collection_mode, stripe_payment_method_id')
+                .eq('rental_id', body.rentalId)
+                .in('status', ['active', 'pending'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (plan) {
+                const { data: scheduled } = await supabase
+                    .from('scheduled_installments')
+                    .select('installment_number, amount, due_date, status')
+                    .eq('rental_id', body.rentalId)
+                    .order('installment_number', { ascending: true });
+                installment = { ...plan, scheduled_installments: scheduled || [] } as InstallmentData;
+                console.log(`Installment plan found: ${plan.plan_type}, ${plan.number_of_installments} payments`);
+            }
+        }
+
         // Fetch additional drivers and merge synthetic fields onto rental so
         // they flow through processTemplate's variables map.
         let additionalDrivers: AdditionalDriverRow[] = [];
@@ -1271,7 +1363,9 @@ export async function POST(request: NextRequest) {
             ? `EXTENSION AGREEMENT #${body.extensionNumber}`
             : body.agreementType === 'payg'
                 ? 'PAYG RENTAL AGREEMENT'
-                : 'ORIGINAL RENTAL AGREEMENT';
+                : body.agreementType === 'installment'
+                    ? 'INSTALLMENT RENTAL AGREEMENT'
+                    : 'ORIGINAL RENTAL AGREEMENT';
         // Draw a visible banner box
         const bannerHeight = 32;
         const bannerY = ctx.y - bannerHeight;
@@ -1301,14 +1395,17 @@ export async function POST(request: NextRequest) {
             // Honor the explicit agreementType picked in the dialog. When the caller
             // passed 'original' (or nothing), fall back to the auto-detect chain so
             // older callers and PDFs without an explicit pick still resolve correctly.
-            // PAYG is a TEMPLATE variant of the original — we still
+            // PAYG / installment are TEMPLATE variants of the original — we still
             // store agreement_type='original' downstream (see normalizedAgreementType).
             const explicit = body.agreementType;
             const templateCategory = explicit === 'extension'
                 ? 'extension'
-                : explicit === 'payg'
-                    ? 'payg'
-                    : rental?.is_pay_as_you_go ? 'payg' : 'standard';
+                : explicit === 'installment'
+                    ? 'installment'
+                    : explicit === 'payg'
+                        ? 'payg'
+                        : (rental?.has_installment_plan && installment) ? 'installment'
+                            : rental?.is_pay_as_you_go ? 'payg' : 'standard';
             let { data: templateData } = await supabase
                 .from('agreement_templates')
                 .select('template_content')
@@ -1340,7 +1437,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml, hasBonzahAddendum: isBonzahTenant, hasDepositClause: (tenant as any)?.deposit_charge_enabled === true }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, termsBlockHtml)
+                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml, hasBonzahAddendum: isBonzahTenant, hasDepositClause: (tenant as any)?.deposit_charge_enabled === true }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
                 );
 
                 // Ensure a signature tag exists
@@ -1515,8 +1612,8 @@ export async function POST(request: NextRequest) {
 
             if (deductResult?.success === false) {
                 console.warn('Insufficient credits for esign:', deductResult);
-                // Record the failed agreement. PAYG is a template
-                // variant of the original — normalize so the DB CHECK constraint
+                // Record the failed agreement. PAYG and installment are template
+                // variants of the original — normalize so the DB CHECK constraint
                 // (agreement_type IN ('original','extension')) holds.
                 const rawType = body.agreementType || 'original';
                 const agreementType = rawType === 'extension' ? 'extension' : 'original';
@@ -1595,7 +1692,7 @@ export async function POST(request: NextRequest) {
 
         const boldSignResult = await boldSignResponse.json();
         const documentId = boldSignResult.documentId;
-        // PAYG is a template variant of the original — it shares
+        // PAYG and installment are template variants of the original — they share
         // the same downstream lifecycle (one per rental, tracked on rentals.document_status),
         // so we collapse them to 'original' for storage. Only 'extension' is distinct.
         const rawType = body.agreementType || 'original';

@@ -16,6 +16,7 @@ import SEO from "@/components/SEO";
 import { z } from "zod";
 import BookingConfirmation from "@/components/BookingConfirmation";
 import { useTenant } from "@/contexts/TenantContext";
+import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useBookingStore } from "@/stores/booking-store";
 import { formatCurrency as formatCurrencyUtil } from "@/lib/format-utils";
 import { useDynamicPricing } from "@/hooks/use-dynamic-pricing";
@@ -82,6 +83,27 @@ const BookingCheckoutContent = () => {
   // Dynamic pricing
   const vehicleIdParam = searchParams?.get("vehicle") || "";
   const { holidays, vehicleOverrides, dailyPrices } = useDynamicPricing(vehicleIdParam || undefined);
+
+  // Installment state - read from tenant context
+  const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
+  const installmentsEnabled = tenant?.installments_enabled ?? false;
+  const installmentConfig: InstallmentConfig = {
+    minimum_days_weekly: 7,
+    minimum_days_monthly: 30,
+    minimum_days_semiweekly: 7,
+    weekly_installments_limit: 4,
+    monthly_installments_limit: 6,
+    semiweekly_installments_limit: 8,
+    limiting_amount_per_day_weekly: 0,
+    limiting_amount_per_day_monthly: 0,
+    limiting_amount_per_day_semiweekly: 0,
+    charge_first_upfront: true,
+    what_gets_split: 'rental_only',
+    grace_period_days: 3,
+    max_retry_attempts: 3,
+    retry_interval_days: 1,
+    ...(tenant?.installment_config || {}),
+  };
 
   const [formData, setFormData] = useState({
     customerName: "",
@@ -301,6 +323,38 @@ const BookingCheckoutContent = () => {
   };
 
   const totals = calculateCompleteTotal();
+
+  // Calculate installment breakdown based on what_gets_split setting
+  // 'rental_only': Only vehicle price + extras are split
+  // 'rental_tax': Vehicle price + extras + tax are split (default)
+  // 'rental_tax_extras': Vehicle price + extras + tax + delivery/collection fees are split
+  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
+
+  const { upfrontAmount, installableAmount } = (() => {
+    // Always upfront: Service Fee (deposit is a hold at pickup, not charged)
+    let upfront = totals.serviceFee;
+    let installable = 0;
+
+    switch (whatGetsSplit) {
+      case 'rental_only':
+        // Only rental (vehicle + extras) is split, tax paid upfront
+        installable = totals.vehiclePrice + totals.extrasTotal;
+        upfront += totals.taxAmount + totals.deliveryFee + totals.collectionFee;
+        break;
+      case 'rental_tax_extras':
+        // Rental + tax + delivery/collection fees are split
+        installable = totals.vehiclePrice + totals.extrasTotal + totals.taxAmount + totals.deliveryFee + totals.collectionFee;
+        break;
+      case 'rental_tax':
+      default:
+        // Rental + tax is split (delivery/collection paid upfront)
+        installable = totals.vehiclePrice + totals.extrasTotal + totals.taxAmount;
+        upfront += totals.deliveryFee + totals.collectionFee;
+        break;
+    }
+
+    return { upfrontAmount: upfront, installableAmount: installable };
+  })();
 
   // Format currency based on tenant settings
   const currencyCode = tenant?.currency_code || 'USD';
@@ -817,7 +871,77 @@ const BookingCheckoutContent = () => {
         }
       }
 
-      // Step 8: show the confirmation screen
+      // Step 8: Handle payment based on installment selection
+
+      // Check if installment plan is selected (not "full" payment)
+      if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
+        console.log("Creating installment checkout for rental:", rental.id);
+        console.log("Plan:", selectedInstallmentPlan.type, "Total Installments:", selectedInstallmentPlan.numberOfInstallments);
+        console.log("Scheduled Installments:", selectedInstallmentPlan.scheduledInstallments);
+        console.log("Upfront Total (deposit + fees + 1st installment):", selectedInstallmentPlan.upfrontTotal);
+
+        // Calculate base upfront (deposit + service fee + delivery/collection)
+        const baseUpfront = currentTotalsForPayment.deposit + currentTotalsForPayment.serviceFee +
+          (deliveryData.deliveryFee || 0) + (deliveryData.collectionLocation?.collection_fee || 0);
+
+        // Call the installment checkout edge function
+        // First installment is paid upfront (if configured), remaining installments are scheduled
+        const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
+          'create-installment-checkout',
+          {
+            body: {
+              rentalId: rental.id,
+              customerId: customer.id,
+              customerEmail: customerEmail,
+              customerName: customerName,
+              customerPhone: customerPhone,
+              vehicleId: vehicleId,
+              vehicleName: vehicleName,
+              // Base upfront: deposit + service fee (+ delivery fees if not included in installments)
+              baseUpfrontAmount: baseUpfront,
+              // First installment amount (paid upfront if charge_first_upfront is true)
+              firstInstallmentAmount: selectedInstallmentPlan.firstInstallmentAmount,
+              // Total upfront = base + first installment (if applicable)
+              upfrontAmount: selectedInstallmentPlan.upfrontTotal,
+              // Total installable amount (based on what_gets_split setting)
+              installableAmount: selectedInstallmentPlan.totalAmount,
+              // Amount per scheduled installment
+              installmentAmount: selectedInstallmentPlan.installmentAmount,
+              planType: selectedInstallmentPlan.type,
+              // Total number of installments
+              numberOfInstallments: selectedInstallmentPlan.numberOfInstallments,
+              // Number of installments to schedule (excludes first if charged upfront)
+              scheduledInstallments: selectedInstallmentPlan.scheduledInstallments,
+              pickupDate: pickupDate,
+              returnDate: returnDate,
+              startDate: pickupDate,
+              tenantId: tenant?.id,
+              // Pass config settings for storage with the plan
+              chargeFirstUpfront: installmentConfig.charge_first_upfront ?? true,
+              whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_only',
+              gracePeriodDays: installmentConfig.grace_period_days ?? 3,
+              maxRetryAttempts: installmentConfig.max_retry_attempts ?? 3,
+              retryIntervalDays: installmentConfig.retry_interval_days ?? 1,
+            },
+          }
+        );
+
+        if (checkoutError) {
+          console.error("Installment checkout error:", checkoutError);
+          throw new Error(checkoutError.message || "Failed to create installment checkout");
+        }
+
+        if (checkoutData?.url) {
+          // Redirect to Stripe checkout
+          toast.success("Redirecting to payment...");
+          window.location.href = checkoutData.url;
+          return;
+        } else {
+          throw new Error("No checkout URL returned");
+        }
+      }
+
+      // Regular flow (full payment or no installments) - show confirmation screen
       setConfirmedBooking({
         pickupLocation,
         dropoffLocation: returnLocation || pickupLocation,
@@ -1041,6 +1165,20 @@ const BookingCheckoutContent = () => {
                 </Card>
               )}
 
+              {/* Installment Payment Options */}
+              {calculateRentalDays() >= Math.min(installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7, installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30) && (
+                <InstallmentSelector
+                  rentalDays={calculateRentalDays()}
+                  installableAmount={installableAmount}
+                  upfrontAmount={upfrontAmount}
+                  totalBill={installableAmount + upfrontAmount}
+                  config={installmentConfig}
+                  enabled={installmentsEnabled}
+                  onSelectPlan={setSelectedInstallmentPlan}
+                  selectedPlan={selectedInstallmentPlan}
+                  formatCurrency={formatCurrency}
+                />
+              )}
             </div>
 
             {/* Right Column - Summary */}
@@ -1199,7 +1337,8 @@ const BookingCheckoutContent = () => {
                   {/* A HOLD is shown separately below the Grand Total — it is not
                       part of the total, so putting it here would overstate what the
                       customer pays. A CHARGED deposit is the opposite: it IS part of
-                      the total, so it belongs here beside Tax and the service fee. */}
+                      the total, so it belongs here beside Tax and the service fee.
+                      For an installment plan it is folded into "Pay Today" below. */}
                   {tenant?.deposit_charge_enabled === true && totals.deposit > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">
@@ -1214,17 +1353,45 @@ const BookingCheckoutContent = () => {
                 <div className="pt-4 space-y-4">
                   {/* Grand Total - Highlighted Section */}
                   <div className="bg-accent/10 border-2 border-accent/30 rounded-lg p-4 -mx-2">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="text-sm text-muted-foreground block">Total Amount Due</span>
-                        <span className="text-lg font-semibold">Grand Total</span>
+                    {selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' ? (
+                      <>
+                        <div className="flex justify-between items-center mb-3">
+                          <div>
+                            <span className="text-sm text-muted-foreground block">Pay Today</span>
+                            <span className="text-lg font-semibold">Pre-Auth + Fees + 1st Installment</span>
+                          </div>
+                          <span className="text-2xl font-bold text-accent">{formatCurrency(selectedInstallmentPlan.upfrontTotal)}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mb-3 -mt-1">
+                          Includes: Pre-Auth ({formatCurrency(totals.deposit)}) + Fees ({formatCurrency(totals.serviceFee + totals.deliveryFee + totals.collectionFee)}) + 1st installment ({formatCurrency(selectedInstallmentPlan.firstInstallmentAmount)})
+                        </div>
+                        <div className="border-t border-accent/20 pt-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Then {selectedInstallmentPlan.scheduledInstallments} {selectedInstallmentPlan.type} payments of
+                            </span>
+                            <span className="font-medium">{formatCurrency(selectedInstallmentPlan.installmentAmount)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm mt-1">
+                            <span className="text-muted-foreground">Total Contract Value</span>
+                            <span className="font-medium">{formatCurrency(totals.grandTotal)}</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-sm text-muted-foreground block">Total Amount Due</span>
+                          <span className="text-lg font-semibold">Grand Total</span>
+                        </div>
+                        <span className="text-3xl font-bold text-accent">{formatCurrency(totals.grandTotal)}</span>
                       </div>
-                      <span className="text-3xl font-bold text-accent">{formatCurrency(totals.grandTotal)}</span>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Pre-Authorization — separate refundable hold shown BELOW the total. */}
-                  {tenant?.deposit_charge_enabled !== true && totals.deposit > 0 && (
+                  {/* Pre-Authorization — separate refundable hold shown BELOW the total.
+                      Full-payment only; for installments it is already part of "Pay Today". */}
+                  {tenant?.deposit_charge_enabled !== true && (!selectedInstallmentPlan || selectedInstallmentPlan.type === 'full') && totals.deposit > 0 && (
                     <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 px-4 py-3">
                       <div className="flex justify-between items-center text-sm">
                         <span className="font-medium">{tenant?.deposit_charge_enabled ? 'Security deposit' : 'Pre-Authorization hold'}</span>
@@ -1248,6 +1415,11 @@ const BookingCheckoutContent = () => {
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Processing...
+                      </>
+                    ) : selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' ? (
+                      <>
+                        <CreditCard className="w-4 h-4 mr-2" />
+                        Pay {formatCurrency(selectedInstallmentPlan.upfrontTotal)} & Setup Installments
                       </>
                     ) : (
                       <>

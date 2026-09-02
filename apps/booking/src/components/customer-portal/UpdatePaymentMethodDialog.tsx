@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 interface UpdatePaymentMethodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  installmentPlanId?: string;
   onSuccess?: () => void;
 }
 
@@ -42,10 +43,12 @@ const CARD_ELEMENT_OPTIONS = {
 
 function CardForm({
   clientSecret,
+  installmentPlanId,
   onSuccess,
   onCancel,
 }: {
   clientSecret: string;
+  installmentPlanId?: string;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -90,10 +93,11 @@ function CardForm({
         throw new Error('Card setup did not complete');
       }
 
-      // Confirm with our backend so the new card becomes the card on file
+      // Confirm with our backend to update the installment plan
       if (setupIntent.payment_method) {
         await confirmPaymentMethod.mutateAsync({
           paymentMethodId: setupIntent.payment_method as string,
+          installmentPlanId,
         });
       }
 
@@ -167,6 +171,7 @@ function CardForm({
 export function UpdatePaymentMethodDialog({
   open,
   onOpenChange,
+  installmentPlanId,
   onSuccess,
 }: UpdatePaymentMethodDialogProps) {
   const createSetupIntent = useCreateSetupIntent();
@@ -186,6 +191,7 @@ export function UpdatePaymentMethodDialog({
     if (open && !clientSecret && !createSetupIntent.isPending) {
       createSetupIntent.mutate(
         {
+          installmentPlanId,
           returnUrl: window.location.href,
         },
         {
@@ -195,7 +201,7 @@ export function UpdatePaymentMethodDialog({
         }
       );
     }
-  }, [open, clientSecret]);
+  }, [open, clientSecret, installmentPlanId]);
 
   const handleSuccess = () => {
     setSuccess(true);
@@ -214,7 +220,7 @@ export function UpdatePaymentMethodDialog({
             Update Payment Method
           </DialogTitle>
           <DialogDescription>
-            Enter your new card details below. This card will be kept on file for this rental.
+            Enter your new card details below. This card will be used for future installment payments.
           </DialogDescription>
         </DialogHeader>
 
@@ -240,6 +246,7 @@ export function UpdatePaymentMethodDialog({
           <Elements stripe={stripePromise} options={{ clientSecret }}>
             <CardForm
               clientSecret={clientSecret}
+              installmentPlanId={installmentPlanId}
               onSuccess={handleSuccess}
               onCancel={() => onOpenChange(false)}
             />

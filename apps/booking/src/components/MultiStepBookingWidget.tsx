@@ -459,7 +459,8 @@ const MultiStepBookingWidget = () => {
     value: number;
     id: string;
     // "manual" = customer typed the code; "duration" = auto-applied by rental length.
-    // Duration discounts apply to fixed pay-in-full rentals only.
+    // Duration discounts apply to fixed pay-in-full rentals only (gated out of
+    // installments downstream in BookingCheckoutStep).
     source?: "manual" | "duration";
     minDurationDays?: number;
   } | null>(null);
@@ -1562,7 +1563,8 @@ const MultiStepBookingWidget = () => {
   // Auto-apply duration-based promo codes.
   // When the tenant has codes with `min_duration_days` set, the longest-qualifying tier
   // is applied automatically based on the rental length — no code typing. This is for
-  // FIXED, pay-in-full rentals only; PAYG / auto-extend never flow through this widget.
+  // FIXED, pay-in-full rentals only; installment bookings strip it back out in
+  // BookingCheckoutStep, and PAYG / auto-extend never flow through this widget.
   // A code the customer typed themselves (source: "manual") always wins and is never
   // overridden here.
   useEffect(() => {

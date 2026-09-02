@@ -5,7 +5,7 @@ import { useTenant } from "@/contexts/TenantContext";
 // Payment-link history: a read-only view of every Stripe payment link/request
 // staff have sent for a rental or customer. Source of truth is the `payments`
 // table — every link-creation path (create-checkout-session, extension pay-links,
-// upfront, "Email Stripe Link", etc.) writes a row keyed by
+// installments, upfront, "Email Stripe Link", etc.) writes a row keyed by
 // stripe_checkout_session_id.
 //
 // Status is derived by CAPTURE state AND the staff Accept/Reject decision

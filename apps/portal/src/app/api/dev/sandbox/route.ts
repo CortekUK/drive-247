@@ -209,7 +209,7 @@ async function allStatus(p: SupabaseClient) {
 // ═════════════════════════════ FAST-FORWARD ═════════════════════════════════
 // The Dev Panel is a pure TIME control: pressing +Nd makes it THIS rental's cron
 // for N days. It shifts the rental's own time anchors back N days, runs the
-// rental's applicable cron jobs (accrual, reminders, auto-extend,
+// rental's applicable cron jobs (accrual, installments, reminders, auto-extend,
 // deposit, daily), then hands every anchor the crons did NOT consume back to its
 // pre-shift value — so the REAL cron never sees a backdated anchor and never
 // churns the rental on its own. Results land in the rental's ledger; the
@@ -217,6 +217,9 @@ async function allStatus(p: SupabaseClient) {
 
 interface FfSnapshot {
   rentals: Record<string, string | null>;
+  openInstallments: Array<{ id: string; due_date: string }>;
+  planId: string | null;
+  planCooldown: string | null;
 }
 
 async function fastForwardRental(p: SupabaseClient, rentalId: string, days: number) {
@@ -254,6 +257,9 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
       deposit_hold_expires_at: rr.deposit_hold_expires_at,
       end_date: rr.end_date,
     },
+    openInstallments: [],
+    planId: null,
+    planCooldown: null,
   };
 
   // ── shift the clock: N days pass for THIS rental ──────────────────────────
@@ -276,6 +282,26 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
     await p.from("rentals").update(u).eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
   }
 
+  // Installments live in scheduled_installments.due_date — shift the open ones.
+  const { data: plan } = await p.from("installment_plans")
+    .select("id, last_reminder_sent_at").eq("rental_id", rentalId)
+    .eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
+  if (plan?.id) {
+    snap.planId = plan.id;
+    snap.planCooldown = (plan as any).last_reminder_sent_at ?? null;
+    const { data: open } = await p.from("scheduled_installments")
+      .select("id, due_date").eq("installment_plan_id", plan.id).eq("invoice_status", "open");
+    snap.openInstallments = (open ?? []) as any[];
+    for (const si of snap.openInstallments) {
+      const base = new Date(`${si.due_date}T00:00:00Z`).getTime();
+      await p.from("scheduled_installments")
+        .update({ due_date: new Date(base - days * DAY_MS).toISOString().split("T")[0] })
+        .eq("id", si.id);
+    }
+    // The 24h charge cooldown must not swallow the simulated days.
+    await p.from("installment_plans").update({ last_reminder_sent_at: null }).eq("id", plan.id);
+  }
+
   // ── run THIS rental's cron jobs, in cron-clock order ──────────────────────
   const fired: Record<string, number> = {};
   const errors: string[] = [];
@@ -288,6 +314,9 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
     if (rr.is_pay_as_you_go) {
       await step("charges", () => drainRental(p, "sandbox-accrue-payg-charges", rentalId, "processed"));
       await step("reminders", async () => progressOf(await fireOne(p, "sandbox-send-payg-reminders", rentalId), "sent"));
+    }
+    if (snap.planId) {
+      await step("installments", () => drainRental(p, "sandbox-process-installment-payment", rentalId, "charged", 8));
     }
     if (rr.auto_extend_enabled) {
       await step("autoExtensions", () => drainRental(p, "sandbox-auto-extend-rentals", rentalId, "renewed", 8));
@@ -342,6 +371,23 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
       await p.from("rentals").update(restore).eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
     }
 
+    // Installments STILL open (charge failed / skipped) get their real due dates
+    // + cooldown back so the REAL installment cron won't charge them off-schedule.
+    if (snap.planId && snap.openInstallments.length) {
+      const { data: still } = await p.from("scheduled_installments")
+        .select("id").eq("installment_plan_id", snap.planId).eq("invoice_status", "open");
+      const stillOpen = new Set(((still ?? []) as any[]).map((s) => s.id));
+      let anyStillOpen = false;
+      for (const si of snap.openInstallments) {
+        if (stillOpen.has(si.id)) {
+          anyStillOpen = true;
+          await p.from("scheduled_installments").update({ due_date: si.due_date }).eq("id", si.id);
+        }
+      }
+      if (anyStillOpen && snap.planCooldown) {
+        await p.from("installment_plans").update({ last_reminder_sent_at: snap.planCooldown }).eq("id", snap.planId);
+      }
+    }
   }
 
   // Post-state so the panel can show what changed + a prepaid hint (a rental with

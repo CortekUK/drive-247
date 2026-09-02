@@ -154,6 +154,9 @@ export interface Tenant {
   pickup_area_enabled: boolean | null;
   return_area_enabled: boolean | null;
 
+  // Installment settings
+  installments_enabled: boolean | null;
+  installment_config: Record<string, any> | null;
 
   // Lockbox settings
   lockbox_enabled: boolean | null;
@@ -496,6 +499,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           return_multiple_locations_enabled,
           pickup_area_enabled,
           return_area_enabled,
+          installments_enabled,
+          installment_config,
           lockbox_enabled,
           monthly_tier_days,
           weekend_surcharge_percent,

@@ -5,7 +5,22 @@ import { useQuery } from '@tanstack/react-query';
 import { format, formatDistanceToNow, isPast, isToday } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+import {
+  useCustomerInstallmentPlans,
+  useInstallmentStats,
+  useNextInstallmentPayment,
+  useCustomerPaymentHistory,
+  getInstallmentStatusBadge,
+  type InstallmentPlan,
+  type ScheduledInstallment,
+} from '@/hooks/use-customer-installments';
 import { useCustomerInvoices, useInvoiceStats, type CustomerInvoice } from '@/hooks/use-customer-invoices';
+import {
+  usePayInstallmentEarly,
+  usePayRemainingInstallments,
+  useRetryPayment,
+  useCreateUpfrontCheckout,
+} from '@/hooks/use-payment-actions';
 import { UpdatePaymentMethodDialog } from '@/components/customer-portal/UpdatePaymentMethodDialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +77,63 @@ import { formatCurrency } from '@/lib/format-utils';
 import { parseDateOnly } from '@/lib/date-utils';
 import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration } from "@/lib/vehicle-identity";
 
+// Mock data for demo installments
+const mockInstallmentPlans = [
+  {
+    id: 'demo-1',
+    vehicleName: '2024 BMW M4 Competition',
+    planType: 'Weekly',
+    totalAmount: 4500,
+    paidAmount: 1500,
+    remainingAmount: 3000,
+    status: 'active',
+    startDate: '2024-01-15',
+    installments: [
+      { number: 1, amount: 750, dueDate: '2024-01-22', status: 'paid', paidAt: '2024-01-22' },
+      { number: 2, amount: 750, dueDate: '2024-01-29', status: 'paid', paidAt: '2024-01-29' },
+      { number: 3, amount: 750, dueDate: '2024-02-05', status: 'scheduled', paidAt: null },
+      { number: 4, amount: 750, dueDate: '2024-02-12', status: 'scheduled', paidAt: null },
+      { number: 5, amount: 750, dueDate: '2024-02-19', status: 'scheduled', paidAt: null },
+      { number: 6, amount: 750, dueDate: '2024-02-26', status: 'scheduled', paidAt: null },
+    ],
+  },
+  {
+    id: 'demo-2',
+    vehicleName: '2023 Mercedes-AMG GT',
+    planType: 'Twice Weekly',
+    totalAmount: 6000,
+    paidAmount: 2000,
+    remainingAmount: 4000,
+    status: 'active',
+    startDate: '2024-01-01',
+    installments: [
+      { number: 1, amount: 750, dueDate: '2024-01-01', status: 'paid', paidAt: '2024-01-01' },
+      { number: 2, amount: 750, dueDate: '2024-01-04', status: 'paid', paidAt: '2024-01-04' },
+      { number: 3, amount: 750, dueDate: '2024-01-08', status: 'overdue', paidAt: null },
+      { number: 4, amount: 750, dueDate: '2024-01-11', status: 'scheduled', paidAt: null },
+      { number: 5, amount: 750, dueDate: '2024-01-15', status: 'scheduled', paidAt: null },
+      { number: 6, amount: 750, dueDate: '2024-01-18', status: 'scheduled', paidAt: null },
+      { number: 7, amount: 750, dueDate: '2024-01-22', status: 'scheduled', paidAt: null },
+      { number: 8, amount: 750, dueDate: '2024-01-25', status: 'scheduled', paidAt: null },
+    ],
+  },
+  {
+    id: 'demo-3',
+    vehicleName: '2024 Porsche 911 Turbo S',
+    planType: 'Monthly',
+    totalAmount: 12000,
+    paidAmount: 8000,
+    remainingAmount: 4000,
+    status: 'active',
+    startDate: '2023-11-01',
+    installments: [
+      { number: 1, amount: 4000, dueDate: '2023-12-01', status: 'paid', paidAt: '2023-12-01' },
+      { number: 2, amount: 4000, dueDate: '2024-01-01', status: 'paid', paidAt: '2024-01-01' },
+      { number: 3, amount: 4000, dueDate: '2024-02-01', status: 'scheduled', paidAt: null },
+    ],
+  },
+];
+
 function StatCard({
   title,
   value,
@@ -95,6 +167,462 @@ function StatCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function NextPaymentCard({
+  plan,
+  installment,
+  onPayNow,
+  onRetry,
+  onUpdateCard,
+  isPaying,
+}: {
+  plan: InstallmentPlan;
+  installment: ScheduledInstallment;
+  onPayNow: (installmentId: string) => void;
+  onRetry: (installmentId: string) => void;
+  onUpdateCard: (planId: string) => void;
+  isPaying: boolean;
+}) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
+  const dueDate = parseDateOnly(installment.due_date);
+  const isOverdue = isPast(dueDate) && !isToday(dueDate);
+  const isDueToday = isToday(dueDate);
+  const isFailed = installment.status === 'failed';
+
+  const vehicle = plan.rentals?.vehicles;
+  const vehicleName = vehicle
+    ? vehicleDisplayLabel(vehicle, tenant)
+    : 'Vehicle';
+
+  return (
+    <Card className={cn(
+      'border-2',
+      isOverdue || isFailed ? 'border-red-500 bg-red-50 dark:bg-red-950/20' :
+      isDueToday ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20' :
+      'border-accent'
+    )}>
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {isOverdue || isFailed ? (
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+            ) : isDueToday ? (
+              <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />
+            ) : (
+              <Clock className="h-5 w-5 text-accent shrink-0" />
+            )}
+            <CardTitle className="text-base sm:text-lg truncate">
+              {isOverdue ? 'Overdue Payment' : isFailed ? 'Payment Failed' : isDueToday ? 'Payment Due Today' : 'Next Payment'}
+            </CardTitle>
+          </div>
+          <Badge
+            variant={isOverdue || isFailed ? 'destructive' : isDueToday ? 'secondary' : 'outline'}
+            className="self-start sm:self-auto"
+          >
+            {isOverdue ? 'Overdue' : isFailed ? 'Failed' : isDueToday ? 'Due Today' : formatDistanceToNow(dueDate, { addSuffix: true })}
+          </Badge>
+        </div>
+        <CardDescription className="flex items-center gap-1 mt-1 break-words">
+          <Car className="h-3 w-3 shrink-0" />
+          <span className="truncate">{vehicleName}</span>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xl sm:text-3xl font-bold break-words">{formatCurrency(installment.amount, currencyCode)}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Installment #{installment.installment_number} of {plan.number_of_installments}
+            </p>
+          </div>
+          <div className="sm:text-right">
+            <p className="text-xs sm:text-sm font-medium">Due Date</p>
+            <p className="text-base sm:text-lg">{format(dueDate, 'MMM dd, yyyy')}</p>
+          </div>
+        </div>
+
+        {isFailed && installment.last_failure_reason && (
+          <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3">
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              Payment Failed
+            </p>
+            <p className="text-sm text-red-600 dark:text-red-300">
+              {installment.last_failure_reason}
+            </p>
+            <p className="text-xs text-red-500 mt-1">
+              Attempts: {installment.failure_count || 1}
+            </p>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          {isFailed ? (
+            <>
+              <Button
+                onClick={() => onRetry(installment.id)}
+                disabled={isPaying}
+                variant="destructive"
+                className="w-full sm:flex-1"
+              >
+                {isPaying ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Retry Payment
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full sm:flex-1"
+                onClick={() => onUpdateCard(plan.id)}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Update Card
+              </Button>
+            </>
+          ) : isOverdue ? (
+            <Button
+              onClick={() => onPayNow(installment.id)}
+              disabled={isPaying}
+              variant="destructive"
+              className="flex-1"
+            >
+              {isPaying ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4 mr-2" />
+              )}
+              Pay Now
+            </Button>
+          ) : (
+            <Button
+              onClick={() => onPayNow(installment.id)}
+              disabled={isPaying}
+              variant="default"
+              className="flex-1"
+            >
+              {isPaying ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4 mr-2" />
+              )}
+              Pay Early
+            </Button>
+          )}
+        </div>
+
+        {!isFailed && !isOverdue && (
+          <p className="text-xs text-muted-foreground">
+            Payment will be automatically charged to your saved card on the due date.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InstallmentPlanCard({
+  plan,
+  onPayNow,
+  onPayOff,
+  onActivate,
+  isPaying,
+}: {
+  plan: InstallmentPlan;
+  onPayNow: (installmentId: string) => void;
+  onPayOff: (planId: string) => void;
+  onActivate: (planId: string) => void;
+  isPaying: boolean;
+}) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
+  const vehicle = plan.rentals?.vehicles;
+  const vehicleName = vehicle
+    ? vehicleDisplayLabel(vehicle, tenant)
+    : 'Vehicle';
+
+  const paidInstallments = plan.paid_installments || 0;
+  const progressPercent = (paidInstallments / plan.number_of_installments) * 100;
+  const totalPaid = plan.total_paid || 0;
+  const remaining = plan.total_installable_amount - totalPaid;
+
+  const isCompleted = plan.status === 'completed';
+  const isOverdue = plan.status === 'overdue';
+  const isPendingPlan = plan.status === 'pending';
+
+  // Get remaining unpaid installments
+  const unpaidInstallments = plan.scheduled_installments.filter(
+    (i) => i.status === 'scheduled' || i.status === 'failed'
+  );
+
+  return (
+    <Card className={cn(
+      isOverdue && 'border-red-300 dark:border-red-800'
+    )}>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base break-words">{vehicleName}</CardTitle>
+              <Badge variant={
+                isCompleted ? 'default' :
+                isOverdue ? 'destructive' :
+                'secondary'
+              } className="shrink-0">
+                {plan.status.charAt(0).toUpperCase() + plan.status.slice(1)}
+              </Badge>
+            </div>
+            <CardDescription className="break-words">
+              {plan.plan_type === 'semiweekly' ? 'Twice Weekly' : plan.plan_type.charAt(0).toUpperCase() + plan.plan_type.slice(1)} Plan
+              {plan.rentals?.rental_number && ` • ${plan.rentals.rental_number}`}
+            </CardDescription>
+          </div>
+          <div className="flex sm:block items-baseline gap-2 sm:text-right shrink-0">
+            <p className="text-sm text-muted-foreground">Total</p>
+            <p className="font-semibold">{formatCurrency(plan.total_installable_amount + plan.upfront_amount - ((plan as any).config?.charge_first_upfront !== false ? plan.installment_amount : 0), currencyCode)}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Progress */}
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              {paidInstallments} of {plan.number_of_installments} installments paid
+            </span>
+            <span className="font-medium">{Math.round(progressPercent)}%</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+          <div className="flex justify-between text-sm">
+            <span className="text-green-600">Paid: {formatCurrency(totalPaid + (plan.upfront_paid ? plan.upfront_amount : 0), currencyCode)}</span>
+            {remaining > 0 && (
+              <span className="text-muted-foreground">Remaining: {formatCurrency(remaining, currencyCode)}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Activate & Pay Button for pending plans */}
+        {isPendingPlan && !plan.upfront_paid && (
+          <Button
+            onClick={() => onActivate(plan.id)}
+            disabled={isPaying}
+            className="w-full"
+          >
+            {isPaying ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <CreditCard className="h-4 w-4 mr-2" />
+            )}
+            Activate & Pay Upfront ({formatCurrency(plan.upfront_amount, currencyCode)})
+          </Button>
+        )}
+
+        {/* Pay Off Button */}
+        {!isCompleted && !isPendingPlan && unpaidInstallments.length > 0 && (
+          <Button
+            onClick={() => onPayOff(plan.id)}
+            disabled={isPaying}
+            variant="outline"
+            className="w-full"
+          >
+            {isPaying ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4 mr-2" />
+            )}
+            Pay Off Remaining ({formatCurrency(remaining, currencyCode)})
+          </Button>
+        )}
+
+        <Separator />
+
+        {/* Schedule */}
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="schedule" className="border-none">
+            <AccordionTrigger className="py-2 hover:no-underline">
+              <span className="text-sm font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Payment Schedule
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 pt-2">
+                {/* Upfront Payment */}
+                <div className="flex items-center justify-between text-sm py-2 border-b">
+                  <div className="flex items-center gap-2">
+                    {plan.upfront_paid ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span>{tenant?.deposit_charge_enabled ? 'Upfront (Deposit + Fees)' : 'Upfront (Pre-Auth + Fees)'}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium">{formatCurrency(plan.upfront_amount, currencyCode)}</span>
+                    {plan.upfront_paid ? (
+                      <Badge variant="default" className="ml-2 text-xs">Paid</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="ml-2 text-xs">Pending</Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Installments */}
+                {plan.scheduled_installments.map((inst) => {
+                  const isPaid = inst.status === 'paid';
+                  const isFailed = inst.status === 'failed';
+                  const isScheduled = inst.status === 'scheduled';
+                  const dueDate = parseDateOnly(inst.due_date);
+                  const isInstOverdue = isScheduled && isPast(dueDate) && !isToday(dueDate);
+
+                  return (
+                    <div
+                      key={inst.id}
+                      className={cn(
+                        'flex items-center justify-between text-sm py-2 border-b last:border-0',
+                        (isFailed || isInstOverdue) && 'bg-red-50 dark:bg-red-950/20 -mx-2 px-2 rounded'
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isPaid ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        ) : isFailed || isInstOverdue ? (
+                          <AlertCircle className="h-4 w-4 text-red-600" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <div>
+                          <span>Installment #{inst.installment_number}</span>
+                          <p className="text-xs text-muted-foreground">
+                            {format(dueDate, 'MMM dd, yyyy')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{formatCurrency(inst.amount, currencyCode)}</span>
+                        {isPaid ? (
+                          <Badge variant="default" className="text-xs">Paid</Badge>
+                        ) : isPendingPlan ? (
+                          <Badge variant="secondary" className="text-xs">Scheduled</Badge>
+                        ) : isFailed ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => onPayNow(inst.id)}
+                            disabled={isPaying}
+                          >
+                            Retry
+                          </Button>
+                        ) : isInstOverdue ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => onPayNow(inst.id)}
+                            disabled={isPaying}
+                          >
+                            Pay
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onPayNow(inst.id)}
+                            disabled={isPaying}
+                          >
+                            Pay Early
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PaymentHistoryList() {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
+  const { data: payments, isLoading } = useCustomerPaymentHistory(10);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="h-6 w-20" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!payments || payments.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
+        <p>No payment history yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {payments.map((payment) => {
+        const vehicle = payment.rentals?.vehicles;
+        const vehicleName = vehicle
+          ? `${vehicle.make || ''} ${vehicle.model || ''}`
+          : null;
+
+        return (
+          <div
+            key={payment.id}
+            className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                'p-2 rounded-full',
+                payment.status === 'Applied' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'
+              )}>
+                <Banknote className={cn(
+                  'h-4 w-4',
+                  payment.status === 'Applied' ? 'text-green-600' : 'text-muted-foreground'
+                )} />
+              </div>
+              <div>
+                <p className="font-medium text-sm">
+                  {payment.payment_type || 'Payment'}
+                  {vehicleName && <span className="text-muted-foreground"> • {vehicleName}</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {format(parseDateOnly(payment.payment_date), 'MMM dd, yyyy')} • {payment.method}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-semibold text-green-600">
+                {formatCurrency(payment.amount, currencyCode)}
+              </p>
+              <Badge variant="outline" className="text-xs">
+                {payment.status}
+              </Badge>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -386,6 +914,165 @@ function InvoiceDetailSheet({
   );
 }
 
+type MockInstallmentPlan = typeof mockInstallmentPlans[0];
+
+function DemoInstallmentCard({
+  plan,
+  onClick,
+}: {
+  plan: MockInstallmentPlan;
+  onClick: () => void;
+}) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
+  const progressPercent = (plan.paidAmount / plan.totalAmount) * 100;
+  const paidInstallments = plan.installments.filter(i => i.status === 'paid').length;
+
+  return (
+    <Card
+      className="cursor-pointer hover:border-accent transition-colors"
+      onClick={onClick}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base break-words">{plan.vehicleName}</CardTitle>
+              <Badge variant="secondary" className="shrink-0">Demo</Badge>
+            </div>
+            <CardDescription>{plan.planType} Plan</CardDescription>
+          </div>
+          <div className="flex sm:block items-baseline gap-2 sm:text-right shrink-0">
+            <p className="text-sm text-muted-foreground">Total</p>
+            <p className="font-semibold">{formatCurrency(plan.totalAmount, currencyCode)}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">
+              {paidInstallments} of {plan.installments.length} installments paid
+            </span>
+            <span className="font-medium">{Math.round(progressPercent)}%</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+          <div className="flex justify-between text-sm">
+            <span className="text-green-600">Paid: {formatCurrency(plan.paidAmount, currencyCode)}</span>
+            <span className="text-muted-foreground">Remaining: {formatCurrency(plan.remainingAmount, currencyCode)}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DemoInstallmentTimeline({
+  open,
+  onOpenChange,
+  plan,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  plan: MockInstallmentPlan | null;
+}) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currency_code || 'USD';
+  if (!plan) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="text-left">
+          <SheetTitle className="flex items-center gap-2">
+            <Car className="h-5 w-5" />
+            {plan.vehicleName}
+          </SheetTitle>
+          <SheetDescription>
+            {plan.planType} Installment Plan • Started {format(parseDateOnly(plan.startDate), 'MMM dd, yyyy')}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-6">
+          {/* Progress Summary */}
+          <div className="bg-muted/50 rounded-lg p-4">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xl font-bold text-green-600">{formatCurrency(plan.paidAmount, currencyCode)}</p>
+                <p className="text-xs text-muted-foreground">Paid</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold">{formatCurrency(plan.remainingAmount, currencyCode)}</p>
+                <p className="text-xs text-muted-foreground">Remaining</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold">{formatCurrency(plan.totalAmount, currencyCode)}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div className="space-y-0">
+            {plan.installments.map((inst, index) => (
+              <div key={inst.number} className="flex gap-4">
+                {/* Timeline line */}
+                <div className="flex flex-col items-center">
+                  <div className={cn(
+                    "w-3 h-3 rounded-full border-2",
+                    inst.status === 'paid' ? "bg-green-500 border-green-500" :
+                    inst.status === 'overdue' ? "bg-red-500 border-red-500" :
+                    "bg-background border-muted-foreground"
+                  )} />
+                  {index < plan.installments.length - 1 && (
+                    <div className={cn(
+                      "w-0.5 h-12",
+                      inst.status === 'paid' ? "bg-green-500" : "bg-muted"
+                    )} />
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">Installment #{inst.number}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Due: {format(new Date(inst.dueDate), 'MMM dd, yyyy')}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">{formatCurrency(inst.amount, currencyCode)}</p>
+                      <Badge
+                        variant={
+                          inst.status === 'paid' ? 'default' :
+                          inst.status === 'overdue' ? 'destructive' :
+                          'secondary'
+                        }
+                        className="text-xs"
+                      >
+                        {inst.status === 'paid' ? 'Paid' :
+                         inst.status === 'overdue' ? 'Overdue' :
+                         'Scheduled'}
+                      </Badge>
+                    </div>
+                  </div>
+                  {inst.paidAt && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Paid on {format(new Date(inst.paidAt), 'MMM dd, yyyy')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // A deposit hold (pre-authorisation) only truly ends when the money is taken
 // (`captured`) or handed back (`released`). Every other value — including
 // `failed` and `expired`, and a NULL status left behind by a placement that
@@ -396,8 +1083,10 @@ const TERMINAL_HOLD_STATUSES = ['captured', 'released'];
 
 // Long-term renters (60–120 day rentals) carry a deposit hold that has to be
 // re-authorised repeatedly over the life of the rental. If their card expires
-// or starts declining, the chain dies — and the only fix is a new card. This
-// hook is what puts the "Update Card" button in front of exactly those renters.
+// or starts declining, the chain dies — and the only fix is a new card. Before
+// this hook the "Update Card" button was gated on having an installment plan,
+// so a renter with a hold and no plan had no way to give us one, and staff had
+// no way to do it for them.
 function useHasActiveDepositHold() {
   const { customerUser } = useCustomerAuthStore();
   const customerId = customerUser?.customer_id;
@@ -435,7 +1124,10 @@ function useHasActiveDepositHold() {
 export default function PaymentsPage() {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currency_code || 'USD';
+  const { data: plans, isLoading: plansLoading } = useCustomerInstallmentPlans();
+  const { data: installmentStats, isLoading: installmentStatsLoading } = useInstallmentStats();
   const { data: invoiceStats, isLoading: invoiceStatsLoading } = useInvoiceStats();
+  const { data: nextPayment, isLoading: nextLoading } = useNextInstallmentPayment();
   const { data: hasActiveHold = false } = useHasActiveDepositHold();
 
   // Show success banner when redirected from Stripe payment
@@ -447,22 +1139,108 @@ export default function PaymentsPage() {
     return false;
   });
 
-  const [updateCardDialog, setUpdateCardDialog] = useState(false);
+  const payEarly = usePayInstallmentEarly();
+  const payOff = usePayRemainingInstallments();
+  const retryPayment = useRetryPayment();
+  const createUpfrontCheckout = useCreateUpfrontCheckout();
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    type: 'pay' | 'payoff' | 'retry';
+    id: string;
+    amount: number;
+    title: string;
+  } | null>(null);
+
+  const [updateCardDialog, setUpdateCardDialog] = useState<{
+    open: boolean;
+    planId?: string;
+  }>({ open: false });
+
+  // Demo installments state
+  const [showDemoInstallments, setShowDemoInstallments] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
+  const [selectedDemoPlan, setSelectedDemoPlan] = useState<MockInstallmentPlan | null>(null);
+  const [demoTimelineOpen, setDemoTimelineOpen] = useState(false);
 
   // Invoice detail state
   const [selectedInvoice, setSelectedInvoice] = useState<CustomerInvoice | null>(null);
   const [invoiceDetailOpen, setInvoiceDetailOpen] = useState(false);
 
-  const isLoading = invoiceStatsLoading;
+  const activePlans = (plans || []).filter(
+    (p) => p.status === 'active' || p.status === 'overdue' || p.status === 'pending'
+  );
+  const completedPlans = (plans || []).filter((p) => p.status === 'completed');
 
+  const isLoading = plansLoading || installmentStatsLoading || invoiceStatsLoading || nextLoading;
+
+  // Combined stats: use invoice stats as primary, installment stats as secondary
   const stats = {
-    totalPaid: invoiceStats?.totalPaid || 0,
-    totalRemaining: invoiceStats?.totalDue || 0,
-    overdueCount: invoiceStats?.overdueCount || 0,
+    activePlans: installmentStats?.activePlans || 0,
+    totalPaid: (invoiceStats?.totalPaid || 0) + (installmentStats?.totalPaid || 0),
+    totalRemaining: (invoiceStats?.totalDue || 0) + (installmentStats?.totalRemaining || 0),
+    overdueCount: (invoiceStats?.overdueCount || 0) + (installmentStats?.overdueCount || 0),
     paidInvoices: invoiceStats?.paidCount || 0,
     pendingInvoices: invoiceStats?.pendingCount || 0,
   };
+  const isPaying = payEarly.isPending || payOff.isPending || retryPayment.isPending || createUpfrontCheckout.isPending;
+
+  const handlePayNow = (installmentId: string) => {
+    const plan = plans?.find(p => p.scheduled_installments.some(i => i.id === installmentId));
+    const inst = plan?.scheduled_installments.find(i => i.id === installmentId);
+    if (inst) {
+      setConfirmDialog({
+        type: inst.status === 'failed' ? 'retry' : 'pay',
+        id: installmentId,
+        amount: inst.amount,
+        title: `Installment #${inst.installment_number}`,
+      });
+    }
+  };
+
+  const handlePayOff = (planId: string) => {
+    const plan = plans?.find(p => p.id === planId);
+    if (plan) {
+      const remaining = plan.total_installable_amount - (plan.total_paid || 0);
+      setConfirmDialog({
+        type: 'payoff',
+        id: planId,
+        amount: remaining,
+        title: 'All Remaining Installments',
+      });
+    }
+  };
+
+  const handleRetry = (installmentId: string) => {
+    handlePayNow(installmentId);
+  };
+
+  const handleActivate = async (planId: string) => {
+    try {
+      const result = await createUpfrontCheckout.mutateAsync(planId);
+      if (result.url) {
+        window.location.href = result.url;
+      }
+    } catch {
+      // Error toast is handled by the hook
+    }
+  };
+
+  const executePayment = async () => {
+    if (!confirmDialog) return;
+
+    try {
+      if (confirmDialog.type === 'payoff') {
+        await payOff.mutateAsync(confirmDialog.id);
+      } else if (confirmDialog.type === 'retry') {
+        await retryPayment.mutateAsync(confirmDialog.id);
+      } else {
+        await payEarly.mutateAsync(confirmDialog.id);
+      }
+    } finally {
+      setConfirmDialog(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Payment success banner */}
@@ -482,7 +1260,7 @@ export default function PaymentsPage() {
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold">Payments</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            View your invoices and payment history
+            Manage your installment plans and view payment history
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -494,12 +1272,12 @@ export default function PaymentsPage() {
             <FileText className="h-4 w-4 mr-2" />
             Download statement
           </Button>
-          {/* Shown for renters with a live deposit hold — the saved card is what
-              the hold is re-authorised against. */}
-          {hasActiveHold && (
+          {/* Also shown for renters with a live deposit hold and no installment
+              plan — the saved card is what the hold is re-authorised against. */}
+          {(activePlans.length > 0 || hasActiveHold) && (
             <Button
               variant="outline"
-              onClick={() => setUpdateCardDialog(true)}
+              onClick={() => setUpdateCardDialog({ open: true })}
               className="w-full sm:w-auto"
             >
               <CreditCard className="h-4 w-4 mr-2" />
@@ -513,8 +1291,8 @@ export default function PaymentsPage() {
 
       {/* Stats */}
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
             <Card key={i}>
               <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
                 <Skeleton className="h-4 w-24" />
@@ -526,13 +1304,18 @@ export default function PaymentsPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <StatCard
+            title="Active Plans"
+            value={stats.activePlans}
+            icon={CreditCard}
+            description={stats.paidInvoices ? `${stats.paidInvoices} invoices paid` : undefined}
+          />
           <StatCard
             title="Total Paid"
             value={formatCurrency(stats.totalPaid, currencyCode)}
             icon={CheckCircle2}
             variant="success"
-            description={stats.paidInvoices ? `${stats.paidInvoices} invoices paid` : undefined}
           />
           <StatCard
             title="Remaining"
@@ -550,20 +1333,144 @@ export default function PaymentsPage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Invoices</CardTitle>
-          <CardDescription>Your rental invoices and billing details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <InvoiceList
-            onViewInvoice={(invoice) => {
-              setSelectedInvoice(invoice);
-              setInvoiceDetailOpen(true);
-            }}
-          />
-        </CardContent>
-      </Card>
+      {/* Tabs Section */}
+      <Tabs defaultValue="installments" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="installments">Installments</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="invoices" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Invoices</CardTitle>
+              <CardDescription>Your rental invoices and billing details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <InvoiceList
+                onViewInvoice={(invoice) => {
+                  setSelectedInvoice(invoice);
+                  setInvoiceDetailOpen(true);
+                }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="installments" className="space-y-6 mt-6">
+          {/* Demo Installments Section */}
+          <Card className="border-dashed">
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle className="text-base sm:text-lg">Demo Installments</CardTitle>
+                  <CardDescription>See how installment plans work</CardDescription>
+                </div>
+                <Button
+                  variant={showDemoInstallments ? "secondary" : "outline"}
+                  onClick={() => setShowDemoInstallments(!showDemoInstallments)}
+                  className="w-full sm:w-auto"
+                >
+                  {showDemoInstallments ? 'Hide Demo' : 'Show Demo'}
+                </Button>
+              </div>
+            </CardHeader>
+            {showDemoInstallments && (
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {mockInstallmentPlans.map((plan) => (
+                    <DemoInstallmentCard
+                      key={plan.id}
+                      plan={plan}
+                      onClick={() => {
+                        setSelectedDemoPlan(plan);
+                        setDemoTimelineOpen(true);
+                      }}
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Next Payment */}
+          {isLoading ? (
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-24 w-full" />
+              </CardContent>
+            </Card>
+          ) : nextPayment ? (
+            <NextPaymentCard
+              plan={nextPayment.plan}
+              installment={nextPayment.installment}
+              onPayNow={handlePayNow}
+              onRetry={handleRetry}
+              onUpdateCard={(planId) => setUpdateCardDialog({ open: true, planId })}
+              isPaying={isPaying}
+            />
+          ) : activePlans.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="font-semibold text-lg mb-2">No Active Installment Plans</h3>
+                <p className="text-muted-foreground text-center max-w-md">
+                  You don't have any active installment plans. When you book a vehicle with installments,
+                  your payment schedule will appear here.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* Active Plans */}
+          {activePlans.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Active Installment Plans</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {activePlans.map((plan) => (
+                  <InstallmentPlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onPayNow={handlePayNow}
+                    onPayOff={handlePayOff}
+                    onActivate={handleActivate}
+                    isPaying={isPaying}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Completed Plans */}
+          {completedPlans.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-muted-foreground">Completed Plans</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {completedPlans.map((plan) => (
+                  <InstallmentPlanCard
+                    key={plan.id}
+                    plan={plan}
+                    onPayNow={handlePayNow}
+                    onPayOff={handlePayOff}
+                    onActivate={handleActivate}
+                    isPaying={isPaying}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Demo Timeline Dialog */}
+      <DemoInstallmentTimeline
+        open={demoTimelineOpen}
+        onOpenChange={setDemoTimelineOpen}
+        plan={selectedDemoPlan}
+      />
 
       {/* Invoice Detail Sheet */}
       <InvoiceDetailSheet
@@ -572,10 +1479,58 @@ export default function PaymentsPage() {
         invoice={selectedInvoice}
       />
 
+      {/* Confirmation Dialog */}
+      <AlertDialog open={!!confirmDialog} onOpenChange={() => setConfirmDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmDialog?.type === 'retry' ? 'Retry Payment' :
+               confirmDialog?.type === 'payoff' ? 'Pay Off Remaining' :
+               'Pay Early'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDialog?.type === 'retry' ? (
+                <>
+                  This will retry the failed payment for <strong>{confirmDialog.title}</strong>.
+                  <br />
+                  Amount: <strong>{formatCurrency(confirmDialog.amount, currencyCode)}</strong>
+                </>
+              ) : confirmDialog?.type === 'payoff' ? (
+                <>
+                  This will pay off all remaining installments at once.
+                  <br />
+                  Total: <strong>{formatCurrency(confirmDialog.amount, currencyCode)}</strong>
+                </>
+              ) : (
+                <>
+                  This will charge your saved card for <strong>{confirmDialog?.title}</strong> now.
+                  <br />
+                  Amount: <strong>{formatCurrency(confirmDialog?.amount || 0, currencyCode)}</strong>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPaying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={executePayment} disabled={isPaying}>
+              {isPaying ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Pay ${formatCurrency(confirmDialog?.amount || 0, currencyCode)}`
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Update Payment Method Dialog */}
       <UpdatePaymentMethodDialog
-        open={updateCardDialog}
-        onOpenChange={setUpdateCardDialog}
+        open={updateCardDialog.open}
+        onOpenChange={(open) => setUpdateCardDialog({ open, planId: updateCardDialog.planId })}
+        installmentPlanId={updateCardDialog.planId}
         onSuccess={() => {
           // Refetch data after card update
           window.location.reload();

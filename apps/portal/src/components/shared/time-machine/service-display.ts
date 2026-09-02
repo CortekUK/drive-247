@@ -9,6 +9,7 @@
 
 export type ServiceKey =
   | "payg"
+  | "installment"
   | "auto_extend"
   | "deposit"
   | "payg_reminder"
@@ -43,6 +44,7 @@ export interface ServiceDisplay {
 /** Render order in the panel — roughly the cron-clock firing order. */
 export const SERVICE_ORDER: ServiceKey[] = [
   "payg",
+  "installment",
   "auto_extend",
   "deposit",
   "payg_reminder",
@@ -61,6 +63,20 @@ export const SERVICE_DISPLAY: Record<ServiceKey, ServiceDisplay> = {
       { key: "totalCharged", label: "Total charged", format: "currency" },
       { key: "dayCount", label: "Days elapsed", format: "number" },
       { key: "nextAccrualAt", label: "Next accrual", format: "datetime" },
+    ],
+  },
+  installment: {
+    label: "Installment Payments",
+    icon: "CalendarClock",
+    description:
+      "Charges due scheduled installments via a Stripe TEST PaymentIntent, settled inline (no webhook).",
+    statusFields: [
+      { key: "planStatus", label: "Plan status", format: "text" },
+      { key: "installments", label: "Installments", format: "number" },
+      { key: "open", label: "Open", format: "number" },
+      { key: "paid", label: "Paid", format: "number" },
+      { key: "nextOpenDue", label: "Next due", format: "date" },
+      { key: "lastReminderSentAt", label: "Last reminder", format: "datetime" },
     ],
   },
   auto_extend: {

@@ -68,6 +68,7 @@ import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDia
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
 import { PaygSection } from '@/components/customer-portal/payg-section';
 import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCard';
+import { CustomerInstallmentsView } from '@/components/installments/CustomerInstallmentsView';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration,
@@ -195,6 +196,21 @@ function getPaymentStatusColor(status: string): string {
       return 'bg-amber-100 text-amber-800';
     case 'failed':
     case 'overdue':
+      return 'bg-red-100 text-red-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+}
+
+function getInstallmentStatusColor(status: string): string {
+  switch (status?.toLowerCase()) {
+    case 'paid':
+      return 'bg-green-100 text-green-800';
+    case 'pending':
+    case 'scheduled':
+      return 'bg-amber-100 text-amber-800';
+    case 'overdue':
+    case 'failed':
       return 'bg-red-100 text-red-800';
     default:
       return 'bg-gray-100 text-gray-800';
@@ -456,7 +472,7 @@ export default function BookingDetailPage() {
         .select(`
           id, rental_number, start_date, end_date, status, monthly_amount, discount_applied, promo_code, rental_period_type,
           payment_status, approval_status, pickup_location, return_location,
-          created_at, is_extended, previous_end_date,
+          created_at, has_installment_plan, is_extended, previous_end_date,
           original_end_date, cancellation_requested, cancellation_reason,
           extension_checkout_url, extension_amount, delivery_method, delivery_address, delivery_fee,
           collection_fee, deposit_hold_status, deposit_hold_amount,
@@ -466,7 +482,8 @@ export default function BookingDetailPage() {
           payg_accrual_day_count,
           is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total,
           auto_extend_enabled,
-          vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, ${VEHICLE_PHOTO_COLUMNS})
+          vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, ${VEHICLE_PHOTO_COLUMNS}),
+          installment_plans!installment_plans_rental_id_fkey (id, plan_type, status, total_installable_amount, upfront_amount, upfront_paid, installment_amount, number_of_installments, paid_installments, total_paid, next_due_date, scheduled_installments (id, installment_number, amount, due_date, status))
         `)
         .eq('id', id)
         .eq('customer_id', customerUser?.customer_id as string)
@@ -569,6 +586,7 @@ export default function BookingDetailPage() {
   // ---- Derived data ----
 
   const vehicle = rental?.vehicles as any;
+  const installmentPlan = (rental?.installment_plans as any)?.[0] || null;
 
   const originalAgreement = useMemo(
     () => agreements.find((a) => a.agreement_type === 'original') || null,
@@ -1262,6 +1280,127 @@ export default function BookingDetailPage() {
             ))}
         </TabsContent>
       </Tabs>
+
+      {/* 4. Installment Plan — new redesigned customer view */}
+      {installmentPlan && rental?.id ? (
+        <CustomerInstallmentsView
+          rentalId={rental.id}
+          rentalStart={rental.start_date}
+          rentalEnd={rental.end_date}
+          currencyCode={currencyCode}
+        />
+      ) : null}
+
+      {/* Legacy installment plan card — kept while new view stabilises */}
+      {false && installmentPlan && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Installment Plan
+              <Badge
+                className={
+                  installmentPlan.status === 'active'
+                    ? 'bg-green-100 text-green-800'
+                    : installmentPlan.status === 'completed'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-800'
+                }
+              >
+                {installmentPlan.status}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Progress */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {installmentPlan.paid_installments || 0} of{' '}
+                  {installmentPlan.number_of_installments || 0} installments paid
+                </span>
+                <span className="font-medium">
+                  {formatCurrency(installmentPlan.total_paid || 0, currencyCode)} /{' '}
+                  {formatCurrency(installmentPlan.total_installable_amount || 0, currencyCode)}
+                </span>
+              </div>
+              <Progress
+                value={
+                  installmentPlan.number_of_installments
+                    ? ((installmentPlan.paid_installments || 0) /
+                        installmentPlan.number_of_installments) *
+                      100
+                    : 0
+                }
+                className="h-2"
+              />
+            </div>
+
+            {/* Summary row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+              {installmentPlan.upfront_amount != null && installmentPlan.upfront_amount > 0 && (
+                <div>
+                  <p className="text-muted-foreground">Upfront</p>
+                  <p className="font-medium">
+                    {formatCurrency(installmentPlan.upfront_amount, currencyCode)}
+                    {installmentPlan.upfront_paid && (
+                      <CheckCircle className="h-3 w-3 text-green-600 inline ml-1" />
+                    )}
+                  </p>
+                </div>
+              )}
+              <div>
+                <p className="text-muted-foreground">Per Installment</p>
+                <p className="font-medium">
+                  {formatCurrency(installmentPlan.installment_amount || 0, currencyCode)}
+                </p>
+              </div>
+              {installmentPlan.next_due_date && (
+                <div>
+                  <p className="text-muted-foreground">Next Due</p>
+                  <p className="font-medium">{formatDate(installmentPlan.next_due_date)}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Scheduled installments table */}
+            {installmentPlan.scheduled_installments &&
+              installmentPlan.scheduled_installments.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Schedule</h4>
+                    <div className="rounded-md border">
+                      <div className="grid grid-cols-4 gap-2 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
+                        <span>#</span>
+                        <span>Due Date</span>
+                        <span>Amount</span>
+                        <span>Status</span>
+                      </div>
+                      {(installmentPlan.scheduled_installments as any[])
+                        .sort((a: any, b: any) => a.installment_number - b.installment_number)
+                        .map((inst: any) => (
+                          <div
+                            key={inst.id}
+                            className="grid grid-cols-4 gap-2 px-4 py-2 border-t text-sm"
+                          >
+                            <span>{inst.installment_number}</span>
+                            <span>{formatDate(inst.due_date)}</span>
+                            <span>{formatCurrency(inst.amount || 0, currencyCode)}</span>
+                            <Badge
+                              className={`${getInstallmentStatusColor(inst.status)} w-fit text-xs`}
+                            >
+                              {inst.status}
+                            </Badge>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </>
+              )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Cancellation notice */}
       {rental.cancellation_requested && (
