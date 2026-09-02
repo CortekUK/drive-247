@@ -170,6 +170,147 @@ function blobText(blob) {
     return p;
   });
 
+  /* ===========================================================================
+   * ACCESSIBILITY
+   *
+   * Added deliberately after an audit. Each of these guards a defect that was
+   * actually present, so each one fails if the defect comes back.
+   * ======================================================================== */
+  console.log("\nPOPUP — accessibility");
+
+  const CSS = fs.readFileSync(path.join(EXT, "popup.css"), "utf8");
+  const JS  = fs.readFileSync(path.join(EXT, "popup.js"),  "utf8");
+  const HTML= fs.readFileSync(path.join(EXT, "popup.html"),"utf8");
+
+  const a11y = bootPopup("https://turo.com/gb/en");
+  await settle();
+
+  check("every button's accessible name contains its visible label (WCAG 2.5.3)", () => {
+    // Was broken on all three of Scrape page / Copy for Sheets / Download CSV:
+    // each carried an aria-label that REPLACED the words on the button, so
+    // "click Scrape page" could not reach it by voice.
+    const p = [];
+    a11y.win.document.querySelectorAll("button").forEach(b => {
+      // A hidden button is not exposed and has no purpose yet; #placeholder-action
+      // is given its label at the moment a state actually offers an action.
+      if (b.hasAttribute("hidden")) return;
+      const visible = (b.textContent || "").replace(/\s+/g, " ").trim();
+      const label = b.getAttribute("aria-label");
+      if (!visible && !label) p.push("a button has no name at all");
+      if (visible && label &&
+          label.toLowerCase().indexOf(visible.toLowerCase()) === -1)
+        p.push('aria-label "' + label + '" does not contain visible text "' + visible + '"');
+    });
+    return p;
+  });
+
+  check("the status live region is never removed from the accessibility tree", () => {
+    // It used to toggle `hidden`. A live region inserted and populated in the
+    // same frame is not reliably announced, which is every status change here.
+    const p = [];
+    const st = a11y.win.document.getElementById("status");
+    if (!st) return ["#status missing"];
+    if (st.hasAttribute("hidden")) p.push("#status carries `hidden` at rest");
+    if (/el\.status\.hidden\s*=/.test(JS)) p.push("popup.js still toggles el.status.hidden");
+    if (!/\.status:empty/.test(CSS)) p.push("no .status:empty rule to collapse it when idle");
+    a11y.win.document.getElementById("scrape").click();
+    return p;
+  });
+  await settle();
+
+  check("a status message reaches the live region, unhidden", () => {
+    const st = a11y.win.document.getElementById("status");
+    const p = [];
+    if (st.hasAttribute("hidden")) p.push("#status was hidden while carrying a message");
+    if (!(st.textContent || "").trim()) p.push("#status carries no text after a scrape");
+    if (st.getAttribute("aria-live") !== "polite") p.push("#status lost aria-live");
+    return p;
+  });
+
+  check("the scroll region can take keyboard focus (WCAG 2.1.1)", () => {
+    const p = [];
+    const sc = a11y.win.document.getElementById("scroll");
+    if (!sc) return ["#scroll missing"];
+    if (sc.getAttribute("tabindex") !== "0")
+      p.push("the only scroll container is not focusable, so it cannot be scrolled from a keyboard");
+    if (!/\.scroll:focus-visible/.test(CSS)) p.push("no focus ring on the scroll region");
+    return p;
+  });
+
+  check("no table cell is removed by the empty-value rule", () => {
+    // display:none on a <td> drops it from the accessibility tree, and these
+    // rows are display:grid (implicit table roles already stripped), so a
+    // missing cell shifts every later cell one column left — a row with no
+    // year announced its rating under the heading "Year".
+    const p = [];
+    if (/td:has\(> span\.muted:only-child\)[^{]*\{[^}]*display:\s*none/.test(CSS))
+      p.push("popup.css still sets display:none on a <td>");
+    const cells = a11y.win.document.querySelectorAll("#rows tr:first-child td");
+    const heads = a11y.win.document.querySelectorAll(".grid thead th");
+    if (cells.length !== heads.length)
+      p.push("row has " + cells.length + " cells against " + heads.length + " headers");
+    return p;
+  });
+
+  check("decorative CSS glyphs declare alternative text", () => {
+    // Chrome exposes generated content to the a11y tree: without `/ ""` the
+    // status reads as "check mark Found 12 listings", the caret as "black
+    // down-pointing small triangle", the rating as "black star 4.9".
+    const p = [];
+    const glyphs = CSS.match(/content:\s*"(?!\s*\/)[^"]+"\s*;/g) || [];
+    glyphs.forEach(g => {
+      const val = g.match(/content:\s*("[^"]+")/)[1];
+      if (CSS.indexOf("content: " + val + " / \"\"") === -1)
+        p.push("no alternative text declared for content: " + val);
+    });
+    return p;
+  });
+
+  check("prefers-reduced-motion neutralises delay as well as duration", () => {
+    const p = [];
+    const m = CSS.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/);
+    if (!m) return ["no prefers-reduced-motion block"];
+    if (!/animation-delay:\s*0m?s\s*!important/.test(m[0]))
+      p.push("row stagger still holds rows invisible for up to 126ms");
+    return p;
+  });
+
+  check("a mixed-source row is distinguishable without colour, and audibly", () => {
+    // The old signal was `box-shadow: inset 0 -1px 0` — invisible in practice
+    // and flattened away under forced colours, i.e. an honesty signal nobody
+    // would ever see.
+    const p = [];
+    if (/\.src--mixed\s*\{[^}]*box-shadow/.test(CSS))
+      p.push(".src--mixed is still a 1px inset shadow");
+    if (!/\.src--mixed\s*\{[^}]*border:/.test(CSS))
+      p.push(".src--mixed has no visible border");
+    if (!/\.src--mixed::after\s*\{[^}]*content:/.test(CSS))
+      p.push(".src--mixed carries no non-colour mark");
+    if (!/__filledFromLowerTier[\s\S]{0,320}sr-only/.test(JS))
+      p.push("popup.js gives a screen reader no text for a mixed-source row");
+    return p;
+  });
+
+  check("no operator-facing copy leaks the extractor's vocabulary", () => {
+    const p = [];
+    const strings = JS
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")
+      // Line-bounded, or the match runs across code between two quotes.
+      .match(/"(?:[^"\\\n]){14,}"/g) || [];
+    const BANNED = /\b(DOM|heuristics?|flight|schema\.org|microdata|test hooks|JSON-LD)\b/i;
+    strings.forEach(s2 => { if (BANNED.test(s2)) p.push("jargon in operator copy: " + s2); });
+    if (BANNED.test(HTML.replace(/<!--[\s\S]*?-->/g, ""))) p.push("jargon in popup.html copy");
+    return p;
+  });
+
+  check("the document has exactly one h1 and it names the product", () => {
+    const p = [];
+    const h1 = a11y.win.document.querySelectorAll("h1");
+    if (h1.length !== 1) p.push("found " + h1.length + " h1 elements, expected 1");
+    else if (!/Drive247/.test(h1[0].textContent)) p.push("h1 does not name the product");
+    return p;
+  });
+
   console.log("\n" + (fail ? "FAILED" : "PASSED") + " — " + pass + " passed, " + fail + " failed\n");
   process.exit(fail ? 1 : 0);
 })();

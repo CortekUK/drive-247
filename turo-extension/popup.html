@@ -49,8 +49,13 @@
   disclosure — lives in here and shares a single scrollbar. Before this, five
   separate elements each carried their own max-height + overflow-y:auto, so a
   long explanation was sliced mid-sentence inside a 100px box with no visible
-  affordance that more text existed. CSS `order` puts <main> ahead of
-  #details so the "why" always precedes the diagnostics.
+  affordance that more text existed. Source order is the reading order and the
+  tab order both: status, summary, results, then the diagnostics panel.
+
+  tabindex="0" is load-bearing. This is the only scroll container in the popup
+  and it can legitimately hold nothing focusable — a table of plain rows under
+  a placeholder with no action button — and a scroll container that cannot take
+  focus cannot be scrolled from a keyboard (WCAG 2.1.1).
 -->
 <div class="scroll" id="scroll" tabindex="0" role="region"
      aria-label="Results and explanation">
@@ -93,22 +98,6 @@
   </p>
 </section>
 
-<section id="details" class="details" hidden>
-  <h2 class="details-title">What the labels mean</h2>
-  <dl class="legend" id="tier-legend"></dl>
-
-  <h2 class="details-title">What was tried</h2>
-  <ol id="strategy-list" class="strategy-list"></ol>
-
-  <h2 class="details-title">What was on the page</h2>
-  <dl id="page-facts" class="facts"></dl>
-
-  <h2 class="details-title" id="raw-title" hidden>Technical detail</h2>
-  <pre id="raw-message" class="raw" hidden></pre>
-
-  <button id="copy-diag" class="btn btn-secondary btn-sm btn-block" type="button"
-          title="Copy a technical report of what this page contained">Copy diagnostics</button>
-</section>
 
 <main class="results">
   <div id="placeholder" class="placeholder" role="region" aria-labelledby="placeholder-title">
@@ -156,6 +145,29 @@
   </div>
 </main>
 
+<!--
+  #details follows <main> in the DOM as well as on screen. It used to sit
+  ahead of it and be moved down with CSS `order`, which reorders pixels but
+  never the tab sequence: tabbing off "How it found these" jumped PAST the
+  table to the Copy diagnostics button at the very bottom, then came back up
+  to the rows (WCAG 2.4.3, Focus Order). Keep these two in agreement.
+-->
+<section id="details" class="details" hidden>
+  <h2 class="details-title">What the labels mean</h2>
+  <dl class="legend" id="tier-legend"></dl>
+
+  <h2 class="details-title">What was tried</h2>
+  <ol id="strategy-list" class="strategy-list"></ol>
+
+  <h2 class="details-title">What was on the page</h2>
+  <dl id="page-facts" class="facts"></dl>
+
+  <h2 class="details-title" id="raw-title" hidden>Technical detail</h2>
+  <pre id="raw-message" class="raw" hidden></pre>
+
+  <button id="copy-diag" class="btn btn-secondary btn-sm btn-block" type="button"
+          title="Copy a technical report of what this page contained">Copy diagnostics</button>
+</section>
 </div><!-- /.scroll -->
 
 <footer class="bar bar-footer">

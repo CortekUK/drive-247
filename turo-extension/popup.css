@@ -185,6 +185,9 @@ body {
 .sr-only {
   position: absolute; width: 1px; height: 1px;
   clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+  /* Insurance: this class is used inside a padded badge, so it must not be
+   * able to inherit its way back to a visible 1px smudge. */
+  padding: 0; margin: 0; border: 0;
 }
 
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
@@ -218,10 +221,12 @@ body {
 }
 .scroll::-webkit-scrollbar-track { background: transparent; }
 
-#status  { order: 1; }
-#summary { order: 2; }
-.results { order: 3; }
-.details { order: 4; }
+/* Source order IS visual order in .scroll — status, summary, results, then the
+ * diagnostics panel. There were `order` declarations here doing the last swap
+ * in CSS while the DOM said otherwise, which moves pixels but never the tab
+ * sequence: tabbing off "How it found these" skipped the whole table and
+ * landed on Copy diagnostics at the bottom (WCAG 2.4.3). popup.html now
+ * carries the real order, and nothing here overrides it. */
 
 /* =============================================================================
  * 2. HEADER
@@ -299,7 +304,20 @@ header.bar {
 @keyframes slide { to { transform: translateX(350%); } }
 
 body:has(#scrape.is-busy) .progress   { opacity: 1; }
-body:has(#scrape.is-busy) #table-wrap { opacity: .45; pointer-events: none; }
+
+/* The previous page's table used to be dimmed to opacity .45 during a
+ * re-scrape. That is stale data an operator still reads, and .45 took the
+ * strongest text on it from 19.93:1 to 3.19:1 and the meta line to 1.89:1 —
+ * a contrast failure across the whole table for the duration.
+ *
+ * Opacity cannot buy this cue: even at .90 the muted meta line is 4.30:1,
+ * still short of 4.5, and .90 does not read as dimmed anyway. So the rows keep
+ * full contrast, and "this is the last page, not this one" is carried by the
+ * three signals that cost nothing — the animating progress rail, the "Reading
+ * the page…" status, and the button's own engaged state. The table is inert
+ * while it lasts, and popup.js marks the region aria-busy so that fact is
+ * announced rather than only drawn. */
+body:has(#scrape.is-busy) #table-wrap { pointer-events: none; cursor: progress; }
 
 /* =============================================================================
  * 3. STATUS BAR

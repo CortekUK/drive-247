@@ -840,6 +840,11 @@
     el.scrape.disabled = busy;
     el.scrape.setAttribute("aria-busy", String(!!busy));
     el.scrapeLabel.textContent = busy ? "Reading page…" : "Scrape page";
+    // The results region is marked busy too. On a re-scrape the previous
+    // page's table stays on screen at full contrast (see popup.css: dimming it
+    // was a contrast failure), so "these are the last page's numbers" has to
+    // be stated rather than implied by a tint a screen reader cannot see.
+    if (el.scroll) el.scroll.setAttribute("aria-busy", String(!!busy));
   }
 
   function currentTab() {
@@ -1090,6 +1095,7 @@
     el.copy = $("copy");
     el.download = $("download");
     el.pageContext = $("page-context");
+    el.scroll = $("scroll");
 
     el.scrape.addEventListener("click", scrape);
     el.download.addEventListener("click", downloadCSV);
