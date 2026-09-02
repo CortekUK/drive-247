@@ -229,7 +229,6 @@ const BookingSuccessContent = () => {
   const [loading, setLoading] = useState(true);
   const sessionId = searchParams?.get("session_id");
   const rentalId = searchParams?.get("rental_id");
-  const isInstallment = searchParams?.get("installment") === "true";
   const isInvoicePayment = searchParams?.get("type") === "invoice" || searchParams?.get("type") === "hold";
   const isAuthenticated = !!customerUser;
 
@@ -499,29 +498,6 @@ const BookingSuccessContent = () => {
               }
             } catch (parseError) {
               console.error("Error parsing payment details:", parseError);
-            }
-          }
-
-          // Step 2.5: Activate installment plan if this is an installment checkout
-          if (isInstallment) {
-            try {
-              console.log('Activating installment plan for rental:', rentalId);
-              const { data: activateResult, error: activateError } = await supabase.functions.invoke('activate-installment-plan', {
-                body: {
-                  rentalId,
-                  checkoutSessionId: sessionId,
-                }
-              });
-
-              if (activateError) {
-                console.error('Failed to activate installment plan:', activateError);
-              } else if (activateResult?.already_active) {
-                console.log('Installment plan already active:', activateResult.plan_id);
-              } else {
-                console.log('Installment plan activated:', activateResult);
-              }
-            } catch (activateErr) {
-              console.error('Error activating installment plan:', activateErr);
             }
           }
 

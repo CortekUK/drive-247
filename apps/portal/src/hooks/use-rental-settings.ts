@@ -3,30 +3,6 @@ import { supabase, supabaseUntyped } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';
 
-export type WhatGetsSplit = 'rental_only' | 'rental_tax' | 'rental_tax_extras';
-
-export interface InstallmentConfig {
-  minimum_days_weekly: number;
-  minimum_days_monthly: number;
-  minimum_days_semiweekly: number;
-  weekly_installments_limit: number;
-  monthly_installments_limit: number;
-  semiweekly_installments_limit: number;
-  limiting_amount_per_day_weekly: number;
-  limiting_amount_per_day_monthly: number;
-  limiting_amount_per_day_semiweekly: number;
-  charge_first_upfront: boolean;
-  what_gets_split: WhatGetsSplit;
-  grace_period_days: number;
-  max_retry_attempts: number;
-  retry_interval_days: number;
-  // Backward compat (old keys, read-only)
-  min_days_for_weekly?: number;
-  min_days_for_monthly?: number;
-  max_installments_weekly?: number;
-  max_installments_monthly?: number;
-}
-
 export interface RentalSettings {
   min_rental_days: number | null;
   min_rental_hours: number | null;
@@ -51,9 +27,6 @@ export interface RentalSettings {
   working_hours_open: string | null;
   working_hours_close: string | null;
   working_hours_always_open: boolean | null;
-  // Installment settings
-  installments_enabled: boolean | null;
-  installment_config: InstallmentConfig | null;
   // Booking lead time display unit
   booking_lead_time_unit: 'hours' | 'days' | null;
   // Lockbox settings
@@ -110,24 +83,6 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   working_hours_open: '09:00',
   working_hours_close: '17:00',
   working_hours_always_open: true,
-  // Installment defaults
-  installments_enabled: false,
-  installment_config: {
-    minimum_days_weekly: 7,
-    minimum_days_monthly: 30,
-    minimum_days_semiweekly: 7,
-    weekly_installments_limit: 4,
-    monthly_installments_limit: 6,
-    semiweekly_installments_limit: 8,
-    limiting_amount_per_day_weekly: 0,
-    limiting_amount_per_day_monthly: 0,
-    limiting_amount_per_day_semiweekly: 0,
-    charge_first_upfront: true,
-    what_gets_split: 'rental_only',
-    grace_period_days: 3,
-    max_retry_attempts: 3,
-    retry_interval_days: 1,
-  },
   // Booking lead time display unit
   booking_lead_time_unit: 'hours',
   // Lockbox defaults

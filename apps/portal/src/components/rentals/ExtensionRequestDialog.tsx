@@ -43,7 +43,6 @@ interface ExtensionRequestDialogProps {
     end_date: string;
     previous_end_date: string | null;
     original_end_date?: string | null;
-    has_installment_plan?: boolean;
     bonzah_policy_id?: string | null;
     rental_period_type?: string;
     customer_id?: string;
@@ -912,16 +911,6 @@ export function ExtensionRequestDialog({
                 )}
               </div>
             </div>
-          )}
-
-          {/* Installment Plan Warning */}
-          {rental.has_installment_plan && extensionDays > 0 && (
-            <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-900/20">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
-                This rental has an active installment plan. The extension charge will be separate from the installment schedule.
-              </AlertDescription>
-            </Alert>
           )}
 
           {/* Extension Insurance */}

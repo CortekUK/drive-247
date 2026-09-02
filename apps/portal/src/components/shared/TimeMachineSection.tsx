@@ -360,7 +360,6 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       const f = (data.fired ?? {}) as Record<string, number>;
       const bits: string[] = [];
       if (f.charges) bits.push(`${f.charges} charge${f.charges === 1 ? "" : "s"}`);
-      if (f.installments) bits.push(`${f.installments} installment charge${f.installments === 1 ? "" : "s"}`);
       if (f.reminders) bits.push(`${f.reminders} reminder${f.reminders === 1 ? "" : "s"}`);
       if (f.autoExtensions) bits.push(`${f.autoExtensions} auto-extension${f.autoExtensions === 1 ? "" : "s"}`);
       if (f.depositRefreshes) bits.push(`${f.depositRefreshes} deposit refresh`);
@@ -373,7 +372,7 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       // being in the `supabase_realtime` publication — which is NOT guaranteed
       // outside prod (staging's publication is empty). So invalidate the rental
       // page's query keys directly: the KPI cards, Payment Breakdown, PAYG
-      // statement and installment schedule refetch immediately, no reload needed.
+      // statement refetch immediately, no reload needed.
       // Keys mirror the page's own Realtime handlers (rentals/[id]/page.tsx).
       await Promise.all(
         [
@@ -388,9 +387,6 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
           ["rental-payments-total"],
           ["rental-payment"],
           ["payg-invoices"],
-          ["installment-plan"],
-          ["installment-plan-full"],
-          ["installment-plan-events"],
         ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       );
       if (errs.length) {

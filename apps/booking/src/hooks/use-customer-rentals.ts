@@ -5,27 +5,6 @@ import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 // test, so a plate the operator had blurred was served unredacted anyway.
 import { VEHICLE_PHOTO_COLUMNS } from '@/lib/vehicle-identity';
 
-export interface CustomerRentalInstallmentPlan {
-  id: string;
-  plan_type: string;
-  status: string;
-  total_installable_amount: number;
-  upfront_amount: number;
-  upfront_paid: boolean | null;
-  installment_amount: number;
-  number_of_installments: number;
-  paid_installments: number | null;
-  total_paid: number | null;
-  next_due_date: string | null;
-  scheduled_installments: {
-    id: string;
-    installment_number: number;
-    amount: number;
-    due_date: string;
-    status: string;
-  }[];
-}
-
 export interface CustomerRental {
   id: string;
   start_date: string;
@@ -38,7 +17,6 @@ export interface CustomerRental {
   pickup_location: string | null;
   return_location: string | null;
   created_at: string;
-  has_installment_plan: boolean | null;
   is_extended: boolean | null;
   previous_end_date: string | null;
   cancellation_requested: boolean | null;
@@ -70,7 +48,6 @@ export interface CustomerRental {
       display_order: number | null;
     }[];
   } | null;
-  installment_plans: CustomerRentalInstallmentPlan[] | null;
 }
 
 export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past' = 'all') {
@@ -100,7 +77,6 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
           pickup_location,
           return_location,
           created_at,
-          has_installment_plan,
           is_extended,
           previous_end_date,
           cancellation_requested,
@@ -126,26 +102,6 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
             monthly_mileage,
             excess_mileage_rate,
             ${VEHICLE_PHOTO_COLUMNS}
-          ),
-          installment_plans!installment_plans_rental_id_fkey (
-            id,
-            plan_type,
-            status,
-            total_installable_amount,
-            upfront_amount,
-            upfront_paid,
-            installment_amount,
-            number_of_installments,
-            paid_installments,
-            total_paid,
-            next_due_date,
-            scheduled_installments (
-              id,
-              installment_number,
-              amount,
-              due_date,
-              status
-            )
           )
         `)
         .eq('customer_id', customerUser.customer_id);

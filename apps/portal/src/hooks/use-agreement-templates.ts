@@ -5,7 +5,7 @@ import { toast } from '@/hooks/use-toast';
 import { getDefaultTemplateForCategory } from '@/lib/default-agreement-template';
 
 export type TemplateType = 'default' | 'custom';
-export type TemplateCategory = 'standard' | 'payg' | 'extension' | 'installment';
+export type TemplateCategory = 'standard' | 'payg' | 'extension';
 
 export interface AgreementTemplate {
   id: string;
@@ -385,9 +385,8 @@ export const useTemplateSelection = (category: TemplateCategory = 'standard') =>
         return existingArr[0];
       }
 
-      // Some categories were seeded with a different template_name (e.g. the
-      // installment category was seeded as "Default Installment Plan Agreement"
-      // by an earlier migration). The unique_active_template_per_tenant index
+      // Some categories were seeded with a different template_name by an
+      // earlier migration. The unique_active_template_per_tenant index
       // allows only one active row per (tenant, category), so inserting a new
       // active "Default Template" row would conflict. Deactivate any other
       // legacy rows in this category first so the new row can take over as

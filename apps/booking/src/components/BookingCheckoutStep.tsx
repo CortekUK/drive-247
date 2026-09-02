@@ -25,7 +25,6 @@ import { formatCurrency } from "@/lib/format-utils";
 import { InvoiceDialog } from "@/components/InvoiceDialog";
 import { AuthPromptDialog } from "@/components/booking/AuthPromptDialog";
 import { createInvoiceWithFallback, Invoice } from "@/lib/invoiceUtils";
-import InstallmentSelector, { InstallmentOption, InstallmentConfig } from "@/components/InstallmentSelector";
 import { useDeliveryLocations } from "@/hooks/useDeliveryLocations";
 import CheckoutProgressOverlay from "@/components/CheckoutProgressOverlay";
 
@@ -34,8 +33,7 @@ interface PromoDetails {
   type: "percentage" | "fixed_amount";
   value: number;
   id: string;
-  // "duration" = auto-applied by rental length; only valid for fixed pay-in-full
-  // rentals, so it is stripped out when an installment plan is selected.
+  // "duration" = auto-applied by rental length.
   source?: "manual" | "duration";
   minDurationDays?: number;
 }
@@ -144,27 +142,6 @@ export default function BookingCheckoutStep({
     { label: 'Almost there' },
   ];
 
-  // Installment state
-  const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState<InstallmentOption | null>(null);
-  const installmentsEnabled = tenant?.installments_enabled ?? false;
-  const installmentConfig: InstallmentConfig = {
-    minimum_days_weekly: 7,
-    minimum_days_monthly: 30,
-    minimum_days_semiweekly: 7,
-    weekly_installments_limit: 4,
-    monthly_installments_limit: 6,
-    semiweekly_installments_limit: 8,
-    limiting_amount_per_day_weekly: 0,
-    limiting_amount_per_day_monthly: 0,
-    limiting_amount_per_day_semiweekly: 0,
-    charge_first_upfront: true,
-    what_gets_split: 'rental_only',
-    grace_period_days: 3,
-    max_retry_attempts: 3,
-    retry_interval_days: 1,
-    ...(tenant?.installment_config || {}),
-  };
-
   // Calculate rental period type based on duration
   const mtd = tenant?.monthly_tier_days ?? 30;
   const calculateRentalPeriodType = (): "Daily" | "Weekly" | "Monthly" => {
@@ -195,18 +172,9 @@ export default function BookingCheckoutStep({
     return 0;
   };
 
-  // A duration discount was auto-applied, but the customer has chosen an installment
-  // plan. Duration discounts are for fixed pay-in-full rentals only, so it does not
-  // apply here (see disclaimer by the installment selector).
-  const isInstallmentPlanSelected =
-    !!selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled;
-  const durationDiscountBlocked =
-    promoDetails?.source === 'duration' && isInstallmentPlanSelected;
-
   // Calculate promo discount amount
   const calculatePromoDiscount = (): number => {
     if (!promoDetails) return 0;
-    if (durationDiscountBlocked) return 0;
 
     if (promoDetails.type === 'fixed_amount') {
       // Fixed amount discount, but not more than the vehicle total
@@ -221,17 +189,6 @@ export default function BookingCheckoutStep({
   // Calculate discounted vehicle total (after promo code)
   const calculateDiscountedVehicleTotal = (): number => {
     return vehicleTotal - calculatePromoDiscount();
-  };
-
-  // Promo discount that may reduce an installment plan: MANUAL codes only.
-  // A duration auto-discount is a fixed-pay-in-full perk, so it never feeds the
-  // installment base. Computed independently of which plan is selected so the
-  // InstallmentSelector's plan amounts stay stable (it caches them by type).
-  const installmentPromoDiscount = (): number => {
-    if (!promoDetails || promoDetails.source === 'duration') return 0;
-    if (promoDetails.type === 'fixed_amount') return Math.min(promoDetails.value, vehicleTotal);
-    if (promoDetails.type === 'percentage') return (vehicleTotal * promoDetails.value) / 100;
-    return 0;
   };
 
   // Calculate tax amount based on tenant settings (applied to discounted price)
@@ -305,46 +262,6 @@ export default function BookingCheckoutStep({
     // Grand total = discounted vehicle price + delivery fees + extras + tax + service fee + insurance + unlimited mileage upgrade + charged deposit (if any)
     return calculateDiscountedVehicleTotal() + calculateDeliveryFees() + calculateExtrasTotal() + calculateTaxAmount() + calculateServiceFee() + effectiveBonzahPremium + unlimitedMileageTotal + chargedSecurityDeposit();
   };
-
-  // Calculate installment breakdown based on what_gets_split setting
-  const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
-  const { installUpfrontAmount, installableAmount } = (() => {
-    // Installment plans use a vehicle total that excludes any duration auto-discount
-    // (fixed-pay-in-full only). Manual codes still apply, matching prior behaviour.
-    const discountedVehicle = vehicleTotal - installmentPromoDiscount();
-    const extrasTotal = calculateExtrasTotal();
-    const taxAmount = (tenant?.tax_enabled && tenant?.tax_percentage)
-      ? discountedVehicle * (tenant.tax_percentage / 100)
-      : 0;
-    const deliveryFees = calculateDeliveryFees();
-    // Service fee — percentage variant is computed on this same vehicle base.
-    const feeType = (tenant as any)?.service_fee_type || 'fixed_amount';
-    const feeValue = (tenant as any)?.service_fee_value ?? tenant?.service_fee_amount ?? 0;
-    const serviceFee = !tenant?.service_fee_enabled
-      ? 0
-      : feeType === 'percentage'
-        ? (discountedVehicle * feeValue) / 100
-        : feeValue;
-
-    let upfront = serviceFee; // Deposit is a hold, not upfront charge
-    let installable = 0;
-
-    switch (whatGetsSplit) {
-      case 'rental_only':
-        installable = discountedVehicle + extrasTotal;
-        upfront += taxAmount + deliveryFees;
-        break;
-      case 'rental_tax_extras':
-        installable = discountedVehicle + extrasTotal + taxAmount + deliveryFees;
-        break;
-      case 'rental_tax':
-      default:
-        installable = discountedVehicle + extrasTotal + taxAmount;
-        upfront += deliveryFees;
-        break;
-    }
-    return { installUpfrontAmount: upfront, installableAmount: installable };
-  })();
 
   const currencyCode = tenant?.currency_code || 'USD';
   const fmt = (amount: number) => formatCurrency(amount, currencyCode);
@@ -609,59 +526,6 @@ export default function BookingCheckoutStep({
     }
   };
 
-  // Function to redirect to installment checkout (Stripe with card saving)
-  const redirectToInstallmentCheckout = async () => {
-    if (!createdRentalData || !selectedInstallmentPlan) {
-      toast.error("Missing rental or installment data");
-      return;
-    }
-
-    try {
-      setIsProcessing(true);
-
-      const { data, error: functionError } = await supabase.functions.invoke('create-installment-checkout', {
-        body: {
-          rentalId: createdRentalData.rental.id,
-          customerId: createdRentalData.customer.id,
-          customerEmail: formData.customerEmail,
-          customerName: formData.customerName,
-          customerPhone: formData.customerPhone,
-          vehicleId: selectedVehicle.id,
-          vehicleName: vehicleDisplayName(selectedVehicle, tenant),
-          tenantId: tenant?.id,
-          upfrontAmount: selectedInstallmentPlan.upfrontTotal,
-          firstInstallmentAmount: selectedInstallmentPlan.firstInstallmentAmount,
-          baseUpfrontAmount: installUpfrontAmount,
-          installmentAmount: selectedInstallmentPlan.installmentAmount,
-          numberOfInstallments: selectedInstallmentPlan.numberOfInstallments,
-          scheduledInstallments: selectedInstallmentPlan.scheduledInstallments,
-          planType: selectedInstallmentPlan.type,
-          installableAmount: installableAmount,
-          pickupDate: formData.pickupDate,
-          returnDate: formData.dropoffDate,
-          startDate: formData.pickupDate,
-          chargeFirstUpfront: installmentConfig.charge_first_upfront ?? true,
-          whatGetsSplit: installmentConfig.what_gets_split ?? 'rental_only',
-          gracePeriodDays: installmentConfig.grace_period_days ?? 3,
-          maxRetryAttempts: installmentConfig.max_retry_attempts ?? 3,
-          retryIntervalDays: installmentConfig.retry_interval_days ?? 1,
-        },
-      });
-
-      if (functionError) throw functionError;
-
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('Failed to create installment checkout session');
-      }
-    } catch (error: any) {
-      console.error("Installment checkout error:", error);
-      toast.error(error.message || "Failed to create installment checkout");
-      setIsProcessing(false);
-    }
-  };
-
   const handleSendDocuSign = async () => {
     if (!createdRentalData) {
       console.error('No rental data available');
@@ -719,13 +583,6 @@ export default function BookingCheckoutStep({
       setTimeout(async () => {
         const payableAmount = calculateGrandTotal();
 
-        // Route to installment checkout if an installment plan is selected
-        if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
-          console.log('Proceeding to installment checkout');
-          redirectToInstallmentCheckout();
-          return;
-        }
-
         // Proceed to payment
         const bookingMode = await getBookingMode();
         console.log('Proceeding to payment, mode:', bookingMode, 'amount:', payableAmount);
@@ -742,12 +599,6 @@ export default function BookingCheckoutStep({
       setSendingDocuSign(false);
 
       setTimeout(async () => {
-        // Route to installment checkout if an installment plan is selected
-        if (selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled) {
-          redirectToInstallmentCheckout();
-          return;
-        }
-
         const bookingMode = await getBookingMode();
         if (bookingMode === 'manual') {
           redirectToPreAuthPayment();
@@ -1782,30 +1633,6 @@ export default function BookingCheckoutStep({
             )}
           </Card>
 
-          {/* Installment Payment Options */}
-          {rentalDuration.days >= Math.min(installmentConfig.minimum_days_weekly ?? installmentConfig.min_days_for_weekly ?? 7, installmentConfig.minimum_days_monthly ?? installmentConfig.min_days_for_monthly ?? 30) && (
-            <>
-            {promoDetails?.source === 'duration' && installmentsEnabled && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400 mb-3">
-                <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>
-                  Your <strong>{promoDetails.value}% long-rental discount</strong> applies when you pay in full. It does <strong>not</strong> apply to installment plans — choosing one below will remove it.
-                </span>
-              </div>
-            )}
-            <InstallmentSelector
-              rentalDays={rentalDuration.days}
-              installableAmount={installableAmount}
-              upfrontAmount={installUpfrontAmount}
-              totalBill={installableAmount + installUpfrontAmount}
-              config={installmentConfig}
-              enabled={installmentsEnabled}
-              onSelectPlan={setSelectedInstallmentPlan}
-              selectedPlan={selectedInstallmentPlan}
-              formatCurrency={fmt}
-            />
-            </>
-          )}
         </div>
 
         {/* Right Column - Price Summary (Sticky) */}
@@ -2106,7 +1933,7 @@ export default function BookingCheckoutStep({
                 <p className="text-xs text-green-600 font-medium flex items-center gap-1">
                   <Check className="w-3 h-3" />
                   {promoDetails.source === 'duration'
-                    ? `${promoDetails.value}% long-rental discount applied automatically${durationDiscountBlocked ? ' (removed for installment plans)' : ''}`
+                    ? `${promoDetails.value}% long-rental discount applied automatically`
                     : promoDetails.type === 'percentage' ? `${promoDetails.value}% off` : `${fmt(promoDetails.value)} off`}
                 </p>
               )}
@@ -2128,11 +1955,6 @@ export default function BookingCheckoutStep({
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Sending Agreement...
-                  </>
-                ) : selectedInstallmentPlan && selectedInstallmentPlan.type !== 'full' && installmentsEnabled ? (
-                  <>
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Pay {fmt(selectedInstallmentPlan.upfrontTotal)} & Setup Installments
                   </>
                 ) : (
                   <>

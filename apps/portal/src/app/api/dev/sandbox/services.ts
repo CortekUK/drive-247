@@ -25,7 +25,6 @@ export const DESIGNATED_TEST_TENANT_ID = "8b434359-3ad1-491e-9593-b0ef381f5b21";
 // NOTE: rental_number is derived as 'R-' || LEFT(id, 6), so each fixture id must
 // differ within its FIRST SIX hex chars or the unique rental_number collides.
 export const PAYG_RENTAL = "a0000001-0000-4000-8000-000000000001";
-export const INSTALLMENT_RENTAL = "a2000002-0000-4000-8000-000000000001";
 export const AUTO_EXTEND_RENTAL = "a3000003-0000-4000-8000-000000000001";
 export const DEPOSIT_RENTAL = "a4000004-0000-4000-8000-000000000001";
 export const RETURN_REMINDER_RENTAL = "a5000005-0000-4000-8000-000000000001";
@@ -55,7 +54,7 @@ export interface SbService {
   /** Response field on the PRIMARY fn signalling "work was done" (drain stops at 0). */
   progressKey?: string;
   /** Scoped time-shift: backdate the driving column(s) by `days`. null when the
-   *  fixture is positioned by preFire() instead (installment/return/daily). */
+   *  fixture is positioned by preFire() instead (return/daily). */
   backdate?: (prod: Sb, days: number) => Promise<void>;
   /** Re-anchor the fixture into the exact "due now" bucket (no time-shift). */
   preFire?: (prod: Sb) => Promise<void>;
@@ -97,6 +96,10 @@ async function shiftDate(prod: Sb, rentalId: string, column: string, days: numbe
 }
 
 // ── Manifest ────────────────────────────────────────────────────────────────
+// Self-reference by key, not array index: a service can be removed from the
+// manifest without silently repointing every later reset() at its neighbour.
+const svc = (key: string): SbService => SERVICES.find((x) => x.key === key)!;
+
 export const SERVICES: SbService[] = [
   // 1. PAYG accrual (ledger only, no money) ─────────────────────────────────
   {
@@ -141,7 +144,7 @@ export const SERVICES: SbService[] = [
         payg_accrual_day_count: 0, payg_start_ts: new Date().toISOString(), payg_next_accrual_at: inDaysIso(1),
         payg_last_accrual_at: null, payg_max_duration_alerted: false,
       }).eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return SERVICES[0].status(s);
+      return svc("payg").status(s);
     },
   },
 
@@ -182,81 +185,11 @@ export const SERVICES: SbService[] = [
         auto_extend_enabled: false,
         deposit_hold_placed_at: new Date().toISOString(), deposit_hold_expires_at: inDaysIso(7),
       }).eq("id", DEPOSIT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return SERVICES[1].status(s);
+      return svc("deposit").status(s);
     },
   },
 
-  // 3. Installment auto-charge (real TEST PI, settles inline) ────────────────
-  //    NOTE: mark-overdue-installments is intentionally NOT fired (global-blast job).
-  {
-    key: "installment",
-    label: "Installment auto-charge",
-    order: 30,
-    scopeRentalId: INSTALLMENT_RENTAL,
-    cronFns: ["sandbox-process-installment-payment"],
-    stepping: "catchup",
-    drainFires: 8,
-    progressKey: "charged",
-    // Days-aware: shift every OPEN installment's due_date back by `days` (the fn
-    // charges the cumulative of the ones that land <= today), and clear the 24h
-    // charge cooldown so simulated days aren't swallowed by it.
-    backdate: async (s, days) => {
-      const { data: plan } = await s.from("installment_plans").select("id")
-        .eq("rental_id", INSTALLMENT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
-      if (!plan?.id) return;
-      const { data: open } = await s.from("scheduled_installments")
-        .select("id, due_date").eq("installment_plan_id", plan.id).eq("invoice_status", "open");
-      for (const si of (open ?? []) as Array<{ id: string; due_date: string }>) {
-        const base = new Date(`${si.due_date}T00:00:00Z`).getTime();
-        const shifted = new Date(base - days * 24 * 3600 * 1000).toISOString().split("T")[0];
-        await s.from("scheduled_installments").update({ due_date: shifted }).eq("id", si.id);
-      }
-      await s.from("installment_plans").update({ last_reminder_sent_at: null }).eq("id", plan.id);
-    },
-    status: async (s) => {
-      const { data: plan } = await s.from("installment_plans")
-        .select("id, status, collection_mode, last_reminder_sent_at").eq("rental_id", INSTALLMENT_RENTAL).maybeSingle();
-      let installments: Array<Record<string, unknown>> = [];
-      if (plan?.id) {
-        const { data } = await s.from("scheduled_installments")
-          .select("id, installment_number, amount, due_date, invoice_status")
-          .eq("installment_plan_id", plan.id).order("installment_number", { ascending: true });
-        installments = data ?? [];
-      }
-      const tally = (st: string) => installments.filter((i) => i.invoice_status === st).length;
-      const nextOpen = installments.find((i) => i.invoice_status === "open");
-      return {
-        planStatus: plan?.status ?? null,
-        lastReminderSentAt: plan?.last_reminder_sent_at ?? null,
-        installments: installments.length,
-        open: tally("open"),
-        paid: tally("paid"),
-        nextOpenDue: nextOpen?.due_date ?? null,
-      };
-    },
-    reset: async (s) => {
-      const { data: plan } = await s.from("installment_plans")
-        .update({ status: "active", collection_mode: "auto", last_reminder_sent_at: null })
-        .eq("rental_id", INSTALLMENT_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID)
-        .select("id").maybeSingle();
-      if (plan?.id) {
-        // Restore the CANONICAL schedule (future-dated so the real cron ignores it
-        // at rest): installment N due at +30d + (N-1) weeks.
-        const { data: rows } = await s.from("scheduled_installments")
-          .select("id, installment_number").eq("installment_plan_id", plan.id);
-        for (const si of (rows ?? []) as Array<{ id: string; installment_number: number }>) {
-          const due = new Date(Date.now() + (30 + (si.installment_number - 1) * 7) * 24 * 3600 * 1000)
-            .toISOString().split("T")[0];
-          await s.from("scheduled_installments")
-            .update({ invoice_status: "open", due_date: due, failure_count: 0, last_failure_reason: null })
-            .eq("id", si.id);
-        }
-      }
-      return SERVICES[2].status(s);
-    },
-  },
-
-  // 4. Auto-extension (real TEST PI, settles inline; order-coupled) ──────────
+  // 3. Auto-extension (real TEST PI, settles inline; order-coupled) ──────────
   {
     key: "auto_extend",
     label: "Auto-extension",
@@ -290,11 +223,11 @@ export const SERVICES: SbService[] = [
         auto_extend_status: "active", auto_extend_charge_count: 0, auto_extend_failed_attempts: 0,
         auto_extend_pending_extension_id: null, auto_extend_next_charge_at: inDaysIso(7),
       }).eq("id", AUTO_EXTEND_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return SERVICES[3].status(s);
+      return svc("auto_extend").status(s);
     },
   },
 
-  // 5. PAYG pay-link reminder (reuses the PAYG fixture rental) ───────────────
+  // 4. PAYG pay-link reminder (reuses the PAYG fixture rental) ───────────────
   {
     key: "payg_reminder",
     label: "PAYG pay-link reminder",
@@ -328,11 +261,11 @@ export const SERVICES: SbService[] = [
       await s.from("rentals").update({
         payg_last_reminder_sent_at: null, payg_auto_reminders_enabled: true,
       }).eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return SERVICES[4].status(s);
+      return svc("payg_reminder").status(s);
     },
   },
 
-  // 6. Return reminder (real email → notify-rental-reminder) ─────────────────
+  // 5. Return reminder (real email → notify-rental-reminder) ─────────────────
   {
     key: "return_reminder",
     label: "Return reminder",
@@ -360,11 +293,11 @@ export const SERVICES: SbService[] = [
       await s.from("rentals").update({
         status: "Active", return_reminder_sent_at: null, end_date: todayStr(),
       }).eq("id", RETURN_REMINDER_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return SERVICES[5].status(s);
+      return svc("return_reminder").status(s);
     },
   },
 
-  // 7. Daily ledger reminder (in-app reminder_events only) ───────────────────
+  // 6. Daily ledger reminder (in-app reminder_events only) ───────────────────
   {
     key: "daily_reminder",
     label: "Daily ledger reminder",
@@ -395,7 +328,7 @@ export const SERVICES: SbService[] = [
       await s.from("reminder_events").delete().eq("rental_id", DAILY_REMINDER_RENTAL);
       await s.from("ledger_entries").update({ due_date: todayStr() })
         .eq("rental_id", DAILY_REMINDER_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).eq("type", "Charge");
-      return SERVICES[6].status(s);
+      return svc("daily_reminder").status(s);
     },
   },
 ];

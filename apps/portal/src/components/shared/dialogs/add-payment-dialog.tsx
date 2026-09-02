@@ -81,18 +81,6 @@ interface AddPaymentDialogProps {
    */
   paygAccrualId?: string;
   /**
-   * scheduled_installments row id the customer is paying off. Same shape as
-   * paygAccrualId — Send-payment-link and Email-Stripe-Link paths forward it
-   * to `create-checkout-session` which stamps `installment_id` on the Stripe
-   * Checkout metadata. The Stripe webhook then calls
-   * `installment_settle_invoice(payment_id, installment_id)` to flip the
-   * scheduled installment to `paid` and supersede any cumulative
-   * predecessors. The manual Record-Payment and Charge-saved-card paths settle
-   * the installment via `mark-installment-paid` after the payment row commits
-   * (handled by the parent's `onPaymentSuccess('recorded')` callback).
-   */
-  installmentId?: string;
-  /**
    * Called after a successful action. The `kind` arg tells the caller whether
    * the payment is already settled in the DB or only initiated:
    *   - 'recorded' — manual Record Payment path, or the Charge-saved-card path
@@ -214,7 +202,6 @@ export const AddPaymentDialog = ({
   targetCategories,
   extensionId,
   paygAccrualId,
-  installmentId,
   onPaymentSuccess,
   breakdownItems,
   outstandingBalanceOverride,
@@ -851,9 +838,6 @@ export const AddPaymentDialog = ({
           // PAYG: stamp the accrual id on the checkout metadata so the Stripe
           // webhook can call payg_settle_invoice once the customer pays.
           ...(paygAccrualId ? { paygAccrualId } : {}),
-          // Installments: stamp the scheduled_installments id so the Stripe
-          // webhook can call installment_settle_invoice once the customer pays.
-          ...(installmentId ? { installmentId } : {}),
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.
@@ -905,7 +889,7 @@ export const AddPaymentDialog = ({
   // two Stripe buttons create a Checkout URL and wait for the customer. The edge
   // function inserts the payments row and calls apply-payment exactly like the
   // manual Record-Payment path, so on success we report 'recorded' and callers
-  // may run their post-settle logic (installment settle, fine sync, …).
+  // may run their post-settle logic (fine sync, …).
   const handleChargeSavedCard = async (opts: { confirmDuplicate?: boolean } = {}) => {
     if (chargeInFlight.current) return;
     const finalCustomerId = selectedCustomerId || customer_id;
@@ -1142,9 +1126,6 @@ export const AddPaymentDialog = ({
           // PAYG: stamp the accrual id so when the customer clicks the
           // emailed link and pays, the Stripe webhook settles the right invoice.
           ...(paygAccrualId ? { paygAccrualId } : {}),
-          // Installments: stamp the scheduled_installments id so the Stripe
-          // webhook can settle the right installment when the customer pays.
-          ...(installmentId ? { installmentId } : {}),
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.

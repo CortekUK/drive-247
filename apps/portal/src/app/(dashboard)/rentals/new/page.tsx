@@ -79,7 +79,6 @@ import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
 import { confidenceLabel, type HealthReason, type VehicleHealthStatus } from "@/types/fleet-health";
 import { RentalProgressOverlay } from "@/components/rentals/rental-progress-overlay";
 import { getTimezonesByRegion, findTimezone } from "@/lib/timezones";
-import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 import { PaygSchedulePreview } from "@/components/rentals/payg-schedule-preview";
 import {
   AdditionalDriversForm,
@@ -311,14 +310,6 @@ const CreateRental = () => {
   const [takeDeposit, setTakeDeposit] = useState<boolean | null>(null);
   const [depositAmountUnlocked, setDepositAmountUnlocked] = useState(false);
   const [depositEditConfirmOpen, setDepositEditConfirmOpen] = useState(false);
-
-  // Installment plan state
-  // semiweekly = 2× per week. The "monthly" type also covers monthly_payments_per_unit
-  // of 2× (~biweekly) and 4× (~weekly-via-monthly): the plan_type column stays
-  // 'monthly' but the cadence intervalDays comes from `monthly_payments_per_unit`.
-  type InstallmentPlanType = 'full' | 'weekly' | 'semiweekly' | 'monthly';
-  const [installmentPlanType, setInstallmentPlanType] = useState<InstallmentPlanType>('full');
-  const [installmentAmountOverride, setInstallmentAmountOverride] = useState<number | null>(null);
 
   // Pay As You Go state
   const [isPayAsYouGo, setIsPayAsYouGo] = useState(false);
@@ -1840,7 +1831,7 @@ const CreateRental = () => {
         unlimited_mileage_total: unlimitedMileageEnabled && unlimitedMileageFlat
           ? Number(unlimitedMileageFlat.toFixed(2))
           : null,
-        has_installment_plan: !isPayAsYouGo && !isAutoExtend && installmentPlanType !== 'full' && rentalSettings?.installments_enabled,
+        has_installment_plan: false,
         is_pay_as_you_go: isPayAsYouGo,
         // Auto-extension (regular rental that auto-renews + bills upfront each period).
         auto_extend_enabled: isAutoExtend,
@@ -2252,7 +2243,7 @@ const CreateRental = () => {
         // Don't throw - rental is already created, just log the error
       }
 
-      // Calculate pricing — shared by both invoice and installment plan creation
+      // Calculate pricing
       const discountedAmount = data.monthly_amount - discountAmount;
       const taxAmount = taxOverride !== null ? taxOverride : calculateTaxAmount(discountedAmount);
       const serviceFee = serviceFeeOverride !== null ? serviceFeeOverride : calculateServiceFee(discountedAmount);
@@ -2312,9 +2303,6 @@ const CreateRental = () => {
 
       const chargedDeposit = depositChargedNow ? securityDeposit : 0;
       const totalAmount = discountedAmount + taxAmount + serviceFee + insurancePremium + effectiveDeliveryFee + effectiveCollectionFee + extrasTotal + chargedDeposit;
-
-      // Track if this is an installment rental (used for routing after creation)
-      const isInstallmentRental = installmentPlanType !== 'full' && rentalSettings?.installments_enabled;
 
       // Generate invoice — REQUIRED for payment breakdown to work.
       // PAYG rentals skip the upfront invoice entirely: charges are accrued daily by the cron,
@@ -2387,162 +2375,6 @@ const CreateRental = () => {
         if (depositChargeError) {
           console.error("Error creating PAYG security deposit charge:", depositChargeError);
           // Don't throw - rental exists; the deposit can be raised manually.
-        }
-      }
-
-      // Create installment plan if selected
-      if (installmentPlanType !== 'full' && rentalSettings?.installments_enabled && rentalSettings?.installment_config) {
-        try {
-          const instConfig = rentalSettings.installment_config;
-          const whatGetsSplit = instConfig.what_gets_split || 'rental_only';
-          const chargeFirst = instConfig.charge_first_upfront !== false;
-
-          let installableAmt = discountedAmount;
-          if (whatGetsSplit === 'rental_tax' || whatGetsSplit === 'rental_tax_extras') {
-            installableAmt += taxAmount;
-          }
-
-          const rentalDaysCalc = Math.max(1, differenceInDays(data.end_date, data.start_date));
-
-          // Cadence resolution mirrors the plan-builder so the saved plan, the
-          // schedule preview, and the calendar preview all agree. The new
-          // installment_config shape stores cadence as `{weekly|monthly}_payments_per_unit`
-          // (1× / 2× / 4×); the legacy shape stored a fixed count cap. We honor
-          // both — new shape wins when present.
-          const usingNewCadence =
-            (instConfig as any)?.weekly_enabled !== undefined ||
-            (instConfig as any)?.monthly_enabled !== undefined ||
-            (instConfig as any)?.weekly_payments_per_unit !== undefined ||
-            (instConfig as any)?.monthly_payments_per_unit !== undefined;
-
-          let unit: 'week' | 'month' = 'week';
-          let paymentsPerUnit = 1;
-          let intervalDays = 7;
-          let numInstallments = 1;
-          let dbPlanType: 'weekly' | 'semiweekly' | 'monthly' = 'weekly';
-
-          if (usingNewCadence) {
-            if (installmentPlanType === 'weekly' || installmentPlanType === 'semiweekly') {
-              unit = 'week';
-              paymentsPerUnit = installmentPlanType === 'semiweekly' ? 2 : 1;
-              dbPlanType = installmentPlanType;
-            } else if (installmentPlanType === 'monthly') {
-              unit = 'month';
-              paymentsPerUnit = ((instConfig as any).monthly_payments_per_unit ?? 1) as 1 | 2 | 4;
-              dbPlanType = 'monthly';
-            }
-            const span = unit === 'week' ? 7 : 30;
-            intervalDays = span / paymentsPerUnit;
-            numInstallments = Math.max(2, Math.ceil(rentalDaysCalc / intervalDays));
-          } else {
-            // Legacy fixed-count cap behavior preserved for unmigrated tenants.
-            if (installmentPlanType === 'weekly') {
-              unit = 'week';
-              paymentsPerUnit = 1;
-              intervalDays = 7;
-              dbPlanType = 'weekly';
-              numInstallments = (instConfig as any).weekly_installments_limit ?? (instConfig as any).max_installments_weekly ?? 4;
-            } else if (installmentPlanType === 'monthly') {
-              unit = 'month';
-              paymentsPerUnit = 1;
-              intervalDays = 30;
-              dbPlanType = 'monthly';
-              numInstallments = (instConfig as any).monthly_installments_limit ?? (instConfig as any).max_installments_monthly ?? 6;
-            } else if (installmentPlanType === 'semiweekly') {
-              // Customer somehow chose semiweekly on a legacy-config tenant —
-              // map it sensibly: 2× weekly = 3.5-day cadence.
-              unit = 'week';
-              paymentsPerUnit = 2;
-              intervalDays = 3.5;
-              dbPlanType = 'semiweekly';
-              numInstallments = Math.max(2, Math.ceil(rentalDaysCalc / intervalDays));
-            }
-          }
-
-          const autoInstAmt = Math.floor((installableAmt / numInstallments) * 100) / 100;
-          const effectiveInstAmt = installmentAmountOverride !== null ? installmentAmountOverride : autoInstAmt;
-          const firstAmt = chargeFirst ? effectiveInstAmt : 0;
-          const scheduledCount = chargeFirst ? numInstallments - 1 : numInstallments;
-
-          // First post-day-zero due date is one cadence interval after start.
-          const firstScheduledDate = addDays(data.start_date, Math.round(intervalDays));
-
-          // Create installment plan record
-          const { data: plan, error: planError } = await (supabase as any)
-            .from('installment_plans')
-            .insert({
-              rental_id: rental.id,
-              tenant_id: tenant?.id,
-              customer_id: data.customer_id,
-              plan_type: dbPlanType,
-              unit,
-              payments_per_unit: paymentsPerUnit,
-              total_installable_amount: installableAmt,
-              number_of_installments: numInstallments,
-              installment_amount: effectiveInstAmt,
-              upfront_amount: securityDeposit + serviceFee + (whatGetsSplit === 'rental_only' ? taxAmount : 0) + firstAmt,
-              upfront_paid: false,
-              status: 'pending',
-              paid_installments: 0,
-              total_paid: 0,
-              next_due_date: format(firstScheduledDate, 'yyyy-MM-dd'),
-              config: {
-                charge_first_upfront: chargeFirst,
-                what_gets_split: whatGetsSplit,
-                grace_period_days: (instConfig as any).grace_period_days ?? 3,
-                max_retry_attempts: (instConfig as any).max_retry_attempts ?? 3,
-                retry_interval_days: (instConfig as any).retry_interval_days ?? 1,
-              },
-            })
-            .select()
-            .single();
-
-          if (planError) {
-            console.error('Error creating installment plan:', planError);
-          } else if (plan) {
-            // Create scheduled installments. Slot offsets:
-            //   chargeFirst=true  → slot i is charged at start + i × interval
-            //                       (slot 0 = today's installment, charged with upfront)
-            //   chargeFirst=false → slot i is charged at start + (i+1) × interval
-            //                       (no slot lands on day zero; first payment is one
-            //                       interval after start)
-            const installments = Array.from({ length: numInstallments }, (_, i) => {
-              const isLast = i === numInstallments - 1;
-              const slotOffset = chargeFirst ? i : i + 1;
-              const dueDate = addDays(data.start_date, Math.round(intervalDays * slotOffset));
-              const lastAmt = Math.round((installableAmt - (effectiveInstAmt * (numInstallments - 1))) * 100) / 100;
-
-              return {
-                installment_plan_id: plan.id,
-                tenant_id: tenant?.id,
-                rental_id: rental.id,
-                customer_id: data.customer_id,
-                installment_number: i + 1,
-                amount: isLast ? lastAmt : effectiveInstAmt,
-                due_date: format(dueDate, 'yyyy-MM-dd'),
-                status: 'scheduled',
-                failure_count: 0,
-              };
-            });
-
-            const { error: schedError } = await (supabase as any)
-              .from('scheduled_installments')
-              .insert(installments);
-
-            if (schedError) {
-              console.error('Error creating scheduled installments:', schedError);
-            }
-
-            // Link plan to rental
-            await supabase
-              .from('rentals')
-              .update({ installment_plan_id: plan.id } as any)
-              .eq('id', rental.id);
-
-          }
-        } catch (installmentError) {
-          console.error('Error setting up installment plan:', installmentError);
-          // Non-fatal — rental is already created
         }
       }
 
@@ -2667,20 +2499,9 @@ const CreateRental = () => {
       await new Promise(resolve => setTimeout(resolve, 600));
       setCreationProgress(0);
 
-      // If installment plan was selected, skip payment/invoice dialogs — go straight to rental detail.
-      // PAYG also skips: there is no upfront amount to collect — charges accrue daily.
-      if (isInstallmentRental) {
-        const planLabel = installmentPlanType === 'weekly'
-          ? 'Weekly'
-          : installmentPlanType === 'semiweekly'
-            ? 'Twice-weekly'
-            : 'Monthly';
-        toast({
-          title: "Rental Created with Installment Plan",
-          description: `${planLabel} installment plan created for ${customerName} • ${vehicleReg}`,
-        });
-        router.push(`/rentals/${rental.id}`);
-      } else if (isPayAsYouGo) {
+      // PAYG skips the payment/invoice dialogs: there is no upfront amount to
+      // collect — charges accrue daily.
+      if (isPayAsYouGo) {
         toast({
           title: "Pay-As-You-Go Rental Created",
           description: `Daily accrual will start from ${rental.start_date}. View the ledger on the rental detail page.`,
@@ -2912,8 +2733,6 @@ const CreateRental = () => {
     setWeeklyMileageOverride(null);
     setMonthlyMileageOverride(null);
     setExcessRateOverride(null);
-    setInstallmentPlanType('full');
-    setInstallmentAmountOverride(null);
     setDeliveryMethod('in_person');
     setLockboxCodeInput('');
     setPickupMethod('fixed');
@@ -3757,16 +3576,12 @@ const CreateRental = () => {
                         if (val === 'auto_extend') {
                           // Auto-extend bills per-period upfront — like PAYG it's Weekly/Monthly with an
                           // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
-                          setInstallmentPlanType('full');
-                          setInstallmentAmountOverride(null);
                           if (form.getValues('rental_period_type') === 'Daily') {
                             form.setValue('rental_period_type', 'Weekly');
                           }
                           setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
                         }
                         if (val === 'payg') {
-                          setInstallmentPlanType('full');
-                          setInstallmentAmountOverride(null);
                           form.setValue('promo_code', '');
                           setPromoDetails(null);
                           setPromoError(null);
@@ -3795,7 +3610,7 @@ const CreateRental = () => {
                         <RadioGroupItem value="regular" />
                         <div>
                           <span className="text-sm font-medium">Regular</span>
-                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront or via installments</p>
+                          <p className="text-xs text-muted-foreground">Standard payment — pay upfront</p>
                         </div>
                       </label>
                       {(rentalSettings as any)?.pay_as_you_go_enabled && (
@@ -4739,407 +4554,6 @@ const CreateRental = () => {
                             </p>
                           )}
                         </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── Installment Plan ──────────────────────────────── */}
-              {!isPayAsYouGo && (() => {
-                const installmentConfig = rentalSettings?.installment_config;
-                const installmentsEnabled = rentalSettings?.installments_enabled && installmentConfig;
-                if (!installmentsEnabled) return null;
-
-                if (!watchedStartDate || !watchedEndDate) return null;
-
-                const rentalDays = differenceInDays(watchedEndDate, watchedStartDate);
-                if (rentalDays < 1) return null;
-
-                // Calculate what gets split (same as booking side)
-                const rentalAmount = watchedMonthlyAmount || 0;
-                const discountAmt = promoDetails ? calculateDiscount(rentalAmount) : 0;
-                const discountedAmount = rentalAmount - discountAmt;
-                const autoTax = calculateTaxAmount(discountedAmount);
-                const autoServiceFee = calculateServiceFee(discountedAmount);
-                const autoDeposit = calculateSecurityDeposit(form.getValues("vehicle_id"));
-                const effectiveTax = taxOverride !== null ? taxOverride : autoTax;
-                const effectiveServiceFee = serviceFeeOverride !== null ? serviceFeeOverride : autoServiceFee;
-                const effectiveDeposit = (depositIsCharged && !isTakingDeposit)
-                  ? 0
-                  : (depositOverride !== null ? depositOverride : autoDeposit);
-
-                const whatGetsSplit = installmentConfig.what_gets_split || 'rental_only';
-                let installableAmount = discountedAmount;
-                let upfrontOnlyAmount = effectiveDeposit + effectiveServiceFee;
-
-                if (whatGetsSplit === 'rental_tax' || whatGetsSplit === 'rental_tax_extras') {
-                  installableAmount += effectiveTax;
-                } else {
-                  upfrontOnlyAmount += effectiveTax;
-                }
-
-                const chargeFirstUpfront = installmentConfig.charge_first_upfront !== false;
-                const currency = tenant?.currency_code || 'USD';
-
-                // Calculate installments helper
-                const calcInstallments = (total: number, count: number) => {
-                  const base = Math.floor((total / count) * 100) / 100;
-                  const last = Math.round((total - (base * (count - 1))) * 100) / 100;
-                  return { base, last };
-                };
-
-                // Detect the new cadence-based installment_config shape (the
-                // 20260427120000 redesign) vs the legacy `*_installments_limit`
-                // shape. The new shape stores cadence as ppu (1×/2×/4× per
-                // week/month) and derives the count from rental length; the
-                // legacy shape stored an explicit count cap. The redesign
-                // dropped the legacy fields from the typed InstallmentConfig,
-                // so we read both via an untyped alias.
-                const cfgAny = installmentConfig as any;
-                const usingNewCadenceShape =
-                  cfgAny?.weekly_enabled !== undefined ||
-                  cfgAny?.monthly_enabled !== undefined ||
-                  cfgAny?.weekly_payments_per_unit !== undefined ||
-                  cfgAny?.monthly_payments_per_unit !== undefined;
-
-                // Hoisted so the "why no plan?" reasons block can read them
-                // without re-deriving. New cadence shape uses hard 7/30-day
-                // minimums and no per-day rate gate; legacy reads from the
-                // saved settings.
-                let minDaysWeekly: number;
-                let minDaysMonthly: number;
-                let limitPerDayWeekly: number;
-                let limitPerDayMonthly: number;
-
-                // Build available plans
-                type PlanOption = {
-                  type: 'full' | 'weekly' | 'semiweekly' | 'monthly';
-                  count: number;
-                  amount: number;
-                  scheduled: number;
-                  firstAmount: number;
-                  upfrontTotal: number;
-                  label: string;
-                  // Cadence metadata used for both preview rendering and the
-                  // scheduled_installments insert at submit time.
-                  intervalDays: number;
-                  unit: 'week' | 'month';
-                  paymentsPerUnit: number;
-                };
-                const plans: PlanOption[] = [
-                  { type: 'full', count: 1, amount: installableAmount + upfrontOnlyAmount, scheduled: 0, firstAmount: installableAmount + upfrontOnlyAmount, upfrontTotal: installableAmount + upfrontOnlyAmount, label: 'Pay in Full', intervalDays: 0, unit: 'week', paymentsPerUnit: 1 }
-                ];
-
-                const perDayRate = rentalDays > 0 ? (installableAmount + upfrontOnlyAmount) / rentalDays : 0;
-
-                // Cadence-aware plan builder: count is derived from rental length
-                // and the chosen payments-per-unit so a 9-day rental at 2× weekly
-                // produces 3 payments (every 3.5 days) instead of the legacy
-                // hardcoded 4 weekly limit.
-                function pushCadencePlan(opts: {
-                  type: 'weekly' | 'semiweekly' | 'monthly';
-                  unit: 'week' | 'month';
-                  paymentsPerUnit: number;
-                  label: string;
-                }) {
-                  const span = opts.unit === 'week' ? 7 : 30;
-                  const intervalDays = span / opts.paymentsPerUnit;
-                  if (intervalDays <= 0) return;
-                  const count = Math.max(2, Math.ceil(rentalDays / intervalDays));
-                  const { base } = calcInstallments(installableAmount, count);
-                  const first = chargeFirstUpfront ? base : 0;
-                  const sched = chargeFirstUpfront ? count - 1 : count;
-                  plans.push({
-                    type: opts.type,
-                    count,
-                    amount: base,
-                    scheduled: sched,
-                    firstAmount: first,
-                    upfrontTotal: upfrontOnlyAmount + first,
-                    label: `${opts.label} (${count} payments)`,
-                    intervalDays,
-                    unit: opts.unit,
-                    paymentsPerUnit: opts.paymentsPerUnit,
-                  });
-                }
-
-                if (usingNewCadenceShape) {
-                  // Hard minimums match the InstallmentSettings UI hints
-                  // ("Available for rentals 7+/30+ days"); no per-day rate gate.
-                  minDaysWeekly = 7;
-                  minDaysMonthly = 30;
-                  limitPerDayWeekly = 0;
-                  limitPerDayMonthly = 0;
-
-                  const weeklyEnabled = cfgAny?.weekly_enabled === true;
-                  const monthlyEnabled = cfgAny?.monthly_enabled === true;
-                  const weeklyPpu = (cfgAny?.weekly_payments_per_unit ?? 1) as 1 | 2;
-                  const monthlyPpu = (cfgAny?.monthly_payments_per_unit ?? 1) as 1 | 2 | 4;
-
-                  if (weeklyEnabled && rentalDays >= 7) {
-                    if (weeklyPpu === 2) {
-                      pushCadencePlan({ type: 'semiweekly', unit: 'week', paymentsPerUnit: 2, label: 'Twice weekly' });
-                    } else {
-                      pushCadencePlan({ type: 'weekly', unit: 'week', paymentsPerUnit: 1, label: 'Weekly' });
-                    }
-                  }
-                  if (monthlyEnabled && rentalDays >= 30) {
-                    const monthlyLabel = monthlyPpu === 4
-                      ? 'Weekly via monthly'
-                      : monthlyPpu === 2
-                        ? 'Twice monthly'
-                        : 'Monthly';
-                    pushCadencePlan({ type: 'monthly', unit: 'month', paymentsPerUnit: monthlyPpu, label: monthlyLabel });
-                  }
-                } else {
-                  // Legacy fallback: original count-cap behavior for tenants who
-                  // haven't been migrated to the cadence model yet.
-                  minDaysWeekly = cfgAny.minimum_days_weekly ?? cfgAny.min_days_for_weekly ?? 7;
-                  const weeklyLimit = cfgAny.weekly_installments_limit ?? cfgAny.max_installments_weekly ?? 4;
-                  limitPerDayWeekly = cfgAny.limiting_amount_per_day_weekly ?? 0;
-
-                  if (rentalDays >= minDaysWeekly && (limitPerDayWeekly <= 0 || perDayRate >= limitPerDayWeekly) && weeklyLimit >= 2) {
-                    const { base } = calcInstallments(installableAmount, weeklyLimit);
-                    const first = chargeFirstUpfront ? base : 0;
-                    const sched = chargeFirstUpfront ? weeklyLimit - 1 : weeklyLimit;
-                    plans.push({ type: 'weekly', count: weeklyLimit, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Weekly (${weeklyLimit} payments)`, intervalDays: 7, unit: 'week', paymentsPerUnit: 1 });
-                  }
-
-                  minDaysMonthly = cfgAny.minimum_days_monthly ?? cfgAny.min_days_for_monthly ?? 30;
-                  const monthlyLimit = cfgAny.monthly_installments_limit ?? cfgAny.max_installments_monthly ?? 6;
-                  limitPerDayMonthly = cfgAny.limiting_amount_per_day_monthly ?? 0;
-
-                  if (rentalDays >= minDaysMonthly && (limitPerDayMonthly <= 0 || perDayRate >= limitPerDayMonthly) && monthlyLimit >= 2) {
-                    const { base } = calcInstallments(installableAmount, monthlyLimit);
-                    const first = chargeFirstUpfront ? base : 0;
-                    const sched = chargeFirstUpfront ? monthlyLimit - 1 : monthlyLimit;
-                    plans.push({ type: 'monthly', count: monthlyLimit, amount: base, scheduled: sched, firstAmount: first, upfrontTotal: upfrontOnlyAmount + first, label: `Monthly (${monthlyLimit} payments)`, intervalDays: 30, unit: 'month', paymentsPerUnit: 1 });
-                  }
-                }
-
-                if (plans.length <= 1) {
-                  // Show reason why installment options aren't available
-                  const reasons: string[] = [];
-                  const minPerDay = Math.min(
-                    limitPerDayWeekly > 0 ? limitPerDayWeekly : Infinity,
-                    limitPerDayMonthly > 0 ? limitPerDayMonthly : Infinity
-                  );
-                  if (minPerDay !== Infinity && perDayRate < minPerDay) {
-                    reasons.push(`Minimum rate of ${formatCurrency(minPerDay, currency)}/day required (this rental is ${formatCurrency(Math.round(perDayRate * 100) / 100, currency)}/day)`);
-                  }
-                  const minDays = Math.min(minDaysWeekly, minDaysMonthly);
-                  if (rentalDays < minDays) {
-                    reasons.push(`Minimum ${minDays} ${minDays === 1 ? 'day' : 'days'} required (this rental is ${rentalDays} ${rentalDays === 1 ? 'day' : 'days'})`);
-                  }
-                  if (reasons.length > 0) {
-                    return (
-                      <div className="rounded-xl border bg-card shadow-sm">
-                        <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
-                            <CreditCard className="h-4 w-4" />
-                          </div>
-                          <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
-                        </div>
-                        <div className="px-6 py-4">
-                          <p className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Info className="h-4 w-4 flex-shrink-0" />
-                            Installment plans not available for this rental. {reasons.join('. ')}.
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                }
-
-                const selectedPlan = plans.find(p => p.type === installmentPlanType) || plans[0];
-                const effectiveInstallmentAmount = installmentAmountOverride !== null ? installmentAmountOverride : selectedPlan.amount;
-
-                return (
-                  <div className="rounded-xl border bg-card shadow-sm">
-                    <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
-                      <div className="flex items-center justify-center h-7 w-7 rounded-md bg-primary/20 text-primary">
-                        <CreditCard className="h-4 w-4" />
-                      </div>
-                      <h2 className="font-extrabold text-xl text-foreground uppercase tracking-wider">Payment Plan</h2>
-                      <span className="ml-auto text-xs text-muted-foreground">Admin can adjust installment amounts per-rental.</span>
-                    </div>
-                    <div className="p-5 space-y-4">
-                      <RadioGroup
-                        value={installmentPlanType}
-                        onValueChange={(val) => {
-                          setInstallmentPlanType(val as InstallmentPlanType);
-                          setInstallmentAmountOverride(null); // reset override on plan change
-                        }}
-                        className="space-y-2"
-                      >
-                        {plans.map((plan) => {
-                          // "every X days" reads naturally for any cadence
-                          // (weekly = 7d, semiweekly = 3.5d, twice-monthly = 15d,
-                          // four-times-monthly = 7.5d). Round to keep it tidy.
-                          const intervalLabel = plan.intervalDays === 7
-                            ? '/week'
-                            : plan.intervalDays === 30
-                              ? '/month'
-                              : ` every ${Math.round(plan.intervalDays * 10) / 10} days`;
-                          return (
-                            <label
-                              key={plan.type}
-                              className={cn(
-                                "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                                installmentPlanType === plan.type ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                              )}
-                            >
-                              <RadioGroupItem value={plan.type} id={`plan-${plan.type}`} />
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium">{plan.label}</span>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {plan.type === 'full'
-                                    ? `Pay ${formatCurrency(plan.upfrontTotal, currency)} now`
-                                    : chargeFirstUpfront
-                                      ? `Pay ${formatCurrency(plan.upfrontTotal, currency)} today, then ${formatCurrency(plan.amount, currency)}${intervalLabel} × ${plan.scheduled}`
-                                      : `Pay ${formatCurrency(upfrontOnlyAmount, currency)} today, then ${formatCurrency(plan.amount, currency)}${intervalLabel} × ${plan.scheduled}`
-                                  }
-                                </p>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </RadioGroup>
-
-                      {/* Installment amount override (only for weekly/monthly) */}
-                      {selectedPlan.type !== 'full' && (
-                        <div className="border-t pt-4 space-y-3">
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <Label className="text-sm">Installment Amount</Label>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Auto: {formatCurrency(selectedPlan.amount, currency)} × {selectedPlan.count} installments
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-36">
-                                <CurrencyInput
-                                  value={effectiveInstallmentAmount}
-                                  onChange={(val) => {
-                                    const numVal = typeof val === 'string' ? parseFloat(val) : val;
-                                    if (numVal === selectedPlan.amount || (isNaN(numVal) && selectedPlan.amount === 0)) {
-                                      setInstallmentAmountOverride(null);
-                                    } else {
-                                      setInstallmentAmountOverride(isNaN(numVal) ? 0 : numVal);
-                                    }
-                                  }}
-                                  placeholder="Amount"
-                                  min={0}
-                                  step={0.01}
-                                  currencySymbol={currencySymbol}
-                                />
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className={cn("text-xs px-2 h-8 w-14 shrink-0", installmentAmountOverride === null && "invisible")}
-                                onClick={() => setInstallmentAmountOverride(null)}
-                              >
-                                Reset
-                              </Button>
-                            </div>
-                          </div>
-
-                          {/* Schedule preview */}
-                          <div className="rounded-md bg-muted/50 p-3 text-xs space-y-1.5">
-                            <p className="font-medium text-sm mb-2">Payment Schedule</p>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Today ({depositIsCharged ? 'deposit' : 'pre-auth'} + fees{chargeFirstUpfront ? ' + 1st installment' : ''})</span>
-                              <span className="font-medium">
-                                {formatCurrency(
-                                  chargeFirstUpfront ? upfrontOnlyAmount + effectiveInstallmentAmount : upfrontOnlyAmount,
-                                  currency
-                                )}
-                              </span>
-                            </div>
-                            {Array.from({ length: selectedPlan.scheduled }, (_, i) => {
-                              // Use cadence intervalDays so 2× weekly produces
-                              // 3.5-day gaps (not 7) and 4× monthly ~7.5-day gaps.
-                              // chargeFirstUpfront=true means slot 0 is today's
-                              // installment, so scheduled[0] sits at offset 1 ×
-                              // intervalDays; with =false slot 0 is the first
-                              // scheduled installment at the same offset.
-                              const offsetSlots = i + 1;
-                              const offsetDays = Math.round(selectedPlan.intervalDays * offsetSlots);
-                              const dueDate = addDays(watchedStartDate, offsetDays);
-                              const isLast = i === selectedPlan.scheduled - 1;
-                              // Last installment absorbs rounding difference
-                              const amt = isLast && installmentAmountOverride === null
-                                ? Math.round((installableAmount - (selectedPlan.amount * (selectedPlan.count - 1))) * 100) / 100
-                                : effectiveInstallmentAmount;
-                              // Payment-N labels work for every cadence; the
-                              // exact date next to it removes any ambiguity.
-                              const slotNumber = chargeFirstUpfront ? i + 2 : i + 1;
-                              return (
-                                <div key={i} className="flex justify-between">
-                                  <span className="text-muted-foreground">
-                                    Payment {slotNumber} — {format(dueDate, 'MMM d, yyyy')}
-                                  </span>
-                                  <span>{formatCurrency(amt, currency)}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {installmentAmountOverride !== null && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-1.5">
-                              Custom installment amount — applies only to this rental.
-                            </p>
-                          )}
-
-                          {/* Visual calendar preview — same component as the rental detail + customer portal */}
-                          {(() => {
-                            const items: InstallmentCalendarItem[] = [];
-                            // Day-zero tile reflects what is actually collected today: the upfront
-                            // (pre-auth + fees) plus the 1st installment when charge_first_upfront
-                            // is on, OR upfront-only when off. Matches the "Today" line in the
-                            // Payment Schedule above so both views agree.
-                            const dayZeroAmount = chargeFirstUpfront
-                              ? upfrontOnlyAmount + effectiveInstallmentAmount
-                              : upfrontOnlyAmount;
-                            if (dayZeroAmount > 0) {
-                              items.push({
-                                number: 1,
-                                date: format(watchedStartDate, 'yyyy-MM-dd'),
-                                amount: dayZeroAmount,
-                                status: 'due_today',
-                              });
-                            }
-                            for (let i = 0; i < selectedPlan.scheduled; i++) {
-                              // Match the schedule preview above: i+1 slots ×
-                              // cadence intervalDays. Works for weekly (7d),
-                              // semiweekly (3.5d), monthly (30d), twice-monthly
-                              // (15d) and four-times-monthly (7.5d).
-                              const dueDate = addDays(watchedStartDate, Math.round(selectedPlan.intervalDays * (i + 1)));
-                              const isLast = i === selectedPlan.scheduled - 1;
-                              const amt = isLast && installmentAmountOverride === null
-                                ? Math.round((installableAmount - (selectedPlan.amount * (selectedPlan.count - 1))) * 100) / 100
-                                : effectiveInstallmentAmount;
-                              items.push({
-                                number: i + (chargeFirstUpfront ? 2 : 1),
-                                date: format(dueDate, 'yyyy-MM-dd'),
-                                amount: amt,
-                                status: 'scheduled',
-                              });
-                            }
-                            return (
-                              <InstallmentCalendar
-                                schedule={items}
-                                rentalStart={format(watchedStartDate, 'yyyy-MM-dd')}
-                                rentalEnd={watchedEndDate ? format(watchedEndDate, 'yyyy-MM-dd') : undefined}
-                                currencyCode={currency}
-                              />
-                            );
-                          })()}
-                        </div>
                       )}
                     </div>
                   </div>

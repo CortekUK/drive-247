@@ -47,7 +47,7 @@ const navItems = [
     title: 'Payments',
     href: '/portal/payments',
     icon: CreditCard,
-    description: 'View installments & payments',
+    description: 'View invoices & payments',
   },
   {
     title: 'ID Verification',

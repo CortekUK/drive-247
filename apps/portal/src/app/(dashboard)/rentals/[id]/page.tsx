@@ -47,9 +47,6 @@ import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDia
 import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
 import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
-import InstallmentPlanCard from "@/components/rentals/InstallmentPlanCard";
-import { InstallmentSection } from "@/components/installments/InstallmentSection";
-import { useInstallmentPlan } from "@/hooks/use-installment-plan";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
 import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
@@ -375,8 +372,7 @@ interface Rental {
   original_end_date?: string | null;
   // Renewal fields
   renewed_from_rental_id?: string | null;
-  // Installment & Insurance fields
-  has_installment_plan?: boolean;
+  // Insurance fields
   bonzah_policy_id?: string | null;
   // Gig driver
   is_gig_driver?: boolean;
@@ -618,9 +614,6 @@ const RentalDetail = () => {
   const [isDeductingDeposit, setIsDeductingDeposit] = useState(false);
   const [isSendingPaymentLink, setIsSendingPaymentLink] = useState(false);
 
-  // Installment sheet state
-  const [showInstallmentSheet, setShowInstallmentSheet] = useState(false);
-  const { plan: installmentPlan, hasInstallmentPlan, retryPayment, isRetrying, markPaid, isMarkingPaid } = useInstallmentPlan(id);
 
   const { locations: allLocations } = usePickupLocations();
 
@@ -3564,21 +3557,6 @@ const RentalDetail = () => {
           });
         }
 
-        // Add installment plan row if one exists
-        if (hasInstallmentPlan && installmentPlan) {
-          rows.push({
-            label: 'Installment Plan',
-            category: 'Installment Plan',
-            amount: installmentPlan.total_installable_amount,
-            detail: `${installmentPlan.plan_type === 'weekly' ? 'Weekly' : 'Monthly'} · ${installmentPlan.paid_installments}/${installmentPlan.number_of_installments} paid`,
-            icon: Banknote,
-            color: 'text-violet-500',
-            bg: 'bg-violet-500/10',
-            nonRefundable: true,
-            onClick: () => setShowInstallmentSheet(true),
-          });
-        }
-
         // PAYG rentals: the accrued categories (Rental / Tax / Service Fee) live in the
         // PaygSection above. Strip them from this fixed-charges breakdown so the card
         // only shows one-off upfront items (Insurance, Delivery, Extras, etc.).
@@ -3600,28 +3578,11 @@ const RentalDetail = () => {
         // Don't allow payments on cancelled/rejected rentals
         const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
 
-        // Installment "virtual paid" categories: when the rental has an active
-        // installment plan AND the upfront has been collected, the fee-side
-        // ledger entries (Tax, Service Fee, Delivery Fee, Security Deposit) are
-        // intentionally NOT decremented — the upfront payment lands entirely on
-        // the Rental charge, with the understanding that those fees are bundled
-        // into that single Rental amount. The Paid badge already reflects this
-        // (see line ~3074), and Action/selectable logic below must mirror it:
-        //   * NOT selectable for further payment (their balance is conceptually 0)
-        //   * Refundable, just like a category whose ledger entry actually paid down
-        const isInstallmentVirtualPaid = (category: string, amount: number): boolean =>
-          !!hasInstallmentPlan
-          && !!installmentPlan?.upfront_paid
-          && ['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee'].includes(category)
-          && amount > 0;
-
         const selectableCategories = rows
           .filter(({ category, amount }) => {
             if (amount <= 0) return false;
             const refunded = refundBreakdown?.[category] ?? 0;
             if (refunded >= amount) return false;
-            // Installment fees are virtually paid via the upfront — not selectable.
-            if (isInstallmentVirtualPaid(category, amount)) return false;
             // Selectable if there's a remaining amount (from ledger or invoice)
             return (categoryRemainingAmounts[category] ?? 0) > 0;
           })
@@ -3700,21 +3661,8 @@ const RentalDetail = () => {
                   const isFirstPaygRow = thisIsPayg && !prevIsPayg;
                   const isFirstNonPaygAfterPayg = isPayg && !thisIsPayg && prevIsPayg;
 
-                  // Billing mode for this row: PAYG > Installments > Regular.
-                  // Installments: only when the rental has an active plan AND the category is
-                  // part of the plan's split (driven by what_gets_split). PAYG rentals never
-                  // use installments per the create-rental rules, so PAYG wins when both are true.
-                  const installSplit = (installmentPlan?.config as any)?.what_gets_split || 'rental_only';
-                  const installCats = installSplit === 'rental_only'
-                    ? ['Rental']
-                    : installSplit === 'rental_tax'
-                      ? ['Rental', 'Tax']
-                      : ['Rental', 'Tax', 'Extras'];
-                  const rowMode: 'PAYG' | 'Installments' | 'Regular' = thisIsPayg
-                    ? 'PAYG'
-                    : (hasInstallmentPlan && installmentPlan && installCats.includes(category))
-                      ? 'Installments'
-                      : 'Regular';
+                  // Billing mode for this row: PAYG > Regular.
+                  const rowMode: 'PAYG' | 'Regular' = thisIsPayg ? 'PAYG' : 'Regular';
                   // PAYG rows are filtered out of this breakdown (shown in PaygSection above),
                   // so the click-to-open-dialog branch is no longer needed here.
                   const effectiveOnClick = onClick;
@@ -3849,9 +3797,7 @@ const RentalDetail = () => {
                           className={
                             rowMode === 'PAYG'
                               ? 'text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[11px]'
-                              : rowMode === 'Installments'
-                                ? 'text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[11px]'
-                                : 'text-muted-foreground border-muted-foreground/20 text-[11px]'
+                              : 'text-muted-foreground border-muted-foreground/20 text-[11px]'
                           }
                         >
                           {rowMode}
@@ -3931,10 +3877,6 @@ const RentalDetail = () => {
                             if (catAllocated > 0) {
                               return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
                             }
-                          }
-                          // For installment plans, fees are paid via the upfront payment (included in the Rental charge)
-                          if (hasInstallmentPlan && installmentPlan?.upfront_paid && ['Security Deposit', 'Service Fee', 'Tax', 'Delivery Fee'].includes(category) && amount > 0) {
-                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
                           }
                           // On cancelled/rejected rental, show "Cancelled" instead of "Not Paid"
                           if (isCancelledOrRejected) {
@@ -4263,14 +4205,7 @@ const RentalDetail = () => {
                         ) : (() => {
                           // Show Refund if category has been paid (via ledger or total payment coverage)
                           const catPayment = paymentBreakdown?.[category];
-                          // Installment rentals bundle Tax/Service Fee/etc. into the
-                          // upfront Rental payment — those fee ledger entries stay
-                          // un-decremented but the Paid badge fires (see line ~3074).
-                          // Mirror that here so the Action column shows Refund, not
-                          // Add Payment, for those rows.
-                          const categoryHasBeenPaid =
-                            (catPayment ? catPayment.paid > 0 : false)
-                            || isInstallmentVirtualPaid(category, amount);
+                          const categoryHasBeenPaid = catPayment ? catPayment.paid > 0 : false;
                           // Security Deposit: disable refund if deposit was already used (deducted for excess mileage — remaining=0 and refunded)
                           const isDepositUsed = !depositIsCharged && category === 'Security Deposit' && (refundBreakdown?.['Security Deposit'] ?? 0) > 0;
                           const wouldShowRefund = applied && !fullyRefunded && categoryHasBeenPaid && canRefund && !isDepositUsed;
@@ -4315,11 +4250,6 @@ const RentalDetail = () => {
                           <Check className="h-4 w-4 text-green-500 inline-block" />
                         ) : (() => {
                           // Show Add Payment if category has remaining amount AND is NOT covered by total payments.
-                          // Installment-virtually-paid fees (Tax/Service Fee/Delivery/Deposit on a rental
-                          // whose upfront installment has been paid) are conceptually settled even though
-                          // their ledger Charge rows show full remaining — exclude them so the row falls
-                          // through to the matching Refund branch above on the next render or the dash here.
-                          if (isInstallmentVirtualPaid(category, amount)) return false;
                           const catRemaining = categoryRemainingAmounts[category] ?? 0;
                           // Nothing raised yet on a charged deposit: still offer it,
                           // so the deposit can be taken mid-rental. Every other
@@ -5043,155 +4973,6 @@ const RentalDetail = () => {
           </Card>
         );
       })()}
-
-      {/* Installment Plan Timeline Sheet */}
-      {installmentPlan && (
-        <Sheet open={showInstallmentSheet} onOpenChange={setShowInstallmentSheet}>
-          <SheetContent className="overflow-y-auto sm:max-w-lg">
-            <SheetHeader>
-              <SheetTitle className="flex items-center gap-2">
-                <Banknote className="h-5 w-5 text-violet-500" />
-                Installment Plan
-                <Badge variant={installmentPlan.status === 'active' ? 'default' : installmentPlan.status === 'completed' ? 'secondary' : 'destructive'} className={installmentPlan.status === 'active' ? 'bg-green-500' : installmentPlan.status === 'completed' ? 'bg-blue-500' : ''}>
-                  {installmentPlan.status}
-                </Badge>
-              </SheetTitle>
-            </SheetHeader>
-
-            <div className="mt-6 space-y-6">
-              {/* Progress Summary */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="font-medium">{installmentPlan.paid_installments} of {installmentPlan.number_of_installments} paid</span>
-                </div>
-                <Progress value={(installmentPlan.paid_installments / installmentPlan.number_of_installments) * 100} className="h-2" />
-              </div>
-
-              {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 bg-green-500/10 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Paid</p>
-                  <p className="text-lg font-bold text-green-600">{formatCurrency(installmentPlan.total_paid)}</p>
-                </div>
-                <div className="text-center p-3 bg-orange-500/10 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Remaining</p>
-                  <p className="text-lg font-bold text-orange-600">{formatCurrency(installmentPlan.total_installable_amount - installmentPlan.total_paid)}</p>
-                </div>
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-lg font-bold">{formatCurrency(installmentPlan.total_installable_amount)}</p>
-                </div>
-              </div>
-
-              {/* Upfront Payment */}
-              <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Upfront Payment (Pre-Auth + Fees)</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold">{formatCurrency(installmentPlan.upfront_amount)}</p>
-                  {installmentPlan.upfront_paid ? (
-                    <Badge variant="outline" className="text-green-500 border-green-500/30 text-[10px]">Paid</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-orange-500 border-orange-500/30 text-[10px]">Pending</Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Timeline */}
-              <div>
-                <h4 className="text-sm font-medium mb-4">Payment Schedule</h4>
-                <div className="space-y-0">
-                  {installmentPlan.scheduled_installments.map((inst, index) => {
-                    const isPaid = inst.status === 'paid';
-                    const isFailed = inst.status === 'failed' || inst.status === 'overdue';
-                    const isScheduled = inst.status === 'scheduled';
-                    const isProcessing = inst.status === 'processing';
-                    const isLast = index === installmentPlan.scheduled_installments.length - 1;
-
-                    return (
-                      <div key={inst.id} className="flex gap-4">
-                        {/* Timeline dot and line */}
-                        <div className="flex flex-col items-center">
-                          <div className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
-                            isPaid ? 'bg-green-500 border-green-500' :
-                            isFailed ? 'bg-red-500 border-red-500' :
-                            isProcessing ? 'bg-yellow-500 border-yellow-500' :
-                            'bg-background border-muted-foreground/30'
-                          }`} />
-                          {!isLast && (
-                            <div className={`w-0.5 h-12 ${isPaid ? 'bg-green-500' : 'bg-muted-foreground/20'}`} />
-                          )}
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 pb-4 -mt-0.5">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium">
-                                {installmentPlan.plan_type === 'weekly' ? `Week ${inst.installment_number}` : `Month ${inst.installment_number}`}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {inst.paid_at ? (
-                                  <span className="text-green-600">Paid on {new Date(inst.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                ) : (
-                                  <>Due {parseLocalDate(inst.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</>
-                                )}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm font-semibold ${isPaid ? 'text-green-600' : isFailed ? 'text-red-600' : ''}`}>
-                                {formatCurrency(inst.amount)}
-                              </span>
-                              {isPaid && <CheckCircle className="h-4 w-4 text-green-500" />}
-                              {isFailed && <XCircle className="h-4 w-4 text-red-500" />}
-                              {isProcessing && <RefreshCw className="h-4 w-4 text-yellow-500 animate-spin" />}
-                              {isScheduled && <Clock className="h-4 w-4 text-muted-foreground/40" />}
-                            </div>
-                          </div>
-                          {isFailed && inst.last_failure_reason && (
-                            <p className="text-xs text-red-500 mt-1">{inst.last_failure_reason}</p>
-                          )}
-                          {isFailed && (
-                            <div className="flex gap-1 mt-1">
-                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => retryPayment(inst.id)} disabled={isRetrying}>
-                                <RefreshCw className="h-3 w-3 mr-1" />Retry
-                              </Button>
-                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => markPaid({ installmentId: inst.id })} disabled={isMarkingPaid}>
-                                <CheckCircle className="h-3 w-3 mr-1" />Mark Paid
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Card on file */}
-              {installmentPlan.stripe_payment_method_id && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-lg">
-                  <CreditCard className="h-4 w-4" />
-                  <span>Card on file for automatic payments</span>
-                </div>
-              )}
-
-              {/* Next due date */}
-              {installmentPlan.next_due_date && installmentPlan.status === 'active' && (
-                <div className="flex items-center gap-2 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950">
-                  <Calendar className="h-4 w-4 text-blue-600" />
-                  <span className="text-sm">
-                    Next payment: <strong>{parseLocalDate(installmentPlan.next_due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
-                  </span>
-                </div>
-              )}
-            </div>
-          </SheetContent>
-        </Sheet>
-      )}
 
       {/* Rental Details */}
       <Card>
@@ -6657,17 +6438,6 @@ const RentalDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Installment Plan Section — new redesigned section. PAYG rentals don't have plans. */}
-      {id && !(rental as any)?.is_pay_as_you_go && (
-        <InstallmentSection
-          rentalId={id}
-          rentalStart={rental?.start_date}
-          rentalEnd={rental?.end_date}
-          customerId={rental?.customers?.id}
-          vehicleId={rental?.vehicles?.id}
-        />
-      )}
-
       {/* Ledger removed — charges visible in Payment Breakdown */}
 
       {/* Add Payment Dialog */}
@@ -7167,7 +6937,6 @@ const RentalDetail = () => {
             start_date: rental.start_date,
             end_date: rental.end_date,
             previous_end_date: rental.previous_end_date || null,
-            has_installment_plan: rental.has_installment_plan,
             bonzah_policy_id: rental.bonzah_policy_id,
             rental_period_type: rental.rental_period_type,
             customer_id: rental.customer_id,
@@ -7187,7 +6956,6 @@ const RentalDetail = () => {
             id: rental.id,
             start_date: rental.start_date,
             end_date: rental.end_date,
-            has_installment_plan: rental.has_installment_plan,
             bonzah_policy_id: rental.bonzah_policy_id,
             rental_period_type: rental.rental_period_type,
             customer_id: rental.customer_id,

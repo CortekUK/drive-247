@@ -4,7 +4,7 @@
  * WHY THIS EXISTS
  * ---------------
  * `payments` rows are created at INTENT time, not at settlement time: a Stripe
- * checkout link, a pre-authorisation hold and an installment link all insert a
+ * checkout link and a pre-authorisation hold both insert a
  * row with a real `amount` and a same-day `payment_date` long before any money
  * moves. Voiding or reversing a payment sets `status` and zeroes
  * `remaining_amount` but deliberately LEAVES `amount` at full face value

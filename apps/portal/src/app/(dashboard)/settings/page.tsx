@@ -43,8 +43,6 @@ import { CommunicationSettings } from '@/components/settings/communication-setti
 import { SubscriptionSettings } from '@/components/settings/subscription-settings';
 import { LockboxTemplatesSection } from '@/components/settings/lockbox-templates-section';
 import { PricingRulesSettings } from '@/components/settings/pricing-rules-settings';
-import { InstallmentConfigDialog } from '@/components/settings/installment-config-dialog';
-import { InstallmentSettings } from '@/components/settings/InstallmentSettings';
 import { formatCurrency } from '@/lib/format-utils';
 import { cn } from '@/lib/utils';
 import { deriveDark, isAutoDerivedDark } from '@/lib/brand-palette';
@@ -165,7 +163,7 @@ const Settings = () => {
   const allSettingsTabs = [
     'general', 'locations', 'branding',
     'requirements', 'duration', 'lockbox',
-    'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
+    'pricing', 'fees', 'preauth', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
     'reminders', 'templates',
     'messaging', 'insurance', 'esign', 'blacklist',
     'subscription',
@@ -175,7 +173,6 @@ const Settings = () => {
   const [isBackfilling, setIsBackfilling] = useState(false);
   const [showDataCleanupDialog, setShowDataCleanupDialog] = useState(false);
   const [resetGeneralDialogOpen, setResetGeneralDialogOpen] = useState(false);
-  const [installmentDialogOpen, setInstallmentDialogOpen] = useState(false);
   const [generalForm, setGeneralForm] = useState({
     currency_code: 'USD',
     distance_unit: 'miles' as 'km' | 'miles',
@@ -476,20 +473,6 @@ const Settings = () => {
     deposit_charge_enabled: boolean;
     deposit_mode: 'global' | 'per_vehicle';
     global_deposit_amount: number;
-    installments_enabled: boolean;
-    installment_config: {
-      minimum_days_weekly: number;
-      minimum_days_monthly: number;
-      weekly_installments_limit: number;
-      monthly_installments_limit: number;
-      limiting_amount_per_day_weekly: number;
-      limiting_amount_per_day_monthly: number;
-      charge_first_upfront: boolean;
-      what_gets_split: 'rental_only' | 'rental_tax' | 'rental_tax_extras';
-      grace_period_days: number;
-      max_retry_attempts: number;
-      retry_interval_days: number;
-    };
     booking_lead_time_value: number;
     booking_lead_time_unit: 'hours' | 'days';
     min_rental_days: number;
@@ -529,33 +512,6 @@ const Settings = () => {
     deposit_charge_enabled: false,
     deposit_mode: 'global' as 'global' | 'per_vehicle',
     global_deposit_amount: 0,
-    // Installment settings
-    installments_enabled: false,
-    installment_config: {
-      minimum_days_weekly: 7,
-      minimum_days_monthly: 30,
-      weekly_installments_limit: 4,
-      monthly_installments_limit: 6,
-      limiting_amount_per_day_weekly: 0,
-      limiting_amount_per_day_monthly: 0,
-      charge_first_upfront: true,
-      what_gets_split: 'rental_only' as 'rental_only' | 'rental_tax' | 'rental_tax_extras',
-      grace_period_days: 3,
-      max_retry_attempts: 3,
-      retry_interval_days: 1,
-    } as {
-      minimum_days_weekly: number;
-      minimum_days_monthly: number;
-      weekly_installments_limit: number;
-      monthly_installments_limit: number;
-      limiting_amount_per_day_weekly: number;
-      limiting_amount_per_day_monthly: number;
-      charge_first_upfront: boolean;
-      what_gets_split: 'rental_only' | 'rental_tax' | 'rental_tax_extras';
-      grace_period_days: number;
-      max_retry_attempts: number;
-      retry_interval_days: number;
-    },
     // Booking lead time
     booking_lead_time_value: 24,
     booking_lead_time_unit: 'hours' as 'hours' | 'days',
@@ -609,21 +565,6 @@ const Settings = () => {
         deposit_charge_enabled: rentalSettings.deposit_charge_enabled ?? false,
         deposit_mode: rentalSettings.deposit_mode ?? 'global',
         global_deposit_amount: rentalSettings.global_deposit_amount ?? 0,
-        // Installment settings
-        installments_enabled: rentalSettings.installments_enabled ?? false,
-        installment_config: {
-          minimum_days_weekly: rentalSettings.installment_config?.minimum_days_weekly ?? rentalSettings.installment_config?.min_days_for_weekly ?? 7,
-          minimum_days_monthly: rentalSettings.installment_config?.minimum_days_monthly ?? rentalSettings.installment_config?.min_days_for_monthly ?? 30,
-          weekly_installments_limit: rentalSettings.installment_config?.weekly_installments_limit ?? rentalSettings.installment_config?.max_installments_weekly ?? 4,
-          monthly_installments_limit: rentalSettings.installment_config?.monthly_installments_limit ?? rentalSettings.installment_config?.max_installments_monthly ?? 6,
-          limiting_amount_per_day_weekly: rentalSettings.installment_config?.limiting_amount_per_day_weekly ?? 0,
-          limiting_amount_per_day_monthly: rentalSettings.installment_config?.limiting_amount_per_day_monthly ?? 0,
-          charge_first_upfront: rentalSettings.installment_config?.charge_first_upfront ?? true,
-          what_gets_split: rentalSettings.installment_config?.what_gets_split ?? 'rental_only',
-          grace_period_days: rentalSettings.installment_config?.grace_period_days ?? 3,
-          max_retry_attempts: rentalSettings.installment_config?.max_retry_attempts ?? 3,
-          retry_interval_days: rentalSettings.installment_config?.retry_interval_days ?? 1,
-        },
         // Booking lead time - convert stored hours back to display value based on unit
         booking_lead_time_unit: (rentalSettings.booking_lead_time_unit as 'hours' | 'days') ?? 'hours',
         booking_lead_time_value: (rentalSettings.booking_lead_time_unit === 'days' && rentalSettings.booking_lead_time_hours)
@@ -881,7 +822,6 @@ const Settings = () => {
       rentalForm.service_fee_value !== (rs.service_fee_value ?? rs.service_fee_amount ?? 0) ||
       rentalForm.deposit_mode !== (rs.deposit_mode ?? 'global') ||
       rentalForm.global_deposit_amount !== (rs.global_deposit_amount ?? 0) ||
-      rentalForm.installments_enabled !== (rs.installments_enabled ?? false) ||
       rentalForm.lockbox_enabled !== (rs.lockbox_enabled ?? false) ||
       rentalForm.lockbox_code_length !== (rs.lockbox_code_length ?? null) ||
       rentalForm.min_rental_days !== (rs.min_rental_days ?? 0) ||
@@ -906,7 +846,6 @@ const Settings = () => {
     lockbox: rentalFormDirty,
     fees: rentalFormDirty,
     preauth: rentalFormDirty,
-    installments: rentalFormDirty,
     promos: rentalFormDirty,
     locations: locationsDirty,
     pricing: pricingDirty,
@@ -1728,7 +1667,6 @@ const Settings = () => {
                 { value: 'pricing', icon: TrendingUp, label: 'Pricing' },
                 { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
                 { value: 'preauth', icon: CreditCard, label: 'Deposit' },
-                { value: 'installments', icon: Banknote, label: 'Installments' },
                 { value: 'payg', icon: Clock, label: 'Pay As You Go' },
                 { value: 'auto-extend', icon: RefreshCw, label: 'Auto-Extend' },
                 { value: 'promos', icon: Zap, label: 'Promos' },
@@ -4009,7 +3947,7 @@ const Settings = () => {
                     <li>Fixed-amount fees, the security deposit, insurance, and delivery charges are handled separately upfront</li>
                     <li>Charges accrue automatically every 24 hours from the rental start time</li>
                     <li>Payment reminders are sent automatically on the configured interval if the customer has an outstanding balance</li>
-                    <li>Payments are recorded manually from the rental detail page; installment plans are not available</li>
+                    <li>Payments are recorded manually from the rental detail page</li>
                   </ul>
                 </div>
               )}
@@ -4100,11 +4038,6 @@ const Settings = () => {
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-
-        {/* Installments Tab */}
-        <TabsContent value="installments" className="space-y-6">
-          <InstallmentSettings />
         </TabsContent>
 
         {/* Auto-Extend Tab */}
@@ -4393,7 +4326,7 @@ const Settings = () => {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only — never to installment plans, pay-as-you-go, or auto-extension renewals. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
+                        Set a number of days to turn this into an automatic duration discount — it applies on its own when a customer&apos;s rental is at least that long (the highest matching tier wins), with no code to type. Applies to fixed rentals paid in full only — never to pay-as-you-go or auto-extension renewals. The Max Users limit still caps total redemptions; once a tier is used up it falls through to the next one down. Leave blank to keep it a normal code customers enter at checkout.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -4645,7 +4578,7 @@ const Settings = () => {
                       }}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Auto duration discounts apply to fixed rentals paid in full only — never to installment, pay-as-you-go, or auto-extension bookings.
+                      Auto duration discounts apply to fixed rentals paid in full only — never to pay-as-you-go or auto-extension bookings.
                     </p>
                   </div>
 
@@ -4887,7 +4820,6 @@ const Settings = () => {
                         <li>Tax: Disabled (0%)</li>
                         <li>Service Fee: Disabled</li>
                         <li>Deposit Mode: Global ($0)</li>
-                        <li>Installments: Disabled (defaults restored)</li>
                         <li>Booking Lead Time: 24 hours</li>
                         <li>Min Rental: 0 days, 1 hour</li>
                         <li>Max Rental: 90 days</li>
@@ -4912,20 +4844,6 @@ const Settings = () => {
                             service_fee_amount: 0,
                             deposit_mode: 'global' as const,
                             global_deposit_amount: 0,
-                            installments_enabled: false,
-                            installment_config: {
-                              minimum_days_weekly: 7,
-                              minimum_days_monthly: 30,
-                              weekly_installments_limit: 4,
-                              monthly_installments_limit: 6,
-                              limiting_amount_per_day_weekly: 0,
-                              limiting_amount_per_day_monthly: 0,
-                              charge_first_upfront: true,
-                              what_gets_split: 'rental_only' as const,
-                              grace_period_days: 3,
-                              max_retry_attempts: 3,
-                              retry_interval_days: 1,
-                            },
                             booking_lead_time_value: 24,
                             booking_lead_time_unit: 'hours' as const,
                             min_rental_days: 0,
@@ -4949,20 +4867,6 @@ const Settings = () => {
                             service_fee_value: 0,
                             deposit_mode: 'global',
                             global_deposit_amount: 0,
-                            installments_enabled: false,
-                            installment_config: {
-                              minimum_days_weekly: 7,
-                              minimum_days_monthly: 30,
-                              weekly_installments_limit: 4,
-                              monthly_installments_limit: 6,
-                              limiting_amount_per_day_weekly: 0,
-                              limiting_amount_per_day_monthly: 0,
-                              charge_first_upfront: true,
-                              what_gets_split: 'rental_only',
-                              grace_period_days: 3,
-                              max_retry_attempts: 3,
-                              retry_interval_days: 1,
-                            },
                             booking_lead_time_value: 24,
                             booking_lead_time_unit: 'hours',
                             min_rental_days: 0,

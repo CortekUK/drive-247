@@ -215,22 +215,18 @@ export default function EditAgreementTemplatePage() {
             <p className="text-sm text-muted-foreground">
               {isDefault
                 ? `Customize the ${
-                    templateCategory === 'installment'
-                      ? 'installment plan'
-                      : templateCategory === 'payg'
-                        ? 'pay-as-you-go'
-                        : templateCategory === 'extension'
-                          ? 'extension'
-                          : 'standard rental'
+                    templateCategory === 'payg'
+                      ? 'pay-as-you-go'
+                      : templateCategory === 'extension'
+                        ? 'extension'
+                        : 'standard rental'
                   } agreement template`
                 : `Create your own custom ${
-                    templateCategory === 'installment'
-                      ? 'installment plan'
-                      : templateCategory === 'payg'
-                        ? 'pay-as-you-go'
-                        : templateCategory === 'extension'
-                          ? 'extension'
-                          : 'rental'
+                    templateCategory === 'payg'
+                      ? 'pay-as-you-go'
+                      : templateCategory === 'extension'
+                        ? 'extension'
+                        : 'rental'
                   } agreement`}
             </p>
           </div>
