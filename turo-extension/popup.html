@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Turo Public Listing Exporter</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+<!--
+  This popup reads the page the operator already has open. It performs no
+  network I/O: there is no fetch, XHR, beacon or navigation anywhere in the
+  extension. Turo's robots.txt disallows /search, /drivers/ and /{locale}/p/*,
+  and classifyUrl() in popup.js refuses to run on those paths even though the
+  page is already on screen. Reading is not crawling, and the code keeps it so.
+-->
+
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <div class="brand-text">
+      <h1>Turo Listing Exporter</h1>
+      <p class="sub" id="page-context">Checking the current tab&hellip;</p>
+    </div>
+  </div>
+  <button id="scrape" class="btn btn-primary" disabled>
+    <span class="spinner" aria-hidden="true"></span>
+    <span class="btn-label">Scrape page</span>
+  </button>
+</header>
+
+<div id="status" class="status" role="status" aria-live="polite" hidden></div>
+
+<section id="summary" class="summary" hidden>
+  <div class="stat">
+    <span class="stat-value" id="stat-count">0</span>
+    <span class="stat-label">listings</span>
+  </div>
+  <div class="stat stat-wide">
+    <span class="stat-value stat-tier" id="stat-tier">&mdash;</span>
+    <span class="stat-label">how it was found</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value" id="stat-sections">0</span>
+    <span class="stat-label">sections</span>
+  </div>
+  <button id="details-toggle" class="btn btn-ghost btn-sm" aria-expanded="false" aria-controls="details">
+    How it found these
+  </button>
+</section>
+
+<section id="details" class="details" hidden>
+  <h2 class="details-title">Strategies attempted, strongest first</h2>
+  <ol id="strategy-list" class="strategy-list"></ol>
+  <h2 class="details-title">What this page contained</h2>
+  <dl id="page-facts" class="facts"></dl>
+  <button id="copy-diag" class="btn btn-ghost btn-sm">Copy diagnostics</button>
+</section>
+
+<main class="results">
+  <div id="placeholder" class="placeholder">
+    <h2 id="placeholder-title">Ready when you are</h2>
+    <p id="placeholder-body">Open a public Turo browse page and press Scrape page.</p>
+    <ul id="placeholder-hints" class="hints" hidden></ul>
+    <button id="placeholder-action" class="btn btn-secondary btn-sm" hidden></button>
+  </div>
+
+  <div id="table-wrap" class="table-wrap" hidden>
+    <table class="grid">
+      <thead>
+        <tr>
+          <th class="col-num">#</th>
+          <th>Vehicle</th>
+          <th class="col-num">Year</th>
+          <th class="col-num">Rating</th>
+          <th class="col-num">Price</th>
+          <th>Section</th>
+          <th class="col-conf">Source</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+
+<footer class="bar bar-footer">
+  <p class="footnote" id="footnote">Reads only the page you already have open.</p>
+  <div class="actions">
+    <button id="copy" class="btn btn-secondary" disabled>Copy for Sheets</button>
+    <button id="download" class="btn btn-primary" disabled>Download CSV</button>
+  </div>
+</footer>
+
+<!-- Order matters: parsers (normalise) -> csv (columns + encode) -> popup (drive). -->
+<script src="parsers.js"></script>
+<script src="csv.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

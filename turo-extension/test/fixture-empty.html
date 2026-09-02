@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>How Turo works | Turo UK</title>
+<!--
+  FIXTURE 4 of 4 — A REAL TURO-LIKE PAGE WITH NO LISTINGS ON IT.
+
+  The question this fixture asks is not "does the extractor return zero rows".
+  Any broken extractor returns zero rows. The question is whether a zero-row
+  run comes back with enough of a trace for an operator to see WHY — which
+  tiers ran, what structured-state sources were probed, and what the page
+  actually contained — instead of an empty table that looks identical to a
+  silent failure.
+
+  So this page is not blank. It is deliberately furnished with the things a
+  real Turo page has, none of which are listings:
+
+    * a __NEXT_DATA__ block with genuine Next.js shape and zero vehicles, so
+      tier 1 finds its source, parses it successfully, and still correctly
+      concludes there is nothing car-shaped inside. Finding the payload and
+      finding no cars are different outcomes and the trace must distinguish
+      them.
+
+    * the Organization ld+json that turo.com really ships — a support phone
+      number. It must contribute no rows.
+
+    * marketing copy that quotes money ("from £29 per day"). This is the
+      adversarial part. A price on the page is exactly what the heuristic tier
+      hunts for, and a scraper that exports a promo strip as a car is worse
+      than one that finds nothing, because the operator has no way to tell.
+      It is prose inside a link with no image, no year and no rating, so it
+      should not qualify as card-shaped.
+
+    * a hero image inside a link, but in a subtree with no price — the mirror
+      image of the case above.
+
+  There is no [itemscope], no data-testid and no aria-label listing link, so
+  tier 2 has nothing to find either.
+-->
+<style>
+  .a7f3k2{font-family:system-ui,sans-serif}
+  .q1w9e8{display:grid}
+  .z0x8c7{position:relative}
+</style>
+</head>
+<body class="a7f3k2">
+
+<header class="z0x8c7">
+  <nav class="q1w9e8">
+    <a href="/gb/en/">Turo</a>
+    <a href="/gb/en/how-turo-works">How Turo works</a>
+    <a href="/gb/en/list-your-car">List your car</a>
+    <a href="/gb/en/login">Log in</a>
+  </nav>
+</header>
+
+<main class="q1w9e8">
+
+  <!-- Hero: a link and an image, but no money anywhere in this subtree. -->
+  <section class="z0x8c7">
+    <h1>Find the perfect car for your next trip</h1>
+    <a href="/gb/en/how-turo-works">
+      <img src="https://images.example.invalid/hero-wide.jpg" alt="Two people loading luggage into a car">
+    </a>
+    <p>Book cars from trusted local hosts across the UK.</p>
+  </section>
+
+  <!-- Marketing copy that quotes money. Prose in a link, no image, no year,
+       no rating. This must NOT be exported as a vehicle. -->
+  <section class="z0x8c7">
+    <h2>Why book with Turo</h2>
+    <a href="/gb/en/list-your-car">
+      Cars from trusted hosts, from £29 per day, with cover included on every
+      booking and roadside assistance as standard throughout your trip.
+    </a>
+    <p>Prices vary by city, vehicle and trip length.</p>
+  </section>
+
+  <section class="z0x8c7">
+    <h2>How it works</h2>
+    <p>Browse cars from local hosts in your area, compare what is available on
+       your dates, and book the one you want. Most hosts respond within an hour
+       and many offer delivery to a station or airport for an additional fee.</p>
+    <p>Collect the car at the agreed time and place. Your host will talk you
+       through anything you need to know, and photographs are taken at the start
+       and end of every trip so both sides have a record of the condition.</p>
+    <p>Return the car where you agreed, refuelled or recharged to the level you
+       started with. Payment is handled entirely through Turo, so there is no
+       cash to exchange and no deposit to chase afterwards.</p>
+  </section>
+
+  <section class="z0x8c7">
+    <h2>Frequently asked questions</h2>
+    <p>Do I need my own insurance? Cover is included with every booking, and you
+       choose the level of protection that suits you when you check out.</p>
+    <p>Can I cancel? Free cancellation up to 24 hours before your trip starts.
+       After that, the host's cancellation policy applies to your booking.</p>
+    <p>Who can book? Anyone with a valid driving licence who meets the age
+       requirement for the vehicle and passes our standard eligibility check.</p>
+    <p>What if something goes wrong during the trip? Roadside assistance is
+       included as standard, and support is available at any hour of the day.</p>
+  </section>
+
+</main>
+
+<footer class="z0x8c7">
+  <p>Turo is a car sharing marketplace.</p>
+</footer>
+
+<!--
+  Real Next.js shape, real page props, zero vehicles. Tier 1 must parse this
+  successfully and still report no listings.
+-->
+<script id="__NEXT_DATA__" type="application/json">
+{"props":{"pageProps":{"page":"how-turo-works","cmsBlocks":[{"id":"hero","heading":"Find the perfect car for your next trip","body":"Book cars from trusted local hosts across the UK."},{"id":"value-props","heading":"Why book with Turo","body":"Cars from trusted hosts, from £29 per day."},{"id":"faq","heading":"Frequently asked questions","items":[{"q":"Do I need my own insurance?","a":"Cover is included with every booking."},{"q":"Can I cancel?","a":"Free cancellation up to 24 hours before your trip starts."}]}],"locale":"en-GB","country":"GB"}},"page":"/[country]/[language]/how-turo-works","query":{"country":"gb","language":"en"},"buildId":"kR3xQ7fLmN2pV8dW","isFallback":false,"gsp":true}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Turo",
+  "url": "https://turo.com/",
+  "logo": "https://images.example.invalid/turo-logo.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+1-415-965-4525",
+    "contactType": "customer service"
+  }
+}
+</script>
+
+</body>
+</html>

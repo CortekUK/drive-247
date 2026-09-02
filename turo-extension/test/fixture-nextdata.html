@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Rent cars in the UK | Turo UK car rental marketplace</title>
+<!--
+  FIXTURE 1 of 4 — EMBEDDED STRUCTURED STATE.
+
+  The same five listings appear in fixture-jsonld.html and fixture-domonly.html.
+  What changes between the fixtures is the STRATEGY, never the data — that is
+  what lets run-tests.js prove the tiers converge, rather than merely proving
+  each tier returns something.
+
+  ---------------------------------------------------------------------------
+  WHY THE PAYLOAD IS SHAPED THE WAY IT IS
+  ---------------------------------------------------------------------------
+
+  The vehicle objects below are not invented. They mirror the DTO recovered
+  from real turo.com captures, because a fixture that tests a made-up shape
+  tests nothing:
+
+      {id, year, make, model, type, rating, completedTrips, isNewListing,
+       avgDailyPrice:{amount,currency}, location:{city,country},
+       images:[{originalImageUrl, resizeableUrlTemplate}], hostId,
+       isAllStarHost, seoCategory}
+
+  Three details in here are load-bearing, and each one exists to catch a
+  specific class of silent failure:
+
+  1. THE DISPLAYED PRICE IS NOT IN THE VEHICLE OBJECT.
+     `avgDailyPrice` is the base rate (45.30). The price the card actually
+     shows is "£1,359/month", and it lives in a SEPARATE map that sits beside
+     `vehicles[]`, keyed by vehicle id. Reading avgDailyPrice as "the price"
+     produces plausible-looking but wrong numbers, which is the worst kind of
+     failure for a pricing tool. Extracting a row therefore requires joining
+     the two.
+
+  2. THE JOIN KEY CHANGES TYPE ACROSS THE BOUNDARY.
+     `vehicles[].id` is a NUMBER (1234567). The `estimatedQuotes` keys are
+     STRINGS ("1234567"), because they are JSON object keys and cannot be
+     anything else. A join that does not coerce silently yields zero prices
+     while still returning a full set of rows — everything looks fine except
+     that the price column is empty.
+
+  3. THE MISSPELLING IS REAL.
+     Turo emits `resizeableUrlTemplate`, not `resizableUrlTemplate`. Code
+     checking only the correct spelling loses every image URL, so the fixture
+     uses Turo's spelling.
+
+  ---------------------------------------------------------------------------
+
+  This fixture ALSO renders all five cards in the DOM, exactly as a hydrated
+  page would. That is deliberate: it proves the JSON tier wins *over* an
+  available DOM, rather than only winning when nothing else is on offer.
+
+  Image hosts are .invalid on purpose, so a stray asset load during a test run
+  can never reach a real endpoint.
+-->
+<style>
+  /* Emotion-style hashed classes, as a production build emits. Nothing in the
+     extractor may key off one — that is the whole point of the constraint. */
+  .css-1hdlq5i{font-family:system-ui,sans-serif}
+  .css-9kd0zz{display:grid}
+</style>
+</head>
+<body>
+
+<header class="css-1hdlq5i">
+  <nav><a href="/gb/en/how-turo-works">How Turo works</a> <a href="/gb/en/login">Log in</a></nav>
+</header>
+
+<main>
+
+  <section>
+    <h2 class="css-1hdlq5i">Monthly luxury car rentals in Oxford</h2>
+    <p class="css-9kd0zz">Average monthly prices for a 30-day trip</p>
+
+    <div class="css-9kd0zz">
+
+      <a data-testid="vehicle-card-link-box" class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/oxford/mercedes-benz/eqe/1234567">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/eqe-720.jpg" alt="Mercedes-Benz EQE 2023 in Oxford">
+          <p class="css-1hdlq5i">Mercedes-Benz EQE</p>
+          <p class="css-1hdlq5i">2023</p>
+          <p class="css-1hdlq5i">New listing</p>
+          <p data-testid="vehicle-discount-and-price" class="css-1hdlq5i">£1,359/month</p>
+        </div>
+      </a>
+
+      <a data-testid="vehicle-card-link-box" class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/oxford/porsche/macan/2345678">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/macan-720.jpg" alt="Porsche Macan 2022 in Oxford">
+          <p class="css-1hdlq5i">Porsche Macan</p>
+          <p class="css-1hdlq5i">2022</p>
+          <p class="css-1hdlq5i">4.75 (5)</p>
+          <p data-testid="vehicle-discount-and-price" class="css-1hdlq5i">£4,056/month</p>
+        </div>
+      </a>
+
+      <a data-testid="vehicle-card-link-box" class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/oxford/tesla/model-y/3456789">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/model-y-720.jpg" alt="Tesla Model Y 2025 in Oxford">
+          <p class="css-1hdlq5i">Tesla Model Y</p>
+          <p class="css-1hdlq5i">2025</p>
+          <p class="css-1hdlq5i">5.0 (3)</p>
+          <p data-testid="vehicle-discount-and-price" class="css-1hdlq5i">£4,395/month</p>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <section>
+    <h2 class="css-1hdlq5i">Car rentals at King's Cross</h2>
+    <p class="css-9kd0zz">Average daily prices for a 3-day trip</p>
+
+    <div class="css-9kd0zz">
+
+      <a data-testid="vehicle-card-link-box" class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/london/citroen/e-c4/4567890">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/e-c4-720.jpg" alt="Citroën ë-C4 2021 in London">
+          <p class="css-1hdlq5i">Citroën ë-C4</p>
+          <p class="css-1hdlq5i">2021</p>
+          <p class="css-1hdlq5i">4.9 (12)</p>
+          <p data-testid="vehicle-discount-and-price" class="css-1hdlq5i">£77/day <span class="css-1hdlq5i">£232 total</span></p>
+        </div>
+      </a>
+
+      <a data-testid="vehicle-card-link-box" class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/london/volkswagen/id-3/5678901">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/id-3-720.jpg" alt="=Volkswagen ID.3 2020 in London">
+          <p class="css-1hdlq5i">=Volkswagen ID.3</p>
+          <p class="css-1hdlq5i">2020</p>
+          <p class="css-1hdlq5i"></p>
+          <p data-testid="vehicle-discount-and-price" class="css-1hdlq5i">£64/day</p>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+</main>
+
+<script id="__NEXT_DATA__" type="application/json">
+{"props":{"pageProps":{"searchLocation":"United Kingdom","sections":[
+{"title":"Monthly luxury car rentals in Oxford","subtitle":"Average monthly prices for a 30-day trip","deepLink":"/gb/en/search?location=Oxford",
+"estimatedQuotes":{
+"1234567":{"pricingDisplay":{"carousel":{"value":"£1,359/month"}},"priceDisplayType":"MONTHLY","vehicleDailyPrice":{"amount":45.3,"currency":"GBP"}},
+"2345678":{"pricingDisplay":{"carousel":{"value":"£4,056/month"}},"priceDisplayType":"MONTHLY","vehicleDailyPrice":{"amount":135.2,"currency":"GBP"}},
+"3456789":{"pricingDisplay":{"carousel":{"value":"£4,395/month"}},"priceDisplayType":"MONTHLY","vehicleDailyPrice":{"amount":146.5,"currency":"GBP"}}},
+"vehicles":[
+{"id":1234567,"make":"Mercedes-Benz","model":"EQE","year":2023,"type":"CAR","rating":null,"completedTrips":0,"isNewListing":true,"avgDailyPrice":{"amount":45.3,"currency":"GBP"},"location":{"city":"Oxford","country":"GB"},"images":[{"originalImageUrl":"https://images.example.invalid/eqe-720.jpg","resizeableUrlTemplate":"https://images.example.invalid/eqe-{width}x{height}.jpg"}],"hostId":901,"isAllStarHost":false,"seoCategory":"luxury"},
+{"id":2345678,"make":"Porsche","model":"Macan","year":2022,"type":"SUV","rating":4.75,"completedTrips":5,"isNewListing":false,"avgDailyPrice":{"amount":135.2,"currency":"GBP"},"location":{"city":"Oxford","country":"GB"},"images":[{"originalImageUrl":"https://images.example.invalid/macan-720.jpg","resizeableUrlTemplate":"https://images.example.invalid/macan-{width}x{height}.jpg"}],"hostId":902,"isAllStarHost":true,"seoCategory":"luxury"},
+{"id":3456789,"make":"Tesla","model":"Model Y","year":2025,"type":"SUV","rating":5,"completedTrips":3,"isNewListing":false,"avgDailyPrice":{"amount":146.5,"currency":"GBP"},"location":{"city":"Oxford","country":"GB"},"images":[{"originalImageUrl":"https://images.example.invalid/model-y-720.jpg","resizeableUrlTemplate":"https://images.example.invalid/model-y-{width}x{height}.jpg"}],"hostId":903,"isAllStarHost":false,"seoCategory":"electric"}
+]},
+{"title":"Car rentals at King's Cross","subtitle":"Average daily prices for a 3-day trip","deepLink":"/gb/en/search?location=London",
+"estimatedQuotes":{
+"4567890":{"pricingDisplay":{"carousel":{"value":"£77/day"}},"priceDisplayType":"TOTAL","totalTripPrice":{"amount":232,"currency":"GBP"},"vehicleDailyPrice":{"amount":77,"currency":"GBP"}},
+"5678901":{"pricingDisplay":{"carousel":{"value":"£64/day"}},"priceDisplayType":"TOTAL","vehicleDailyPrice":{"amount":64,"currency":"GBP"}}},
+"vehicles":[
+{"id":4567890,"make":"Citroën","model":"ë-C4","year":2021,"type":"CAR","rating":4.9,"completedTrips":12,"isNewListing":false,"avgDailyPrice":{"amount":77,"currency":"GBP"},"location":{"city":"London","country":"GB"},"images":[{"originalImageUrl":"https://images.example.invalid/e-c4-720.jpg","resizeableUrlTemplate":"https://images.example.invalid/e-c4-{width}x{height}.jpg"}],"hostId":904,"isAllStarHost":false,"seoCategory":"electric"},
+{"id":5678901,"make":"=Volkswagen","model":"ID.3","year":2020,"type":"CAR","rating":null,"completedTrips":0,"isNewListing":false,"avgDailyPrice":{"amount":64,"currency":"GBP"},"location":{"city":"London","country":"GB"},"images":[{"originalImageUrl":"https://images.example.invalid/id-3-720.jpg","resizeableUrlTemplate":"https://images.example.invalid/id-3-{width}x{height}.jpg"}],"hostId":905,"isAllStarHost":false,"seoCategory":"electric"}
+]}
+]}},"page":"/[country]/[language]","query":{"country":"gb","language":"en"},"buildId":"kR3xQ7fLmN2pV8dW","isFallback":false,"gsp":true}
+</script>
+
+</body>
+</html>

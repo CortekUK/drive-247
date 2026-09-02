@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Rent cars in the UK | Turo UK car rental marketplace</title>
+<!--
+  FIXTURE 2 of 4 — SCHEMA.ORG JSON-LD.
+
+  Identical five listings to fixture-nextdata.html, expressed as schema.org
+  instead. No __NEXT_DATA__ anywhere, so the extractor must reach the data
+  through its ld+json reader.
+
+  Two deliberate details:
+
+  1. There is a third ld+json block containing an Organization. That is what
+     turo.com actually ships (a customer-service phone number, and nothing
+     about any car). Including it proves the reader ignores non-listing
+     structured data rather than counting it as a row.
+
+  2. offers.unitText reads "per month" / "per day" rather than the bare noun.
+     schema.org would happily accept "MONTH", but the extractor's period
+     matcher only recognises phrases such as "per month", "/month" or
+     "monthly" — a bare "month" or "MONTH" parses to null. The fixture uses
+     the form that works; see the note in run-tests.js, which asserts that
+     gap explicitly so it cannot be forgotten.
+-->
+<style>.css-1hdlq5i{font-family:system-ui,sans-serif}.css-9kd0zz{display:grid}</style>
+</head>
+<body>
+
+<header class="css-1hdlq5i">
+  <nav><a href="/gb/en/how-turo-works">How Turo works</a> <a href="/gb/en/login">Log in</a></nav>
+</header>
+
+<main>
+
+  <section>
+    <h2 class="css-1hdlq5i">Monthly luxury car rentals in Oxford</h2>
+    <p class="css-9kd0zz">Average monthly prices for a 30-day trip</p>
+    <div class="css-9kd0zz">
+
+      <a class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/oxford/mercedes-benz/eqe/1234567">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/eqe-720.jpg" alt="Mercedes-Benz EQE 2023 in Oxford">
+          <p class="css-1hdlq5i">Mercedes-Benz EQE</p>
+          <p class="css-1hdlq5i">2023</p>
+          <p class="css-1hdlq5i">New listing</p>
+          <p class="css-1hdlq5i">£1,359/month</p>
+        </div>
+      </a>
+
+      <a class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/oxford/porsche/macan/2345678">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/macan-720.jpg" alt="Porsche Macan 2022 in Oxford">
+          <p class="css-1hdlq5i">Porsche Macan</p>
+          <p class="css-1hdlq5i">2022</p>
+          <p class="css-1hdlq5i">4.75 (5)</p>
+          <p class="css-1hdlq5i">£4,056/month</p>
+        </div>
+      </a>
+
+      <a class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/oxford/tesla/model-y/3456789">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/model-y-720.jpg" alt="Tesla Model Y 2025 in Oxford">
+          <p class="css-1hdlq5i">Tesla Model Y</p>
+          <p class="css-1hdlq5i">2025</p>
+          <p class="css-1hdlq5i">5.0 (3)</p>
+          <p class="css-1hdlq5i">£4,395/month</p>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <section>
+    <h2 class="css-1hdlq5i">Car rentals at King's Cross</h2>
+    <p class="css-9kd0zz">Average daily prices for a 3-day trip</p>
+    <div class="css-9kd0zz">
+
+      <a class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/london/citroen/e-c4/4567890">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/e-c4-720.jpg" alt="Citroën ë-C4 2021 in London">
+          <p class="css-1hdlq5i">Citroën ë-C4</p>
+          <p class="css-1hdlq5i">2021</p>
+          <p class="css-1hdlq5i">4.9 (12)</p>
+          <p class="css-1hdlq5i">£77/day <span class="css-1hdlq5i">£232 total</span></p>
+        </div>
+      </a>
+
+      <a class="css-1hdlq5i" href="/gb/en/car-rental/united-kingdom/london/volkswagen/id-3/5678901">
+        <div class="css-9kd0zz">
+          <img class="css-1hdlq5i" src="https://images.example.invalid/id-3-720.jpg" alt="=Volkswagen ID.3 2020 in London">
+          <p class="css-1hdlq5i">=Volkswagen ID.3</p>
+          <p class="css-1hdlq5i">2020</p>
+          <p class="css-1hdlq5i"></p>
+          <p class="css-1hdlq5i">£64/day</p>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- Section 1 as an ItemList of Cars. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Monthly luxury car rentals in Oxford",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "item": {
+        "@type": "Car",
+        "name": "Mercedes-Benz EQE",
+        "brand": { "@type": "Brand", "name": "Mercedes-Benz" },
+        "model": "EQE",
+        "vehicleModelDate": "2023",
+        "sku": "1234567",
+        "url": "https://turo.com/gb/en/car-rental/united-kingdom/oxford/mercedes-benz/eqe/1234567",
+        "image": "https://images.example.invalid/eqe-720.jpg",
+        "offers": {
+          "@type": "Offer",
+          "price": "1359",
+          "priceCurrency": "GBP",
+          "unitText": "per month",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "item": {
+        "@type": "Car",
+        "name": "Porsche Macan",
+        "brand": { "@type": "Brand", "name": "Porsche" },
+        "model": "Macan",
+        "vehicleModelDate": "2022",
+        "sku": "2345678",
+        "url": "https://turo.com/gb/en/car-rental/united-kingdom/oxford/porsche/macan/2345678",
+        "image": "https://images.example.invalid/macan-720.jpg",
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.75", "reviewCount": "5", "bestRating": "5" },
+        "offers": {
+          "@type": "Offer",
+          "price": "4056",
+          "priceCurrency": "GBP",
+          "unitText": "per month",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "item": {
+        "@type": "Car",
+        "name": "Tesla Model Y",
+        "brand": { "@type": "Brand", "name": "Tesla" },
+        "model": "Model Y",
+        "vehicleModelDate": "2025",
+        "sku": "3456789",
+        "url": "https://turo.com/gb/en/car-rental/united-kingdom/oxford/tesla/model-y/3456789",
+        "image": "https://images.example.invalid/model-y-720.jpg",
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": "5", "reviewCount": "3", "bestRating": "5" },
+        "offers": {
+          "@type": "Offer",
+          "price": "4395",
+          "priceCurrency": "GBP",
+          "unitText": "per month",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    }
+  ]
+}
+</script>
+
+<!-- Section 2 as a second ItemList. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "ItemList",
+  "name": "Car rentals at King's Cross",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "item": {
+        "@type": "Car",
+        "name": "Citroën ë-C4",
+        "brand": { "@type": "Brand", "name": "Citroën" },
+        "model": "ë-C4",
+        "vehicleModelDate": "2021",
+        "sku": "4567890",
+        "url": "https://turo.com/gb/en/car-rental/united-kingdom/london/citroen/e-c4/4567890",
+        "image": "https://images.example.invalid/e-c4-720.jpg",
+        "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "12", "bestRating": "5" },
+        "offers": {
+          "@type": "Offer",
+          "price": "77",
+          "priceCurrency": "GBP",
+          "unitText": "per day",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "item": {
+        "@type": "Car",
+        "name": "=Volkswagen ID.3",
+        "vehicleModelDate": "2020",
+        "sku": "5678901",
+        "url": "https://turo.com/gb/en/car-rental/united-kingdom/london/volkswagen/id-3/5678901",
+        "image": "https://images.example.invalid/id-3-720.jpg",
+        "offers": {
+          "@type": "Offer",
+          "price": "64",
+          "priceCurrency": "GBP",
+          "unitText": "per day",
+          "availability": "https://schema.org/InStock"
+        }
+      }
+    }
+  ]
+}
+</script>
+
+<!--
+  What turo.com actually ships: an Organization block with a support phone
+  number and no listing data at all. It must contribute zero rows.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Turo",
+  "url": "https://turo.com/",
+  "logo": "https://images.example.invalid/turo-logo.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+1-415-965-4525",
+    "contactType": "customer service"
+  }
+}
+</script>
+
+</body>
+</html>

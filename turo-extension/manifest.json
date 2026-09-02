@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Turo Public Listing Exporter",
+  "version": "1.0.0",
+  "description": "Reads the public Turo page you already have open and exports the visible listing data to a sheet. No login, no crawling, no network calls.",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Export the Turo listings on this page"
+  }
+}

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Rent cars in the UK | Turo UK car rental marketplace</title>
+<!--
+  FIXTURE 3 of 4 — NO EMBEDDED JSON AT ALL.
+
+  The same five listings as fixture-nextdata.html and fixture-jsonld.html, but
+  the page carries:
+
+    * no __NEXT_DATA__
+    * no ld+json
+    * no window.__APOLLO_STATE__ / __INITIAL_STATE__ / self.__next_f
+    * no [itemscope]/[itemtype] microdata
+    * no data-testid / data-test / data-qa
+    * no aria-label on any listing link
+
+  So tiers 1 and 2 must come back empty and the heuristic DOM tier is the only
+  thing left. That is the point of this fixture: it isolates the weakest tier
+  and proves it still recovers the same values as the JSON tiers.
+
+  Every class name is a meaningless hash, as a production Emotion/CSS-modules
+  build emits. No selector in the extractor may key off one, and this fixture
+  is how that constraint gets enforced rather than merely asserted.
+
+  The markup is also deliberately laid out DIFFERENTLY from the two JSON
+  fixtures — deeper wrappers, the price split across sibling spans, the rating
+  and the review count in separate elements. If the heuristic tier only worked
+  against one hand-written layout, that would be a test proving nothing, so
+  the layout it is asked to survive is not the layout it was written beside.
+
+  Note the year and rating sit in their own elements. Reading these cards with
+  .textContent would fuse them into "Model Y20255.0" and destroy the year;
+  the extractor reads text nodes with boundaries instead, and this fixture is
+  shaped to catch a regression there.
+-->
+<style>
+  .a7f3k2{font-family:system-ui,sans-serif}
+  .q1w9e8{display:grid;gap:16px}
+  .z0x8c7{position:relative}
+  .m4n2b6{display:block}
+  .v5b3n1{font-weight:600}
+  .l9k7j5{color:#666}
+  .p3o1i9{font-weight:700}
+  .t8y6u4{color:#111}
+</style>
+</head>
+<body class="a7f3k2">
+
+<header class="z0x8c7">
+  <nav class="q1w9e8">
+    <a class="m4n2b6" href="/gb/en/how-turo-works">How Turo works</a>
+    <a class="m4n2b6" href="/gb/en/login">Log in</a>
+  </nav>
+</header>
+
+<main class="q1w9e8">
+
+  <section class="z0x8c7">
+    <h2 class="v5b3n1">Monthly luxury car rentals in Oxford</h2>
+    <p class="l9k7j5">Average monthly prices for a 30-day trip</p>
+
+    <div class="q1w9e8">
+
+      <a class="m4n2b6" href="/gb/en/car-rental/united-kingdom/oxford/mercedes-benz/eqe/1234567">
+        <div class="z0x8c7">
+          <div class="z0x8c7">
+            <img class="m4n2b6" src="https://images.example.invalid/eqe-720.jpg" alt="Mercedes-Benz EQE 2023 in Oxford">
+          </div>
+          <div class="q1w9e8">
+            <div class="v5b3n1"><span class="t8y6u4">Mercedes-Benz EQE</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">2023</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">New listing</span></div>
+            <div class="p3o1i9"><span class="t8y6u4">£1,359</span><span class="l9k7j5">/month</span></div>
+          </div>
+        </div>
+      </a>
+
+      <a class="m4n2b6" href="/gb/en/car-rental/united-kingdom/oxford/porsche/macan/2345678">
+        <div class="z0x8c7">
+          <div class="z0x8c7">
+            <img class="m4n2b6" src="https://images.example.invalid/macan-720.jpg" alt="Porsche Macan 2022 in Oxford">
+          </div>
+          <div class="q1w9e8">
+            <div class="v5b3n1"><span class="t8y6u4">Porsche Macan</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">2022</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">4.75</span><span class="l9k7j5">(5)</span></div>
+            <div class="p3o1i9"><span class="t8y6u4">£4,056</span><span class="l9k7j5">/month</span></div>
+          </div>
+        </div>
+      </a>
+
+      <a class="m4n2b6" href="/gb/en/car-rental/united-kingdom/oxford/tesla/model-y/3456789">
+        <div class="z0x8c7">
+          <div class="z0x8c7">
+            <img class="m4n2b6" src="https://images.example.invalid/model-y-720.jpg" alt="Tesla Model Y 2025 in Oxford">
+          </div>
+          <div class="q1w9e8">
+            <div class="v5b3n1"><span class="t8y6u4">Tesla Model Y</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">2025</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">5.0</span><span class="l9k7j5">(3)</span></div>
+            <div class="p3o1i9"><span class="t8y6u4">£4,395</span><span class="l9k7j5">/month</span></div>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <section class="z0x8c7">
+    <h2 class="v5b3n1">Car rentals at King's Cross</h2>
+    <p class="l9k7j5">Average daily prices for a 3-day trip</p>
+
+    <div class="q1w9e8">
+
+      <a class="m4n2b6" href="/gb/en/car-rental/united-kingdom/london/citroen/e-c4/4567890">
+        <div class="z0x8c7">
+          <div class="z0x8c7">
+            <img class="m4n2b6" src="https://images.example.invalid/e-c4-720.jpg" alt="Citroën ë-C4 2021 in London">
+          </div>
+          <div class="q1w9e8">
+            <div class="v5b3n1"><span class="t8y6u4">Citroën ë-C4</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">2021</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">4.9</span><span class="l9k7j5">(12)</span></div>
+            <div class="p3o1i9"><span class="t8y6u4">£77</span><span class="l9k7j5">/day</span><span class="l9k7j5">£232 total</span></div>
+          </div>
+        </div>
+      </a>
+
+      <a class="m4n2b6" href="/gb/en/car-rental/united-kingdom/london/volkswagen/id-3/5678901">
+        <div class="z0x8c7">
+          <div class="z0x8c7">
+            <img class="m4n2b6" src="https://images.example.invalid/id-3-720.jpg" alt="=Volkswagen ID.3 2020 in London">
+          </div>
+          <div class="q1w9e8">
+            <div class="v5b3n1"><span class="t8y6u4">=Volkswagen ID.3</span></div>
+            <div class="l9k7j5"><span class="t8y6u4">2020</span></div>
+            <div class="l9k7j5"></div>
+            <div class="p3o1i9"><span class="t8y6u4">£64</span><span class="l9k7j5">/day</span></div>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+</main>
+
+<footer class="z0x8c7">
+  <p class="l9k7j5">Turo is a car sharing marketplace.</p>
+</footer>
+
+</body>
+</html>

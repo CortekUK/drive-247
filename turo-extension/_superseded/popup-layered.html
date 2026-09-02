@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Turo Public Listing Scraper</title>
+  <link rel="stylesheet" href="popup-layered.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="dot" id="dot"></span><h1>Turo listing scraper</h1></div>
+    <div class="bar-actions">
+      <button id="rescan" class="btn btn-ghost" type="button" title="Read the page again">Re-scan</button>
+      <button id="download" class="btn btn-primary" type="button" disabled>Download CSV</button>
+    </div>
+  </header>
+
+  <p id="status" class="status">Reading the page you have open…</p>
+
+  <section id="summary" class="summary" hidden>
+    <div class="stat"><span class="stat-v" id="s-rows">–</span><span class="stat-l">listings</span></div>
+    <div class="stat"><span class="stat-v" id="s-tier">–</span><span class="stat-l">winning strategy</span></div>
+    <div class="stat"><span class="stat-v" id="s-conf">–</span><span class="stat-l">avg confidence</span></div>
+    <div class="stat"><span class="stat-v" id="s-locale">–</span><span class="stat-l">locale</span></div>
+    <div class="stat"><span class="stat-v" id="s-ms">–</span><span class="stat-l">took</span></div>
+  </section>
+
+  <div id="tierNote" class="note" hidden></div>
+
+  <div class="table-wrap" id="tableWrap" hidden>
+    <table id="table"><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table>
+  </div>
+
+  <div id="empty" class="empty" hidden></div>
+
+  <details id="diagBox" class="diag" hidden>
+    <summary>Diagnostics — what each strategy actually saw
+      <button id="copyDiag" class="btn btn-ghost btn-xs" type="button">Copy</button>
+    </summary>
+    <div id="diag"></div>
+  </details>
+
+  <footer class="foot">Reads only the page already open in this tab. No login, no account, no network requests.</footer>
+
+  <script src="lib/schema.js"></script>
+  <script src="lib/csv.js"></script>
+  <script src="popup-layered.js"></script>
+</body>
+</html>

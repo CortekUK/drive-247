@@ -1,0 +1,215 @@
+/* =============================================================================
+ * popup.css
+ *
+ * One rule governs the palette: COLOUR IS RESERVED FOR TELLING THE TRUTH ABOUT
+ * DATA QUALITY, never for decoration. Green means the row came from the page's
+ * own JSON. Amber means it was inferred by shape-matching the DOM and could be
+ * wrong. An unrecognised strategy falls through to grey rather than borrowing a
+ * colour that would read as trustworthy.
+ *
+ * Flat surfaces, 1px borders, no shadows or gradients.
+ * ========================================================================== */
+
+:root {
+  --accent: #5b3df5;
+  --accent-dark: #4325d6;
+  --accent-soft: #eef0fe;
+  --ink: #0f1020;
+  --ink-2: #404052;
+  --muted: #737382;
+  --surface: #ffffff;
+  --surface-2: #f8f9fc;
+  --line: #e4e7f0;
+  --ok: #0f8a4a;
+  --ok-soft: #e7f6ed;
+  --warn: #a35c04;
+  --warn-soft: #fdf3e3;
+  --bad: #c2261f;
+  --bad-soft: #fdeceb;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 800px;
+  height: 600px;
+  margin: 0;
+  font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--surface);
+}
+
+/* Fixed header and footer, scrolling middle. */
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+h1, h2 { margin: 0; font-weight: 600; }
+
+/* ---------------------------------------------------------------- bars --- */
+
+.bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex: 0 0 auto;
+}
+.bar-footer { border-bottom: none; border-top: 1px solid var(--line); }
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mark {
+  width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto;
+  background: var(--accent);
+}
+.brand-text { min-width: 0; }
+.brand h1 { font-size: 15px; letter-spacing: -0.01em; }
+.sub {
+  margin: 2px 0 0; font-size: 11.5px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px;
+}
+.footnote { margin: 0; font-size: 11.5px; color: var(--muted); }
+.actions { display: flex; gap: 8px; }
+
+/* -------------------------------------------------------------- buttons --- */
+
+.btn {
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  padding: 8px 14px; border-radius: var(--radius);
+  border: 1px solid transparent; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+.btn-secondary { background: var(--surface); color: var(--ink-2); border-color: var(--line); }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+.btn-ghost { background: transparent; color: var(--accent-dark); padding: 5px 8px; }
+.btn-ghost:hover:not(:disabled) { background: var(--accent-soft); }
+.btn-sm { font-size: 12px; padding: 5px 10px; }
+
+.spinner { display: none; width: 13px; height: 13px; flex: 0 0 auto;
+  border: 2px solid rgba(255,255,255,.45); border-top-color: #fff;
+  border-radius: 50%; animation: spin .7s linear infinite; }
+.is-busy .spinner { display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none !important; } }
+
+/* --------------------------------------------------------------- status --- */
+
+.status {
+  padding: 9px 16px; font-size: 12.5px; line-height: 1.45;
+  border-bottom: 1px solid var(--line); flex: 0 0 auto;
+}
+.status.tone-ok   { background: var(--ok-soft);   color: var(--ok); }
+.status.tone-warn { background: var(--warn-soft); color: var(--warn); }
+.status.tone-bad  { background: var(--bad-soft);  color: var(--bad); }
+.status.tone-info { background: var(--surface-2); color: var(--ink-2); }
+
+/* -------------------------------------------------------------- summary --- */
+
+.summary {
+  display: flex; align-items: center; gap: 22px;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  background: var(--surface-2); flex: 0 0 auto;
+}
+.stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.stat-wide { flex: 1 1 auto; min-width: 0; }
+.stat-value { font-size: 15px; font-weight: 600; line-height: 1.2; }
+.stat-label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* The honesty badge. Unknown strategies keep the neutral grey base. */
+.stat-tier {
+  font-size: 12px; padding: 3px 9px; border-radius: 20px;
+  background: #eceef4; color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; align-self: flex-start;
+}
+.stat-tier.tier-json      { background: var(--ok-soft);     color: var(--ok); }
+.stat-tier.tier-semantic  { background: var(--accent-soft); color: var(--accent-dark); }
+.stat-tier.tier-heuristic { background: var(--warn-soft);   color: var(--warn); }
+
+/* -------------------------------------------------------------- details --- */
+
+.details {
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+  background: var(--surface-2); flex: 0 0 auto;
+  max-height: 210px; overflow-y: auto;
+}
+.details-title {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); margin: 0 0 6px;
+}
+.details-title + * { margin-bottom: 12px; }
+.strategy-list { margin: 0 0 12px; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--ink-2); }
+.strategy-list .s-ok   { color: var(--ok); font-weight: 500; }
+.strategy-list .s-none { color: var(--muted); }
+.strategy-list .s-bad  { color: var(--bad); }
+
+.facts { margin: 0 0 12px; font-size: 12px; display: grid;
+  grid-template-columns: max-content 1fr; gap: 3px 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere; }
+
+/* -------------------------------------------------------------- results --- */
+
+.results { flex: 1 1 auto; overflow: hidden; min-height: 0; display: flex; }
+
+.placeholder {
+  margin: auto; padding: 28px 34px; text-align: center; max-width: 480px;
+}
+.placeholder h2 { font-size: 14.5px; margin-bottom: 6px; }
+.placeholder p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.hints {
+  margin: 12px 0 0; padding: 0; list-style: none;
+  font-size: 12px; color: var(--ink-2); text-align: left; line-height: 1.55;
+}
+.hints li { padding: 4px 0 4px 16px; position: relative; }
+.hints li::before { content: "·"; position: absolute; left: 5px; color: var(--muted); }
+.placeholder .btn { margin-top: 14px; }
+
+.table-wrap { flex: 1 1 auto; overflow: auto; min-height: 0; width: 100%; }
+
+.grid { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.grid thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--accent-soft); color: var(--accent-dark);
+  text-align: left; font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .03em;
+  padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.grid td {
+  padding: 8px 10px; border-bottom: 1px solid var(--line);
+  vertical-align: top; color: var(--ink-2);
+}
+.grid tbody tr:hover td { background: var(--surface-2); }
+.col-num { text-align: right; font-variant-numeric: tabular-nums; }
+td.col-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.col-conf { white-space: nowrap; }
+
+.v-name { color: var(--ink); font-weight: 500; }
+.v-sub { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
+.grid a { color: var(--accent-dark); text-decoration: none; }
+.grid a:hover { text-decoration: underline; }
+
+/* A missing value is an em dash, never a zero. */
+.muted { color: var(--muted); }
+.pill-new {
+  display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 20px;
+  background: var(--accent-soft); color: var(--accent-dark); white-space: nowrap;
+}
+
+/* Rows found by shape-matching the DOM are visibly flagged, so they can never
+   be mistaken for rows lifted from the page's own JSON. */
+tr.is-low td { background: #fffcf5; }
+tr.is-low:hover td { background: #fff8ea; }
+
+.src {
+  font-size: 10.5px; padding: 2px 7px; border-radius: 20px;
+  background: #eceef4; color: var(--ink-2); white-space: nowrap;
+}
+.src.tier-json      { background: var(--ok-soft);     color: var(--ok); }
+.src.tier-semantic  { background: var(--accent-soft); color: var(--accent-dark); }
+.src.tier-heuristic { background: var(--warn-soft);   color: var(--warn); }
