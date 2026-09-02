@@ -33,7 +33,6 @@ export const TAB_KEYS = [
   'agreements',
   'reports',
   'pl_dashboard',
-  'cms',
   'audit_logs',
   'settings',
 ] as const;
@@ -97,7 +96,6 @@ export const TAB_GROUPS: TabGroup[] = [
   {
     label: 'Administration',
     tabs: [
-      { key: 'cms', label: 'Website Content', group: 'Administration' },
       { key: 'audit_logs', label: 'Audit Logs', group: 'Administration', viewOnly: true },
     ],
   },
@@ -133,7 +131,6 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/agreements': 'agreements',
   '/reports': 'reports',
   '/pl-dashboard': 'pl_dashboard',
-  '/cms': 'cms',
   '/audit-logs': 'audit_logs',
   '/settings': 'settings',
 };

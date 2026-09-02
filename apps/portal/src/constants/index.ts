@@ -13,11 +13,5 @@
 // ============================================
 // SHARED CONSTANTS
 // ============================================
-// Shared constants (defaults, general constants, PNL, CMS defaults)
+// Shared constants (defaults, general constants, PNL)
 export * from './shared';
-
-// ============================================
-// CMS / WEBSITE CONTENT CONSTANTS
-// ============================================
-// Website Content (CMS) constants - actually used in cms/* pages
-export * from './website-content';

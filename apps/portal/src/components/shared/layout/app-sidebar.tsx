@@ -275,7 +275,6 @@ export function AppSidebar() {
       label: "Administration",
       icon: AnimatedEarth,
       items: [
-        { name: "Website Content", href: "/cms", icon: AnimatedEarth },
         { name: "Audit Logs", href: "/audit-logs", icon: AnimatedHistory },
         { name: "Manage Users", href: "/users", icon: AnimatedUsers, headAdminOnly: true },
       ].filter(item => {

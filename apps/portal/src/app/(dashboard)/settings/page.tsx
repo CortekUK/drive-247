@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -517,7 +517,6 @@ const Settings = () => {
     auto_extend_default_lead_hours: number;
     auto_extend_grace_hours: number;
     auto_extend_max_retries: number;
-    blog_enabled: boolean;
   }>({
     minimum_rental_age: '',
     tax_enabled: false,
@@ -593,8 +592,6 @@ const Settings = () => {
     auto_extend_default_lead_hours: 0,
     auto_extend_grace_hours: 48,
     auto_extend_max_retries: 3,
-    // Blog
-    blog_enabled: false,
   });
 
   // Sync rental form with loaded settings
@@ -664,7 +661,6 @@ const Settings = () => {
         auto_extend_default_lead_hours: (rentalSettings as any).auto_extend_default_lead_hours ?? 0,
         auto_extend_grace_hours: (rentalSettings as any).auto_extend_grace_hours ?? 48,
         auto_extend_max_retries: (rentalSettings as any).auto_extend_max_retries ?? 3,
-        blog_enabled: (rentalSettings as any).blog_enabled ?? false,
       });
     }
   }, [rentalSettings]);
@@ -4872,58 +4868,6 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          {/* Blog Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PenLine className="h-5 w-5 text-primary" />
-                Blog
-              </CardTitle>
-              <CardDescription>
-                Enable the blog feature on your customer-facing booking website. When enabled, a Blog link appears in the navigation and published posts are visible to customers.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-start justify-between gap-3 p-4 border rounded-lg">
-                <div className="space-y-1">
-                  <h4 className="font-medium">Enable Blog</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Show the blog section on your booking website
-                  </p>
-                </div>
-                <Switch
-                  checked={rentalForm.blog_enabled}
-                  onCheckedChange={(checked) => {
-                    setRentalForm(prev => ({ ...prev, blog_enabled: checked }));
-                  }}
-                />
-              </div>
-
-              {canEditSettings('rental') && (
-                <Button
-                  onClick={async () => {
-                    try {
-                      await updateRentalSettings({
-                        blog_enabled: rentalForm.blog_enabled,
-                      } as any);
-                    } catch (error) {
-                      console.error('Failed to update blog settings:', error);
-                    }
-                  }}
-                  disabled={isUpdatingRentalSettings}
-                  className="flex items-center gap-2 w-full sm:w-auto"
-                >
-                  {isUpdatingRentalSettings ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Save
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Reset All Booking Settings to Defaults */}
           {canEditSettings('rental') && (
             <div className="flex justify-start">
@@ -5041,7 +4985,6 @@ const Settings = () => {
                             payg_max_reminders: 10,
                             payg_preauth_days: 2,
                             payg_max_duration_days: 90,
-                            blog_enabled: false,
                           }));
                           toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
                         } catch (error: any) {
