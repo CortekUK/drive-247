@@ -85,6 +85,8 @@ export interface RentalSettings {
   auto_extend_default_lead_hours: number | null;
   auto_extend_grace_hours: number | null;
   auto_extend_max_retries: number | null;
+  // Blog
+  blog_enabled: boolean | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -159,6 +161,8 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   auto_extend_default_lead_hours: 0,
   auto_extend_grace_hours: 48,
   auto_extend_max_retries: 3,
+  // Blog
+  blog_enabled: false,
 };
 
 /**

@@ -161,6 +161,8 @@ export interface Tenant {
   // Lockbox settings
   lockbox_enabled: boolean | null;
 
+  // Blog
+  blog_enabled: boolean | null;
 
   // Dynamic pricing
   monthly_tier_days: number | null;
@@ -502,6 +504,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           installments_enabled,
           installment_config,
           lockbox_enabled,
+          blog_enabled,
           monthly_tier_days,
           weekend_surcharge_percent,
           weekend_days,
