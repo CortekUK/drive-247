@@ -1,22 +1,23 @@
 'use client';
 
 /**
- * The post-payment errand, whole: RESOLVE THE TOKEN, THEN RUN TWO STEPS.
+ * The post-payment errand, whole: RESOLVE THE TOKEN, THEN COLLECT TWO THINGS.
  *
  * This file owns everything about the token-addressed screen that is not one of
- * the two steps themselves — the link states (invalid, expired, cancelled,
- * already checked), the branding, the "your payment has gone through" header,
- * and the rail that says how far through the errand the customer is. The steps
- * live next door: `identity-capture.tsx` is step one, `insurance-upload.tsx` is
- * step two.
+ * the two collection panels themselves — the link states (invalid, expired,
+ * cancelled, already checked), the branding, the "your payment has gone
+ * through" header, the rail that says how far through the errand the customer
+ * is, and THE ONE BUTTON THAT SENDS EVERYTHING. The panels live next door:
+ * `identity-capture.tsx` is the identity documents, `insurance-upload.tsx` is
+ * the insurance certificate.
  *
- * ── WHY TWO STEPS AND NOT ONE WIDGET ────────────────────────────────────────
+ * ── WHY TWO PANELS AND NOT ONE WIDGET ───────────────────────────────────────
  * v1 collects both things after payment, and so do we. An earlier build of this
  * surface fused them into a single component and every problem it had came from
  * the fusion:
  *
  *  * The two do not have the same shape. A licence is PHOTOGRAPHED — rear
- *    camera, one frame at a time, retake until it is readable. An insurance
+ *    camera, a slot per photo, retake until it is readable. An insurance
  *    certificate is a PDF the customer already has in their inbox — a file
  *    picker, several files, no camera anywhere. One widget served neither.
  *  * They must not share a status column, and they do not: identity ends on
@@ -30,20 +31,34 @@
  *    fused build minted one on every page open, so ten refreshes locked a
  *    customer out of their own paid booking and left a false statement on their
  *    record. Opening this screen mints NOTHING; a session appears when the
- *    customer presses Start inside step one, and from nowhere else.
+ *    customer presses the send button below, and from nowhere else.
  *
- * ── WHY EITHER ORDER WORKS ──────────────────────────────────────────────────
- * The steps are numbered because a numbered list is how a person judges how
- * much is left, but they are not a wizard: whichever is outstanding opens by
- * default, and the other can be opened at any time from its own row. Nothing
- * server-side cares about the order — `start-identity`/`submit-identity` and
- * `submit-insurance` are three independent actions on the same token — and a
- * customer whose insurance PDF is to hand but whose licence is in another room
- * should not be stuck.
+ * ── ONE BUTTON, NOT TWO, AND WHY IT IS THE SHELL THAT OWNS IT ───────────────
+ * Both panels used to carry their own footer submit, so a customer with photos
+ * in one and a PDF in the other had two things to press and no way to tell
+ * whether they had finished. There is now a single primary action at the foot
+ * of the screen. It is disabled until BOTH things are present and — this is the
+ * part that matters — it SAYS WHAT IS STILL MISSING while it is disabled. A
+ * grey button with no explanation is the failure mode this replaces.
+ *
+ * Readiness is pushed UP from each panel (`onReadyChange`) and the send is
+ * pulled DOWN through an imperative handle. The panels keep their own files,
+ * previews and errors; the shell keeps the decision. Nothing about the two
+ * server calls changed — they are still two independent actions on one token,
+ * and each panel still owns its own mutation.
+ *
+ * THE INSURANCE FILES GO FIRST. Not cosmetic: `submit-insurance` is a plain
+ * filing that essentially always succeeds, while `submit-identity` runs a paid
+ * OCR and face-match pass that can be unavailable for reasons that have nothing
+ * to do with the customer (staging's AWS credentials are expired right now, and
+ * the function answers 502 `identity_unavailable`). Sending identity first
+ * would let that outage block a perfectly good insurance upload that used to go
+ * through on its own. This way a half-failure still lands the half that worked,
+ * and the panel that failed says so and can be retried on its own.
  *
  * ── WHO DECIDES A STEP IS DONE ──────────────────────────────────────────────
  * The SERVER, always. `identityDone` and `insuranceDone` below start from what
- * the link function reported and are only ever moved by a step's `onSubmitted`,
+ * the link function reported and are only ever moved by a panel's `onSubmitted`,
  * which fires after the server has come back from the write. The browser marks
  * nothing on its own: `identity_verifications` has RLS off with an anon UPDATE
  * grant on staging, so a page that could stamp its own completion is a page
@@ -55,9 +70,17 @@
  * in the product that carries the word "confirmed". So no success path here says
  * "confirmed" or "complete" — what they say is: received, under review, we will
  * confirm shortly.
+ *
+ * The primary button is the one place that had to be argued over rather than
+ * simply written. It reads "Confirm and send my documents": the object of the
+ * verb is the DOCUMENTS, which is a thing the customer really is confirming,
+ * and it is never "Confirm booking", which would assert something only the
+ * operator can. The sentence directly above it still says the booking is not
+ * confirmed yet, and what the button produces is a "received / under review"
+ * state — never a confirmation.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Ban,
   CalendarDays,
@@ -65,12 +88,11 @@ import {
   CircleAlert,
   CircleCheck,
   Clock,
-  FileText,
-  IdCard,
   Link2Off,
   Loader2,
   Mail,
   RefreshCw,
+  Send,
   ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -84,8 +106,15 @@ import {
   NoticeScreen,
   ProblemBox,
 } from '@/components/booking/documents-shared';
-import { IdentityCapture, IdentityReceivedPanel } from '@/components/booking/identity-capture';
-import { InsuranceUpload } from '@/components/booking/insurance-upload';
+import {
+  IdentityCapture,
+  IdentityReceivedPanel,
+  type IdentityCaptureHandle,
+} from '@/components/booking/identity-capture';
+import {
+  InsuranceUpload,
+  type InsuranceUploadHandle,
+} from '@/components/booking/insurance-upload';
 import {
   useBookingDocumentsSession,
   useResendBookingDocumentsLink,
@@ -167,7 +196,7 @@ export function BookingDocumentsScreen({ token }: { token: string }) {
   );
 }
 
-/* ─────────────────────────── the two-step errand ───────────────────────── */
+/* ─────────────────────────── the two-part errand ───────────────────────── */
 
 type StepKey = 'identity' | 'insurance';
 
@@ -186,12 +215,12 @@ function ReadyScreen({
   const operator = session.tenant.companyName ?? 'the rental company';
 
   /*
-    THE SERVER'S WORD IS THE STARTING POINT FOR BOTH STEPS.
+    THE SERVER'S WORD IS THE STARTING POINT FOR BOTH PANELS.
 
     `identityStatus` is `booking_document_links.identity_status`: null (never
     started), 'pending' (a session was minted but nothing came back), 'submitted'
     or 'rejected'. Only 'submitted' is done — a rejection is emphatically not,
-    and step one renders its own retry panel for it.
+    and the identity panel renders its own retry state for it.
 
     `documentsStatus` is the INSURANCE step, and 'submitted' is what
     `submit-insurance` writes. ('verified' never reaches here: the server answers
@@ -204,26 +233,93 @@ function ReadyScreen({
   const insuranceDone = insuranceSent || session.documentsStatus === 'submitted';
 
   /*
-    Which step is expanded. `null` means "whichever is outstanding" — recomputed
-    on every render rather than stored, so finishing one step opens the other
-    without an effect. A press pins it; finishing a step un-pins it so the
-    default takes over again.
+    What each panel says about itself. Pushed up rather than pulled, because the
+    panels own the files and the shell owns the decision — and the shell must be
+    able to render the disabled reason without reaching into either one.
   */
-  const [pinned, setPinned] = useState<StepKey | null>(null);
-  const openStep: StepKey | null = pinned ?? (!identityDone ? 'identity' : !insuranceDone ? 'insurance' : null);
+  const [identityReady, setIdentityReady] = useState(false);
+  const [identityMissing, setIdentityMissing] = useState<readonly string[]>([]);
+  const [insuranceReady, setInsuranceReady] = useState(false);
+
+  const identityRef = useRef<IdentityCaptureHandle>(null);
+  const insuranceRef = useRef<InsuranceUploadHandle>(null);
+
+  const [sending, setSending] = useState(false);
+  const [sendProblem, setSendProblem] = useState<string | null>(null);
 
   const handleIdentitySubmitted = useCallback(() => {
     setIdentitySent(true);
-    setPinned(null);
   }, []);
 
   const handleInsuranceSubmitted = useCallback(() => {
     setInsuranceSent(true);
-    setPinned(null);
+  }, []);
+
+  /*
+    Stable identities. Both are the dependency of an effect inside a panel, so a
+    fresh closure on every shell render would re-fire that effect on every
+    keystroke elsewhere on the page.
+  */
+  const handleIdentityReady = useCallback((ready: boolean) => {
+    setIdentityReady(ready);
+  }, []);
+  const handleIdentityMissing = useCallback((missing: readonly string[]) => {
+    setIdentityMissing(missing);
+  }, []);
+  const handleInsuranceReady = useCallback((ready: boolean) => {
+    setInsuranceReady(ready);
   }, []);
 
   const bothDone = identityDone && insuranceDone;
   const outstanding = (identityDone ? 0 : 1) + (insuranceDone ? 0 : 1);
+
+  /*
+    "Present" is deliberately two different facts joined by OR: the server has
+    already filed it, or the customer has chosen it here. Reading only the
+    server's column would leave the button permanently dead for a first-time
+    customer; reading only the local files would leave it dead for someone
+    coming back to finish the half they did not do last time.
+  */
+  const identityPresent = identityDone || identityReady;
+  const insurancePresent = insuranceDone || insuranceReady;
+  const canSend = identityPresent && insurancePresent && !sending;
+
+  const missing: string[] = [
+    ...(identityDone ? [] : identityMissing),
+    ...(insurancePresent ? [] : ['your insurance document']),
+  ];
+
+  const handleSendEverything = useCallback(async () => {
+    setSendProblem(null);
+    setSending(true);
+    try {
+      /*
+        INSURANCE FIRST — see the file header. It is the call that essentially
+        always works, and putting it behind the AI pass would let an outage in
+        the AI pass block it.
+      */
+      let allWell = true;
+      if (!insuranceDone) {
+        const ok = (await insuranceRef.current?.submit()) ?? false;
+        if (!ok) allWell = false;
+      }
+      if (!identityDone) {
+        const ok = (await identityRef.current?.submit()) ?? false;
+        if (!ok) allWell = false;
+      }
+      if (!allWell) {
+        // Each panel has already rendered the specific reason — the file that
+        // would not store, the rate limit, the "we could not check your photos
+        // just now". This line only says where to look.
+        setSendProblem(
+          'Not everything went through. The part that did not is marked above, ' +
+            'and anything that arrived has been kept — you only need to send the rest.',
+        );
+      }
+    } finally {
+      setSending(false);
+    }
+  }, [identityDone, insuranceDone]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -264,7 +360,8 @@ function ReadyScreen({
                   Your booking is{' '}
                   <span className="font-medium text-brand-text">not confirmed yet</span>.{' '}
                   {operator} needs two things from you first — photos of your driving
-                  licence, and a copy of your insurance. It takes a couple of minutes.
+                  licence, and a copy of your insurance. Add both below, then send them
+                  together.
                 </>
               )}
             </p>
@@ -285,26 +382,21 @@ function ReadyScreen({
           />
           <IdentityReceivedPanel operator={operator} />
         </Panel>
-      ) : openStep === 'identity' ? (
+      ) : (
         <IdentityCapture
+          ref={identityRef}
           token={token}
           session={session}
           stepLabel={STEP_LABEL.identity}
           serverStatus={session.identityStatus}
           onSubmitted={handleIdentitySubmitted}
-        />
-      ) : (
-        <CollapsedStep
-          icon={IdCard}
-          title="Your identity documents"
-          summary="Photos of your driving licence and a photo of you, so we can check they match."
-          stepLabel={STEP_LABEL.identity}
-          onOpen={() => setPinned('identity')}
+          onReadyChange={handleIdentityReady}
+          onMissingChange={handleIdentityMissing}
         />
       )}
 
       {/* ── step two: insurance ──────────────────────────────────────────── */}
-      {insuranceDone && openStep !== 'insurance' ? (
+      {insuranceDone ? (
         <Panel>
           <PanelHeader
             title="Your insurance document"
@@ -314,38 +406,35 @@ function ReadyScreen({
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-success-light">
               <ShieldCheck aria-hidden strokeWidth={1.75} className="size-4.5 text-success" />
             </span>
-            <div className="min-w-0">
-              <p className="text-sm leading-relaxed text-brand-text-soft">
-                We have your insurance document and it is{' '}
-                <span className="font-medium text-brand-text">under review</span> by{' '}
-                {operator}. There is nothing else for you to do on this step.
-              </p>
-              <Button
-                type="button"
-                variant="brand-outline"
-                className="mt-3 h-11"
-                onClick={() => setPinned('insurance')}
-              >
-                Send another document
-              </Button>
-            </div>
+            <p className="min-w-0 text-sm leading-relaxed text-brand-text-soft">
+              We have your insurance document and it is{' '}
+              <span className="font-medium text-brand-text">under review</span> by{' '}
+              {operator}. There is nothing else for you to do on this step.
+            </p>
           </div>
         </Panel>
-      ) : openStep === 'insurance' ? (
+      ) : (
         <InsuranceUpload
+          ref={insuranceRef}
           token={token}
           session={session}
           alreadySubmitted={insuranceDone}
           stepLabel={STEP_LABEL.insurance}
           onSubmitted={handleInsuranceSubmitted}
+          onReadyChange={handleInsuranceReady}
         />
-      ) : (
-        <CollapsedStep
-          icon={FileText}
-          title="Your insurance document"
-          summary="Your certificate or declarations page — a PDF or a photo is fine."
-          stepLabel={STEP_LABEL.insurance}
-          onOpen={() => setPinned('insurance')}
+      )}
+
+      {/* ── the one primary action ───────────────────────────────────────── */}
+      {bothDone ? null : (
+        <SendEverythingBar
+          canSend={canSend}
+          sending={sending}
+          missing={missing}
+          problem={sendProblem}
+          onSend={() => {
+            void handleSendEverything();
+          }}
         />
       )}
 
@@ -355,6 +444,91 @@ function ReadyScreen({
         the page will offer to email you a fresh one.
       </p>
     </div>
+  );
+}
+
+/**
+ * The screen's single primary action, and the sentence that explains it.
+ *
+ * ── THE DISABLED STATE IS THE IMPORTANT ONE ─────────────────────────────────
+ * A greyed-out button with nothing beside it is the bug this exists to avoid.
+ * While it cannot be pressed, the line above it NAMES what is still outstanding
+ * — "Still needed: the front of your licence, a photo of you, and your insurance
+ * document" — and the button carries the same list in `aria-describedby`, so a
+ * screen reader gets the reason rather than just "dimmed".
+ *
+ * ── THE WORDING ─────────────────────────────────────────────────────────────
+ * "Confirm and send my documents". The customer IS confirming something — that
+ * these are the documents they mean to send — and the object of the verb says
+ * so. What it deliberately is not is "Confirm booking": an operator still
+ * reviews these and can still reject the booking, and `notify-booking-approved`
+ * is the only thing in the product that says a booking is confirmed. The line
+ * under the button keeps that explicit, and every result state this produces
+ * reads "received" and "under review".
+ */
+function SendEverythingBar({
+  canSend,
+  sending,
+  missing,
+  problem,
+  onSend,
+}: {
+  canSend: boolean;
+  sending: boolean;
+  missing: readonly string[];
+  problem: string | null;
+  onSend: () => void;
+}) {
+  const missingSentence =
+    missing.length === 0
+      ? null
+      : missing.length === 1
+        ? `Still needed: ${missing[0]}.`
+        : `Still needed: ${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}.`;
+
+  return (
+    <Panel className="px-4 py-4 sm:px-5">
+      <div className="flex flex-col gap-3">
+        {problem ? <ProblemBox message={problem} /> : null}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p
+              id="send-everything-state"
+              className={cn(
+                'text-sm leading-relaxed',
+                canSend ? 'text-brand-text' : 'text-brand-text-soft',
+              )}
+            >
+              {sending
+                ? 'Sending everything. Please keep this page open.'
+                : (missingSentence ??
+                  'Both documents are ready to go. Nothing is sent until you press the button.')}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-brand-text-subtle">
+              This sends your documents for review. It does not confirm your
+              booking — the team will email you once they have approved it.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="brand"
+            className="h-11 w-full shrink-0 sm:w-auto"
+            disabled={!canSend}
+            aria-describedby="send-everything-state"
+            onClick={onSend}
+          >
+            {sending ? (
+              <Loader2 aria-hidden className="size-4 animate-spin" />
+            ) : (
+              <Send aria-hidden className="size-4" />
+            )}
+            {sending ? 'Sending…' : 'Confirm and send my documents'}
+          </Button>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
@@ -409,50 +583,6 @@ function StepRail({
             </li>
           ))}
         </ol>
-      </div>
-    </Panel>
-  );
-}
-
-/**
- * The step that is not open yet — a name, a sentence and a way in.
- *
- * It is a real button rather than a disabled placeholder because the order is
- * not enforced anywhere: three independent server actions hang off this token,
- * and a customer with their insurance PDF to hand but their licence upstairs
- * should be able to start with the one they have.
- */
-function CollapsedStep({
-  icon: Icon,
-  title,
-  summary,
-  stepLabel,
-  onOpen,
-}: {
-  icon: LucideIcon;
-  title: string;
-  summary: string;
-  stepLabel: string;
-  onOpen: () => void;
-}) {
-  return (
-    <Panel>
-      <PanelHeader title={title} action={<StatusChip tone="neutral">{stepLabel}</StatusChip>} />
-      <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="flex min-w-0 gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-stone">
-            <Icon aria-hidden strokeWidth={1.75} className="size-4.5 text-brand-text-subtle" />
-          </span>
-          <p className="min-w-0 text-sm leading-relaxed text-brand-text-soft">{summary}</p>
-        </div>
-        <Button
-          type="button"
-          variant="brand-outline"
-          className="h-11 w-full shrink-0 sm:w-auto"
-          onClick={onOpen}
-        >
-          Start this step
-        </Button>
       </div>
     </Panel>
   );

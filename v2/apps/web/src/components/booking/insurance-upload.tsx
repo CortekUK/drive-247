@@ -48,8 +48,17 @@
  *    five minutes earlier.
  *  * The identity session must be minted LAZILY. It caps a customer at ten an
  *    hour and sets `customers.identity_verification_status = 'pending'` as a
- *    side effect, so it is minted when the customer starts step one and never
- *    on a page open. Opening this screen still mints nothing at all.
+ *    side effect, so it is minted when the customer SENDS step one and never on
+ *    a page open. Opening this screen still mints nothing at all.
+ *
+ * ── WHY THE SEND BUTTON IS NO LONGER IN THIS FILE ───────────────────────────
+ * The screen now has ONE primary action covering both steps, and it lives in
+ * `documents-screen.tsx`. This panel therefore keeps everything about CHOOSING
+ * files — the tray, the dedupe, the per-file errors, the progress bar — and
+ * gives the shell two things: `onReadyChange` (pushed up, so the one button can
+ * be disabled and can say what is missing) and an imperative `submit()` (pulled
+ * down when it is pressed). It still owns the mutation, so the ordering rule
+ * below is unchanged: `onSubmitted` fires only AFTER the server has come back.
  *
  * ── WHAT THIS SCREEN MAY AND MAY NOT SAY ────────────────────────────────────
  * Uploading does NOT confirm a booking. An operator reviews the document
@@ -59,8 +68,8 @@
  * under review, we will confirm shortly.
  */
 
-import { useCallback, useRef, useState } from 'react';
-import { CircleCheck, FileText, Loader2, Send, ShieldCheck, Upload, X } from 'lucide-react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { CircleCheck, FileText, Loader2, Upload, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Panel, PanelHeader } from '@/components/portal/primitives';
@@ -87,6 +96,11 @@ interface Pick {
   error: string | null;
 }
 
+/** The handle the shell's single primary button calls. Never throws. */
+export interface InsuranceUploadHandle {
+  submit: () => Promise<boolean>;
+}
+
 /* ──────────────────────────── the upload tray ──────────────────────────── */
 
 export function InsuranceUpload({
@@ -95,6 +109,8 @@ export function InsuranceUpload({
   alreadySubmitted,
   stepLabel,
   onSubmitted,
+  onReadyChange,
+  ref,
 }: {
   token: string;
   session: BookingDocumentsSession;
@@ -112,13 +128,15 @@ export function InsuranceUpload({
    * that can be made to lie.
    */
   onSubmitted: (count: number) => void;
+  /** Whether there is at least one file to send. Drives the shell's button. */
+  onReadyChange: (ready: boolean) => void;
+  ref?: React.Ref<InsuranceUploadHandle>;
 }) {
   const submit = useSubmitBookingInsurance();
 
   const [picks, setPicks] = useState<Pick[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [sentCount, setSentCount] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -211,11 +229,29 @@ export function InsuranceUpload({
     setPicks(next);
   }, []);
 
-  const handleSubmit = useCallback(async () => {
+  /* ── readiness, pushed up to the shell ──────────────────────────────── */
+
+  /*
+    A document ALREADY filed by the server counts as present. Without this the
+    single confirm button would sit permanently disabled for a customer coming
+    back to finish step one — the server says `documents_status = 'submitted'`,
+    but this panel's local tray is empty, and "files chosen locally" is not the
+    same fact as "the server has them".
+  */
+  const ready = picks.length > 0 || alreadySubmitted;
+
+  useEffect(() => {
+    onReadyChange(ready);
+  }, [onReadyChange, ready]);
+
+  const handleSubmit = useCallback(async (): Promise<boolean> => {
     const files = picksRef.current.map((pick) => pick.file);
     if (files.length === 0) {
+      // Nothing new to send. When the server already has a document that is a
+      // no-op success, not a failure — the shell must not treat it as one.
+      if (alreadySubmitted) return true;
       setProblem('Please choose at least one file to send.');
-      return;
+      return false;
     }
     setProblem(null);
     setPicks((previous) =>
@@ -235,9 +271,10 @@ export function InsuranceUpload({
           );
         },
       });
-      setSentCount(result.submitted);
+      picksRef.current = [];
       setPicks([]);
       onSubmitted(result.submitted);
+      return true;
     } catch (caught: unknown) {
       // The hook has already turned storage and transport failures into
       // sentences that name the file and what to do next.
@@ -246,32 +283,20 @@ export function InsuranceUpload({
           ? caught.message
           : 'Something went wrong sending your files. Please try again.',
       );
+      return false;
     }
-  }, [onSubmitted, session.uploadPrefix, submit, token]);
+  }, [alreadySubmitted, onSubmitted, session.uploadPrefix, submit, token]);
 
-  /* ── the receipt, once something has been sent ─────────────────────── */
-
-  if (sentCount !== null) {
-    return (
-      <ReceivedPanel
-        session={session}
-        count={sentCount}
-        onAddMore={() => {
-          setSentCount(null);
-          setProblem(null);
-        }}
-      />
-    );
-  }
+  useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
   const storedCount = picks.filter((pick) => pick.state === 'stored').length;
 
   return (
     <Panel>
       <PanelHeader
-        title={alreadySubmitted ? 'Send another document' : 'Your insurance document'}
+        title={alreadySubmitted ? 'Send another insurance document' : 'Your insurance document'}
         action={
-          <StatusChip tone="neutral">
+          <StatusChip tone={picks.length > 0 ? 'success' : 'neutral'}>
             {picks.length > 0
               ? `${stepLabel} · ${picks.length} ${picks.length === 1 ? 'file' : 'files'}`
               : stepLabel}
@@ -394,25 +419,6 @@ export function InsuranceUpload({
           {session.tenant.companyName ?? 'the rental company'}.
         </p>
       </div>
-
-      <div className="flex flex-col gap-2 border-t border-brand-border-soft px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-        <Button
-          type="button"
-          variant="brand"
-          className="h-11 w-full sm:w-auto"
-          disabled={picks.length === 0 || busy}
-          onClick={() => {
-            void handleSubmit();
-          }}
-        >
-          {busy ? (
-            <Loader2 aria-hidden className="size-4 animate-spin" />
-          ) : (
-            <Send aria-hidden className="size-4" />
-          )}
-          {busy ? 'Sending…' : 'Send my document'}
-        </Button>
-      </div>
     </Panel>
   );
 }
@@ -465,57 +471,5 @@ function FileRow({
         <X aria-hidden className="size-4" />
       </Button>
     </li>
-  );
-}
-
-/**
- * What the customer is told once the files are filed.
- *
- * READ THE COPY BEFORE EDITING IT. This is "we have it and we are looking at
- * it", and it is NOT "your booking is confirmed" — the operator's approval is a
- * separate, later event that this page cannot see, and `notify-booking-approved`
- * is the email that carries that word. The words "confirmed" and "complete" do
- * not appear.
- */
-function ReceivedPanel({
-  session,
-  count,
-  onAddMore,
-}: {
-  session: BookingDocumentsSession;
-  count: number;
-  onAddMore: () => void;
-}) {
-  const operator = session.tenant.companyName ?? 'the rental company';
-
-  return (
-    <Panel className="px-5 py-8">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <span className="grid size-11 place-items-center rounded-full bg-success-light">
-          <ShieldCheck aria-hidden strokeWidth={1.75} className="size-5 text-success" />
-        </span>
-        <p className="text-base font-medium text-brand-text">
-          {count === 1 ? 'Your document has arrived' : 'Your documents have arrived'}
-        </p>
-        <p className="max-w-md text-sm leading-relaxed text-brand-text-soft">
-          {count === 1 ? 'It is' : 'They are'} now under review by {operator}. Your
-          booking is not confirmed yet — we will email you as soon as it is, and
-          there is nothing else for you to do until then.
-        </p>
-        {session.rental.rentalNumber ? (
-          <StatusChip tone="neutral" className="mt-1">
-            Booking {session.rental.rentalNumber}
-          </StatusChip>
-        ) : null}
-        <Button type="button" variant="brand-outline" className="mt-1 h-11" onClick={onAddMore}>
-          <Upload aria-hidden className="size-4" />
-          Send another document
-        </Button>
-        <p className="max-w-md text-xs leading-relaxed text-brand-text-subtle">
-          You can close this page. The link in your email will bring you back here
-          for the next seven days if you need it.
-        </p>
-      </div>
-    </Panel>
   );
 }

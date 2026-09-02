@@ -1,10 +1,9 @@
 'use client';
 
 /**
- * STEP ONE of the post-payment errand: the three identity photos.
+ * STEP ONE of the post-payment errand: the three identity photos, ALL AT ONCE.
  *
- * Front of the document → back of the document (skippable) → a photo of the
- * customer → review → send. That order and that payload are v1's
+ * The payload and the order the server wants are v1's
  * (`apps/booking/src/app/verify/[token]/page.tsx`); none of its code is ported,
  * and three of its behaviours are deliberately NOT reproduced:
  *
@@ -23,14 +22,40 @@
  *     and four MIME types, then swallows the storage error. Validation here is
  *     the bucket's real limits and every message names the limit that was hit.
  *
- * ── NOTHING IS MINTED UNTIL THE CUSTOMER PRESSES START ──────────────────────
+ * ── WHY THIS IS A BOARD OF THREE SLOTS AND NOT A WIZARD ─────────────────────
+ * The previous build of this file was a four-screen wizard driven by one
+ * integer: front → back → selfie → review, with Back, "Skip this" and Continue
+ * buttons and a header that read "photo 3 of 3". Three things were wrong with
+ * it, and all three are fixed by showing the slots together:
+ *
+ *  * A customer could not see what was still missing without walking the
+ *    wizard. The board answers that at a glance, and marks which slots are
+ *    required.
+ *  * Choosing three files at once was silently discarded — `accept()` read
+ *    `list?.[0]` and neither input carried `multiple`. Picking three photos out
+ *    of a camera roll is the single commonest way to do this on a phone. It now
+ *    fans out across the empty slots in order (see `fanOut`).
+ *  * The optional back of the document was expressed as a "Skip this" BUTTON,
+ *    which reads as an instruction rather than a property of the slot. It is
+ *    now a label on the slot itself, which is what it always was: a passport
+ *    has nothing on the back.
+ *
+ * Everything the wizard actually protected is kept: per-slot replace and
+ * remove, the bucket's 5 MB / JPG-PNG limits, the optional back, and the exact
+ * submit payload.
+ *
+ * ── NOTHING IS MINTED UNTIL THE CUSTOMER PRESSES SEND ───────────────────────
  * The identity session is what the upload paths are scoped by, and asking for
  * one has side effects: `create-ai-verification-session` caps a customer at TEN
  * an hour and sets `customers.identity_verification_status = 'pending'`. An
  * earlier build of this surface asked for one on every page open, so ten
  * refreshes locked a customer out of their own paid booking and left a false
  * status on their record. There is therefore NO `useEffect` in this file that
- * calls the server. `start` runs from a press, and from nothing else.
+ * calls the server, and — now that there is no "Start" screen — the mint has
+ * moved INTO `submit()`, which runs from the screen's one primary button and
+ * from nothing else. Choosing photos costs nothing; sending them mints one
+ * session. The server reuses an unprocessed session, so a failed send followed
+ * by a retry does not consume a second.
  *
  * ── WHAT THIS STEP MAY AND MAY NOT SAY ──────────────────────────────────────
  * Sending photos does not confirm a booking, and it does not "verify" anyone
@@ -46,17 +71,16 @@
  * customer's to read; the server drops it before it can reach a rendered string.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   Camera,
-  Check,
   IdCard,
+  ImagePlus,
   Loader2,
   RotateCcw,
   ScanFace,
-  Send,
   ShieldCheck,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -81,6 +105,8 @@ import { cn } from '@/lib/utils';
 interface PhotoSpec {
   slot: IdentitySlot;
   title: string;
+  /** The one-line name used in the "still needed" sentence on the send button. */
+  shortTitle: string;
   /** What a good photo looks like. Concrete, not "make sure it is clear". */
   guidance: string;
   /** `environment` is the rear camera, `user` the front one. */
@@ -93,8 +119,9 @@ const PHOTOS: readonly PhotoSpec[] = [
   {
     slot: 'front',
     title: 'Front of your driving licence',
+    shortTitle: 'the front of your licence',
     guidance:
-      'Lay it flat on a dark surface in good light and fill the frame. All four corners need to be visible, and the text has to be readable.',
+      'Lay it flat in good light and fill the frame. All four corners visible, text readable.',
     capture: 'environment',
     optional: false,
     icon: IdCard,
@@ -102,8 +129,9 @@ const PHOTOS: readonly PhotoSpec[] = [
   {
     slot: 'back',
     title: 'Back of your driving licence',
+    shortTitle: 'the back of your licence',
     guidance:
-      'The same again, turned over. Skip this if your document has nothing on the back — a passport, for instance.',
+      'The same again, turned over. Leave this one out if your document has nothing on the back — a passport, for instance.',
     capture: 'environment',
     optional: true,
     icon: IdCard,
@@ -111,6 +139,7 @@ const PHOTOS: readonly PhotoSpec[] = [
   {
     slot: 'selfie',
     title: 'A photo of you',
+    shortTitle: 'a photo of you',
     guidance:
       'Face the camera in even light, with nothing covering your face. We compare this against the photo on your document.',
     capture: 'user',
@@ -119,8 +148,8 @@ const PHOTOS: readonly PhotoSpec[] = [
   },
 ];
 
-/** The index after the last photo: the review-and-send screen. */
-const REVIEW_INDEX = PHOTOS.length;
+/** The slots a fanned-out multi-file selection fills, in this order. */
+const FILL_ORDER: readonly IdentitySlot[] = ['front', 'back', 'selfie'];
 
 interface Shot {
   file: File;
@@ -132,6 +161,27 @@ type Shots = Record<IdentitySlot, Shot | null>;
 
 const NO_SHOTS: Shots = { front: null, back: null, selfie: null };
 
+/* ───────────────────────── what the shell drives ───────────────────────── */
+
+/**
+ * The handle the shell's single primary button calls.
+ *
+ * The step owns its own files, its own previews and its own errors — lifting
+ * all of that into the shell would have meant the shell owning three object-URL
+ * lifecycles it has no other reason to know about. What the shell needs is
+ * exactly two things: "are you ready" (pushed up through `onReadyChange`) and
+ * "go" (pulled down through this handle).
+ */
+export interface IdentityCaptureHandle {
+  /**
+   * Send the photos. Resolves TRUE only when the server accepted them; false
+   * covers both a rejection and a failure, each of which has already been
+   * rendered inside this panel. Never throws — the shell's button must not have
+   * to know the difference.
+   */
+  submit: () => Promise<boolean>;
+}
+
 /* ──────────────────────────── the component ────────────────────────────── */
 
 export function IdentityCapture({
@@ -142,30 +192,53 @@ export function IdentityCapture({
   /** Where the server says this step already stood when the page opened. */
   serverStatus,
   onSubmitted,
+  /**
+   * Whether the required photos are present. Pushed up on every change so the
+   * shell's one button can be disabled — and can SAY what is missing — without
+   * reaching into this step's state.
+   */
+  onReadyChange,
+  /** The names of the missing required photos, for the shell's disabled line. */
+  onMissingChange,
+  ref,
 }: {
   token: string;
   session: BookingDocumentsSession;
   stepLabel: string;
   serverStatus: string | null;
   onSubmitted: () => void;
+  onReadyChange: (ready: boolean) => void;
+  onMissingChange: (missing: readonly string[]) => void;
+  ref?: React.Ref<IdentityCaptureHandle>;
 }) {
   const start = useStartBookingIdentity();
   const submit = useSubmitBookingIdentity();
 
-  /** Null until the customer presses Start. This IS the lazy-mint gate. */
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  /**
+   * Null until the first send. This IS the lazy-mint gate — see the file
+   * header. It is held across a failed attempt so a retry reuses the session
+   * rather than spending another of the customer's ten an hour.
+   */
   const [uploadPrefix, setUploadPrefix] = useState<string | null>(null);
 
-  const [stepIndex, setStepIndex] = useState(0);
   const [shots, setShots] = useState<Shots>(NO_SHOTS);
   const [problem, setProblem] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [rejected, setRejected] = useState(false);
   const [sending, setSending] = useState<IdentitySlot | null>(null);
+  const [dragSlot, setDragSlot] = useState<IdentitySlot | 'board' | null>(null);
 
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragActive, setDragActive] = useState(false);
+  /**
+   * One input pair PER SLOT, plus one multi-file input for the whole board.
+   *
+   * The wizard could share a single pair because exactly one photo was ever on
+   * screen. Three slots at once cannot: `capture` is an attribute of the
+   * element, not of the click, so a shared input would carry the wrong camera
+   * for two of the three slots.
+   */
+  const cameraRefs = useRef<Partial<Record<IdentitySlot, HTMLInputElement | null>>>({});
+  const fileRefs = useRef<Partial<Record<IdentitySlot, HTMLInputElement | null>>>({});
+  const multiRef = useRef<HTMLInputElement>(null);
 
   /*
     Whether to offer "Take a photo" at all.
@@ -184,14 +257,15 @@ export function IdentityCapture({
   }, []);
 
   /*
-    Object URLs are revoked when their shot is replaced (in `setShot`) and again
-    for whatever is left when the component goes away. v1 creates one on every
-    retake and revokes none, which on a phone means the browser holds every
-    discarded attempt in memory for the life of the tab.
+    Object URLs are revoked when their shot is replaced and again for whatever
+    is left when the component goes away. v1 creates one on every retake and
+    revokes none, which on a phone means the browser holds every discarded
+    attempt in memory for the life of the tab.
 
-    The ref mirrors the state so the unmount cleanup can read the CURRENT shots
-    without listing them as an effect dependency — depending on `shots` would
-    revoke a live preview on every retake.
+    The ref mirrors the state for two readers: the unmount cleanup (which must
+    see the CURRENT shots without listing them as a dependency — depending on
+    `shots` would revoke a live preview on every retake) and `fanOut`, which
+    must build on the batch before it when two selections land in one tick.
   */
   const shotsRef = useRef<Shots>(shots);
   shotsRef.current = shots;
@@ -204,97 +278,192 @@ export function IdentityCapture({
     [],
   );
 
-  const setShot = useCallback((slot: IdentitySlot, file: File) => {
-    const rejection = validateIdentityPhoto(file);
-    if (rejection) {
-      setProblem(rejection);
-      return;
-    }
-    setProblem(null);
-    setShots((previous) => {
-      const existing = previous[slot];
-      if (existing) URL.revokeObjectURL(existing.previewUrl);
-      return { ...previous, [slot]: { file, previewUrl: URL.createObjectURL(file) } };
-    });
+  /** Both writes go through here so the ref and the state can never disagree. */
+  const commit = useCallback((next: Shots) => {
+    shotsRef.current = next;
+    setShots(next);
   }, []);
 
-  const clearShot = useCallback((slot: IdentitySlot) => {
-    setProblem(null);
-    setShots((previous) => {
+  const setShot = useCallback(
+    (slot: IdentitySlot, file: File) => {
+      const rejection = validateIdentityPhoto(file);
+      if (rejection) {
+        setProblem(rejection);
+        return;
+      }
+      setProblem(null);
+      const previous = shotsRef.current;
       const existing = previous[slot];
       if (existing) URL.revokeObjectURL(existing.previewUrl);
-      return { ...previous, [slot]: null };
-    });
-  }, []);
-
-  const accept = useCallback(
-    (slot: IdentitySlot, list: FileList | null) => {
-      const file = list?.[0];
-      if (file) setShot(slot, file);
+      commit({ ...previous, [slot]: { file, previewUrl: URL.createObjectURL(file) } });
     },
-    [setShot],
+    [commit],
   );
 
-  /** Back to a clean slate. The NEXT press of Start mints a fresh session. */
+  const clearShot = useCallback(
+    (slot: IdentitySlot) => {
+      setProblem(null);
+      const previous = shotsRef.current;
+      const existing = previous[slot];
+      if (existing) URL.revokeObjectURL(existing.previewUrl);
+      commit({ ...previous, [slot]: null });
+    },
+    [commit],
+  );
+
+  /**
+   * Several files at once, spread across the slots that are still empty.
+   *
+   * THE WHOLE POINT OF THE BOARD. On a phone the natural gesture is to open the
+   * camera roll once and tick three photos; the wizard threw two of them away.
+   * They fill front → back → selfie, which is the order they were almost
+   * certainly taken in, and every one of them is still validated individually —
+   * a 7 MB photo in the middle of a good batch is named and refused on its own
+   * rather than sinking the batch.
+   *
+   * `targetSlot` is set when the drop landed on ONE slot: that slot is filled
+   * first even if it already had a photo (dropping onto a filled slot means
+   * "replace this one"), and any extras spill into the remaining empties.
+   *
+   * Computed against `shotsRef` rather than inside a `setShots` updater on
+   * purpose: this loop has a side effect (it fills `rejections`, which the last
+   * line puts in front of the customer), and React runs an updater during the
+   * render rather than at the call site. A second batch arriving while a
+   * re-render was queued would have found `rejections` empty and the customer's
+   * oversized file would have vanished with no explanation — the one case the
+   * message exists for.
+   */
+  const fanOut = useCallback(
+    (list: FileList | null, targetSlot?: IdentitySlot) => {
+      if (!list || list.length === 0) return;
+
+      const incoming = Array.from(list);
+      const rejections: string[] = [];
+      const next: Shots = { ...shotsRef.current };
+
+      const queue: IdentitySlot[] = [];
+      if (targetSlot) queue.push(targetSlot);
+      for (const slot of FILL_ORDER) {
+        if (slot !== targetSlot && next[slot] === null) queue.push(slot);
+      }
+
+      let filled = 0;
+      for (const file of incoming) {
+        const rejection = validateIdentityPhoto(file);
+        if (rejection) {
+          rejections.push(rejection);
+          continue;
+        }
+        const slot = queue.shift();
+        if (!slot) {
+          rejections.push(
+            `“${file.name}” was not added — all three photo slots are already filled. Remove one first if you meant to replace it.`,
+          );
+          continue;
+        }
+        const existing = next[slot];
+        if (existing) URL.revokeObjectURL(existing.previewUrl);
+        next[slot] = { file, previewUrl: URL.createObjectURL(file) };
+        filled += 1;
+      }
+
+      if (filled > 0) commit(next);
+      setProblem(rejections.length > 0 ? rejections.join(' ') : null);
+    },
+    [commit],
+  );
+
+  /** Back to a clean slate. The NEXT send mints a fresh session. */
   const startOver = useCallback(() => {
     setRejected(false);
     setSubmitError(null);
     setProblem(null);
-    setSessionId(null);
     setUploadPrefix(null);
-    setStepIndex(0);
-    setShots((previous) => {
-      for (const shot of Object.values(previous)) {
-        if (shot) URL.revokeObjectURL(shot.previewUrl);
-      }
-      return NO_SHOTS;
-    });
-  }, []);
-
-  /** The ONLY thing that mints a session, and it runs from a press. */
-  const handleStart = useCallback(async () => {
-    setProblem(null);
-    try {
-      const minted = await start.mutateAsync({ token });
-      setSessionId(minted.sessionId);
-      setUploadPrefix(minted.uploadPrefix);
-      setStepIndex(0);
-    } catch (caught: unknown) {
-      // The hook has already turned every server code — the ten-an-hour cap
-      // included — into a sentence written for a customer.
-      setProblem(
-        caught instanceof Error
-          ? caught.message
-          : 'We could not start the identity check. Please try again in a moment.',
-      );
+    const previous = shotsRef.current;
+    for (const shot of Object.values(previous)) {
+      if (shot) URL.revokeObjectURL(shot.previewUrl);
     }
-  }, [start, token]);
+    commit(NO_SHOTS);
+  }, [commit]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!uploadPrefix || !shots.front || !shots.selfie) {
+  /* ── readiness, pushed up to the shell ──────────────────────────────── */
+
+  const ready = shots.front !== null && shots.selfie !== null;
+
+  useEffect(() => {
+    onReadyChange(ready);
+  }, [onReadyChange, ready]);
+
+  useEffect(() => {
+    // Only the REQUIRED slots. The back of the document is genuinely optional
+    // at every layer — the hook types it `File | null`, and the server reads it
+    // with `readPath(body.documentBackPath, false)` — so naming it here would
+    // be inventing a blocker.
+    const missing = PHOTOS.filter(
+      (spec) => !spec.optional && shots[spec.slot] === null,
+    ).map((spec) => spec.shortTitle);
+    onMissingChange(missing);
+  }, [onMissingChange, shots]);
+
+  /* ── the send, driven by the shell's one button ─────────────────────── */
+
+  const handleSubmit = useCallback(async (): Promise<boolean> => {
+    const current = shotsRef.current;
+    if (!current.front || !current.selfie) {
       setSubmitError(
         'We still need the front of your document and a photo of you before we can check them.',
       );
-      return;
+      return false;
     }
     setSubmitError(null);
+
+    /*
+      THE MINT, AND THE ONLY PLACE IT HAPPENS.
+
+      Reusing the prefix we already hold matters: every mint can spend one of
+      the customer's ten sessions an hour, and a customer whose first send
+      failed on a flaky connection would otherwise burn one per retry.
+    */
+    let prefix = uploadPrefix;
+    if (prefix === null) {
+      try {
+        const minted = await start.mutateAsync({ token });
+        prefix = minted.uploadPrefix;
+        setUploadPrefix(minted.uploadPrefix);
+      } catch (caught: unknown) {
+        // The hook has already turned every server code — the ten-an-hour cap
+        // included — into a sentence written for a customer.
+        setSubmitError(
+          caught instanceof Error
+            ? caught.message
+            : 'We could not start the identity check. Please try again in a moment.',
+        );
+        return false;
+      }
+    }
+
     try {
       const result = await submit.mutateAsync({
         token,
-        uploadPrefix,
-        front: shots.front.file,
-        back: shots.back?.file ?? null,
-        selfie: shots.selfie.file,
+        uploadPrefix: prefix,
+        front: current.front.file,
+        back: current.back?.file ?? null,
+        selfie: current.selfie.file,
         onPhotoState: (slot, state) => {
           setSending(state === 'uploading' ? slot : null);
         },
       });
       setSending(null);
       if (result.identityStatus === 'rejected') {
+        // A rejected session is spent; the retry must mint a fresh one, and the
+        // stale prefix must not be reused or the uploads would land beside a
+        // session the server has already judged.
+        setUploadPrefix(null);
         setRejected(true);
-        return;
+        return false;
       }
       onSubmitted();
+      return true;
     } catch (caught: unknown) {
       setSending(null);
       // Already written for a customer by the hook — including the
@@ -305,16 +474,13 @@ export function IdentityCapture({
           ? caught.message
           : 'Something went wrong sending your photos. Please try again.',
       );
+      return false;
     }
-  }, [onSubmitted, shots, submit, token, uploadPrefix]);
+  }, [onSubmitted, start, submit, token, uploadPrefix]);
 
-  const reviewRows = useMemo(
-    () => PHOTOS.map((spec) => ({ spec, shot: shots[spec.slot] })),
-    [shots],
-  );
+  useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
-  const busy = submit.isPending;
-  const canSubmit = shots.front !== null && shots.selfie !== null;
+  const busy = submit.isPending || start.isPending;
 
   /* ── the retry panel, after a rejection ─────────────────────────────── */
 
@@ -380,346 +546,315 @@ export function IdentityCapture({
     );
   }
 
-  /* ── before anything is minted: the start gate ──────────────────────── */
+  /* ── the board ──────────────────────────────────────────────────────── */
 
-  if (sessionId === null || uploadPrefix === null) {
-    const returning = serverStatus === 'rejected';
-    return (
-      <Panel>
-        <PanelHeader
-          title="Your identity documents"
-          action={<StatusChip tone="neutral">{stepLabel}</StatusChip>}
-        />
-        <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
-          <p className="text-sm leading-relaxed text-brand-text-soft">
-            {returning
-              ? 'The last set of photos could not be read. Have another go — three photos, a minute or so, and it is usually the lighting rather than the document.'
-              : 'Three photos: the front of your driving licence, the back of it, and one of you. It takes about a minute, and your phone’s camera is the easiest way to do it.'}
-          </p>
-
-          <ul className="flex flex-col gap-2">
-            {PHOTOS.map((spec) => (
-              <li
-                key={spec.slot}
-                className="flex items-center gap-3 rounded-[12px] border border-brand-border-soft px-3 py-2.5"
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-[8px] bg-brand-stone">
-                  <spec.icon
-                    aria-hidden
-                    strokeWidth={1.75}
-                    className="size-4 text-brand-text-subtle"
-                  />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-brand-text">{spec.title}</span>
-                  {spec.optional ? (
-                    <span className="block text-xs text-brand-text-subtle">
-                      Skippable — a passport has nothing on the back
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          {problem ? <ProblemBox message={problem} /> : null}
-
-          <p className="text-xs leading-relaxed text-brand-text-subtle">
-            Your photos are stored against this booking and used to check your
-            identity. They are not shared with anyone outside{' '}
-            {session.tenant.companyName ?? 'the rental company'}.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-brand-border-soft px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-          <Button
-            type="button"
-            variant="brand"
-            className="h-11 w-full sm:w-auto"
-            disabled={start.isPending}
-            onClick={() => {
-              void handleStart();
-            }}
-          >
-            {start.isPending ? (
-              <Loader2 aria-hidden className="size-4 animate-spin" />
-            ) : (
-              <Camera aria-hidden className="size-4" />
-            )}
-            {returning ? 'Take them again' : 'Start — take the first photo'}
-          </Button>
-        </div>
-      </Panel>
-    );
-  }
-
-  /* ── review and send ────────────────────────────────────────────────── */
-
-  if (stepIndex >= REVIEW_INDEX) {
-    return (
-      <Panel>
-        <PanelHeader
-          title="Check these before you send them"
-          action={<StatusChip tone="info">{stepLabel} · last photo</StatusChip>}
-        />
-        <div className="flex flex-col gap-3 px-4 py-4 sm:px-5">
-          {reviewRows.map(({ spec, shot }) => (
-            <div
-              key={spec.slot}
-              className="flex items-center gap-3 rounded-[12px] border border-brand-border-soft px-3 py-2.5"
-            >
-              {shot ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={shot.previewUrl}
-                  alt=""
-                  className="size-14 shrink-0 rounded-[8px] border border-brand-border-soft object-cover"
-                />
-              ) : (
-                <span className="grid size-14 shrink-0 place-items-center rounded-[8px] bg-brand-stone">
-                  <spec.icon
-                    aria-hidden
-                    strokeWidth={1.75}
-                    className="size-5 text-brand-text-subtle"
-                  />
-                </span>
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-brand-text">{spec.title}</span>
-                <span className="block text-xs text-brand-text-subtle">
-                  {shot ? formatSize(shot.file.size) : spec.optional ? 'Skipped' : 'Still needed'}
-                </span>
-              </span>
-              <Button
-                type="button"
-                variant="brand-ghost"
-                className="h-11 shrink-0"
-                onClick={() => setStepIndex(PHOTOS.indexOf(spec))}
-              >
-                {shot ? 'Change' : 'Add'}
-              </Button>
-            </div>
-          ))}
-
-          {submitError ? <ProblemBox message={submitError} /> : null}
-
-          <p className="text-xs leading-relaxed text-brand-text-subtle">
-            Your photos are stored against this booking and used to check your
-            identity. They are not shared with anyone outside{' '}
-            {session.tenant.companyName ?? 'the rental company'}.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-brand-border-soft px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
-          <Button
-            type="button"
-            variant="brand-outline"
-            className="h-11 w-full sm:w-auto"
-            onClick={() => setStepIndex(PHOTOS.length - 1)}
-          >
-            <ArrowLeft aria-hidden className="size-4" />
-            Back
-          </Button>
-          <Button
-            type="button"
-            variant="brand"
-            className="h-11 w-full sm:w-auto"
-            disabled={!canSubmit}
-            onClick={() => {
-              void handleSubmit();
-            }}
-          >
-            <Send aria-hidden className="size-4" />
-            Send my documents
-          </Button>
-        </div>
-      </Panel>
-    );
-  }
-
-  /* ── one photo ──────────────────────────────────────────────────────── */
-
-  const spec = PHOTOS[stepIndex];
-  const currentShot = shots[spec.slot];
-  const isLastPhoto = stepIndex === PHOTOS.length - 1;
+  const returning = serverStatus === 'rejected';
+  const chosen = FILL_ORDER.filter((slot) => shots[slot] !== null).length;
 
   return (
     <Panel>
       <PanelHeader
-        title={spec.title}
+        title="Your identity documents"
         action={
-          <StatusChip tone="neutral">
-            {stepLabel} · photo {stepIndex + 1} of {PHOTOS.length}
+          <StatusChip tone={ready ? 'success' : 'neutral'}>
+            {chosen === 0 ? stepLabel : `${stepLabel} · ${chosen} of 3 added`}
           </StatusChip>
         }
       />
 
-      <div className="flex flex-col gap-4 px-4 py-4 sm:px-5">
-        <p className="text-sm leading-relaxed text-brand-text-soft">{spec.guidance}</p>
+      <div
+        /*
+          The whole board is a drop target as well as each slot. A customer
+          dragging three files from a folder has no reason to aim at a
+          particular tile, and `fanOut` with no target slot is exactly the
+          "fill the empties in order" behaviour they expect.
+        */
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (!busy) setDragSlot('board');
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!busy) setDragSlot((current) => current ?? 'board');
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          if (event.currentTarget === event.target) setDragSlot(null);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragSlot(null);
+          if (!busy) fanOut(event.dataTransfer.files);
+        }}
+        className="flex flex-col gap-4 px-4 py-4 sm:px-5"
+      >
+        <p className="text-sm leading-relaxed text-brand-text-soft">
+          {returning
+            ? 'The last set of photos could not be read. Have another go — it is usually the lighting rather than the document. Add all three below in any order.'
+            : 'Three photos, in any order. Add them all here — you can pick more than one at a time, and replace any of them before you send.'}
+        </p>
 
-        {currentShot ? (
-          <div className="flex flex-col gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={currentShot.previewUrl}
-              alt={`The ${spec.title.toLowerCase()} you just chose`}
-              className="max-h-72 w-full rounded-[14px] border border-brand-border-soft object-contain"
+        {/* ── add several at once ───────────────────────────────────────── */}
+        <div className="flex flex-col gap-2 rounded-[14px] border border-dashed border-brand-border bg-brand-card px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <Upload aria-hidden strokeWidth={1.75} className="size-5 shrink-0 text-brand-text-subtle" />
+            <p className="min-w-0 text-sm leading-relaxed text-brand-text-soft">
+              Got them already? Choose all of your photos in one go and we will
+              put them in the empty slots below.
+            </p>
+          </div>
+
+          <input
+            ref={multiRef}
+            type="file"
+            multiple
+            accept={IDENTITY_ACCEPT_ATTRIBUTE}
+            className="sr-only"
+            onChange={(event) => {
+              fanOut(event.target.files);
+              // Cleared so choosing the SAME files again still fires onChange —
+              // which is what "I removed one by mistake" looks like.
+              event.target.value = '';
+            }}
+          />
+          <Button
+            type="button"
+            variant="brand-outline"
+            className="h-11 w-full shrink-0 sm:w-auto"
+            onClick={() => multiRef.current?.click()}
+          >
+            <ImagePlus aria-hidden className="size-4" />
+            Add photos
+          </Button>
+        </div>
+
+        {/* ── the three slots, together ─────────────────────────────────── */}
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {PHOTOS.map((spec) => (
+            <PhotoSlot
+              key={spec.slot}
+              spec={spec}
+              shot={shots[spec.slot]}
+              offerCamera={offerCamera}
+              dragging={dragSlot === spec.slot}
+              onDragStateChange={(active) => setDragSlot(active ? spec.slot : null)}
+              onFiles={(list) => fanOut(list, spec.slot)}
+              onClear={() => clearShot(spec.slot)}
+              registerCamera={(element) => {
+                cameraRefs.current[spec.slot] = element;
+              }}
+              registerFile={(element) => {
+                fileRefs.current[spec.slot] = element;
+              }}
+              openCamera={() => cameraRefs.current[spec.slot]?.click()}
+              openFiles={() => fileRefs.current[spec.slot]?.click()}
             />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs text-brand-text-subtle">
-                {formatSize(currentShot.file.size)}
-              </span>
+          ))}
+        </ul>
+
+        <p className="text-xs text-brand-text-subtle">{IDENTITY_FORMATS_LABEL}</p>
+
+        {problem ? <ProblemBox message={problem} /> : null}
+        {submitError ? <ProblemBox message={submitError} /> : null}
+
+        <p className="text-xs leading-relaxed text-brand-text-subtle">
+          Your photos are stored against this booking and used to check your
+          identity. They are not shared with anyone outside{' '}
+          {session.tenant.companyName ?? 'the rental company'}.
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+/* ──────────────────────────────── one slot ─────────────────────────────── */
+
+/**
+ * One of the three photos: what it is, whether it is required, and either the
+ * picture that is in it or the two ways to put one there.
+ *
+ * The required/optional marker is on the SLOT rather than expressed as a "skip"
+ * button, because that is what it is — a property of the document, not an
+ * action for the customer to take.
+ */
+function PhotoSlot({
+  spec,
+  shot,
+  offerCamera,
+  dragging,
+  onDragStateChange,
+  onFiles,
+  onClear,
+  registerCamera,
+  registerFile,
+  openCamera,
+  openFiles,
+}: {
+  spec: PhotoSpec;
+  shot: Shot | null;
+  offerCamera: boolean;
+  dragging: boolean;
+  onDragStateChange: (active: boolean) => void;
+  onFiles: (list: FileList | null) => void;
+  onClear: () => void;
+  registerCamera: (element: HTMLInputElement | null) => void;
+  registerFile: (element: HTMLInputElement | null) => void;
+  openCamera: () => void;
+  openFiles: () => void;
+}) {
+  return (
+    <li
+      onDragEnter={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDragStateChange(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDragStateChange(true);
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        if (event.currentTarget === event.target) onDragStateChange(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onDragStateChange(false);
+        onFiles(event.dataTransfer.files);
+      }}
+      className={cn(
+        'flex flex-col gap-3 rounded-[14px] border p-3 transition-colors',
+        dragging
+          ? 'border-brand-forest bg-brand-stone'
+          : shot
+            ? 'border-brand-border-soft bg-brand-card'
+            : 'border-dashed border-brand-border bg-brand-card',
+      )}
+    >
+      {/*
+        `min-h-10` so a one-line title and a two-line title still put their
+        previews on the same baseline. Without it the three tiles' pictures sit
+        at three different heights, which reads as a rendering fault.
+      */}
+      <div className="flex min-h-10 items-start justify-between gap-2">
+        <p className="min-w-0 text-sm font-medium leading-snug text-brand-text">
+          {spec.title}
+        </p>
+        <StatusChip
+          tone={spec.optional ? 'neutral' : shot ? 'success' : 'warning'}
+          className="shrink-0"
+        >
+          {spec.optional ? 'Optional' : shot ? 'Added' : 'Required'}
+        </StatusChip>
+      </div>
+
+      {/*
+        A fixed-height frame whether or not there is a photo in it, so adding
+        one does not shove the other two slots down the page.
+      */}
+      <div className="relative h-32 overflow-hidden rounded-[10px] border border-brand-border-soft bg-brand-stone">
+        {shot ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={shot.previewUrl}
+            alt={`The ${spec.title.toLowerCase()} you chose`}
+            className="size-full object-cover"
+          />
+        ) : (
+          <div className="flex size-full flex-col items-center justify-center gap-1.5 px-2 text-center">
+            <spec.icon aria-hidden strokeWidth={1.5} className="size-6 text-brand-text-subtle" />
+            <span className="text-xs leading-snug text-brand-text-subtle">
+              {spec.optional ? 'Add it if your document has a back' : 'Nothing added yet'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs leading-relaxed text-brand-text-subtle">{spec.guidance}</p>
+
+      {/*
+        Two inputs per slot, not one. The `capture` attribute cannot be toggled
+        per press, and a single input carrying it would take the gallery away on
+        a phone — which is exactly what a customer needs when the photo was
+        taken on another device. `multiple` is on both so a batch aimed at one
+        slot still spills into the empty ones.
+      */}
+      <input
+        ref={registerCamera}
+        type="file"
+        accept={IDENTITY_ACCEPT_ATTRIBUTE}
+        capture={spec.capture}
+        className="sr-only"
+        onChange={(event) => {
+          onFiles(event.target.files);
+          event.target.value = '';
+        }}
+      />
+      <input
+        ref={registerFile}
+        type="file"
+        multiple
+        accept={IDENTITY_ACCEPT_ATTRIBUTE}
+        className="sr-only"
+        onChange={(event) => {
+          onFiles(event.target.files);
+          event.target.value = '';
+        }}
+      />
+
+      <div className="mt-auto flex flex-col gap-2">
+        {shot ? (
+          <>
+            <span className="text-xs text-brand-text-subtle">{formatSize(shot.file.size)}</span>
+            <div className="flex gap-2">
               <Button
                 type="button"
                 variant="brand-outline"
-                className="h-11"
-                onClick={() => clearShot(spec.slot)}
+                className="h-11 flex-1 px-2 text-xs"
+                onClick={offerCamera ? openCamera : openFiles}
               >
                 <RotateCcw aria-hidden className="size-4" />
-                Take it again
+                Replace
               </Button>
-            </div>
-          </div>
-        ) : (
-          <div
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setDragActive(true);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragActive(true);
-            }}
-            onDragLeave={(event) => {
-              event.preventDefault();
-              setDragActive(false);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragActive(false);
-              accept(spec.slot, event.dataTransfer.files);
-            }}
-            className={cn(
-              'flex flex-col items-center gap-2 rounded-[14px] border border-dashed px-4 py-8 text-center transition-colors',
-              dragActive ? 'border-brand-forest bg-brand-stone' : 'border-brand-border bg-brand-card',
-            )}
-          >
-            <Upload aria-hidden strokeWidth={1.75} className="size-5 text-brand-text-subtle" />
-            <p className="text-sm text-brand-text-soft">
-              {offerCamera
-                ? 'Take the photo now, or choose one you already have.'
-                : 'Drop the photo here, or choose one from your device.'}
-            </p>
-
-            {/*
-              Two inputs, not one. The `capture` attribute cannot be toggled per
-              press, and a single input carrying it would take the gallery away
-              on a phone — which is exactly what a customer needs when the photo
-              was taken on another device. `key` forces a fresh element per
-              photo so the previous one's `capture` value can never linger.
-            */}
-            <input
-              key={`camera-${spec.slot}`}
-              ref={cameraInputRef}
-              type="file"
-              accept={IDENTITY_ACCEPT_ATTRIBUTE}
-              capture={spec.capture}
-              className="sr-only"
-              onChange={(event) => {
-                accept(spec.slot, event.target.files);
-                // Cleared so choosing the SAME file twice still fires onChange —
-                // which is what "take it again, it was blurry" looks like.
-                event.target.value = '';
-              }}
-            />
-            <input
-              key={`file-${spec.slot}`}
-              ref={fileInputRef}
-              type="file"
-              accept={IDENTITY_ACCEPT_ATTRIBUTE}
-              className="sr-only"
-              onChange={(event) => {
-                accept(spec.slot, event.target.files);
-                event.target.value = '';
-              }}
-            />
-
-            <div className="mt-1 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              {offerCamera ? (
-                <Button
-                  type="button"
-                  variant="brand"
-                  className="h-11"
-                  onClick={() => cameraInputRef.current?.click()}
-                >
-                  <Camera aria-hidden className="size-4" />
-                  Take a photo
-                </Button>
-              ) : null}
               <Button
                 type="button"
-                variant={offerCamera ? 'brand-outline' : 'brand'}
-                className="h-11"
-                onClick={() => fileInputRef.current?.click()}
+                variant="brand-ghost"
+                aria-label={`Remove ${spec.title.toLowerCase()}`}
+                className="size-11 shrink-0 p-0"
+                onClick={onClear}
               >
-                Choose a file
+                <Trash2 aria-hidden className="size-4" />
               </Button>
             </div>
-
-            <p className="text-xs text-brand-text-subtle">{IDENTITY_FORMATS_LABEL}</p>
-          </div>
-        )}
-
-        {problem ? <ProblemBox message={problem} /> : null}
-      </div>
-
-      <div className="flex flex-col gap-2 border-t border-brand-border-soft px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
-        <Button
-          type="button"
-          variant="brand-outline"
-          className="h-11 w-full sm:w-auto"
-          disabled={stepIndex === 0}
-          onClick={() => {
-            setProblem(null);
-            setStepIndex((index) => Math.max(0, index - 1));
-          }}
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Back
-        </Button>
-
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {spec.optional && currentShot === null ? (
+          </>
+        ) : (
+          <div className="flex gap-2">
+            {offerCamera ? (
+              <Button
+                type="button"
+                variant="brand"
+                className="h-11 flex-1 px-2 text-xs"
+                onClick={openCamera}
+              >
+                <Camera aria-hidden className="size-4" />
+                Take
+              </Button>
+            ) : null}
             <Button
               type="button"
-              variant="brand-ghost"
-              className="h-11 w-full sm:w-auto"
-              onClick={() => {
-                setProblem(null);
-                setStepIndex((index) => index + 1);
-              }}
+              variant={offerCamera ? 'brand-outline' : 'brand'}
+              className="h-11 flex-1 px-2 text-xs"
+              onClick={openFiles}
             >
-              Skip this
+              <ImagePlus aria-hidden className="size-4" />
+              {offerCamera ? 'Choose' : 'Choose a file'}
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="brand"
-            className="h-11 w-full sm:w-auto"
-            // Optional photos advance via "Skip this"; the primary button stays
-            // honest about needing one rather than silently doing nothing.
-            disabled={currentShot === null}
-            onClick={() => {
-              setProblem(null);
-              setStepIndex((index) => index + 1);
-            }}
-          >
-            {isLastPhoto ? 'Review' : 'Continue'}
-            <Check aria-hidden className="size-4" />
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
-    </Panel>
+    </li>
   );
 }
 
