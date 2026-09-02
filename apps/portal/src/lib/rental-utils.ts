@@ -112,10 +112,6 @@ export const formatDuration = (value: number, periodType: string = 'Monthly'): s
 export interface RentalStatusOptions {
   /** The rental's return_time (e.g. "14:30:00"); null/undefined = no specific time */
   returnTime?: string | null;
-  /** Whether the rental is set to auto-extend (weekly auto-renew) */
-  autoExtendEnabled?: boolean | null;
-  /** The auto-extend lifecycle status ('active' | 'awaiting_payment' | 'paused' | 'ended' | ...) */
-  autoExtendStatus?: string | null;
 }
 
 /**
@@ -172,18 +168,6 @@ export const getRentalStatus = (
   // If start date is in the future, it's upcoming
   if (isAfter(start, today)) {
     return "Upcoming";
-  }
-
-  // Auto-extending rentals keep renewing weekly, so their end_date constantly
-  // trails "now" between renewals. They must NOT auto-complete on date alone —
-  // only an explicit Closed/Cancelled status (handled above) or a stopped
-  // auto-extend lifecycle ends them. Otherwise they stay Active.
-  const autoExtendActive =
-    options.autoExtendEnabled === true &&
-    options.autoExtendStatus !== "ended" &&
-    options.autoExtendStatus !== "cancelled";
-  if (autoExtendActive) {
-    return "Active";
   }
 
   // If there's an end date and the rental has fully ended (past the return time /

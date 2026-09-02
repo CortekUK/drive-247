@@ -361,7 +361,6 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       const bits: string[] = [];
       if (f.charges) bits.push(`${f.charges} charge${f.charges === 1 ? "" : "s"}`);
       if (f.reminders) bits.push(`${f.reminders} reminder${f.reminders === 1 ? "" : "s"}`);
-      if (f.autoExtensions) bits.push(`${f.autoExtensions} auto-extension${f.autoExtensions === 1 ? "" : "s"}`);
       if (f.depositRefreshes) bits.push(`${f.depositRefreshes} deposit refresh`);
       if (f.returnReminders) bits.push(`${f.returnReminders} return reminder${f.returnReminders === 1 ? "" : "s"}`);
       const errs = Array.isArray(data.errors) ? (data.errors as string[]) : [];
@@ -382,7 +381,6 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
           ["rental-charges"],
           ["rental-refund-breakdown"],
           ["rental-invoice"],
-          ["rental-extension-totals"],
           ["rental-payments"],
           ["rental-payments-total"],
           ["rental-payment"],

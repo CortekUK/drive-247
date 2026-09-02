@@ -17,13 +17,10 @@ export interface CustomerRental {
   pickup_location: string | null;
   return_location: string | null;
   created_at: string;
-  is_extended: boolean | null;
   previous_end_date: string | null;
   cancellation_requested: boolean | null;
   cancellation_reason: string | null;
   renewed_from_rental_id: string | null;
-  extension_checkout_url: string | null;
-  extension_amount: number | null;
   delivery_method: string | null;
   delivery_address: string | null;
   delivery_fee: number | null;
@@ -77,13 +74,10 @@ export function useCustomerRentals(filter: 'all' | 'active' | 'current' | 'past'
           pickup_location,
           return_location,
           created_at,
-          is_extended,
           previous_end_date,
           cancellation_requested,
           cancellation_reason,
           renewed_from_rental_id,
-          extension_checkout_url,
-          extension_amount,
           delivery_method,
           delivery_address,
           delivery_fee,

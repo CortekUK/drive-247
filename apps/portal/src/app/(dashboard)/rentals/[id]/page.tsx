@@ -20,7 +20,6 @@ import { BlurredImage } from "@/components/ui/blurred-image";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { AddPaymentDialog } from "@/components/shared/dialogs/add-payment-dialog";
-import { AutoExtensionSection } from "@/components/rentals/auto-extension-section";
 import { RefundDialog } from "@/components/shared/dialogs/refund-dialog";
 import { ChargeDepositDialog } from "@/components/shared/dialogs/charge-deposit-dialog";
 import { TakeDepositDialog } from "@/components/shared/dialogs/take-deposit-dialog";
@@ -41,8 +40,6 @@ import { DamageAnalysisCard } from "@/components/rentals/damage-analysis-card";
 import { MileageSummaryCard } from "@/components/rentals/mileage-summary-card";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import RejectionDialog from "@/components/rentals/rejection-dialog";
-import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
-import { AdminExtendRentalDialog } from "@/components/rentals/AdminExtendRentalDialog";
 import { EditPickupReturnDialog } from "@/components/rentals/edit-pickup-return-dialog";
 import { SwapVehicleDialog } from "@/components/rentals/swap-vehicle-dialog";
 import { BuyInsuranceDialog } from "@/components/rentals/buy-insurance-dialog";
@@ -64,7 +61,6 @@ import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { AgreementTimeline } from "@/components/rentals/AgreementTimeline";
 import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-card";
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
-import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
 import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
 
@@ -361,8 +357,6 @@ interface Rental {
   delivery_method?: string | null;
   collection_location_id?: string;
   collection_address?: string;
-  // Extension fields
-  is_extended?: boolean;
   previous_end_date?: string | null;
   original_end_date?: string | null;
   // Renewal fields
@@ -530,8 +524,6 @@ const RentalDetail = () => {
     : bonzahBlockedReason(tenant);
   const { data: rentalAgreements = [], isLoading: loadingAgreements } = useRentalAgreements(id);
   const { data: insurancePolicies = [], isLoading: isLoadingInsurancePolicies } = useRentalInsurancePolicies(id);
-  // Phase 5: authoritative per-extension totals from the rental_extension_totals view.
-  const { data: extensionTotals = [] } = useRentalExtensionTotals(id);
   // skipInsurance removed — insurance doc upload is always visible; only Bonzah selector is gated on integration_bonzah
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [sendingDocuSign, setSendingDocuSign] = useState(false);
@@ -554,7 +546,6 @@ const RentalDetail = () => {
   const [refundCategory, setRefundCategory] = useState<string>("");
   const [refundTotalAmount, setRefundTotalAmount] = useState(0);
   const [refundPaidAmount, setRefundPaidAmount] = useState(0);
-  const [refundExtensionId, setRefundExtensionId] = useState<string | undefined>();
 
   // Undo manual payment dialog state
   const [showUndoDialog, setShowUndoDialog] = useState(false);
@@ -562,28 +553,17 @@ const RentalDetail = () => {
   const [undoAmount, setUndoAmount] = useState(0);
   const [isUndoing, setIsUndoing] = useState(false);
 
-  // Extension dialog state
-  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
-  const [showAdminExtendDialog, setShowAdminExtendDialog] = useState(false);
 
   // Edit pickup/return dialog state
   const [showEditPickupReturn, setShowEditPickupReturn] = useState(false);
   const [showSwapVehicle, setShowSwapVehicle] = useState(false);
 
-  // Extension payment state
-  const [showExtensionPayment, setShowExtensionPayment] = useState(false);
-  const [extensionPaymentAmount, setExtensionPaymentAmount] = useState<number | undefined>();
-  const [extensionPaymentCategories, setExtensionPaymentCategories] = useState<string[]>([]);
-  const [extensionPaymentExtensionId, setExtensionPaymentExtensionId] = useState<string | undefined>();
 
   // Buy Insurance dialog state
   const [showBuyInsurance, setShowBuyInsurance] = useState(false);
-  const [buyInsuranceMode, setBuyInsuranceMode] = useState<'original' | 'extension'>('original');
-  const [buyInsuranceExtensionId, setBuyInsuranceExtensionId] = useState<string | null>(null);
   const [insurancePaymentMode, setInsurancePaymentMode] = useState(false);
   const [insurancePaymentAmount, setInsurancePaymentAmount] = useState<number | undefined>();
   const [insurancePaymentCategories, setInsurancePaymentCategories] = useState<string[]>(['Insurance']);
-  const [insurancePaymentExtensionId, setInsurancePaymentExtensionId] = useState<string | undefined>();
 
   // Targeted payment selection state
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
@@ -700,20 +680,18 @@ const RentalDetail = () => {
   const { data: refundData } = useRentalRefundBreakdown(id);
   const refundBreakdown = refundData?.categoryRefunds || null;
   const chargeRefunds = refundData?.chargeRefunds || {};
-  const extensionCategoryRefunds = refundData?.extensionCategoryRefunds || {};
   const { data: manualPaidByCategory } = useRentalManualPaidBreakdown(id);
 
-  // Auto-extension rentals have no upfront invoice — synthesise an
+  // Ledger-billed rentals have no upfront invoice — synthesise an
   // invoice-shaped object from the ledger-entry sums so the regular Payment
   // Breakdown card (incl. the per-extension accordion) can render with all the
   // same categories, refund controls, pay-selected buttons, etc. Regular rentals
   // keep using the real invoice row untouched.
   const invoiceBreakdown = useMemo(() => {
     if (rawInvoiceBreakdown) return rawInvoiceBreakdown;
-    // No real invoice: synthesise from the ledger when this rental bills via the
-    // ledger (auto-extension extensions) rather than an upfront invoice.
-    const billsViaLedger = (rental as any)?.auto_extend_enabled
-      || (rentalCharges && rentalCharges.length > 0);
+    // No real invoice: synthesise from the ledger when charges exist without
+    // an upfront invoice row.
+    const billsViaLedger = rentalCharges && rentalCharges.length > 0;
     if (!billsViaLedger) return null;
 
     const sumBy = (cat: string) =>
@@ -803,7 +781,6 @@ const RentalDetail = () => {
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
         queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental', id] });
       }
     };
@@ -824,27 +801,17 @@ const RentalDetail = () => {
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-invoice'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `rental_id=eq.${id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payments'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_applications' }, () => {
         queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rental_extensions', filter: `rental_id=eq.${id}` }, () => {
-        queryClient.invalidateQueries({ queryKey: ['rental', id] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-totals'] });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rentals', filter: `id=eq.${id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['rental', id] });
@@ -987,7 +954,6 @@ const RentalDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
-          queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
           queryClient.invalidateQueries({ queryKey: ['rental', id] }),
           queryClient.invalidateQueries({ queryKey: ['rental-payments'] }),
           queryClient.invalidateQueries({ queryKey: ['excess-mileage-charge'] }),
@@ -1072,7 +1038,6 @@ const RentalDetail = () => {
           queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
           queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
-          queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
           queryClient.invalidateQueries({ queryKey: ['rental', id] }),
         ]);
         setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
@@ -1092,7 +1057,6 @@ const RentalDetail = () => {
             queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] }),
             queryClient.invalidateQueries({ queryKey: ['rental-charges'] }),
             queryClient.invalidateQueries({ queryKey: ['rental-invoice'] }),
-            queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] }),
             queryClient.invalidateQueries({ queryKey: ['rental', id] }),
           ]);
           setPaymentResult({ status: 'success', message: 'Customer has completed the payment.' });
@@ -1869,96 +1833,12 @@ const RentalDetail = () => {
     },
   });
 
-  // Group extension charges by extension for display.
-  //
-  // Source of truth is `rental_extension_totals` — every approved extension row
-  // renders, regardless of whether ledger rows or Bonzah policies have landed
-  // yet. Ledger rows attach by `extension_id` (authoritative) with a
-  // reference-text fallback for legacy rows that don't have it stamped.
-  // Insurance policies attach by `extension_id` only — index-based matching
-  // was ambiguous when some extensions had no policy.
-  const extensionGroups = (() => {
-    const allExtCharges = (rentalCharges || []).filter(c =>
-      c.category === 'Extension' ||
-      c.category === 'Extension Rental' ||
-      c.category === 'Extension Tax' ||
-      c.category === 'Extension Service Fee' ||
-      c.category === 'Extension Insurance'
-    );
-
-    const extPoliciesByExtensionId = new Map<string, any>();
-    for (const p of (insurancePolicies || [])) {
-      if (p.policy_type === 'extension' && (p as any).extension_id) {
-        extPoliciesByExtensionId.set((p as any).extension_id, p);
-      }
-    }
-
-    // Reference-text fallback grouping (for ledger rows with null extension_id)
-    const chargesByRef: Record<number, typeof allExtCharges> = {};
-    for (const charge of allExtCharges) {
-      const m = charge.reference?.match(/Extension #(\d+)/);
-      if (!m) continue;
-      const n = parseInt(m[1], 10);
-      if (!chargesByRef[n]) chargesByRef[n] = [];
-      chargesByRef[n].push(charge);
-    }
-
-    // If there are no rental_extensions rows yet (legacy), fall back to the old
-    // ledger-only grouping so nothing regresses.
-    if (!extensionTotals || extensionTotals.length === 0) {
-      return Object.entries(chargesByRef)
-        .sort(([a], [b]) => parseInt(a) - parseInt(b))
-        .map(([num, charges]) => ({
-          extensionNumber: parseInt(num),
-          charges,
-          totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
-          totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
-          entryDate: charges[0]?.entry_date || '',
-          rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
-          insurancePolicy: null as any,
-        }));
-    }
-
-    return (extensionTotals || [])
-      .slice()
-      .sort((a: any, b: any) => Number(a.sequence_number) - Number(b.sequence_number))
-      .map((ext: any) => {
-        const seq = Number(ext.sequence_number);
-        // Primary: ledger rows tagged with this extension_id.
-        const byId = allExtCharges.filter((c: any) => c.extension_id === ext.id);
-        // Fallback: reference-text match for legacy rows with null extension_id.
-        const byRef = (chargesByRef[seq] || []).filter(c => !byId.some(b => b.id === c.id));
-        const charges = [...byId, ...byRef];
-        return {
-          extensionId: ext.id as string,
-          extensionNumber: seq,
-          charges,
-          totalAmount: charges.reduce((sum, c) => sum + c.amount, 0),
-          totalRemaining: charges.reduce((sum, c) => sum + c.remaining_amount, 0),
-          entryDate: charges[0]?.entry_date || '',
-          rentalCharge: charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension'),
-          insurancePolicy: extPoliciesByExtensionId.get(ext.id) || null,
-        };
-      });
-  })();
-
-  // Outstanding balance: originals come from ledger-backed categoryRemainingAmounts.
-  // Extensions come from the authoritative rental_extension_totals view so we
-  // don't double-count or miss ext-insurance whose ledger entry hasn't landed.
-  // Pending-approval extensions are excluded (customer can't pay those yet).
+  // Outstanding balance from ledger-backed categoryRemainingAmounts.
   const outstandingBalance = useMemo(() => {
-    const originalCategories = categoryRemainingAmounts
-      ? Object.entries(categoryRemainingAmounts)
-          .filter(([cat]) => !cat.startsWith('Extension'))
-          .reduce((sum, [, amt]) => sum + amt, 0)
+    return categoryRemainingAmounts
+      ? Object.entries(categoryRemainingAmounts).reduce((sum, [, amt]) => sum + amt, 0)
       : 0;
-
-    const extensionOutstanding = (extensionTotals || [])
-      .filter(re => re.display_status !== 'pending_approval' && re.display_status !== 'cancelled' && re.display_status !== 'refunded')
-      .reduce((sum, re) => sum + Number(re.outstanding_amount || 0), 0);
-
-    return originalCategories + extensionOutstanding;
-  }, [categoryRemainingAmounts, extensionTotals]);
+  }, [categoryRemainingAmounts]);
 
   if (isLoading) {
     return <div>Loading rental details...</div>;
@@ -1968,9 +1848,7 @@ const RentalDetail = () => {
     return <div>Rental not found</div>;
   }
 
-  // Scope-split insurance docs (Phase 5 polish): original vs per-extension.
   const originalInsuranceDocs = (insuranceDocuments || []).filter((d: any) => !d.extension_id);
-  const extensionInsuranceDocs = (insuranceDocuments || []).filter((d: any) => !!d.extension_id);
 
   // Does the ORIGINAL scope already have insurance? (active Bonzah OR uploaded doc)
   const originalBonzahActive = (insurancePolicies || []).some(
@@ -2378,22 +2256,6 @@ const RentalDetail = () => {
             </p>
             {/* Key Status Badges */}
             <div className="flex flex-wrap gap-2 mt-2">
-              {/* Auto-Extension indicator */}
-              {(rental as any).auto_extend_enabled && (
-                <Badge
-                  variant="outline"
-                  className="bg-violet-500/10 text-violet-600 border-violet-500/30 gap-1"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Auto-Extension
-                  {(rental as any).auto_extend_status === 'paused' && (
-                    <span className="ml-1 text-xs font-normal text-amber-500">· Paused</span>
-                  )}
-                  {(rental as any).auto_extend_status === 'awaiting_payment' && (
-                    <span className="ml-1 text-xs font-normal text-amber-500">· Awaiting payment</span>
-                  )}
-                </Badge>
-              )}
             </div>
             <div className="flex flex-wrap gap-2 mt-1">
               <Badge
@@ -2520,20 +2382,6 @@ const RentalDetail = () => {
           {/* Active Rental - Show Add Payment, Close, Cancel, Delete buttons */}
           {canEdit('rentals') && displayStatus === 'Active' && (
             <>
-              {rental.is_extended && (
-                <Button
-                  variant="default"
-                  className="bg-amber-600 hover:bg-amber-700"
-                  onClick={() => setShowExtensionDialog(true)}
-                >
-                  <CalendarPlus className="h-4 w-4 mr-2" />
-                  Review Extension
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => setShowAdminExtendDialog(true)}>
-                <CalendarPlus className="h-4 w-4 mr-2" />
-                Extend Rental
-              </Button>
               <Button variant="outline" onClick={() => setShowAddPayment(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Payment
@@ -2839,23 +2687,6 @@ const RentalDetail = () => {
           </div>
         );
       })()}
-
-      {/* Auto-Extension management — right after the stat cards */}
-      {rental && (rental as any).auto_extend_enabled && id && (
-        <AutoExtensionSection
-          rentalId={id}
-          rental={rental}
-          currencyCode={tenant?.currency_code || 'USD'}
-          taxPercent={(rentalSettings as any)?.tax_enabled ? Number((rentalSettings as any)?.tax_percentage || 0) : 0}
-          baseOutstanding={Object.entries(categoryRemainingAmounts || {})
-            .filter(([c]) => !c.startsWith('Extension'))
-            .reduce((s, [, a]) => s + (Number(a) || 0), 0)}
-          canEdit={canEdit('rentals')}
-          timezone={tenant?.timezone || 'America/New_York'}
-          customerEmail={rental.customers?.email}
-          customerName={rental.customers?.name}
-        />
-      )}
 
       {/* Payment Breakdown — upfront fixed charges (Insurance, Delivery, Extras, etc.).
           */}
@@ -3909,457 +3740,17 @@ const RentalDetail = () => {
           </>
         );
 
-        // Render extension breakdown table — mirrors original table structure
-        // Applicable rows: Rental Fee, Tax, Insurance, Service Fee
-        // Not applicable for extensions: Security Deposit, Delivery Fee, Collection Fee, Extras
-        const renderExtensionBreakdownTable = (group: typeof extensionGroups[0]) => {
-          const isCancelledOrRejected = rental.status === 'Cancelled' || rental.approval_status === 'rejected';
-
-          // Parse dates from the rental charge reference
-          const refCharge = group.rentalCharge;
-          const dateMatch = refCharge?.reference?.match(/\((.+?) → (.+?)\)/);
-          const fromDate = dateMatch?.[1] || '';
-          const toDate = dateMatch?.[2] || '';
-          const daysMatch = refCharge?.reference?.match(/(\d+) day/);
-          const extDays = daysMatch?.[1] || '';
-          const dateDetail = extDays ? `${extDays} day${extDays !== '1' ? 's' : ''} (${fromDate} → ${toDate})` : (refCharge?.reference || `Extension #${group.extensionNumber}`);
-
-          // Find ledger charges by category
-          const extRentalCharge = group.charges.find(c => c.category === 'Extension Rental' || c.category === 'Extension');
-          const taxCharge = group.charges.find(c => c.category === 'Extension Tax');
-          const serviceFeeCharge = group.charges.find(c => c.category === 'Extension Service Fee');
-
-          // Extension insurance from bonzah_insurance_policies
-          const extInsurance = group.insurancePolicy;
-          const insuranceAmount = extInsurance?.premium_amount ?? 0;
-          const insuranceActive = extInsurance?.status === 'active' || extInsurance?.status === 'policy_issued';
-          // Insurance ledger entry (for payment tracking) — MUST be scoped to
-          // THIS extension's charges, not a global find across the rental.
-          // Global find returns the first Extension Insurance charge encountered
-          // (DESC-ordered by due_date), so creating a new extension made older
-          // extensions pick up the newer extension's unpaid remaining_amount
-          // and flip their Bonzah Insurance row to "Not Paid" incorrectly.
-          const insuranceLedgerCharge = group.charges.find(c =>
-            c.category === 'Extension Insurance' ||
-            (c.category === 'Insurance' && c.reference?.includes(`Extension #${group.extensionNumber}`))
-          );
-
-          // Build rows — 1:1 with original table's applicable categories
-          const extRows: { label: string; category: string; amount: number; remaining_amount: number; detail: string; icon: any; color: string; bg: string }[] = [
-            {
-              label: 'Rental',
-              category: extRentalCharge?.category || 'Extension Rental',
-              amount: extRentalCharge?.amount ?? 0,
-              remaining_amount: extRentalCharge?.remaining_amount ?? 0,
-              detail: dateDetail,
-              icon: Car,
-              color: 'text-green-500',
-              bg: 'bg-green-500/10',
-            },
-            {
-              label: 'Tax',
-              category: taxCharge?.category || 'Extension Tax',
-              amount: taxCharge?.amount ?? 0,
-              remaining_amount: taxCharge?.remaining_amount ?? 0,
-              detail: (taxCharge && extRentalCharge) ? `${((taxCharge.amount / extRentalCharge.amount) * 100).toFixed(1)}% rate` : 'Tax on rental',
-              icon: Percent,
-              color: 'text-blue-500',
-              bg: 'bg-blue-500/10',
-            },
-            {
-              label: extInsurance ? 'Bonzah Insurance' : 'Insurance',
-              category: 'Extension Insurance',
-              // Ledger charge is source of truth for what's owed — the policy
-              // record can disagree if a top-up or duplicate policy was added
-              // and the charge got summed. Falling back to the policy premium
-              // only when no ledger charge exists yet (preview state).
-              amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.amount) : insuranceAmount,
-              remaining_amount: insuranceLedgerCharge ? Number(insuranceLedgerCharge.remaining_amount) : insuranceAmount,
-              detail: extInsurance
-                ? `${extInsurance.coverage_types ? getActiveCoverageLabels(extInsurance.coverage_types, { cdw: 'CDW', rcli: 'RCLI', sli: 'SLI', pai: 'PAI' }).map(c => c.label).join(', ') : 'Bonzah Insurance'}`
-                : "Customer's own",
-              icon: ShieldCheck,
-              color: 'text-teal-500',
-              bg: 'bg-teal-500/10',
-            },
-            {
-              label: 'Service Fee',
-              category: serviceFeeCharge?.category || 'Extension Service Fee',
-              amount: serviceFeeCharge?.amount ?? 0,
-              remaining_amount: serviceFeeCharge?.remaining_amount ?? 0,
-              detail: 'Platform fee',
-              icon: Receipt,
-              color: 'text-purple-500',
-              bg: 'bg-purple-500/10',
-            },
-          ];
-
-          // A credit posted against this extension lives in its own ledger row
-          // (category 'Adjustment', negative remaining). extRows is built only
-          // from the five 'Extension*' categories — page.tsx:2106 filters
-          // 'Adjustment' out — so these rows still carry their FULL pre-credit
-          // remaining_amount and the collect controls would take the whole
-          // undiscounted figure.
-          //
-          // rental_extension_totals nets the Adjustment: its LATERAL has no
-          // CATEGORY and no SIGN filter, but it DOES require type='Charge'.
-          // These credits qualify only because they are posted as type='Charge'
-          // with a negative amount. A credit written as type 'Refund' or
-          // 'Adjustment' would be invisible here and this clamp would do nothing.
-          // Clamp to it: nothing collectable once the view says zero.
-          // Without this, Keri's table offers to collect $333.84 on a week she
-          // owes $0.00 on, Sabrina $294.25 against $250.11, Debbie $197.38
-          // against $100.30 — $475.06 of over-collection across three live
-          // customers, created by the corrections themselves.
-          const extTotalsRow = (extensionTotals || []).find(
-            (t: any) => t.id === (group as any).extensionId,
-          ) as any;
-          const extTrueOutstanding = Number(extTotalsRow?.outstanding_amount ?? NaN);
-
-          // A CANCELLED extension is a week that was priced and then declined. Its
-          // charges keep their full remaining_amount forever, and extensionGroups
-          // applies no status filter — while `isCancelledOrRejected` below tests the
-          // RENTAL's status, not the extension's. So a cancelled week renders with
-          // live checkboxes and Add Payment links. Sabrina's R-c91368 offers $888.97
-          // this way, on a week the Balance Due tile correctly excludes
-          // (page.tsx:2182 filters cancelled/refunded/pending_approval).
-          const extIsDead = ['cancelled', 'refunded', 'pending_approval'].includes(
-            String(extTotalsRow?.display_status ?? ''),
-          );
-          const extIsSettledByCredit =
-            extIsDead || (Number.isFinite(extTrueOutstanding) && extTrueOutstanding <= 0.001);
-
-          // Compute selectable categories for this extension
-          const extSelectableCategories = (extIsSettledByCredit ? [] : extRows)
-            .filter(({ amount, remaining_amount }) => amount > 0 && remaining_amount > 0)
-            .map(r => r.category);
-
-          const extAllSelected = extSelectableCategories.length > 0 && extSelectableCategories.every(c => selectedExtCategories.has(c));
-          const extSomeSelected = extSelectableCategories.some(c => selectedExtCategories.has(c));
-
-          // Never offer to collect more than the extension actually still owes.
-          // Clamp each row against the extension's true outstanding and then sum,
-          // rather than clamping the subtotal against the whole-extension figure —
-          // the latter produced amounts belonging to neither the row nor the
-          // extension (ticking only Rental on Sabrina gave 250.11 beside a 275.00 row).
-          const extCollectableCap = extIsDead ? 0 : extTrueOutstanding;
-          const extSelectedTotal = Math.round(
-            extSelectableCategories
-              .filter(c => selectedExtCategories.has(c))
-              .reduce((sum, c) => {
-                const row = extRows.find(r => r.category === c);
-                const rowRemaining = row?.remaining_amount ?? 0;
-                const capped = Number.isFinite(extCollectableCap)
-                  ? Math.min(rowRemaining, Math.max(0, extCollectableCap - sum))
-                  : rowRemaining;
-                return sum + capped;
-              }, 0) * 100,
-          ) / 100;
-
-          const toggleExtCategory = (category: string) => {
-            setSelectedExtCategories(prev => {
-              const next = new Set(prev);
-              if (next.has(category)) next.delete(category);
-              else next.add(category);
-              return next;
-            });
-          };
-
-          const toggleAllExtUnpaid = () => {
-            if (extAllSelected) {
-              setSelectedExtCategories(new Set());
-            } else {
-              setSelectedExtCategories(new Set(extSelectableCategories));
-            }
-          };
-
-          return (
-            <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {extSelectableCategories.length > 0 && (
-                    <TableHead className="pl-6 w-10">
-                      <Checkbox
-                        checked={extAllSelected ? true : extSomeSelected ? "indeterminate" : false}
-                        onCheckedChange={toggleAllExtUnpaid}
-                        aria-label="Select all unpaid extension items"
-                      />
-                    </TableHead>
-                  )}
-                  <TableHead className={extSelectableCategories.length > 0 ? "" : "pl-6"}>Category</TableHead>
-                  <TableHead className="text-center w-[100px]">Status</TableHead>
-                  <TableHead className="text-right w-[100px]">Amount</TableHead>
-                  <TableHead className="text-right w-[100px]">Refunded</TableHead>
-                  <TableHead className="text-right pr-6 w-[140px]">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {extRows.map(({ label, category, amount, remaining_amount, detail, icon: Icon, color, bg }) => {
-                  const applied = amount > 0;
-                  // For extensions, scope refunds to THIS extension's specific charge
-                  const thisCharge = group.charges.find(c => c.category === category);
-                  // Primary lookup: (extension_id, category) map — immune to
-                  // charge-id drift, reference format, and amount collisions.
-                  // Fallback to the legacy charge-id map for rows where the
-                  // refund didn't carry extension_id (pre-fix data).
-                  const refunded = (group.extensionId && extensionCategoryRefunds[`${group.extensionId}|${category}`])
-                    ?? (thisCharge ? (chargeRefunds[thisCharge.id] ?? 0) : 0);
-                  const fullyRefunded = applied && refunded > 0 && refunded >= amount;
-                  const isInsuranceRow = category === 'Extension Insurance';
-                  const isPaid = applied && remaining_amount === 0;
-                  const isPartial = !isInsuranceRow && applied && remaining_amount > 0 && remaining_amount < amount;
-                  // A credit against this extension lives in an 'Adjustment' row that
-                  // extRows never sees, so remaining_amount here still states the FULL
-                  // pre-credit debt. Gating the row button on it alone let the whole
-                  // $475.06 be collected one row at a time — the checkbox clamp above
-                  // does not touch this path, and add-payment-dialog skips its
-                  // overpayment guard whenever defaultAmount is supplied, which this
-                  // button always does. So gate on the extension's true outstanding too.
-                  const hasUnpaid = applied && !isPaid && !fullyRefunded && !extIsSettledByCredit;
-                  // What this row may actually collect, never more than the extension owes.
-                  const rowCollectable = Number.isFinite(extCollectableCap)
-                    ? Math.min(remaining_amount, extCollectableCap)
-                    : remaining_amount;
-                  const isExtSelectable = extSelectableCategories.includes(category);
-                  const isExtSelected = selectedExtCategories.has(category);
-
-                  return (
-                    <TableRow key={category} className={!applied ? 'opacity-40' : ''}>
-                      {extSelectableCategories.length > 0 && (
-                        <TableCell className="pl-6 w-10">
-                          {isExtSelectable ? (
-                            <Checkbox
-                              checked={isExtSelected}
-                              onCheckedChange={() => toggleExtCategory(category)}
-                              aria-label={`Select ${label}`}
-                            />
-                          ) : null}
-                        </TableCell>
-                      )}
-                      <TableCell className={extSelectableCategories.length > 0 ? "" : "pl-6"}>
-                        <div className="flex items-center gap-3">
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center ${applied ? bg : 'bg-muted/30'}`}>
-                            <Icon className={`h-3.5 w-3.5 ${applied ? color : 'text-muted-foreground/50'}`} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">{label}</p>
-                            <p className="text-xs text-muted-foreground">{applied ? detail : 'Not applied'}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {(() => {
-                          if (!applied) {
-                            return <Badge variant="outline" className="text-muted-foreground/60 border-muted-foreground/20 text-[11px]">Not Applied</Badge>;
-                          }
-                          if (fullyRefunded) {
-                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Refunded</Badge>;
-                          }
-                          if (refunded > 0) {
-                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partial Refund</Badge>;
-                          }
-                          // A credit against this extension settled it. The row's own
-                          // remaining_amount still states the full pre-credit debt (the
-                          // 'Adjustment' row is filtered out of extRows), so without this
-                          // the operator sees "Not Paid $390.00" on a week that is settled
-                          // and reads the table as broken.
-                          if (extIsDead) {
-                            return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Not billable</Badge>;
-                          }
-                          if (extIsSettledByCredit) {
-                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Settled by credit</Badge>;
-                          }
-                          if (isPaid) {
-                            return <Badge variant="outline" className="text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-[11px]">Paid</Badge>;
-                          }
-                          if (isPartial) {
-                            return <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 text-[11px]">Partially Paid</Badge>;
-                          }
-                          if (isCancelledOrRejected) {
-                            return <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30 text-[11px]">Cancelled</Badge>;
-                          }
-                          return <Badge variant="outline" className="text-red-500 border-red-500/30 bg-red-500/10 text-[11px]">Not Paid</Badge>;
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className={`text-sm font-semibold ${!applied ? 'text-muted-foreground/50' : ''}`}>
-                          {formatCurrencyUtil(amount, tenant?.currency_code || 'USD')}
-                        </span>
-                        {isPartial && (
-                          <p className="text-xs text-muted-foreground">
-                            {formatCurrencyUtil(remaining_amount, tenant?.currency_code || 'USD')} remaining
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {refunded > 0 ? (
-                          <span className="text-sm text-amber-500 font-medium">{formatCurrencyUtil(refunded, tenant?.currency_code || 'USD')}</span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground/40">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right pr-6">
-                        <div className="flex items-center gap-2 justify-end">
-                        {!applied ? (
-                          <span className="text-muted-foreground/30">-</span>
-                        ) : hasUnpaid ? (
-                          <button
-                            className="text-xs font-medium text-blue-500 hover:text-blue-400 hover:underline"
-                            onClick={() => {
-                              setExtensionPaymentAmount(rowCollectable > 0 ? rowCollectable : amount);
-                              setExtensionPaymentCategories([category]);
-                              // Authoritative extensionId from rental_extension_totals.id —
-                              // don't trust (thisCharge.extension_id) because legacy rows
-                              // may have it null even when they belong to this extension.
-                              setExtensionPaymentExtensionId(group.extensionId || (thisCharge as any)?.extension_id || undefined);
-                              setShowExtensionPayment(true);
-                            }}
-                          >
-                            Add Payment
-                          </button>
-                        ) : isPaid && !fullyRefunded && canRefund ? (
-                          <button
-                            className="text-xs font-medium text-orange-500 hover:text-orange-400 hover:underline"
-                            onClick={() => {
-                              setRefundCategory(category);
-                              setRefundTotalAmount(amount);
-                              // Authoritative extensionId from rental_extension_totals.id.
-                              // Falls back to the charge's stamped extension_id only if the
-                              // group lookup is missing (legacy data with no totals row).
-                              setRefundExtensionId(group.extensionId || (thisCharge as any)?.extension_id || undefined);
-                              setRefundPaidAmount(Math.max(0, amount - refunded));
-                              setShowRefundDialog(true);
-                            }}
-                          >
-                            {refunded > 0 ? 'Refund More' : 'Refund'}
-                          </button>
-                        ) : fullyRefunded ? (
-                          <Check className="h-4 w-4 text-green-500 inline-block" />
-                        ) : (
-                          <span className="text-muted-foreground/30">-</span>
-                        )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            {/* Selection footer for targeted extension payment.
-                Gated on extSelectableCategories too: selectedExtCategories is ONE
-                component-level Set keyed by category NAME and shared by every
-                extension group, so ticking a row on one extension previously made
-                this footer render on a settled one showing "$0.00 selected" with a
-                live Add Payment button — which seeds the dialog with the whole
-                rental's outstanding, stamped against the wrong extension. */}
-            {selectedExtCategories.size > 0 && extSelectableCategories.length > 0 && extSelectedTotal > 0 && (
-              <div className="sticky bottom-0 border-t bg-primary/20 border-primary/40 px-6 py-3 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {selectedExtCategories.size} item{selectedExtCategories.size > 1 ? 's' : ''} selected &mdash;{' '}
-                  <span className="font-semibold text-foreground">{formatCurrencyUtil(extSelectedTotal, tenant?.currency_code || 'USD')}</span>
-                </p>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const cats = Array.from(selectedExtCategories);
-                    setExtensionPaymentCategories(cats);
-                    setExtensionPaymentAmount(extSelectedTotal);
-                    // CRITICAL: stamp the specific extension's id so
-                    // apply-payment's EXTENSION ISOLATION scopes allocation
-                    // to THIS extension's charges. Without this, the FIFO
-                    // allocator picks the oldest unpaid Extension* charge
-                    // (usually the first extension) and drains there first.
-                    setExtensionPaymentExtensionId(group.extensionId || undefined);
-                    setShowExtensionPayment(true);
-                  }}
-                >
-                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
-                  Add Payment
-                </Button>
-              </div>
-            )}
-            </>
-          );
-        };
-
-        const hasExtensions = extensionGroups.length > 0;
-
-        // No extensions: single card, no accordion
-        if (!hasExtensions) {
-          return (
-            <Card className={isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {renderOriginalBreakdownTable()}
-              </CardContent>
-            </Card>
-          );
-        }
-
-        // With extensions: one big Card → Accordion inside
         return (
           <Card className={isProcessingPayment ? 'opacity-50 pointer-events-none' : ''}>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-4">
               <CardTitle className="text-base font-medium">Payment Breakdown</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Accordion type="single" defaultValue="original" className="w-full space-y-3 px-4 pb-4">
-                {/* Original Rental */}
-                <AccordionItem value="original" className="border rounded-lg overflow-hidden">
-                  <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                    <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-green-500/10 flex items-center justify-center">
-                        <Car className="h-3 w-3 text-green-500" />
-                      </div>
-                      <span className="text-sm font-medium">Original Rental</span>
-                      <Badge variant="outline" className="text-[10px] ml-1">
-                        {formatCurrencyUtil(invoiceBreakdown.totalAmount, tenant?.currency_code || 'USD')}
-                      </Badge>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="px-0 pb-0">
-                    {renderOriginalBreakdownTable()}
-                  </AccordionContent>
-                </AccordionItem>
-
-                {/* Extension sections */}
-                {extensionGroups.map((group) => {
-                  // Insurance is now included in group.charges (and therefore
-                  // group.totalAmount) when it has a ledger entry. Only add the
-                  // policy premium on top if no Extension Insurance charge exists.
-                  const hasInsuranceCharge = group.charges.some(c => c.category === 'Extension Insurance');
-                  const extInsuranceAmt = hasInsuranceCharge ? 0 : (group.insurancePolicy?.premium_amount ?? 0);
-                  const extTotalWithInsurance = group.totalAmount + extInsuranceAmt;
-
-                  return (
-                    <AccordionItem key={`ext-${group.extensionNumber}`} value={`extension-${group.extensionNumber}`} className="border rounded-lg overflow-hidden">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                        <div className="flex items-center gap-2">
-                          <div className="h-6 w-6 rounded-full bg-blue-500/10 flex items-center justify-center">
-                            <CalendarPlus className="h-3 w-3 text-blue-500" />
-                          </div>
-                          <div className="text-left">
-                            <span className="text-sm font-medium">Extension #{group.extensionNumber}</span>
-                          </div>
-                          <Badge variant="outline" className="text-[10px] ml-1">
-                            {formatCurrencyUtil(extTotalWithInsurance, tenant?.currency_code || 'USD')}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-0 pb-0">
-                        {renderExtensionBreakdownTable(group)}
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                })}
-              </Accordion>
+              {renderOriginalBreakdownTable()}
             </CardContent>
           </Card>
         );
+
       })()}
 
       {/* Rental Details */}
@@ -4555,7 +3946,7 @@ const RentalDetail = () => {
                       </p>
                     )}
                     {/* Show original end date if rental has been extended */}
-                    {(rental.original_end_date || (!rental.is_extended && rental.previous_end_date)) && (
+                    {(rental.original_end_date || rental.previous_end_date) && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Originally: {parseLocalDate(rental.original_end_date || rental.previous_end_date!).toLocaleDateString('en-US')}
                       </p>
@@ -4576,45 +3967,6 @@ const RentalDetail = () => {
             <p className="text-xs text-muted-foreground mt-3 italic">
               Times shown in {tenant?.timezone || (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "local time")}
             </p>
-
-            {/* Extension History */}
-            {extensionGroups.length > 0 && (
-              <div className="mt-4 pt-3 border-t space-y-1.5">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Extension History</p>
-                {extensionGroups.map((group) => {
-                  const refCharge = group.rentalCharge;
-                  const refMatch = refCharge?.reference?.match(/\(([^)]+)\)/);
-                  const dateRange = refMatch?.[1] || '';
-                  return (
-                    <div key={group.extensionNumber} className="flex items-center gap-2 text-sm">
-                      <CalendarPlus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-muted-foreground">Extension #{group.extensionNumber}:</span>
-                      <span className="font-medium">{dateRange || `${group.charges.length} charges`}</span>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-sm">{formatCurrencyUtil(group.totalAmount + (group.charges.some(c => c.category === 'Extension Insurance') ? 0 : (group.insurancePolicy?.premium_amount || 0)), tenant?.currency_code || 'USD')}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Pending Extension Alert */}
-            {rental.is_extended && rental.previous_end_date && (
-              <Alert className="mt-4 border-amber-200 bg-amber-50 dark:bg-amber-950/30">
-                <CalendarPlus className="h-4 w-4 text-amber-600" />
-                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                  <span className="font-medium">Extension Requested:</span> Customer wants to extend until{' '}
-                  <strong>{parseLocalDate(rental.previous_end_date).toLocaleDateString('en-US')}</strong>
-                  <Button
-                    variant="link"
-                    className="ml-2 h-auto p-0 text-amber-700 dark:text-amber-300"
-                    onClick={() => setShowExtensionDialog(true)}
-                  >
-                    Review Request
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
 
           </div>
 
@@ -4795,32 +4147,6 @@ const RentalDetail = () => {
         canEdit={canEdit('rentals')}
         tenantId={tenant?.id}
         displayStatus={displayStatus}
-        extensionGroups={extensionGroups.map((g) => {
-          // Prefer authoritative dates from rental_extension_totals; fall back
-          // to the insurance policy or the rental charge reference for legacy
-          // rentals that don't have a rental_extensions row.
-          const extRow = (extensionTotals || []).find((e: any) => Number(e.sequence_number) === g.extensionNumber);
-          const ref = g.rentalCharge?.reference || '';
-          const dateMatch = ref.match(/\((.+?) → (.+?)\)/);
-          const parseRefDate = (d: string | undefined) => {
-            if (!d) return undefined;
-            // Try as-is first (may be partial like "Sep 12" → NaN in modern engines)
-            let parsed = new Date(d);
-            if (isNaN(parsed.getTime())) {
-              // Append current year for partial dates like "Sep 12"
-              parsed = new Date(`${d}, ${new Date().getFullYear()}`);
-            }
-            if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
-            return undefined;
-          };
-          const extInsurance = g.insurancePolicy;
-          return {
-            extensionNumber: g.extensionNumber,
-            entryDate: g.entryDate,
-            previousEndDate: extRow?.previous_end_date || extInsurance?.trip_start_date || parseRefDate(dateMatch?.[1]) || undefined,
-            newEndDate: extRow?.new_end_date || extInsurance?.trip_end_date || parseRefDate(dateMatch?.[2]) || undefined,
-          };
-        })}
         onViewAgreement={handleViewAgreementById}
       />
 
@@ -4836,15 +4162,7 @@ const RentalDetail = () => {
           isBonzahConnected={isBonzahConnected}
           canSellBonzah={bonzahCanSell}
           bonzahCdBalance={bonzahCdBalance}
-          onBuyInsurance={() => { setBuyInsuranceMode('original'); setShowBuyInsurance(true); }}
-          extensions={extensionTotals}
-          extensionDocs={extensionInsuranceDocs}
-          onBuyExtensionInsuranceFor={(extId) => {
-            setBuyInsuranceMode('extension');
-            setBuyInsuranceExtensionId(extId);
-            setShowBuyInsurance(true);
-          }}
-          onUploadExtensionInsuranceFor={(extId) => uploadInsuranceDoc({ extensionId: extId })}
+          onBuyInsurance={() => setShowBuyInsurance(true)}
         />
       )}
 
@@ -5808,40 +5126,15 @@ const RentalDetail = () => {
       {rental && (
         <BuyInsuranceDialog
           open={showBuyInsurance}
-          onOpenChange={(v) => {
-            setShowBuyInsurance(v);
-            if (!v) { setBuyInsuranceMode('original'); setBuyInsuranceExtensionId(null); }
-          }}
+          onOpenChange={setShowBuyInsurance}
           rental={rental}
-          mode={buyInsuranceMode}
-          extensionId={buyInsuranceExtensionId}
           onUploadOwnPolicy={() => {
-            const extId = buyInsuranceMode === 'extension' ? buyInsuranceExtensionId : null;
-            // Reset mode/extension like the onOpenChange close path does.
             setShowBuyInsurance(false);
-            setBuyInsuranceMode('original');
-            setBuyInsuranceExtensionId(null);
-            uploadInsuranceDoc({ extensionId: extId });
+            uploadInsuranceDoc({});
           }}
-          extensionDates={(() => {
-            if (buyInsuranceMode !== 'extension') return undefined;
-            // Prefer the specific extension's dates when one is selected; fall
-            // back to the legacy rental-level pending extension dates.
-            if (buyInsuranceExtensionId) {
-              const ext = extensionTotals.find(e => e.id === buyInsuranceExtensionId);
-              if (ext?.previous_end_date && ext?.new_end_date) {
-                return { start: ext.previous_end_date, end: ext.new_end_date };
-              }
-            }
-            if (rental.previous_end_date) {
-              return { start: rental.previous_end_date, end: rental.end_date };
-            }
-            return undefined;
-          })()}
           onPurchaseComplete={(premium) => {
             setInsurancePaymentAmount(premium);
-            setInsurancePaymentCategories(buyInsuranceMode === 'extension' ? ['Extension Insurance'] : ['Insurance']);
-            setInsurancePaymentExtensionId(buyInsuranceMode === 'extension' ? (buyInsuranceExtensionId || undefined) : undefined);
+            setInsurancePaymentCategories(['Insurance']);
             setInsurancePaymentMode(true);
           }}
         />
@@ -5857,7 +5150,6 @@ const RentalDetail = () => {
           rental_id={rental.id}
           defaultAmount={insurancePaymentAmount}
           targetCategories={insurancePaymentCategories}
-          extensionId={insurancePaymentExtensionId}
           insuranceChargeMode
         />
       )}
@@ -5885,7 +5177,6 @@ const RentalDetail = () => {
           category={refundCategory}
           totalAmount={refundTotalAmount}
           paidAmount={refundPaidAmount}
-          extensionId={refundExtensionId}
         />
       )}
 
@@ -6196,45 +5487,6 @@ const RentalDetail = () => {
             monthly_amount: rental.monthly_amount,
             start_date: rental.start_date,
             end_date: rental.end_date,
-          }}
-        />
-      )}
-
-      {/* Extension Request Dialog */}
-      {rental && (
-        <ExtensionRequestDialog
-          open={showExtensionDialog}
-          onOpenChange={setShowExtensionDialog}
-          rental={{
-            id: rental.id,
-            start_date: rental.start_date,
-            end_date: rental.end_date,
-            previous_end_date: rental.previous_end_date || null,
-            bonzah_policy_id: rental.bonzah_policy_id,
-            rental_period_type: rental.rental_period_type,
-            customer_id: rental.customer_id,
-            vehicle_id: rental.vehicles?.id,
-            customers: rental.customers,
-            vehicles: rental.vehicles,
-          }}
-        />
-      )}
-
-      {/* Admin Extend Rental Dialog */}
-      {rental && (
-        <AdminExtendRentalDialog
-          open={showAdminExtendDialog}
-          onOpenChange={setShowAdminExtendDialog}
-          rental={{
-            id: rental.id,
-            start_date: rental.start_date,
-            end_date: rental.end_date,
-            bonzah_policy_id: rental.bonzah_policy_id,
-            rental_period_type: rental.rental_period_type,
-            customer_id: rental.customer_id,
-            vehicle_id: rental.vehicles?.id,
-            customers: rental.customers,
-            vehicles: rental.vehicles,
           }}
         />
       )}

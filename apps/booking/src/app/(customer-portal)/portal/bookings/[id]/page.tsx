@@ -29,7 +29,6 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
 import { useRentalAgreements, type RentalAgreement } from '@/hooks/use-rental-agreements';
 import { useRentalInsurancePolicies, type CustomerInsurancePolicy } from '@/hooks/use-rental-insurance-policies';
-import { useRentalExtensionTotals, sumExtensionOutstanding } from '@/hooks/use-rental-extension-totals';
 import { useRentalInvoice, useRentalPaymentBreakdown } from '@/hooks/use-rental-invoice';
 import { useRentalCharges } from '@/hooks/use-rental-ledger-data';
 import {
@@ -64,9 +63,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { ExtendRentalDialog } from '@/components/customer-portal/ExtendRentalDialog';
 import PaymentBreakdown from '@/components/customer-portal/PaymentBreakdown';
-import { AutoExtensionCard } from '@/components/customer-portal/AutoExtensionCard';
 import type { CustomerRental } from '@/hooks/use-customer-rentals';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { vehicleDisplayName, vehicleDisplayLabel, displayRegistration,
@@ -455,13 +452,12 @@ export default function BookingDetailPage() {
         .select(`
           id, rental_number, start_date, end_date, status, monthly_amount, discount_applied, promo_code, rental_period_type,
           payment_status, approval_status, pickup_location, return_location,
-          created_at, is_extended, previous_end_date,
+          created_at, previous_end_date,
           original_end_date, cancellation_requested, cancellation_reason,
-          extension_checkout_url, extension_amount, delivery_method, delivery_address, delivery_fee,
+          delivery_method, delivery_address, delivery_fee,
           collection_fee, deposit_hold_status, deposit_hold_amount,
           document_status, docusign_envelope_id, signed_document_id,
           is_unlimited_mileage, unlimited_mileage_tier, unlimited_mileage_total,
-          auto_extend_enabled,
           vehicles:vehicle_id (id, reg, make, model, colour, photo_url, daily_mileage, weekly_mileage, monthly_mileage, excess_mileage_rate, ${VEHICLE_PHOTO_COLUMNS})
         `)
         .eq('id', id)
@@ -533,28 +529,18 @@ export default function BookingDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-refund-breakdown'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payments', filter: `rental_id=eq.${id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['customer-rental-payments', id] });
         queryClient.invalidateQueries({ queryKey: ['customer-rental-payments-total', id] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_applications' }, () => {
         queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
         queryClient.invalidateQueries({ queryKey: ['rental-payment-breakdown'] });
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rental_extensions', filter: `rental_id=eq.${id}` }, () => {
-        queryClient.invalidateQueries({ queryKey: ['rental-extension-totals'] });
-        queryClient.invalidateQueries({ queryKey: ['customer-rental-ledger', id] });
-        queryClient.invalidateQueries({ queryKey: ['rental-charges'] });
-        queryClient.invalidateQueries({ queryKey: ['customer-auto-extension', id] });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rentals', filter: `id=eq.${id}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['customer-rental-detail', id] });
-        queryClient.invalidateQueries({ queryKey: ['customer-auto-extension', id] });
       })
       .subscribe();
     return () => {
@@ -669,16 +655,6 @@ export default function BookingDetailPage() {
     return Object.values(amounts).reduce((s, v) => s + v, 0);
   }, [paymentBreakdownByCategory, invoiceBreakdown, rentalChargesForOutstanding, rental, tenant?.deposit_charge_enabled]);
 
-  // Phase 5: authoritative extension outstanding from the unified view.
-  // Replaces the old ledger-sum which drifted when extension insurance was
-  // added before its ledger entry landed, and which double-counted during
-  // partial refunds.
-  const { data: extensionTotals } = useRentalExtensionTotals(id || undefined);
-  const extensionOutstandingTotal = useMemo(
-    () => sumExtensionOutstanding(extensionTotals),
-    [extensionTotals]
-  );
-
   // Gallery photo first: it is the only image the operator can redact, and
   // putting the legacy vehicles.photo_url ahead of it silently served the
   // unblurred plate to the very tenants who asked us to hide it. Matches the
@@ -701,32 +677,6 @@ export default function BookingDetailPage() {
         return vehicle.monthly_mileage || vehicle.weekly_mileage || vehicle.daily_mileage;
     }
   })();
-
-  const [extendDialogOpen, setExtendDialogOpen] = useState(false);
-  const [showCancelExtension, setShowCancelExtension] = useState(false);
-
-  const canExtend = rental?.status === 'Active' && !rental?.is_extended;
-  const hasExtensionPending = rental?.is_extended === true;
-
-  const cancelExtension = useMutation({
-    mutationFn: async () => {
-      if (!rental?.id) throw new Error('Missing rental');
-      const { error } = await supabase
-        .from('rentals')
-        .update({ is_extended: false, previous_end_date: null })
-        .eq('id', rental.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-rental-detail', id] });
-      queryClient.invalidateQueries({ queryKey: ['customer-rentals'] });
-      toast.success('Extension request cancelled');
-      setShowCancelExtension(false);
-    },
-    onError: () => {
-      toast.error('Failed to cancel extension request');
-    },
-  });
 
   // ---- Loading state ----
 
@@ -820,9 +770,6 @@ export default function BookingDetailPage() {
                   <Badge className={getRentalStatusColor(rental.status)}>
                     {rental.status?.replace(/_/g, ' ')}
                   </Badge>
-                  {hasExtensionPending && (
-                    <Badge className="bg-amber-100 text-amber-800">Extension Pending</Badge>
-                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-1 truncate">
                   {vehicleTitle}
@@ -832,22 +779,6 @@ export default function BookingDetailPage() {
             );
           })()}
         </div>
-        {canExtend && (
-          <Button onClick={() => setExtendDialogOpen(true)}>
-            <CalendarPlus className="h-4 w-4 mr-2" />
-            Request Extension
-          </Button>
-        )}
-        {hasExtensionPending && (
-          <Button
-            variant="outline"
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setShowCancelExtension(true)}
-          >
-            <XCircle className="h-4 w-4 mr-2" />
-            Cancel Extension Request
-          </Button>
-        )}
       </div>
 
       {/* Vehicle photo + quick info */}
@@ -945,26 +876,13 @@ export default function BookingDetailPage() {
                 )}
               </div>
 
-              {rental.is_extended && rental.original_end_date && (
-                <div className="mt-3 pt-3 border-t text-sm">
-                  <div className="flex items-center gap-2 text-amber-700">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      Extended &mdash; Original end date:{' '}
-                      <span className="font-medium">{formatDate(rental.original_end_date)}</span>,
-                      Current end date:{' '}
-                      <span className="font-medium">{formatDate(rental.end_date)}</span>
-                    </span>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
         </div>
       )}
 
       {/* Balance summary */}
-      {(originalOutstanding + extensionOutstandingTotal) > 0 && (
+      {originalOutstanding > 0 && (
         <Card className="border-amber-200 dark:border-amber-900">
           <CardContent className="pt-4 pb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -974,27 +892,12 @@ export default function BookingDetailPage() {
                   Outstanding Balance
                 </p>
                 <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">
-                  {formatCurrency(
-                    originalOutstanding + extensionOutstandingTotal,
-                    currencyCode
-                  )}
+                  {formatCurrency(originalOutstanding, currencyCode)}
                 </p>
               </div>
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Weekly Billing / Auto-Extension — read-only customer view, synced with
-          the same rental_extension_totals data the admin sees. Renders only for
-          auto-extension rentals. */}
-      {(rental as any)?.auto_extend_enabled && (
-        <AutoExtensionCard
-          rentalId={(rental as any).id}
-          currencyCode={currencyCode}
-          taxPercent={tenant?.tax_enabled ? Number(tenant?.tax_percentage || 0) : 0}
-          timezone={(tenant as any)?.timezone}
-        />
       )}
 
       <Tabs defaultValue="payments" className="w-full">
@@ -1154,46 +1057,6 @@ export default function BookingDetailPage() {
         </Card>
       )}
 
-      {/* Extend Rental Dialog */}
-      {rental && (
-        <ExtendRentalDialog
-          open={extendDialogOpen}
-          onOpenChange={setExtendDialogOpen}
-          rental={rental as unknown as CustomerRental}
-        />
-      )}
-
-      {/* Cancel Extension Request Dialog */}
-      <AlertDialog open={showCancelExtension} onOpenChange={setShowCancelExtension}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Extension Request?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will cancel your request to extend
-              {rental?.previous_end_date
-                ? ` until ${format(parseDateOnly(rental.previous_end_date), 'MMM dd, yyyy')}`
-                : ''}
-              . You can submit a new extension request later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={cancelExtension.isPending}>Keep Request</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                cancelExtension.mutate();
-              }}
-              disabled={cancelExtension.isPending}
-              className="bg-destructive hover:bg-destructive/90"
-            >
-              {cancelExtension.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              ) : null}
-              Cancel Request
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -8,7 +8,6 @@
 // server route returns and renders the fields named here.
 
 export type ServiceKey =
-  | "auto_extend"
   | "deposit"
   | "return_reminder"
   | "daily_reminder";
@@ -40,26 +39,12 @@ export interface ServiceDisplay {
 
 /** Render order in the panel — roughly the cron-clock firing order. */
 export const SERVICE_ORDER: ServiceKey[] = [
-  "auto_extend",
   "deposit",
   "return_reminder",
   "daily_reminder",
 ];
 
 export const SERVICE_DISPLAY: Record<ServiceKey, ServiceDisplay> = {
-  auto_extend: {
-    label: "Auto-Extension",
-    icon: "CalendarPlus",
-    description:
-      "Extends the rental and charges the next period (test PI, inline). Steps day-by-day, end_date in lockstep.",
-    statusFields: [
-      { key: "autoExtendStatus", label: "Status", format: "text" },
-      { key: "chargeCount", label: "Periods charged", format: "number" },
-      { key: "endDate", label: "End date", format: "date" },
-      { key: "nextChargeAt", label: "Next charge", format: "datetime" },
-      { key: "failedAttempts", label: "Failed attempts", format: "number" },
-    ],
-  },
   deposit: {
     label: "Deposit Holds",
     icon: "ShieldCheck",

@@ -50,7 +50,6 @@ import Link from "next/link";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
-import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
@@ -68,8 +67,6 @@ import {
 const RentalsList = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
-  const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
 
@@ -359,26 +356,11 @@ const RentalsList = () => {
                     {rentals.map((rental) => (
                       <TableRow
                         key={rental.id}
-                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
+                        className={`hover:bg-muted/50 cursor-pointer ${rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
                         <TableCell className="font-medium">
-                          {rental.is_extended ? (
-                            <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
-                              <button
-                                className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRental(rental);
-                                  setShowExtensionDialog(true);
-                                }}
-                              >
-                                <CalendarPlus className="h-3 w-3" />
-                                Extension Requested
-                              </button>
-                            </div>
-                          ) : rental.cancellation_requested ? (
+                          {rental.cancellation_requested ? (
                             <div className="flex flex-col">
                               <span>{rental.rental_number}</span>
                               <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
@@ -467,16 +449,6 @@ const RentalsList = () => {
                             >
                               {rental.computed_status}
                             </Badge>
-                            {(rental as any).auto_extend_enabled && (
-                              <Badge variant="outline" className="text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[10px]">
-                                Auto-Extend
-                              </Badge>
-                            )}
-                            {(rental as any).auto_extend_status === 'paused' && (
-                              <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:bg-amber-950/30 text-[10px]">
-                                Paused
-                              </Badge>
-                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -567,31 +539,6 @@ const RentalsList = () => {
         </div>
       )}
 
-      {/* Extension Request Dialog */}
-      {selectedRental && (
-        <ExtensionRequestDialog
-          open={showExtensionDialog}
-          onOpenChange={(open) => {
-            setShowExtensionDialog(open);
-            if (!open) setSelectedRental(null);
-          }}
-          rental={{
-            id: selectedRental.id,
-            end_date: selectedRental.end_date || '',
-            previous_end_date: selectedRental.previous_end_date || null,
-            customers: {
-              id: selectedRental.customer.id,
-              name: selectedRental.customer.name,
-            },
-            vehicles: {
-              id: selectedRental.vehicle.id,
-              reg: selectedRental.vehicle.reg,
-              make: selectedRental.vehicle.make,
-              model: selectedRental.vehicle.model,
-            },
-          }}
-        />
-      )}
     </div>
   );
 };

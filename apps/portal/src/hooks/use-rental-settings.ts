@@ -46,11 +46,6 @@ export interface RentalSettings {
   return_reminder_hours: number | null;
   // Pay As You Go
   // Auto-extension (prepaid rolling rentals)
-  auto_extend_enabled: boolean | null;
-  auto_extend_default_charge_mode: 'auto_charge' | 'pay_link' | null;
-  auto_extend_default_lead_hours: number | null;
-  auto_extend_grace_hours: number | null;
-  auto_extend_max_retries: number | null;
 }
 
 const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
@@ -95,11 +90,6 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   return_reminder_hours: 24,
   // Pay As You Go
   // Auto-extension (prepaid rolling rentals)
-  auto_extend_enabled: false,
-  auto_extend_default_charge_mode: 'pay_link',
-  auto_extend_default_lead_hours: 0,
-  auto_extend_grace_hours: 48,
-  auto_extend_max_retries: 3,
 };
 
 /**
