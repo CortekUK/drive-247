@@ -1901,38 +1901,6 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // Send WhatsApp notification
-        let whatsAppSent = false;
-        const customerPhone = (customer as any)?.phone || '';
-        if (customerPhone && documentId) {
-            try {
-                const companyName = tenant?.company_name || 'Drive 247';
-                const refId = body.rentalId.substring(0, 8).toUpperCase();
-                const message = `\u{1F4DD} *Rental Agreement Ready to Sign*\n\nHi ${body.customerName},\n\n${companyName} has sent you a rental agreement (Ref: ${refId}) to sign.\n\nPlease check your email from BoldSign and click "Review and Sign" to complete.\n\nIf you have any questions, contact ${companyName}.`;
-
-                const whatsappResponse = await fetch(`${supabaseUrl}/functions/v1/send-signing-whatsapp`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseServiceKey}`,
-                    },
-                    body: JSON.stringify({
-                        customerPhone: customerPhone,
-                        message: message,
-                        tenantId: body.tenantId,
-                    }),
-                });
-
-                whatsAppSent = whatsappResponse.ok;
-                if (!whatsAppSent) {
-                    console.warn('WhatsApp edge function error:', await whatsappResponse.text());
-                }
-                console.log('WhatsApp signing notification:', whatsAppSent ? 'sent' : 'failed');
-            } catch (e) {
-                console.warn('WhatsApp notification error:', e);
-            }
-        }
-
         // Create in-app notification for the customer
         try {
             const { data: customerUser } = await supabase
@@ -1968,7 +1936,7 @@ export async function POST(request: NextRequest) {
         // request a failure — the document exists, credits are spent and the
         // agreement row is written — but the caller must be able to tell the
         // operator that the customer was not emailed.
-        return NextResponse.json({ ok: true, envelopeId: documentId, agreementId, emailSent, emailStatus, emailError, whatsAppSent });
+        return NextResponse.json({ ok: true, envelopeId: documentId, agreementId, emailSent, emailStatus, emailError });
 
     } catch (error: any) {
         console.error('API Error:', error);

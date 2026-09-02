@@ -2,14 +2,13 @@
 
 import { cn } from '@/lib/utils';
 import { format, isToday, isYesterday } from 'date-fns';
-import { Check, CheckCheck, MessageSquare, Mail, AlertCircle, Phone as PhoneIcon, PhoneIncoming, PhoneOutgoing, Voicemail, Play, Pause, Sparkles } from 'lucide-react';
+import { Check, CheckCheck, MessageSquare, Mail, AlertCircle, Phone as PhoneIcon, PhoneIncoming, PhoneOutgoing, Voicemail, Play, Pause } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ChatMessage, MessageChannel } from '@/hooks/use-chat-messages';
 import { BookingReferenceCard } from './BookingReferenceCard';
 import type { BookingReference } from './BookingPicker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState, useRef } from 'react';
-import { CallTranscriptDialog } from './call-transcript-dialog';
 
 /* Brand icons for channel indicators */
 function TwilioIconSmall({ className }: { className?: string }) {
@@ -151,8 +150,6 @@ export function ChatMessageBubble({
             <VoiceCallCard
               direction={metadata?.direction || 'outbound'}
               durationSeconds={metadata?.duration_seconds || 0}
-              hasTranscript={metadata?.has_transcript || false}
-              callSid={metadata?.call_sid || ''}
             />
           )}
 
@@ -334,19 +331,16 @@ function VoicemailPlayer({ recordingUrl, durationSeconds }: { recordingUrl: stri
   );
 }
 
-// Voice call card component — flashy neon style for calls with AI transcript
+// Voice call card component — renders historical call rows in the thread.
+// The AI transcript viewer that this card used to open is parked; the card
+// stays so past calls still read correctly in the timeline.
 function VoiceCallCard({
   direction,
   durationSeconds,
-  hasTranscript,
-  callSid,
 }: {
   direction: string;
   durationSeconds: number;
-  hasTranscript: boolean;
-  callSid: string;
 }) {
-  const [showTranscript, setShowTranscript] = useState(false);
   const isInbound = direction === 'inbound';
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -355,54 +349,23 @@ function VoiceCallCard({
   };
 
   return (
-    <>
-      <button
-        onClick={() => hasTranscript && setShowTranscript(true)}
-        className={cn(
-          'w-full text-left rounded-lg p-3 transition-all',
-          hasTranscript
-            ? 'bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-fuchsia-500/10 border border-indigo-500/30 hover:border-indigo-400/50 hover:shadow-[0_0_15px_rgba(99,102,241,0.15)] cursor-pointer'
-            : 'bg-amber-500/10 border border-amber-500/20'
-        )}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className={cn(
-              'w-8 h-8 rounded-full flex items-center justify-center',
-              hasTranscript
-                ? 'bg-gradient-to-br from-indigo-500 to-violet-600'
-                : 'bg-amber-500/20'
-            )}>
-              {isInbound ? (
-                <PhoneIncoming className={cn('h-4 w-4', hasTranscript ? 'text-white' : 'text-amber-600')} />
-              ) : (
-                <PhoneOutgoing className={cn('h-4 w-4', hasTranscript ? 'text-white' : 'text-amber-600')} />
-              )}
-            </div>
-            <div>
-              <p className="text-sm font-medium">
-                {isInbound ? 'Inbound' : 'Outbound'} call
-              </p>
-              <p className="text-xs text-muted-foreground">{formatTime(durationSeconds)}</p>
-            </div>
-          </div>
-          {hasTranscript && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-[11px] font-semibold shadow-lg shadow-indigo-500/25">
-              <Sparkles className="h-3 w-3" />
-              AI Summary
-            </div>
+    <div className="w-full rounded-lg p-3 bg-amber-500/10 border border-amber-500/20">
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-amber-500/20">
+          {isInbound ? (
+            <PhoneIncoming className="h-4 w-4 text-amber-600" />
+          ) : (
+            <PhoneOutgoing className="h-4 w-4 text-amber-600" />
           )}
         </div>
-      </button>
-
-      {showTranscript && (
-        <CallTranscriptDialog
-          callSid={callSid}
-          open={showTranscript}
-          onOpenChange={setShowTranscript}
-        />
-      )}
-    </>
+        <div>
+          <p className="text-sm font-medium">
+            {isInbound ? 'Inbound' : 'Outbound'} call
+          </p>
+          <p className="text-xs text-muted-foreground">{formatTime(durationSeconds)}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 

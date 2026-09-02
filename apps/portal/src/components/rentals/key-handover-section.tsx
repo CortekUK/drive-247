@@ -17,7 +17,6 @@ import {
   Loader2,
   User,
   Mail,
-  MessageCircle,
   Phone,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -129,7 +128,6 @@ export const KeyHandoverSection = ({
   // Derive enabled notification methods from tenant settings
   const enabledMethods = rentalSettings?.lockbox_notification_methods || ['email'];
   const emailEnabled = enabledMethods.includes('email');
-  const whatsappEnabled = enabledMethods.includes('whatsapp');
   const smsEnabled = enabledMethods.includes('sms');
 
   // Lockbox code state — pre-fill from vehicle, editable by admin
@@ -146,11 +144,8 @@ export const KeyHandoverSection = ({
   // Notification — driven by settings, with editable recipient
   const sendEmail = emailEnabled;
   const sendSms = smsEnabled;
-  const sendWhatsApp = whatsappEnabled;
   const [customerEmailOverride, setCustomerEmailOverride] = useState(customerEmail || '');
-  const [whatsAppPhone, setWhatsAppPhone] = useState(customerPhone || '');
   const [smsPhone, setSmsPhone] = useState(customerPhone || '');
-  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
 
   // Show lockbox option when feature is enabled in tenant settings (not dependent on vehicle having a code)
   const showLockboxOption = !!rentalSettings?.lockbox_enabled;
@@ -267,7 +262,7 @@ export const KeyHandoverSection = ({
           body: {
             customerName,
             customerEmail: customerEmailOverride || customerEmail,
-            customerPhone: (sendSms || sendWhatsApp) ? (smsPhone || whatsAppPhone || customerPhone) : customerPhone,
+            customerPhone: sendSms ? (smsPhone || customerPhone) : customerPhone,
             vehicleName,
             vehicleReg,
             lockboxCode,
@@ -282,12 +277,11 @@ export const KeyHandoverSection = ({
             defaultInstructions: rentalSettings?.lockbox_default_instructions || null,
             sendEmail,
             sendSms,
-            sendWhatsapp: sendWhatsApp,
           },
         });
 
-        const activeChannel = sendWhatsApp ? 'whatsapp' : sendSms ? 'sms' : 'email';
-        const recipientDisplay = sendWhatsApp ? (whatsAppPhone || customerPhone) : sendSms ? (smsPhone || customerPhone) : (customerEmailOverride || customerEmail);
+        const activeChannel = sendSms ? 'sms' : 'email';
+        const recipientDisplay = sendSms ? (smsPhone || customerPhone) : (customerEmailOverride || customerEmail);
 
         if (error) {
           console.error("Failed to send lockbox notification:", error);
@@ -300,7 +294,7 @@ export const KeyHandoverSection = ({
           } as any);
           toast({
             title: "Warning",
-            description: `WhatsApp notification failed to send. You may need to contact the customer manually.`,
+            description: `Lockbox notification failed to send. You may need to contact the customer manually.`,
             variant: "destructive",
           });
         } else {
@@ -333,8 +327,6 @@ export const KeyHandoverSection = ({
         .update({ delivery_method: 'in_person' })
         .eq("id", rentalId);
     }
-
-    // WhatsApp is now handled by notify-lockbox-code via sendWhatsapp flag — no separate call needed
 
     // Auto-save mileage if it has a value but hasn't been saved yet
     if (confirmHandover === 'giving' && givingMileage && !givingHandover?.mileage) {
@@ -626,20 +618,7 @@ export const KeyHandoverSection = ({
                     />
                   </div>
                 )}
-                {whatsappEnabled && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <MessageCircle className="h-3.5 w-3.5 text-primary" />
-                      <span className="font-medium">WhatsApp</span>
-                    </div>
-                    <PhoneInput
-                      value={whatsAppPhone}
-                      onChange={(val) => setWhatsAppPhone(val)}
-                      defaultCountry="US"
-                    />
-                  </div>
-                )}
-                {!emailEnabled && !smsEnabled && !whatsappEnabled && (
+                {!emailEnabled && !smsEnabled && (
                   <p className="text-xs text-muted-foreground">No notification method configured. Go to Settings → Bookings to set one up.</p>
                 )}
               </div>
@@ -657,27 +636,25 @@ export const KeyHandoverSection = ({
               <div className="sticky bottom-0 pt-3 pb-1 bg-inherit space-y-2 border-t mt-2 -mx-4 px-4">
                 <Button
                   onClick={() => givingCompleted ? setConfirmUndo("giving") : handleRequestHandover("giving")}
-                  disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || isSendingWhatsApp || (!givingCompleted && paygUpfrontBlocked)}
+                  disabled={isMarkingHanded || isUnmarkingHanded || isSendingLockbox || (!givingCompleted && paygUpfrontBlocked)}
                   variant={givingCompleted ? "outline" : "default"}
                   className="w-full"
                   title={!givingCompleted && paygUpfrontBlocked ? paygUpfrontMessage : undefined}
                 >
-                  {(isSendingLockbox || isSendingWhatsApp) ? (
+                  {isSendingLockbox ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <KeyRound className="h-4 w-4 mr-2" />
                   )}
                   {isSendingLockbox
                     ? "Sending lockbox code..."
-                    : isSendingWhatsApp
-                      ? "Sending WhatsApp..."
-                      : isMarkingHanded || isUnmarkingHanded
-                        ? "Processing..."
-                        : givingCompleted
-                          ? "Undo Collection"
-                          : showLockboxOption && deliveryMethodChoice === 'lockbox'
-                            ? "Confirm Collection & Send Code"
-                            : "Confirm Collection"}
+                    : isMarkingHanded || isUnmarkingHanded
+                      ? "Processing..."
+                      : givingCompleted
+                        ? "Undo Collection"
+                        : showLockboxOption && deliveryMethodChoice === 'lockbox'
+                          ? "Confirm Collection & Send Code"
+                          : "Confirm Collection"}
                 </Button>
 
                 {/* PAYG upfront-payment gate */}
@@ -861,15 +838,6 @@ export const KeyHandoverSection = ({
                         <span className="flex items-center gap-1.5 text-blue-600 font-medium">
                           <Phone className="h-3.5 w-3.5" />
                           An SMS with collection details will be sent to {smsPhone}.
-                        </span>
-                      </>
-                    )}
-                    {sendWhatsApp && whatsAppPhone && (
-                      <>
-                        <br /><br />
-                        <span className="flex items-center gap-1.5 text-green-600 font-medium">
-                          <MessageCircle className="h-3.5 w-3.5" />
-                          A WhatsApp message with collection details will be sent to {whatsAppPhone}.
                         </span>
                       </>
                     )}

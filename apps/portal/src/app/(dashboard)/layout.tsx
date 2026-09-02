@@ -32,7 +32,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { AppBannerStack } from "@/components/banners/app-banner-stack";
-import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 
@@ -354,7 +353,6 @@ export default function DashboardLayout({
         </SidebarInset>
 
         {/* Global voice call — always listening for inbound calls */}
-        <GlobalVoiceCallProvider />
 
         {/* Confirms a subscription that was paid OUTSIDE the portal — a sales
             link. Purely reassurance: dismissible, blocks nothing, and renders

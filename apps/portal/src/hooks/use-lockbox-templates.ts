@@ -32,16 +32,6 @@ const DEFAULT_SMS_TEMPLATE = {
   body: `Your vehicle {{vehicle_reg}} has been delivered. Lockbox code: {{lockbox_code}}. Ref: {{booking_ref}}`,
 };
 
-const DEFAULT_WHATSAPP_TEMPLATE = {
-  body: `*Vehicle Collection Confirmation*
-
-Hi {{customer_name}},
-
-Your vehicle *{{vehicle_name}}* ({{vehicle_reg}}) has been collected.
-
-Booking Ref: {{booking_ref}}`,
-};
-
 export function useLockboxTemplates() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
@@ -76,12 +66,6 @@ export function useLockboxTemplates() {
     const saved = getTemplate('sms');
     if (saved) return { body: saved.body };
     return DEFAULT_SMS_TEMPLATE;
-  };
-
-  const getWhatsAppTemplate = () => {
-    const saved = getTemplate('whatsapp');
-    if (saved) return { body: saved.body };
-    return DEFAULT_WHATSAPP_TEMPLATE;
   };
 
   const saveTemplate = useMutation({
@@ -119,7 +103,6 @@ export function useLockboxTemplates() {
     getTemplate,
     getEmailTemplate,
     getSmsTemplate,
-    getWhatsAppTemplate,
     saveTemplate,
   };
 }
