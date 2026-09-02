@@ -23,6 +23,35 @@
  * hold up on the system fallback stack.
  * ========================================================================== */
 
+/* ---------------------------------------------------------------------------
+ * Fonts — bundled, not linked.
+ *
+ * A <link> to fonts.googleapis.com does NOT work here. MV3's content security
+ * policy blocks remote stylesheets and font files outright, so the request is
+ * refused, nothing errors visibly, and every rule silently falls through to the
+ * system stack. The only way to actually ship DM Sans and Inter is to carry the
+ * files, which is what these are: the latin subset of each, straight from
+ * Google Fonts, as variable fonts so one file covers every weight we use.
+ *
+ * font-display:block rather than swap — this is a 420px popup that opens and
+ * closes in seconds, and a visible reflow from fallback to real font halfway
+ * through reading it is worse than ~50ms of nothing.
+ * ------------------------------------------------------------------------- */
+@font-face {
+  font-family: "DM Sans";
+  src: url("assets/fonts/dm-sans.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
 :root {
   color-scheme: light dark;
 
@@ -165,9 +194,13 @@
  * the viewport is genuinely smaller (page zoom, a short screen). */
 html, body {
   width: 420px;
-  max-width: 100vw;
+  /* NO vw/vh HERE — EVER.
+     A Chrome extension popup has no viewport until its content gives it one, so
+     100vw/100vh resolve against ~0 and clamp the popup out of existence: the
+     icon is clicked and nothing appears. This was exactly that bug. Chrome caps
+     popups at 800x600 by itself, so px is both sufficient and safe. */
   height: 600px;
-  max-height: 100vh;
+  max-height: 600px;
   margin: 0;
   overflow: hidden;
   overflow-x: hidden;   /* a stray wide element must never clip the popup */
