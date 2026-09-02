@@ -82,13 +82,6 @@ function formatActionName(action: string): string {
     payment_captured: 'Captured',
     payment_refunded: 'Refunded',
     payment_failed: 'Pay Failed',
-    fine_created: 'Fine Add',
-    fine_updated: 'Fine Edit',
-    fine_deleted: 'Fine Delete',
-    fine_charged: 'Fine Charged',
-    fine_waived: 'Fine Waived',
-    fine_paid: 'Fine Paid',
-    fine_appeal_successful: 'Appeal Won',
     invoice_created: 'Invoice Add',
     invoice_updated: 'Invoice Edit',
     invoice_deleted: 'Invoice Delete',
@@ -96,17 +89,6 @@ function formatActionName(action: string): string {
     document_uploaded: 'Doc Upload',
     document_updated: 'Doc Edit',
     document_deleted: 'Doc Delete',
-    plate_created: 'Plate Add',
-    plate_updated: 'Plate Edit',
-    plate_deleted: 'Plate Delete',
-    plate_assigned: 'Plate Assign',
-    plate_unassigned: 'Plate Remove',
-    promotion_created: 'Promo Add',
-    promotion_updated: 'Promo Edit',
-    promotion_deleted: 'Promo Delete',
-    testimonial_created: 'Review Add',
-    testimonial_updated: 'Review Edit',
-    testimonial_deleted: 'Review Delete',
     faq_created: 'FAQ Add',
     faq_updated: 'FAQ Edit',
     faq_deleted: 'FAQ Delete',
@@ -153,8 +135,7 @@ function getActionBadgeVariant(action: string): BadgeVariant {
     action.includes('deleted') ||
     action.includes('blocked') ||
     action.includes('cancelled') ||
-    action.includes('failed') ||
-    action.includes('waived')
+    action.includes('failed')
   )
     return 'destructive';
   if (
