@@ -43,11 +43,11 @@ export function FeatureCard({
           <Image
             src={imageSrc}
             alt={imageAlt}
-            width={856}
-            height={260}
+            width={2000}
+            height={828}
             priority={false}
             sizes="(min-width: 1024px) 60vw, 100vw"
-            className="pointer-events-none absolute bottom-2 left-2 h-auto w-[160%] max-w-none object-contain object-bottom"
+            className="pointer-events-none absolute bottom-2 right-2 h-auto w-[120%] max-w-none object-contain object-bottom"
           />
         )}
       </article>
@@ -71,16 +71,7 @@ export function FeatureCard({
           </p>
         </div>
 
-        {imageSrc && (
-          <Image
-            src={imageSrc}
-            alt={imageAlt}
-            width={516}
-            height={577}
-            sizes="120px"
-            className="pointer-events-none absolute right-5 bottom-4 h-auto w-[110px] object-contain drop-shadow-[0_8px_16px_rgba(16,130,193,0.2)]"
-          />
-        )}
+        <ShieldMark className="pointer-events-none absolute bottom-4 right-5 h-auto w-[104px]" />
       </article>
     );
   }
@@ -106,5 +97,44 @@ export function FeatureCard({
         {description}
       </p>
     </article>
+  );
+}
+
+/**
+ * The muted card's shield.
+ *
+ * This replaces a 321 KB glossy-blue 3D shield PNG that was painting 104 CSS
+ * pixels. Drawn inline instead: it is sharp at any device pixel ratio, costs
+ * about a kilobyte, carries no third-party licence, and is in the brand palette
+ * rather than the stock clipart's blue.
+ */
+function ShieldMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 96 108"
+      className={className}
+      role="img"
+      aria-label="Protected"
+    >
+      <path
+        d="M48 3 6 19v37c0 22.5 17.2 40.6 42 49 24.8-8.4 42-26.5 42-49V19L48 3Z"
+        fill="var(--brand-forest)"
+      />
+      <path
+        d="M48 13.5 15 26v30c0 17.9 13.4 32.6 33 39.7 19.6-7.1 33-21.8 33-39.7V26L48 13.5Z"
+        fill="none"
+        stroke="var(--brand-gold)"
+        strokeWidth="2"
+        strokeOpacity="0.55"
+      />
+      <path
+        d="M32 55.5 43.5 67 66 44.5"
+        fill="none"
+        stroke="var(--brand-gold)"
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

@@ -68,10 +68,10 @@ export function SafetyVerificationSection() {
           </div>
           <div className="relative -mx-4">
             <Image
-              src="/booking_landingpage/camaro.png"
-              alt="Red Chevrolet Camaro ZL1"
-              width={1039}
-              height={565}
+              src="/booking_landingpage/safety-car.webp"
+              alt="Black sports coupe, three-quarter front view"
+              width={2200}
+              height={970}
               sizes="100vw"
               className="h-auto w-full object-contain drop-shadow-[0_20px_30px_rgba(0,0,0,0.12)]"
               priority={false}
@@ -83,10 +83,10 @@ export function SafetyVerificationSection() {
         {/* Desktop overlay layout */}
         <div className="relative hidden lg:block lg:min-h-[480px]">
           <Image
-            src="/booking_landingpage/camaro.png"
-            alt="Red Chevrolet Camaro ZL1"
-            width={1039}
-            height={565}
+            src="/booking_landingpage/safety-car.webp"
+            alt="Black sports coupe, three-quarter front view"
+            width={2200}
+            height={970}
             sizes="60vw"
             className="absolute inset-x-[-10%] inset-y-0 m-auto h-auto w-[120%] object-contain drop-shadow-[0_30px_40px_rgba(0,0,0,0.12)]"
             priority={false}

@@ -84,10 +84,10 @@ export async function HeroSection() {
         <div className="relative min-h-[280px] sm:min-h-[360px] lg:min-h-[640px]">
           <div className="absolute inset-x-[-4%] inset-y-0 flex items-center lg:inset-x-[-15%]">
             <Image
-              src="/booking_landingpage/lexus-hero.png"
-              alt="Lexus RX in Nori Green Pearl"
-              width={934}
-              height={501}
+              src="/booking_landingpage/hero-car.webp"
+              alt="Black luxury SUV, three-quarter front view"
+              width={2600}
+              height={1207}
               priority
               sizes="(min-width: 1024px) 60vw, 100vw"
               className="h-auto w-full drop-shadow-[0px_25px_30px_rgba(0,0,0,0.12)]"

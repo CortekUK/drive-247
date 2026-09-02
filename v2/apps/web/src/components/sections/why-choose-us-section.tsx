@@ -45,8 +45,8 @@ export async function WhyChooseUsSection() {
               title={featureCard.title}
               description={featureCard.description}
               variant="feature"
-              imageSrc="/booking_landingpage/rolls-royce.png"
-              imageAlt="Rolls-Royce Phantom"
+              imageSrc="/booking_landingpage/feature-car.webp"
+              imageAlt="White executive saloon, three-quarter front view"
             />
           )}
 
@@ -70,8 +70,6 @@ export async function WhyChooseUsSection() {
                 title={mutedCard.title}
                 description={mutedCard.description}
                 variant="muted"
-                imageSrc="/booking_landingpage/shield.png"
-                imageAlt="Privacy shield"
               />
             )}
           </div>
