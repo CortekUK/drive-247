@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen, Wrench } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen, Wrench, Sparkles } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -39,6 +39,7 @@ import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
+import { useCustomSiteEnabled } from "@/hooks/use-custom-site";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -213,6 +214,7 @@ export function AppSidebar() {
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";
   const { isLive } = useSetupStatus();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
+  const { enabled: customSiteEnabled } = useCustomSiteEnabled();
 
   // Feedback entry point. Available to every role — a `viewer` hits the same
   // bugs as a head admin, so gating this on permissions would silence exactly
@@ -343,6 +345,11 @@ export function AppSidebar() {
       icon: AnimatedEarth,
       items: [
         { name: "Website Content", href: "/cms", icon: AnimatedEarth },
+        // Only while this tenant's custom website is switched on by a super
+        // admin. The route itself re-checks, so a bookmark cannot get in.
+        ...(customSiteEnabled
+          ? [{ name: "New Website Content", href: "/cms/new-website", icon: Sparkles }]
+          : []),
         { name: "Audit Logs", href: "/audit-logs", icon: AnimatedHistory },
         { name: "Manage Users", href: "/users", icon: AnimatedUsers, headAdminOnly: true },
       ].filter(item => {

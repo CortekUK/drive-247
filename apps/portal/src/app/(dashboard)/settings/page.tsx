@@ -25,6 +25,7 @@ import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Be
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { CustomSiteAccentField } from '@/components/settings/custom-site-accent-field';
 import { useTenant } from '@/contexts/TenantContext';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
@@ -2799,6 +2800,10 @@ const Settings = () => {
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
+
+              {/* The custom booking site's one operator-set colour. It saves
+                  itself, so it stays out of the branding form's dark-sync. */}
+              <CustomSiteAccentField />
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {/* Undo for anything unsaved — including a "Sync dark theme from light". */}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Save, Loader2, Image, Phone, Mail, MapPin, Globe } from "lucide-react";
@@ -118,6 +119,47 @@ export function SiteSettingsEditor({
               label="Site Logo"
               description="Upload your logo (recommended: PNG with transparent background)"
             />
+
+            {/* The dark-background upload. Optional: without it the site
+                falls back to the main logo on dark surfaces, which most marks
+                survive. A logo with dark lettering does not, which is what
+                this is for. */}
+            <div className="border-t pt-4">
+              <LogoUploadWithResize
+                currentLogoUrl={logoData.dark_logo_url || ""}
+                logoAlt={logoData.logo_alt}
+                onLogoChange={(url) => {
+                  const next = { ...logoData, dark_logo_url: url };
+                  setLogoData(next);
+                  onSaveLogo(next);
+                }}
+                onAltChange={(alt) => setLogoData({ ...logoData, logo_alt: alt })}
+                label="Dark-background Logo (Optional)"
+                description="Used on the footer and in dark mode. Falls back to your main logo."
+              />
+            </div>
+
+            {/* Whether the site prints the company name beside the mark. Not
+                guessed from the image: a logo that already contains the name
+                would print it twice, and an icon-only mark shown alone leaves
+                the header anonymous. */}
+            <div className="flex items-start justify-between gap-4 border-t pt-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="show-company-name">Show company name beside the logo</Label>
+                <p className="text-sm text-muted-foreground">
+                  Turn this off if your logo already includes your company name.
+                </p>
+              </div>
+              <Switch
+                id="show-company-name"
+                checked={logoData.show_company_name !== false}
+                onCheckedChange={(v) => {
+                  const next = { ...logoData, show_company_name: v };
+                  setLogoData(next);
+                  onSaveLogo(next);
+                }}
+              />
+            </div>
 
             <div className="border-t pt-4">
               <div className="space-y-2">
