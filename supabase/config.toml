@@ -442,3 +442,19 @@ verify_jwt = true
 # function resolves tenant_id from it server-side.
 [functions.turo-bridge-ingest]
 verify_jwt = false
+
+# turo-bridge-reconcile accepts EITHER door: the extension's pairing token in the
+# body (the operator is signed into turo.com, not Drive247) or a portal JWT for
+# the operator-facing actions. It therefore has to run with verify_jwt = false
+# and do its own auth — which it does, refusing outright when neither credential
+# is present, and 403ing when a token and a JWT name different tenants.
+[functions.turo-bridge-reconcile]
+verify_jwt = false
+
+# turo-bridge-promote and turo-bridge-confirm-vehicle-map deliberately have NO
+# entry here, and that is load-bearing: with no entry the gateway applies the
+# default verify_jwt = true, so both refuse without a real portal session.
+# Promotion creates rentals and customers; a vehicle mapping writes
+# turo_vehicle_map.confirmed_by, which is NOT NULL by design. Neither decision
+# may be made by a bearer of a pairing token, because a token proves which
+# tenant and never which person. Do not add them.

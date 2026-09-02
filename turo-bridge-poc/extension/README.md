@@ -1,17 +1,42 @@
-# Drive247 Turo Bridge (PoC)
+# Drive247 Turo Bridge
 
-A Chrome extension that pulls **one** upcoming reservation out of an operator's
-own logged-in Turo session and lands it in their Drive247 portal.
+A Chrome extension that reads an operator's **own logged-in Turo host calendar**
+and lands it in their Drive247 portal.
 
-This is a proof of concept for a demo, not a product. The entire scope is:
+There are two paths in here and they are deliberately separate:
 
-1. Load the unpacked extension in Chrome
-2. Click it, paste a pairing token
-3. One reservation syncs from Turo
-4. That reservation appears in the Drive247 portal
+| | What it does | Status |
+|---|---|---|
+| **Sync one reservation** | The original proof of concept. One click, one best-scoring reservation, one row. | Unchanged. Still the demo. |
+| **Sync my Turo calendar** | The real read. A resumable, paginated walk over every upcoming trip, with typed degraded-read handling and an absence ledger. | New. Foundation, not yet met a real Turo response. |
 
-Everything else — multiple trips, scheduling, promotion into `rentals`,
-two-way sync — is explicitly out of scope.
+**Nothing in here has ever run against real Turo data, and that is a permanent
+constraint, not a temporary one** — Turo does not operate in our country and we
+have no host account. Every field name is a reconstruction. The whole design
+follows from that one fact: the parser *discovers* fields rather than assuming
+them, refuses to emit a value it is unsure of, and reports what it could not
+read instead of inventing something plausible.
+
+## The one idea worth understanding
+
+> **Acquiring a block is cheap and reversible. Releasing one sells the same car
+> twice.**
+
+Every rule below is that asymmetry applied. Concretely, it means the extension
+carries **two independent permissions, never one**:
+
+- **`mayWrite`** — may we save the trips we did read? Almost always yes. Saving
+  a trip we can see is idempotent and harmless even from a half-finished read.
+- **`mayRelease`** — may the *absence* of a trip be treated as that trip having
+  ended? Almost always **no**. It requires three separate facts to line up: the
+  outcome permits it, the walk demonstrably reached the end of the feed, **and**
+  a second independent endpoint confirmed the Turo session was healthy.
+
+A degraded read — a WAF returning HTTP 200 with an empty body, an expired
+session, a field Turo renamed overnight — produces *fewer records*. If fewer
+records could release blocks, the cars behind those trips go back on sale while
+they are physically out on rent. So absence is never evidence. Only something we
+positively **read** can release anything.
 
 ---
 
@@ -50,7 +75,10 @@ copy it straight into the popup.
 
 ---
 
-## What to expect
+## What to expect — the one-reservation demo
+
+*(The full-sync path has its own states; see **The full sync, step by step** and
+**Why the progress readout has no bar** below.)*
 
 The popup always ends in one of these states, and the **badge under the status
 line always tells you which data path ran**. That badge is the most important
@@ -102,20 +130,30 @@ reasons you may see:
 
 ## How it works
 
+Both paths share the same plumbing. The difference is how many times the middle
+of it runs, and how much is written down between the turns.
+
 ```
 popup.js            view only; owns no state, writes only the token
-   │  chrome.runtime.sendMessage({type:"SYNC_ONE"})
+   │  sendMessage({type:"SYNC_ONE"})      or  {type:"SYNC_ALL"}
    ▼
-background.js       the service worker — orchestrates one click
+background.js       the service worker
    │  chrome.scripting.executeScript  → turo.com tab, ISOLATED world
-   ▼
-content-turo.js     fetch the feed, classify the outcome, normalise ONE trip
-   │                (falls back to fixture.js here, in-page)
+   ▼                                     (MAIN world on one retry, see below)
+content-turo.js     fetch, classify the outcome, normalise
+   │                  SYNC_ONE : one best-scoring trip, fixture on failure
+   │                  SYNC_ALL : one PAGE, via turo-read-contract.js
    ▼  result[0].result
-background.js       POST { token, source, reservation } to turo-bridge-ingest
-   ▼
-Supabase edge fn    resolves tenant from sha256(token), upserts one row
+background.js       POST { token, source, reservation } — ONE trip per call
+   ▼                persist the receipt only AFTER the ack
+Supabase edge fn    resolves tenant from the token, upserts one row
 ```
+
+Everything the multi-batch run needs to continue lives in
+`chrome.storage.local`, never in a JS variable: the cursor (`turoCursor`), the
+page awaiting acknowledgement (`syncPending`), the per-record rows and
+diagnostics (`syncSummary`), the view model (`syncState`) and the previous run's
+ids (`syncManifest`).
 
 ### The read happens inside a turo.com tab, never in the worker
 
@@ -173,6 +211,222 @@ code, and a bug in the parser would break the demo rather than hide behind it.
 
 ---
 
+## The full sync, step by step
+
+Click **Sync my Turo calendar**. The service worker then does this, and every
+step is written to `chrome.storage.local` *before* the network call it
+describes:
+
+```
+  probe the session   GET /api/vehicles/me
+        │             (also the fleet read — see "How empty is told apart from blocked")
+        ▼
+  read a page   ───▶  normalise each trip   ───▶  flush, one POST per trip
+        ▲                                              │
+        └──────────  next page, if the feed gave us one ┘
+        ▼
+  finish: coverage verdict, the two gates, absence ledger
+```
+
+### Surviving the service worker being killed
+
+MV3 kills the worker at any moment — after ~30 seconds idle, after ~5 minutes of
+work, and completely while Chrome is quit. A long-running loop holding progress
+in a local variable is not a design, it is a bug that shows up on someone else's
+machine. So:
+
+| Rule | How |
+|---|---|
+| **No module-scope state holds progress** | The only mutable at module scope is a re-entrancy latch, and losing it to a worker death is *correct* — a dead worker has no concurrent pump to guard against. Everything else is in `chrome.storage.local`. |
+| **The intent is persisted before the await that fulfils it** | The cursor records "I am about to read page N" and is written *before* the fetch. A worker killed mid-read wakes knowing exactly what it was doing. |
+| **The receipt is written only after the acknowledgement** | A death between "read" and "ingest acked" replays exactly one page. That is safe because the ingest upserts on `(tenant_id, reservation_id)` — at-least-once delivery over an idempotent sink, which is the only guarantee an MV3 worker can honestly offer. |
+| **A dead worker can wake itself** | `chrome.alarms` is the only thing that can revive one, so an active run keeps a 1-minute backstop alarm. `setTimeout` still handles the ~1.2s pacing between pages whenever the worker happens to be alive, because a 1-minute floor would make a 3-page sync take 3 minutes. |
+
+This is tested literally: `background-orchestrator.test.js` starts a run, throws
+away the entire module *and its pending timers*, re-requires it against the same
+storage, and asserts the sync still finishes with every record delivered.
+
+### The ingest takes one reservation per call
+
+`supabase/functions/turo-bridge-ingest/index.ts` reads a single `reservation`
+object. There is no batch endpoint and this extension does not own that
+function, so a page of *N* trips becomes *N* sequential POSTs. That is why the
+flush is its own resumable phase rather than one call: each acknowledged record
+is removed from the stored pending list immediately, so a worker death partway
+through a page neither loses the trips that landed nor double-writes them.
+
+---
+
+## How "empty" is told apart from "blocked"
+
+These four things produce **identical bytes**:
+
+- a WAF returning HTTP 200 with `{"trips":[]}`
+- an expired Turo session
+- an envelope key Turo renamed overnight
+- a host who genuinely has no upcoming trips
+
+An empty trips list therefore means *nothing on its own*. It produces the
+outcome `EMPTY_UNCONFIRMED`, which writes nothing and releases nothing. The only
+thing that can promote it to `NO_TRIPS_CONFIRMED` is a **second, independent
+endpoint** saying the session is healthy — `GET /api/vehicles/me`, which we want
+anyway for vehicle identity. One extra request buys the whole distinction.
+
+A non-empty vehicle list counts as corroboration. An **empty** one deliberately
+does not: an operator we are migrating *off* Turo owns cars by definition, so
+zero vehicles and zero trips is far likelier a degraded surface than a real
+state.
+
+---
+
+## Why the progress readout has no bar
+
+The easiest bug to write in this entire feature is `processed / total` where
+`total` came from the same possibly-degraded response as `processed`. A WAF that
+truncates a list to 8 items will just as happily report `total: 8`, and the
+operator sees a full green bar over half a calendar.
+
+So there is no bar. The popup shows:
+
+- **`Batch 3 · 47 trips read so far`** while walking — a number with no
+  denominator, because there is no honest denominator yet
+- **`Batch 3 of 3 · 47 trips read`** only once the walk has *proved* it reached
+  the end of the feed
+- absolute counts (`Saved`, `Need a vehicle`, `Check these`, `Could not read`) —
+  never a percentage, all of them counted from what we actually parsed
+- a coverage sentence that reads *"read 8 trips (there may be more — page
+  failed)"* when incomplete, and is asserted by test never to contain `" of "`
+
+What Turo *claimed* the total was is captured as `declaredTotal` and shown only
+in the diagnostics. It corroborates; it never counts.
+
+`popup-render.test.js` renders the real orchestrator output through the real
+`popup.html` and asserts the string `"N of N"` never appears on a truncated run.
+
+---
+
+## When a trip disappears
+
+A trip that was in the last sync and is not in this one is classified, and only
+one of these classifications frees a car:
+
+| What we observed | Verdict | Effect |
+|---|---|---|
+| We **read** it with a cancelled status | `explicit_cancelled_status` | Dates freed. This is *presence*, not absence. |
+| A targeted lookup returned "gone" | `targeted_404` | Dates freed. |
+| Another trip claims to replace it | `superseded` | **Dates stay blocked.** It moved; it did not end. |
+| It simply was not in the response | `absent_only` | **Dates stay blocked, forever if need be.** |
+
+`absent_only` never releases, no matter how many consecutive syncs repeat it.
+Repeating an unreliable observation does not make it reliable — a WAF that
+returns 200-with-nothing does so every single time.
+
+And even positive evidence is ANDed with the run's own `mayRelease`, so a
+cancellation read during a truncated walk still changes nothing.
+
+### The ledger is unioned, not replaced
+
+An id dropped from the manifest can never be diffed again, so a degraded run
+overwriting it would quietly erase our own memory of trips that are still real.
+The only id ever allowed to fall out is one with positive release evidence in a
+run that earned `mayRelease`.
+
+---
+
+## Vehicle identity, and why it is the hard part
+
+In the Drive247 database `vehicles.reg` is globally unique — 461 rows, 461
+distinct — while `vehicles.vin` is **not**: 400 non-null values across only 326
+distinct, so 74 rows share a VIN with another row. That single fact settles the
+ladder:
+
+| Evidence | Confidence | Needs a human? |
+|---|---|---|
+| `turo_vehicle_id` from a real nested vehicle object | high | no |
+| `plate_exact` — a plate stated as a plate | high | no |
+| `label_plate_parsed` — a plate mined out of `"Owner 1 Wagoneer (Jon) (CA #9DUC203)"` | medium | **yes** |
+| `vin_unique` | medium | **yes** |
+| `label_fuzzy` — a name and nothing else | low | **yes** |
+| `unbound` | low | **yes** |
+
+A VIN can raise confidence in a match reached another way. It can never *be* the
+match.
+
+### A defect this code refuses to inherit
+
+`turo-read-contract.js` hands the **whole trip object** to its vehicle reader
+when a trip carries no nested `vehicle` object, and that reader's first rung
+looks for `id`. The result is that the *trip's* id is adopted as the *vehicle's*
+identity, with confidence `high` and `requiresReview: false`. Verified:
+
+```js
+{ id: 900000004, reservationId: "R-900000004", vehicleLabel: "Owner 1 Wagoneer (Jon) (CA #9DUC203)" }
+  -> vehicle.turoVehicleId === "900000004"   // that is the TRIP
+```
+
+That is worse than being unbound, because `turo_vehicle_id` is the one rung that
+matches a car *without* a human confirming it. `hardenVehicle()` in
+`content-turo.js` refuses that binding, re-mines the label for a plate, moves
+the record **down** the ladder, and records the rejected id so it shows up in
+the run report rather than being silently swallowed. It can only ever reduce
+confidence, never raise it.
+
+---
+
+## The bundled sample data is not a bypass
+
+`fixture.js` is a substitute **network**, not a substitute pipeline. A sample
+run goes through the same `classifyBody`, the same `extractItems`, the same
+`detectPagination` and the same normaliser a live response would. It is three
+cursor-paginated pages, and several records in it are **deliberately awkward** so
+the tolerant paths run on every single sync rather than only on the day Turo
+changes something:
+
+| Record | What is wrong with it | What must happen |
+|---|---|---|
+| FX-2 | spans a month boundary (28 Sep → 3 Oct) | imported intact |
+| FX-3 | no end date at all | **rejected**, `ends_at` reported |
+| FX-4 | no vehicle object — only `"Owner 1 Wagoneer (Jon) (CA #9DUC203)"` | plate mined, marked review-required |
+| FX-5 | `return` renamed to `tripEndTs` | **rejected**, and `tripEndTs` is *named on screen* |
+| FX-6 | cancelled | the one thing that may release |
+| FX-7 | claims to replace a trip from the last run | followed as a move, not a disappearance |
+| FX-8 | same-day turnaround with FX-2 (back 10:00, out 16:00) | both survive as separate trips |
+| FX-9 | `COMPLETED`, and in the past | held 48h past the end anyway |
+| FX-10 | no timezone, no guest | lands, with both reported as unknown |
+| FX-11 | VIN, no plate, no id | bound at medium confidence, review-required |
+
+Plus seven degraded **scenarios** selectable from the popup — WAF empty 200, bot
+challenge, expired session, renamed envelope, cut-off stream, 429, and silent
+truncation — so every gate can be exercised on a machine that will never see
+Turo.
+
+Anything produced from this file is stamped `source: "fixture"` all the way to
+the database, whose column carries `CHECK (source IN ('turo','fixture'))`, and
+the popup says *"sample data"* out loud. A demo that cannot tell you which of
+the two things it just did is worse than no demo.
+
+---
+
+## Running the tests
+
+No build step, no test runner, no dependencies — plain `node`:
+
+```bash
+cd turo-bridge-poc/extension
+node turo-read-contract.test.js          # the read layer          (78 assertions)
+node background-orchestrator.test.js     # the resumable sync      (79 assertions)
+node popup-render.test.js                # the UI, via jsdom       (30 assertions)
+```
+
+The orchestrator suite fakes the whole browser: `chrome.storage.local` is a
+plain object, the tab is the bundled fixture, and "the worker was killed" is
+implemented literally. The popup suite renders the *actual* states the
+orchestrator produced through the *actual* `popup.html`, then reads the rendered
+text back out — so if the wrong sentence ever reaches the screen, it fails
+there rather than in front of an operator.
+
+---
+
 ## Security posture
 
 - **We never ask for Turo credentials.** There is no login form in this
@@ -199,7 +453,8 @@ code, and a bug in the parser would break the demo rather than hide behind it.
 | Permission | Why |
 |---|---|
 | `scripting` | The only way to run the reader inside a real turo.com tab. It *is* the mechanism. |
-| `storage` | Persists the token and the last result so nothing is lost when the MV3 worker is evicted. |
+| `storage` | Persists the token, the run cursor and every result. On the multi-batch path this is not a convenience — it is the *only* thing that survives the worker being killed, so it holds all progress. |
+| `alarms` | The only mechanism that can revive a dead MV3 service worker. Without it an interrupted sync waits for the operator to click **Continue**; the code degrades to exactly that if the permission is ever stripped. |
 | `https://turo.com/*`, `https://*.turo.com/*` | Injecting into the operator's own Turo tab — and what makes `tabs.query({url})` work **without** the `tabs` permission. |
 | `https://hviqoaokxvlancmftwuo.supabase.co/*` | POST the reservation to our own edge function. |
 
@@ -217,26 +472,59 @@ on the user's click, so the extension does literally nothing until invoked.
 
 | File | Role |
 |---|---|
-| `manifest.json` | MV3 manifest. Classic service worker, 2 permissions, 3 host permissions. |
-| `background.js` | The service worker. Orchestrates one click; the only thing that talks to Drive247. |
-| `content-turo.js` | Runs in the turo.com tab. Fetches, classifies, normalises. Also `importScripts`-ed by the worker so the fixture path reuses the same normaliser. |
-| `fixture.js` | The bundled sample reservation. Clearly labelled, in-band. |
-| `popup.html` / `popup.css` / `popup.js` | The popup. A view only — it owns no state. |
+| `manifest.json` | MV3 manifest. Classic service worker, 3 permissions, 3 host permissions. |
+| `background.js` | The service worker. Owns **both** paths: the one-click PoC and the resumable multi-batch run. The only thing that talks to Drive247. |
+| `turo-read-contract.js` | The read layer: degraded-read taxonomy, pagination detection, tolerant normalisation, coverage verdict, absence ledger, cursor. Pure functions plus two tab-only fetchers. Owned by a sibling design; treated here as settled. |
+| `turo-contract.d.ts` | Types for the above. No build step — `tsc --noEmit --strict` only. |
+| `content-turo.js` | Runs in the turo.com tab. The original one-reservation reader, **plus** the v3 multi-page entry points (`collectPage`, `collectVehicles`) and `hardenVehicle()`. Also `importScripts`-ed by the worker so the fixture path reuses the same parser. |
+| `fixture.js` | Bundled sample data: 11 deliberately awkward trips over 3 pages, a fleet, a previous-run manifest, and 7 degraded scenarios. A substitute network, not a substitute pipeline. |
+| `popup.html` / `popup.css` / `popup.js` | The popup. A view only — it owns no state and the run outlives it. |
+| `*.test.js` | Three suites, plain `node`. See **Running the tests**. |
 
 ---
 
 ## Known limits
 
-- **Nothing here has run against a real Turo response.** There is no Turo
-  account to test with and no published schema to check against. The parser is
-  built so that being wrong is *survivable* — an unrecognised shape yields the
-  labelled fixture plus an honest reason string, never a crash and never a wrong
-  date — but do not read this README as a claim that the live path is verified.
-- **One reservation, not many.** `collectOneReservation()` returns the single
-  best-scoring candidate. Pagination and multi-trip import are out of scope.
+Read these as the honest edge of what has been built, not as a to-do list.
+
+- **Nothing here has run against a real Turo response, and nothing will until
+  someone has a host account.** Every field name, every envelope key, every
+  request parameter is a reconstruction. The design absorbs that: an
+  unrecognised shape produces a *reported unknown*, never a guess. But do not
+  read this README as a claim that the live path is verified — it is not, and
+  the first live run will almost certainly need alias edits.
+- **The first live run is the schema.** Every page contributes to a
+  `keyHistogram` of the keys Turo actually sent, and every rejected record
+  carries the key names it was carrying. After one real run, fixing an alias
+  list is a one-line change informed by data rather than an investigation.
+  That is the entire recovery plan and it is deliberate.
+- **`PARAM.cursor` / `offset` / `limit` / `page` are guessed *request*
+  parameter names** — a separate unknown from the response key names. They are
+  only used when the feed does **not** hand back a full next-URL. If Turo
+  returns a `links.next`, we never guess at all, and that path is preferred.
+- **`explicitEnd` is derived, not reported.** `readPage()` consumes the
+  envelope's `hasMore` / `isLastPage` signal internally and does not hand it
+  back, so `content-turo.js` reconstructs it from the pagination plan. The
+  reconstruction is conservative — it can only fail by refusing to call a
+  finished walk finished, which costs an unnecessary "there may be more" and
+  never a wrong release. Worth replacing with the real value if `readPage` ever
+  returns it.
+- **`SUSPECT_FIRST_PAGE = 50`**, the heuristic that decides whether a first page
+  was capped, is a guess. Turo returns ~200 per *search* page; the host-trips
+  page size is unconfirmed. Being wrong only ever costs an unnecessary "there
+  may be more".
+- **Vehicle *matching* against Drive247 is not here.** The extension resolves as
+  far as a plate, a VIN hint and a label, records which rung of the ladder it
+  reached, and flags anything that is not an outright plate match for review.
+  Actually choosing a `vehicles` row is a portal-side, human-confirmed step.
 - **The landing table is not `rentals`.** Rows land in a staging table that
   nothing downstream reads. Promotion into a real rental — with pricing,
-  agreements and payments — is a separate, deliberate step.
+  agreements and payments — is a separate, deliberate, human-confirmed step.
+- **Two extension scaffolds exist in this repo and have drifted.** This one, and
+  `extensions/turo-bridge/` with an ES-module `lib/turo-read.js`. They disagree
+  about the ISOLATED-vs-MAIN world retry. The ingest already carries
+  compatibility shims for their disagreements. Someone should pick one and
+  delete the other before this grows further.
 - **This directory is untracked.** It has been wiped mid-session by a stray
   `git clean -fd` more than once. **Commit it before doing more work in here.**
 - `BOT_BLOCKED` vs `NOT_LOGGED_IN` on a bare 403 with unattributable HTML is a
@@ -244,3 +532,21 @@ on the user's click, so the extension does literally nothing until invoked.
   what a 403 HTML body is, and keep a 300-character snippet in the diagnostics
   precisely so the first operator with a real Turo account can tell us whether
   that default is wrong.
+
+---
+
+## Blocking issue, outside this directory
+
+`turo-bridge-ingest` is **broken against production right now**, independently of
+anything here. The live `turo_bridge_tokens` table has a plaintext
+`token text NOT NULL` column and no `token_hash`, while the repo's
+`supabase/functions/turo-bridge-ingest/index.ts:167` queries
+`.eq("token_hash", tokenHash)`. The *deployed* function is an older version that
+still compares plaintext and works.
+
+So: deploying the repo's version without first applying
+`turo-bridge-poc/sql/01-schema.sql` (which adds the digest columns, backfills,
+then drops the plaintext one) turns **every** sync into a 500. There is 1 token
+and 1 reservation live today, so the migration is trivial now and will not be
+later. Nothing in this extension can be tested end-to-end against production
+until that lands.

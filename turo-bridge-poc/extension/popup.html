@@ -37,7 +37,98 @@
       <p class="hint" id="tokenHint">Paste the token from your Drive247 portal.</p>
     </div>
 
-    <button type="button" class="primary" id="sync">
+    <!-- ================================================== the full sync == -->
+    <button type="button" class="primary" id="syncAll">
+      <span class="spinner" id="spinnerAll" hidden></span>
+      <span id="syncAllLabel">Sync my Turo calendar</span>
+    </button>
+
+    <div class="rowline">
+      <label class="check">
+        <input type="checkbox" id="useSample">
+        <span>Use bundled sample data</span>
+      </label>
+      <select id="scenario" class="mini" aria-label="Sample scenario" disabled>
+        <option value="">Normal (3 batches)</option>
+        <option value="waf_empty_200">Empty 200 (WAF)</option>
+        <option value="bot_challenge">Bot challenge</option>
+        <option value="session_expired">Session expired</option>
+        <option value="renamed_envelope">Renamed envelope</option>
+        <option value="truncated_stream">Cut-off stream</option>
+        <option value="rate_limited">Rate limited</option>
+        <option value="silent_truncation">Silent truncation</option>
+      </select>
+    </div>
+
+    <!-- ============================================= the live run panel == -->
+    <section class="run" id="run" data-phase="idle" aria-live="polite" hidden>
+
+      <div class="run-head">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="runStep">Working…</span>
+        <span class="badge" id="runSource" data-source="" hidden></span>
+      </div>
+
+      <!-- BATCH COUNTER. "of N" is rendered ONLY once the walk has proved it
+           reached the end of the feed. Until then there is a number and no
+           denominator, because there is no honest denominator to show. -->
+      <p class="batch" id="runBatch"></p>
+
+      <div class="tiles" id="runTiles"></div>
+
+      <!-- COVERAGE. The sentence that stops "8 of 8 green" on a partial read. -->
+      <p class="coverage" id="runCoverage"></p>
+
+      <!-- THE TWO GATES, always shown separately. Writing what we read and
+           releasing what we did not see are different permissions. -->
+      <dl class="gates" id="runGates" hidden>
+        <div class="grow"><dt>Saved to Drive247</dt><dd id="gWrite"></dd></div>
+        <div class="grow"><dt>Blocks released</dt><dd id="gRelease"></dd></div>
+      </dl>
+      <p class="gate-reason" id="gReason"></p>
+
+      <!-- TYPED ERROR STATE: what happened, and what a human can do about it. -->
+      <div class="alert" id="runAlert" hidden>
+        <p class="alert-kind" id="alertKind"></p>
+        <p class="alert-advice" id="alertAdvice"></p>
+        <p class="alert-detail" id="alertDetail"></p>
+        <div class="alert-actions">
+          <button type="button" class="secondary" id="continueBtn">Continue</button>
+          <button type="button" class="linkish subtle" id="stopBtn">Stop</button>
+        </div>
+      </div>
+
+      <details class="drawer" id="unknownDrawer" hidden>
+        <summary><span id="unknownCount"></span></summary>
+        <ul class="kv" id="unknownList"></ul>
+        <p class="hint">These fields were not found in Turo's response. Nothing was guessed —
+          any trip missing a date or an id was left out rather than imported with an invented one.</p>
+      </details>
+
+      <details class="drawer" id="rejectDrawer" hidden>
+        <summary><span id="rejectCount"></span></summary>
+        <ul class="kv" id="rejectList"></ul>
+        <p class="hint">Turo sent these, but not in a shape we could read. The key names below are
+          what it actually sent — send them to Drive247 support and the fix is a one-line change.</p>
+      </details>
+
+      <details class="drawer" id="tripDrawer" hidden>
+        <summary><span id="tripCount"></span></summary>
+        <ul class="trips" id="tripList"></ul>
+      </details>
+
+      <details class="drawer" id="absenceDrawer" hidden>
+        <summary><span id="absenceCount"></span></summary>
+        <ul class="kv" id="absenceList"></ul>
+        <p class="hint">A trip that simply did not appear is never treated as cancelled. Its dates stay
+          blocked until Turo positively tells us otherwise.</p>
+      </details>
+    </section>
+
+    <hr class="rule">
+
+    <!-- ==================================== the original one-click demo == -->
+    <button type="button" class="secondary" id="sync">
       <span class="spinner" id="spinner" hidden></span>
       <span id="syncLabel">Sync one reservation</span>
     </button>

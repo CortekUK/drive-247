@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Drive247 Turo Bridge (PoC)",
-  "version": "0.1.0",
-  "description": "Pull one upcoming Turo reservation into your Drive247 portal.",
+  "version": "0.2.0",
+  "description": "Read your own Turo host calendar into Drive247. Never asks for your Turo password.",
   "minimum_chrome_version": "116",
   "action": {
     "default_popup": "popup.html",
@@ -19,7 +19,8 @@
   },
   "permissions": [
     "scripting",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://turo.com/*",

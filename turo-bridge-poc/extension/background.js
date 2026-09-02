@@ -1,21 +1,50 @@
 /**
- * background.js — the MV3 service worker. It orchestrates one click:
+ * background.js — the MV3 service worker.
  *
- *     read a Turo tab  ->  normalise ONE reservation  ->  POST to Drive247
+ * It orchestrates TWO things, and keeping them separate is deliberate:
  *
- * MV3 LIFECYCLE STANCE (the reason this file looks the way it does)
- * ----------------------------------------------------------------
- * The worker can be killed at ANY moment, including between the POST landing
- * and the status write. So:
- *   - zero durable state lives in worker globals; everything the popup needs is
- *     written to chrome.storage.local
- *   - one click is one short, awaited round trip — no alarms, no long-lived
- *     ports, no queues
- *   - the backend upserts on (tenant_id, reservation_id), so re-clicking after
- *     a worker death re-posts the SAME reservation and produces one row, not two
- *   - setStatus() is the single writer of user-visible state. It persists first
- *     and never messages the popup, because a closed popup rejects
- *     sendMessage with "Receiving end does not exist"
+ *   1. SYNC_ONE — the original proof of concept. One click:
+ *          read a Turo tab -> normalise ONE reservation -> POST to Drive247
+ *      Unchanged, still the demo path, still works with no Turo account.
+ *
+ *   2. SYNC_ALL — the real read. A resumable, multi-page walk:
+ *          probe the session -> read page -> normalise -> flush -> next page
+ *      with every step persisted BEFORE the await that performs it.
+ *
+ * =====================================================================
+ * MV3 LIFECYCLE STANCE — the reason this file looks the way it does
+ * =====================================================================
+ * The service worker is killed at any moment: after ~30s idle, after ~5min of
+ * work, when Chrome feels like it, and completely while Chrome is quit. A
+ * long-running `for` loop holding progress in a local variable is therefore not
+ * a design, it is a bug that only shows up on someone else's machine.
+ *
+ * So this file obeys three rules without exception:
+ *
+ *   R1. NO MODULE-SCOPE STATE HOLDS PROGRESS. The only module-scope mutable is
+ *       `pumping`, a re-entrancy latch, and losing it to a worker death is
+ *       exactly right — a dead worker has no concurrent pump to guard against.
+ *       Everything else lives in chrome.storage.local.
+ *
+ *   R2. THE INTENT IS PERSISTED BEFORE THE AWAIT THAT FULFILS IT. The cursor
+ *       records "I am about to read page N" and is written to storage BEFORE
+ *       the fetch. A worker killed mid-read wakes up knowing precisely what it
+ *       was doing. The receipt is written only AFTER the ingest acknowledges,
+ *       so a death between "read" and "acked" replays one page — which is safe
+ *       because the ingest upserts on (tenant_id, reservation_id).
+ *
+ *   R3. A DEAD WORKER MUST BE ABLE TO WAKE ITSELF. setTimeout does not keep an
+ *       MV3 worker alive and does not survive its death. chrome.alarms is the
+ *       only thing that can revive one, so an active run keeps a 1-minute
+ *       backstop alarm running. setTimeout still handles the sub-second pacing
+ *       when the worker happens to be alive, because a 1-minute floor between
+ *       pages would make a 3-page sync take 3 minutes.
+ *
+ * WHAT IS NOT AUTOMATED, ON PURPOSE
+ * A run parked by a BOT CHALLENGE is never auto-resumed. Retrying into a live
+ * challenge is what escalates a soft check into a hard block on the operator's
+ * OWN Turo account — the single asset in this integration we cannot replace.
+ * The alarm is cancelled and a human has to clear the check and click again.
  *
  * DEBUGGING: worker logs do NOT appear in the page's DevTools. Open them from
  * the "service worker" link on the extension's chrome://extensions card.
@@ -24,18 +53,20 @@
 "use strict";
 
 /* Classic (non-module) worker on purpose: importScripts() does not exist in a
-   module worker, and we need it to load the SAME normaliser the page uses.
-   One normaliser, never two.
+   module worker, and we need it to load the SAME parser the page uses. One
+   parser, never two.
    GUARDED: a throwing top-level importScripts aborts worker REGISTRATION, and
    the extension then looks completely dead with only a red "Errors" button on
    the chrome://extensions card to explain it. */
+var IMPORT_ERROR = null;
 try {
-  importScripts("fixture.js", "content-turo.js");
+  importScripts("fixture.js", "turo-read-contract.js", "content-turo.js");
 } catch (e) {
-  console.error("[TuroBridge] fixture.js / content-turo.js failed to load in the worker:", e);
+  IMPORT_ERROR = String((e && e.message) || e);
+  console.error("[TuroBridge] reader files failed to load in the worker:", e);
 }
 
-// ---------------------------------------------------------------- constants
+// ============================================================== constants ==
 
 const SUPABASE_URL = "https://hviqoaokxvlancmftwuo.supabase.co";
 
@@ -43,8 +74,8 @@ const SUPABASE_URL = "https://hviqoaokxvlancmftwuo.supabase.co";
    portal (apps/portal/src/integrations/supabase/client.ts), so embedding it
    here leaks nothing new. It is NOT what authorises this call — the pairing
    token in the body is. turo-bridge-ingest runs with verify_jwt = false and
-   resolves the tenant from the token's sha256 hash, so the extension can never
-   name a tenant and a copied key alone buys nothing. */
+   resolves the tenant from the token, so the extension can never name a tenant
+   and a copied key alone buys nothing. */
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aXFvYW9reHZsYW5jbWZ0d3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNjM2NTcsImV4cCI6MjA3NzkzOTY1N30.jwpdtizfTxl3MeCNDu-mrLI7GNK4PYWYg5gsIZy0T_Q";
 
@@ -56,14 +87,55 @@ const INGEST_URL = `${SUPABASE_URL}/functions/v1/turo-bridge-ingest`;
 const TURO_TAB_URL = "https://turo.com/us/en/trips/booked";
 const TAB_LOAD_TIMEOUT_MS = 20000;
 const POST_TIMEOUT_MS = 15000;
+const INJECT_TIMEOUT_MS = 25000;
+
+/* THE INGEST TAKES ONE RESERVATION PER CALL.
+   supabase/functions/turo-bridge-ingest/index.ts reads `body.reservation` — a
+   single object — and upserts one row. There is no batch endpoint and this
+   agent does not own that function, so a page of N trips becomes N sequential
+   POSTs. That is why the flush phase is its own resumable step rather than a
+   single call: a worker death partway through a page must not lose the trips
+   that already landed, and must not double-write the ones that did. Both are
+   handled by flushing one record at a time and shrinking the pending list in
+   storage as each is acknowledged. */
+/* TWO SEPARATE BUDGETS, because they protect against two different failures.
+
+   PER RECORD: the server refuses a `raw` payload over 64KB
+   (turo-bridge-ingest MAX_RAW_BYTES). We stay well under it — 8KB is ample for
+   one trip object, and the part that actually matters (`__d247`, which records
+   what we did and did not understand) is small and is NEVER the part trimmed.
+
+   PER PAGE: chrome.storage.local is capped at roughly 10MB. A live page could
+   carry ~200 trips, and 200 fat raw payloads would blow that — at which point
+   `set()` rejects and the sync stalls in a re-read loop. So a whole page is
+   measured before it is stored and progressively slimmed until it fits.
+
+   NOTHING IS EVER DROPPED TO MAKE ROOM. Trimming removes the feed's own verbose
+   payload from the largest records first, keeping every reservation and all of
+   its metadata. If even the fully-slimmed page will not fit, the run PARKS with
+   an honest message rather than quietly syncing a subset — a page that silently
+   lost half its trips is the same failure as a truncated read, arriving from
+   our own side instead of Turo's. */
+const INGEST_MAX_RAW_BYTES = 8 * 1024;
+const PAGE_STORAGE_BUDGET_BYTES = 4 * 1024 * 1024;
+
+/* Alarms are the ONLY mechanism that can revive a dead MV3 worker. Chrome
+   clamps alarm periods to a 30-second floor for packed extensions, so this is a
+   BACKSTOP, not the pacing mechanism — pacing is setTimeout, which is faster
+   and works whenever the worker happens to still be alive. */
+const PUMP_ALARM = "d247-turo-pump";
+const PUMP_ALARM_MINUTES = 1;
 
 /* Retry the identical read in the MAIN world only for outcomes where a header
    minted by the page's own JS could plausibly be the difference. A 401, an
    explicitly empty feed, a timeout or a 429 will answer the same in either
-   world, so retrying those just doubles the traffic. */
+   world, so retrying those just doubles the traffic against a WAF. */
 const RETRY_IN_MAIN = new Set(["BOT_BLOCKED", "UNKNOWN", "UNPARSEABLE"]);
 
-/* One message per outcome: what happened, AND what to do about it. */
+/* One message per outcome for the PoC single-reservation path: what happened,
+   AND what to do about it. The multi-page path takes its advice from
+   POLICY[outcome].advice in turo-read-contract.js instead, so there is exactly
+   one place each of those sentences is written. */
 const ADVICE = {
   NOT_LOGGED_IN: "You are not signed in to Turo in this browser. Open turo.com, log in as a host, then click Sync again.",
   NO_TRIPS: "Signed in to Turo, but there are no upcoming host trips to import.",
@@ -77,29 +149,112 @@ const ADVICE = {
   fixture_unparseable: "The bundled sample data failed its own normaliser — this is a bug in the extension."
 };
 
+/**
+ * WHICH PARKED RUNS MAY RESUME THEMSELVES.
+ *
+ * The split is not about severity, it is about whether another request is SAFE
+ * TO ISSUE UNATTENDED. A rate limit clears on its own and retrying is expected
+ * behaviour. A bot challenge clears only when a HUMAN solves it, and retrying
+ * into it is what turns a soft check into a hard block on the operator's own
+ * account. A logged-out session likewise cannot fix itself.
+ */
+const AUTO_RESUMABLE = new Set(["RATE_LIMITED", "UNREACHABLE", "TRUNCATED", "PAGINATION_STALLED"]);
+
+/* Storage keys. Every one of these is the durable half of a rule above. */
+const K = {
+  token: "pairingToken",
+  lastRun: "lastRun",        // the PoC single-click status (unchanged shape)
+  cursor: "turoCursor",      // RunCursor + our run-scoped counters
+  state: "syncState",        // the popup's view model
+  pending: "syncPending",    // records read but not yet acknowledged by ingest
+  summary: "syncSummary",    // light per-record rows + diagnostics for the UI
+  manifest: "syncManifest"   // the LAST run's ids, for the absence ledger
+};
+
 /* Resets to false if the worker is killed, which is exactly right: a dead
-   worker has no in-flight request to guard against. */
-let inFlight = false;
+   worker has no in-flight pump to guard against. THIS IS THE ONLY MUTABLE AT
+   MODULE SCOPE AND IT HOLDS NO PROGRESS. */
+let pumping = false;
 
-// ------------------------------------------------------------------ wiring
+// ================================================================= wiring ==
 
-// Registered at the top level so it survives every worker revival.
+// Registered at the top level so they survive every worker revival.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg || msg.type !== "SYNC_ONE") return false;
-  syncOne()
-    .then((r) => { try { sendResponse(r); } catch (_) {} })
-    .catch((e) => { try { sendResponse({ phase: "error", title: String((e && e.message) || e) }); } catch (_) {} });
-  return true; // keep the channel open; best effort only — storage is the truth
+  if (!msg || !msg.type) return false;
+
+  if (msg.type === "SYNC_ONE") {
+    syncOne()
+      .then((r) => reply(sendResponse, r))
+      .catch((e) => reply(sendResponse, { phase: "error", title: String((e && e.message) || e) }));
+    return true;
+  }
+  if (msg.type === "SYNC_ALL") {
+    startRun(msg.mode === "fixture" ? "fixture" : "live", msg.scenario || null)
+      .then((s) => reply(sendResponse, s))
+      .catch((e) => reply(sendResponse, { phase: "error", lastError: String((e && e.message) || e) }));
+    return true;
+  }
+  if (msg.type === "SYNC_RESUME") {
+    resumeRun().then((s) => reply(sendResponse, s)).catch(() => reply(sendResponse, null));
+    return true;
+  }
+  if (msg.type === "SYNC_CANCEL") {
+    cancelRun().then((s) => reply(sendResponse, s)).catch(() => reply(sendResponse, null));
+    return true;
+  }
+  if (msg.type === "SYNC_STATE") {
+    get(K.state).then((s) => reply(sendResponse, s || null)).catch(() => reply(sendResponse, null));
+    return true;
+  }
+  return false;
 });
 
-// ------------------------------------------------------------ the one click
+/* The popup can be closed between our reply and its arrival, which rejects with
+   "Receiving end does not exist". Storage is the truth; this is best effort. */
+function reply(sendResponse, value) {
+  try { sendResponse(value); } catch (_) { /* popup closed */ }
+}
+
+/* R3: the only thing that can revive a dead worker.
+   GUARDED. If the "alarms" permission is ever stripped from the manifest,
+   chrome.alarms is undefined and an unguarded addListener here throws during
+   worker REGISTRATION — which kills SYNC_ONE too, and presents as an extension
+   that does nothing at all with one red "Errors" button to explain it. */
+if (typeof chrome !== "undefined" && chrome.alarms && chrome.alarms.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== PUMP_ALARM) return;
+    pump("alarm").catch((e) => console.error("[TuroBridge] pump from alarm failed:", e));
+  });
+} else {
+  console.warn('[TuroBridge] no "alarms" permission — a sync interrupted by the worker being killed will need a manual Continue.');
+}
+
+/* Chrome was quit mid-run. Nothing ran while it was closed; pick up where the
+   cursor says we were, subject to resumeDecision()'s guards. */
+chrome.runtime.onStartup.addListener(() => {
+  pump("startup").catch(() => {});
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  // A reload replaces the code but not the alarms, and an alarm pointing at a
+  // run from a previous version of this file is a debugging trap.
+  clearAlarm().catch(() => {});
+});
+
+// ============================================== PART 1 — THE POC ONE CLICK ==
+//
+// Everything in this section is the original proof of concept and is
+// deliberately byte-for-byte in behaviour. It is the path that works with no
+// Turo account, it is what gets demonstrated, and nothing in PART 2 may change
+// how it behaves.
+
+let inFlight = false; // PoC-only latch; same rationale as `pumping`.
 
 async function syncOne() {
   if (inFlight) return await setStatus({ phase: "running", title: "Already syncing…" });
   inFlight = true;
   try {
-    const { pairingToken } = await chrome.storage.local.get("pairingToken");
-    const token = (pairingToken || "").trim();
+    const token = (await get(K.token) || "").trim();
     if (!token) {
       return await setStatus({
         phase: "error",
@@ -126,7 +281,9 @@ async function syncOne() {
       source: read.source
     });
 
-    const response = await postReservation(token, read);
+    const response = await postReservation(token, read.reservation, {
+      source: read.source, reason: read.reason, detail: read.detail, diagnostics: read.diagnostics
+    });
 
     if (!response.ok) {
       return await setStatus({
@@ -157,40 +314,29 @@ async function syncOne() {
       }
     });
   } catch (e) {
-    return await setStatus({
-      phase: "error",
-      title: "Sync failed",
-      detail: String((e && e.message) || e)
-    });
+    return await setStatus({ phase: "error", title: "Sync failed", detail: String((e && e.message) || e) });
   } finally {
     inFlight = false;
   }
 }
 
-// ------------------------------------------------------------- reading Turo
-
 /**
- * Runs the reader inside a real turo.com tab. Tries the ISOLATED world first
- * (same-origin, page cookies, no page-visible footprint) and retries the exact
- * same code in the MAIN world only when the failure is one that a page-minted
- * header could explain. See the header comment in content-turo.js.
- *
- * @returns {Promise<{ok:boolean, source:"turo"|"fixture"|null, reason:string,
- *                    detail:string|null, reservation:object|null, diagnostics:object}>}
+ * Runs the single-reservation reader inside a real turo.com tab. ISOLATED
+ * world first (same-origin, page cookies, no page-visible footprint); the exact
+ * same code is retried in the MAIN world only when the failure is one a
+ * page-minted header could explain. See the header comment in content-turo.js.
  */
 async function readOneReservation() {
   let tab;
   try {
     tab = await getTuroTab();
   } catch (e) {
-    // We never even got a tab. Fall back in the worker, using the same
-    // normaliser, so the demo still completes end to end.
     return fixtureFromWorker("no_tab", String((e && e.message) || e));
   }
 
   let first;
   try {
-    first = await runReaderInWorld(tab.id, "ISOLATED");
+    first = await callInTab(tab.id, "ISOLATED", "collectOneReservation", []);
   } catch (e) {
     return fixtureFromWorker("UNREACHABLE", `Injection failed: ${String((e && e.message) || e)}`);
   }
@@ -200,28 +346,1023 @@ async function readOneReservation() {
   if (first.source === "fixture" && RETRY_IN_MAIN.has(first.reason)) {
     console.log(`[TuroBridge] ISOLATED read returned ${first.reason}; retrying in MAIN world.`);
     try {
-      const second = await runReaderInWorld(tab.id, "MAIN");
+      const second = await callInTab(tab.id, "MAIN", "collectOneReservation", []);
       if (second.ok && second.source === "turo") return second;
-      // MAIN did no better. Keep the ISOLATED verdict — it is the cleaner
-      // signal — but record that we tried both.
-      first.diagnostics = Object.assign({}, first.diagnostics, {
-        retriedInMain: true,
-        mainReason: second.reason
-      });
+      first.diagnostics = Object.assign({}, first.diagnostics, { retriedInMain: true, mainReason: second.reason });
     } catch (e) {
-      first.diagnostics = Object.assign({}, first.diagnostics, {
-        retriedInMain: true,
-        mainError: String((e && e.message) || e)
-      });
+      first.diagnostics = Object.assign({}, first.diagnostics, { retriedInMain: true, mainError: String((e && e.message) || e) });
     }
   }
-
   return first;
 }
 
 /**
+ * Last-resort fallback when we could not run anything in a tab at all.
+ * Uses the SAME normalize() the page uses (loaded via importScripts above), so
+ * this path and the in-page fixture path produce byte-identical reservations.
+ */
+function fixtureFromWorker(reason, detail) {
+  const bridge = globalThis.__d247TuroBridge;
+  if (!bridge || !bridge.fixtureReservation) {
+    return {
+      ok: false, source: null, reason: "no_fixture",
+      detail: `${detail}; content-turo.js did not load in the service worker${IMPORT_ERROR ? " (" + IMPORT_ERROR + ")" : ""}`,
+      reservation: null, diagnostics: {}
+    };
+  }
+  const out = bridge.fixtureReservation(reason, detail);
+  out.diagnostics = Object.assign({}, out.diagnostics, { loadedIn: "service-worker" });
+  return out;
+}
+
+// ==================================== PART 2 — THE RESUMABLE MULTI-PAGE RUN ==
+
+/**
+ * Start a fresh run. Writes the cursor BEFORE anything else happens, so even a
+ * worker killed one millisecond later leaves a run that can be reasoned about.
+ *
+ * @param {"live"|"fixture"} mode
+ * @param {string|null} scenario  a fixture degraded scenario to force
+ */
+async function startRun(mode, scenario) {
+  const R = reader();
+  if (!R) return await writeState(errorState("The reader did not load in the service worker" + (IMPORT_ERROR ? ": " + IMPORT_ERROR : ".")));
+
+  const token = (await get(K.token) || "").trim();
+  if (!token) {
+    return await writeState(errorState("Paste the pairing token from your Drive247 portal, then start the sync."));
+  }
+
+  const runId = "run-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+
+  /* THE TENANT GUARD, planted at the start of the run.
+     One Chrome profile holds ONE Turo cookie jar and can be paired to TWO
+     Drive247 tenants over its life. Every later step re-checks the live token
+     against this fingerprint and ABANDONS rather than resumes on a mismatch.
+     Flushing tenant A's pages under tenant B's token is the worst outcome
+     available in this system and it is unrecoverable once written. */
+  const tokenFingerprint = (await R.fingerprint(token)).slice(0, 16);
+
+  const firstPage = { pageKey: "p0", path: R.TRIPS_PATH, index: 0 };
+  let cursor = R.newCursor(runId, tokenFingerprint, firstPage);
+
+  // Run-scoped observations. All of them are DERIVED FROM WHAT WE READ, never
+  // from anything the feed declares about itself.
+  cursor = R.advanceCursor(cursor, {
+    mode: mode,
+    scenario: scenario,
+    phase: "probing_session",
+    world: "ISOLATED",
+    mainRetryUsed: false,
+    seenPageKeys: [],
+    outcomes: [],
+    pagesRead: 0,
+    recordsOffered: 0,
+    recordsAccepted: 0,
+    recordsRejected: 0,
+    recordsFlushed: 0,
+    ingestFailures: 0,
+    explicitEnd: false,
+    lastPageShort: false,
+    stalled: false,
+    stallReason: null,
+    pageFailed: false,
+    sawTrips: false,
+    lastError: null,
+    /* THE SERVER-SIDE RUN. turo-bridge-ingest opens a turo_sync_jobs row on the
+       first POST and returns its id; every later POST of this run carries it
+       back so the whole sync is ONE run rather than one run per reservation.
+       Persisted in the cursor (never in module scope) so an MV3 kill does not
+       orphan it — R1. */
+    ingestJobId: null,
+    /* is_authoritative in 03-foundation-schema.sql:223 requires
+       http_error_count = 0, so this has to be counted rather than assumed. */
+    httpErrors: 0,
+    /* Whatever the feed CLAIMED the total was. Captured, sent, and never used
+       as a denominator by anything — see the column comment at 03:163. */
+    feedReportedTotal: null
+  });
+
+  await set(K.cursor, cursor);
+  await set(K.pending, null);
+  await set(K.summary, {
+    ids: [], rows: [], rejected: [], keyHistogram: {},
+    unknownCounts: {}, envelopeKeys: [], vehicles: []
+  });
+  await writeState(projectState(cursor, await get(K.summary), null));
+  await ensureAlarm();
+
+  pump("start").catch((e) => console.error("[TuroBridge] pump failed:", e));
+  return await get(K.state);
+}
+
+/**
+ * The operator clicked Continue.
+ *
+ * This is the ONLY thing that may restart a run parked by a bot challenge or by
+ * the operator themselves. `manualResume` is a one-shot flag consumed by
+ * decideResume(), so an alarm or a browser restart can never stand in for the
+ * human who was supposed to clear the challenge.
+ */
+async function resumeRun() {
+  const R = reader();
+  let cursor = await get(K.cursor);
+  if (cursor && R && cursor.phase === "parked") {
+    cursor = R.advanceCursor(cursor, { manualResume: true, nextAllowedAt: null });
+    await set(K.cursor, cursor);
+  }
+  await ensureAlarm();
+  pump("manual-resume").catch(() => {});
+  return await get(K.state);
+}
+
+async function cancelRun() {
+  const R = reader();
+  let cursor = await get(K.cursor);
+  if (!cursor || !R) return await get(K.state);
+  cursor = R.advanceCursor(cursor, {
+    phase: "parked", parkedReason: "USER_CANCELLED",
+    lastError: "Stopped by you. Nothing that was already read has been undone."
+  });
+  await set(K.cursor, cursor);
+  await clearAlarm();
+  return await writeState(projectState(cursor, await get(K.summary), null));
+}
+
+/**
+ * THE PUMP.
+ *
+ * Runs steps until it must wait, and every step is individually durable. If the
+ * worker dies inside `stepOnce`, the next wake-up re-reads the cursor from
+ * storage and continues from the last thing that was actually written down.
+ *
+ * The loop exists purely as an optimisation for the case where the worker
+ * happens to stay alive; correctness never depends on it going round twice.
+ */
+async function pump(trigger) {
+  if (pumping) return;
+  pumping = true;
+  try {
+    for (let guard = 0; guard < 200; guard++) {
+      const R = reader();
+      if (!R) return;
+
+      let cursor = await get(K.cursor);
+      if (!cursor || !cursor.runId) { await clearAlarm(); return; }
+      if (cursor.phase === "done") { await clearAlarm(); return; }
+
+      if (cursor.phase === "parked") {
+        const decision = await decideResume(cursor);
+        if (decision.wait) {
+          // Cooling down. The alarm stays armed; the operator sees a countdown.
+          await writeState(projectState(cursor, await get(K.summary), decision.message));
+          return;
+        }
+        if (!decision.resume) {
+          // Not resumable — a different tenant, a different Turo account, or
+          // too old to be current. Say which, and stop.
+          await clearAlarm();
+          await writeState(projectState(cursor, await get(K.summary), decision.message));
+          return;
+        }
+        /* `reprobe` is the resumed run's obligation to prove WHOSE Turo account
+           it is about to read, before it reads anything.
+
+           A parked run keeps cursor.pending, so it used to resume straight into
+           reading_trips — skipping stepProbeSession(), which is the only place
+           the Turo-account guard lives. The hole was live and automatic: park on
+           a 429 (RATE_LIMITED is auto-resumable), let the operator sign out of
+           host A and into host B, and the alarm would fire, resume, and flush
+           host B's trips into tenant A under the unchanged pairing token. The
+           token guard in stepOnce() cannot see this — the Drive247 token never
+           changed; only the Turo cookie jar did.
+
+           The phase itself is preserved (a run parked mid-flush still has records
+           in K.pending and must go back to flushing, not re-read the page), so
+           this costs one /api/vehicles/me request and loses no work. */
+        cursor = R.advanceCursor(cursor, {
+          phase: cursor.pending ? "reading_trips" : (cursor.session ? "reading_trips" : "probing_session"),
+          reprobe: true,
+          parkedReason: null, nextAllowedAt: null, lastError: null,
+          manualResume: false   // one shot, consumed here
+        });
+        await set(K.cursor, cursor);
+      }
+
+      /* THE RUN-LENGTH CAP. A run that has been going for longer than
+         LIMITS.maxRunMs is parked, not failed: what it read is real and stays,
+         and the coverage verdict simply never reaches "complete". */
+      const age = Date.now() - new Date(cursor.startedAt).getTime();
+      if (age > R.LIMITS.maxRunMs && cursor.phase !== "flushing") {
+        await parkRun(cursor, "TRUNCATED",
+          "This sync has been running for a while, so it paused. What was read is saved; nothing was released. Continue when you are ready.");
+        return;
+      }
+
+      const step = await stepOnce(cursor);
+      if (step.stop) return;
+      if (step.waitMs > 0) {
+        await scheduleWake(step.waitMs);
+        return;
+      }
+    }
+    console.warn("[TuroBridge] pump hit its iteration guard; rescheduling.");
+    await scheduleWake(1000);
+  } finally {
+    pumping = false;
+  }
+}
+
+/**
+ * Exactly ONE durable step. Returns {stop, waitMs}.
+ *
+ * Read this alongside R2 in the header: in every branch below, the cursor is
+ * written to storage describing what is ABOUT to happen, and only then is the
+ * awaited operation performed.
+ */
+async function stepOnce(cursor) {
+  const R = reader();
+
+  // The tenant guard, re-checked on EVERY step and not just on resume. The
+  // operator can paste a different pairing token into the popup mid-run.
+  const token = (await get(K.token) || "").trim();
+  if (!token) {
+    await parkRun(cursor, "NOT_LOGGED_IN", "The pairing token was cleared, so the sync stopped. Paste it again to continue.");
+    return { stop: true, waitMs: 0 };
+  }
+  const fp = (await R.fingerprint(token)).slice(0, 16);
+  if (fp !== cursor.tokenFingerprint) {
+    await abandonRun(cursor,
+      "The pairing token changed while this sync was running — it belongs to a different Drive247 tenant. The sync was abandoned rather than risk writing one operator's trips into another's account.");
+    return { stop: true, waitMs: 0 };
+  }
+
+  /* THE RESUMED-RUN ACCOUNT GUARD. Ordered before the phase dispatch so that
+     NOTHING — not a page read, not a flush — happens on a resumed run until the
+     signed-in Turo host has been re-observed and matched. stepProbeSession does
+     its own equivalent check, so it is allowed through to avoid a double probe. */
+  if (cursor.reprobe && cursor.phase !== "probing_session") {
+    return await stepReverifyAccount(cursor);
+  }
+
+  if (cursor.phase === "probing_session") return await stepProbeSession(cursor);
+  if (cursor.phase === "reading_trips")   return await stepReadPage(cursor);
+  if (cursor.phase === "flushing")        return await stepFlush(cursor);
+
+  await parkRun(cursor, "UNKNOWN", `The sync reached an unexpected state (${cursor.phase}).`);
+  return { stop: true, waitMs: 0 };
+}
+
+// ------------------------------------------------- step 1: the session probe
+
+/**
+ * Read /api/vehicles/me. This is BOTH the fleet read and the independent
+ * session probe.
+ *
+ * WHY THIS RUNS FIRST AND WHY IT MATTERS MORE THAN IT LOOKS.
+ * `{"trips":[]}` from a WAF, an expired session, a renamed envelope key and a
+ * host with an empty calendar are IDENTICAL BYTES. An empty trips list can
+ * therefore never, on its own, mean "there are no trips" — it means
+ * EMPTY_UNCONFIRMED, which writes nothing and releases nothing. The only thing
+ * that can promote it to a confirmed empty is a SECOND, INDEPENDENT endpoint
+ * saying the session is healthy, and this is that endpoint. We want it anyway
+ * for vehicle identity, so it costs one request and buys the whole distinction.
+ */
+async function stepProbeSession(cursor) {
+  const R = reader();
+
+  cursor = R.advanceCursor(cursor, { phase: "probing_session", pending: null });
+  await set(K.cursor, cursor);                       // <-- R2: intent, then act
+
+  const read = await withTab(cursor, (tabId, world, shim) => callInTab(tabId, world, "collectVehicles", [], shim));
+  if (read.__tabError) {
+    await parkRun(cursor, "UNREACHABLE", read.__tabError);
+    return { stop: true, waitMs: 0 };
+  }
+
+  const policy = R.policyFor(read.outcome);
+  if (read.outcome !== R.OUTCOME.OK && policy.halt) {
+    // A challenge or a dead session at the FIRST request. Stop here: there is
+    // no value in also hammering the trips feed with the same broken session,
+    // and on BOT_BLOCKED there is real harm in it.
+    await parkRun(cursor, read.outcome, policy.advice, read.message);
+    return { stop: true, waitMs: 0 };
+  }
+
+  /* sawTripsThisRun = false ON PURPOSE. buildSessionProbe short-circuits on a
+     true here and returns a probe with turoHostId null — which would silently
+     disable the Turo-account guard below. We ask the vehicles endpoint what it
+     knows first, and only fall back to "we saw trips, so the session is
+     obviously alive" at the end of the run. */
+  const probe = R.buildSessionProbe(read.outcome === R.OUTCOME.OK ? read : null, false);
+
+  /* THE TURO-ACCOUNT GUARD. buildSessionProbe() cannot fill this in — hashing
+     is async and that function is not — so the orchestrator MUST. Without it,
+     resumeDecision()'s "did the operator switch Turo accounts?" check compares
+     null to null and silently degrades to a no-op, and a resumed run could mix
+     two hosts' fleets into one tenant. */
+  probe.turoAccountFingerprint = probe.turoHostId ? await R.fingerprint(probe.turoHostId) : null;
+
+  if (cursor.turoAccountFingerprint && probe.turoAccountFingerprint &&
+      cursor.turoAccountFingerprint !== probe.turoAccountFingerprint) {
+    await abandonRun(cursor,
+      "A different Turo account is signed in now. The sync was abandoned rather than mix two hosts' trips into one Drive247 account.");
+    return { stop: true, waitMs: 0 };
+  }
+
+  const summary = await get(K.summary);
+  summary.vehicles = (read.vehicles || []).map(lightVehicle);
+  await set(K.summary, summary);
+
+  cursor = R.advanceCursor(cursor, {
+    phase: "reading_trips",
+    session: probe,
+    // This step performs the same comparison stepReverifyAccount() does, so a
+    // resumed run routed through here has discharged its obligation.
+    reprobe: false,
+    turoAccountFingerprint: probe.turoAccountFingerprint,
+    pending: { pageKey: "p0", path: R.TRIPS_PATH, index: 0 },
+    outcomes: cursor.outcomes.concat(read.outcome === R.OUTCOME.OK ? [] : [read.outcome])
+  });
+  await set(K.cursor, cursor);
+  await writeState(projectState(cursor, summary, null));
+  return { stop: false, waitMs: R.pacingDelayMs() };
+}
+
+/**
+ * RE-VERIFY WHOSE TURO ACCOUNT THIS IS, on a resumed run, before reading again.
+ *
+ * WHY THIS EXISTS AS A SEPARATE STEP. The account guard used to live only in
+ * stepProbeSession(), which runs once at the START of a run. But a parked run
+ * keeps cursor.pending and resumes directly into reading_trips (or flushing),
+ * so the guard was skipped on every resume — and resumeDecision()'s copy of it
+ * was a tautology (see decideResume). The net effect was that the ONE defence
+ * against mixing two Turo hosts' fleets into a single Drive247 tenant could not
+ * fire on the exact path where it was needed, and that path is automatic: a 429
+ * parks the run, the alarm resumes it unattended, and whichever host is signed
+ * in at that moment is the one that gets read.
+ *
+ * This does NOT change the phase. A run parked mid-flush still has records in
+ * K.pending and must return to flushing; a run parked mid-walk must return to
+ * its page. The only thing this step buys is the right to continue.
+ *
+ * A probe that cannot name a host (turoHostId null) does not abandon the run —
+ * it simply fails to confirm, and we carry on with whatever the cursor already
+ * knew. Refusing on an unnameable host would make the feature unusable the
+ * moment /api/vehicles/me changes shape, and the value here is a POSITIVE
+ * mismatch, never an absence. Absence is not evidence on this side either.
+ */
+async function stepReverifyAccount(cursor) {
+  const R = reader();
+
+  cursor = R.advanceCursor(cursor, { phase: cursor.phase });
+  await set(K.cursor, cursor);                       // <-- R2: intent, then act
+
+  const read = await withTab(cursor, (tabId, world, shim) =>
+    callInTab(tabId, world, "collectVehicles", [], shim));
+
+  if (read.__tabError) {
+    await parkRun(cursor, "UNREACHABLE", read.__tabError);
+    return { stop: true, waitMs: 0 };
+  }
+
+  const policy = R.policyFor(read.outcome);
+  if (read.outcome !== R.OUTCOME.OK && policy.halt) {
+    // Same reasoning as the opening probe: do not push a broken session on to
+    // the trips feed, and on BOT_BLOCKED do not issue another request at all.
+    await parkRun(cursor, read.outcome, policy.advice, read.message);
+    return { stop: true, waitMs: 0 };
+  }
+
+  const probe = R.buildSessionProbe(read.outcome === R.OUTCOME.OK ? read : null, false);
+  probe.turoAccountFingerprint = probe.turoHostId ? await R.fingerprint(probe.turoHostId) : null;
+
+  /* THE MISMATCH. Only a positive, named disagreement abandons the run. */
+  if (cursor.turoAccountFingerprint && probe.turoAccountFingerprint &&
+      cursor.turoAccountFingerprint !== probe.turoAccountFingerprint) {
+    await abandonRun(cursor,
+      "A different Turo account is signed in now, so the paused sync was abandoned rather than continue reading one host's trips into another operator's Drive247 account. Start a fresh sync when the right account is signed in.");
+    return { stop: true, waitMs: 0 };
+  }
+
+  cursor = R.advanceCursor(cursor, {
+    reprobe: false,
+    // Learn the fingerprint if the opening probe never managed to. Never
+    // OVERWRITE one: the stored value is what every later comparison is against.
+    turoAccountFingerprint: cursor.turoAccountFingerprint || probe.turoAccountFingerprint,
+    session: probe.liveSession ? probe : cursor.session
+  });
+  await set(K.cursor, cursor);
+  await writeState(projectState(cursor, await get(K.summary), null));
+  return { stop: false, waitMs: R.pacingDelayMs() };
+}
+
+// ------------------------------------------------------ step 2: read a page
+
+async function stepReadPage(cursor) {
+  const R = reader();
+  const pageRequest = cursor.pending;
+  if (!pageRequest) return await finishRun(cursor);
+
+  // R2. The intent — "I am about to request THIS page" — is durable before the
+  // request exists. A worker killed inside the fetch wakes up knowing it.
+  cursor = R.advanceCursor(cursor, { phase: "reading_trips", pending: pageRequest });
+  await set(K.cursor, cursor);
+
+  const read = await withTab(cursor, (tabId, world, shim) =>
+    callInTab(tabId, world, "collectPage", [pageRequest, cursor.pagination], shim));
+
+  if (read.__tabError) {
+    await parkRun(cursor, "UNREACHABLE", read.__tabError);
+    return { stop: true, waitMs: 0 };
+  }
+
+  const outcomes = cursor.outcomes.concat([read.outcome]);
+
+  /* is_authoritative (03:223) requires http_error_count = 0, so an HTTP failure
+     has to be COUNTED rather than merely reacted to — otherwise a run that hit
+     a 500 on page 2 and recovered would still present as a clean read. Captured
+     here, before any branch, so a park cannot skip it. */
+  if (typeof read.httpStatus === "number" && read.httpStatus >= 400) {
+    cursor = R.advanceCursor(cursor, { httpErrors: (cursor.httpErrors || 0) + 1 });
+  }
+  /* Whatever the feed CLAIMED the total was. Recorded so a human can compare it
+     against what we actually read; never used as a denominator by anything. */
+  if (read.plan && typeof read.plan.declaredTotal === "number") {
+    cursor = R.advanceCursor(cursor, { feedReportedTotal: read.plan.declaredTotal });
+  }
+
+  // ---- not OK: throttle, retry in the other world, or park -----------------
+  if (read.outcome !== R.OUTCOME.OK) {
+    const policy = R.policyFor(read.outcome);
+
+    // One MAIN-world retry per run, and only where a page-minted header could
+    // plausibly be the difference. Retrying everything doubles our traffic
+    // against a WAF for nothing.
+    if (policy.retryInMainWorld && !cursor.mainRetryUsed && cursor.mode === "live") {
+      cursor = R.advanceCursor(cursor, { mainRetryUsed: true, world: "MAIN", outcomes: outcomes });
+      await set(K.cursor, cursor);
+      await writeState(projectState(cursor, await get(K.summary), "Retrying that page from inside the page itself…"));
+      return { stop: false, waitMs: R.pacingDelayMs() };
+    }
+
+    const decision = R.throttleDecision(read.outcome, cursor.throttleStrikes, read.retryAfterSeconds);
+    if (decision.action === "retry") {
+      cursor = R.advanceCursor(cursor, {
+        throttleStrikes: decision.strikes,
+        nextAllowedAt: new Date(Date.now() + decision.waitMs).toISOString(),
+        outcomes: outcomes,
+        lastError: policy.advice
+      });
+      await set(K.cursor, cursor);
+      await writeState(projectState(cursor, await get(K.summary), decision.reason));
+      return { stop: false, waitMs: decision.waitMs };
+    }
+
+    // Park. The cursor keeps `pending`, so continuing re-requests exactly this
+    // page — deterministic pageKey plus an idempotent ingest makes a replay a
+    // no-op if it had in fact landed.
+    cursor = R.advanceCursor(cursor, {
+      throttleStrikes: decision.strikes,
+      outcomes: outcomes,
+      pageFailed: true,
+      nextAllowedAt: decision.waitMs ? new Date(Date.now() + decision.waitMs).toISOString() : null
+    });
+    await parkRun(cursor, read.outcome, policy.advice, read.message);
+    return { stop: true, waitMs: 0 };
+  }
+
+  // ---- OK -----------------------------------------------------------------
+  const summary = await get(K.summary);
+  const seenIds = summary.ids.slice();
+  const pageIds = read.records.map((r) => r.reservationId);
+
+  /* STALL DETECTION. Two ways a paginated walk goes wrong without ever failing:
+     the cursor stops advancing, or the page advances and the CONTENT repeats.
+     Both look like progress from the inside. The first walks into a rate limit
+     and then a challenge; the second inflates the count so a truncated read
+     looks abundant. */
+  const stall = R.detectStall(read.next, cursor.seenPageKeys, pageIds, seenIds);
+
+  // Merge diagnostics. These are the parts that make being wrong survivable.
+  for (const k of Object.keys(read.keyHistogram || {})) {
+    summary.keyHistogram[k] = (summary.keyHistogram[k] || 0) + read.keyHistogram[k];
+  }
+  for (const ek of read.envelopeKeys || []) {
+    if (summary.envelopeKeys.indexOf(ek) === -1) summary.envelopeKeys.push(ek);
+  }
+  for (const rej of read.rejected || []) {
+    if (summary.rejected.length < 50) summary.rejected.push(lightRejection(rej));
+  }
+  for (const rec of read.records) {
+    for (const u of rec.unknowns || []) {
+      const slot = summary.unknownCounts[u.field] || { count: 0, reason: u.reason, sample: null, tried: u.candidatesTried || [] };
+      slot.count += 1;
+      if (slot.sample === null && u.sample !== null && u.sample !== undefined) slot.sample = String(u.sample).slice(0, 120);
+      summary.unknownCounts[u.field] = slot;
+    }
+  }
+  await set(K.summary, summary);
+
+  /* The page's records go to storage BEFORE the flush begins, so a worker death
+     between reading and posting loses nothing. They are the ONLY bulky thing we
+     persist, they are bounded to one page, and each one is removed as it is
+     acknowledged — so the stored blob shrinks as the flush proceeds. */
+  const pendingBlob = {
+    pageKey: pageRequest.pageKey,
+    index: pageRequest.index,
+    records: read.records.map((r) => toWire(r, cursor)),
+    nextPage: stall.stalled ? null : read.next
+  };
+  const fitted = fitToStorage(pendingBlob);
+  if (!fitted.ok) {
+    await parkRun(cursor, "UNKNOWN",
+      "That batch was too large for this browser to hold safely, so the sync paused rather than save only part of it.",
+      fitted.detail);
+    return { stop: true, waitMs: 0 };
+  }
+  try {
+    await set(K.pending, pendingBlob);
+  } catch (e) {
+    /* Almost always the storage quota. Park rather than fall through: the
+       cursor is still on this page, so continuing simply re-reads it, and a
+       silent throw here would spin that re-read forever. */
+    await parkRun(cursor, "UNKNOWN",
+      "This browser refused to store that batch, so the sync paused. Nothing was lost.",
+      String((e && e.message) || e));
+    return { stop: true, waitMs: 0 };
+  }
+
+  const observed = (read.plan && read.plan.observedPageSize) || null;
+  cursor = R.advanceCursor(cursor, {
+    phase: "flushing",
+    pagination: read.plan,
+    seenPageKeys: cursor.seenPageKeys.concat([pageRequest.pageKey]),
+    pagesRead: cursor.pagesRead + 1,
+    recordsOffered: cursor.recordsOffered + read.itemCount,
+    recordsAccepted: cursor.recordsAccepted + read.records.length,
+    recordsRejected: cursor.recordsRejected + (read.rejected || []).length,
+    outcomes: outcomes,
+    sawTrips: cursor.sawTrips || read.records.length > 0,
+    /* NOT `!read.next`. A walk that simply could not build a next request has
+       not been told it ended — see the derivation in content-turo.js. */
+    explicitEnd: !!read.explicitEnd,
+    lastPageShort: observed !== null && read.itemCount < observed,
+    stalled: stall.stalled,
+    stallReason: stall.reason
+  });
+  await set(K.cursor, cursor);
+  await writeState(projectState(cursor, summary, null));
+  return { stop: false, waitMs: 0 };
+}
+
+// -------------------------------------------- step 3: flush the page's records
+
+/**
+ * POST the current page's records to Drive247, ONE AT A TIME.
+ *
+ * The ingest takes one reservation per call, so this is a loop of POSTs rather
+ * than one batch. That is not a workaround for a missing batch endpoint — it is
+ * what makes a partial page survivable. Each acknowledged record is removed
+ * from the stored pending list immediately, so:
+ *
+ *   worker dies after the POST landed, before the removal
+ *       -> the record is re-POSTed, and the ingest upserts on
+ *          (tenant_id, reservation_id). One row, not two.
+ *   worker dies before the POST
+ *       -> the record is still in the pending list and is simply sent.
+ *
+ * At-least-once delivery over an idempotent sink, which is the only delivery
+ * guarantee an MV3 worker can honestly offer.
+ */
+async function stepFlush(cursor) {
+  const R = reader();
+  const pending = await get(K.pending);
+  if (!pending) {
+    cursor = R.advanceCursor(cursor, { phase: "reading_trips" });
+    await set(K.cursor, cursor);
+    return { stop: false, waitMs: 0 };
+  }
+
+  const token = (await get(K.token) || "").trim();
+
+  if (pending.records.length > 0) {
+    const record = pending.records[0];
+    const summaryNow = await get(K.summary);
+    /* THE REASON WE SEND MUST BE THE ONE WE ACTUALLY HAVE.
+       This was a hardcoded "OK", so every record a run flushed claimed a clean
+       read — including records read on page 1 of a run that went on to be rate
+       limited, truncated or challenged. The run's real verdict does reach the
+       server at finalize (`job.reader_outcome`), but until then this is the
+       only signal on the wire, and an operator reading a per-record diagnostic
+       that says OK about a degraded run is being told something we do not know.
+       worstOutcome() over what has been seen SO FAR is the honest answer: true
+       at the moment of the write, and it can only get worse. */
+    const soFar = R.worstOutcome(cursor.outcomes && cursor.outcomes.length ? cursor.outcomes : ["OK"]);
+    const res = await postReservation(token, null, {
+      source: cursor.mode === "fixture" ? "fixture" : "turo",
+      reason: soFar,
+      detail: soFar === "OK"
+        ? null
+        : "This record parsed cleanly, but the run has already degraded (" + cursor.outcomes.join(", ") + ").",
+      /* BATCH SHAPE, deliberately, even for one record. The ingest's legacy
+         single-`reservation` path defaults job.finalize to TRUE
+         (index.ts:717), which closed the run after the first trip and turned
+         every later POST into a 409. */
+      reservations: [record],
+      job: buildJobEnvelope(cursor, summaryNow, { finalize: false }),
+      diagnostics: { runId: cursor.runId, pageKey: pending.pageKey, world: cursor.world, mode: cursor.mode }
+    });
+
+    /* The server opened the run on the first POST and told us its id. Persist
+       it BEFORE anything else can fail (R2): a worker killed here wakes up
+       still attached to the same run rather than opening a second one, which
+       the turo_sync_jobs_one_running_per_kind index would refuse anyway. */
+    if (res.jobId && res.jobId !== cursor.ingestJobId) {
+      cursor = R.advanceCursor(cursor, { ingestJobId: res.jobId });
+      await set(K.cursor, cursor);
+    }
+
+    /* 200 + write_safe:false is Drive247 reading the run and REFUSING it. It
+       has already finalised the job as failed, so the id we hold is spent —
+       drop it, or a resume would 409 forever against a closed run. */
+    if (res.ok && res.writeSafe === false) {
+      cursor = R.advanceCursor(cursor, { ingestJobId: null });
+      await parkRun(cursor, "UNKNOWN",
+        "Drive247 read this sync and did not trust it, so nothing was written and nothing was released. Your existing availability is untouched.",
+        res.wroteNothingBecause);
+      return { stop: true, waitMs: 0 };
+    }
+
+    if (!res.ok) {
+      /* A REJECTED WRITE IS NOT A REJECTED READ. The Turo side is fine; our own
+         side refused. Park with the record still pending so nothing is lost,
+         and say plainly that this is a Drive247 problem so the operator does
+         not go hunting on turo.com. */
+      cursor = R.advanceCursor(cursor, { ingestFailures: cursor.ingestFailures + 1 });
+      await parkRun(cursor, "INGEST_FAILED",
+        "Drive247 would not accept a reservation, so the sync paused. Nothing was lost — continuing will resend it.",
+        res.detail);
+      return { stop: true, waitMs: 0 };
+    }
+
+    // Acked. Shrink the pending list and record it. R2's second half: the
+    // receipt exists only after the acknowledgement.
+    pending.records = pending.records.slice(1);
+    await set(K.pending, pending);
+
+    const summary = await get(K.summary);
+    if (summary.ids.indexOf(record.reservation_id) === -1) summary.ids.push(record.reservation_id);
+    if (summary.rows.length < 500) summary.rows.push(lightRow(record, res.action));
+    await set(K.summary, summary);
+
+    cursor = R.advanceCursor(cursor, { recordsFlushed: cursor.recordsFlushed + 1 });
+    await set(K.cursor, cursor);
+    await writeState(projectState(cursor, summary, null));
+    return { stop: false, waitMs: 0 };
+  }
+
+  // Page fully acknowledged.
+  const flushedIds = (await get(K.summary)).ids;
+  cursor = R.commitReceipt(cursor, { pageKey: pending.pageKey, index: pending.index }, flushedIds);
+
+  if (cursor.stalled) {
+    cursor = R.advanceCursor(cursor, { outcomes: cursor.outcomes.concat(["PAGINATION_STALLED"]), pending: null });
+    await set(K.pending, null);
+    await set(K.cursor, cursor);
+    return await finishRun(cursor);
+  }
+
+  if (cursor.pagesRead >= R.LIMITS.maxPages) {
+    cursor = R.advanceCursor(cursor, { outcomes: cursor.outcomes.concat(["TRUNCATED"]), pending: null });
+    await set(K.pending, null);
+    await set(K.cursor, cursor);
+    return await finishRun(cursor);
+  }
+
+  const next = pending.nextPage;
+  await set(K.pending, null);
+
+  if (!next) {
+    cursor = R.advanceCursor(cursor, { pending: null });
+    await set(K.cursor, cursor);
+    return await finishRun(cursor);
+  }
+
+  cursor = R.advanceCursor(cursor, { phase: "reading_trips", pending: next });
+  await set(K.cursor, cursor);
+  await writeState(projectState(cursor, await get(K.summary), null));
+  return { stop: false, waitMs: R.pacingDelayMs() };
+}
+
+// ------------------------------------------------------------ finishing up
+
+/**
+ * Reduce the run to its two gates and write the manifest.
+ *
+ * `mayRelease` is the conjunction of THREE independent facts (the outcome, a
+ * demonstrably complete walk, and an independently corroborated session) and
+ * finaliseRun() is the only thing allowed to compute it.
+ */
+async function finishRun(cursor) {
+  const R = reader();
+  const summary = await get(K.summary);
+
+  const outcome = cursor.recordsAccepted > 0
+    ? R.worstOutcome(cursor.outcomes.length ? cursor.outcomes : ["OK"])
+    : emptyRunOutcome(cursor, R);
+
+  const coverage = R.coverageVerdict({
+    pagesRead: cursor.pagesRead,
+    recordsSeen: cursor.recordsAccepted,
+    plan: cursor.pagination,
+    pageFailed: cursor.pageFailed,
+    stalled: cursor.stalled,
+    maxPages: R.LIMITS.maxPages,
+    explicitEnd: cursor.explicitEnd,
+    lastPageShort: cursor.lastPageShort
+  });
+
+  /* If the vehicles probe could not corroborate the session but we went on to
+     read real trips, the trips themselves ARE the corroboration. This is the
+     only place `sawTripsThisRun` is allowed to be true, and it deliberately
+     comes last so the hostId-bearing probe wins whenever it exists. */
+  let session = cursor.session;
+  if ((!session || !session.liveSession) && cursor.sawTrips) {
+    session = R.buildSessionProbe(null, true);
+    session.turoAccountFingerprint = cursor.turoAccountFingerprint || null;
+  }
+
+  const previous = (await get(K.manifest)) || null;
+  const run = {
+    runId: cursor.runId,
+    outcome: outcome,
+    coverage: coverage,
+    session: session,
+    reservations: summary.rows.map((r) => ({
+      reservationId: r.id, lifecycle: r.lifecycle, supersedesReservationId: r.supersedes || null
+    })),
+    targeted404: {}
+  };
+  R.finaliseRun(run);
+
+  const absences = previous ? R.diffAbsences(previous, run) : [];
+
+  /* THE MANIFEST IS UNIONED, NOT REPLACED — unless the run earned the right to
+     forget something. An id dropped from the manifest can never be diffed
+     again, so a degraded run overwriting it would quietly erase our own memory
+     of trips that are still real. Only an id with POSITIVE release evidence in
+     a run that mayRelease is allowed to fall out. */
+  const released = {};
+  const absentCounts = {};
+  for (const a of absences) {
+    if (a.releaseAllowed) released[a.reservationId] = true;
+    else if (a.evidence === "absent_only") absentCounts[a.reservationId] = a.consecutiveAbsentRuns;
+  }
+
+  const keep = {};
+  for (const id of summary.ids) keep[id] = true;          // everything read this run
+  for (const a of absences) if (!a.releaseAllowed) keep[a.reservationId] = true;
+
+  /* THE RELEASE WINS OVER "WE SAW IT". A trip READ WITH A CANCELLED STATUS is
+     both seen this run and positively released, and it must fall out of the
+     ledger — otherwise it reappears next run as `absent_only`, which never
+     releases, and we would hold a block forever for a trip we have positively
+     been told is cancelled. This is the ONLY circumstance in which the bridge
+     forgets an id, and it requires evidence we READ, never evidence we failed
+     to read. */
+  for (const id of Object.keys(released)) delete keep[id];
+  await set(K.manifest, {
+    runId: cursor.runId,
+    startedAt: cursor.startedAt,
+    finishedAt: new Date().toISOString(),
+    seenReservationIds: Object.keys(keep),
+    absentRunCounts: absentCounts,
+    keyHistogram: summary.keyHistogram,
+    envelopeKeys: summary.envelopeKeys
+  });
+
+  /* CLOSE THE SERVER-SIDE RUN. Until this existed the ingest never learned a
+     run had ended, so every turo_sync_jobs row sat 'running' until the reaper
+     retired it as heartbeat_lost — and `completeness`, `is_authoritative` and
+     `progress_denominator` (all GENERATED from state='succeeded') could never
+     be anything but 'in_progress' / false / NULL. Nothing could ever be
+     released, and the portal's sync history could never show a finished read.
+
+     Sent even when the run went badly: a degradation nobody can see is a
+     degradation nobody fixes. */
+  const finalised = await finaliseIngestRun(cursor, summary, outcome, coverage, run.mayWrite);
+
+  /* AND THEN ASK FOR A CONCLUSION. Only after a finalisation the server accepted
+     and did not refuse as unsafe: reconciling a run Drive247 has just told us it
+     did not believe would be asking it to draw conclusions from a read it has
+     already rejected.
+
+     dry_run is forced on for fixture runs. Bundled demo data is inert
+     everywhere else in this system and it must be inert here too — a sample
+     trip must never be able to move a real row's presence state. */
+  let reconcileNote = null;
+  if (finalised && finalised.ok && finalised.writeSafe !== false) {
+    const token = (await get(K.token) || "").trim();
+    const rec = await reconcileRun(token, finalised.jobId || cursor.ingestJobId, cursor.mode);
+    if (!rec.ok) {
+      reconcileNote =
+        "The bookings were saved, but Drive247 could not check them against the previous sync yet. " +
+        "Nothing was released. (" + rec.detail + ")";
+    }
+  }
+
+  const finished = R.advanceCursor(cursor, {
+    reconcileNote: reconcileNote,
+    phase: "done", pending: null, finishedAt: new Date().toISOString(),
+    finalOutcome: outcome, coverage: coverage, ingestJobId: null, gates: {
+      mayWrite: run.mayWrite, mayRelease: run.mayRelease, reason: run.gateReason
+    },
+    absences: absences
+  });
+  await set(K.cursor, finished);
+  await set(K.pending, null);
+  await clearAlarm();
+  await writeState(projectState(finished, summary, null));
+  return { stop: true, waitMs: 0 };
+}
+
+/**
+ * A run that accepted zero records. Which of the several very different reasons
+ * it was is the whole question, and it is answered by the session probe, never
+ * by the emptiness itself.
+ */
+function emptyRunOutcome(cursor, R) {
+  const worst = R.worstOutcome(cursor.outcomes.length ? cursor.outcomes : ["EMPTY_UNCONFIRMED"]);
+  if (worst !== R.OUTCOME.OK && worst !== R.OUTCOME.EMPTY_UNCONFIRMED) return worst;
+  // The ONLY promotion of "empty" to "confirmed empty", and it needs a second,
+  // independent endpoint to have said the session is healthy.
+  if (cursor.session && cursor.session.liveSession) return R.OUTCOME.NO_TRIPS_CONFIRMED;
+  return R.OUTCOME.EMPTY_UNCONFIRMED;
+}
+
+async function parkRun(cursor, outcome, advice, detail) {
+  const R = reader();
+  let parked = R.advanceCursor(cursor, {
+    phase: "parked", parkedReason: outcome,
+    lastError: detail ? advice + " (" + detail + ")" : advice,
+    outcomes: cursor.outcomes.concat([outcome === "INGEST_FAILED" ? "UNREACHABLE" : outcome])
+  });
+
+  /* A park that will NOT retry itself is, from Drive247's point of view, the end
+     of the run — so say so, rather than leaving a turo_sync_jobs row 'running'
+     until the reaper calls it heartbeat_lost. A bot challenge or a dead session
+     is exactly the thing an operator needs to see in the sync history, and it
+     is exactly what never reached the server before.
+
+     Skipped for INGEST_FAILED: Drive247 is the thing that just refused us, so
+     another POST is not going to arrive either. */
+  /* Deliberately NOT conditional on our already holding a run id. The failure
+     that matters most — a bot challenge or a signed-out session on the very
+     first page — happens BEFORE any record is flushed, so there is no run yet.
+     Requiring one meant the single most important thing an operator needs to be
+     told was the one thing that never reached Drive247. The ingest opens the
+     turo_sync_jobs row for us and finalises it as failed in the same call. */
+  if (!AUTO_RESUMABLE.has(outcome) && outcome !== "INGEST_FAILED") {
+    await finaliseIngestRun(parked, await get(K.summary), outcome, null, false);
+    // The id is spent: the ingest finalises a not-write-safe run as failed, and
+    // a resume that reused it would 409 against a closed run forever.
+    parked = R.advanceCursor(parked, { ingestJobId: null });
+  }
+  await set(K.cursor, parked);
+  // A challenge or a dead session cannot fix itself, so no unattended retry.
+  if (AUTO_RESUMABLE.has(outcome)) await ensureAlarm();
+  else await clearAlarm();
+  await writeState(projectState(parked, await get(K.summary), advice));
+}
+
+async function abandonRun(cursor, message) {
+  const R = reader();
+  const dead = R.advanceCursor(cursor, {
+    phase: "done", finishedAt: new Date().toISOString(),
+    parkedReason: "ABANDONED", finalOutcome: "UNKNOWN", lastError: message,
+    gates: { mayWrite: false, mayRelease: false, reason: message }
+  });
+  await set(K.cursor, dead);
+  await set(K.pending, null);
+  await clearAlarm();
+  await writeState(projectState(dead, await get(K.summary), message));
+}
+
+async function decideResume(cursor) {
+  const R = reader();
+  const token = (await get(K.token) || "").trim();
+  /* ⚠ turoAccountFingerprint is deliberately NULL here, and that is a FIX, not
+     an omission. This used to pass `cursor.turoAccountFingerprint`, which made
+     resumeDecision()'s Turo-account guard compare the cursor's own stored value
+     against itself — a tautology that could never fire, so the documented
+     "did the operator switch Turo accounts?" check was dead code.
+
+     There is no fresh observation available at DECIDE time: naming the signed-in
+     host costs a request to turo.com, and decideResume() must stay synchronous
+     with respect to the network. So the guard is moved to where an observation
+     actually exists — stepReverifyAccount(), which every resumed run is now
+     forced through by the `reprobe` flag set in pump() before any further page
+     is read. Passing null here makes resumeDecision skip a check it cannot
+     honestly perform, rather than appearing to perform it. */
+  const ctx = {
+    tokenFingerprint: token ? (await R.fingerprint(token)).slice(0, 16) : null,
+    turoAccountFingerprint: null
+  };
+  const d = R.resumeDecision(cursor, ctx);
+  if (d.resume && cursor.parkedReason && !AUTO_RESUMABLE.has(cursor.parkedReason) && !cursor.manualResume) {
+    // resumeDecision answers "is this cursor still valid?". It does NOT answer
+    // "is it safe to issue another request?", and for a bot challenge the
+    // answer to the second question is no until a human has cleared it. Zero
+    // further requests is the whole point.
+    return { resume: false, restart: false, wait: false, reason: cursor.parkedReason,
+      message: cursor.parkedReason === "USER_CANCELLED"
+        ? "This sync was stopped. Click Continue to pick it up where it left off."
+        : R.policyFor(cursor.parkedReason).advice };
+  }
+  return d;
+}
+
+// ================================================= tab + injection plumbing ==
+
+/**
+ * Run a reader function inside a real turo.com tab, or against the bundled
+ * fixture in the worker when the run is in sample mode.
+ *
+ * THE FETCH MUST HAPPEN IN THE TAB. A fetch from the service worker sends
+ * Origin: chrome-extension://<id>, Sec-Fetch-Site: cross-site and no Referer —
+ * a textbook non-browser-page fingerprint, and it never joins PerimeterX's
+ * page-side token refresh. The rationale is documented at content-turo.js:22-38
+ * and it is the reason this indirection exists at all.
+ */
+async function withTab(cursor, fn) {
+  if (cursor.mode === "fixture") return await fixtureCall(cursor, fn);
+  let tab;
+  try {
+    tab = await getTuroTab();
+  } catch (e) {
+    return { __tabError: "Could not open a turo.com tab to read from: " + String((e && e.message) || e) };
+  }
+  try {
+    return await fn(tab.id, cursor.world === "MAIN" ? "MAIN" : "ISOLATED", null);
+  } catch (e) {
+    return { __tabError: "Could not run the reader in the Turo tab: " + String((e && e.message) || e) };
+  }
+}
+
+/**
+ * Sample mode runs entirely in the worker, against fixture.js — and it runs
+ * through the SAME classifier, item extractor, pagination detector and
+ * normaliser a live response goes through. It is a substitute NETWORK, not a
+ * substitute pipeline. That distinction is what makes it worth having on a
+ * machine that will never see a Turo response.
+ */
+async function fixtureCall(cursor, fn) {
+  const F = globalThis.D247_TURO_FIXTURE;
+  const B = globalThis.__d247TuroBridge;
+  if (!F || !B) return { __tabError: "The bundled sample data did not load in the service worker." };
+
+  // A tiny shim so the fixture path and the tab path call the same names.
+  const shim = {
+    collectVehicles: async () => {
+      const v = F.readVehicles(cursor.scenario);
+      return { outcome: v.outcome, message: v.message, httpStatus: v.httpStatus,
+        envelopeKeys: v.envelopeKeys, vehicles: v.vehicles, itemCount: v.items.length, turoHostId: v.turoHostId };
+    },
+    collectPage: async (pageRequest, prevPlan) => {
+      const page = F.readPage(pageRequest, prevPlan || null, cursor.scenario);
+      const records = [], rejected = [], histogram = {};
+      const R = reader();
+      if (page.outcome === R.OUTCOME.OK) {
+        for (const item of page.items) {
+          if (item && typeof item === "object" && !Array.isArray(item)) {
+            for (const k of Object.keys(item).slice(0, 60)) histogram[k] = (histogram[k] || 0) + 1;
+          }
+          const n = B.normalizeGuarded(item);
+          if (n.record) records.push(n.record); else if (n.rejected) rejected.push(n.rejected);
+        }
+        if (page.items.length > 0 && records.length === 0) {
+          page.outcome = R.OUTCOME.SHAPE_CHANGED;
+          page.message = "The sample data produced " + page.items.length + " item(s) and none could be read.";
+        }
+      }
+      return {
+        outcome: page.outcome, message: page.message,
+        explicitEnd: !page.next && page.plan && page.plan.style !== "unknown",
+        pageKey: page.pageKey, world: "fixture",
+        httpStatus: page.httpStatus, finalUrl: page.finalUrl, bytes: page.bytes,
+        envelopeKeys: page.envelopeKeys, snippet: page.snippet, retryAfterSeconds: page.retryAfterSeconds,
+        itemCount: page.items.length, plan: page.plan, next: page.next,
+        records: records, rejected: rejected, keyHistogram: histogram
+      };
+    }
+  };
+  return await fn(null, null, shim);
+}
+
+/**
  * Two executeScript calls, both hitting the same tab AND the same world:
- *   1. `files:` loads fixture.js + content-turo.js, defining the globals
+ *   1. `files:` loads the reader, defining the globals
  *   2. `func:` invokes the entrypoint and hands back its resolved value
  *
  * Why two: a `files:` injection's own completion value is a weak contract, and
@@ -235,47 +1376,30 @@ async function readOneReservation() {
  * option. Anyone "fixing" this by adding chrome.runtime.sendMessage inside the
  * page will silently break the MAIN retry.
  */
-async function runReaderInWorld(tabId, world) {
+async function callInTab(tabId, world, method, args, shim) {
+  if (shim) return await shim[method].apply(null, args);
+
   await chrome.scripting.executeScript({
     target: { tabId },
     world,
-    files: ["fixture.js", "content-turo.js"]
+    files: ["fixture.js", "turo-read-contract.js", "content-turo.js"]
   });
 
-  const frames = await chrome.scripting.executeScript({
-    target: { tabId },
-    world,
-    func: () => globalThis.__d247TuroBridge.collectOneReservation()
-  });
+  const frames = await withTimeout(
+    chrome.scripting.executeScript({
+      target: { tabId },
+      world,
+      args: [method, args],
+      func: (m, a) => globalThis.__d247TuroBridge[m].apply(null, a)
+    }),
+    INJECT_TIMEOUT_MS,
+    "the Turo tab did not answer in time"
+  );
 
   const result = frames && frames[0] && frames[0].result;
   if (!result) throw new Error("the reader returned nothing");
   return result;
 }
-
-/**
- * Last-resort fallback when we could not run anything in a tab at all.
- * Uses the SAME normalize() the page uses (loaded via importScripts above), so
- * this path and the in-page fixture path produce byte-identical reservations.
- */
-function fixtureFromWorker(reason, detail) {
-  const bridge = globalThis.__d247TuroBridge;
-  if (!bridge || !bridge.fixtureReservation) {
-    return {
-      ok: false,
-      source: null,
-      reason: "no_fixture",
-      detail: `${detail}; content-turo.js did not load in the service worker`,
-      reservation: null,
-      diagnostics: {}
-    };
-  }
-  const out = bridge.fixtureReservation(reason, detail);
-  out.diagnostics = Object.assign({}, out.diagnostics, { loadedIn: "service-worker" });
-  return out;
-}
-
-// ------------------------------------------------------- finding/opening a tab
 
 /**
  * chrome.tabs.query({url}) needs EITHER the "tabs" permission or a matching
@@ -290,7 +1414,8 @@ async function getTuroTab() {
   if (ready) return ready;
   if (existing[0]) return await waitForLoad(existing[0].id);
 
-  // active:false — never steal focus in the middle of a demo.
+  // active:false — never steal focus in the middle of a demo, or in the middle
+  // of whatever the operator was actually doing.
   const created = await chrome.tabs.create({ url: TURO_TAB_URL, active: false });
   return await waitForLoad(created.id);
 }
@@ -325,10 +1450,17 @@ function waitForLoad(tabId) {
   });
 }
 
-// ------------------------------------------------------------ posting to us
+function withTimeout(promise, ms, message) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message)), ms);
+    promise.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
+// ================================================================= the POST ==
 
 /**
- * POST /functions/v1/turo-bridge-ingest
+ * POST /functions/v1/turo-bridge-ingest — ONE reservation.
  *
  * Shape and headers follow the portal's own convention for calling an edge
  * function without a Supabase session: an `apikey` header plus the caller's
@@ -348,7 +1480,7 @@ function waitForLoad(tabId) {
  * cross-origin fetch from an injected script would be subject to CORS, while
  * the worker is exempt by host permission.
  */
-async function postReservation(token, read) {
+async function postReservation(token, reservation, meta) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
   try {
@@ -358,17 +1490,27 @@ async function postReservation(token, read) {
       signal: controller.signal,
       body: JSON.stringify({
         // The credential. Never a tenant id — the server resolves the tenant
-        // from this token's hash, which is the whole security model.
+        // from this token, which is the whole security model.
         token,
         // "turo" | "fixture". Stays on the wire, is persisted, and is never
         // merely inferable. It is the single thing preventing sample data from
         // being mistaken downstream for a real reservation.
-        source: read.source,
-        reason: read.reason || null,
-        detail: read.detail || null,
+        source: meta.source,
+        reason: meta.reason || null,
+        detail: meta.detail || null,
         extension_version: chrome.runtime.getManifest().version,
-        diagnostics: read.diagnostics || null,
-        reservation: read.reservation
+        diagnostics: meta.diagnostics || null,
+        parser_version: "turo-read-contract@" + (reader().__version || "?"),
+        /* THE RUN. Without this every POST opened, finalised and closed its own
+           turo_sync_jobs row: an 11-trip sync produced 11 separate 'manual_single'
+           runs, each claiming success, and the portal's sync history read as
+           eleven complete syncs of one trip each. `job.job_id` (null on the first
+           POST, the server's id thereafter) is what makes it ONE run. */
+        job: meta.job || undefined,
+        /* Batch shape. `reservations: []` is a legal finalisation call — it
+           advances and closes the run without writing a reservation row. */
+        reservation: reservation || undefined,
+        reservations: reservation ? undefined : (meta.reservations || [])
       })
     });
 
@@ -381,36 +1523,620 @@ async function postReservation(token, read) {
         : `Drive247 answered HTTP ${res.status}.` +
           (res.status === 404 ? " The turo-bridge-ingest function is not deployed." : "");
       console.error("[TuroBridge] ingest failed:", res.status, detail);
-      return { ok: false, detail };
+      return { ok: false, detail, status: res.status, jobId: body.job_id || null };
     }
 
-    console.log(`[TuroBridge] ${body.action || "saved"} ${body.reservationId} (source=${body.source})`);
-    return { ok: true, action: body.action || "created", id: body.id || null };
+    /* write_safe === false is the server REFUSING the run, not the network
+       failing: it answers 200 with `wrote_nothing_because` and finalises the
+       job as failed. Surfaced as ok:true + writeSafe:false so the caller can
+       tell "Drive247 is down" from "Drive247 read this and did not believe it". */
+    /* The batch response reports per-record outcomes in `results[]`; only the
+       legacy single-reservation shape carries a top-level `action`. Read both
+       so the PoC path and the run path can share this function. */
+    const firstResult = Array.isArray(body.results) && body.results.length ? body.results[0] : null;
+    return {
+      ok: true,
+      action: body.action || (firstResult && firstResult.action) || "created",
+      rejected: !!(firstResult && firstResult.action === "rejected"),
+      rejectedReason: (firstResult && firstResult.reason) || null,
+      id: body.id || (firstResult && firstResult.row_id) || null,
+      jobId: body.job_id || null,
+      writeSafe: body.write_safe !== false,
+      wroteNothingBecause: body.wrote_nothing_because || null,
+      /* What the SERVER concluded — completeness, is_authoritative and
+         observed_complete are GENERATED columns, so this is the only honest
+         source for them. We never recompute them here. */
+      run: body.run || null
+    };
   } catch (e) {
     const aborted = e && e.name === "AbortError";
     return {
       ok: false,
-      detail: aborted
-        ? "Drive247 did not respond in time."
-        : `Could not reach Drive247: ${String((e && e.message) || e)}`
+      detail: aborted ? "Drive247 did not respond in time." : `Could not reach Drive247: ${String((e && e.message) || e)}`
     };
   } finally {
     clearTimeout(timer);
   }
 }
 
-// ------------------------------------------------------------------ status
+/**
+ * THE RUN ENVELOPE — `job` on the ingest wire.
+ *
+ * Everything here is an OBSERVATION. Nothing in it is, or can be, a claim about
+ * health: `completeness`, `is_authoritative`, `observed_complete` and
+ * `progress_denominator` are GENERATED ALWAYS columns
+ * (turo-bridge-poc/sql/03-foundation-schema.sql:208-244) and Postgres refuses a
+ * write to them from anyone, service_role included. Authority is DERIVED from
+ * these observations, never asserted by us.
+ *
+ * ⚠ window_start / window_end ARE NOT OPTIONAL. is_authoritative (03:223) is
+ *   `... AND window_start IS NOT NULL AND window_end IS NOT NULL`, so a run that
+ *   omits them can NEVER become authoritative — and a release can only ever
+ *   cite an authoritative run. Omitting them silently disabled the entire
+ *   release path. They are what we can VOUCH for having read, derived from the
+ *   trips we actually parsed, never from anything the feed declared.
+ *
+ * ⚠ finalize is ALWAYS sent explicitly. The ingest defaults it to TRUE on the
+ *   legacy single-reservation shape (index.ts:717), so leaving it off closed
+ *   the run after the first record and made every later POST a 409.
+ */
+function buildJobEnvelope(cursor, summary, opts) {
+  opts = opts || {};
+  const rows = (summary && summary.rows) || [];
+
+  // The window we can vouch for: the earliest start and latest end among trips
+  // we actually PARSED. Not the requested window, not anything the feed said.
+  let from = null, to = null;
+  for (const r of rows) {
+    if (r.startsAt && (from === null || r.startsAt < from)) from = r.startsAt;
+    if (r.endsAt && (to === null || r.endsAt > to)) to = r.endsAt;
+    // A trip that starts inside the window but ends outside it still widens
+    // what we read; so does a start later than every end.
+    if (r.startsAt && (to === null || r.startsAt > to)) to = r.startsAt;
+    if (r.endsAt && (from === null || r.endsAt < from)) from = r.endsAt;
+  }
+
+  // Every Turo vehicle this run laid eyes on. A vehicle that never appeared
+  // cannot have its trips released by this job — silence about a car is not a
+  // statement about that car (03 §7, rule 3).
+  const vehicles = {};
+  for (const v of (summary && summary.vehicles) || []) {
+    const id = typeof v === "string" ? v : (v && (v.turoVehicleId || v.id));
+    if (id) vehicles[String(id)] = true;
+  }
+  for (const r of rows) if (r.turoVehicleId) vehicles[String(r.turoVehicleId)] = true;
+
+  const env = {
+    job_id: cursor.ingestJobId || null,
+    kind: "trips",
+    // Explicit on EVERY call. See the warning above.
+    finalize: opts.finalize === true,
+    parser_version: "turo-read-contract@" + (reader().__version || "?"),
+
+    pages_fetched: cursor.pagesRead || 0,
+    records_seen: cursor.recordsAccepted || 0,
+    raw_item_count: cursor.recordsOffered || 0,
+    // A record we could not understand is a PARSE FAILURE, and it costs the run
+    // its authority. That is correct: we do not know what we did not read.
+    parse_failure_count: cursor.recordsRejected || 0,
+    http_error_count: cursor.httpErrors || 0,
+    feed_reported_total: cursor.feedReportedTotal,
+
+    window_start: from,
+    window_end: to,
+    observed_turo_vehicle_ids: Object.keys(vehicles),
+
+    // Inert until the extension can see a real Turo host identity — the field
+    // to hash is unconfirmed, and a guessed fingerprint is worse than none
+    // because the §7 pin would then lock a tenant to a value that means nothing.
+    turo_account_fingerprint: cursor.turoAccountFingerprint || null
+  };
+
+  if (opts.finalize) {
+    env.reader_outcome = opts.outcome || "UNKNOWN";
+    env.degraded_reason = degradedReasonFor(opts.outcome, cursor);
+    // saw_end_of_feed is a POSITIVE claim and only `explicitEnd` earns it: a
+    // walk that merely could not build a next request has not been told it
+    // ended. Anything short of that leaves the run non-authoritative, which is
+    // the direction that cannot release a block.
+    env.saw_end_of_feed = !!(opts.coverage && opts.coverage.complete) && !!cursor.explicitEnd;
+    // The client may only ever make the server's verdict STRICTER
+    // (index.ts:resolveWriteSafety). Never more permissive.
+    env.write_safe = opts.mayWrite !== false;
+    env.pages = (cursor.receipts || []).slice(0, 100).map((r, i) => ({
+      seq: typeof r.index === "number" ? r.index : i,
+      // PATH ONLY. A session-bearing query string must never be persisted.
+      url_path: String(reader().TRIPS_PATH || "").split("?")[0],
+      record_count: r.recordCount,
+      requested_at: r.committedAt,
+      observed_keys: Object.keys((summary && summary.keyHistogram) || {}).slice(0, 200)
+    }));
+  }
+  return env;
+}
 
 /**
- * The SINGLE writer of user-visible state. Persist to storage first; the popup
- * renders storage on open and follows storage.onChanged, so a sync that
- * finishes after the popup was closed is still correct and still visible when
- * it is reopened. We deliberately never sendMessage the popup — a closed popup
- * rejects with "Receiving end does not exist", usually as an unhandled
+ * Map our read outcome onto turo_sync_jobs.degraded_reason, whose CHECK list is
+ * CLOSED (03:145-154). Returning null claims the run was clean, so only the two
+ * genuinely clean outcomes get it.
+ */
+function degradedReasonFor(outcome, cursor) {
+  switch (outcome) {
+    case "OK":
+    case "NO_TRIPS_CONFIRMED":
+      return cursor && cursor.pageFailed ? "http_error" : null;
+    case "TRUNCATED":          return "page_cap_reached";
+    case "PAGINATION_STALLED": return "unknown";
+    case "RATE_LIMITED":       return "http_error";
+    case "UNREACHABLE":        return "http_error";
+    case "BOT_BLOCKED":        return "waf_challenge";
+    case "EMPTY_UNCONFIRMED":  return "waf_empty_200";
+    case "NOT_LOGGED_IN":      return "not_signed_in";
+    case "SHAPE_CHANGED":
+    case "UNPARSEABLE":        return "shape_unrecognised";
+    // A failure we cannot name is still a failure, and 'unknown' is not
+    // authoritative either.
+    default:                   return "unknown";
+  }
+}
+
+/**
+ * Close the server-side run. Sent with ZERO reservations: it advances and
+ * finalises the turo_sync_jobs row and writes nothing else.
+ *
+ * This is also the ONLY way a degraded read ever reaches Drive247. Before it
+ * existed, a bot challenge or an expired session parked the run locally and the
+ * server heard nothing at all — so the ingest's degraded-run gate, the whole
+ * point of which is that an operator who is told nothing learns nothing, could
+ * never fire.
+ */
+async function finaliseIngestRun(cursor, summary, outcome, coverage, mayWrite) {
+  const token = (await get(K.token) || "").trim();
+  if (!token) return { ok: false, detail: "No pairing token." };
+  const res = await postReservation(token, null, {
+    source: cursor.mode === "fixture" ? "fixture" : "turo",
+    reason: outcome,
+    detail: null,
+    reservations: [],
+    job: buildJobEnvelope(cursor, summary, {
+      finalize: true, outcome: outcome, coverage: coverage, mayWrite: mayWrite
+    }),
+    diagnostics: { runId: cursor.runId, world: cursor.world, mode: cursor.mode }
+  });
+  if (!res.ok) console.error("[TuroBridge] could not finalise the run:", res.detail);
+  return res;
+}
+
+/**
+ * Ask Drive247 to reconcile the run we just closed.
+ *
+ * ⚠ THIS IS THE STEP THAT WAS MISSING ENTIRELY. Ingest records what the feed
+ *   SAID; turo-bridge-reconcile is the only thing that draws a conclusion from
+ *   it. Without this call rows land and never leave presence_state OBSERVED:
+ *   nothing is ever marked MISSING, no cancellation candidate is ever raised,
+ *   and the portal's cancellation queue is permanently and misleadingly empty.
+ *
+ * Calling it unconditionally is safe by construction, and deliberately so:
+ *   - a NON-QUALIFYING run writes nothing at all — not one presence transition,
+ *     not one conflict, not one block;
+ *   - qualification is READ from a GENERATED column, so neither this client nor
+ *     service_role can assert it;
+ *   - corroborated absence (E3) raises a REVIEW ITEM saying the car is still
+ *     blocked; it never releases;
+ *   - the only release that does not need a signed-in human is a status we
+ *     positively READ as cancelled.
+ * So the worst thing a spurious call here can do is nothing.
+ *
+ * Failure is non-fatal and never rewrites the run: the reservations already
+ * landed, which is the valuable half. An unreconciled run means a stale block,
+ * which ages out; a wrongly reconciled one means a double-sold car.
+ */
+async function reconcileRun(token, jobId, mode) {
+  if (!jobId) return { ok: false, detail: "No run id to reconcile." };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/turo-bridge-reconcile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      signal: controller.signal,
+      // The pairing token is the credential here exactly as it is for ingest —
+      // this path makes no operator decision, so it needs no operator.
+      body: JSON.stringify({ token, action: "reconcile", job_id: jobId, dry_run: mode === "fixture" })
+    });
+    let body = {};
+    try { body = await res.json(); } catch (_) {}
+    if (!res.ok) {
+      const detail = (body && body.error) ||
+        `Drive247 answered HTTP ${res.status}.` +
+        (res.status === 404 ? " The turo-bridge-reconcile function is not deployed." : "");
+      console.warn("[TuroBridge] reconcile skipped:", res.status, detail);
+      return { ok: false, detail };
+    }
+    return { ok: true, report: body };
+  } catch (e) {
+    return { ok: false, detail: String((e && e.message) || e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * A normalised TuroReservation -> the wire shape turo-bridge-ingest reads.
+ *
+ * TWO FIELDS ARE SENT THAT THE SERVER CURRENTLY DROPS, and they are sent
+ * anyway: `vehicle_plate` and `turo_status`. The ingest's column map
+ * (index.ts:240-256) has no entry for either and the table has no such columns,
+ * so today they survive only inside `raw`. That is precisely why the `__d247`
+ * block below duplicates them there — the plate is the ONLY safe vehicle join
+ * key (vehicles.reg is unique 461/461; vehicles.vin is not, 326 distinct across
+ * 400), and Turo's own trip status is what tells a reconciler that a trip was
+ * cancelled. Losing either in transit would be silent and expensive. When the
+ * columns are added, the top-level fields start landing with no extension
+ * change at all.
+ *
+ * NOTHING IS INVENTED HERE. Every value either came from the feed or is null,
+ * and `unknowns` names every field we could not read.
+ */
+function toWire(record, cursor) {
+  const v = record.vehicle || {};
+  const meta = {
+    schema: 1,
+    run_id: cursor.runId,
+    mode: cursor.mode,
+    parser: "turo-read-contract@" + (reader().__version || "?"),
+    lifecycle: record.lifecycle,
+    hold_until: record.holdUntil,
+    timezone: record.timezone,
+    supersedes_reservation_id: record.supersedesReservationId,
+    confidence: record.confidence,
+    requires_review: record.requiresReview,
+    vehicle: {
+      turo_vehicle_id: v.turoVehicleId || null,
+      plate_normalised: v.plateNormalised || null,
+      plate_raw: v.plateRaw || null,
+      vin_hint: v.vinHint || null,          // A HINT. Never a join key.
+      label: v.label || null,
+      evidence: v.evidence,
+      confidence: v.confidence,
+      requires_review: v.requiresReview,
+      rejected_vehicle_id: v.__rejectedVehicleId || null,
+      rejected_vehicle_id_reason: v.__rejectedVehicleIdReason || null
+    },
+    // The two things that make being wrong survivable: what we could not read,
+    // and everything no extractor claimed.
+    unknowns: (record.unknowns || []).map((u) => ({
+      field: u.field, reason: u.reason, sample: u.sample === null || u.sample === undefined ? null : String(u.sample).slice(0, 200)
+    })),
+    unmapped: record.rawOverflow || {},
+    field_evidence: record.evidence || {}
+  };
+
+  let raw = Object.assign({}, record.raw || {}, { __d247: meta });
+  if (JSON.stringify(raw).length > INGEST_MAX_RAW_BYTES) {
+    // Trim the FEED payload, never the metadata: the metadata is the part that
+    // says what we did and did not understand, and it is small.
+    raw = {
+      __d247: meta,
+      __d247_raw_trimmed: true,
+      __d247_raw_keys: Object.keys(record.raw || {}).slice(0, 60)
+    };
+  }
+
+  return {
+    reservation_id: record.reservationId,
+    source: cursor.mode === "fixture" ? "fixture" : "turo",
+    guest_name: record.guestName || null,
+    vehicle_label: v.label || null,
+    vehicle_plate: v.plateRaw || null,   // TIER 1 of the vehicle ladder
+    starts_at: record.startsAt,
+    ends_at: record.endsAt,
+    status: "synced",                     // OUR import lane, not Turo's trip state
+    turo_status: record.turoStatusRaw || null,  // TURO'S word, kept separate
+    total_amount: record.totalAmount,
+    currency: record.currency,
+
+    /* ⚠ THESE FOUR MUST BE AT THE TOP LEVEL OR THEY ARE LOST.
+       turo-bridge-ingest's pick() (index.ts:347) reads the TOP LEVEL of this
+       object only — it never descends into `raw`. Sending them solely inside
+       raw.__d247 left four real columns permanently NULL, and each one is
+       load-bearing:
+         turo_vehicle_id  — the identity the vehicle-mapping queue groups on,
+                            and the value the release gate in 03 §7 checks
+                            against turo_sync_jobs.observed_turo_vehicle_ids.
+                            Without it NO trip can ever be released.
+         turo_guest_id    — the only non-name guest identity; a display name
+                            alone scores 0.25 in succession, deliberately.
+         timezone         — reported, never assumed. blocked_dates is DATE-only
+                            with an inclusive end, so a wrong zone IS the
+                            same-day-turnaround double-booking.
+         supersedes_...   — a trip that MOVED, not a trip that vanished. The
+                            ingest stamps it on the PREDECESSOR (index.ts:1007).
+       All four are still mirrored inside `raw.__d247` as well; a duplicate
+       costs bytes, a silent NULL costs a car. */
+    turo_vehicle_id: v.turoVehicleId || null,
+    turo_guest_id: record.guestId || null,
+    timezone: record.timezone || null,
+    supersedes_reservation_id: record.supersedesReservationId || null,
+
+    raw
+  };
+}
+
+/**
+ * Make one page's worth of records fit in chrome.storage.local WITHOUT losing
+ * any of them.
+ *
+ * The order of sacrifice is deliberate: the feed's own verbose payload goes
+ * first, largest record first, and `__d247` — which carries the plate, the
+ * unknowns, the vehicle evidence and the overflow keys — is kept intact to the
+ * very end. That metadata is the part that makes being wrong survivable; the
+ * echo of Turo's own JSON is a diagnostic nicety.
+ *
+ * Mutates `blob` in place. Returns {ok:false} only when even the fully-slimmed
+ * page will not fit, which the caller must treat as a failure and never as a
+ * reason to store a subset.
+ */
+function fitToStorage(blob) {
+  let size = JSON.stringify(blob).length;
+  if (size <= PAGE_STORAGE_BUDGET_BYTES) return { ok: true, trimmed: 0 };
+
+  const bySize = blob.records
+    .map((r, i) => ({ i, n: JSON.stringify(r).length }))
+    .sort((a, b) => b.n - a.n);
+
+  let trimmed = 0;
+  for (const { i } of bySize) {
+    const rec = blob.records[i];
+    if (!rec.raw || rec.raw.__d247_raw_trimmed) continue;
+    rec.raw = {
+      __d247: rec.raw.__d247,
+      __d247_raw_trimmed: true,
+      __d247_raw_keys: Object.keys(rec.raw).filter((k) => k !== "__d247").slice(0, 60)
+    };
+    trimmed++;
+    size = JSON.stringify(blob).length;
+    if (size <= PAGE_STORAGE_BUDGET_BYTES) return { ok: true, trimmed };
+  }
+
+  return {
+    ok: false, trimmed,
+    detail: `a single batch of ${blob.records.length} trips needs ${Math.round(size / 1024)}KB, over the ${Math.round(PAGE_STORAGE_BUDGET_BYTES / 1024)}KB this extension will hold`
+  };
+}
+
+// ============================================================ the view model ==
+
+/**
+ * The popup renders THIS and nothing else. It is written on every step, so a
+ * popup opened after the fact, or reopened halfway through, always shows the
+ * truth rather than a half-finished animation.
+ *
+ * THE ONE RULE THIS FUNCTION ENFORCES: a denominator is only ever populated
+ * when the walk is DEMONSTRABLY COMPLETE. `progressTotal` is null until then,
+ * and the popup renders nothing where a "of N" would go. A progress bar whose
+ * denominator comes from the same degraded response as its numerator reads 8/8
+ * green on a truncated read, which is the most confidently wrong thing this UI
+ * could do. `declaredTotal` is carried for diagnostics and is never that
+ * denominator.
+ */
+function projectState(cursor, summary, note) {
+  const R = reader();
+  const s = summary || { ids: [], rows: [], rejected: [], keyHistogram: {}, unknownCounts: {}, envelopeKeys: [], vehicles: [] };
+  const done = cursor.phase === "done";
+  const parked = cursor.phase === "parked";
+  const coverage = cursor.coverage || null;
+  const gates = cursor.gates || null;
+
+  const outcome = cursor.finalOutcome || cursor.parkedReason || (done ? "OK" : null);
+  const policy = outcome && R ? R.policyFor(outcome === "INGEST_FAILED" ? "UNREACHABLE" : outcome) : null;
+
+  const unknownFields = Object.keys(s.unknownCounts).map((f) => ({
+    field: f, count: s.unknownCounts[f].count,
+    reason: s.unknownCounts[f].reason, sample: s.unknownCounts[f].sample
+  })).sort((a, b) => b.count - a.count);
+
+  let review = 0, cancelled = 0, needVehicle = 0;
+  for (const row of s.rows) {
+    if (row.review) review++;
+    if (row.lifecycle === "cancelled") cancelled++;
+    if (row.vehicleEvidence === "unbound" || row.vehicleEvidence === "label_fuzzy") needVehicle++;
+  }
+
+  return {
+    version: 1,
+    runId: cursor.runId,
+    mode: cursor.mode,
+    scenario: cursor.scenario || null,
+    phase: done ? "done" : parked ? "parked" : "running",
+    stepLabel: stepLabel(cursor),
+    note: note || null,
+    startedAt: cursor.startedAt,
+    updatedAt: new Date().toISOString(),
+
+    /* BATCH COUNTING, HONESTLY.
+       `batchesDone` is a fact — we read that many pages. `batchesTotal` is a
+       CLAIM, and we only make it once the walk proved it ended. Until then the
+       popup shows "Batch 3" with no denominator, which is the true statement. */
+    batchesDone: cursor.pagesRead,
+    batchesTotal: coverage && coverage.complete ? cursor.pagesRead : null,
+    currentBatch: cursor.pending ? cursor.pending.index + 1 : cursor.pagesRead,
+
+    counts: {
+      offered: cursor.recordsOffered,
+      accepted: cursor.recordsAccepted,
+      rejected: cursor.recordsRejected,
+      flushed: cursor.recordsFlushed,
+      review: review,
+      needVehicle: needVehicle,
+      cancelled: cancelled,
+      vehicles: (s.vehicles || []).length
+    },
+    // Only ever populated on a complete walk. See the block comment above.
+    progressTotal: coverage && coverage.complete ? cursor.recordsAccepted : null,
+    declaredTotal: (cursor.pagination && cursor.pagination.declaredTotal) || null,
+
+    coverage: coverage ? { complete: coverage.complete, evidence: coverage.evidence, display: coverage.display } : null,
+    session: cursor.session ? { liveSession: cursor.session.liveSession, evidence: cursor.session.evidence } : null,
+    gates: gates,
+    pagination: cursor.pagination ? { style: cursor.pagination.style, confidence: cursor.pagination.confidence, matchedKeys: cursor.pagination.matchedKeys } : null,
+
+    outcome: outcome,
+    advice: policy ? policy.advice : null,
+    lastError: cursor.lastError || null,
+    /* Said out loud rather than swallowed: the trips landed but Drive247 has not
+       yet compared them against the previous sync, so nothing has been released
+       and nothing has been marked missing. Silence here would read as "all
+       done". */
+    reconcileNote: cursor.reconcileNote || null,
+    ingestFailures: cursor.ingestFailures || 0,
+    canResume: parked,
+    autoResumes: parked ? AUTO_RESUMABLE.has(cursor.parkedReason) : false,
+    nextAllowedAt: cursor.nextAllowedAt || null,
+
+    rows: s.rows.slice(-40),
+    unknownFields: unknownFields,
+    rejected: s.rejected.slice(0, 12),
+    absences: cursor.absences || [],
+    envelopeKeys: s.envelopeKeys,
+    keyHistogram: s.keyHistogram
+  };
+}
+
+function stepLabel(cursor) {
+  if (cursor.phase === "probing_session") return "Checking your Turo session…";
+  if (cursor.phase === "reading_trips") return "Reading batch " + ((cursor.pending ? cursor.pending.index : cursor.pagesRead) + 1) + "…";
+  if (cursor.phase === "flushing") return "Saving batch " + cursor.pagesRead + " to Drive247…";
+  if (cursor.phase === "parked") return "Paused";
+  if (cursor.phase === "done") return "Finished";
+  return "Working…";
+}
+
+function errorState(message) {
+  return {
+    version: 1, runId: null, mode: null, phase: "parked", stepLabel: "Cannot start",
+    startedAt: null, updatedAt: new Date().toISOString(),
+    batchesDone: 0, batchesTotal: null, currentBatch: 0,
+    counts: { offered: 0, accepted: 0, rejected: 0, flushed: 0, review: 0, needVehicle: 0, cancelled: 0, vehicles: 0 },
+    progressTotal: null, declaredTotal: null,
+    coverage: null, session: null, gates: null, pagination: null,
+    outcome: "UNKNOWN", advice: message, lastError: message, ingestFailures: 0,
+    canResume: false, autoResumes: false, nextAllowedAt: null,
+    rows: [], unknownFields: [], rejected: [], absences: [], envelopeKeys: [], keyHistogram: {}
+  };
+}
+
+function lightRow(wire, action) {
+  const meta = (wire.raw && wire.raw.__d247) || {};
+  const veh = meta.vehicle || {};
+  return {
+    id: wire.reservation_id,
+    guest: wire.guest_name,
+    vehicle: wire.vehicle_label || veh.plate_raw || null,
+    vehicleEvidence: veh.evidence || "unbound",
+    plate: veh.plate_normalised || null,
+    /* Carried so buildJobEnvelope can report observed_turo_vehicle_ids. A trip
+       we positively read IS an observation of its vehicle, and without that the
+       release gate in 03 §7 (rule 3) can never be satisfied on a feed that does
+       not separately enumerate vehicles. */
+    turoVehicleId: veh.turo_vehicle_id || null,
+    startsAt: wire.starts_at,
+    endsAt: wire.ends_at,
+    lifecycle: meta.lifecycle || "unknown",
+    holdUntil: meta.hold_until || null,
+    supersedes: meta.supersedes_reservation_id || null,
+    review: !!meta.requires_review,
+    unknowns: (meta.unknowns || []).map((u) => u.field),
+    action: action || "created"
+  };
+}
+
+function lightRejection(rej) {
+  return {
+    reason: rej.reason,
+    fields: (rej.unknowns || []).map((u) => u.field),
+    keys: (rej.observedKeys || []).slice(0, 20)
+  };
+}
+
+function lightVehicle(v) {
+  return {
+    turoVehicleId: v.turoVehicleId || null,
+    plate: v.plateNormalised || null,
+    vin: v.vinHint || null,
+    label: v.label || null,
+    evidence: v.evidence,
+    requiresReview: v.requiresReview
+  };
+}
+
+// ==================================================== storage + alarm helpers ==
+
+function reader() { return globalThis.__d247TuroRead || null; }
+
+async function get(key) {
+  const bag = await chrome.storage.local.get(key);
+  return bag[key];
+}
+async function set(key, value) {
+  const patch = {};
+  patch[key] = value;
+  await chrome.storage.local.set(patch);
+}
+
+async function writeState(state) {
+  await set(K.state, state);
+  return state;
+}
+
+/**
+ * The SINGLE writer of the PoC single-click state. Persist to storage first;
+ * the popup renders storage on open and follows storage.onChanged, so a sync
+ * that finishes after the popup was closed is still correct and still visible
+ * when it is reopened. We deliberately never sendMessage the popup — a closed
+ * popup rejects with "Receiving end does not exist", usually as an unhandled
  * rejection.
  */
 async function setStatus(status) {
   const lastRun = Object.assign({ at: Date.now() }, status);
-  await chrome.storage.local.set({ lastRun });
+  await set(K.lastRun, lastRun);
   return lastRun;
+}
+
+/* Alarms may be absent if the permission was stripped from the manifest. The
+   run still works while the worker happens to stay alive; it just cannot revive
+   itself. Degrade, and say so in the log rather than throwing. */
+function alarmsAvailable() {
+  return typeof chrome !== "undefined" && chrome.alarms && typeof chrome.alarms.create === "function";
+}
+
+async function ensureAlarm() {
+  if (!alarmsAvailable()) {
+    console.warn('[TuroBridge] the "alarms" permission is missing; a sync interrupted by the worker being killed will need a manual Continue.');
+    return;
+  }
+  const existing = await chrome.alarms.get(PUMP_ALARM);
+  if (!existing) {
+    chrome.alarms.create(PUMP_ALARM, { periodInMinutes: PUMP_ALARM_MINUTES, delayInMinutes: PUMP_ALARM_MINUTES });
+  }
+}
+
+async function clearAlarm() {
+  if (!alarmsAvailable()) return;
+  try { await chrome.alarms.clear(PUMP_ALARM); } catch (_) {}
+}
+
+/**
+ * Wait, and be ready to be killed while waiting.
+ *
+ * setTimeout is the FAST path and works only while the worker is alive; the
+ * alarm is the BACKSTOP that revives it if it is not. Chrome clamps alarms to
+ * roughly a 30-second floor, which is far too coarse for the ~1.2s pacing
+ * between pages — hence both.
+ */
+async function scheduleWake(ms) {
+  await ensureAlarm();
+  if (ms <= 25000) {
+    setTimeout(() => { pump("timer").catch(() => {}); }, ms);
+  }
 }
