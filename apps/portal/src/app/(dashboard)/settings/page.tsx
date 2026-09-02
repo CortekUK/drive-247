@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -31,7 +31,6 @@ import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-res
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { DataCleanupDialog } from '@/components/settings/data-cleanup-dialog';
 import { EmailNotificationSettings } from '@/components/settings/email-notification-settings';
-import { PushNotificationSettings } from '@/components/settings/push-notification-settings';
 import { ColorPicker } from '@/components/settings/color-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { OGImageUpload } from '@/components/settings/og-image-upload';
@@ -169,7 +168,7 @@ const Settings = () => {
     'general', 'locations', 'branding',
     'requirements', 'duration', 'lockbox',
     'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments',
-    'reminders', 'push', 'templates',
+    'reminders', 'templates',
     'messaging', 'insurance', 'esign', 'blacklist',
     'subscription',
   ];
@@ -1742,7 +1741,6 @@ const Settings = () => {
                 { value: 'extras', icon: Package, label: 'Extras' },
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
-                { value: 'push', icon: BellRing, label: 'Push' },
                 { value: 'templates', icon: FileText, label: 'Templates' },
                 { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
                 { value: 'insurance', icon: Shield, label: 'Insurance' },
@@ -5089,10 +5087,6 @@ const Settings = () => {
         </TabsContent>
 
         {/* Templates Tab */}
-        <TabsContent value="push" className="space-y-6">
-          <PushNotificationSettings canEdit={canEditSettings('push')} />
-        </TabsContent>
-
         <TabsContent value="templates" className="space-y-6">
           {/* Email Templates */}
           <Card>

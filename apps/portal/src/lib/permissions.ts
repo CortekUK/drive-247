@@ -190,9 +190,6 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   payments: 'settings.payments',
   // Communication
   reminders: 'settings.reminders',
-  // Push reuses the notifications permission key — no new grant to backfill for
-  // managers who already have it.
-  push: 'settings.reminders',
   templates: 'settings.templates',
   // Integrations (all map to settings.integrations)
   integrations: 'settings.integrations',

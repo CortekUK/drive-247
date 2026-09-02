@@ -11,7 +11,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
 import DevPanel from "@/components/shared/DevPanel";
-import { ServiceWorkerRegistrar } from "@/components/push/service-worker-registrar";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   const initialize = useAuthStore((state) => state.initialize);
@@ -57,12 +56,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <NextTopLoader color="hsl(var(--primary))" height={2} showSpinner={false} />
       <QueryClientProvider client={queryClient}>
         <TenantProvider>
-          {/* Inside TenantProvider on purpose — it must read the tenant's push
-              flag, and registers NOTHING for tenants that have push switched
-              off. A service worker intercepts navigations for the whole origin,
-              so it is not something to install on operators who get no benefit
-              from it. */}
-          <ServiceWorkerRegistrar />
           <RealtimeChatProvider>
             <AuthInitializer>
               <ThemeProvider

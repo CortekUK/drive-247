@@ -207,9 +207,6 @@ export interface Tenant {
    */
   hide_vehicle_registration: boolean | null;
 
-  // Web Push (PWA) notifications. Per-tenant rollout flag — the booking site
-  // only offers to enable notifications when this is true.
-  push_notifications_enabled: boolean | null;
 }
 
 interface TenantContextType {
@@ -521,8 +518,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           customer_theme_mode,
           show_effective_daily_rate,
           hide_checkout_price_breakdown,
-          hide_vehicle_registration,
-          push_notifications_enabled
+          hide_vehicle_registration
         `)
         .eq('slug', slug)
         // Load active AND suspended tenants so a suspended tenant resolves and

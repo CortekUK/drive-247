@@ -392,7 +392,6 @@ export const ROUTES = {
   VEHICLES: "/vehicles",
   RENTALS: "/rentals",
   PAYMENTS: "/payments",
-  PLATES: "/plates",
   INSURANCE: "/insurance",
   INVOICES: "/invoices",
   INSURANCES: "/insurances",

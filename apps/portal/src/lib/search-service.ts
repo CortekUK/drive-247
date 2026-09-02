@@ -17,7 +17,6 @@ export interface SearchResults {
   vehicles: SearchResult[];
   rentals: SearchResult[];
   payments: SearchResult[];
-  plates: SearchResult[];
   insurance: SearchResult[];
   invoices: SearchResult[];
   insurances: SearchResult[];
@@ -79,7 +78,6 @@ export const searchService = {
         vehicles: [],
         rentals: [],
         payments: [],
-        plates: [],
         insurance: [],
         invoices: [],
         insurances: [],
@@ -93,7 +91,6 @@ export const searchService = {
       vehicles: [],
       rentals: [],
       payments: [],
-      plates: [],
       insurance: [],
       invoices: [],
       insurances: [],
@@ -222,40 +219,6 @@ export const searchService = {
           }));
 
         results.payments = rankResults(paymentResults, query);
-      }
-
-      // Search plates (if not filtered out)
-      if (entityFilter === 'all' || entityFilter === 'plates') {
-        let plateQuery = supabase
-          .from("plates")
-          .select(`
-            id,
-            plate_number,
-            status,
-            supplier,
-            notes,
-            vehicles!plates_vehicle_id_fkey(reg, make, model)
-          `)
-          .or(`plate_number.ilike.${searchTerm},supplier.ilike.${searchTerm}`);
-
-        if (tenantId) {
-          plateQuery = plateQuery.eq("tenant_id", tenantId);
-        }
-
-        const { data: plates } = await plateQuery.limit(10);
-
-        const plateResults = (plates || []).map(plate => ({
-          id: plate.id,
-          title: plate.plate_number,
-          subtitle: plate.vehicles 
-            ? `${(plate.vehicles as any).reg} • ${(plate.vehicles as any).make} ${(plate.vehicles as any).model} • ${plate.status || 'Unknown'}`
-            : `Not Assigned • ${plate.status || 'Unknown'}`,
-          category: "Plates",
-          url: `/plates/${plate.id}`,
-          icon: "hash",
-        }));
-
-        results.plates = rankResults(plateResults, query);
       }
 
       // Search insurance policies (if not filtered out)
