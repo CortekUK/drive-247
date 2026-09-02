@@ -121,9 +121,8 @@ export function BuyInsuranceDialog({
   // Starts in the past clamp to Pacific-TOMORROW (not local today): Bonzah can't
   // start a policy today, and bonzah-create-quote clamps the same way — so the
   // preview prices exactly the window the purchase will actually cover.
-  // PAYG rentals have a null end_date (open-ended); fall back to start+30d so this
-  // dialog can still render without crashing even if it ever opens for a PAYG row.
-  // (PAYG should not surface this dialog at all — guarded at the call site too.)
+  // Open-ended rentals have a null end_date; fall back to start+30d so this
+  // dialog can still render without crashing.
   const tripDates = (() => {
     if (isExtension && extensionDates) {
       return { start: clampToBonzahStart(extensionDates.start.split('T')[0]), end: extensionDates.end.split('T')[0] };

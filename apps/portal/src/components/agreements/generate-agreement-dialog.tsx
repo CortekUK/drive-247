@@ -39,11 +39,7 @@ interface ExtensionRow {
   new_end_date: string | null;
 }
 
-interface RentalFlags {
-  is_pay_as_you_go: boolean;
-}
-
-type AgreementType = "original" | "payg" | "extension";
+type AgreementType = "original" | "extension";
 
 export function GenerateAgreementDialog({
   open,
@@ -73,26 +69,7 @@ export function GenerateAgreementDialog({
     enabled: !!rental?.id,
   });
 
-  // Fetch rental flags (PAYG) so we can enable the right dropdown options
-  const { data: rentalFlags } = useQuery({
-    queryKey: ["rental-flags-for-agreement", rental?.id],
-    queryFn: async (): Promise<RentalFlags | null> => {
-      if (!rental?.id) return null;
-      const { data, error } = await supabase
-        .from("rentals")
-        .select("is_pay_as_you_go")
-        .eq("id", rental.id)
-        .single();
-      if (error) throw error;
-      return {
-        is_pay_as_you_go: !!data?.is_pay_as_you_go,
-      };
-    },
-    enabled: !!rental?.id,
-  });
-
   const hasExtensions = extensions.length > 0;
-  const isPayg = !!rentalFlags?.is_pay_as_you_go;
 
   // Reset transient state when the configure dialog closes
   useEffect(() => {
@@ -101,13 +78,6 @@ export function GenerateAgreementDialog({
       setExtensionId("");
     }
   }, [rental]);
-
-  // Pre-select the most appropriate type once rental flags load
-  useEffect(() => {
-    if (!rentalFlags) return;
-    if (isPayg) setAgreementType("payg");
-    else setAgreementType("original");
-  }, [rentalFlags, isPayg]);
 
   // If user picks Extension but only one exists, auto-select it
   useEffect(() => {
@@ -174,8 +144,6 @@ export function GenerateAgreementDialog({
         const successMessage =
           agreementType === "extension"
             ? `Extension #${selectedExtension?.sequence_number} agreement sent for signing`
-            : agreementType === "payg"
-            ? "PAYG rental agreement sent for signing"
             : "Rental agreement sent for signing";
         toast.success(successMessage);
         await Promise.all([
@@ -236,9 +204,6 @@ export function GenerateAgreementDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="original">Original Rental Agreement</SelectItem>
-                  <SelectItem value="payg" disabled={!isPayg}>
-                    PAYG Rental Agreement{!isPayg ? " (rental is not PAYG)" : ""}
-                  </SelectItem>
                   <SelectItem value="extension" disabled={!hasExtensions}>
                     Extension Agreement{!hasExtensions && extensionsLoading ? " (loading…)" : !hasExtensions ? " (no extensions)" : ""}
                   </SelectItem>

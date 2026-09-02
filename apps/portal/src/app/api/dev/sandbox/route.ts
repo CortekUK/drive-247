@@ -125,12 +125,6 @@ const DAY_MS = 24 * 3600 * 1000;
 const backDays = (ts: string, days: number) =>
   new Date(new Date(ts).getTime() - days * DAY_MS).toISOString();
 
-async function paygWindowSeconds(p: SupabaseClient): Promise<number> {
-  const { data } = await p.from("tenants")
-    .select("payg_accrual_window_seconds").eq("id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
-  return Number((data as any)?.payg_accrual_window_seconds) || 86400;
-}
-
 /** Fire a cron fn repeatedly until it stops doing work (catch-up drain). */
 async function drainRental(p: SupabaseClient, fn: string, rentalId: string, key: string, max = 12) {
   let total = 0;
@@ -209,8 +203,8 @@ async function allStatus(p: SupabaseClient) {
 // ═════════════════════════════ FAST-FORWARD ═════════════════════════════════
 // The Dev Panel is a pure TIME control: pressing +Nd makes it THIS rental's cron
 // for N days. It shifts the rental's own time anchors back N days, runs the
-// rental's applicable cron jobs (accrual, reminders, auto-extend,
-// deposit, daily), then hands every anchor the crons did NOT consume back to its
+// rental's applicable cron jobs (reminders, auto-extend, deposit, daily), then
+// hands every anchor the crons did NOT consume back to its
 // pre-shift value — so the REAL cron never sees a backdated anchor and never
 // churns the rental on its own. Results land in the rental's ledger; the
 // frontend (KPI cards / Payment Breakdown / timeline) shows them via Realtime.
@@ -223,7 +217,7 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   await assertDesignated(p, rentalId);
 
   const { data: r0 } = await p.from("rentals")
-    .select("status, is_pay_as_you_go, auto_extend_enabled, deposit_hold_status, payg_closed_at, payg_start_ts, payg_last_reminder_sent_at, payg_next_accrual_at, auto_extend_next_charge_at, deposit_hold_expires_at, end_date")
+    .select("status, auto_extend_enabled, deposit_hold_status, auto_extend_next_charge_at, deposit_hold_expires_at, end_date")
     .eq("id", rentalId).maybeSingle();
   if (!r0) throw new Error("rental not found");
   const rr = r0 as any;
@@ -233,8 +227,8 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   // hand them back to the REAL crons forever.
   let activated = false;
   if (rr.status !== "Active") {
-    if (rr.status === "Pending" && !rr.payg_closed_at) {
-      await p.from("rentals").update({ status: "Active", payg_paused: false })
+    if (rr.status === "Pending") {
+      await p.from("rentals").update({ status: "Active" })
         .eq("id", rentalId).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
       activated = true;
     } else {
@@ -242,14 +236,9 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
     }
   }
 
-  const win = await paygWindowSeconds(p);
-
   // ── snapshot every anchor we are about to shift ───────────────────────────
   const snap: FfSnapshot = {
     rentals: {
-      payg_start_ts: rr.payg_start_ts,
-      payg_last_reminder_sent_at: rr.payg_last_reminder_sent_at,
-      payg_next_accrual_at: rr.payg_next_accrual_at,
       auto_extend_next_charge_at: rr.auto_extend_next_charge_at,
       deposit_hold_expires_at: rr.deposit_hold_expires_at,
       end_date: rr.end_date,
@@ -258,14 +247,6 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
 
   // ── shift the clock: N days pass for THIS rental ──────────────────────────
   const u: Record<string, unknown> = {};
-  if (rr.payg_start_ts) u.payg_start_ts = backDays(rr.payg_start_ts, days);
-  if (rr.payg_last_reminder_sent_at) u.payg_last_reminder_sent_at = backDays(rr.payg_last_reminder_sent_at, days);
-  // PAYG accrual is WINDOW-based, not calendar-based (the test tenant may run a
-  // short QA window). "N days pass" = N windows become due. (days-1)*win margin
-  // avoids the boundary race that made +7d post 8 accruals.
-  if (rr.is_pay_as_you_go) {
-    u.payg_next_accrual_at = new Date(Date.now() - Math.max(0, days - 1) * win * 1000 - 1000).toISOString();
-  }
   if (rr.auto_extend_next_charge_at) u.auto_extend_next_charge_at = backDays(rr.auto_extend_next_charge_at, days);
   if (rr.deposit_hold_expires_at) u.deposit_hold_expires_at = backDays(rr.deposit_hold_expires_at, days);
   if (rr.end_date) {
@@ -285,10 +266,6 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   };
 
   try {
-    if (rr.is_pay_as_you_go) {
-      await step("charges", () => drainRental(p, "sandbox-accrue-payg-charges", rentalId, "processed"));
-      await step("reminders", async () => progressOf(await fireOne(p, "sandbox-send-payg-reminders", rentalId), "sent"));
-    }
     if (rr.auto_extend_enabled) {
       await step("autoExtensions", () => drainRental(p, "sandbox-auto-extend-rentals", rentalId, "renewed", 8));
     }
@@ -302,24 +279,12 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
     // ── hand the clock back so the REAL cron never sees backdated anchors, and
     //    restore business date fields we only shifted for the simulation. ─────
     const { data: after } = await p.from("rentals")
-      .select("auto_extend_next_charge_at, deposit_hold_expires_at, payg_last_reminder_sent_at, end_date")
+      .select("auto_extend_next_charge_at, deposit_hold_expires_at, end_date")
       .eq("id", rentalId).maybeSingle();
     const a = (after ?? {}) as any;
     const nowMs = Date.now();
     const inst = (ts: unknown) => (ts ? new Date(ts as string).getTime() : NaN);
     const restore: Record<string, unknown> = {};
-
-    // PAYG accrual pointer: park one full window in the future.
-    if (rr.is_pay_as_you_go) restore.payg_next_accrual_at = new Date(nowMs + win * 1000).toISOString();
-
-    // payg_start_ts is a business field (billing start) — always restore it.
-    if (snap.rentals.payg_start_ts) restore.payg_start_ts = snap.rentals.payg_start_ts;
-
-    // payg_last_reminder_sent_at: keep it only if a reminder RE-STAMPED it (value
-    // moved off our shifted one); otherwise restore the real value.
-    if (u.payg_last_reminder_sent_at && inst(a.payg_last_reminder_sent_at) === inst(u.payg_last_reminder_sent_at)) {
-      restore.payg_last_reminder_sent_at = snap.rentals.payg_last_reminder_sent_at;
-    }
 
     // auto-extend / deposit anchors: if the cron did NOT advance them past now
     // (compare as INSTANTS, not strings — DB returns +00:00, we wrote Z), restore
@@ -347,13 +312,12 @@ async function fastForwardRental(p: SupabaseClient, rentalId: string, days: numb
   // Post-state so the panel can show what changed + a prepaid hint (a rental with
   // a big prepaid balance settles new charges immediately → Balance Due stays $0).
   const { data: post } = await p.from("rentals")
-    .select("payg_accrual_day_count, end_date").eq("id", rentalId).maybeSingle();
+    .select("end_date").eq("id", rentalId).maybeSingle();
   const { data: chg } = await p.from("ledger_entries")
     .select("amount, remaining_amount").eq("rental_id", rentalId).eq("type", "Charge");
   const gross = (chg ?? []).reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
   const outstanding = (chg ?? []).reduce((s: number, c: any) => s + Number(c.remaining_amount || 0), 0);
   const summary = {
-    dayCount: (post as any)?.payg_accrual_day_count ?? null,
     endDate: (post as any)?.end_date ?? null,
     chargeRows: (chg ?? []).length,
     grossCharged: Math.round(gross * 100) / 100,

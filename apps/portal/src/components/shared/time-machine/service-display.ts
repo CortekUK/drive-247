@@ -8,10 +8,8 @@
 // server route returns and renders the fields named here.
 
 export type ServiceKey =
-  | "payg"
   | "auto_extend"
   | "deposit"
-  | "payg_reminder"
   | "return_reminder"
   | "daily_reminder";
 
@@ -42,27 +40,13 @@ export interface ServiceDisplay {
 
 /** Render order in the panel — roughly the cron-clock firing order. */
 export const SERVICE_ORDER: ServiceKey[] = [
-  "payg",
   "auto_extend",
   "deposit",
-  "payg_reminder",
   "return_reminder",
   "daily_reminder",
 ];
 
 export const SERVICE_DISPLAY: Record<ServiceKey, ServiceDisplay> = {
-  payg: {
-    label: "PAYG Accrual",
-    icon: "Gauge",
-    description:
-      "Accrues pay-as-you-go daily/period charges to the ledger. No Stripe — ledger only.",
-    statusFields: [
-      { key: "accruals", label: "Accruals posted", format: "number" },
-      { key: "totalCharged", label: "Total charged", format: "currency" },
-      { key: "dayCount", label: "Days elapsed", format: "number" },
-      { key: "nextAccrualAt", label: "Next accrual", format: "datetime" },
-    ],
-  },
   auto_extend: {
     label: "Auto-Extension",
     icon: "CalendarPlus",
@@ -86,17 +70,6 @@ export const SERVICE_DISPLAY: Record<ServiceKey, ServiceDisplay> = {
       { key: "amount", label: "Hold amount", format: "currency" },
       { key: "expiresAt", label: "Hold expires", format: "datetime" },
       { key: "paymentIntentId", label: "Payment intent", format: "text" },
-    ],
-  },
-  payg_reminder: {
-    label: "PAYG Reminders",
-    icon: "BellRing",
-    description:
-      "Sends a PAYG balance reminder with a test Stripe Checkout pay-link (creates a Pending payment).",
-    statusFields: [
-      { key: "reminderLogs", label: "Reminders sent", format: "number" },
-      { key: "lastReminderSentAt", label: "Last sent", format: "datetime" },
-      { key: "autoRemindersEnabled", label: "Reminders enabled", format: "boolean" },
     ],
   },
   return_reminder: {

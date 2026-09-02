@@ -179,7 +179,6 @@ export const SETTINGS_VALUE_TO_KEY: Record<string, string> = {
   pricing: 'settings.pricing',
   fees: 'settings.rental',
   preauth: 'settings.rental',
-  payg: 'settings.rental',
   'auto-extend': 'settings.rental',
   promos: 'settings.rental',
   extras: 'settings.extras',

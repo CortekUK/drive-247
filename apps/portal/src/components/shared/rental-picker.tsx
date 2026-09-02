@@ -35,7 +35,7 @@ export interface PickerRental {
 interface RentalPickerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Insurance mode: only Active/Confirmed with future end_date, no PAYG. Agreement mode: also includes last 90d Completed. */
+  /** Insurance mode: only Active/Confirmed with future end_date. Agreement mode: also includes last 90d Completed. */
   mode: "insurance" | "agreement";
   onSelect: (rental: PickerRental) => void;
   title?: string;

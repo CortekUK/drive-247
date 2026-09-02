@@ -45,13 +45,6 @@ export interface RentalSettings {
   return_reminder_enabled: boolean | null;
   return_reminder_hours: number | null;
   // Pay As You Go
-  pay_as_you_go_enabled: boolean | null;
-  payg_reminder_interval_days: number | null;
-  payg_grace_period_days: number | null;
-  payg_max_reminders: number | null;
-  payg_preauth_days: number | null;
-  payg_max_duration_days: number | null;
-  payg_upfront_required: boolean | null;
   // Auto-extension (prepaid rolling rentals)
   auto_extend_enabled: boolean | null;
   auto_extend_default_charge_mode: 'auto_charge' | 'pay_link' | null;
@@ -101,13 +94,6 @@ const DEFAULT_RENTAL_SETTINGS: RentalSettings = {
   return_reminder_enabled: false,
   return_reminder_hours: 24,
   // Pay As You Go
-  pay_as_you_go_enabled: false,
-  payg_reminder_interval_days: 4,
-  payg_grace_period_days: 2,
-  payg_max_reminders: 10,
-  payg_preauth_days: 2,
-  payg_max_duration_days: 90,
-  payg_upfront_required: false,
   // Auto-extension (prepaid rolling rentals)
   auto_extend_enabled: false,
   auto_extend_default_charge_mode: 'pay_link',

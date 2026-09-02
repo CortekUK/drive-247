@@ -310,12 +310,7 @@ const CustomerDetail = () => {
   const deleteGigDriverImage = useDeleteGigDriverImage();
 
   // Per-rental outstanding, matched to the rental detail page math so the same
-  // number shows in both places. Switch the source by rental type:
-  //   - PAYG rentals: sum open payg_accruals' day_total (rental detail's
-  //     `balanceDue` in use-payg-invoices.ts uses exactly this).
-  //   - Fixed-term rentals: sum ledger_entries.remaining_amount on Charges.
-  // Mixing both sources double-counts open PAYG days (the ledger Charge row
-  // and the open accrual point at the same money).
+  // number shows in both places: sum ledger_entries.remaining_amount on Charges.
   const { data: rentalOutstandings } = useQuery({
     queryKey: ["customer-rental-outstandings", tenant?.id, id],
     queryFn: async () => {
@@ -323,17 +318,12 @@ const CustomerDetail = () => {
 
       const rentalsRes = await supabase
         .from("rentals")
-        .select("id, is_pay_as_you_go")
+        .select("id")
         .eq("tenant_id", tenant.id)
         .eq("customer_id", id);
       if (rentalsRes.error) throw rentalsRes.error;
 
-      const paygRentalIds = (rentalsRes.data || [])
-        .filter(r => r.is_pay_as_you_go)
-        .map(r => r.id);
-      const fixedRentalIds = (rentalsRes.data || [])
-        .filter(r => !r.is_pay_as_you_go)
-        .map(r => r.id);
+      const fixedRentalIds = (rentalsRes.data || []).map(r => r.id);
 
       // A cancelled extension's charges keep their full remaining_amount — the
       // week was priced, then declined. The RENTAL page already excludes them
@@ -351,35 +341,18 @@ const CustomerDetail = () => {
       if (deadExtRes.error) console.error("Cancelled-extension fetch failed:", deadExtRes.error);
       const deadExtIds = new Set((deadExtRes.data || []).map((e: any) => e.id));
 
-      const [paygRes, ledgerRes] = await Promise.all([
-        paygRentalIds.length > 0
-          ? supabase
-              .from("payg_accruals")
-              .select("rental_id, daily_rate, tax_amount, service_fee_amount, rentals!inner(payg_closed_at)")
-              .eq("tenant_id", tenant.id)
-              .in("rental_id", paygRentalIds)
-              .eq("invoice_status", "open")
-              .is("rentals.payg_closed_at", null)
-          : Promise.resolve({ data: [], error: null }),
-        fixedRentalIds.length > 0
-          ? supabase
-              .from("ledger_entries")
-              .select("rental_id, remaining_amount, extension_id")
-              .eq("tenant_id", tenant.id)
-              .in("rental_id", fixedRentalIds)
-              .eq("type", "Charge")
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+      const ledgerRes = fixedRentalIds.length > 0
+        ? await supabase
+            .from("ledger_entries")
+            .select("rental_id, remaining_amount, extension_id")
+            .eq("tenant_id", tenant.id)
+            .in("rental_id", fixedRentalIds)
+            .eq("type", "Charge")
+        : { data: [], error: null };
 
-      if (paygRes.error) console.error("PAYG outstanding fetch failed:", paygRes.error);
       if (ledgerRes.error) throw ledgerRes.error;
 
       const map: Record<string, number> = {};
-      (paygRes.data as any[])?.forEach(a => {
-        const key = a.rental_id || "__no_rental__";
-        const dayTotal = Number(a.daily_rate || 0) + Number(a.tax_amount || 0) + Number(a.service_fee_amount || 0);
-        map[key] = (map[key] || 0) + dayTotal;
-      });
       (ledgerRes.data as any[])?.forEach(entry => {
         // Skip charges belonging to a cancelled/refunded/unapproved extension —
         // matching the rental page. Without this the two screens disagree.

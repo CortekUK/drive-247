@@ -35,7 +35,7 @@ import { parseLocalDate } from "@/lib/date-utils";
 const timeRegex = /^\d{2}:\d{2}(:\d{2})?$/;
 
 // Schema covers both dates and times for the whole Rental Period card. start_date
-// is always required (every rental has one). end_date is optional because PAYG
+// is always required (every rental has one). end_date is optional because some
 // rentals are open-ended. Times stay optional/empty-string-allowed so an operator
 // can clear them if needed; the regex still applies when a value is present.
 const editPickupReturnSchema = z.object({
@@ -67,7 +67,6 @@ interface RentalForEdit {
   return_time?: string | null;
   delivery_address?: string | null;
   collection_address?: string | null;
-  is_pay_as_you_go?: boolean | null;
 }
 
 interface EditPickupReturnDialogProps {
@@ -106,7 +105,6 @@ export function EditPickupReturnDialog({
   const { tenant } = useTenant();
   const { logAction } = useAuditLog();
   const tz = useDisplayTimezone();
-  const isPayg = !!rental?.is_pay_as_you_go;
 
   const form = useForm<EditPickupReturnValues>({
     resolver: zodResolver(editPickupReturnSchema),
@@ -182,7 +180,7 @@ export function EditPickupReturnDialog({
           entityId: rental.id,
           details: {
             start_date: values.start_date?.toISOString().split("T")[0] ?? null,
-            end_date: isPayg ? null : (values.end_date?.toISOString().split("T")[0] ?? null),
+            end_date: values.end_date?.toISOString().split("T")[0] ?? null,
             pickup_location: values.pickup_location,
             pickup_time: values.pickup_time || null,
             return_location: values.return_location,
@@ -303,33 +301,25 @@ export function EditPickupReturnDialog({
                 Return
               </p>
 
-              {!isPayg && (
-                <FormField
-                  control={form.control}
-                  name="end_date"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Date</FormLabel>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled
-                        className="w-full pl-3 text-left font-normal opacity-70 cursor-not-allowed"
-                      >
-                        {field.value ? format(field.value, "PPP") : <span>—</span>}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {isPayg && (
-                <p className="text-sm text-muted-foreground italic">
-                  Pay-As-You-Go rentals are open-ended — no return date.
-                </p>
-              )}
+              <FormField
+                control={form.control}
+                name="end_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Date</FormLabel>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled
+                      className="w-full pl-3 text-left font-normal opacity-70 cursor-not-allowed"
+                    >
+                      {field.value ? format(field.value, "PPP") : <span>—</span>}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

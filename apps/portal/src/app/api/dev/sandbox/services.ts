@@ -24,7 +24,6 @@ export const DESIGNATED_TEST_TENANT_ID = "8b434359-3ad1-491e-9593-b0ef381f5b21";
 //    route.ts refuses to operate on anything not in this set. ────────────────
 // NOTE: rental_number is derived as 'R-' || LEFT(id, 6), so each fixture id must
 // differ within its FIRST SIX hex chars or the unique rental_number collides.
-export const PAYG_RENTAL = "a0000001-0000-4000-8000-000000000001";
 export const AUTO_EXTEND_RENTAL = "a3000003-0000-4000-8000-000000000001";
 export const DEPOSIT_RENTAL = "a4000004-0000-4000-8000-000000000001";
 export const RETURN_REMINDER_RENTAL = "a5000005-0000-4000-8000-000000000001";
@@ -101,54 +100,7 @@ async function shiftDate(prod: Sb, rentalId: string, column: string, days: numbe
 const svc = (key: string): SbService => SERVICES.find((x) => x.key === key)!;
 
 export const SERVICES: SbService[] = [
-  // 1. PAYG accrual (ledger only, no money) ─────────────────────────────────
-  {
-    key: "payg",
-    label: "PAYG accrual",
-    order: 10,
-    scopeRentalId: PAYG_RENTAL,
-    cronFns: ["sandbox-accrue-payg-charges"],
-    stepping: "catchup",
-    drainFires: 10,
-    progressKey: "processed",
-    // Window-aware: post `days` accrual CYCLES (one daily-rate charge each) by
-    // anchoring payg_next_accrual_at `days` windows into the past — works whether
-    // the tenant's accrual window is 24h (prod) or 5-min (this test tenant's QA).
-    backdate: async (prod, days) => {
-      const { data: t } = await prod.from("tenants")
-        .select("payg_accrual_window_seconds").eq("id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
-      const win = Number((t as any)?.payg_accrual_window_seconds) || 86400;
-      // `- 1s` so exactly `days` windows fall due (avoids the boundary off-by-one).
-      const target = new Date(Date.now() - (days * win - 1) * 1000).toISOString();
-      await prod.from("rentals").update({ payg_next_accrual_at: target })
-        .eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-    },
-    status: async (s) => {
-      const [{ count: accruals }, charges, rental] = await Promise.all([
-        s.from("payg_accruals").select("id", { count: "exact", head: true }).eq("rental_id", PAYG_RENTAL),
-        s.from("ledger_entries").select("remaining_amount").eq("rental_id", PAYG_RENTAL).eq("type", "Charge"),
-        s.from("rentals").select("payg_next_accrual_at, payg_accrual_day_count").eq("id", PAYG_RENTAL).maybeSingle(),
-      ]);
-      return {
-        accruals: accruals ?? 0,
-        totalCharged: sumRemaining(charges.data),
-        nextAccrualAt: rental.data?.payg_next_accrual_at ?? null,
-        dayCount: rental.data?.payg_accrual_day_count ?? 0,
-      };
-    },
-    reset: async (s) => {
-      await s.from("payg_accruals").delete().eq("rental_id", PAYG_RENTAL);
-      await s.from("ledger_entries").delete().eq("rental_id", PAYG_RENTAL).eq("type", "Charge");
-      await s.from("rentals").update({
-        is_pay_as_you_go: true, status: "Active", payg_paused: false, payg_closed_at: null,
-        payg_accrual_day_count: 0, payg_start_ts: new Date().toISOString(), payg_next_accrual_at: inDaysIso(1),
-        payg_last_accrual_at: null, payg_max_duration_alerted: false,
-      }).eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return svc("payg").status(s);
-    },
-  },
-
-  // 2. Deposit-hold refresh (test hold recreate; self-reverts) ───────────────
+  // 1. Deposit-hold refresh (test hold recreate; self-reverts) ───────────────
   {
     key: "deposit",
     label: "Deposit-hold refresh",
@@ -189,7 +141,7 @@ export const SERVICES: SbService[] = [
     },
   },
 
-  // 3. Auto-extension (real TEST PI, settles inline; order-coupled) ──────────
+  // 2. Auto-extension (real TEST PI, settles inline; order-coupled) ──────────
   {
     key: "auto_extend",
     label: "Auto-extension",
@@ -227,45 +179,7 @@ export const SERVICES: SbService[] = [
     },
   },
 
-  // 4. PAYG pay-link reminder (reuses the PAYG fixture rental) ───────────────
-  {
-    key: "payg_reminder",
-    label: "PAYG pay-link reminder",
-    order: 50,
-    scopeRentalId: PAYG_RENTAL,
-    cronFns: ["sandbox-send-payg-reminders"],
-    stepping: "single",
-    progressKey: "sent",
-    // Cadence anchor is last-sent OR (when never sent) payg_start_ts — shift
-    // whichever one the fn will actually read, so a fresh reset still works.
-    backdate: async (prod, days) => {
-      const { data } = await prod.from("rentals").select("payg_last_reminder_sent_at")
-        .eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID).maybeSingle();
-      const col = (data as { payg_last_reminder_sent_at?: string | null } | null)?.payg_last_reminder_sent_at
-        ? "payg_last_reminder_sent_at" : "payg_start_ts";
-      await shiftTs(prod, PAYG_RENTAL, col, days, 0);
-    },
-    status: async (s) => {
-      const [{ count: logs }, rental] = await Promise.all([
-        s.from("payg_reminder_log").select("id", { count: "exact", head: true }).eq("rental_id", PAYG_RENTAL),
-        s.from("rentals").select("payg_last_reminder_sent_at, payg_auto_reminders_enabled").eq("id", PAYG_RENTAL).maybeSingle(),
-      ]);
-      return {
-        reminderLogs: logs ?? 0,
-        lastReminderSentAt: rental.data?.payg_last_reminder_sent_at ?? null,
-        autoRemindersEnabled: rental.data?.payg_auto_reminders_enabled ?? null,
-      };
-    },
-    reset: async (s) => {
-      await s.from("payg_reminder_log").delete().eq("rental_id", PAYG_RENTAL);
-      await s.from("rentals").update({
-        payg_last_reminder_sent_at: null, payg_auto_reminders_enabled: true,
-      }).eq("id", PAYG_RENTAL).eq("tenant_id", DESIGNATED_TEST_TENANT_ID);
-      return svc("payg_reminder").status(s);
-    },
-  },
-
-  // 5. Return reminder (real email → notify-rental-reminder) ─────────────────
+  // 3. Return reminder (real email → notify-rental-reminder) ─────────────────
   {
     key: "return_reminder",
     label: "Return reminder",
@@ -297,7 +211,7 @@ export const SERVICES: SbService[] = [
     },
   },
 
-  // 6. Daily ledger reminder (in-app reminder_events only) ───────────────────
+  // 4. Daily ledger reminder (in-app reminder_events only) ───────────────────
   {
     key: "daily_reminder",
     label: "Daily ledger reminder",

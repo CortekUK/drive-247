@@ -76,12 +76,7 @@ export default function EditAgreementTemplatePage() {
   const currentTemplate = templateType === 'default' ? defaultTemplate : customTemplate;
   const templateName = templateType === 'default' ? DEFAULT_TEMPLATE_NAME : CUSTOM_TEMPLATE_NAME;
   const isDefault = templateType === 'default';
-  const categoryLabel =
-    templateCategory === 'payg'
-      ? 'Pay As You Go'
-      : templateCategory === 'extension'
-        ? 'Extension'
-        : 'Standard';
+  const categoryLabel = templateCategory === 'extension' ? 'Extension' : 'Standard';
 
   const defaultContentForCategory = getDefaultTemplateForCategory(templateCategory);
 
@@ -215,18 +210,10 @@ export default function EditAgreementTemplatePage() {
             <p className="text-sm text-muted-foreground">
               {isDefault
                 ? `Customize the ${
-                    templateCategory === 'payg'
-                      ? 'pay-as-you-go'
-                      : templateCategory === 'extension'
-                        ? 'extension'
-                        : 'standard rental'
+                    templateCategory === 'extension' ? 'extension' : 'standard rental'
                   } agreement template`
                 : `Create your own custom ${
-                    templateCategory === 'payg'
-                      ? 'pay-as-you-go'
-                      : templateCategory === 'extension'
-                        ? 'extension'
-                        : 'rental'
+                    templateCategory === 'extension' ? 'extension' : 'rental'
                   } agreement`}
             </p>
           </div>

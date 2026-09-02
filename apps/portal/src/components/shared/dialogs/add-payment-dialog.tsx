@@ -68,19 +68,6 @@ interface AddPaymentDialogProps {
   targetCategories?: string[];
   extensionId?: string;
   /**
-   * PAYG accrual id of the invoice the customer is paying off. When set, the
-   * Send-payment-link and Email-Stripe-Link paths forward it as
-   * `paygAccrualId` to `create-checkout-session`, which stamps it on the
-   * Stripe Checkout metadata. The Stripe webhook then calls
-   * `payg_settle_invoice(payment_id, accrual_id)` to flip the accrual to
-   * `paid` (and supersede earlier opens), so PAYG status mirrors the
-   * non-PAYG flow where Stripe payments settle automatically.
-   * The Charge-saved-card path does not forward it: like the manual
-   * Record-Payment path it settles through `apply-payment`, which resolves and
-   * settles the latest open accrual itself once the money is allocated.
-   */
-  paygAccrualId?: string;
-  /**
    * Called after a successful action. The `kind` arg tells the caller whether
    * the payment is already settled in the DB or only initiated:
    *   - 'recorded' — manual Record Payment path, or the Charge-saved-card path
@@ -201,7 +188,6 @@ export const AddPaymentDialog = ({
   insuranceChargeMode,
   targetCategories,
   extensionId,
-  paygAccrualId,
   onPaymentSuccess,
   breakdownItems,
   outstandingBalanceOverride,
@@ -835,9 +821,6 @@ export const AddPaymentDialog = ({
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
-          // PAYG: stamp the accrual id on the checkout metadata so the Stripe
-          // webhook can call payg_settle_invoice once the customer pays.
-          ...(paygAccrualId ? { paygAccrualId } : {}),
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.
@@ -1091,13 +1074,13 @@ export const AddPaymentDialog = ({
     try {
       const amount = form.getValues("amount") || breakdownTotal || invoiceToSend?.total_amount || rentalDetails?.monthly_amount || 0;
 
-      // Mirror the PAYG reminder cron's URL strategy: emails go to real
+      // Emails go to real
       // customers and must always land on production (or wherever the customer
       // can actually reach). NEVER point at localhost — even when the admin is
       // testing from a local dev portal, the customer reading the email is on
       // their own machine and can't resolve test.localhost:3000.
       //
-      // Resolution order (matches send-payg-reminders' deriveBookingOrigin):
+      // Resolution order:
       //   1. NEXT_PUBLIC_BOOKING_BASE_URL — explicit override (single-domain
       //      deployments or QA environments)
       //   2. https://{tenant.slug}.{NEXT_PUBLIC_BOOKING_BASE_DOMAIN || drive-247.com}
@@ -1123,9 +1106,6 @@ export const AddPaymentDialog = ({
           source: 'portal',
           ...(targetCategories && targetCategories.length > 0 ? { targetCategories } : {}),
           ...(extensionId ? { extensionId } : {}),
-          // PAYG: stamp the accrual id so when the customer clicks the
-          // emailed link and pays, the Stripe webhook settles the right invoice.
-          ...(paygAccrualId ? { paygAccrualId } : {}),
           // First-rental flow: after the rental payment captures, the webhook
           // invokes place-deposit-hold to authorise the deposit off-session on
           // the same saved card.

@@ -371,8 +371,8 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
       // normally refreshes via Supabase Realtime, but that depends on the tables
       // being in the `supabase_realtime` publication — which is NOT guaranteed
       // outside prod (staging's publication is empty). So invalidate the rental
-      // page's query keys directly: the KPI cards, Payment Breakdown, PAYG
-      // statement refetch immediately, no reload needed.
+      // page's query keys directly: the KPI cards and Payment Breakdown
+      // refetch immediately, no reload needed.
       // Keys mirror the page's own Realtime handlers (rentals/[id]/page.tsx).
       await Promise.all(
         [
@@ -386,7 +386,6 @@ export function TimeMachineSection({ expanded, onToggle }: { expanded: boolean; 
           ["rental-payments"],
           ["rental-payments-total"],
           ["rental-payment"],
-          ["payg-invoices"],
         ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
       );
       if (errs.length) {
