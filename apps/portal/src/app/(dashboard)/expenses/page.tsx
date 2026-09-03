@@ -13,7 +13,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, Tag } from "lucide-react";
+import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format-utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -34,7 +36,20 @@ const TABS: Record<
 };
 
 export default function ExpensesPage() {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // Load-bearing, and NOT redundant with the two sidebar gates. Hiding a nav
+  // entry hides the link, not the page: typing /expenses, following a bookmark
+  // or a pasted link would still render the whole tracker for a lean tenant.
+  // The sidebars decide what is offered; this decides what exists.
+  //
+  // Fails open on an unresolved slug (see isAreaHidden), so the tenants using
+  // this today — Flow Auto Rentals has 11 live rows, newest 2026-08-10 — keep
+  // it during the first-paint tick when TenantContext has not resolved yet.
+  //
+  // PRESENTATION ONLY. The `vehicle_expense_pnl_trigger` trigger on
+  // `vehicle_expenses` is what feeds `pnl_entries`, and it runs in the
+  // database. Nothing here can reach it.
+  if (isAreaHidden("expenses", tenantSlug)) notFound();
   const currencyCode = tenant?.currency_code || "USD";
   const { canEdit } = useManagerPermissions();
   const editable = canEdit("expenses");

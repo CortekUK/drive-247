@@ -106,8 +106,39 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * vehicle-detail Ownership panel and the vehicles-list Owner column/filter
  * are not behind the flag at all and render for every tenant today. This gate
  * is what actually closes those, and only for the canary.
+ *
+ * `expenses` is the Expense Tracker at `/expenses`. Same reasoning, and the
+ * same refusal to delete: `vehicle_expenses` holds 57 rows across three
+ * tenants, 11 of them Flow Auto Rentals' — 2,364.64 of real spend, newest
+ * 2026-08-10 — with the internal `test` tenant holding 41 and `drive-247`
+ * five. Removing it from main would take a live operator's cost ledger away
+ * to hide one nav row from one canary, the inversion Fleet Quotes and Tesla
+ * Fleet already cost us twice.
+ *
+ * P&L IS A DIFFERENT FEATURE AND IS NOT TOUCHED. The two meet in exactly one
+ * place, and it is in the database, not in React: the trigger
+ * `vehicle_expense_pnl_trigger` on `vehicle_expenses` runs
+ * `handle_vehicle_expense_pnl()`, which writes/updates/deletes the matching
+ * `pnl_entries` row keyed `'vexp:' || id`. That path is server-side and fires
+ * for any writer, so a presentation-layer gate cannot reach it — which is the
+ * whole reason the gate is safe. `pnl_entries` carries 12,559 rows across 31
+ * tenants; `/reports`, `/pl-dashboard`, `/reports/vehicle-profitability` and
+ * the `get-vehicle-profitability` edge function all read `pnl_entries` and
+ * never `vehicle_expenses`, and none of them import anything from
+ * `components/expenses/` or call a `use-expense*` hook. They are deliberately
+ * NOT gated.
+ *
+ * Northwind has 0 rows in `vehicle_expenses` and 0 in `pnl_entries`, so this
+ * gate takes nothing away from it — it only stops offering a screen the lean
+ * product does not carry. The route, the nine components, the three hooks,
+ * `lib/expense-utils.ts`, the `vehicle_expenses` / `expense_categories` /
+ * `expense_ai_summaries` tables, the private `expense-receipts` bucket, the
+ * `generate-expense-summary` edge function and the nine migrations all stay
+ * exactly where they are. So does the `permissions.ts` wiring: `canView`
+ * treats an unmapped route as ALLOWED, so pulling the `expenses` tab key
+ * while the route still exists would WIDEN manager access, not narrow it.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners'] as const;
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners', 'expenses'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 

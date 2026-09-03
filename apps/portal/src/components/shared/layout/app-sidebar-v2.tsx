@@ -534,7 +534,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         { name: "Payments", href: "/payments", icon: CreditCard },
         { name: "Invoices", href: "/invoices", icon: Receipt },
         { name: "Fines", href: "/fines", icon: BadgeAlert },
-        { name: "Expenses", href: "/expenses", icon: Wallet },
+        ...(isAreaHidden("expenses", tenantSlug)
+          ? []
+          : [{ name: "Expenses", href: "/expenses", icon: Wallet }]),
         { name: "Credits", href: "/credits", icon: CircleDollarSign },
       ],
     },

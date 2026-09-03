@@ -307,3 +307,99 @@ describe("isAreaHidden('owners')", () => {
     }
   });
 });
+/**
+ * Expenses, called out on its own for the reason the two before it are: the
+ * cost of getting it wrong is measurable, not hypothetical.
+ *
+ * `vehicle_expenses` holds 57 rows across three tenants. Eleven belong to Flow
+ * Auto Rentals — 2,364.64 of real spend, newest 2026-08-10 — with 41 on the
+ * internal `test` tenant and 5 on `drive-247`. So the assertion that carries
+ * the weight below is NOT "northwind is hidden". It is that nobody else is: a
+ * tenant flipping to true here is a live operator losing the screen that holds
+ * its cost ledger, to hide one nav row from one canary.
+ *
+ * The gate is presentation-only and CANNOT reach P&L. Expenses feeds
+ * `pnl_entries` through the database trigger `vehicle_expense_pnl_trigger`
+ * (`handle_vehicle_expense_pnl()`), which is server-side and fires for any
+ * writer. `pnl_entries` carries 12,559 rows across 31 tenants and is untouched
+ * by anything in this module.
+ */
+describe("isAreaHidden('expenses')", () => {
+  it("is a real member of LEAN_HIDDEN_AREAS", () => {
+    // A typo'd or missing area is not a compile error at runtime — isAreaHidden
+    // fails open on anything it does not recognise. Without this assertion the
+    // gate could silently never fire and every test below would still pass by
+    // agreeing that nothing is hidden.
+    expect(LEAN_HIDDEN_AREAS).toContain("expenses");
+  });
+
+  it("hides Expenses from the northwind canary", () => {
+    expect(isAreaHidden("expenses", "northwind")).toBe(true);
+  });
+
+  it("hides Expenses from NO ONE else", () => {
+    // The first three are the only tenants with rows in `vehicle_expenses`:
+    // flowautorentals (11, live), the internal `test` tenant (41) and
+    // drive-247 (5). flowautorentals is the case that matters — it is a live
+    // operator whose ledger this screen holds. The rest are ordinary paying
+    // tenants that can reach the page from the Finance nav group today.
+    for (const slug of [
+      "flowautorentals",
+      "test",
+      "drive-247",
+      "goniko",
+      "revtekrentals",
+      "globalmotiontransport",
+      "jangramrentals",
+      "eastpeakrentalsllc",
+      "openbayrental",
+      "flowrentalsllc",
+      "drive-hustle",
+    ]) {
+      expect(isAreaHidden("expenses", slug)).toBe(false);
+    }
+  });
+
+  it("fails open on an unresolved slug", () => {
+    // TenantContext resolves the slug client-side from window.location.hostname
+    // and leaves it null for a tick on first paint, and on an unrecognised
+    // host. Hiding during that tick would flicker the nav row out on every load
+    // for the tenants using it, and would 404 the route out from under an
+    // operator mid-entry.
+    expect(isAreaHidden("expenses", null)).toBe(false);
+    expect(isAreaHidden("expenses", undefined)).toBe(false);
+    expect(isAreaHidden("expenses", "")).toBe(false);
+  });
+
+  it("keys on the slug, never on a tenant id", () => {
+    // northwind is 6e5c544f-… in production and 8e6bc88f-… on the seeded
+    // staging branch. An id-keyed gate resolves to the ungated path on
+    // localhost — where the owner tests at northwind.portal.localhost — with no
+    // error and no failed build, so the screen simply never changes.
+    expect(isAreaHidden("expenses", "6e5c544f-b374-451f-a662-360a634bff15")).toBe(false);
+    expect(isAreaHidden("expenses", "8e6bc88f-86d6-4468-8610-73f7c8a88f6e")).toBe(false);
+  });
+
+  it("is case- and whitespace-exact", () => {
+    expect(isAreaHidden("expenses", "Northwind")).toBe(false);
+    expect(isAreaHidden("expenses", " northwind")).toBe(false);
+    expect(isAreaHidden("expenses", "northwind-2")).toBe(false);
+  });
+
+  it("does not disturb the areas gated before it", () => {
+    // Adding an area to the tuple must not shift behaviour for the existing
+    // seven. Enquiries alone is on for 51 production tenants.
+    for (const area of [
+      "enquiries",
+      "leads",
+      "automations",
+      "quotes",
+      "tesla",
+      "welcome",
+      "owners",
+    ] as const) {
+      expect(isAreaHidden(area, "northwind")).toBe(true);
+      expect(isAreaHidden(area, "goniko")).toBe(false);
+    }
+  });
+});

@@ -331,7 +331,9 @@ export function AppSidebar() {
         { name: "Payments", href: "/payments", icon: AnimatedCreditCard },
         { name: "Invoices", href: "/invoices", icon: AnimatedReceipt },
         { name: "Fines", href: "/fines", icon: AnimatedBadgeAlert },
-        { name: "Expenses", href: "/expenses", icon: Wallet },
+        ...(isAreaHidden("expenses", tenantSlug)
+          ? []
+          : [{ name: "Expenses", href: "/expenses", icon: Wallet }]),
         { name: "Credits", href: "/credits", icon: CircleDollarSign },
       ],
     },
