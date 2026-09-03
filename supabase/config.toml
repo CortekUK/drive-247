@@ -122,6 +122,15 @@ verify_jwt = true
 [functions.submit-enquiry]
 verify_jwt = false
 
+# OAuth callback (Tesla 302-redirects to this endpoint, so it can't carry a JWT).
+# The POST actions in this function still verify the JWT in code.
+[functions.tesla-fleet-api]
+verify_jwt = false
+
+# Hourly Tesla Supercharger sync (called by pg_cron with a service-role bearer).
+[functions.sync-tesla-charges-cron]
+verify_jwt = false
+
 # Lead Management — public application form submission (Spec §6.2).
 [functions.submit-application]
 verify_jwt = false
