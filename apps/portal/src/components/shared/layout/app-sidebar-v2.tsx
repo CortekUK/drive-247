@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-// The source branch drew this sidebar in `@phosphor-icons/react`, which is not
-// a dependency here and is not being added for a canary. Every icon below is
-// the closest lucide equivalent; the aliases keep the branch's own names so the
-// markup reads the same:
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+// The source worktree draws this sidebar in `@phosphor-icons/react`, which is
+// not a dependency here and is not being added for a canary. Every icon below
+// is the closest lucide equivalent; the aliases keep the source's own names so
+// the markup reads the same:
 //   SquaresFour→LayoutGrid  CalendarDots→CalendarDays  Prohibit→Ban
 //   WarningCircle→BadgeAlert  ChartBar→BarChart3  ClockCounterClockwise→History
-//   Gear→Settings  Sparkle→Sparkles  House→Home  EnvelopeSimple→Mail
-//   Article→Newspaper  CaretRight→ChevronRight  MagnifyingGlass→Search
-//   Tray→Inbox  Money→Banknote  ChatCircle→MessageSquare  Buildings→Building2
+//   Gear→Settings  House→Home  EnvelopeSimple→Mail  Article→Newspaper
+//   CaretRight→ChevronRight  MagnifyingGlass→Search  Tray→Inbox  Money→Banknote
+//   ChatCircle→MessageSquare  Buildings→Building2  Plugs→Plug
 //   CurrencyCircleDollar→CircleDollarSign  TrendUp→TrendingUp  Lightning→Zap/Bolt
 //   Signature→FileSignature  ShieldSlash→ShieldX  FlowArrow→Workflow
 import {
@@ -56,7 +56,6 @@ import {
   Ban,
   BadgeAlert,
   BarChart3,
-  History,
   Settings,
   Globe,
   Home,
@@ -65,7 +64,12 @@ import {
   Megaphone,
   Mail,
   Newspaper,
+  Plug,
 } from "lucide-react";
+// CRITICAL: `ui/sidebar` and `ui-v2/sidebar` each define their OWN React
+// context. The dashboard layout pairs this component with ui-v2's
+// SidebarProvider, so `useSidebar` MUST come from ui-v2 or every render throws
+// "useSidebar must be used within a SidebarProvider".
 import {
   Sidebar,
   SidebarContent,
@@ -94,11 +98,61 @@ import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useCMSPages } from "@/hooks/use-cms-pages";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { GlobalSearch } from "@/components/shared/layout/global-search";
 import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
+import { SidebarSearchScene, useTypedHint } from "@/components/shared/layout/sidebar-search-scene";
+import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-customizer-dialog";
+import { useNavPreferences } from "@/hooks/use-nav-preferences";
+import { applyNavPreferences } from "@/lib/nav-preferences";
+import { TraxIcon } from "@/components/chat/TraxIcon";
+
+/**
+ * The search field's specular sweep.
+ *
+ * The source worktree keeps this in its own `global.css`; that file is out of
+ * scope for this port, and an `animate-[shine-sweep_…]` class with no matching
+ * @keyframes silently leaves the band parked across the middle of the field.
+ * Declaring it here keeps the animation self-contained in the one component
+ * that uses it. Values are the source's, unchanged: it crosses in the first
+ * 14% of the cycle and idles for the rest, so it glints once every four
+ * seconds rather than pulsing like a loading bar.
+ */
+const SHINE_KEYFRAMES = `
+@keyframes shine-sweep {
+  0% { transform: translateX(-120%); }
+  14% { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}
+`;
+
+/** Website nav order — matches the order the pages appear on the live site. */
+const CMS_PAGE_ORDER = [
+  "home",
+  "about",
+  "fleet",
+  "reviews",
+  "promotions",
+  "contact",
+  "blog",
+  "privacy",
+  "terms",
+];
+
+const CMS_PAGE_ICONS: Record<string, any> = {
+  home: Home,
+  about: Info,
+  fleet: Car,
+  reviews: Star,
+  promotions: Megaphone,
+  contact: Mail,
+  blog: Newspaper,
+  privacy: Shield,
+  terms: FileText,
+};
 
 interface NavItem {
   name: string;
@@ -131,9 +185,9 @@ interface NavGroup {
 /**
  * Settings sidebar tab definitions.
  *
- * Taken from the v1 sidebar, NOT from the source branch — the branch's copy
+ * Taken from the v1 sidebar, NOT from the source worktree — the source's copy
  * predates Push Notifications and Accounting and still calls `payments`
- * "Stripe Connect". Shipping the branch's list would have quietly removed two
+ * "Stripe Connect". Shipping the source's list would have quietly removed two
  * settings tabs from the canary and mislabelled a third.
  */
 const settingsTabGroups = [
@@ -202,14 +256,14 @@ const settingsTabGroups = [
  * serving the other 56 tenants byte for byte (V2_PLAN §3). The only edit to v1
  * is the single branch in `(dashboard)/layout.tsx`.
  *
- * `onAskAI` is optional. The source branch deleted the top header and moved
- * Trax's opener into the layout; here the header stays, so Trax keeps its own
- * button and this row renders only when a caller supplies an opener. Two
- * openers into two Trax instances would mean two separate conversations.
+ * `onAskAI` is optional and currently unused by the layout: the header keeps
+ * its own Trax button, so this row renders only when a caller supplies an
+ * opener. Two openers into two Trax instances would mean two conversations.
  */
 export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   // Close the mobile sheet immediately on nav tap — gives instant perceived
@@ -221,6 +275,15 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { tenant, tenantSlug } = useTenant();
+  // Website rail + its publish switches. React Query dedupes this against the
+  // /cms dashboard's own read, so the extra mount costs nothing.
+  const {
+    pages: cmsPages,
+    publishPage,
+    unpublishPage,
+    isPublishing,
+    isUnpublishing,
+  } = useCMSPages();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -273,16 +336,39 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const collapsed = state === "collapsed";
 
   const [searchOpen, setSearchOpen] = useState(false);
+  /** What was typed into the sidebar field. Seeds and drives the search scene. */
+  const [searchSeed, setSearchSeed] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  /** Search mode: the rail becomes the result list instead of the nav. */
+  const [searchScene, setSearchScene] = useState(false);
+  const typedHint = useTypedHint(!collapsed && !searchScene && !searchSeed);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+  const { preferences: navPreferences } = useNavPreferences();
   const [activeView, setActiveView] = useState<"admin" | "cms">(
     pathname?.startsWith("/cms") ? "cms" : "admin"
   );
   const [drillGroup, setDrillGroup] = useState<NavGroup | null>(null);
 
-  // /cms maps to the `cms` tab key, so the CMS view is behind the same manager
-  // grant that hides "Website Content" from the v1 sidebar. Without this a
-  // restricted manager would reach every CMS page from the section tabs.
+  // /cms maps to the `cms` tab key, so the Website view is behind the same
+  // manager grant that hides "Website Content" from the v1 sidebar. Without
+  // this a restricted manager would reach every CMS page from the section tabs.
   const canSeeCms = !isManager || canView("cms");
   const view = canSeeCms ? activeView : "admin";
+
+  /**
+   * Switching side always lands on that side's dashboard. Flipping the rail
+   * without moving left the nav describing one half of the product while the
+   * page still showed the other.
+   */
+  const switchView = useCallback(
+    (next: "admin" | "cms") => {
+      if (next === "cms" && !canSeeCms) return;
+      setActiveView(next);
+      closeMobileOnNav();
+      router.push(next === "cms" ? "/cms" : "/");
+    },
+    [router, closeMobileOnNav, canSeeCms]
+  );
 
   // Keyboard shortcuts to switch sidebar tabs (Alt+1 / Alt+2 — avoids the
   // browser's Cmd/Ctrl+number tab switching).
@@ -292,15 +378,32 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       if (!e.altKey || e.metaKey || e.ctrlKey) return;
       if (e.code === "Digit1") {
         e.preventDefault();
-        setActiveView("admin");
+        switchView("admin");
       } else if (e.code === "Digit2") {
         e.preventDefault();
-        setActiveView("cms");
+        switchView("cms");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canSeeCms]);
+  }, [canSeeCms, switchView]);
+
+  // Opened from the user menu at the foot of the rail. The dialog needs the
+  // computed nav, which only exists here, so the trigger and the dialog are
+  // joined by an event rather than by threading props through UserMenuV2.
+  useEffect(() => {
+    const openCustomizer = () => setCustomizerOpen(true);
+    window.addEventListener("open-sidebar-customizer", openCustomizer);
+    return () =>
+      window.removeEventListener("open-sidebar-customizer", openCustomizer);
+  }, []);
+
+  // NOTE — no `open-global-search` / ⌘K listener here, unlike the source
+  // worktree. That worktree deleted the top header; this branch keeps it, and
+  // `HeaderSearch` already registers its own ⌘K handler while `providers.tsx`
+  // separately dispatches `open-global-search` on the same chord. A listener
+  // here would therefore open two dialogs at once. The ⌘K badge on the field
+  // still tells the truth — the header answers it.
 
   // Settings mode: when on /settings path, show settings sidebar
   const isSettingsPage = pathname?.startsWith("/settings") || false;
@@ -337,7 +440,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   };
 
   // --- Top-level "fingertip" items (always visible, no children) ---
-  const topLevel: NavItem[] = ([
+  const rawTopLevel: NavItem[] = ([
     { name: "Rentals", href: "/rentals", icon: FileText },
     { name: "Vehicles", href: "/vehicles", icon: Car },
     { name: "Customers", href: "/customers", icon: Users },
@@ -350,7 +453,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // Pending Bookings especially, where an unseen queue means bookings nobody
   // approves. Rentals, Vehicles and Customers stay top-level, so these groups
   // hold what v1 nested under "Fleet & Bookings" and "Customers".
-  const groups: NavGroup[] = ([
+  const rawGroups: NavGroup[] = ([
     {
       label: "Bookings",
       icon: CalendarDays,
@@ -362,7 +465,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
       ],
     },
-    // Restored from v1: the source branch dropped Fleet Health entirely. It is
+    // Kept from v1: the source worktree dropped Fleet Health entirely. It is
     // still behind the same `fleet_health_enabled` flag and keeps its amber
     // badge tone — the page exists and its queue is pull-only.
     ...(fleetHealthEnabled
@@ -386,6 +489,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       items: [
         { name: "Blocked Customers", href: "/blocked-customers", icon: Ban },
         // Enquiries folds into Leads once lead management is on — same as v1.
+        // The lean-areas gate is the second half of the condition and must stay:
+        // a lean tenant never sees Enquiries at all.
         ...(leadManagementEnabled || isAreaHidden("enquiries", tenantSlug)
           ? []
           : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
@@ -440,24 +545,44 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     .map((g) => ({ ...g, items: g.items.filter(filterItem) }))
     .filter((g) => g.items.length > 0);
 
-  // --- CMS view: website content pages become the nav ---
-  //
-  // Only routes that exist under `app/(dashboard)/cms/`. The source branch also
-  // listed `/cms/branding` and `/cms/info`, which are not pages here and would
-  // have been two 404s in the nav.
-  const cmsNav: NavItem[] = [
-    { name: "Overview", href: "/cms", icon: Globe },
-    { name: "Home", href: "/cms/home", icon: Home },
-    { name: "About", href: "/cms/about", icon: Info },
-    { name: "Fleet", href: "/cms/fleet", icon: Car },
-    { name: "Reviews", href: "/cms/reviews", icon: Star },
-    { name: "Promotions", href: "/cms/promotions", icon: Megaphone },
-    { name: "Contact", href: "/cms/contact", icon: Mail },
-    { name: "Blog", href: "/cms/blog", icon: Newspaper },
-    { name: "Privacy", href: "/cms/privacy", icon: Shield },
-    { name: "Terms", href: "/cms/terms", icon: FileText },
-    { name: "Site Settings", href: "/cms/site-settings", icon: Settings },
-  ];
+  // The user's own arrangement, laid over the nav the app just computed.
+  // Deliberately applied AFTER `filterItem`: a stored href for a page this
+  // user may not see then matches nothing, so customisation can only ever
+  // hide or reorder — never reveal.
+  const arrangedNav = applyNavPreferences({
+    topLevel: rawTopLevel,
+    groups: rawGroups,
+    preferences: navPreferences,
+  });
+  const topLevel = arrangedNav.topLevel as NavItem[];
+  const groups = arrangedNav.groups as NavGroup[];
+
+  // --- Website view: the site's pages, and nothing else ---
+  // Driven off the `cms_pages` rows rather than a hardcoded list, so the rail
+  // can never drift from what actually exists.
+  const cmsPageNav = useMemo(() => {
+    return [...(cmsPages ?? [])]
+      // Site Settings is configuration, not a page a visitor can land on, and
+      // it has no publish state worth toggling — it gets its own static row
+      // below instead (v1 offers that route, so it must stay reachable).
+      .filter((p: any) => p.slug !== "site-settings")
+      .sort((a: any, b: any) => {
+        const ia = CMS_PAGE_ORDER.indexOf(a.slug);
+        const ib = CMS_PAGE_ORDER.indexOf(b.slug);
+        return (
+          (ia === -1 ? CMS_PAGE_ORDER.length : ia) - (ib === -1 ? CMS_PAGE_ORDER.length : ib)
+        );
+      })
+      .map((p: any) => ({
+        id: p.id as string,
+        slug: p.slug as string,
+        name: p.name as string,
+        href: `/cms/${p.slug}`,
+        icon: CMS_PAGE_ICONS[p.slug] || FileText,
+        published: p.status === "published",
+      }));
+  }, [cmsPages]);
+
   const isCmsActive = (href: string) =>
     href === "/cms" ? pathname === "/cms" : (pathname?.startsWith(href) ?? false);
 
@@ -666,14 +791,23 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         <OrgSwitcher collapsed={collapsed} />
       </SidebarHeader>
 
-      {/* Navigation — fingertip items + drill-in groups */}
+      {/* Search mode takes the whole rail: the results land where the field
+          that produced them is, instead of behind a modal over the page. */}
+      {searchScene && !collapsed ? (
+        <SidebarContent className="gap-0 pt-1">
+          <SidebarSearchScene
+            query={searchSeed}
+            onQueryChange={setSearchSeed}
+            onClose={() => {
+              setSearchScene(false);
+              setSearchSeed("");
+            }}
+          />
+        </SidebarContent>
+      ) : (
+      /* Navigation — fingertip items + drill-in groups */
       <SidebarContent className="gap-0 pt-1 transition-all duration-300 ease-in-out">
-        {/* Search — prominent field at the very top.
-            A click-to-open field rather than a live input: the shared
-            `GlobalSearch` on this branch takes no `initialQuery`, so a real
-            input would swallow the first keystrokes on the way to the dialog.
-            No ⌘K listener here either — the header's `HeaderSearch` already
-            owns that shortcut, and a second listener would open two dialogs. */}
+        {/* Search — prominent field at the very top */}
         <SidebarGroup className="p-1.5 pb-1">
           <SidebarGroupContent>
             {collapsed ? (
@@ -689,25 +823,89 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 </SidebarMenuItem>
               </SidebarMenu>
             ) : (
-              <button
-                type="button"
-                onClick={() => setSearchOpen(true)}
-                aria-label="Search"
-                className="flex h-10 w-full cursor-pointer items-center gap-2 rounded-lg bg-primary/[0.07] px-3 text-left ring-1 ring-inset ring-primary/20 transition-colors hover:bg-primary/10"
+              /* A real field, not a button that opens one. The first keystroke
+                 swaps the rail for the search scene and is carried across in
+                 `searchSeed`, so nothing typed here is lost. */
+              <div
+                className={[
+                  "relative flex h-8 w-full items-center gap-2 overflow-hidden rounded-lg px-2.5",
+                  // A real border rather than a ring, so the inner glass layers
+                  // below can be inset by a pixel and leave the edge intact.
+                  "border border-primary/25 bg-primary/[0.07] backdrop-blur-[2px]",
+                  // The depth, in one shadow: a lit inner top edge, a shaded
+                  // inner floor, a tight contact shadow and a soft lift beneath.
+                  // Together they read as a raised pane rather than a flat tint.
+                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.65),inset_0_-1px_0_rgba(0,0,0,0.05),0_1px_1px_rgba(0,0,0,0.04),0_6px_14px_-8px_rgba(0,0,0,0.20)]",
+                  "transition-colors focus-within:border-primary/50 focus-within:bg-primary/10 hover:bg-primary/10",
+                ].join(" ")}
               >
-                <Search className="h-4 w-4 shrink-0 text-primary" />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">Search</span>
+                <style>{SHINE_KEYFRAMES}</style>
+                {/* The glass itself: a sheen resting in the upper half, and a
+                    blurred specular band crossing every four seconds. Both are
+                    inset a pixel to keep off the border, take no clicks, and the
+                    moving one drops out entirely under reduced motion. */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-x-px top-px h-1/2 rounded-t-lg bg-gradient-to-b from-white/30 to-transparent dark:from-white/[0.07]"
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-px left-px w-full -skew-x-[18deg] animate-[shine-sweep_4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent blur-[3px] motion-reduce:hidden dark:via-white/20"
+                />
+                {/* Trax's own mark rather than a magnifier: the field is the
+                    portal's one "ask it anything" control, and its face says
+                    that faster than any label could. `currentColor` because
+                    TraxIcon paints through SVG presentation attributes, where a
+                    var() would never resolve. */}
+                <span className="flex shrink-0 items-center justify-center text-primary">
+                  <TraxIcon size={16} color="currentColor" />
+                </span>
+                <div className="relative min-w-0 flex-1 overflow-hidden">
+                  <input
+                    type="text"
+                    value={searchSeed}
+                    onChange={(e) => {
+                      setSearchSeed(e.target.value);
+                      setSearchScene(true);
+                    }}
+                    onFocus={() => {
+                      setSearchFocused(true);
+                      // Clicking the field is the whole gesture — the rail
+                      // swaps to results rather than a modal opening over it.
+                      setSearchScene(true);
+                    }}
+                    onBlur={() => setSearchFocused(false)}
+                    /* The visible hint is the overlay below — a native
+                       placeholder can't carry a caret of its own. */
+                    placeholder=""
+                    aria-label="Search"
+                    className="w-full bg-transparent text-[13px] text-foreground outline-none"
+                  />
+                  {!searchSeed && (
+                    <span
+                      aria-hidden
+                      /* Clipped by the wrapper and faded over the last 14px, so a
+                         long hint dissolves rather than running into the ⌘K badge. */
+                      className="pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap pr-2 text-[13px] leading-none text-muted-foreground [mask-image:linear-gradient(to_right,black_calc(100%-14px),transparent)]"
+                    >
+                      {typedHint}
+                      {!searchFocused && (
+                        <span className="ml-0.5 inline-block h-3 w-px animate-pulse bg-muted-foreground/80" />
+                      )}
+                    </span>
+                  )}
+                </div>
                 <kbd className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">⌘K</kbd>
-              </button>
+              </div>
             )}
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Section tabs: Admin / CMS. Hidden entirely from a manager without
-            the `cms` grant — v1 hides "Website Content" from them too. */}
+        {/* Section tabs: Portal / Website. Hidden entirely from a manager
+            without the `cms` grant — v1 hides "Website Content" from them too. */}
         {canSeeCms && !collapsed && (
           <div className="px-1.5 pb-1 pt-0.5">
-            <div className="relative grid grid-cols-2 rounded-lg bg-primary/[0.07] p-1 ring-1 ring-inset ring-primary/15">
+            <div className="relative grid grid-cols-2 rounded-lg p-1">
               {/* Sliding active pill */}
               <span
                 aria-hidden
@@ -715,12 +913,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 style={{ transform: view === "cms" ? "translateX(100%)" : "translateX(0)" }}
               />
               {([
-                { key: "admin", label: "Admin", kbd: "⌥1" },
-                { key: "cms", label: "CMS", kbd: "⌥2" },
+                { key: "admin", label: "Portal", kbd: "⌥1" },
+                { key: "cms", label: "Website", kbd: "⌥2" },
               ] as const).map((tab) => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveView(tab.key)}
+                  onClick={() => switchView(tab.key)}
                   className={`relative z-10 flex items-center justify-between gap-1.5 cursor-pointer rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${
                     view === tab.key
                       ? "text-primary"
@@ -743,18 +941,18 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </div>
         )}
 
-        {/* Collapsed rail equivalent of the tab strip. Without it the whole CMS
-            section — v1's "Website Content" entry — is unreachable from the
-            rail, since the strip above needs the full width. */}
+        {/* Collapsed rail equivalent of the tab strip. Without it the whole
+            Website section — v1's "Website Content" entry — is unreachable from
+            the rail, since the strip above needs the full width. */}
         {canSeeCms && collapsed && (
           <SidebarGroup className="p-1.5 pb-1">
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => setActiveView(view === "cms" ? "admin" : "cms")}
+                    onClick={() => switchView(view === "cms" ? "admin" : "cms")}
                     isActive={view === "cms"}
-                    tooltip={view === "cms" ? "Back to Admin" : "Website Content"}
+                    tooltip={view === "cms" ? "Back to Portal" : "Website"}
                     className="h-8 transition-colors"
                   >
                     <Globe className="h-4 w-4 shrink-0" />
@@ -765,33 +963,108 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </SidebarGroup>
         )}
 
-        {/* This sidebar's own search dialog. Mounted unconditionally; its
+        {/* The collapsed rail's search dialog. Mounted unconditionally; its
             underlying query is `enabled: debouncedQuery.length > 0`, so a
             closed one costs nothing. */}
         <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
         {view === "cms" ? (
-          /* CMS — website content pages become the nav */
+          /* Website — the site's pages, each with its live/off switch. Anything
+             that is not a page (blog posts, promos, branding, SEO) is managed
+             from the Website dashboard instead. */
           <SidebarGroup className="p-1.5 pb-0">
             <SidebarGroupContent>
               <SidebarMenu>
-                {cmsNav.map((item) => (
-                  <SidebarMenuItem key={item.href}>
+                {/* The one non-page row: everything that isn't a page — blog
+                    posts, promos, branding, SEO — is managed from here. */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/cms"}
+                    tooltip={collapsed ? "Dashboard" : undefined}
+                    className="h-8 transition-colors"
+                  >
+                    <Link href="/cms" onClick={closeMobileOnNav}>
+                      <LayoutGrid className="h-4 w-4 shrink-0" />
+                      <span
+                        className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}
+                      >
+                        Dashboard
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                {!collapsed && <div className="mx-2 my-1.5 h-px bg-sidebar-border/60" />}
+
+                {cmsPageNav.map((item) => (
+                  <SidebarMenuItem key={item.id} className="flex items-center gap-1">
                     <SidebarMenuButton
                       asChild
                       isActive={isCmsActive(item.href)}
                       tooltip={collapsed ? item.name : undefined}
-                      className="h-8 transition-colors"
+                      className="h-8 min-w-0 flex-1 transition-colors"
                     >
                       <Link href={item.href} onClick={closeMobileOnNav}>
                         <item.icon className="h-4 w-4 shrink-0" />
-                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                        <span
+                          className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"} ${
+                            !collapsed && !item.published ? "text-muted-foreground" : ""
+                          }`}
+                        >
                           {item.name}
                         </span>
                       </Link>
                     </SidebarMenuButton>
+                    {/* Trailing status button — green when the page is live on
+                        the website, grey when it is not. Kept outside the Link
+                        so toggling a page never also navigates to it. */}
+                    {!collapsed && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={item.published}
+                            aria-label={`${item.published ? "Unpublish" : "Publish"} ${item.name}`}
+                            disabled={isPublishing || isUnpublishing}
+                            onClick={() =>
+                              item.published ? unpublishPage(item.id) : publishPage(item.id)
+                            }
+                            className={`mr-1 h-3.5 w-3.5 shrink-0 cursor-pointer rounded-full ring-offset-1 ring-offset-sidebar transition-all hover:ring-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                              item.published
+                                ? "bg-green-500 hover:ring-green-500/40"
+                                : "bg-muted-foreground/25 hover:ring-muted-foreground/30"
+                            }`}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          {item.published ? "Live — click to unpublish" : "Off — click to publish"}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </SidebarMenuItem>
                 ))}
+
+                {/* Site Settings, kept from v1's Website list. The source
+                    worktree filters it out of the page rail because it has no
+                    publish state, but `/cms/site-settings` is a real route this
+                    branch already offers — dropping the row would strand it. */}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isCmsActive("/cms/site-settings")}
+                    tooltip={collapsed ? "Site Settings" : undefined}
+                    className="h-8 transition-colors"
+                  >
+                    <Link href="/cms/site-settings" onClick={closeMobileOnNav}>
+                      <Settings className="h-4 w-4 shrink-0" />
+                      <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                        Site Settings
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -816,8 +1089,27 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
 
-                  {/* Welcome pack, restored from v1 — the source branch dropped
-                      it. Deliberately NOT in ROUTE_TO_TAB: unmapped routes are
+                  {/* Integrations — from the source worktree. Not in
+                      ROUTE_TO_TAB, so unmapped means allowed for every role,
+                      exactly as `getTabKeyForRoute` treats it. */}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/integrations")}
+                      tooltip={collapsed ? "Integrations" : undefined}
+                      className="h-8 transition-colors"
+                    >
+                      <Link href="/integrations" onClick={closeMobileOnNav}>
+                        <Plug className="h-4 w-4 shrink-0" />
+                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Integrations</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+
+                  {/* Welcome pack, kept from v1 — the source worktree dropped
+                      it, but `/welcome` is a live route this branch's v1 rail
+                      links to, so removing the row would strand it.
+                      Deliberately NOT in ROUTE_TO_TAB: unmapped routes are
                       allowed for every role, so a `viewer` or a restricted
                       `manager` keeps it. They hit the same confusion as a head
                       admin — gating the guide would silence exactly the people
@@ -998,6 +1290,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </>
         )}
       </SidebarContent>
+      )}
 
       {/* Pinned Footer */}
       <SidebarFooter className="p-1.5">
@@ -1041,7 +1334,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         )}
 
         <SidebarMenu>
-          {/* Profile row — whole row opens the user menu */}
+          {/* Profile row — whole row opens the user menu, and carries the
+              customiser trigger beside it. */}
           <SidebarMenuItem>
             {collapsed ? (
               <div className="flex justify-center py-1">
@@ -1054,6 +1348,15 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
+
+      {/* Given the RAW nav, not the arranged one — the customiser has to show
+          the user everything they could have, including what they've hidden. */}
+      <SidebarCustomizerDialog
+        open={customizerOpen}
+        onOpenChange={setCustomizerOpen}
+        topLevel={rawTopLevel}
+        groups={rawGroups}
+      />
     </Sidebar>
   );
 }

@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui-v2/dialog';
 import { Input } from '@/components/ui-v2/input';
 import { Label } from '@/components/ui-v2/label';
-import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send } from 'lucide-react';
+import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send, SlidersHorizontal } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
@@ -43,6 +43,10 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
   // tenant who disabled the form gets it back through the side door.
   const { formEnabled: feedbackEnabled } = useFeedbackSettings();
 
+  // Controlled so the row CONTAINER can carry the open state. The pill now
+  // wraps the customise and caret buttons as well as the trigger, and a
+  // `data-[state=open]` class only ever reaches the trigger itself.
+  const [menuOpen, setMenuOpen] = useState(false);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -253,31 +257,75 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          {variant === 'row' ? (
-            // Neutral hover and open states. These were `bg-sidebar-accent`,
-            // which the theme hook drives from the tenant's accent colour, so on
-            // a warm brand the whole row turned solid orange the moment the menu
-            // opened. A row that is only a trigger should not be the loudest
-            // thing on screen.
-            <button className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer transition-colors hover:bg-foreground/5 data-[state=open]:bg-foreground/5">
-              <Avatar className="h-8 w-8 rounded-full overflow-hidden shrink-0">
-                <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                  {userInitials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="flex-1 min-w-0">
-                <span className="block text-[13px] font-semibold leading-tight truncate">{appUser.name || 'User'}</span>
-                <span className="block text-[11px] text-muted-foreground leading-tight truncate">{appUser.email}</span>
-              </span>
-              {appUser.must_change_password && (
-                <span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
-              )}
-              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        {variant === 'row' ? (
+          // Hover and open states live on the CONTAINER, not the trigger, so
+          // the highlight covers the icons too rather than stopping short at
+          // the end of the name. Open state comes from `menuOpen` — the
+          // trigger's own `data-[state=open]` cannot style its parent.
+          //
+          // Neutral colours on purpose. These were `bg-sidebar-accent`, which
+          // the theme hook drives from the tenant's accent colour, so on a warm
+          // brand the whole row turned solid orange the moment the menu opened.
+          // A row that is only a trigger should not be the loudest thing on
+          // screen.
+          <div
+            className={`flex w-full items-center rounded-lg transition-colors hover:bg-foreground/5 ${
+              menuOpen ? 'bg-foreground/5' : ''
+            }`}
+          >
+            {/* The customise button is a SIBLING of the trigger, not a child of
+                it: nesting a button inside the trigger button is invalid markup,
+                and the click would open the menu on its way past. */}
+            <DropdownMenuTrigger asChild>
+              <button className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-2.5 text-left outline-none cursor-pointer">
+                <Avatar className="h-8 w-8 rounded-full overflow-hidden shrink-0">
+                  <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[13px] font-semibold leading-tight truncate">{appUser.name || 'User'}</span>
+                  <span className="block text-[11px] text-muted-foreground leading-tight truncate">{appUser.email}</span>
+                </span>
+                {appUser.must_change_password && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-destructive shrink-0" />
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            {/* The customiser dialog needs the nav the sidebar computed, so it
+                is mounted there and opened from here by event — the same
+                pattern `open-global-search` already uses. */}
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(new Event('open-sidebar-customizer'))
+              }
+              aria-label="Customise sidebar"
+              title="Customise sidebar"
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-foreground/5 hover:text-foreground"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
             </button>
-          ) : (
+            {/* The caret sits AFTER the customise button, so it can no longer be
+                a child of the trigger. It drives the same menu through the
+                controlled `open` state instead. `stopPropagation` on pointerdown
+                is what makes that work while the menu is open: without it the
+                dismissable layer would treat this as an outside click and close
+                the menu a beat before the toggle reopened it. */}
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Open account menu"
+              className="shrink-0 rounded-lg p-1.5 text-muted-foreground outline-none transition-colors cursor-pointer hover:bg-foreground/5 hover:text-foreground"
+            >
+              <ChevronsUpDown className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative hover:bg-accent transition-colors cursor-pointer">
               <Avatar className="h-8 w-8 rounded-full overflow-hidden">
                 <AvatarImage src={appUser.avatar_url || undefined} alt={appUser.name || 'User'} className="object-cover" />
@@ -289,8 +337,8 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
                 <div className="absolute -top-1 -right-1 h-3 w-3 bg-destructive rounded-full" />
               )}
             </Button>
-          )}
-        </DropdownMenuTrigger>
+          </DropdownMenuTrigger>
+        )}
         <DropdownMenuContent align="start" sideOffset={8} className="w-64 p-0 rounded-xl overflow-hidden">
           {/* User info header */}
           <div className="p-2.5 pb-2">

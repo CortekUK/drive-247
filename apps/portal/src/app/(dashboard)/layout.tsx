@@ -22,7 +22,6 @@ import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { useV2 } from "@/lib/v2-context";
 import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
-import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
 import { QuickDock } from "@/components/shared/layout/quick-dock";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { CreditBalance } from "@/components/shared/layout/credit-balance";
@@ -345,23 +344,49 @@ export default function DashboardLayout({
     <DynamicThemeProvider>
       <Provider>
         {v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
+
+        {/* v2 has no top bar — and the SidebarTrigger lived in it. On desktop
+            the sidebar still collapses the way the source does: the
+            `SidebarRail` hairline down its edge, plus ⌘B. Both are desktop
+            only, though — the rail is `sm:flex`, and below 768px the sidebar
+            is an off-canvas Sheet with no opener of its own — so without this
+            handle a v2 tenant on a phone would have no route to navigation at
+            all. Mirrors the dock's tucked handle on the opposite edge.
+            `Trigger` is the v2 trigger here, from the same module as
+            `Provider`, so the sidebar context still resolves. */}
+        {v2Chrome && (
+          <Trigger
+            aria-label="Open navigation"
+            className="fixed left-0 top-1/2 z-40 h-11 w-7 -translate-y-1/2 rounded-l-none rounded-r-2xl border border-l-0 border-border/70 bg-card text-muted-foreground shadow-[6px_0_20px_-12px_rgba(0,0,0,0.18)] md:hidden"
+          />
+        )}
+
         <Inset className="overflow-x-hidden">
-          <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
-            <Trigger className="-ml-1 flex-shrink-0" />
-            <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
-              <HeaderSearch />
-            </div>
-            <TraxAIDialog />
-            <div className="ml-auto flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
-              <div className="hidden min-[420px]:flex items-center gap-1 sm:gap-2">
-                <BonzahBalance />
-                <CreditBalance />
+          {/* v1 only — the v2 chrome deletes this row outright, which is the
+              single most visible difference between the two designs. Nothing
+              in it is v2's last route to anything: search and the user menu
+              (which carries the theme switch) moved into the sidebar, Trax and
+              notifications into the right-edge dock, credits to their own nav
+              entry, and the Bonzah balance to Settings → Insurance and the
+              dashboard's balance widget. */}
+          {!v2Chrome && (
+            <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
+              <Trigger className="-ml-1 flex-shrink-0" />
+              <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
+                <HeaderSearch />
               </div>
-              <NotificationBell />
-              <ThemeToggle />
-              {v2Chrome ? <UserMenuV2 /> : <UserMenu />}
-            </div>
-          </header>
+              <TraxAIDialog />
+              <div className="ml-auto flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
+                <div className="hidden min-[420px]:flex items-center gap-1 sm:gap-2">
+                  <BonzahBalance />
+                  <CreditBalance />
+                </div>
+                <NotificationBell />
+                <ThemeToggle />
+                <UserMenu />
+              </div>
+            </header>
+          )}
           <MaintenanceBanner />
           {/*
             Deposit-hold alerts, and the mount point every future banner should
@@ -372,12 +397,19 @@ export default function DashboardLayout({
           */}
           <AppBannerStack scope="app" />
 
-          <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          {/* `pt-0` exists because the v1 header already supplies the top
+              gap. With the header gone, v2 needs its own — the source's main
+              is a plain `p-4`. */}
+          <main className={`flex flex-1 flex-col gap-4 p-4${v2Chrome ? "" : " pt-0"}`}>
             {children}
           </main>
         </Inset>
 
-        {/* v2 right-edge quick dock. v2 chrome only — v1 tenants never mount it. */}
+        {/* v2 right-edge quick dock — Ask AI · Messages · Enquiries ·
+            Notifications. Replaces the header row above. It owns the v2
+            tenant's single Trax instance (v1's still comes from
+            `<TraxAIDialog />` in the header), so the two never coexist.
+            v2 chrome only — v1 tenants never mount it. */}
         {v2Chrome && <QuickDock />}
 
         {/* Global voice call — always listening for inbound calls */}

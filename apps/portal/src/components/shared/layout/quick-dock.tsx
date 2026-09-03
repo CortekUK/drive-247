@@ -1,10 +1,11 @@
 "use client";
 
-import { forwardRef, useState, type ComponentProps, type ReactNode } from "react";
+import { forwardRef, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Sparkles, MessageCircle, Inbox, ChevronLeft, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { MessagesSheet, EnquiriesSheet } from "@/components/shared/layout/dock-sheets";
+import { TraxLauncher, type TraxLauncherHandle } from "@/components/trax/trax-launcher";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -78,14 +79,17 @@ DockButton.displayName = "DockButton";
  * so it doesn't compete with content, and can be collapsed into a thin handle
  * that still surfaces the collective unread count.
  *
- * `onAskAI` is optional. On the branch this dock replaced the top header, so
- * the layout owned the single Trax instance and handed the opener down. Here
- * the v1 header stays (V2_PLAN §3 allows exactly one branch line in
- * `(dashboard)/layout.tsx`, and mounting Trax state is not it), so Trax is
- * still opened from its own header button and this slot simply does not render
- * unless a caller supplies an opener. Two entry points into two separate Trax
- * instances would mean two separate conversations, which is the bug the
- * branch's single-instance note was written about.
+ * Four affordances, in the source's order: Ask AI · Messages · Enquiries ·
+ * Notifications. With the v2 top header gone this dock is the only place three
+ * of them are reachable from, so none of the four is conditional.
+ *
+ * `onAskAI` stays optional for a caller that already owns a Trax instance and
+ * wants the dock to drive it (the source's layout does exactly that). When no
+ * opener is supplied the dock mounts its own single instance via
+ * `TraxLauncher` — see that file for why the conversation cannot simply be
+ * mounted here with a custom button. Either way there is exactly ONE Trax on
+ * screen: two would mean two `useChat()` states and two conversations that
+ * each forget what the other was told.
  *
  * Every count below comes from an existing tenant-scoped hook — all three
  * filter on `.eq('tenant_id', tenant.id)`. This component issues no query of
@@ -93,89 +97,101 @@ DockButton.displayName = "DockButton";
  */
 export function QuickDock({ onAskAI }: { onAskAI?: () => void } = {}) {
   const [tucked, setTucked] = useState(false);
+  const traxRef = useRef<TraxLauncherHandle>(null);
   const { unreadCount: chatUnread } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
   const { unreadCount: notifUnread } = useNotifications();
   const enquiryPending = enquiryStats?.pending || 0;
   const collective = (chatUnread || 0) + enquiryPending + (notifUnread || 0);
 
-  // Collapsed: a thin handle with a pull-out arrow + the collective count.
-  if (tucked) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={() => setTucked(false)}
-            aria-label="Show quick actions"
-            className={`fixed right-0 top-1/2 z-40 flex -translate-y-1/2 cursor-pointer items-center justify-center px-1.5 py-2.5 text-muted-foreground transition-colors hover:text-foreground ${PANEL}`}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {collective > 0 && (
-              <span className="absolute -top-2 right-3 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
-                {collective > 9 ? "9+" : collective}
-              </span>
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left" sideOffset={10} className={TIP}>
-          <span className="font-medium">Quick actions</span>
-          {collective > 0 && (
-            <span className="font-semibold text-primary">{collective} waiting</span>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
+  // Only mount our own Trax when nobody else owns one.
+  const ownsTrax = !onAskAI;
+  const askAI = onAskAI ?? (() => traxRef.current?.open());
 
   return (
-    <div className="group fixed right-0 top-1/2 z-40 -translate-y-1/2">
-      <div className={`flex items-stretch overflow-hidden ${PANEL}`}>
-        {/* Collapse handle — integrated left strip, revealed on hover */}
-        <button
-          onClick={() => setTucked(true)}
-          aria-label="Collapse"
-          className="flex w-0 shrink-0 cursor-pointer items-center justify-center overflow-hidden text-muted-foreground opacity-0 transition-all duration-200 ease-out hover:bg-accent hover:text-foreground group-hover:w-7 group-hover:opacity-100"
-        >
-          <ChevronRight className="h-4 w-4 shrink-0" />
-        </button>
-        <div className="my-1.5 w-0 self-stretch bg-border/60 opacity-0 transition-all duration-200 group-hover:w-px group-hover:opacity-100" />
+    <>
+      {tucked ? (
+        // Collapsed: a thin handle with a pull-out arrow + the collective count.
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setTucked(false)}
+              aria-label="Show quick actions"
+              className={`fixed right-0 top-1/2 z-40 flex -translate-y-1/2 cursor-pointer items-center justify-center px-1.5 py-2.5 text-muted-foreground transition-colors hover:text-foreground ${PANEL}`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {collective > 0 && (
+                <span className="absolute -top-2 right-3 z-10 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
+                  {collective > 9 ? "9+" : collective}
+                </span>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={10} className={TIP}>
+            <span className="font-medium">Quick actions</span>
+            {collective > 0 && (
+              <span className="font-semibold text-primary">{collective} waiting</span>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <div className="group fixed right-0 top-1/2 z-40 -translate-y-1/2">
+          <div className={`flex items-stretch overflow-hidden ${PANEL}`}>
+            {/* Collapse handle — integrated left strip, revealed on hover */}
+            <button
+              onClick={() => setTucked(true)}
+              aria-label="Collapse"
+              className="flex w-0 shrink-0 cursor-pointer items-center justify-center overflow-hidden text-muted-foreground opacity-0 transition-all duration-200 ease-out hover:bg-accent hover:text-foreground group-hover:w-7 group-hover:opacity-100"
+            >
+              <ChevronRight className="h-4 w-4 shrink-0" />
+            </button>
+            <div className="my-1.5 w-0 self-stretch bg-border/60 opacity-0 transition-all duration-200 group-hover:w-px group-hover:opacity-100" />
 
-        <div className="flex flex-col items-center gap-0.5 p-1">
-          {onAskAI && (
-            <DockButton label="Ask AI" onClick={onAskAI} icon={<Sparkles className={ICON} />} />
-          )}
+            <div className="flex flex-col items-center gap-0.5 p-1">
+              <DockButton label="Ask AI" onClick={askAI} icon={<Sparkles className={ICON} />} />
 
-          <MessagesSheet
-            trigger={
-              <DockButton
-                label="Messages"
-                count={chatUnread || 0}
-                icon={<MessageCircle className={ICON} />}
+              <MessagesSheet
+                trigger={
+                  <DockButton
+                    label="Messages"
+                    count={chatUnread || 0}
+                    icon={<MessageCircle className={ICON} />}
+                  />
+                }
               />
-            }
-          />
 
-          <EnquiriesSheet
-            trigger={
-              <DockButton
-                label="Enquiries"
-                count={enquiryPending}
-                countLabel="pending"
-                icon={<Inbox className={ICON} />}
+              <EnquiriesSheet
+                trigger={
+                  <DockButton
+                    label="Enquiries"
+                    count={enquiryPending}
+                    countLabel="pending"
+                    icon={<Inbox className={ICON} />}
+                  />
+                }
               />
-            }
-          />
 
-          {/* The shared NotificationBell owns its own trigger button and popover
-              and takes no props on this branch, so it is restyled in place to
-              match the dock rather than re-implemented — a second copy of the
-              mark-read / delete / navigate logic is the kind of duplicate that
-              silently drifts. */}
-          <div className="[&>button]:h-9 [&>button]:w-9 [&>button]:rounded-xl [&>button]:text-muted-foreground [&>button]:transition-all [&>button]:duration-200 [&>button:hover]:text-primary [&_svg]:h-[18px] [&_svg]:w-[18px]">
-            <NotificationBell />
+              {/* The shared NotificationBell owns its own trigger button and
+                  popover and takes no `trigger` prop here, so it is restyled in
+                  place to match the dock rather than re-implemented — a second
+                  copy of the mark-read / delete / navigate logic is the kind of
+                  duplicate that silently drifts. It draws its own unread badge,
+                  so the count still reads at a glance like the two above. */}
+              <div className="[&>button]:relative [&>button]:h-9 [&>button]:w-9 [&>button]:rounded-xl [&>button]:text-muted-foreground [&>button]:transition-all [&>button]:duration-200 [&>button]:ease-out [&>button:hover]:-translate-x-1 [&>button:hover]:scale-110 [&>button:hover]:text-primary [&>button>svg]:h-[18px] [&>button>svg]:w-[18px]">
+                <NotificationBell />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {/*
+        Outside the collapsed/expanded branch on purpose. Tucking the dock must
+        not unmount Trax: that would close an open conversation mid-sentence and
+        throw away every message in it, because the transcript lives in the
+        dialog's own `useChat()` state.
+      */}
+      {ownsTrax && <TraxLauncher ref={traxRef} />}
+    </>
   );
 }

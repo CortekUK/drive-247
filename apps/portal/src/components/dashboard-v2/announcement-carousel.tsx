@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, RotateCcw, X } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import {
   Dialog,
@@ -18,16 +18,21 @@ import {
   type AnnouncementSeverity,
   type FeatureAnnouncement,
 } from '@/hooks/use-feature-announcements';
+import { AttentionWash } from './attention-wash';
+import { CardSurface } from './card-surface';
 
 /**
  * Feature announcements as a text-only carousel — no photography, just the
  * name of the thing set large on a brand wash.
  *
- * Gestures stay separate, as they were on the stack this replaces: swipe or the
- * dots move between announcements, tapping opens the detail, and only the ×
- * (or "Got it" in the dialog) makes one go away. Moving between slides must
- * never be the same motion as dismissing, because one is idle browsing and the
- * other is irreversible.
+ * Gestures stay separate, as they were on the stack this replaces: swipe, the
+ * arrows or the dots move between announcements, and tapping opens the detail.
+ * Moving between slides must never be the same motion as dismissing, because
+ * one is idle browsing and the other is irreversible.
+ *
+ * There is deliberately no × on the card face. Hiding an announcement is only
+ * reachable from inside the detail dialog ("Got it, hide this"), so a stray
+ * click on the dashboard can never make a product update disappear.
  */
 
 /** Auto-advance interval. Long enough to read a title without feeling nagged. */
@@ -218,21 +223,23 @@ export function AnnouncementCarousel({ className }: { className?: string }) {
       <div
         className={cn(
           // The brand wash is the whole visual — with no photograph, the theme
-          // and the typography are what carry the card.
-          //
-          // `chart-3` / `chart-5` are NOT Tailwind colour keys in this app
-          // (tailwind.config.ts extends `colors` with the shadcn set only), so
-          // `from-chart-3` would compile to nothing. The tokens themselves do
-          // exist — styles/v2-theme.css defines --chart-1..5 under `.v2-theme`,
-          // which the root layout puts on <body> for the same gated tenants —
-          // so they are referenced as arbitrary values instead.
-          'relative isolate flex min-h-[260px] flex-col overflow-hidden rounded-xl bg-gradient-to-br from-[hsl(var(--chart-3))] via-primary to-[hsl(var(--chart-5))] p-5 text-white shadow-sm',
+          // and the typography are what carry the card. The gradient itself
+          // lives in CardSurface below, shared with the card to its right;
+          // `isolate` keeps that layer between this element's background and
+          // its content.
+          'relative isolate flex min-h-[260px] flex-col overflow-hidden rounded-xl p-5 text-white shadow-sm',
           className
         )}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >
-        <div className="flex items-start justify-between gap-2">
+        <CardSurface cardId="announcements" />
+        {/* Top rung of the row's attention ramp. White rather than a token,
+            because this one sits on the brand gradient instead of on a card —
+            it reads as light catching the surface. */}
+        <AttentionWash hsl="0 0% 100%" level="high" />
+
+        <div className="flex items-start gap-2">
           <span
             className={cn(
               'rounded-full border px-2 py-0.5 text-[11px] font-medium backdrop-blur-sm',
@@ -241,19 +248,6 @@ export function AnnouncementCarousel({ className }: { className?: string }) {
           >
             {SEVERITY_LABEL[current.severity]}
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 shrink-0 rounded-full text-white/70 hover:bg-white/15 hover:text-white"
-            onPointerDownCapture={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              dismiss(current.id);
-            }}
-            aria-label={`Dismiss “${current.title}”`}
-          >
-            <X className="size-4" />
-          </Button>
         </div>
 
         {/* The slide itself. Draggable, and a tap opens the detail. */}
@@ -316,23 +310,46 @@ export function AnnouncementCarousel({ className }: { className?: string }) {
         </motion.div>
 
         {count > 1 && (
-          <div className="mt-4 flex items-center gap-1.5">
-            {announcements.map((a, i) => (
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              {announcements.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => {
+                    setDirection(i > index ? 1 : -1);
+                    setIndex(i);
+                  }}
+                  aria-label={`Show ${a.title}`}
+                  aria-current={i === index}
+                  className={cn(
+                    'h-1.5 rounded-full transition-all',
+                    i === index ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
+                  )}
+                />
+              ))}
+            </div>
+
+            {/* Kept faint on purpose — the swipe is still the primary gesture;
+                these are for anyone who doesn't think to drag a card. */}
+            <div className="flex items-center gap-0.5">
               <button
-                key={a.id}
                 type="button"
-                onClick={() => {
-                  setDirection(i > index ? 1 : -1);
-                  setIndex(i);
-                }}
-                aria-label={`Show ${a.title}`}
-                aria-current={i === index}
-                className={cn(
-                  'h-1.5 rounded-full transition-all',
-                  i === index ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/70'
-                )}
-              />
-            ))}
+                onClick={() => go(-1)}
+                aria-label="Previous announcement"
+                className="rounded-full p-1 text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => go(1)}
+                aria-label="Next announcement"
+                className="rounded-full p-1 text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
