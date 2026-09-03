@@ -1,8 +1,8 @@
 {
   "meta": {
-    "generatedAt": "2026-09-03T12:04:30.266Z",
+    "generatedAt": "2026-09-03T16:41:03.544Z",
     "projectRef": "hviqoaokxvlancmftwuo",
-    "gitSha": "b5ec1a68bce8ca8453a35656c98e18861b6f0bf2",
+    "gitSha": "8ee2f373781605509e65244822e2d025ea16c907",
     "note": "Baseline of v1. Regenerate ONLY together with an intentional, reviewed change to v1, and commit both in the same commit."
   },
   "schema": {
@@ -34007,7 +34007,7 @@
     "apps/portal/src/app/(dashboard)/settings/email-templates/[key]/page.tsx": "7c3d0adcec7d0e5c",
     "apps/portal/src/app/(dashboard)/settings/email-templates/page.tsx": "d42d42fa038ec287",
     "apps/portal/src/app/(dashboard)/settings/lead-management/page.tsx": "ef4b142ddc1881b0",
-    "apps/portal/src/app/(dashboard)/settings/page.tsx": "9e0a4dd5abebc1e8",
+    "apps/portal/src/app/(dashboard)/settings/page.tsx": "cdf658cc1b10ac75",
     "apps/portal/src/app/(dashboard)/settings/reminders/page.tsx": "1a1f8d6c620c5b7f",
     "apps/portal/src/app/(dashboard)/settings/users/page.tsx": "325c1f6800f63e02",
     "apps/portal/src/app/(dashboard)/subscription/page.tsx": "86958435efc112ba",
@@ -34245,7 +34245,7 @@
     "apps/portal/src/components/reminders/add-reminder-dialog.tsx": "3c9c45852bcf39db",
     "apps/portal/src/components/rentals-v2/booking-mode-selector.tsx": "930e02ea841d74cc",
     "apps/portal/src/components/rentals-v2/customer-step.tsx": "491d39d42a121afe",
-    "apps/portal/src/components/rentals-v2/rental-create-v2.tsx": "ba4dd35e76e6482e",
+    "apps/portal/src/components/rentals-v2/rental-create-v2.tsx": "e99a5275e52458ff",
     "apps/portal/src/components/rentals-v2/rental-onboarding-shell.tsx": "2c6ccaaa9d47736e",
     "apps/portal/src/components/rentals-v2/rentals-filter-bar.tsx": "906708a87b004bec",
     "apps/portal/src/components/rentals-v2/rentals-filter-panel.tsx": "8ac11a156ecd4004",
@@ -34301,7 +34301,7 @@
     "apps/portal/src/components/rentals/rental-ledger.tsx": "2799245fcc6471fc",
     "apps/portal/src/components/rentals/rental-payment-row.tsx": "317caa3dcc574987",
     "apps/portal/src/components/rentals/rental-progress-overlay.tsx": "cafb9db7b03b8cb3",
-    "apps/portal/src/components/rentals/rental-record-download.tsx": "7f13b4c762ee3b0b",
+    "apps/portal/src/components/rentals/rental-record-download.tsx": "3f088e610fbc9dd2",
     "apps/portal/src/components/rentals/rentals-filters.tsx": "def5f492b69f440b",
     "apps/portal/src/components/rentals/supercharger-charges-dialog.tsx": "9d5f6bcd2f15a40b",
     "apps/portal/src/components/rentals/swap-vehicle-dialog.tsx": "a3c4c6dbb19e9cfa",
