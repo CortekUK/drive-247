@@ -36,7 +36,7 @@ export const NORTHWIND_PROD = '6e5c544f-b374-451f-a662-360a634bff15';
 export const NORTHWIND_STAGING = '8e6bc88f-86d6-4468-8610-73f7c8a88f6e';
 
 /** Every environment's canary. Use this in `V2_AREAS`, not a bare id. */
-export const NORTHWIND = [NORTHWIND_PROD, NORTHWIND_STAGING] as const;
+export const NORTHWIND: readonly string[] = [NORTHWIND_PROD, NORTHWIND_STAGING];
 
 /**
  * One entry per v2 area. Today every list is just the canary.
