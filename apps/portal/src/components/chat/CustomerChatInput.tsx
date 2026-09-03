@@ -134,6 +134,7 @@ export function CustomerChatInput({
   const placeholderMap: Record<string, string> = {
     in_app: 'Type a message...',
     sms: 'Type an SMS...',
+    whatsapp: 'Type a WhatsApp message...',
     email: 'Type an email...',
   };
 

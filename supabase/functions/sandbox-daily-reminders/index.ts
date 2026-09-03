@@ -40,7 +40,7 @@ interface LedgerEntry {
   remaining_amount: number;
   category: string;
   tenant_id: string;
-  customers: { name: string };
+  customers: { name: string; whatsapp_opt_in?: boolean };
   vehicles: { reg: string };
 }
 
@@ -116,7 +116,7 @@ serve(async (req) => {
         remaining_amount,
         category,
         tenant_id,
-        customers!inner(name),
+        customers!inner(name, whatsapp_opt_in),
         vehicles!inner(reg)
       `)
       .eq('type', 'Charge')

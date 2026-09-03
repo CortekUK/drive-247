@@ -164,6 +164,7 @@ export default function DevPanel() {
                 license_number: `DL${randomSuffix}${Math.floor(Math.random() * 100000)}`,
                 id_number: `ID${randomSuffix}${Math.floor(Math.random() * 100000)}`,
                 status: 'Active' as const,
+                whatsapp_opt_in: true,
             }
 
             // Insert customer directly into Supabase
@@ -176,6 +177,7 @@ export default function DevPanel() {
                     license_number: customerData.license_number,
                     id_number: customerData.id_number,
                     status: customerData.status,
+                    whatsapp_opt_in: customerData.whatsapp_opt_in,
                     tenant_id: tenantId,
                 })
                 .select()

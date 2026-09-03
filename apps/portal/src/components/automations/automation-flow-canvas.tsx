@@ -29,6 +29,7 @@ import "@xyflow/react/dist/style.css";
 import {
   Phone,
   Mail,
+  MessageSquare,
   Clock,
   GitBranch,
   Square,
@@ -51,6 +52,7 @@ interface DraftStep {
 const STEP_META: Record<string, { Icon: typeof Phone; color: string; label: string }> = {
   sms: { Icon: Phone, color: "bg-emerald-50 border-emerald-200 text-emerald-900", label: "SMS" },
   email: { Icon: Mail, color: "bg-blue-50 border-blue-200 text-blue-900", label: "Email" },
+  whatsapp: { Icon: MessageSquare, color: "bg-green-50 border-green-200 text-green-900", label: "WhatsApp" },
   wait: { Icon: Clock, color: "bg-amber-50 border-amber-200 text-amber-900", label: "Wait" },
   condition: { Icon: GitBranch, color: "bg-violet-50 border-violet-200 text-violet-900", label: "Condition" },
   stop: { Icon: Square, color: "bg-zinc-100 border-zinc-200 text-zinc-700", label: "Stop" },
@@ -193,6 +195,7 @@ export function AutomationFlowCanvas({ triggerType, steps, selectedKey, onSelect
 function previewFor(step: DraftStep): string {
   switch (step.step_type) {
     case "sms":
+    case "whatsapp":
       return String((step.config.body as string) ?? "");
     case "email": {
       const subject = (step.config.subject as string) ?? "";

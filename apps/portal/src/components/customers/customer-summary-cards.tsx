@@ -7,6 +7,7 @@ interface Customer {
   phone: string;
   type: string;
   status: string;
+  whatsapp_opt_in: boolean;
   is_blocked?: boolean;
   is_gig_driver?: boolean;
 }

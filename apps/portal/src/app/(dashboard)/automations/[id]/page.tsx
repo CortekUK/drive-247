@@ -49,6 +49,7 @@ type StepType =
   | "wait"
   | "condition"
   | "stop"
+  | "whatsapp"
   | "move_stage"
   | "assign_staff"
   | "create_task"
@@ -65,6 +66,7 @@ interface DraftStep {
 const STEP_LABELS: Record<StepType, string> = {
   sms: "Send SMS",
   email: "Send Email",
+  whatsapp: "Send WhatsApp",
   wait: "Wait",
   condition: "Condition",
   stop: "Stop",
@@ -367,7 +369,7 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
             </div>
           </div>
           <div className="flex flex-wrap gap-1">
-            {(["sms", "email", "wait", "condition", "move_stage", "assign_staff", "create_task", "webhook", "generate_doc", "stop"] as StepType[]).map((t) => (
+            {(["sms", "email", "whatsapp", "wait", "condition", "move_stage", "assign_staff", "create_task", "webhook", "generate_doc", "stop"] as StepType[]).map((t) => (
               <Button key={t} size="sm" variant="outline" onClick={() => addStep(t)}>
                 <Plus className="mr-1 h-3 w-3" /> {STEP_LABELS[t]}
               </Button>
@@ -468,6 +470,14 @@ export default function AutomationBuilderPage({ params }: { params: Promise<{ id
                 )}
                 {s.step_type === "stop" && (
                   <p className="text-xs text-[#737373]">Ends the run with status=completed.</p>
+                )}
+                {s.step_type === "whatsapp" && (
+                  <Textarea
+                    value={(s.config.body as string) ?? ""}
+                    onChange={(e) => updateStepConfig(s.clientKey, { body: e.target.value })}
+                    placeholder="Hi {{first_name}}, …"
+                    rows={2}
+                  />
                 )}
                 {s.step_type === "move_stage" && (
                   <Select

@@ -151,7 +151,7 @@ Uses Supabase Realtime channels (replaced Socket.io):
 - **Webhooks**: Stripe (`stripe-webhook-test`, `stripe-webhook-live`, `stripe-connect-webhook`), BoldSign (`boldsign-webhook`)
 - **Payments**: `create-checkout-session`, `create-preauth-checkout`, `capture-booking-payment`, `process-refund`, `schedule-refund`, installment handling
 - **Stripe Connect**: `create-connected-account`, `get-connect-onboarding-link`, `sync-stripe-account`
-- **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions
+- **Notifications**: `aws-ses-email`, `aws-sns-sms`, `send-booking-email`, 15+ `notify-*` functions, `send-collection-whatsapp`, `send-signing-whatsapp` (Twilio WhatsApp)
 - **Verification**: `create-ai-verification-session`, `ai-document-ocr`, `ai-face-match`
 - **Insurance**: `bonzah-calculate-premium`, `bonzah-create-quote`, `bonzah-confirm-payment`, `bonzah-download-pdf`, `bonzah-verify-credentials`, `bonzah-view-policy`, `bonzah-get-balance`, `bonzah-probe-pdf`
 - **Lockbox**: `notify-lockbox-code` — sends lockbox code to customers via email/SMS using per-tenant templates from `lockbox_templates` table
@@ -230,7 +230,7 @@ Required variables (see `.env.example`):
 - `STRIPE_SUBSCRIPTION_SECRET_KEY`, `STRIPE_SUBSCRIPTION_PRICE_ID`, `STRIPE_SUBSCRIPTION_WEBHOOK_SECRET` (platform subscription billing)
 - BoldSign API keys (`BOLDSIGN_TEST_API_KEY`, `BOLDSIGN_LIVE_API_KEY`, `BOLDSIGN_BASE_URL`)
 - AWS SES/SNS credentials for emails and SMS
-- Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`) for SMS and voice
+- Twilio (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`) for WhatsApp
 
 ## Build Notes
 
@@ -384,7 +384,8 @@ Self-service key handover system where customers retrieve keys from a lockbox in
 - **Vehicle fields**: `lockbox_code` (text), `lockbox_instructions` (text, e.g., "rear left wheel arch") on `vehicles` table
 - **Rental tracking**: `delivery_method` (enum: `lockbox`, `in_person`, NULL) on `rentals` table
 - **Templates**: `lockbox_templates` table stores per-tenant customizable email/SMS templates with `{{variable}}` placeholders (`{{customer_name}}`, `{{vehicle_reg}}`, `{{lockbox_code}}`, `{{booking_ref}}`, `{{delivery_address}}`, `{{lockbox_instructions}}`)
-- **Notification**: `notify-lockbox-code` edge function sends via Resend (email) and Twilio (SMS), falls back to default templates if no custom template exists. If a tenant's `lockbox_notification_methods` leaves no usable channel, it falls back to email rather than sending nothing — this message carries the code that opens the box holding the car keys
+- **Notification**: `notify-lockbox-code` edge function sends via Resend (email) and AWS SNS (SMS), falls back to default templates if no custom template exists
+- **WhatsApp**: `send-collection-whatsapp` edge function sends collection/lockbox details via WhatsApp using per-tenant templates with `{{variable}}` placeholders
 - **Portal UI**: Key handover section on rental detail page supports lockbox delivery; lockbox template editor in settings (only visible when `lockbox_enabled = true`)
 
 ## Setup Hub & Go-Live System
@@ -436,6 +437,15 @@ Sub-day minimum rental durations (e.g., 4-hour minimum instead of full day):
 - **Booking validation**: Used in Zod schema for rental duration validation in `apps/booking/src/app/booking/page.tsx`
 - Migration: `supabase/migrations/20260220120000_add_min_rental_hours.sql`
 
+## WhatsApp Notifications (Twilio)
+
+WhatsApp messaging for collection/lockbox and signing notifications:
+
+- **Edge functions**: `send-collection-whatsapp` (vehicle collection with lockbox code, instructions, photos — supports Meta Content Templates via `TWILIO_WHATSAPP_CONTENT_SID` and sandbox free-form), `send-signing-whatsapp` (simple signing link message)
+- **Env vars**: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, optional `TWILIO_WHATSAPP_CONTENT_SID`
+- Phone normalization defaults to `+44` (UK) if no country code provided
+- Supports up to 10 photo MediaUrls in collection messages
+
 ## BoldSign E-Signatures
 
 Per-tenant test/live mode with branded signing experience:
@@ -444,7 +454,7 @@ Per-tenant test/live mode with branded signing experience:
 - **Rental column**: `boldsign_mode` — records which mode was used when creating the agreement
 - **Shared helper**: `supabase/functions/_shared/boldsign-client.ts` — mirrors `stripe-client.ts` pattern. `getBoldSignApiKey(mode)`, `getTenantBoldSignMode()`, `getBoldSignBrandId()`
 - **Env vars**: `BOLDSIGN_TEST_API_KEY` (sandbox), `BOLDSIGN_LIVE_API_KEY` (production), `BOLDSIGN_BASE_URL`
-- **E-sign flow**: All esign API routes (portal + booking) resolve tenant's `boldsign_mode` per-request. `DisableEmails: true` always — we send our own signing email via `send-signing-email` edge function
+- **E-sign flow**: All esign API routes (portal + booking) resolve tenant's `boldsign_mode` per-request. `DisableEmails: true` always — we send our own signing email via `send-signing-email` edge function + WhatsApp via `send-signing-whatsapp`
 - **Webhook**: `boldsign-webhook` resolves mode from `rental.boldsign_mode` → tenant fallback to download signed PDF with correct API key
 - **Portal UI**: Settings → Integrations has `<ESignSettings />` — self-service test/live toggle with confirmation dialog for going live. TEST badge shown on agreements created in test mode.
 - **Test mode**: Documents are watermarked and auto-deleted after 14 days (BoldSign sandbox behavior)

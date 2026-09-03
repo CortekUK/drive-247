@@ -74,6 +74,7 @@ interface Customer {
   email: string;
   phone: string;
   status: string;
+  whatsapp_opt_in: boolean;
   license_number?: string;
   id_number?: string;
   date_of_birth?: string;
@@ -208,7 +209,7 @@ const CustomerDetail = () => {
       const { data, error } = await (supabase as any)
         .from("customers")
         .select(`
-          id, name, email, phone, status,
+          id, name, email, phone, status, whatsapp_opt_in,
           license_number, id_number, date_of_birth, is_blocked, blocked_at, blocked_reason,
           is_gig_driver,
           nok_full_name, nok_relationship, nok_phone, nok_email, nok_address
@@ -640,12 +641,21 @@ const CustomerDetail = () => {
               </div>
 
               {/* Additional Info */}
-              {(customer.license_number || customer.id_number) && (
+              {(customer.license_number || customer.id_number || customer.whatsapp_opt_in) && (
                 <>
                   <MetricDivider />
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3">
                     {customer.license_number && <MetricItem label="License No." value={customer.license_number} />}
                     {customer.id_number && <MetricItem label="ID Number" value={customer.id_number} />}
+                    {customer.whatsapp_opt_in && (
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground mb-0.5">WhatsApp</span>
+                        <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">
+                          <CheckCircle className="h-2.5 w-2.5 mr-0.5" />
+                          Opted In
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

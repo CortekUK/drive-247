@@ -9,7 +9,7 @@
  *   - custom message
  *   - expiry (12h/24h/3d/7d)
  *   - show prices toggle
- *   - send method (sms/email/copy)
+ *   - send method (sms/email/whatsapp/copy)
  */
 "use client";
 
@@ -52,7 +52,7 @@ interface Props {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-type SendMethod = "sms" | "email" | "copy";
+type SendMethod = "sms" | "email" | "whatsapp" | "copy";
 function offerChannelAvailable(method: SendMethod, lead: LeadRow): boolean {
   if (method === "copy") return true;
   if (method === "email") return !!lead.email && EMAIL_RE.test(lead.email.trim());
@@ -62,6 +62,7 @@ function offerChannelAvailable(method: SendMethod, lead: LeadRow): boolean {
 function offerDestinationLabel(method: SendMethod, lead: LeadRow): string {
   if (method === "copy") return "Link copied — paste it wherever";
   if (method === "email") return lead.email ? `Will email ${lead.email}` : "No email on file";
+  if (method === "whatsapp") return lead.phone ? `Will WhatsApp ${lead.phone}` : "No phone on file";
   return lead.phone ? `Will SMS ${lead.phone}` : "No phone on file";
 }
 
@@ -85,7 +86,7 @@ export function OfferBuilderDialog({
   // Default to the first channel the lead can actually receive; fall back to "copy"
   // (always available — operator just gets a URL to paste manually).
   const defaultMethod: SendMethod =
-    (["sms", "email"] as SendMethod[]).find((m) => offerChannelAvailable(m, lead)) ?? "copy";
+    (["sms", "email", "whatsapp"] as SendMethod[]).find((m) => offerChannelAvailable(m, lead)) ?? "copy";
   const [sendMethod, setSendMethod] = useState<SendMethod>(defaultMethod);
   const [submitting, setSubmitting] = useState(false);
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
@@ -238,6 +239,9 @@ export function OfferBuilderDialog({
                   </SelectItem>
                   <SelectItem value="email" disabled={!offerChannelAvailable("email", lead)}>
                     Email {!offerChannelAvailable("email", lead) && "(no email)"}
+                  </SelectItem>
+                  <SelectItem value="whatsapp" disabled={!offerChannelAvailable("whatsapp", lead)}>
+                    WhatsApp {!offerChannelAvailable("whatsapp", lead) && "(no phone)"}
                   </SelectItem>
                   <SelectItem value="copy">Copy link only</SelectItem>
                 </SelectContent>

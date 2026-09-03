@@ -45,6 +45,7 @@ const SOURCE_OPTIONS = [
   { value: "admin_manual", label: "Admin-created" },
   { value: "inbound_sms", label: "Inbound SMS" },
   { value: "inbound_email", label: "Inbound email" },
+  { value: "inbound_whatsapp", label: "Inbound WhatsApp" },
   { value: "legacy_enquiry", label: "Legacy enquiry" },
 ];
 

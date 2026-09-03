@@ -84,7 +84,7 @@ export function usePlatformStatus(): PlatformStatus {
         (supabase as any)
           .from("tenants")
           .select(
-            "logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, integration_twilio_sms, twilio_phone_number, stripe_mode, subscription_stripe_mode, setup_completed_at"
+            "logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, integration_twilio_sms, integration_whatsapp, twilio_phone_number, meta_whatsapp_phone_number, stripe_mode, subscription_stripe_mode, setup_completed_at"
           )
           .eq("id", tenant!.id)
           .single(),
@@ -98,7 +98,9 @@ export function usePlatformStatus(): PlatformStatus {
           boldsign_test_brand_id: string | null;
           boldsign_live_brand_id: string | null;
           integration_twilio_sms: boolean | null;
+          integration_whatsapp: boolean | null;
           twilio_phone_number: string | null;
+          meta_whatsapp_phone_number: string | null;
           stripe_mode: string | null;
           subscription_stripe_mode: "test" | "live" | null;
           setup_completed_at: string | null;
@@ -127,7 +129,8 @@ export function usePlatformStatus(): PlatformStatus {
     !!td?.boldsign_test_brand_id || !!td?.boldsign_live_brand_id;
   const hasVehicle = (extraData?.vehicleCount ?? 0) > 0;
   const hasLogo = !!td?.logo_url;
-  const hasNotifications = !!td?.integration_twilio_sms;
+  const hasNotifications =
+    !!td?.integration_twilio_sms || !!td?.integration_whatsapp;
 
   const stripeMode = td?.stripe_mode ?? "test";
   const stripeComplete = !!stripeItem?.isComplete;
@@ -247,6 +250,17 @@ export function usePlatformStatus(): PlatformStatus {
       priority: 20,
       comingSoon: true,
       icon: "twilio",
+    },
+    {
+      id: "whatsapp-notifications",
+      label: "WhatsApp Notifications",
+      description: "Customer messaging via WhatsApp",
+      isComplete: false,
+      actionLabel: "Learn more",
+      actionPath: "/settings?tab=messaging",
+      priority: 21,
+      comingSoon: true,
+      icon: "whatsapp",
     },
   ];
 

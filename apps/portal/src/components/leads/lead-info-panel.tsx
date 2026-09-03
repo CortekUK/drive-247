@@ -12,7 +12,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Phone, MessageCircle, Flame, ThermometerSun, Snowflake, AlertTriangle, Copy, Pencil, Check, X } from "lucide-react";
+import { Mail, Phone, MessageSquare, MessageCircle, Flame, ThermometerSun, Snowflake, AlertTriangle, Copy, Pencil, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import type { LeadRow } from "@/hooks/use-leads";
 import { useUpdateLeadContact } from "@/hooks/use-lead-mutations";
@@ -142,7 +142,7 @@ const BAND_ICONS = {
 
 interface Props {
   lead: LeadRow;
-  onFocusComposer?: (channel: "sms" | "email") => void;
+  onFocusComposer?: (channel: "sms" | "email" | "whatsapp") => void;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -224,6 +224,15 @@ export function LeadInfoPanel({ lead, onFocusComposer }: Props) {
           >
             <Mail className="h-4 w-4" />
           </button>
+          <button
+            onClick={() => phoneOk && onFocusComposer?.("whatsapp")}
+            disabled={!phoneOk}
+            title={phoneOk ? "Compose WhatsApp" : "No phone on file"}
+            className="rounded p-1.5 text-[#737373] hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            aria-label="WhatsApp"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
         </div>
       </Section>
 
@@ -262,7 +271,7 @@ export function LeadInfoPanel({ lead, onFocusComposer }: Props) {
           onSave={(next) => updateContact.mutate({ leadId: lead.id, patch: { email: next } })}
         />
         {!phoneOk && (
-          <p className="mt-1 text-[10px] text-amber-700">No usable phone — SMS disabled.</p>
+          <p className="mt-1 text-[10px] text-amber-700">No usable phone — SMS / WhatsApp disabled.</p>
         )}
         {!emailOk && (
           <p className="mt-1 text-[10px] text-amber-700">No usable email — Email channel disabled.</p>

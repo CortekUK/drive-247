@@ -1,7 +1,7 @@
 /**
  * useSendLeadMessage — Spec Section 6.4.
  * Sends a message in a lead's conversation via the send-lead-message edge function.
- * Handles SMS / Email / internal note.
+ * Handles SMS / Email / WhatsApp / internal note.
  */
 "use client";
 

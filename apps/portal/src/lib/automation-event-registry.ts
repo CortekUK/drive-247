@@ -86,7 +86,7 @@ export const EVENT_REGISTRY: EventDefinition[] = [
   { name: "lead.offer_expired", entity: "lead", phase: 1,
     description: "Offer expired without acceptance.", payloadFields: ["lead_id", "offer_id"] },
   { name: "lead.inbound_message", entity: "lead", phase: 1,
-    description: "Inbound SMS/email.", payloadFields: ["lead_id", "channel", "body"] },
+    description: "Inbound SMS/email/WhatsApp.", payloadFields: ["lead_id", "channel", "body"] },
   { name: "manual", entity: "any", phase: 1,
     description: "Operator clicks Run now.", payloadFields: ["entity_type", "entity_id", "started_by"] },
 

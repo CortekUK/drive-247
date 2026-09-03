@@ -361,7 +361,7 @@ export default function OnboardingFollowUpSheet({
     try {
       await navigator.clipboard.writeText(message);
       setCopied(true);
-      toast.success('Message copied — paste it into your email or SMS');
+      toast.success('Message copied — paste it into your email or WhatsApp');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Could not copy to clipboard');
@@ -576,6 +576,7 @@ export default function OnboardingFollowUpSheet({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 <SelectItem value="sms">SMS</SelectItem>
                 <SelectItem value="call">Call</SelectItem>
                 <SelectItem value="other">Other</SelectItem>

@@ -998,7 +998,7 @@ export async function getTenantInfo(
       // "DRIVE 247" branding rather than the operator's. An email that is
       // already visibly degraded is not made worse by omitting a plate, and
       // the same fail-closed rule now governs the client
-      // (canRevealRegistration) and the lockbox sender.
+      // (canRevealRegistration) and the lockbox/WhatsApp senders.
       hide_vehicle_registration: true,
     };
   }

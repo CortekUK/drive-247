@@ -1,13 +1,13 @@
 /**
  * LeadComposer — Spec Section 6.4 (Composer).
  *
- * Channel tabs (SMS / Email / Note), template picker, variable
+ * Channel tabs (SMS / Email / WhatsApp / Note), template picker, variable
  * autocomplete, attachment shortcuts, send button + Cmd/Ctrl+Enter.
  */
 "use client";
 
 import { useEffect, useState } from "react";
-import { Send, Loader2, Mail, Phone, FileText, Sparkles } from "lucide-react";
+import { Send, Loader2, Mail, Phone, MessageSquare, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,7 @@ import type { LeadRow } from "@/hooks/use-leads";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
-type ComposerChannel = "sms" | "email" | "note";
+type ComposerChannel = "sms" | "email" | "whatsapp" | "note";
 
 interface LeadComposerProps {
   leadId: string;
@@ -44,7 +44,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function channelAvailable(channel: ComposerChannel, lead: LeadRow): boolean {
   if (channel === "note") return true;
   if (channel === "email") return !!lead.email && EMAIL_RE.test(lead.email.trim());
-  // SMS relies on phone
+  // SMS + WhatsApp both rely on phone
   if (!lead.phone) return false;
   const digits = lead.phone.replace(/\D/g, "");
   return digits.length >= 7;
@@ -58,6 +58,7 @@ function channelDestinationLabel(channel: ComposerChannel, lead: LeadRow): strin
 const CHANNEL_TABS: { value: ComposerChannel; label: string; Icon: typeof Phone }[] = [
   { value: "sms", label: "SMS", Icon: Phone },
   { value: "email", label: "Email", Icon: Mail },
+  { value: "whatsapp", label: "WhatsApp", Icon: MessageSquare },
   { value: "note", label: "Note", Icon: FileText },
 ];
 
@@ -99,7 +100,7 @@ export function LeadComposer({ leadId, lead, conversationId, initialChannel = "s
   // no phone on file (or vice versa).
   const initialResolved: ComposerChannel = channelAvailable(initialChannel, lead)
     ? initialChannel
-    : (["sms", "email", "note"] as ComposerChannel[]).find((c) => channelAvailable(c, lead)) ?? "note";
+    : (["sms", "email", "whatsapp", "note"] as ComposerChannel[]).find((c) => channelAvailable(c, lead)) ?? "note";
   const [channel, setChannel] = useState<ComposerChannel>(initialResolved);
   const [body, setBody] = useState("");
   const [subject, setSubject] = useState("");
@@ -107,7 +108,7 @@ export function LeadComposer({ leadId, lead, conversationId, initialChannel = "s
 
   const send = useSendLeadMessage();
   const templates = useLeadTemplates(
-    channel === "note" ? undefined : (channel as "sms" | "email"),
+    channel === "note" ? undefined : (channel as "sms" | "email" | "whatsapp"),
   );
   const [drafting, setDrafting] = useState<string | null>(null);
 
@@ -154,7 +155,9 @@ export function LeadComposer({ leadId, lead, conversationId, initialChannel = "s
     // Block before the network call — otherwise send-lead-message would either
     // 500 (no destination) or silently drop the message.
     if (!channelAvailable(channel, lead)) {
-      const what = channel === "email" ? "an email address" : "a phone number";
+      const what =
+        channel === "email" ? "an email address" :
+        channel === "whatsapp" ? "a phone number for WhatsApp" : "a phone number";
       toast.error(`This lead has no ${what}. Update the lead or switch channel.`);
       return;
     }

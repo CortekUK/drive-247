@@ -5,7 +5,7 @@ import { useTenant } from '@/contexts/TenantContext';
 export interface LockboxTemplate {
   id: string;
   tenant_id: string;
-  channel: 'email' | 'sms';
+  channel: 'email' | 'sms' | 'whatsapp';
   subject: string | null;
   body: string;
   is_active: boolean;
@@ -32,6 +32,16 @@ const DEFAULT_SMS_TEMPLATE = {
   body: `Your vehicle {{vehicle_reg}} has been delivered. Lockbox code: {{lockbox_code}}. Ref: {{booking_ref}}`,
 };
 
+const DEFAULT_WHATSAPP_TEMPLATE = {
+  body: `*Vehicle Collection Confirmation*
+
+Hi {{customer_name}},
+
+Your vehicle *{{vehicle_name}}* ({{vehicle_reg}}) has been collected.
+
+Booking Ref: {{booking_ref}}`,
+};
+
 export function useLockboxTemplates() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
@@ -52,7 +62,7 @@ export function useLockboxTemplates() {
     enabled: !!tenant?.id,
   });
 
-  const getTemplate = (channel: 'email' | 'sms') => {
+  const getTemplate = (channel: 'email' | 'sms' | 'whatsapp') => {
     return templates?.find(t => t.channel === channel) || null;
   };
 
@@ -68,11 +78,17 @@ export function useLockboxTemplates() {
     return DEFAULT_SMS_TEMPLATE;
   };
 
+  const getWhatsAppTemplate = () => {
+    const saved = getTemplate('whatsapp');
+    if (saved) return { body: saved.body };
+    return DEFAULT_WHATSAPP_TEMPLATE;
+  };
+
   const saveTemplate = useMutation({
     mutationFn: async ({ channel, subject, body }: { channel: string; subject?: string; body: string }) => {
       if (!tenant?.id) throw new Error('No tenant');
 
-      const existing = getTemplate(channel as 'email' | 'sms');
+      const existing = getTemplate(channel as 'email' | 'sms' | 'whatsapp');
 
       if (existing) {
         const { error } = await supabase
@@ -103,6 +119,7 @@ export function useLockboxTemplates() {
     getTemplate,
     getEmailTemplate,
     getSmsTemplate,
+    getWhatsAppTemplate,
     saveTemplate,
   };
 }

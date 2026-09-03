@@ -9,6 +9,7 @@
  * Channels:
  *   sms       → aws-sns-sms (existing)
  *   email     → Resend via _shared/resend-service.ts (branded with tenant template)
+ *   whatsapp  → _shared/whatsapp-client.ts (Meta Graph API)
  *   note      → internal-only, no provider dispatch
  *
  * Variable substitution: re-implements the {{var}} pattern used by notify-lockbox-code.
@@ -23,7 +24,7 @@ import {
   wrapWithBrandedTemplate,
 } from "../_shared/resend-service.ts";
 
-type Channel = "sms" | "email" | "note";
+type Channel = "sms" | "email" | "whatsapp" | "note";
 
 interface Payload {
   tenantId?: string;
@@ -212,14 +213,22 @@ Deno.serve(async (req) => {
           if (result.messageId) channelMessageId = result.messageId;
           if (!result.success) dispatchError = result.error ?? "Email send failed";
         }
-      } else {
-        // A stored template row can still carry a channel this function no
-        // longer dispatches — lead_message_templates kept 36 rows on the
-        // removed WhatsApp channel. Without this branch the message would be
-        // inserted, never sent, and still marked 'sent': a silent drop that
-        // looks to staff exactly like a delivered message. Fail loudly instead,
-        // so the row shows as failed and can be resent on SMS or email.
-        dispatchError = `Channel "${effectiveChannel}" is no longer supported — resend this message on SMS or email`;
+      } else if (effectiveChannel === "whatsapp") {
+        // Reuse send-collection-whatsapp for now — generic Meta Graph send.
+        // V2 will introduce a generic send-lead-whatsapp wrapper.
+        const { data } = await supabase.functions.invoke("send-collection-whatsapp", {
+          body: {
+            customerName: l.full_name,
+            customerPhone: l.phone,
+            vehicleName: l.vehicle_class ?? "your rental",
+            vehicleReg: "",
+            bookingRef: l.id.slice(0, 8),
+            notes: renderedBody,
+            tenantId: body.tenantId,
+          },
+        }) as { data?: { messageId?: string; success?: boolean; error?: string } };
+        if (data?.messageId) channelMessageId = data.messageId;
+        if (data?.success === false) dispatchError = data.error ?? "WhatsApp send failed";
       }
     } catch (err) {
       dispatchError = err instanceof Error ? err.message : "Dispatch error";

@@ -22,6 +22,7 @@ export default function MessagesPage() {
   const joinedFor = useRef<string | null>(null);
 
   const smsEnabled = !!(tenant as any)?.integration_twilio_sms;
+  const whatsappEnabled = !!(tenant as any)?.integration_twilio_whatsapp || !!(tenant as any)?.integration_whatsapp;
 
   const handleSelectChannel = (channel: ChatChannel) => {
     setSelectedChannel(channel);
@@ -84,6 +85,7 @@ export default function MessagesPage() {
             onBack={() => setSelectedChannel(null)}
             lastChannel={selectedChannel?.last_channel || 'in_app'}
             smsEnabled={smsEnabled}
+            whatsappEnabled={whatsappEnabled}
           />
         </div>
       </div>

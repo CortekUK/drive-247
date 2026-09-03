@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  MessageSquare,
   Smartphone,
   Mail,
   PhoneCall,
@@ -28,6 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { TwilioSmsSettings } from './twilio-sms-settings';
+import { TwilioWhatsAppSettings } from './twilio-whatsapp-settings';
 import { CallForwardingSettings } from './call-forwarding-settings';
 import { useTwilioSms } from '@/hooks/use-twilio-sms';
 import { useTwilioVoice } from '@/hooks/use-twilio-voice';
@@ -53,6 +55,7 @@ export function CommunicationSettings({ onBack }: CommunicationSettingsProps = {
   const { status: twilioStatus } = useTwilioSms();
   const { status: voiceStatus, isLoading: voiceLoading, setup: voiceSetup, disable: voiceDisable } = useTwilioVoice();
   const { tenant } = useTenant();
+  const whatsappConnected = !!(tenant as any)?.integration_twilio_whatsapp;
 
   const [showDisableVoiceWarning, setShowDisableVoiceWarning] = useState(false);
 
@@ -74,17 +77,22 @@ export function CommunicationSettings({ onBack }: CommunicationSettingsProps = {
         <div>
           <h3 className="text-lg font-semibold text-foreground">Communication Channels</h3>
           <p className="text-sm text-muted-foreground">
-            Configure how you communicate with customers — SMS, Email, and Calling.
+            Configure how you communicate with customers — SMS, WhatsApp, Email, and Calling.
           </p>
         </div>
       </div>
 
       <Tabs value={activeChannel} onValueChange={setActiveChannel}>
-        <TabsList className="grid grid-cols-3 w-full">
+        <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="sms" className="flex items-center gap-2">
             <Smartphone className="h-4 w-4" />
             <span className="hidden sm:inline">SMS</span>
             {smsStatus === 'active' && <CheckCircle2 className="h-3 w-3 text-green-600" />}
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">WhatsApp</span>
+            {whatsappConnected && <CheckCircle2 className="h-3 w-3 text-green-600" />}
           </TabsTrigger>
           <TabsTrigger value="email" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
@@ -101,6 +109,11 @@ export function CommunicationSettings({ onBack }: CommunicationSettingsProps = {
         {/* SMS Tab */}
         <TabsContent value="sms" className="mt-6">
           <TwilioSmsSettings />
+        </TabsContent>
+
+        {/* WhatsApp Tab */}
+        <TabsContent value="whatsapp" className="mt-6 space-y-6">
+          <TwilioWhatsAppSettings />
         </TabsContent>
 
         {/* Email Tab */}
