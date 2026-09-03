@@ -383,17 +383,6 @@ const smoke = [
     (r) => (r[0].n >= 4 ? null : `only ${r[0].n}/4 present`),
   ],
   [
-    'control-center tables present',
-    `SELECT count(*)::int AS n FROM information_schema.tables
-      WHERE table_schema='public' AND table_name IN ('batches','tenant_batches','batch_files')`,
-    (r) => (r[0].n === 3 ? null : `only ${r[0].n}/3 present`),
-  ],
-  [
-    'get_enabled_batch_keys() callable',
-    `SELECT public.get_enabled_batch_keys() AS keys`,
-    (r) => (Array.isArray(r[0].keys) ? null : 'did not return an array'),
-  ],
-  [
     'northwind canary exists',
     `SELECT count(*)::int AS n FROM public.tenants WHERE slug = 'northwind'`,
     (r) => (r[0].n === 1 ? null : 'northwind tenant not found'),

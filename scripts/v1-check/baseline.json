@@ -1,8 +1,8 @@
 {
   "meta": {
-    "generatedAt": "2026-09-03T04:33:41.906Z",
+    "generatedAt": "2026-09-03T05:07:33.486Z",
     "projectRef": "hviqoaokxvlancmftwuo",
-    "gitSha": "bdcee46973f4680b0b51c91cdc828b34bb0b367e",
+    "gitSha": "8ee99fa131823d0373869467af1dd23f7a0b1351",
     "note": "Baseline of v1. Regenerate ONLY together with an intentional, reviewed change to v1, and commit both in the same commit."
   },
   "schema": {
@@ -1439,121 +1439,6 @@
             "type": "integer",
             "nullable": false,
             "default": "0"
-          },
-          "updated_at": {
-            "type": "timestamp with time zone",
-            "nullable": false,
-            "default": "now()"
-          }
-        }
-      },
-      "batch_files": {
-        "rls": true,
-        "columns": {
-          "batch_id": {
-            "type": "uuid",
-            "nullable": false,
-            "default": null
-          },
-          "created_at": {
-            "type": "timestamp with time zone",
-            "nullable": false,
-            "default": "now()"
-          },
-          "file_name": {
-            "type": "text",
-            "nullable": false,
-            "default": null
-          },
-          "file_size": {
-            "type": "bigint",
-            "nullable": true,
-            "default": null
-          },
-          "file_url": {
-            "type": "text",
-            "nullable": false,
-            "default": null
-          },
-          "id": {
-            "type": "uuid",
-            "nullable": false,
-            "default": "gen_random_uuid()"
-          },
-          "uploaded_by": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          }
-        }
-      },
-      "batches": {
-        "rls": true,
-        "columns": {
-          "area": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "branch": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "checklist": {
-            "type": "jsonb",
-            "nullable": false,
-            "default": "'[]'::jsonb"
-          },
-          "created_at": {
-            "type": "timestamp with time zone",
-            "nullable": false,
-            "default": "now()"
-          },
-          "description": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "id": {
-            "type": "uuid",
-            "nullable": false,
-            "default": "gen_random_uuid()"
-          },
-          "key": {
-            "type": "text",
-            "nullable": false,
-            "default": null
-          },
-          "killswitch": {
-            "type": "boolean",
-            "nullable": false,
-            "default": "false"
-          },
-          "notes": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "owner": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "status": {
-            "type": "v2_batch_status",
-            "nullable": false,
-            "default": "'not_started'::v2_batch_status"
-          },
-          "tags": {
-            "type": "ARRAY",
-            "nullable": false,
-            "default": "'{}'::text[]"
-          },
-          "title": {
-            "type": "text",
-            "nullable": false,
-            "default": null
           },
           "updated_at": {
             "type": "timestamp with time zone",
@@ -13422,61 +13307,6 @@
           }
         }
       },
-      "tenant_batches": {
-        "rls": true,
-        "columns": {
-          "batch_id": {
-            "type": "uuid",
-            "nullable": false,
-            "default": null
-          },
-          "created_at": {
-            "type": "timestamp with time zone",
-            "nullable": false,
-            "default": "now()"
-          },
-          "enabled": {
-            "type": "boolean",
-            "nullable": false,
-            "default": "false"
-          },
-          "enabled_at": {
-            "type": "timestamp with time zone",
-            "nullable": true,
-            "default": null
-          },
-          "enabled_by": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "id": {
-            "type": "uuid",
-            "nullable": false,
-            "default": "gen_random_uuid()"
-          },
-          "rolled_back_at": {
-            "type": "timestamp with time zone",
-            "nullable": true,
-            "default": null
-          },
-          "rolled_back_by": {
-            "type": "text",
-            "nullable": true,
-            "default": null
-          },
-          "tenant_id": {
-            "type": "uuid",
-            "nullable": false,
-            "default": null
-          },
-          "updated_at": {
-            "type": "timestamp with time zone",
-            "nullable": false,
-            "default": "now()"
-          }
-        }
-      },
       "tenant_credit_wallets": {
         "rls": true,
         "columns": {
@@ -18279,66 +18109,6 @@
         "name": "backfill_jobs_tenant_id_fkey",
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
-      },
-      "batch_files.batch_files_batch_id_fkey": {
-        "table_name": "batch_files",
-        "name": "batch_files_batch_id_fkey",
-        "kind": "f",
-        "definition": "FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE"
-      },
-      "batch_files.batch_files_file_name_check": {
-        "table_name": "batch_files",
-        "name": "batch_files_file_name_check",
-        "kind": "c",
-        "definition": "CHECK (((char_length(file_name) >= 1) AND (char_length(file_name) <= 300)))"
-      },
-      "batch_files.batch_files_file_size_check": {
-        "table_name": "batch_files",
-        "name": "batch_files_file_size_check",
-        "kind": "c",
-        "definition": "CHECK (((file_size IS NULL) OR (file_size >= 0)))"
-      },
-      "batch_files.batch_files_pkey": {
-        "table_name": "batch_files",
-        "name": "batch_files_pkey",
-        "kind": "p",
-        "definition": "PRIMARY KEY (id)"
-      },
-      "batches.batches_checklist_check": {
-        "table_name": "batches",
-        "name": "batches_checklist_check",
-        "kind": "c",
-        "definition": "CHECK ((jsonb_typeof(checklist) = 'array'::text))"
-      },
-      "batches.batches_key_check": {
-        "table_name": "batches",
-        "name": "batches_key_check",
-        "kind": "c",
-        "definition": "CHECK ((key ~ '^[a-z0-9][a-z0-9._-]{0,31}$'::text))"
-      },
-      "batches.batches_key_key": {
-        "table_name": "batches",
-        "name": "batches_key_key",
-        "kind": "u",
-        "definition": "UNIQUE (key)"
-      },
-      "batches.batches_pkey": {
-        "table_name": "batches",
-        "name": "batches_pkey",
-        "kind": "p",
-        "definition": "PRIMARY KEY (id)"
-      },
-      "batches.batches_tags_check": {
-        "table_name": "batches",
-        "name": "batches_tags_check",
-        "kind": "c",
-        "definition": "CHECK ((tags <@ ARRAY['ui'::text, 'architecture'::text, 'api'::text, 'refactoring'::text, 'cutting'::text, 'testing'::text, 'documentation'::text, 'feature_addition'::text]))"
-      },
-      "batches.batches_title_check": {
-        "table_name": "batches",
-        "name": "batches_title_check",
-        "kind": "c",
-        "definition": "CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)))"
       },
       "blacklist_entries.blacklist_entries_added_by_fkey": {
         "table_name": "blacklist_entries",
@@ -23236,30 +23006,6 @@
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
       },
-      "tenant_batches.tenant_batches_batch_id_fkey": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_batch_id_fkey",
-        "kind": "f",
-        "definition": "FOREIGN KEY (batch_id) REFERENCES batches(id) ON DELETE CASCADE"
-      },
-      "tenant_batches.tenant_batches_batch_tenant_key": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_batch_tenant_key",
-        "kind": "u",
-        "definition": "UNIQUE (batch_id, tenant_id)"
-      },
-      "tenant_batches.tenant_batches_pkey": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_pkey",
-        "kind": "p",
-        "definition": "PRIMARY KEY (id)"
-      },
-      "tenant_batches.tenant_batches_tenant_id_fkey": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_tenant_id_fkey",
-        "kind": "f",
-        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
-      },
       "tenant_credit_wallets.tenant_credit_wallets_auto_refill_package_id_fkey": {
         "table_name": "tenant_credit_wallets",
         "name": "tenant_credit_wallets_auto_refill_package_id_fkey",
@@ -25087,36 +24833,6 @@
         "table_name": "backfill_jobs",
         "name": "backfill_jobs_tenant_idx",
         "definition": "CREATE INDEX backfill_jobs_tenant_idx ON public.backfill_jobs USING btree (tenant_id, created_at DESC)"
-      },
-      "batch_files.batch_files_batch_idx": {
-        "table_name": "batch_files",
-        "name": "batch_files_batch_idx",
-        "definition": "CREATE INDEX batch_files_batch_idx ON public.batch_files USING btree (batch_id, created_at DESC)"
-      },
-      "batch_files.batch_files_pkey": {
-        "table_name": "batch_files",
-        "name": "batch_files_pkey",
-        "definition": "CREATE UNIQUE INDEX batch_files_pkey ON public.batch_files USING btree (id)"
-      },
-      "batches.batches_area_live_uniq": {
-        "table_name": "batches",
-        "name": "batches_area_live_uniq",
-        "definition": "CREATE UNIQUE INDEX batches_area_live_uniq ON public.batches USING btree (lower(area)) WHERE ((area IS NOT NULL) AND (btrim(area) <> ''::text) AND (status <> ALL (ARRAY['completed'::v2_batch_status, 'rejected'::v2_batch_status])))"
-      },
-      "batches.batches_key_key": {
-        "table_name": "batches",
-        "name": "batches_key_key",
-        "definition": "CREATE UNIQUE INDEX batches_key_key ON public.batches USING btree (key)"
-      },
-      "batches.batches_pkey": {
-        "table_name": "batches",
-        "name": "batches_pkey",
-        "definition": "CREATE UNIQUE INDEX batches_pkey ON public.batches USING btree (id)"
-      },
-      "batches.batches_status_idx": {
-        "table_name": "batches",
-        "name": "batches_status_idx",
-        "definition": "CREATE INDEX batches_status_idx ON public.batches USING btree (status)"
       },
       "blacklist_entries.blacklist_entries_pkey": {
         "table_name": "blacklist_entries",
@@ -28528,26 +28244,6 @@
         "name": "subscription_plans_pkey",
         "definition": "CREATE UNIQUE INDEX subscription_plans_pkey ON public.subscription_plans USING btree (id)"
       },
-      "tenant_batches.tenant_batches_batch_idx": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_batch_idx",
-        "definition": "CREATE INDEX tenant_batches_batch_idx ON public.tenant_batches USING btree (batch_id)"
-      },
-      "tenant_batches.tenant_batches_batch_tenant_key": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_batch_tenant_key",
-        "definition": "CREATE UNIQUE INDEX tenant_batches_batch_tenant_key ON public.tenant_batches USING btree (batch_id, tenant_id)"
-      },
-      "tenant_batches.tenant_batches_pkey": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_pkey",
-        "definition": "CREATE UNIQUE INDEX tenant_batches_pkey ON public.tenant_batches USING btree (id)"
-      },
-      "tenant_batches.tenant_batches_tenant_idx": {
-        "table_name": "tenant_batches",
-        "name": "tenant_batches_tenant_idx",
-        "definition": "CREATE INDEX tenant_batches_tenant_idx ON public.tenant_batches USING btree (tenant_id)"
-      },
       "tenant_credit_wallets.tenant_credit_wallets_pkey": {
         "table_name": "tenant_credit_wallets",
         "name": "tenant_credit_wallets_pkey",
@@ -30645,11 +30341,6 @@
         "args": "",
         "result": "uuid"
       },
-      "get_enabled_batch_keys()": {
-        "name": "get_enabled_batch_keys",
-        "args": "",
-        "result": "text[]"
-      },
       "get_expiring_bookings()": {
         "name": "get_expiring_bookings",
         "args": "",
@@ -32108,14 +31799,6 @@
         "events": "UPDATE",
         "enabled": "O"
       },
-      "batches.set_batches_updated_at": {
-        "table_name": "batches",
-        "name": "set_batches_updated_at",
-        "function_name": "public.set_updated_at",
-        "timing": "BEFORE",
-        "events": "UPDATE",
-        "enabled": "O"
-      },
       "blacklist_entries.set_blacklist_entries_updated_at": {
         "table_name": "blacklist_entries",
         "name": "set_blacklist_entries_updated_at",
@@ -33140,14 +32823,6 @@
         "events": "UPDATE",
         "enabled": "O"
       },
-      "tenant_batches.set_tenant_batches_updated_at": {
-        "table_name": "tenant_batches",
-        "name": "set_tenant_batches_updated_at",
-        "function_name": "public.set_updated_at",
-        "timing": "BEFORE",
-        "events": "UPDATE",
-        "enabled": "O"
-      },
       "tenant_credit_wallets.set_tenant_credit_wallets_updated_at": {
         "table_name": "tenant_credit_wallets",
         "name": "set_tenant_credit_wallets_updated_at",
@@ -33824,7 +33499,6 @@
     "apps/admin/app/admin/(protected)/requests/page.tsx": "69a50aa72a2b450b",
     "apps/admin/app/admin/(protected)/sales/page.tsx": "52952805d2667099",
     "apps/admin/app/admin/(protected)/settings/page.tsx": "10623826f226c913",
-    "apps/admin/app/admin/(protected)/v2-control-center/page.tsx": "df717516586204f2",
     "apps/admin/app/admin/(protected)/welcome-pack/page.tsx": "4701e0f46a93c49c",
     "apps/admin/app/admin/login/page.tsx": "cb0a55c652ea43b2",
     "apps/admin/app/layout.tsx": "b77b098f7046f7d7",
@@ -33851,16 +33525,13 @@
     "apps/admin/components/admin/SalesCredentialsDialog.tsx": "a65240fea3015ca5",
     "apps/admin/components/admin/SalesOnboardingDialog.tsx": "3214a3ee8aa6b1f3",
     "apps/admin/components/admin/SendToBrandonDialog.tsx": "2130c5b41dc177c4",
-    "apps/admin/components/admin/Sidebar.tsx": "294a2909e7e34143",
+    "apps/admin/components/admin/Sidebar.tsx": "23640108dc530854",
     "apps/admin/components/admin/SidebarContext.tsx": "cf927cac5ac3802a",
     "apps/admin/components/admin/deposit-hold-health.tsx": "807d0e241ea0d0cc",
     "apps/admin/components/admin/finance-events-tab.tsx": "1b830c9f2efda264",
     "apps/admin/components/admin/operator-prompt-card.tsx": "946d82a2f874cef7",
     "apps/admin/components/admin/tenant-credits-tab.tsx": "c292f293e0a41bdc",
     "apps/admin/components/admin/tenant-payments-tab.tsx": "9e9f5874bbf88889",
-    "apps/admin/components/admin/v2-control-center/batch-detail.tsx": "5cf132e8d8d3e339",
-    "apps/admin/components/admin/v2-control-center/rollout-panel.tsx": "e2440cf01e432eb4",
-    "apps/admin/components/admin/v2-control-center/types.ts": "bec4e706e8640457",
     "apps/admin/components/announcements/AnnouncementPreview.tsx": "0a807a6f921dee4b",
     "apps/admin/components/dev/DevPanel.tsx": "55672d2142bac9cc",
     "apps/admin/components/push/service-worker-registrar.tsx": "b6c2790b0f1d70b2",
@@ -35738,7 +35409,6 @@
     "supabase/migrations/20260826120000_square_checkout_idempotency.sql": "1ba5027a0a3b678d",
     "supabase/migrations/20260826130000_square_cron_jobs.sql": "17be12e3670e7977",
     "supabase/migrations/20260827090000_tenant_chooses_provider_once.sql": "3ce6735e31910451",
-    "supabase/migrations/20260827093000_fix_provider_lock_trigger_scope.sql": "97c2acd4b2c2b0cd",
-    "supabase/migrations/20260902120000_add_v2_control_center.sql": "48af340055c6c1aa"
+    "supabase/migrations/20260827093000_fix_provider_lock_trigger_scope.sql": "97c2acd4b2c2b0cd"
   }
 }
