@@ -2,7 +2,7 @@
 //
 // Send (or resend) the ID-verification invite to a single additional driver.
 //
-// Uses Drive247's AI verification flow. Mirrors what
+// Uses Drive247's AI verification flow (NOT Veriff). Mirrors what
 // create-ai-verification-session does for primary customers, but:
 //   - identity_verifications.customer_id is NULL (additional drivers are not
 //     customers; they live in rental_additional_drivers).

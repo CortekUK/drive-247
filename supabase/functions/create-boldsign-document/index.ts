@@ -1029,7 +1029,7 @@ Deno.serve(async (req) => {
     }
 
     // Mark each additional driver as 'sent' for signing so the rental detail
-    // page reflects the live BoldSign state. `process-ai-verification` updates
+    // page reflects the live BoldSign state. The Veriff webhook updates
     // verification_status separately; the BoldSign webhook will flip to
     // 'signed' once each driver completes signing.
     if (additionalSignersForBoldSign.length > 0) {

@@ -8,6 +8,7 @@ import {
   Shield,
   FileSignature,
   CircleDollarSign,
+  ScanFace,
   MessageSquare,
   ArrowRight,
   Zap,
@@ -32,6 +33,7 @@ const iconMap: Record<string, React.ElementType> = {
   bonzah: Shield,
   boldsign: FileSignature,
   credits: CircleDollarSign,
+  veriff: ScanFace,
   notifications: MessageSquare,
   tesla_fleet: Zap,
 };

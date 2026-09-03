@@ -1268,7 +1268,7 @@ export async function POST(request: NextRequest) {
         const customer = rental?.customers || { name: body.customerName, email: body.customerEmail };
         const vehicle = rental?.vehicles || { make: '', model: '', reg: 'N/A' };
 
-        // Fetch latest identity verification for this customer
+        // Fetch latest identity verification for this customer (AI or Veriff)
         let verification: any = null;
         const customerId = rental?.customer_id || (customer as any)?.id;
         if (customerId) {

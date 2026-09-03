@@ -55,7 +55,7 @@ export const TERMINAL_STAGES: LeadStage[] = ["converted", "lost", "blacklisted"]
 
 /**
  * Allowed transitions per spec §6.1. Operator-driven moves are explicit;
- * auto transitions (BoldSign webhook, Stripe webhook, etc.)
+ * auto transitions (BoldSign webhook, Stripe webhook, Veriff webhook, etc.)
  * are listed here too because they reuse this gate via the same mutation path.
  *
  * **Lost / Blacklist are universal terminations.** Per spec, an operator must be

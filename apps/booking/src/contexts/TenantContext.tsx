@@ -84,6 +84,7 @@ export interface Tenant {
   area_center_lon: number | null;
 
   // Integration settings
+  integration_veriff: boolean | null;
   integration_bonzah: boolean | null;
   integration_twilio_sms: boolean | null;
   bonzah_brochure_url: string | null;
@@ -472,6 +473,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           return_area_radius_km,
           area_center_lat,
           area_center_lon,
+          integration_veriff,
           integration_bonzah,
           integration_twilio_sms,
           bonzah_brochure_url,

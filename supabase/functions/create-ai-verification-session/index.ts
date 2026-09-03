@@ -142,7 +142,7 @@ async function createSessionForCustomer(
       provider: 'ai',
       verification_provider: 'ai',
       external_user_id: customerId,
-      session_id: sessionId, // Always set session_id: readers key off it, not the row id
+      session_id: sessionId, // Set session_id for consistency with Veriff flow
       status: 'init',
       review_status: 'init',
       qr_session_token: qrToken,
