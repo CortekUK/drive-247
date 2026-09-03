@@ -19,6 +19,8 @@
     "update-branding": "node scripts/bulk-update-branding.js",
     "update-cms": "node scripts/update-cms-content.js",
     "db:switch": "node scripts/db-switch.mjs",
+    "v1:check": "node scripts/v1-check/check.mjs",
+    "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
     "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal",
     "dev:prod": "node scripts/db-switch.mjs prod && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal"
   },
