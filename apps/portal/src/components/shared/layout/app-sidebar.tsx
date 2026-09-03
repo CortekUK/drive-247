@@ -668,7 +668,13 @@ export function AppSidebar() {
                   routes are allowed for every role, so a `viewer` or a
                   restricted `manager` keeps it. They hit the same confusion
                   as a head admin — gating the guide would silence exactly
-                  the people most likely to need it. */}
+                  the people most likely to need it.
+
+                  Hidden from the lean canary only. northwind renders the v2
+                  rail, not this one, so this gate changes nothing today — it
+                  is here so the predicate is uniform across both rails and a
+                  later flip of the rail cannot silently un-hide the row. */}
+              {!isAreaHidden("welcome", tenantSlug) && (
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -684,6 +690,7 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

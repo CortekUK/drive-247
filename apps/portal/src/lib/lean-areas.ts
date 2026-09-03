@@ -67,8 +67,20 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * canary has no Tesla vehicles and no Tesla connection — the server side is
  * already inert for it, and reaching into that path would put the very billing
  * we just repaired back at risk.
+ *
+ * `welcome` is the Welcome Pack — the in-portal operator guide at `/welcome`.
+ * It is gated here rather than removed because it is being READ RIGHT NOW:
+ * `welcome_pack_reads` holds 184 rows from 16 operators across 14 tenants,
+ * the newest at 2026-09-02 20:45 UTC, against 12 chapters / 59 sections /
+ * 62 FAQs of content. Deleting it from main would take the guide from all 35+
+ * paying tenants at once to hide it from one canary — the exact inversion the
+ * Fleet Quotes and Tesla Fleet removals above already cost us. So the route,
+ * the components, the `use-welcome-pack` hook, the four `welcome_pack_*`
+ * tables and the super-admin authoring screen in apps/admin all stay exactly
+ * where they are and keep serving everyone else; only what northwind SEES
+ * changes.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla'] as const;
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 

@@ -1120,7 +1120,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       allowed for every role, so a `viewer` or a restricted
                       `manager` keeps it. They hit the same confusion as a head
                       admin — gating the guide would silence exactly the people
-                      most likely to need it. */}
+                      most likely to need it.
+
+                      Hidden from the lean canary only. This is the rail
+                      northwind actually renders, so this is the gate the owner
+                      sees; the v1 rail below carries the identical predicate so
+                      the two cannot drift. Everyone else keeps the row — 16
+                      operators across 14 tenants have read the pack. */}
+                  {!isAreaHidden("welcome", tenantSlug) && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
@@ -1134,6 +1141,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                  )}
 
                   {/* Ask AI — only when the caller owns a Trax instance to open. */}
                   {onAskAI && (

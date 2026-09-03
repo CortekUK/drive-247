@@ -120,3 +120,81 @@ describe("isAreaHidden('tesla')", () => {
     expect(isAreaHidden("tesla", "northwind-2")).toBe(false);
   });
 });
+
+/**
+ * Welcome Pack, called out on its own for the same reason Tesla Fleet is: the
+ * cost of getting it wrong is measurable rather than hypothetical.
+ *
+ * The pack is the in-portal operator guide at `/welcome`. It is not dormant
+ * code — `welcome_pack_reads` holds 184 rows written by 16 operators across 14
+ * tenants, the newest 2026-09-02, against 12 chapters / 59 sections / 62 FAQs.
+ * So the assertion that carries weight below is NOT "northwind is hidden"; it
+ * is that nobody else is. A tenant flipping to true here is 35+ operators
+ * losing the documentation for a product they are actively learning, to hide
+ * one row from one canary.
+ */
+describe("isAreaHidden('welcome')", () => {
+  it("is a real member of LEAN_HIDDEN_AREAS", () => {
+    // A typo'd or missing area is not a compile error at runtime — isAreaHidden
+    // fails open on anything it does not recognise. Without this assertion the
+    // gate could silently never fire and every test below would still pass by
+    // agreeing that nothing is hidden.
+    expect(LEAN_HIDDEN_AREAS).toContain("welcome");
+  });
+
+  it("hides the Welcome Pack from the northwind canary", () => {
+    expect(isAreaHidden("welcome", "northwind")).toBe(true);
+  });
+
+  it("hides the Welcome Pack from NO ONE else", () => {
+    // Ordinary paying tenants, plus the internal `test` tenant. Any of these
+    // turning true is an outage of the docs, not a cosmetic regression.
+    for (const slug of [
+      "goniko",
+      "revtekrentals",
+      "globalmotiontransport",
+      "jangramrentals",
+      "eastpeakrentalsllc",
+      "openbayrental",
+      "flowrentalsllc",
+      "drive-hustle",
+      "test",
+    ]) {
+      expect(isAreaHidden("welcome", slug)).toBe(false);
+    }
+  });
+
+  it("fails open on an unresolved slug", () => {
+    // TenantContext leaves the slug null for a tick on first paint and keeps it
+    // null on an unrecognised host. Hiding during that tick would make the nav
+    // row flicker out on every load for the 14 tenants already reading it, and
+    // would 404 the route out from under a mid-read operator.
+    expect(isAreaHidden("welcome", null)).toBe(false);
+    expect(isAreaHidden("welcome", undefined)).toBe(false);
+    expect(isAreaHidden("welcome", "")).toBe(false);
+  });
+
+  it("keys on the slug, never on a tenant id", () => {
+    // northwind is 6e5c544f-… in production and 8e6bc88f-… on the seeded
+    // staging branch. An id-keyed gate resolves to the ungated path on
+    // localhost — where the owner tests at northwind.portal.localhost:3011 —
+    // with no error and no failed build, so the screen simply never changes.
+    expect(isAreaHidden("welcome", "6e5c544f-b374-451f-a662-360a634bff15")).toBe(false);
+    expect(isAreaHidden("welcome", "8e6bc88f-86d6-4468-8610-73f7c8a88f6e")).toBe(false);
+  });
+
+  it("is case- and whitespace-exact", () => {
+    expect(isAreaHidden("welcome", "Northwind")).toBe(false);
+    expect(isAreaHidden("welcome", " northwind")).toBe(false);
+    expect(isAreaHidden("welcome", "northwind-2")).toBe(false);
+  });
+
+  it("does not disturb the areas gated before it", () => {
+    // Adding an area to the tuple must not shift behaviour for the existing
+    // five. Enquiries alone is on for 51 production tenants.
+    for (const area of ["enquiries", "leads", "automations", "quotes", "tesla"] as const) {
+      expect(isAreaHidden(area, "northwind")).toBe(true);
+      expect(isAreaHidden(area, "goniko")).toBe(false);
+    }
+  });
+});

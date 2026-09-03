@@ -13,6 +13,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { BookOpen } from 'lucide-react';
 import { useWelcomePackPrompt } from '@/hooks/use-welcome-pack';
+import { useTenant } from '@/contexts/TenantContext';
+import { isAreaHidden } from '@/lib/lean-areas';
 
 const DISMISS_KEY = 'welcome-pack-prompt-dismissed-v';
 
@@ -34,6 +36,7 @@ const DISMISS_KEY = 'welcome-pack-prompt-dismissed-v';
 export function WelcomePackPrompt({ suppressed = false }: { suppressed?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { tenantSlug } = useTenant();
   const { shouldPrompt, settings } = useWelcomePackPrompt();
   // Starts dismissed so nothing can flash before localStorage is read.
   const [dismissed, setDismissed] = useState(true);
@@ -61,7 +64,15 @@ export function WelcomePackPrompt({ suppressed = false }: { suppressed?: boolean
 
   // Never over the pack itself, and never on top of a blocking gate.
   const onPack = pathname?.startsWith('/welcome');
-  const open = shouldPrompt && !dismissed && !suppressed && !onPack;
+  // Hidden from the lean canary. Gated HERE rather than at the mount site in
+  // (dashboard)/layout.tsx on purpose: this dialog's only action is
+  // `router.push('/welcome')`, which now 404s for a lean tenant, so an
+  // ungated caller would offer northwind a button into a dead end. Keeping the
+  // predicate inside the component means every present and future caller
+  // inherits it. `suppressed` stays what it always was — dialog stacking, not
+  // tenancy — so the two concerns do not get tangled.
+  const hidden = isAreaHidden('welcome', tenantSlug);
+  const open = shouldPrompt && !dismissed && !suppressed && !onPack && !hidden;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && dismiss()}>
