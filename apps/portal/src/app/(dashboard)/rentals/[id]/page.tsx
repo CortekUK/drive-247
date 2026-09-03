@@ -89,6 +89,7 @@ import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
 import { SuperchargerChargesDialog } from "@/components/rentals/supercharger-charges-dialog";
+import { isAreaHidden } from "@/lib/lean-areas";
 
 // Parse a Postgres DATE string ("YYYY-MM-DD") as local midnight. `new Date("2026-05-20")`
 // is parsed as UTC midnight, which renders as the previous day in any timezone
@@ -532,7 +533,11 @@ const RentalDetail = () => {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // Tesla Fleet is hidden from the lean canary and that tenant alone. Data-driven
+  // already — the canary has no Tesla vehicles, so none of this would render for
+  // it anyway — but gated explicitly so the predicate is the same everywhere.
+  const teslaHidden = isAreaHidden('tesla', tenantSlug);
   // Renew opens /rentals/new, so it is a rental-creation entry point too.
   // Lean tenants only; a constant false for everyone else.
   const { blocked: rentalCreationBlocked } = useRentalCreationGate();
@@ -2691,7 +2696,7 @@ const RentalDetail = () => {
                 </Badge>
               )}
               {/* Tesla Fleet indicator */}
-              {rental.vehicles?.tesla_fleet_enabled && (
+              {rental.vehicles?.tesla_fleet_enabled && !teslaHidden && (
                 <Badge
                   variant="outline"
                   className="bg-red-500/10 text-red-600 border-red-500/30 gap-1"
@@ -3743,7 +3748,7 @@ const RentalDetail = () => {
         }
 
         // Add Supercharger row if charges exist or vehicle is Tesla Fleet enabled
-        if (teslaCharges.chargeCount > 0) {
+        if (teslaCharges.chargeCount > 0 && !teslaHidden) {
           rows.push({
             label: 'Supercharger',
             category: 'Supercharger',
@@ -7559,7 +7564,7 @@ const RentalDetail = () => {
       </Dialog>
 
       {/* Supercharger Charges Dialog */}
-      <SuperchargerChargesDialog
+      {!teslaHidden && <SuperchargerChargesDialog
         open={showSuperchargerDialog}
         onOpenChange={setShowSuperchargerDialog}
         charges={teslaCharges.charges}
@@ -7590,7 +7595,7 @@ const RentalDetail = () => {
           setSelectedCategories(new Set(['Supercharger']));
           setShowTargetedPayment(true);
         }}
-      />
+      />}
 
       {/* Rejection Dialog */}
       {rental && (

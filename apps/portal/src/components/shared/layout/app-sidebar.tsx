@@ -473,6 +473,11 @@ export function AppSidebar() {
                 ...group,
                 items: group.items.filter(item =>
                   canViewSettings(item.value) &&
+                  // Tesla Fleet is hidden from the lean canary and that tenant
+                  // alone. Presentation only — the settings tab, the edge
+                  // functions and the hourly Supercharger sync all stay put for
+                  // Jangram and every other operator running Teslas.
+                  !(item.value === 'tesla' && isAreaHidden('tesla', tenantSlug)) &&
                   (query === "" || item.label.toLowerCase().includes(query))
                 ),
               }))

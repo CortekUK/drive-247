@@ -42,7 +42,7 @@ import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
-import { isLeanTenant } from '@/lib/lean-areas';
+import { isAreaHidden, isLeanTenant } from '@/lib/lean-areas';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { CommunicationSettings } from '@/components/settings/communication-settings';
@@ -213,6 +213,12 @@ const Settings = () => {
   // the other side. Hidden here; the mode itself is forced live server-side in
   // every BoldSign resolution point (see resolveBoldSignMode in lib/lean-areas).
   const hideESignModeToggle = isLeanTenant(tenantSlug);
+
+  // Tesla Fleet is hidden from the lean canary and from that tenant ONLY.
+  // Everything behind this tab stays on main and keeps serving the operators
+  // who actually run Teslas — Jangram bills Supercharger sessions through it
+  // hourly. Presentation-layer gate, exactly like Enquiries/Leads/Automations.
+  const hideTeslaTab = isAreaHidden('tesla', tenantSlug);
 
   // Vehicle Owners + Owner Payouts feature toggle
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -1797,6 +1803,8 @@ const Settings = () => {
                 // Lean tenants: no E-Sign tab — its only content is the
                 // test/live mode toggle, and lean tenants are always live.
                 .filter(item => !(item.value === 'esign' && hideESignModeToggle))
+                // Lean tenants: no Tesla Fleet tab.
+                .filter(item => !(item.value === 'tesla' && hideTeslaTab))
                 .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
@@ -5244,7 +5252,9 @@ const Settings = () => {
 
         {/* Tesla Fleet Tab */}
         <TabsContent value="tesla" className="space-y-6">
-          <TeslaFleetSettings />
+          {/* Guarded here as well as on the trigger so ?tab=tesla typed
+              directly cannot surface the connect flow for a lean tenant. */}
+          {!hideTeslaTab && <TeslaFleetSettings />}
         </TabsContent>
 
         {/* Blacklist Tab */}

@@ -56,3 +56,67 @@ describe("isAreaHidden", () => {
     expect(isAreaHidden("leads", "northwind-2")).toBe(false);
   });
 });
+
+/**
+ * Tesla Fleet, called out on its own because the cost of getting it wrong is
+ * already known. The integration was DELETED from main rather than gated, and
+ * Jangram Rentals — a live Denver operator with 6 Teslas, 5 wired to the Fleet
+ * API — lost automatic Supercharger billing until it was restored (c37e0f55).
+ *
+ * So the assertion that matters here is not "northwind is hidden". It is that
+ * NO other tenant is: jangramrentals and openbayrental both have
+ * `integration_tesla_fleet = true` in production today, and the `test` tenant
+ * carries 9 wired vehicles. Any of them turning true is an outage, not a
+ * cosmetic regression.
+ */
+describe("isAreaHidden('tesla')", () => {
+  it("is a real member of LEAN_HIDDEN_AREAS", () => {
+    // A typo'd or missing area is not a compile error at runtime — isAreaHidden
+    // returns false for anything it does not recognise (fail-open). So the
+    // membership itself has to be asserted, or the gate silently never fires.
+    expect(LEAN_HIDDEN_AREAS).toContain("tesla");
+  });
+
+  it("hides Tesla Fleet from the northwind canary", () => {
+    expect(isAreaHidden("tesla", "northwind")).toBe(true);
+  });
+
+  it("hides Tesla Fleet from NO ONE else", () => {
+    // jangramrentals is the operator the removal actually broke; openbayrental
+    // has the integration connected; `test` is the internal tenant with 9 wired
+    // Teslas. The rest are ordinary paying tenants.
+    for (const slug of [
+      "jangramrentals",
+      "openbayrental",
+      "test",
+      "goniko",
+      "revtekrentals",
+      "globalmotiontransport",
+      "eastpeakrentalsllc",
+    ]) {
+      expect(isAreaHidden("tesla", slug)).toBe(false);
+    }
+  });
+
+  it("fails open on an unresolved slug", () => {
+    // TenantContext leaves the slug null for a tick on first paint. Hiding the
+    // tab during that tick would flicker it away from Jangram on every load.
+    expect(isAreaHidden("tesla", null)).toBe(false);
+    expect(isAreaHidden("tesla", undefined)).toBe(false);
+    expect(isAreaHidden("tesla", "")).toBe(false);
+  });
+
+  it("keys on the slug, never on a tenant id", () => {
+    // northwind is 6e5c544f-… in production and 8e6bc88f-… on the seeded
+    // staging branch. An id-keyed gate resolves to the ungated path on
+    // localhost with no error and no failed build.
+    expect(isAreaHidden("tesla", "6e5c544f-b374-451f-a662-360a634bff15")).toBe(false);
+    expect(isAreaHidden("tesla", "8e6bc88f-86d6-4468-8610-73f7c8a88f6e")).toBe(false);
+  });
+
+  it("is case- and whitespace-exact", () => {
+    expect(isAreaHidden("tesla", "Northwind")).toBe(false);
+    expect(isAreaHidden("tesla", " northwind")).toBe(false);
+    expect(isAreaHidden("tesla", "northwind-2")).toBe(false);
+  });
+});

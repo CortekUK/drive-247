@@ -48,6 +48,7 @@ import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { TraxIcon } from "@/components/chat/TraxIcon";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
@@ -175,7 +176,9 @@ export default function VehicleDetail() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { logAction } = useAuditLog();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // Hidden from the lean canary only; every other tenant keeps the card.
+  const teslaHidden = isAreaHidden('tesla', tenantSlug);
   const queryClient = useQueryClient();
   const { settings: rentalSettings } = useRentalSettings();
   const { canEdit } = useManagerPermissions();
@@ -664,7 +667,7 @@ export default function VehicleDetail() {
 
 
           {/* Tesla Fleet API Section */}
-          {tenant?.integration_tesla_fleet && (
+          {tenant?.integration_tesla_fleet && !teslaHidden && (
             <div className="mb-6">
               <Card className="shadow-card rounded-lg border-red-200/50 dark:border-red-900/30">
                 <CardHeader className="pb-3">

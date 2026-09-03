@@ -55,8 +55,20 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * had it. Hiding it from the canary belongs here, in the presentation layer,
  * exactly like the other three — the route, hook and pricing rules stay on
  * main and keep serving everyone else.
+ *
+ * `tesla` is the same story, and a costlier one. The Tesla Fleet integration
+ * was DELETED from main (2ee1fd13 + 40dbdcbb, both reverted in c37e0f55)
+ * rather than gated. Jangram Rentals — a live Denver operator with 6 Teslas,
+ * 5 of them wired to the Fleet API — lost automatic Supercharger billing for
+ * the duration: no hourly poll, no session-to-rental matching, no Supercharger
+ * line to Charge or Waive. Open Bay Rental also has the integration connected.
+ * Only the UI is gated here; the edge functions, `tesla-sync-engine` and cron
+ * job 36 `sync-tesla-charges-hourly` are deliberately NOT touched, because the
+ * canary has no Tesla vehicles and no Tesla connection — the server side is
+ * already inert for it, and reaching into that path would put the very billing
+ * we just repaired back at risk.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes'] as const;
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 
