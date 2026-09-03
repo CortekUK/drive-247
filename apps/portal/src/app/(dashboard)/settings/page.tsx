@@ -42,6 +42,7 @@ import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
+import { isLeanTenant } from '@/lib/lean-areas';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { CommunicationSettings } from '@/components/settings/communication-settings';
@@ -205,7 +206,13 @@ const Settings = () => {
   } = useOrgSettings();
 
   // Get tenant context for ID and refetch
-  const { tenant, refetchTenant } = useTenant();
+  const { tenant, refetchTenant, tenantSlug } = useTenant();
+
+  // Lean tenants have no test modes — BoldSign is always live for them, so the
+  // self-serve test/live e-signature toggle would be a switch with nothing on
+  // the other side. Hidden here; the mode itself is forced live server-side in
+  // every BoldSign resolution point (see resolveBoldSignMode in lib/lean-areas).
+  const hideESignModeToggle = isLeanTenant(tenantSlug);
 
   // Vehicle Owners + Owner Payouts feature toggle
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -1785,7 +1792,12 @@ const Settings = () => {
                 { value: 'tesla', icon: Zap, label: 'Tesla' },
                 { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
-              ] as const).filter(item => canViewSettings(item.value)).map(item => (
+              ] as const)
+                .filter(item => canViewSettings(item.value))
+                // Lean tenants: no E-Sign tab — its only content is the
+                // test/live mode toggle, and lean tenants are always live.
+                .filter(item => !(item.value === 'esign' && hideESignModeToggle))
+                .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
                 </TabsTrigger>
@@ -5224,7 +5236,10 @@ const Settings = () => {
 
         {/* E-Signatures Tab */}
         <TabsContent value="esign" className="space-y-6">
-          <ESignSettings />
+          {/* Hidden for lean tenants — always live, so there is nothing to toggle.
+              Guarded here as well as on the tab trigger so ?tab=esign typed
+              directly cannot surface the switch. */}
+          {!hideESignModeToggle && <ESignSettings />}
         </TabsContent>
 
         {/* Tesla Fleet Tab */}

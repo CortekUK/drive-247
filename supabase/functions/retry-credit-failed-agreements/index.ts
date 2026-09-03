@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
+import { resolveBoldSignMode } from '../_shared/lean-tenants.ts';
 
 /**
  * retry-credit-failed-agreements
@@ -70,7 +71,8 @@ async function processRental(supabase: Supa, rentalId: string): Promise<Record<s
   if (!email || !name) return { skipped: 'missing_customer_contact' };
 
   const tenant = rental.tenants as { slug?: string; boldsign_mode?: string } | null;
-  const boldsignMode = tenant?.boldsign_mode || 'test';
+  // Lean tenants are always live, whatever the column says.
+  const boldsignMode = resolveBoldSignMode(tenant?.boldsign_mode, tenant?.slug);
   const isLive = boldsignMode !== 'test';
 
   // Idempotency: is a valid agreement already covering the current full period?

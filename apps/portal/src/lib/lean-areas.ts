@@ -63,5 +63,42 @@ export function isAreaHidden(
 ): boolean {
   if (!tenantSlug) return false;
   if (!LEAN_HIDDEN_AREAS.includes(area)) return false;
+  return isLeanTenant(tenantSlug);
+}
+
+/**
+ * Is this tenant on the lean v2 product?
+ *
+ * Same fail-open contract as `isAreaHidden`: an unresolved slug is NOT lean, so
+ * every gate built on this keeps v1 behaviour until the tenant is known.
+ */
+export function isLeanTenant(tenantSlug: string | null | undefined): boolean {
+  if (!tenantSlug) return false;
   return LEAN_TENANTS.includes(tenantSlug);
+}
+
+/**
+ * The lean product has NO test modes — BoldSign is always live.
+ *
+ * Resolves the mode a *tenant* signs in. Lean tenants get `live` whatever
+ * `tenants.boldsign_mode` says; everyone else keeps the historical default of
+ * `test` unless the column explicitly says `live`.
+ *
+ * SCOPE — tenant-level resolution only. Callers still prefer the mode recorded
+ * on the agreement/rental row when there is one, and that history is NOT
+ * rewritten: a document created in the BoldSign sandbox must keep being read
+ * with the sandbox key or it 404s. New records for a lean tenant simply record
+ * `live`, because creation resolves through here.
+ *
+ * Mirrored, because the three runtimes cannot share a module:
+ *  - booking : apps/booking/src/lib/lean-tenants.ts
+ *  - edge fns: supabase/functions/_shared/lean-tenants.ts
+ * Every mirror must carry the same tenant list.
+ */
+export function resolveBoldSignMode(
+  tenantMode: string | null | undefined,
+  tenantSlug: string | null | undefined,
+): 'test' | 'live' {
+  if (isLeanTenant(tenantSlug)) return 'live';
+  return tenantMode === 'live' ? 'live' : 'test';
 }

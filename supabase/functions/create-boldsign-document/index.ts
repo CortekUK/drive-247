@@ -7,6 +7,7 @@ import { resolveAgreementMileage } from '../_shared/agreement-mileage.ts';
 import { fetchTenantTermsBlock } from '../_shared/agreement-terms.ts';
 import { injectAgreementClauses } from '../_shared/agreement-injection.ts';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '../_shared/bonzah-addendum.ts';
+import { resolveBoldSignMode } from '../_shared/lean-tenants.ts';
 
 interface CreateDocumentRequest {
   rentalId: string;
@@ -908,11 +909,15 @@ Deno.serve(async (req) => {
     if (tenantId) {
       const { data: tenantInfo } = await supabase
         .from('tenants')
-        .select('currency_code, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
+        // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
+        .select('slug, currency_code, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id')
         .eq('id', tenantId)
         .single();
       if (tenantInfo?.currency_code) _currencyCode = tenantInfo.currency_code;
-      if (tenantInfo?.boldsign_mode) boldsignMode = tenantInfo.boldsign_mode as BoldSignMode;
+      // Lean tenants are always live, whatever the column says. This is a CREATE
+      // path, so the mode chosen here is recorded on the agreement row and is
+      // what the webhook later uses to download the signed PDF.
+      boldsignMode = resolveBoldSignMode(tenantInfo?.boldsign_mode, tenantInfo?.slug);
       const brandId = getBoldSignBrandId(tenantInfo || {}, boldsignMode);
       if (brandId) tenantBrandId = brandId;
     }

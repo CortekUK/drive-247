@@ -8,6 +8,7 @@ import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
+import { resolveBoldSignMode } from '@/lib/lean-areas';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -1289,7 +1290,8 @@ export async function POST(request: NextRequest) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
-                .select('company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled')
+                // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
+                .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
@@ -1473,7 +1475,14 @@ export async function POST(request: NextRequest) {
         const pdfBytes = await pdfDoc.save();
 
         // ── Resolve BoldSign mode + API key ──
-        const boldsignMode: 'test' | 'live' = tenant?.boldsign_mode || 'test';
+        // Lean tenants are always live (no test modes), whatever the column says.
+        // This is the CREATE path, so the mode chosen here is what gets recorded
+        // on the agreement/rental rows below — which is how the webhook later
+        // downloads the signed PDF with the matching key.
+        const boldsignMode: 'test' | 'live' = resolveBoldSignMode(
+            tenant?.boldsign_mode,
+            (tenant as { slug?: string | null } | null)?.slug,
+        );
         outerMode = boldsignMode;
         outerRental = rental;
         const BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);

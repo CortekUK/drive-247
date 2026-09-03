@@ -2,6 +2,7 @@
 // Mirrors pattern from stripe-client.ts
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
+import { resolveBoldSignMode } from './lean-tenants.ts';
 
 export type BoldSignMode = 'test' | 'live';
 
@@ -28,7 +29,12 @@ export function getBoldSignBaseUrl(): string {
 }
 
 /**
- * Get tenant's BoldSign mode from database
+ * Get tenant's BoldSign mode from database.
+ *
+ * Lean tenants are ALWAYS live — the lean product has no test modes — so the
+ * `boldsign_mode` column is overridden for them here. `slug` is selected purely
+ * to feed that gate, which is slug-keyed because a tenant's id differs per
+ * environment.
  */
 export async function getTenantBoldSignMode(
   supabase: SupabaseClient,
@@ -36,7 +42,7 @@ export async function getTenantBoldSignMode(
 ): Promise<BoldSignMode> {
   const { data, error } = await supabase
     .from('tenants')
-    .select('boldsign_mode')
+    .select('boldsign_mode, slug')
     .eq('id', tenantId)
     .single();
 
@@ -45,7 +51,7 @@ export async function getTenantBoldSignMode(
     return 'test';
   }
 
-  return (data.boldsign_mode as BoldSignMode) || 'test';
+  return resolveBoldSignMode(data.boldsign_mode as string | null, data.slug as string | null);
 }
 
 /**
