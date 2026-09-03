@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ import {
 
 import { useFleetHealth, useFleetHealthStats, useRecomputeFleetHealth } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 // The column below renders vehicles.current_mileage, which Fleet Health stores
 // in miles for every tenant. It was printed raw under a unit-less "Mileage"
 // header, so a km tenant read a mile count with nothing saying so.
@@ -97,7 +99,7 @@ export default function FleetHealthPage() {
   const [setupDismissed, setSetupDismissed] = useState(false);
 
   const [odometerFor, setOdometerFor] = useState<VehicleHealthRow | null>(null);
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const [scheduleFor, setScheduleFor] = useState<VehicleHealthRow | null>(null);
   const [completing, setCompleting] = useState<MaintenanceJob | null>(null);
@@ -128,6 +130,19 @@ export default function FleetHealthPage() {
    * Show the setup screen instead of the table.
    */
   const showSetup = stats.shouldShowSetup && !setupDismissed;
+
+  // Load-bearing, and NOT redundant with the two sidebar gates or the Settings
+  // toggle. Hiding a nav entry hides the link, not the page: typing /fleet-health,
+  // following a bookmark, or restoring a pinned tab would still render the whole
+  // fleet list. The sidebars decide what is offered; this decides what exists.
+  //
+  // Placed after the hooks above rather than at the top of the component so the
+  // hook order is identical on every render — the same shape quotes/page.tsx and
+  // enquiries/page.tsx already use.
+  //
+  // Fails open on an unresolved slug (see isAreaHidden), so the tenants running
+  // Fleet Health keep it during the first-paint tick before TenantContext resolves.
+  if (isAreaHidden("fleet-health", tenantSlug)) notFound();
 
   return (
     <div className="container mx-auto space-y-6 p-6">

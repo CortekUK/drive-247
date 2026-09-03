@@ -178,7 +178,7 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * `settings.accounting` mapping would EXPOSE the tab to every manager,
  * including those never granted it. Removing the key widens access.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners', 'expenses', 'accounting'] as const;
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners', 'expenses', 'accounting', 'fleet-health'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 

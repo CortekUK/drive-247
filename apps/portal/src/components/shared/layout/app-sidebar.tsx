@@ -176,8 +176,14 @@ export function AppSidebar() {
   // no refetch. `=== true` keeps the item hidden while that query is still in flight
   // rather than flashing a nav entry the tenant has not turned on.
   const { settings: rentalSettings } = useRentalSettings();
+  // The lean gate is applied here as well as in useFleetHealthEnabled(): both
+  // sidebars compute this inline from the rental-settings row rather than calling
+  // that hook, so the hook's choke point does not reach them. Northwind renders
+  // app-sidebar-v2; the other 35 render app-sidebar. Gating one proves nothing
+  // about the other.
   const fleetHealthEnabled =
-    (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true;
+    (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true &&
+    !isAreaHidden("fleet-health", tenantSlug);
   // Fleet Health alerting is pull-only by design — nothing is emailed or pushed —
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();

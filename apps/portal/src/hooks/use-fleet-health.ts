@@ -3,6 +3,7 @@ import { supabaseUntyped as supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
+import { isAreaHidden } from "@/lib/lean-areas";
 import type {
   VehicleHealthRow,
   VehicleHealthStatus,
@@ -41,9 +42,23 @@ function invalidateFleetHealth(qc: ReturnType<typeof useQueryClient>) {
  *
  * The column defaults to false, so without this gate the feature would effectively
  * ship on for every tenant on the platform with only its navigation hidden.
+ *
+ * ALSO the single choke point for the lean-product gate, and deliberately so.
+ * Every Fleet Health affordance outside the `/fleet-health` route itself already
+ * asks this one question before rendering — the Health column and filter on the
+ * vehicles list, the whole Fleet Health card on vehicle detail (with its Record
+ * odometer / Schedule / Report issue buttons and the maintenance-rules editor),
+ * and the health chip on the vehicle picker in rentals/new. Gating HERE closes
+ * all of them at once and cannot be missed the next time one is added, which
+ * gating each call site individually could.
+ *
+ * Presentation only: `tenants.fleet_health_enabled` is untouched, cron 66
+ * `evaluate-fleet-health` keeps running, and every other tenant is unaffected.
  */
 export function useFleetHealthEnabled(): boolean {
   const { settings } = useRentalSettings();
+  const { tenantSlug } = useTenant();
+  if (isAreaHidden("fleet-health", tenantSlug)) return false;
   return (
     (settings as unknown as { fleet_health_enabled?: boolean } | null)
       ?.fleet_health_enabled === true
