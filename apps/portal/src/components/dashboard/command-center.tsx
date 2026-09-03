@@ -13,6 +13,8 @@ import {
   Rocket,
   Info,
   Coins,
+  ShieldCheck,
+  IdCard,
 } from "lucide-react";
 import {
   Tooltip,
@@ -126,6 +128,15 @@ function WhatsAppMark() {
   return <img src="/whatsapp-logo.svg" alt="" className="h-[18px] w-auto" />;
 }
 
+function CMDMark() {
+  return (
+    <>
+      <img src="/cmd-logo.svg" alt="" className="h-4 w-auto dark:hidden" />
+      <img src="/cmd-logo-dark.svg" alt="" className="h-4 w-auto hidden dark:block" />
+    </>
+  );
+}
+
 const brandMarks: Record<string, React.ReactNode> = {
   subscription: <StripeMark />,
   "stripe-connect": <StripeMark />,
@@ -137,6 +148,8 @@ const brandMarks: Record<string, React.ReactNode> = {
 const comingSoonBrands: Record<string, React.ReactNode> = {
   twilio: <TwilioMark />,
   whatsapp: <WhatsAppMark />,
+  "cmd-driver": <IdCard className="h-4 w-4 text-cyan-500" />,
+  "cmd-insurance": <ShieldCheck className="h-4 w-4 text-emerald-500" />,
 };
 
 // --- Info tooltips for integrations ---
