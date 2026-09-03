@@ -31,7 +31,6 @@ import {
   Activity,
   HeartPulse,
   BookOpen,
-  Layers,
 } from 'lucide-react';
 
 interface NavItem {
@@ -101,9 +100,6 @@ function useNavigation() {
     {
       label: 'Configuration',
       items: [
-        // Platform-level, not per-tenant: this controls which tenants see the
-        // v2 rewrite, so it sits with Settings rather than in Management.
-        { name: 'V2 Control Center', href: '/admin/v2-control-center', icon: Layers },
         { name: 'Settings', href: '/admin/settings', icon: Settings },
         ...(user?.is_primary_super_admin
           ? [{ name: 'Manage Admins', href: '/admin/admins', icon: Users }]
