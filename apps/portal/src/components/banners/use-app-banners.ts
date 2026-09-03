@@ -38,17 +38,15 @@ import { useMemo } from "react";
 
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import type { AppBanner } from "./banner-types";
-import { useAccountingBanners } from "./sources/accounting-banners";
 import { useDepositHoldBanners } from "./sources/deposit-hold-banners";
 
 export function useAppBanners(): AppBanner[] {
   // Hooks first, unconditionally, in a stable order.
   const deposit = useDepositHoldBanners();
-  const accounting = useAccountingBanners();
   const { canView } = useManagerPermissions();
 
   return useMemo(() => {
-    const all: AppBanner[] = [...deposit, ...accounting];
+    const all: AppBanner[] = [...deposit];
 
     return all.filter((b) => (b.requiresTab ? canView(b.requiresTab) : true));
     // `canView` is rebuilt on every render of the permissions hook, so it is
@@ -56,5 +54,5 @@ export function useAppBanners(): AppBanner[] {
     // permission data it closes over is what actually changes, and that
     // re-renders this hook anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deposit, accounting]);
+  }, [deposit]);
 }

@@ -1,5 +1,13 @@
 /**
- * Finance Sync — tenant resolution for the accounting edge functions.
+ * Tenant resolution for edge functions that must work for super admins too.
+ *
+ * Previously `_shared/accounting/resolve-tenant.ts`. It was written for the
+ * Xero/Zoho accounting functions, but it is provider-agnostic and outlived
+ * them: when that integration was parked, `get-vehicle-profitability` — which
+ * reads the LIVE `pnl_entries` table and is not part of accounting — was still
+ * importing it, so the module moved up to `_shared/` rather than being deleted.
+ * The history below is kept because it is the reason the rules are what they
+ * are, not because accounting is still here.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * Why this exists
