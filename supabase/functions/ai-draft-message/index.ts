@@ -17,7 +17,7 @@ interface Payload {
   leadId?: string;
   intent?: Intent;
   customPrompt?: string;
-  channelHint?: "sms" | "email" | "whatsapp";
+  channelHint?: "sms" | "email";
 }
 
 async function hashString(s: string): Promise<string> {

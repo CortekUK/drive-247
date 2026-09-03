@@ -27,7 +27,6 @@ interface InsurancePolicy {
     name: string;
     email: string | null;
     phone: string | null;
-    whatsapp_opt_in: boolean;
   };
   vehicles: {
     reg: string;
@@ -100,7 +99,7 @@ Deno.serve(async (req) => {
       .from('insurance_policies')
       .select(`
         *, tenant_id,
-        customers!inner(name, email, phone, whatsapp_opt_in),
+        customers!inner(name, email, phone),
         vehicles(reg, make, model)
       `)
       .eq('status', 'Active')

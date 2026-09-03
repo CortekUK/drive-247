@@ -15,7 +15,7 @@ interface Props {
   leadId: string;
   lead: LeadRow;
   conversation: ConversationRow | null;
-  composerChannel?: "sms" | "email" | "whatsapp" | "note";
+  composerChannel?: "sms" | "email" | "note";
 }
 
 export function LeadCommunicationPanel({ leadId, lead, conversation, composerChannel }: Props) {

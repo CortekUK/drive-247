@@ -66,7 +66,7 @@ export function LeadWorkspace({ leadId }: Props) {
   const { data: lead, isLoading, error } = useLead(leadId);
   const { data: conversation } = useLeadConversation(leadId);
   const updateStage = useUpdateLeadStage();
-  const [composerChannel, setComposerChannel] = useState<"sms" | "email" | "whatsapp" | "note">("sms");
+  const [composerChannel, setComposerChannel] = useState<"sms" | "email" | "note">("sms");
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerVehicles, setOfferVehicles] = useState<string[]>([]);
   const [convertOpen, setConvertOpen] = useState(false);

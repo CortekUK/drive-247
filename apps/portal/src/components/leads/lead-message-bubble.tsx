@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 const CHANNEL_STYLES: Record<ConversationMessage["channel"], { Icon: typeof Phone; bg: string }> = {
   sms: { Icon: Phone, bg: "bg-emerald-50" },
   email: { Icon: Mail, bg: "bg-blue-50" },
-  whatsapp: { Icon: MessageSquare, bg: "bg-green-50" },
   in_app: { Icon: MessageSquare, bg: "bg-indigo-50" },
   note: { Icon: FileText, bg: "bg-yellow-100" },
   system: { Icon: Bot, bg: "bg-zinc-100" },

@@ -25,7 +25,7 @@ interface LockboxSendTimelineProps {
 interface LogEntry {
   id: string;
   event_type: 'scheduled' | 'sent' | 'resent' | 'rescheduled' | 'failed';
-  channel: 'email' | 'sms' | 'whatsapp';
+  channel: 'email' | 'sms';
   scheduled_for: string | null;
   sent_by_name: string | null;
   details: string | null;
@@ -43,7 +43,6 @@ const eventConfig: Record<string, { icon: typeof Clock; color: string; label: st
 const channelIcons: Record<string, typeof Mail> = {
   email: Mail,
   sms: MessageCircle,
-  whatsapp: MessageCircle,
 };
 
 export function LockboxSendTimeline({ rentalId, scheduledSendTime }: LockboxSendTimelineProps) {

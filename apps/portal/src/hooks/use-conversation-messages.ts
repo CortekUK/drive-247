@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRealtimeInvalidate } from "./use-realtime-invalidate";
 
-export type MessageChannel = "sms" | "email" | "whatsapp" | "in_app" | "note" | "system" | "call_summary";
+export type MessageChannel = "sms" | "email" | "in_app" | "note" | "system" | "call_summary";
 export type MessageDirection = "inbound" | "outbound" | "internal";
 export type MessageSenderType = "lead" | "customer" | "staff" | "system" | "ai";
 export type MessageStatus = "queued" | "sent" | "delivered" | "read" | "failed";

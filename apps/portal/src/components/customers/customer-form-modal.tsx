@@ -31,7 +31,6 @@ interface Customer {
   email: string | null;
   phone: string | null;
   status: string;
-  whatsapp_opt_in: boolean;
   date_of_birth?: string;
   license_number?: string;
   id_number?: string;
@@ -108,7 +107,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       license_number: "",
       id_number: "",
       is_gig_driver: false,
-      whatsapp_opt_in: false,
       status: "Active",
       notes: "",
       nok_full_name: "",
@@ -138,7 +136,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         license_number: customer.license_number || "",
         id_number: customer.id_number || "",
         is_gig_driver: customer.is_gig_driver || false,
-        whatsapp_opt_in: customer.whatsapp_opt_in,
         status: customer.status as "Active" | "Inactive",
         notes: "",
         nok_full_name: customer.nok_full_name || "",
@@ -160,7 +157,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         license_number: "",
         id_number: "",
         is_gig_driver: false,
-        whatsapp_opt_in: false,
         status: "Active",
         notes: "",
         nok_full_name: "",
@@ -183,7 +179,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
       license_number: string;
       id_number: string;
       status?: 'Active' | 'Inactive';
-      whatsapp_opt_in?: boolean;
       notes?: string;
     }>) => {
       const data = e.detail;
@@ -196,7 +191,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
 
       // Fill additional fields if provided
       if (data.status) form.setValue('status', data.status);
-      if (data.whatsapp_opt_in !== undefined) form.setValue('whatsapp_opt_in', data.whatsapp_opt_in);
       if (data.notes) form.setValue('notes', data.notes);
 
       // Trigger validation
@@ -403,7 +397,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
         license_number: data.license_number || null,
         id_number: data.id_number || null,
         is_gig_driver: data.is_gig_driver,
-        whatsapp_opt_in: data.whatsapp_opt_in,
         status: data.status,
         nok_full_name: data.nok_full_name || null,
         nok_relationship: data.nok_relationship || null,

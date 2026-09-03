@@ -14,7 +14,6 @@ import { Separator } from "@/components/ui/separator";
 import {
   Mail,
   Phone,
-  MessageSquare,
   User,
   Calendar,
   FileText,
@@ -32,7 +31,6 @@ interface Customer {
   status?: string | null;
   license_number?: string | null;
   id_number?: string | null;
-  whatsapp_opt_in?: boolean | null;
   rejection_reason?: string | null;
   rejected_at?: string | null;
   rejected_by?: string | null;
@@ -127,12 +125,6 @@ export function RejectedCustomerDialog({
                   {customer.created_at
                     ? format(new Date(customer.created_at), "MMM dd, yyyy")
                     : "—"}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">WhatsApp</p>
-                <p className="text-sm">
-                  {customer.whatsapp_opt_in ? "Opted In" : "Not opted in"}
                 </p>
               </div>
             </div>
@@ -236,23 +228,6 @@ export function RejectedCustomerDialog({
                   <a href={`tel:${customer.phone}`}>
                     <Phone className="h-4 w-4 mr-2" />
                     Call
-                  </a>
-                </Button>
-              )}
-              {customer.phone && customer.whatsapp_opt_in && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  className="text-green-600 border-green-200 hover:bg-green-50"
-                >
-                  <a
-                    href={`https://wa.me/${customer.phone.replace(/\D/g, "")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    WhatsApp
                   </a>
                 </Button>
               )}

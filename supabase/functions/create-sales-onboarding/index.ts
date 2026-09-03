@@ -146,7 +146,7 @@ function isHttpUrl(value: string): boolean {
 
 /**
  * Digits plus an optional leading `+`. We deliberately do NOT guess a country
- * code — a wrong prefix silently breaks SMS/WhatsApp delivery later.
+ * code — a wrong prefix silently breaks SMS delivery later.
  */
 function normalizePhone(raw: string): string {
   const plus = raw.trim().startsWith("+") ? "+" : "";
@@ -588,7 +588,6 @@ function buildCmsContent(t: ContentVars): Record<string, Record<string, unknown>
         phone: { number: t.phoneHref, availability: t.hours || "Contact us for availability" },
         email: { address: t.email, response_time: "We reply as quickly as we can" },
         office: { address: t.location || "" },
-        whatsapp: { number: t.phoneHref, description: "Message us for a quick reply" },
       },
       contact_form: {
         title: "Send Us a Message",
@@ -1015,7 +1014,7 @@ Deno.serve(async (req) => {
       return errorResponse("Logo URL must be a valid http(s) URL", 400);
     }
 
-    // Phone is optional, but a malformed one silently breaks SMS/WhatsApp later.
+    // Phone is optional, but a malformed one silently breaks SMS later.
     const phoneDigits = rawPhone.replace(/\D/g, "");
     if (rawPhone && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
       return errorResponse("Business phone must have between 7 and 15 digits", 400);

@@ -133,21 +133,6 @@ const PREVIEW_ANNOUNCEMENTS: FeatureAnnouncement[] = [
     sort_priority: 80,
     audience_filter: null,
   },
-  {
-    id: 'preview-whatsapp',
-    title: 'WhatsApp',
-    summary: 'Send collection details, lockbox codes and photos over WhatsApp.',
-    body_html:
-      '<p>Collection instructions, the lockbox code and up to ten photos go out as a single WhatsApp message instead of a chain of texts.</p><p>Falls back to SMS automatically when a number is not reachable on WhatsApp.</p>',
-    image_url: null,
-    cta_label: null,
-    cta_url: null,
-    severity: 'minor',
-    published_at: null,
-    expires_at: null,
-    sort_priority: 70,
-    audience_filter: null,
-  },
 ];
 
 function readDismissed(): string[] {

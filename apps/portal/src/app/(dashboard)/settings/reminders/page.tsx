@@ -102,7 +102,7 @@ export default function ReminderSettings() {
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm">
-              <strong>Future Ready:</strong> Email and WhatsApp delivery will be enabled when external APIs are connected.
+              <strong>Future Ready:</strong> Email delivery will be enabled when external APIs are connected.
             </p>
           </div>
         </CardContent>

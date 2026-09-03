@@ -25,7 +25,7 @@ interface GenericPayload {
   from?: string;
   to?: string;
   body?: string;
-  channel?: "sms" | "whatsapp";
+  channel?: "sms";
 }
 
 interface SnsEnvelope {
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
             phone: payload.from,
             application_data: { submissions: [{ submittedAt: new Date().toISOString(), source: "inbound_sms" }] },
             stage: "new",
-            source: payload.channel === "whatsapp" ? "inbound_whatsapp" : "inbound_sms",
+            source: "inbound_sms",
             source_metadata: { firstMessage: payload.body },
           })
           .select("id")
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
     await supabase.from("conversation_messages").insert({
       tenant_id: tenantId,
       conversation_id: conv.id,
-      channel: payload.channel === "whatsapp" ? "whatsapp" : "sms",
+      channel: "sms",
       direction: "inbound",
       sender_type: "lead",
       body: payload.body,

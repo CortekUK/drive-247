@@ -30,7 +30,7 @@ interface Payload {
   depositAmount?: number;
   showPrices?: boolean;
   expiresInHours?: number;
-  sendMethod?: "sms" | "email" | "whatsapp" | "copy";
+  sendMethod?: "sms" | "email" | "copy";
 }
 
 function nanoCode(size = 8): string {

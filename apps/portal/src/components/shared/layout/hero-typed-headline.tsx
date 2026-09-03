@@ -73,7 +73,7 @@ const FEATURES: Feature[] = [
     before: "Hand over keys with a ",
     key: "code",
     after: ".",
-    sub: "Lockbox collection, with the code sent by email, SMS or WhatsApp as the rental starts.",
+    sub: "Lockbox collection, with the code sent by email or SMS as the rental starts.",
   },
   {
     before: "Your whole ",
@@ -103,7 +103,7 @@ const FEATURES: Feature[] = [
     before: "One ",
     key: "inbox",
     after: " for every customer.",
-    sub: "Chat, SMS and WhatsApp in one thread, tied to the booking it belongs to.",
+    sub: "Chat and SMS in one thread, tied to the booking it belongs to.",
   },
 ];
 

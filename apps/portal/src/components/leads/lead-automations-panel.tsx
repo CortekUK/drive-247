@@ -155,7 +155,7 @@ export function LeadAutomationsPanel({ lead }: Props) {
         },
       );
       if (docErr) throw docErr;
-      // 2. Notify the lead via email + WhatsApp
+      // 2. Notify the lead via email
       if (doc?.documentId) {
         await supabase.functions.invoke("send-signing-email", {
           body: {

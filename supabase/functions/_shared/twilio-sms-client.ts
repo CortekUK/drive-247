@@ -1,20 +1,10 @@
 // Twilio SMS Client — BYO (Bring Your Own) model
 // Tenants connect their own Twilio account. We store their Account SID + Auth Token
 // and call Twilio's API on their behalf. Twilio bills them directly.
-//
-// WhatsApp still uses the platform's parent Twilio account via env vars
-// (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN). This file exposes BOTH paths:
-//   - getTenantTwilioCredentials / sendTenantSMS → tenant's own creds
-//   - sendTwilioWhatsApp → platform env var creds
 
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
 const TWILIO_API_BASE = 'https://api.twilio.com/2010-04-01';
-
-// Platform-level credentials — ONLY used by Twilio WhatsApp (senders are registered
-// at the parent account level and cannot live on tenant BYO accounts).
-const PLATFORM_ACCOUNT_SID = () => Deno.env.get('TWILIO_ACCOUNT_SID') || '';
-const PLATFORM_AUTH_TOKEN = () => Deno.env.get('TWILIO_AUTH_TOKEN') || '';
 
 export interface TenantTwilioCredentials {
   sid: string;
@@ -217,89 +207,6 @@ export async function sendTenantSMS(
     console.error('[Twilio] SMS send error:', err.message);
     return { success: false, error: err.message };
   }
-}
-
-// --- Platform-level WhatsApp (still uses env var creds) ---
-
-/**
- * Send WhatsApp message via the platform's parent Twilio account.
- * WhatsApp senders are registered at the parent account level in Twilio,
- * not on BYO tenant accounts. So we always use platform env var credentials.
- *
- * If contentSid + contentVariables are provided, sends a pre-approved template
- * (works without 24-hour window). Otherwise falls back to free-form body text.
- */
-export async function sendTwilioWhatsApp(
-  _credentials: TenantTwilioCredentials,
-  whatsappFromNumber: string,
-  to: string,
-  body: string,
-  contentSid?: string,
-  contentVariables?: Record<string, string>
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const platformSid = PLATFORM_ACCOUNT_SID();
-  const platformToken = PLATFORM_AUTH_TOKEN();
-
-  if (!platformSid || !platformToken) {
-    return { success: false, error: 'Twilio platform account not configured' };
-  }
-
-  if (!whatsappFromNumber) {
-    return { success: false, error: 'No WhatsApp sender number configured for this tenant' };
-  }
-
-  try {
-    const normalizedTo = normalizePhoneNumber(to);
-    const messageParams: Record<string, string> = {
-      To: `whatsapp:${normalizedTo}`,
-      From: `whatsapp:${whatsappFromNumber}`,
-    };
-
-    if (contentSid) {
-      // Use pre-approved Content Template — works outside 24-hour window
-      messageParams.ContentSid = contentSid;
-      if (contentVariables) {
-        messageParams.ContentVariables = JSON.stringify(contentVariables);
-      }
-    } else {
-      // Free-form text — only works within 24-hour window
-      messageParams.Body = body;
-    }
-
-    const data = await twilioFetch(
-      `${TWILIO_API_BASE}/Accounts/${platformSid}/Messages.json`,
-      platformSid,
-      platformToken,
-      'POST',
-      messageParams
-    );
-
-    return { success: true, messageId: data.sid };
-  } catch (err: any) {
-    console.error('[Twilio] WhatsApp send error:', err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-/**
- * Fetch tenant's Twilio WhatsApp number from the database.
- * This is a tenant-level config for WhatsApp sender routing, not a BYO credential.
- */
-export async function getTenantWhatsAppNumber(
-  supabaseClient: SupabaseClient,
-  tenantId: string
-): Promise<string> {
-  const { data, error } = await supabaseClient
-    .from('tenants')
-    .select('twilio_whatsapp_number')
-    .eq('id', tenantId)
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to fetch tenant WhatsApp number: ${error.message}`);
-  }
-
-  return data?.twilio_whatsapp_number || '';
 }
 
 // --- Utilities ---
