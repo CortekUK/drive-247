@@ -19,8 +19,24 @@
  * deleting the v1 directory. Three deletions, no judgement calls.
  */
 
-/** The canary. A real tenant row in production, carrying synthetic data only. */
-export const NORTHWIND = '6e5c544f-b374-451f-a662-360a634bff15';
+/**
+ * The canary. A real tenant row carrying synthetic data only.
+ *
+ * TWO ids, because `northwind` exists in both databases with DIFFERENT primary
+ * keys — the staging branch was seeded separately, not cloned. Local dev points
+ * at staging (`npm run db:switch`), so a prod-only id here makes every gate
+ * silently resolve to v1 on localhost while working correctly in production.
+ * That is a confusing failure: the code is right, the build is right, and the
+ * screen is simply never the new one.
+ *
+ * Listing both is safe. A staging id can never match a production tenant, so
+ * the extra entry widens nothing.
+ */
+export const NORTHWIND_PROD = '6e5c544f-b374-451f-a662-360a634bff15';
+export const NORTHWIND_STAGING = '8e6bc88f-86d6-4468-8610-73f7c8a88f6e';
+
+/** Every environment's canary. Use this in `V2_AREAS`, not a bare id. */
+export const NORTHWIND = [NORTHWIND_PROD, NORTHWIND_STAGING] as const;
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -30,13 +46,13 @@ export const NORTHWIND = '6e5c544f-b374-451f-a662-360a634bff15';
  */
 const V2_AREAS = {
   /** Settings → Appearance. A new route; v1 has no counterpart. */
-  appearance: [NORTHWIND],
+  appearance: [...NORTHWIND],
   /**
    * The v2 design tokens, scoped to `.v2-theme` on <body>.
    * Restyles every shadcn primitive for gated tenants without editing one of
    * them — see styles/v2-theme.css.
    */
-  theme: [NORTHWIND],
+  theme: [...NORTHWIND],
 } satisfies Record<string, readonly string[]>;
 
 export type V2Area = keyof typeof V2_AREAS;
