@@ -184,7 +184,19 @@ describe("every rental-creation entry point is gated", () => {
     // Without this, the dialog is defeated by typing the address.
     const src = readPortalSource("app/(dashboard)/rentals/new/page.tsx");
     expect(src).toMatch(/useRentalCreationGate\(\)/);
-    expect(src).toMatch(/if \(rentalCreationBlocked\) \{\s*return <ConnectStripeRequiredDialog open \/>;/);
+    expect(src).toMatch(
+      /if \(rentalCreationBlocked\) \{\s*return <ConnectStripeRequiredDialog open[^>]*\/>;/,
+    );
+  });
+
+  it("the route wires up the canary's dismissal, or its close control does nothing", () => {
+    // This branch returns the dialog INSTEAD of the form, so closing the dialog
+    // without recording the dismissal would blank the screen rather than reveal
+    // the form. `onDismiss` flips `blocked` itself, which is the boolean the
+    // branch above tests. See lib/rental-gate-dismissal.ts.
+    const src = readPortalSource("app/(dashboard)/rentals/new/page.tsx");
+    expect(src).toMatch(/dismiss:\s*dismissRentalCreationGate/);
+    expect(src).toMatch(/<ConnectStripeRequiredDialog open onDismiss=\{dismissRentalCreationGate\}/);
   });
 
   it("no gated entry point still navigates unconditionally", () => {

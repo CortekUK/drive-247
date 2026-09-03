@@ -158,7 +158,8 @@ const CreateRental = () => {
   const skipInsurance = !isBonzahConnected || !isBonzahSellable(tenant);
   const queryClient = useQueryClient();
   // Lean tenants cannot open this form without a usable Stripe Connect account.
-  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
+  const { blocked: rentalCreationBlocked, dismiss: dismissRentalCreationGate } =
+    useRentalCreationGate();
   const { isManager, canEdit } = useManagerPermissions();
   const { appUser, isAdmin } = useAuth();
   const { logAction } = useAuditLog();
@@ -2886,8 +2887,15 @@ const CreateRental = () => {
   // block is bypassed by typing /rentals/new into the address bar. Returning
   // instead of the form — rather than early-returning higher up — keeps every
   // hook above unconditionally called.
+  //
+  // `onDismiss` is what makes the canary's "×" mean anything. This branch
+  // returns the dialog INSTEAD of the form, so merely closing the dialog would
+  // blank the screen. Recording the dismissal flips `rentalCreationBlocked`
+  // itself to false, this branch stops being taken, and the form below renders
+  // on the next paint — for the rest of the visit, including after navigating
+  // away and back.
   if (rentalCreationBlocked) {
-    return <ConnectStripeRequiredDialog open />;
+    return <ConnectStripeRequiredDialog open onDismiss={dismissRentalCreationGate} />;
   }
 
   return (
