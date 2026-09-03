@@ -11,7 +11,7 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { handleCors, jsonResponse, errorResponse } from "../_shared/cors.ts";
-import { resolveTenantId } from "../_shared/resolve-tenant.ts";
+import { resolveTenantId } from "../_shared/accounting/resolve-tenant.ts";
 
 interface Payload {
   periodStart?: string;   // ISO date — defaults to 12 months ago
