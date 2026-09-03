@@ -20,8 +20,8 @@ export interface RentalAdditionalDriver {
 
 /**
  * Fetches additional drivers for a rental. Subscribes to realtime updates so
- * verification status changes from the Veriff webhook surface in the portal
- * without manual refresh.
+ * verification status changes written by `process-ai-verification` surface in
+ * the portal without manual refresh.
  */
 export function useRentalAdditionalDrivers(rentalId: string | undefined, enabled: boolean = true) {
   const { tenant } = useTenant();

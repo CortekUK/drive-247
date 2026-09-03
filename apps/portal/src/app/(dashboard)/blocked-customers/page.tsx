@@ -798,7 +798,7 @@ const BlockedCustomers = () => {
               <Alert className="py-2">
                 <AlertTriangle className="h-3 w-3" />
                 <AlertDescription className="text-xs">
-                  New customers or Veriff verifications with this identity will be blocked.
+                  New customers or identity verifications with this identity will be blocked.
                 </AlertDescription>
               </Alert>
             </div>

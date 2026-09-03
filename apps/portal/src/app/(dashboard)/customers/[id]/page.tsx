@@ -151,23 +151,26 @@ const CustomerDetail = () => {
     queryKey: ["customer-verification", id],
     queryFn: async () => {
       // Prefer completed verifications over init/pending ones.
-      // Scope to AI/Veriff only — CMD has its own dedicated tab + query.
+      // Scope to provider = 'ai': AI verification is the only identity provider
+      // still wired up here. Rows left behind by the retired third-party
+      // providers are excluded so a long-dead attempt can't outrank a current
+      // AI pass.
       const { data: completedData } = await (supabase as any)
         .from("identity_verifications")
         .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, review_result, provider, verification_completed_at")
         .eq("customer_id", id)
         .eq("status", "completed")
-        .in("provider", ["ai", "veriff"])
+        .eq("provider", "ai")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (completedData) return completedData;
-      // Fallback to latest AI/Veriff record if no completed one exists.
+      // Fallback to the latest AI record if no completed one exists.
       const { data, error } = await (supabase as any)
         .from("identity_verifications")
         .select("date_of_birth, document_expiry_date, face_image_url, selfie_image_url, document_front_url, document_back_url, status, review_result, provider, verification_completed_at")
         .eq("customer_id", id)
-        .in("provider", ["ai", "veriff"])
+        .eq("provider", "ai")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

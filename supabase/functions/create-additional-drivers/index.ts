@@ -4,7 +4,7 @@
 //
 // Mutations bypass RLS via service_role; tenant ownership is enforced inside
 // the function by reading the rental row and matching against the caller's
-// app_users.tenant_id. The actual Veriff session + email sending is delegated
+// app_users.tenant_id. The actual AI verification session + email sending is delegated
 // to `send-additional-driver-invite` (one call per driver) so the rental form
 // can fire-and-forget while the rental insert completes.
 //

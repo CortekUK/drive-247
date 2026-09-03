@@ -16,8 +16,6 @@ const VERIFICATION_DOC_OPTIONS = [
   { value: 'id_card', label: 'ID Card' },
 ];
 
-const EXPIRY_SECONDS = 3 * 60 * 60; // 3 hours
-
 interface StartVerificationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -44,8 +42,6 @@ export function StartVerificationDialog({
   const [verificationDone, setVerificationDone] = useState(false);
   const [copied, setCopied] = useState(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const verificationMode = tenant?.integration_veriff !== false ? 'veriff' : 'ai';
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -136,38 +132,19 @@ export function StartVerificationDialog({
     if (!customerId || !tenant) return;
     setCreating(true);
     try {
-      if (verificationMode === 'ai') {
-        const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
-          body: { customerId, tenantId: tenant.id, tenantSlug: tenant.slug },
-        });
-        if (error) throw error;
-        if (!data.ok) throw new Error(data.detail || data.error || 'Failed to create verification session');
+      const { data, error } = await supabase.functions.invoke('create-ai-verification-session', {
+        body: { customerId, tenantId: tenant.id, tenantSlug: tenant.slug },
+      });
+      if (error) throw error;
+      if (!data.ok) throw new Error(data.detail || data.error || 'Failed to create verification session');
 
-        toast.success('Verification link generated');
-        setSessionData({
-          sessionId: data.sessionId,
-          url: data.qrUrl,
-          expiresAt: new Date(data.expiresAt),
-        });
-        setIsPolling(true);
-      } else {
-        const { data, error } = await supabase.functions.invoke('create-veriff-session', {
-          body: { customerId },
-        });
-        if (error) throw error;
-        if (!data.ok) throw new Error(data.detail || data.error || 'Failed to create verification session');
-
-        toast.success('Verification session created');
-        if (data.sessionUrl) {
-          setSessionData({
-            sessionId: data.sessionId || '',
-            url: data.sessionUrl,
-            expiresAt: new Date(Date.now() + EXPIRY_SECONDS * 1000),
-          });
-        }
-        queryClient.invalidateQueries({ queryKey: ['customer-verification', customerId] });
-        queryClient.invalidateQueries({ queryKey: ['customers-list'] });
-      }
+      toast.success('Verification link generated');
+      setSessionData({
+        sessionId: data.sessionId,
+        url: data.qrUrl,
+        expiresAt: new Date(data.expiresAt),
+      });
+      setIsPolling(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to create verification session');
     } finally {

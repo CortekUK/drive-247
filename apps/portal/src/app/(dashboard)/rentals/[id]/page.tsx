@@ -63,6 +63,7 @@ import { cn } from "@/lib/utils";
 import { getActiveCoverageLabels } from "@/lib/coverage-labels";
 import { getPacificTomorrow } from "@/lib/bonzah-dates";
 import { extractFunctionError } from "@/lib/edge-error";
+import { formatVerificationProvider } from "@/lib/verification-provider";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { LocationMap } from "@/components/ui/location-map";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -1831,7 +1832,7 @@ const RentalDetail = () => {
           //
           // 2. manually_verified is never overwritten. A staff member recorded,
           //    with their name and a reason, that they checked this person's ID.
-          //    A later Veriff row going 'pending' (or an unrelated attempt
+          //    A later verification row going 'pending' (or an unrelated attempt
           //    resolving RED) must not silently erase that — it would re-block a
           //    customer who was legitimately cleared, with no audit entry
           //    explaining why. Only an explicit action should undo an explicit
@@ -6729,7 +6730,7 @@ const RentalDetail = () => {
                     </Badge>
                   ) : (
                     <Badge variant="secondary">
-                      Veriff
+                      {formatVerificationProvider(identityVerification.verification_provider)}
                     </Badge>
                   )}
                 </div>

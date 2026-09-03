@@ -3046,7 +3046,7 @@ const Settings = () => {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  This determines which document type is accepted during Veriff or AI verification.
+                  This determines which document type is accepted during AI verification.
                 </p>
               </div>
 
