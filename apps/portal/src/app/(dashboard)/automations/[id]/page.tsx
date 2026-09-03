@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { ChevronLeft, Trash2, Send, Play, Plus, GripVertical, FlaskConical, Loader2, List, Workflow } from "lucide-react";
 import { AutomationFlowCanvas } from "@/components/automations/automation-flow-canvas";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
 
@@ -90,6 +91,9 @@ function stepToDraft(s: AutomationStep): DraftStep {
 }
 
 export default function AutomationBuilderPage({ params }: { params: Promise<{ id: string }> }) {
+  const { tenantSlug } = useTenant();
+  if (isAreaHidden("automations", tenantSlug)) notFound();
+
   const { id } = use(params);
   const router = useRouter();
 

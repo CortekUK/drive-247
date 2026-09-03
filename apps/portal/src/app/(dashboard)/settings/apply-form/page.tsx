@@ -8,7 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { notFound } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 
 const STEPS = [
   { key: "about", label: "About you", required: true, fields: ["fullName", "dateOfBirth", "email", "phone", "addressLine1", "city", "state", "postalCode"] },
@@ -27,7 +29,8 @@ interface FormConfig {
 }
 
 export default function ApplyFormSettingsPage() {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  if (isAreaHidden("leads", tenantSlug)) notFound();
   const [config, setConfig] = useState<FormConfig>({
     hidden_steps: [],
     required_overrides: {},

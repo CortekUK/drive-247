@@ -22,7 +22,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { useAutomations, useCreateAutomation } from "@/hooks/use-automations";
 import { TRIGGER_OPTIONS, eventLabel } from "@/lib/automation-event-registry";
-import { useRouter } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
+import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { cn } from "@/lib/utils";
 
 const STATUS_HUES = {
@@ -32,6 +34,9 @@ const STATUS_HUES = {
 };
 
 export default function AutomationsPage() {
+  const { tenantSlug } = useTenant();
+  if (isAreaHidden("automations", tenantSlug)) notFound();
+
   const router = useRouter();
   const { data: automations = [], isLoading } = useAutomations();
   const create = useCreateAutomation();

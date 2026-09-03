@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { notFound, useRouter, useSearchParams } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { Inbox, Loader2, Search, MessageSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +29,8 @@ import {
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { EnquiryDetailDrawer } from "@/components/enquiries/enquiry-detail-drawer";
+import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 
 const STATUS_FILTERS: { value: EnquiryStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -271,6 +273,9 @@ function StatCard({ label, value, highlight }: { label: string; value: number; h
 }
 
 export default function EnquiriesPage() {
+  const { tenantSlug } = useTenant();
+  if (isAreaHidden("enquiries", tenantSlug)) notFound();
+
   return (
     <Suspense
       fallback={
