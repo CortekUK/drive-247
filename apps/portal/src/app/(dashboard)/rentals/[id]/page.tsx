@@ -28,6 +28,8 @@ import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
+import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
+import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
@@ -532,6 +534,10 @@ const RentalDetail = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
+  // Renew opens /rentals/new, so it is a rental-creation entry point too.
+  // Lean tenants only; a constant false for everyone else.
+  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
+  const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);
   // Charged-deposit tenants take the deposit as real money (a 'Security Deposit'
   // ledger Charge, refundable in full or in part). Hold tenants ring-fence it on
   // the card instead, which is what every deposit_hold_* branch below serves.
@@ -2987,7 +2993,11 @@ const RentalDetail = () => {
               {displayStatus === 'Completed' && (
                 <Button
                   variant="default"
-                  onClick={() => router.push(`/rentals/new?renew_from=${rental.id}`)}
+                  onClick={() =>
+                    rentalCreationBlocked
+                      ? setShowConnectStripeDialog(true)
+                      : router.push(`/rentals/new?renew_from=${rental.id}`)
+                  }
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Renew
@@ -8057,6 +8067,13 @@ const RentalDetail = () => {
       {/* Finance Sync — per-rental sync stripe (Sprint 3). Renders nothing when
           no provider connected or no events for this rental yet. */}
       <AccountingSyncStripe rentalId={id} />
+
+      {/* Lean tenants without usable Stripe Connect, raised from Renew —
+          dismissible here, because there IS a page behind it to return to. */}
+      <ConnectStripeRequiredDialog
+        open={showConnectStripeDialog}
+        onOpenChange={setShowConnectStripeDialog}
+      />
     </div>
   );
 };
