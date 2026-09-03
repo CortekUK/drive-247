@@ -19,8 +19,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Loader2, Scissors, Wand2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui-v2/button';
+import { Label } from '@/components/ui-v2/label';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
 import { useTenant } from '@/contexts/TenantContext';
 import { toast } from '@/hooks/use-toast';

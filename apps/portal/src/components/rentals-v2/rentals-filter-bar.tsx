@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Search, SlidersHorizontal } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui-v2/input";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
 import {
   RentalsFilterPanel,

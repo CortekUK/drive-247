@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { Manrope } from "next/font/google";
 import { createClient } from "@supabase/supabase-js";
 import { Providers } from "./providers";
 import "@/global.css";
@@ -123,6 +124,16 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
+/**
+ * The v2 design's typeface. Defines --font-manrope only; nothing reads it
+ * outside `.v2-theme`, so v1 tenants neither render it nor fetch the files.
+ */
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+
 const brandingScript = `
 (function() {
   try {
@@ -163,9 +174,11 @@ export default async function RootLayout({
   );
 
   const themeClass = v2Flags.theme ? "v2-theme" : undefined;
+  // The font variable rides with the theme gate, so v1 tenants are untouched.
+  const fontClass = v2Flags.theme ? manrope.variable : undefined;
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={fontClass}>
       <head>
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />

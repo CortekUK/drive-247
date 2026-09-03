@@ -3,8 +3,8 @@
 import { format } from "date-fns";
 import { Activity, CalendarIcon, CreditCard, Inbox, ShieldCheck } from "lucide-react";
 import { RentalFilters } from "@/hooks/use-enhanced-rentals";
-import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui-v2/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { FilterChip, FilterSection, FilterShell } from "@/components/shared/filter-primitives";
 import { cn } from "@/lib/utils";

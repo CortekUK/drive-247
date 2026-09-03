@@ -170,3 +170,443 @@
   --glow-gold-subtle: 0 0 25px -5px hsl(var(--primary) / 0.35), 0 0 50px -10px hsl(var(--primary) / 0.2);
   --glow-gold-intense: 0 0 35px -5px hsl(var(--primary) / 0.55), 0 0 70px -10px hsl(var(--primary) / 0.3);
 }
+
+/* ===========================================================================
+ * PART 2 — the rest of the branch stylesheet (keyframes, base, components,
+ * utilities, chat backdrop), ported as SCOPED rules.
+ *
+ * Scoping conventions used below, and why they differ by selector kind:
+ *
+ *   class rules      →  `.v2-theme .foo`        (0,2,0)
+ *   dark class rules →  `.dark .v2-theme .foo`  (0,3,0)
+ *   <body> rules     →  `body.v2-theme`         (0,1,1)
+ *   element / `*`    →  `:where(.v2-theme) el`  (0,0,1) / (0,0,0)
+ *
+ * The `:where()` form on ELEMENT selectors is load-bearing, not decoration.
+ * This file cannot use `@layer base`: it carries no `@tailwind` directives and
+ * Next runs PostCSS per-file, so Tailwind v3 would throw "`@layer base` is used
+ * but no matching `@tailwind base` directive is present". Without a layer the
+ * rules land AFTER the utilities layer, so a plain `.v2-theme h1` (0,1,1) would
+ * outrank `text-2xl` (0,1,0) and repaint all 85 `<h1 className="text-…">` in the
+ * portal at 48px for the canary. `:where(.v2-theme) h1` pins the selector back
+ * to (0,0,1) — the exact weight `h1` carries inside v1's `@layer base` — so it
+ * still beats v1 on source order but keeps losing to utilities, as intended.
+ * `:where()` contributes zero specificity but is NOT an escape hatch: the
+ * element still has to sit inside `.v2-theme`, so nothing leaks to the other
+ * 56 tenants.
+ * =========================================================================== */
+
+
+/* ---------------------------------------------------------------------------
+ * Shadow token aliases.
+ *
+ * The branch renamed the shadow tokens `--ds-shadow-*` and re-exposed them as
+ * `shadow-card` / `shadow-hover` through Tailwind v4's `@theme`. There is no
+ * `@theme` here — v3's tailwind.config.ts hardcodes `boxShadow: { sm:
+ * var(--shadow-sm), card: var(--shadow-card), hover: var(--shadow-hover) }` —
+ * so inside `.v2-theme` those three utilities were still resolving to v1's GOLD
+ * shadows inherited from `:root`. Aliasing re-connects them without touching
+ * the config, and one light-mode block covers dark too: the `var()` is
+ * substituted where it is used, against whichever `--ds-shadow-*` the element
+ * has, which `.dark .v2-theme` has already overridden on the same <body>.
+ * ------------------------------------------------------------------------- */
+.v2-theme {
+  --shadow-sm: var(--ds-shadow-sm);
+  --shadow-card: var(--ds-shadow-card);
+  --shadow-hover: var(--ds-shadow-hover);
+}
+
+
+/* ===========================================================================
+ * Keyframes
+ *
+ * `@keyframes` are global by nature — there is no way to scope them to
+ * `.v2-theme`. So any name that v1 ALREADY defines is renamed with a `v2-`
+ * prefix rather than redefined, and every reference inside the scoped rules
+ * below points at the renamed copy. v1 defines animations in two places and
+ * both were checked:
+ *   • src/global.css      → rentalProgressShimmer, trax-glow, trax-ring
+ *   • tailwind.config.ts  → border-rotate, float, glow, spin-slow,
+ *                           pulse-subtle, slide-up, fade-in, wiggle
+ *                           (emitted into the same bundle by `animate-*`)
+ * The seven timeline/marketing keyframes at the end collide with neither, so
+ * they keep their branch names and the ported components can use them as-is.
+ * =========================================================================== */
+
+/* Renamed — v1 defines these via tailwind.config.ts `keyframes`. The bodies are
+   identical to v1's, so the `animate-*` utilities keep working untouched; these
+   copies exist for v2 rules that name the animation directly. */
+@keyframes v2-border-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes v2-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes v2-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+@keyframes v2-spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes v2-pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(0.98); }
+}
+@keyframes v2-slide-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes v2-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes v2-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-12deg); }
+  75% { transform: rotate(12deg); }
+}
+
+/* Renamed — v1 defines this in src/global.css. */
+@keyframes v2-rental-progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Renamed — v1 defines these in src/global.css (Trax AI branding). */
+@keyframes v2-trax-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px hsl(var(--accent) / 0.7))
+            drop-shadow(0 0 8px hsl(var(--accent) / 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px hsl(var(--accent) / 1))
+            drop-shadow(0 0 14px hsl(var(--accent) / 0.6))
+            drop-shadow(0 0 24px hsl(var(--accent) / 0.25));
+  }
+}
+@keyframes v2-trax-ring {
+  0%, 100% {
+    box-shadow: 0 0 6px -1px hsl(var(--accent) / 0.35),
+                inset 0 0 4px -1px hsl(var(--accent) / 0.15);
+  }
+  50% {
+    box-shadow: 0 0 12px -1px hsl(var(--accent) / 0.5),
+                0 0 22px -4px hsl(var(--accent) / 0.25),
+                inset 0 0 8px -1px hsl(var(--accent) / 0.2);
+  }
+}
+
+/* New in the branch — no v1 name to collide with, so these keep their names and
+   the ported v2 components can reference them exactly as the branch does. */
+
+/* Periodic shine sweep — sweeps across once, then rests for the rest of the cycle */
+@keyframes shine-sweep {
+  0% { transform: translateX(-120%); }
+  14% { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}
+
+/* Live timeline bars — staggered Gantt "fill" that grows from the left, holds, resets */
+@keyframes timeline-grow {
+  0% { transform: scaleX(0.2); opacity: 0.35; }
+  35% { transform: scaleX(1); opacity: 1; }
+  80% { transform: scaleX(1); opacity: 0.9; }
+  100% { transform: scaleX(0.2); opacity: 0.35; }
+}
+
+/* "Now" playhead — a soft vertical line scanning across the timeline */
+@keyframes playhead-scan {
+  0% { left: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+/* Calendar icon gentle bob */
+@keyframes icon-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Arrow nudge */
+@keyframes arrow-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
+/* A tiny car driving across the timeline */
+@keyframes car-drive {
+  0% { left: -10%; opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { left: 106%; opacity: 0; }
+}
+
+/* Ambient particles drifting upward */
+@keyframes particle-rise {
+  0% { transform: translateY(6px) scale(0.6); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-52px) scale(0.2); opacity: 0; }
+}
+
+
+/* ===========================================================================
+ * Base layer  (branch lines 357–401)
+ * =========================================================================== */
+
+/* Branch: `* { @apply border-border outline-ring/50 }`.
+ *
+ * Only the outline half is ported. `border-border` is deliberately DROPPED:
+ * v1's `@layer base` already applies it to `*` at (0,0,0), and inside this
+ * scope `--border` resolves to the v2 token, so the colour is already correct.
+ * Re-emitting it here — after the utilities layer — would have made it outrank
+ * every `border-<colour>` utility in the canary and flatten them all to the
+ * token border.
+ *
+ * `@apply outline-ring/50` is written out longhand: `ring` is a flat
+ * `hsl(var(--ring))` string in tailwind.config.ts with no `<alpha-value>`
+ * placeholder, so a v3.4 opacity modifier on it cannot be relied on to produce
+ * the alpha the branch's v4 build does. */
+:where(.v2-theme) * {
+  outline-color: hsl(var(--ring) / 0.5);
+}
+
+/* Branch: `html { @apply font-sans }` — v4 maps `--font-sans` to Manrope.
+ *
+ * Two things block a literal port. `font-sans` in THIS project's
+ * tailwind.config.ts is `["Playfair Display", "serif"]`, so `@apply font-sans`
+ * would set a display serif, not Manrope; and the app loads only Inter (see the
+ * <head> in src/app/layout.tsx), which this task may not edit. So the stack is
+ * written out with Manrope as an opt-in first choice: today `--font-manrope` is
+ * undefined and this renders Inter — identical to v1 — and the day a
+ * `next/font` Manrope is added to the layout it takes over with no CSS change.
+ * The class rides on <body>, not <html>, because that is where it is applied. */
+body.v2-theme {
+  font-family: var(--font-manrope, "Inter"), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  @apply bg-background text-foreground;
+}
+
+/* Typography. `:where()` keeps these at the (0,0,1) weight they carry in v1's
+   `@layer base` — see the header note; a bare `.v2-theme h1` would beat the
+   `text-xl` / `text-2xl` / `text-3xl` on the portal's own headings. */
+:where(.v2-theme) h1 { @apply text-5xl font-bold; }      /* 48px */
+:where(.v2-theme) h2 { @apply text-3xl font-semibold; }  /* 32px */
+:where(.v2-theme) h3 { @apply text-2xl font-medium; }    /* 24px */
+
+@media (max-width: 768px) {
+  body.v2-theme { @apply text-base; }  /* 16px on mobile */
+}
+@media (min-width: 769px) {
+  body.v2-theme { @apply text-sm; }  /* 14px on desktop */
+}
+
+.v2-theme .text-metadata { @apply text-xs; }  /* 12px */
+
+/* Hide number input spinner arrows */
+:where(.v2-theme) input[type="number"]::-webkit-inner-spin-button,
+:where(.v2-theme) input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+:where(.v2-theme) input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+
+/* ===========================================================================
+ * Components layer  (branch lines 406–483)
+ * =========================================================================== */
+
+/* Rental creation progress bar shimmer */
+.v2-theme .rental-progress-bar-fill {
+  position: relative;
+  background: hsl(var(--primary));
+  overflow: hidden;
+}
+.v2-theme .rental-progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 50%;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary-foreground) / 0.3), transparent);
+  animation: v2-rental-progress-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Override browser autofill styling for consistent input backgrounds */
+.v2-theme input:-webkit-autofill,
+.v2-theme input:-webkit-autofill:hover,
+.v2-theme input:-webkit-autofill:focus,
+.v2-theme input:-webkit-autofill:active {
+  box-shadow: inset 0 0 0 1000px hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+}
+
+/* Professional rotating border effect */
+.v2-theme .rotating-border { @apply relative; }
+.v2-theme .rotating-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: conic-gradient(from 0deg, transparent, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.3), hsl(var(--primary) / 0.1), transparent);
+  border-radius: inherit;
+  animation: v2-border-rotate 6s linear infinite;
+  z-index: -1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .v2-theme .rotating-border::before {
+    animation: none;
+    background: hsl(var(--primary) / 0.1);
+  }
+}
+
+/* Buttons with focus rings and rounded-lg */
+.v2-theme .btn-primary {
+  @apply bg-gradient-primary text-primary-foreground rounded-lg font-medium px-4 py-2 transition-all duration-200 focus:ring-2 focus:ring-primary focus:ring-offset-2 hover:opacity-90;
+}
+
+/* Cards with hover scale */
+.v2-theme .card-hover {
+  @apply transition-all duration-200 hover:scale-102 hover:shadow-hover;
+}
+
+/* Badges */
+.v2-theme .badge-status {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+.v2-theme .badge-completed {
+  background-color: #22c55e !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+/* Forms */
+.v2-theme .input-focus {
+  @apply focus:ring-2 focus:ring-primary focus:border-primary rounded-md border-input;
+}
+
+/* Tables */
+.v2-theme .table-row {
+  @apply text-sm hover:bg-muted/50 transition-colors duration-200;
+}
+.v2-theme .table-header {
+  @apply text-xs font-medium text-muted-foreground uppercase tracking-wider;
+}
+
+
+/* ===========================================================================
+ * Utilities layer  (branch lines 488–565)
+ * =========================================================================== */
+
+/* Scrollbar utilities */
+.v2-theme .scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.v2-theme .scrollbar-thin::-webkit-scrollbar {
+  -webkit-appearance: none;
+  height: 10px;
+  width: 10px;
+}
+.v2-theme .scrollbar-thin::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.1);
+  border-radius: 9999px;
+}
+.v2-theme .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: all 0.2s ease;
+}
+.v2-theme .scrollbar-thin:hover {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted) / 0.2);
+}
+.v2-theme .scrollbar-thin:hover::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.2);
+}
+.v2-theme .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.5);
+  background-clip: padding-box;
+}
+.v2-theme .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.7);
+  background-clip: padding-box;
+}
+
+/* Soft ambient page background — faint indigo glow, adapts to light/dark */
+.v2-theme .bg-app-gradient {
+  /* Every layer must be brand-derived. The top-left wash was a literal
+     `hsl(247 92% 60%)`, so a tenant on green got a purple corner — the one
+     gradient stop in the shell that ignored their colour. `--chart-3` is
+     that exact value by default and follows the brand once themed, so this
+     looks identical on the stock palette and correct on every other.
+     Written as `hsl(var(--chart-3) / …)` rather than `@apply bg-chart-3`:
+     chart-1..5 are not colour keys in this project's tailwind.config.ts, so
+     the utility does not exist and `@apply` would be a build error. */
+  background-image:
+    radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.20), transparent 55%),
+    radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.16), transparent 52%),
+    radial-gradient(55rem 45rem at 50% 115%, hsl(var(--primary) / 0.12), transparent 55%),
+    linear-gradient(180deg, hsl(var(--primary) / 0.07) 0%, transparent 45%);
+  background-repeat: no-repeat;
+}
+
+/* Trax AI branding animations */
+.v2-theme .trax-icon { animation: v2-trax-glow 2.5s ease-in-out infinite; }
+.v2-theme .trax-ring { animation: v2-trax-ring 2.5s ease-in-out infinite; }
+
+
+/* ===========================================================================
+ * Chat backdrop  (branch lines 567–582)
+ *
+ * WhatsApp-style chat backdrop — faint indigo doodle dots over a tinted base.
+ * Recoloured to the portal design system instead of WhatsApp's dark green.
+ * New in the branch; v1's global.css has no `.chat-doodle` at all.
+ * =========================================================================== */
+.v2-theme .chat-doodle {
+  background-color: hsl(var(--muted) / 0.4);
+  background-image:
+    radial-gradient(hsl(var(--primary) / 0.06) 1.5px, transparent 1.6px),
+    radial-gradient(hsl(var(--primary) / 0.05) 1.5px, transparent 1.6px);
+  background-size: 28px 28px, 28px 28px;
+  background-position: 0 0, 14px 14px;
+}
+.dark .v2-theme .chat-doodle {
+  background-color: hsl(var(--background) / 0.6);
+  background-image:
+    radial-gradient(hsl(var(--primary) / 0.12) 1.5px, transparent 1.6px),
+    radial-gradient(hsl(var(--primary) / 0.10) 1.5px, transparent 1.6px);
+}
+
+
+/* ===========================================================================
+ * NOT ported, on purpose — the tail of the branch stylesheet.
+ *
+ * `@media print { body:has([data-print-root]) … }` (branch lines 598–661) is
+ * already present VERBATIM in v1's src/global.css (lines 392–469). It is a
+ * global, `!important`-everywhere print-isolation block that applies to every
+ * tenant, the canary included, so a scoped duplicate would change nothing and
+ * only risk drift between two copies of the same rules.
+ *
+ * Also not ported, for the same "v1 already provides it identically" reason:
+ *   • `.bg-gradient-primary { color: white !important }` — global.css:279
+ *   • the v4 `@utility` block (container / scale-102 / transition-smooth /
+ *     bg-gradient-*) — all four already exist in tailwind.config.ts under
+ *     `container`, `scale.102`, `transitionProperty.smooth` and
+ *     `backgroundImage`, and this task may not edit that config.
+ *   • the `@theme inline` colour and `--animate-*` maps — v3's config already
+ *     wires every `hsl(var(--…))` colour and every `animate-*` except
+ *     `animate-wiggle`, which no component in this app uses.
+ * =========================================================================== */

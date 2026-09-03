@@ -2,7 +2,7 @@
 
 import { forwardRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Sparkles, MessageCircle, Inbox, ChevronLeft, ChevronRight } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { MessagesSheet, EnquiriesSheet } from "@/components/shared/layout/dock-sheets";
 import { useUnreadCount } from "@/hooks/use-unread-count";

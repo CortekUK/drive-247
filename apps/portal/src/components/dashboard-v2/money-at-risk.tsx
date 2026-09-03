@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Check, Receipt } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui-v2/card';
+import { Skeleton } from '@/components/ui-v2/skeleton';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format-utils';
 import { useTenant } from '@/contexts/TenantContext';

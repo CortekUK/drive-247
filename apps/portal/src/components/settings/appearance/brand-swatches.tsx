@@ -14,9 +14,9 @@
 import { useState } from 'react';
 import { Check, Pipette } from 'lucide-react';
 
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui-v2/popover';
+import { Input } from '@/components/ui-v2/input';
+import { Label } from '@/components/ui-v2/label';
 import { readableForegroundOn, sameColor } from '@/lib/appearance/color';
 import { cn } from '@/lib/utils';
 

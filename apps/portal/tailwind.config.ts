@@ -15,6 +15,16 @@ export default {
     extend: {
       fontFamily: {
         sans: ["Playfair Display", "serif"],
+        // v2 only. Additive: no v1 component uses `font-heading` (verified by
+        // grep across apps/portal/src), so this changes no existing rendering.
+        // Falls back to the system stack wherever --font-manrope is undefined,
+        // which is every tenant not gated into the v2 theme.
+        heading: [
+          "var(--font-manrope)",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       colors: {
         border: "hsl(var(--border))",

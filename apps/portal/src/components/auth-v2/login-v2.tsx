@@ -22,11 +22,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useAuth, useAuthStore } from "@/stores/auth-store";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui-v2/button";
+import { Input } from "@/components/ui-v2/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui-v2/checkbox";
+import { Alert, AlertDescription } from "@/components/ui-v2/alert";
 import {
   Form,
   FormControl,

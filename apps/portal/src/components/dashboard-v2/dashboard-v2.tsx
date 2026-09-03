@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui-v2/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui-v2/card";
+import { Skeleton } from "@/components/ui-v2/skeleton";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
-} from "@/components/ui/hover-card";
+} from "@/components/ui-v2/hover-card";
 import {
   ChartContainer,
   ChartTooltip,

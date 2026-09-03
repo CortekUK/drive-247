@@ -20,11 +20,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, RotateCcw, Save } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui-v2/button';
+import { Input } from '@/components/ui-v2/input';
+import { Label } from '@/components/ui-v2/label';
+import { Separator } from '@/components/ui-v2/separator';
+import { Skeleton } from '@/components/ui-v2/skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from '@/components/ui-v2/alert-dialog';
 
 import { FaviconUpload } from '@/components/settings/favicon-upload';
 import { BrandSwatches } from '@/components/settings/appearance/brand-swatches';

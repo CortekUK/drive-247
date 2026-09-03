@@ -2,7 +2,7 @@
 
 import { type ReactNode } from "react";
 import { X, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui-v2/button";
 import { cn } from "@/lib/utils";
 
 /**

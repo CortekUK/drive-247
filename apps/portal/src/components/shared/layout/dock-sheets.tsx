@@ -2,8 +2,8 @@
 
 import { useState, type ComponentProps, type ReactNode, type ElementType } from "react";
 import Link from "next/link";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui-v2/sheet";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { MessageSquare, Inbox } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useChatChannels } from "@/hooks/use-chat-channels";

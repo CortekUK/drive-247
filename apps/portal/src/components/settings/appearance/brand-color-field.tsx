@@ -13,7 +13,7 @@
  */
 
 import { AlertTriangle, Check, Wand2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui-v2/button';
 import { deepenUntilReadable, judgeBrandColor } from '@/lib/appearance/color';
 import { cn } from '@/lib/utils';
 

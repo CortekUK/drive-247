@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui-v2/dropdown-menu";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useAuth } from "@/stores/auth-store";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";

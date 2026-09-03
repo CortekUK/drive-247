@@ -10,16 +10,16 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from '@/components/ui-v2/dropdown-menu';
+import { Button } from '@/components/ui-v2/button';
+import { Badge } from '@/components/ui-v2/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui-v2/dialog';
+import { Input } from '@/components/ui-v2/input';
+import { Label } from '@/components/ui-v2/label';
 import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { Switch } from '@/components/ui/switch';
+import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { useFeedbackSettings } from '@/hooks/use-feedback-settings';
 import { toast } from '@/hooks/use-toast';

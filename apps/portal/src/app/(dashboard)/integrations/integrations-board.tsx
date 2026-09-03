@@ -13,10 +13,10 @@
 // comment there.
 
 import { type ComponentType, useState } from "react";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardTitle } from "@/components/ui-v2/card";
+import { Badge } from "@/components/ui-v2/badge";
+import { Button } from "@/components/ui-v2/button";
+import { Switch } from "@/components/ui-v2/switch";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/ui-v2/dialog";
 // The branch drew these two from `@phosphor-icons/react`, which is not a
 // dependency of this app. lucide-react — already the icon set everywhere else
 // in the portal — carries both, and takes the same `size` / `color` props.

@@ -78,10 +78,10 @@ import {
   SidebarFooter,
   SidebarRail,
   useSidebar,
-} from "@/components/ui/sidebar";
-import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+} from "@/components/ui-v2/sidebar";
+import { Input } from "@/components/ui-v2/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui-v2/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { useReminderStats } from "@/hooks/use-reminders";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";

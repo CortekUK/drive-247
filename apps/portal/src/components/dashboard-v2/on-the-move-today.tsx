@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowUpRight, Car, Check, KeyRound } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui-v2/card';
+import { Skeleton } from '@/components/ui-v2/skeleton';
 import { cn } from '@/lib/utils';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useTodayOperations, type Movement } from '@/hooks/use-today-operations';
