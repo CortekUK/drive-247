@@ -43,8 +43,20 @@
  */
 const LEAN_TENANTS: readonly string[] = ['northwind'];
 
-/** Areas hidden from lean tenants. */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations'] as const;
+/**
+ * Areas hidden from lean tenants.
+ *
+ * `quotes` is here for a different reason than the other three, and the
+ * difference is worth recording. Enquiries/Leads/Automations are v1 areas the
+ * lean product does not carry. Fleet Quotes was briefly DELETED from main
+ * instead of gated (43b97af1, reverted in 5acae08a) on the mistaken reading
+ * that it was the same kind of thing. It was not: its nav entry sat
+ * unconditionally next to Rentals behind no flag, so all 35+ paying tenants
+ * had it. Hiding it from the canary belongs here, in the presentation layer,
+ * exactly like the other three — the route, hook and pricing rules stay on
+ * main and keep serving everyone else.
+ */
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 

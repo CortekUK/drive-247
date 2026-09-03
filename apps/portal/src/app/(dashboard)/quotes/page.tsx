@@ -14,8 +14,10 @@ import {
   RefreshCw,
   Send,
 } from "lucide-react";
+import { notFound } from "next/navigation";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { useFleetQuote, type FleetQuoteSearch } from "@/hooks/use-fleet-quote";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuditLog } from "@/hooks/use-audit-log";
@@ -68,7 +70,12 @@ function safeTimezone(value: unknown): string {
 }
 
 export default function FleetQuotesPage() {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // Load-bearing, and NOT redundant with the two sidebar gates. Hiding a nav
+  // entry hides the link, not the page: typing /quotes, following a bookmark
+  // or a pasted link would still render the full generator for a lean tenant.
+  // The sidebars decide what is offered; this decides what exists.
+  if (isAreaHidden("quotes", tenantSlug)) notFound();
   const timezone = safeTimezone(tenant?.timezone);
   const today = formatInTimeZone(new Date(), timezone, "yyyy-MM-dd");
   const tomorrow = shiftLocalDate(today, 1);

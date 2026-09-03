@@ -32,6 +32,7 @@ import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
@@ -165,7 +166,7 @@ export function AppSidebar() {
   }, [isMobile, setOpenMobile]);
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -285,7 +286,9 @@ export function AppSidebar() {
           { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
         ] : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
-        { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
+        ...(isAreaHidden("quotes", tenantSlug)
+          ? []
+          : [{ name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign }]),
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
       ],

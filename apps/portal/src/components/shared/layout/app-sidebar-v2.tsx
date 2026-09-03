@@ -458,7 +458,9 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       label: "Bookings",
       icon: CalendarDays,
       items: [
-        { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
+        ...(isAreaHidden("quotes", tenantSlug)
+          ? []
+          : [{ name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign }]),
         ...(showPendingBookings
           ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }]
           : []),
