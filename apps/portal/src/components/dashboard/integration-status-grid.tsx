@@ -10,7 +10,6 @@ import {
   CircleDollarSign,
   MessageSquare,
   ArrowRight,
-  Zap,
 } from "lucide-react";
 import type { ChecklistItem, IntegrationStatus } from "@/hooks/use-platform-status";
 
@@ -33,7 +32,6 @@ const iconMap: Record<string, React.ElementType> = {
   boldsign: FileSignature,
   credits: CircleDollarSign,
   notifications: MessageSquare,
-  tesla_fleet: Zap,
 };
 
 const statusConfig: Record<
