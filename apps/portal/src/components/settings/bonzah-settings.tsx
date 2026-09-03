@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Shield, CheckCircle2, AlertCircle, ExternalLink, Loader2, TestTube2, Zap, Unplug, Lock, Wallet, RefreshCw, Bell, ShieldAlert, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { isTestModeUiHidden } from '@/lib/lean-areas';
 import { providerPresentation } from "@/lib/payment-provider";
 import { useBonzahBalance } from '@/hooks/use-bonzah-balance';
 import { useBonzahAlertConfig } from '@/hooks/use-bonzah-alert-config';
@@ -48,7 +49,11 @@ interface BonzahStatus {
 export function BonzahSettings() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { tenant: tenantContext, refetchTenant } = useTenant();
+  const { tenant: tenantContext, refetchTenant, tenantSlug } = useTenant();
+  // Lean tenants have no test modes — the API Mode card and the shared-test-account
+  // notice are concepts they do not have. UI only: bonzah_mode is untouched, and
+  // whether insurance may be SOLD is still decided by isBonzahSellable().
+  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
   const pay = providerPresentation(tenantContext?.payment_provider);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -272,7 +277,10 @@ export function BonzahSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Card 1: API Mode */}
+      {/* Card 1: API Mode — hidden for lean tenants, which have no test modes.
+          UI only: bonzah_mode itself is untouched, and whether insurance can be
+          SOLD is decided by isBonzahSellable(), not by this card. */}
+      {!hideTestModeUi && (
       <Card>
         <CardHeader>
           <CardTitle>API Mode</CardTitle>
@@ -319,6 +327,7 @@ export function BonzahSettings() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Card 2: How Bonzah Insurance Works (shown when not yet connected) */}
       {!isConnected && <Card>
@@ -608,8 +617,8 @@ export function BonzahSettings() {
             </div>
           )}
 
-          {/* Test mode info */}
-          {isTestMode && (
+          {/* Test mode info — hidden for lean tenants (no test modes) */}
+          {isTestMode && !hideTestModeUi && (
             <div className="p-4 rounded-lg border bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">

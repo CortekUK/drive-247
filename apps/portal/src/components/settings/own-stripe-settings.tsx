@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Link2, CheckCircle2, Loader2, ExternalLink, TestTube2, Zap } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { isTestModeUiHidden } from '@/lib/lean-areas';
 
 interface OwnStripeStatus {
   id: string;
@@ -26,7 +27,10 @@ interface OwnStripeStatus {
  */
 export function OwnStripeSettings() {
   const queryClient = useQueryClient();
-  const { tenant: tenantContext } = useTenant();
+  const { tenant: tenantContext, tenantSlug } = useTenant();
+  // Lean tenants have no test modes — the Test/Live chip is a concept they
+  // do not have. UI only: stripe_mode itself is untouched.
+  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
   const [connecting, setConnecting] = useState(false);
 
   // Surface the OAuth redirect result (?oauth=ok|incomplete|error) once on mount
@@ -130,10 +134,13 @@ export function OwnStripeSettings() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Link2 className="h-5 w-5" /> Your Stripe Account
-          <Badge variant="outline" className="ml-2 gap-1">
-            {tenantMode === 'live' ? <Zap className="h-3 w-3" /> : <TestTube2 className="h-3 w-3" />}
-            {tenantMode === 'live' ? 'Live' : 'Test'} mode
-          </Badge>
+          {/* Mode chip hidden for lean tenants (no test modes) */}
+          {!hideTestModeUi && (
+            <Badge variant="outline" className="ml-2 gap-1">
+              {tenantMode === 'live' ? <Zap className="h-3 w-3" /> : <TestTube2 className="h-3 w-3" />}
+              {tenantMode === 'live' ? 'Live' : 'Test'} mode
+            </Badge>
+          )}
         </CardTitle>
         <CardDescription>
           Connect your own Stripe account to receive booking payments directly. You keep full

@@ -102,3 +102,20 @@ export function resolveBoldSignMode(
   if (isLeanTenant(tenantSlug)) return 'live';
   return tenantMode === 'live' ? 'live' : 'test';
 }
+
+/**
+ * Should test/live mode switches, TEST badges and sandbox-override UI be hidden?
+ *
+ * PRESENTATION ONLY, and the distinction is load-bearing. This changes nothing
+ * about what a tenant's mode actually IS: `tenants.stripe_mode` and
+ * `tenants.bonzah_mode` are untouched, and the 66 edge functions that branch on
+ * `stripe_mode` keep seeing exactly what they saw before. A lean tenant still
+ * transacts in whatever mode its columns say — it is simply not shown a switch
+ * and a badge for a concept the lean product does not have.
+ *
+ * Flipping a lean tenant's Stripe to live for real is a money decision, not a
+ * UI cleanup, and is deliberately NOT done here.
+ */
+export function isTestModeUiHidden(tenantSlug: string | null | undefined): boolean {
+  return isLeanTenant(tenantSlug);
+}

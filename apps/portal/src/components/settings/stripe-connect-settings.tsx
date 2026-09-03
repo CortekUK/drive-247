@@ -12,6 +12,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { SquareSettings } from '@/components/settings/square-settings';
 import { PaymentProviderChoice } from '@/components/settings/payment-provider-choice';
 import { OwnStripeSettings } from './own-stripe-settings';
+import { isTestModeUiHidden } from '@/lib/lean-areas';
 
 interface StripeConnectStatus {
   stripe_account_id: string | null;
@@ -23,7 +24,10 @@ interface StripeConnectStatus {
 export function StripeConnectSettings() {
   const queryClient = useQueryClient();
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-  const { tenant: tenantContext } = useTenant();
+  const { tenant: tenantContext, tenantSlug } = useTenant();
+  // Lean tenants have no test modes — the TEST/LIVE mode banner below is a
+  // concept they do not have. UI only: stripe_mode itself is untouched.
+  const hideTestModeUi = isTestModeUiHidden(tenantSlug);
 
   // Get current tenant's Stripe Connect status
   const { data: tenantStatus, isLoading } = useQuery({
@@ -207,7 +211,8 @@ export function StripeConnectSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Stripe Mode Display */}
+        {/* Stripe Mode Display — hidden for lean tenants (no test modes) */}
+        {!hideTestModeUi && (
         <div className="p-4 rounded-lg border bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 dark:from-blue-950/30 dark:to-purple-950/30 dark:border-blue-800">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -235,6 +240,7 @@ export function StripeConnectSettings() {
             )}
           </div>
         </div>
+        )}
 
         {/* Status Display */}
         <div className={`p-4 rounded-lg border ${
