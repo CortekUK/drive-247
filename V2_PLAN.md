@@ -44,121 +44,131 @@ too far apart to merge.
 So the model is:
 
 - All work lands on `main`.
-- Every change is behind a flag.
+- Every change is behind a tenant gate.
 - A single canary tenant, **`northwind`**, receives every change first — UI,
   logic, schema, architecture.
-- The other ~56 tenants continue to see v1, untouched, with no code path
-  changed underneath them.
+- The other 56 tenants — 32 of them paying — continue to see v1, untouched,
+  with no code path changed underneath them.
 - v2 grows over v1 one area at a time. When an area is live for every tenant,
-  the v1 code for that area is deleted and its flag is removed.
+  the v1 code for that area is deleted and its gate is removed.
 - v1 is switched off only when nothing is left pointing at it.
 
-The canary is a real tenant row in production:
+The canary is a real tenant row:
 
 ```
-slug        northwind
-id          6e5c544f-b374-451f-a662-360a634bff15
-name        Northwind Rentals
-created     2026-09-03
+slug          northwind
+id            6e5c544f-b374-451f-a662-360a634bff15
+name          Northwind Rentals
+tenant_type   test
+login         ilyasghulam35@gmail.com
+created       2026-09-03
 ```
+
+It lives in production, alongside the real operators — not in a copy of the
+database, because a copy is a second thing to keep in sync and it stops
+resembling production the day it is made.
 
 It carries synthetic data only. Never copy real customer data into it.
 
 ---
 
-## 2. The batch model
+## 2. The canary model
 
-A **batch** is one coherent change that owns **one area** — the new dashboard,
-the new vehicle screens, the new rental detail page. One batch, one area, one
-independent rollback.
+There is no rollout system. There is one tenant.
 
-Batches are tracked in the **V2 Control Center** at `/admin/v2-control-center`
-(app: `apps/admin`, route `apps/admin/app/admin/(protected)/v2-control-center/`,
-components in `apps/admin/components/admin/v2-control-center/`).
+Every v2 change — a screen, a query, a column, a trigger, an edge function —
+is gated so that **`northwind` sees it and nobody else does**. The other 56
+tenants keep running exactly the code they ran yesterday. When a change has
+been live on the canary long enough to have failed and has not, it is widened;
+when it is live for everyone, the v1 code behind it is deleted and the gate
+goes with it.
 
-### The three tables
+That is the whole model. **No rollout table, no rollout percentage, no admin UI,
+nothing in the database that describes a rollout.** Machinery of that kind was
+built here and then removed deliberately. It is a second system that has to stay
+correct, and one that is subtly wrong is worse than none at all: it tells you a
+change can be pulled back at the exact moment you are betting on being able to
+pull it back.
 
-Created by `supabase/migrations/20260902120000_add_v2_control_center.sql`. Read
-that file — it is heavily commented and it is the authority, not this summary.
+### Where the gate lives
 
-| Table | Holds |
-|---|---|
-| `batches` | the change: `key`, `title`, `status`, `tags`, `area`, `branch`, `owner`, `checklist`, `killswitch` |
-| `tenant_batches` | the rollout: one row per (batch, tenant) with `enabled` and who flipped it, when, both directions |
-| `batch_files` | attachments — specs, screenshots, before/afters — in the private `batch-files` bucket |
+**In application code, keyed on the tenant.** Resolve the tenant, ask whether it
+is on v2 for this area, render v2 or v1.
 
-Status vocabulary (`public.v2_batch_status`): `not_started`, `in_progress`,
-`testing`, `partial_rollout`, `pending`, `rejected`, `completed`.
+```ts
+// apps/portal/src/lib/v2.ts   ← create this with the first v2 area
+export const NORTHWIND = '6e5c544f-b374-451f-a662-360a634bff15';
 
-### Effective state
+/** One entry per v2 area. Today every list is just the canary. */
+const V2_AREAS = {
+  vehicles:  [NORTHWIND],
+  dashboard: [NORTHWIND],
+} satisfies Record<string, readonly string[]>;
 
-```
-enabled_for_tenant  =  NOT batches.killswitch  AND  tenant_batches.enabled
-```
-
-Do not re-implement that expression anywhere. Read it through the one function
-that owns it:
-
-```sql
-public.get_enabled_batch_keys() RETURNS text[]
-```
-
-`STABLE SECURITY DEFINER`, granted to `authenticated`, returns the batch keys in
-effect for the **calling user's own tenant** and nothing else. It is `SECURITY
-DEFINER` because callers cannot read `batches` directly.
-
-The killswitch is a separate column rather than "set `enabled = false`
-everywhere" on purpose: pulling it is **one write**, and it leaves every
-per-tenant row exactly as it was, so releasing it restores the previous rollout
-precisely rather than requiring you to reconstruct who was on before the
-incident.
-
-Rolled-back `tenant_batches` rows are kept (`enabled = false` with
-`rolled_back_at` set), never deleted. "We tried b4 on RevTek on the 3rd and
-pulled it on the 4th" is exactly the question asked after an incident, and a
-`DELETE` cannot answer it.
-
-### The rollout gate
-
-Move a batch forward one step at a time, and only when the previous step has
-been live long enough to have failed:
-
-```
-northwind  →  1–2 real, friendly tenants  →  batches of 5  →  everyone
+export function isV2(
+  area: keyof typeof V2_AREAS,
+  tenantId: string | null | undefined,
+): boolean {
+  if (!tenantId) return false;          // unknown tenant ⇒ v1, always
+  return V2_AREAS[area].includes(tenantId);
+}
 ```
 
-Do not skip to "everyone" because a batch looks small. The batches that broke
+Widening an area is an edit to that one file and a deploy — reviewed like any
+other change, reverted like any other change, and recorded in `git log`, which
+is more history than a toggle in a dashboard ever gave. It needs no migration,
+so the gate can never break v1's schema; it costs no query, so the gate can
+never fail.
+
+Three properties of it are not optional:
+
+**It fails to v1.** If resolving the tenant throws, or comes back empty, the
+answer is v1 and every tenant sees the screen they already had. A gate that
+fails *open* puts all 57 tenants on unfinished code at once.
+
+**It is resolved once, at the entrance** — on the server, at the route or layout
+level. Never sprinkled through a component, never in a client effect. That is
+§3, and it is the most important rule in this document.
+
+**It is deletable.** When an area is live for everyone, the cleanup is deleting
+its entry from `V2_AREAS` and its branch from the route. Nothing else.
+
+The one gate that predates this file is the `tenants.booking_v2_enabled` column,
+read by `apps/booking/src/app/page.tsx`. Copy its **shape** — resolved on the
+server, in one place, falling back to the legacy component on any failure. Do
+not copy its **storage**: new gates do not get a column on `tenants` (§4).
+
+### Widening
+
+Move one step at a time, and only when the previous step has been live long
+enough to have failed:
+
+```
+northwind  →  1–2 real, friendly tenants  →  everyone
+```
+
+Do not skip to "everyone" because a change looks small. The changes that broke
 things looked small.
 
-### One live batch per area — and why
+### One area at a time — the rule with no database behind it
 
-There is a partial unique index:
+> **Two pieces of v2 work must not touch the same code at the same time.**
 
-```sql
-CREATE UNIQUE INDEX batches_area_live_uniq
-  ON public.batches (lower(area))
-  WHERE area IS NOT NULL AND btrim(area) <> ''
-    AND status NOT IN ('completed', 'rejected');
-```
+Independent rollback is the entire safety story of this project, and it only
+holds while each change's edits are *separable*. If two pieces of work touch the
+same screen at once, their edits land on the same lines and fuse. From then on:
 
-It refuses to let two batches that are still live claim the same area.
-`completed` and `rejected` batches release their claim.
+- Reverting A also removes half of B, or breaks it outright.
+- Reverting "just A" is no longer a thing that can be done.
+- And the two gates still *look* independent — two entries in `V2_AREAS`, two
+  things you believe you can pull separately. The belief is the dangerous part,
+  and it holds right up until the incident in which you need it not to.
 
-**Why this matters more than it looks.** Per-batch rollback is the entire safety
-story of this project. It only works while a batch's changes are *separable*.
-If two batches touch the same screen at the same time, their edits land on the
-same lines and fuse. From then on:
-
-- Rolling back batch A also removes half of batch B, or breaks it outright.
-- Rolling back "just A" is no longer a thing that can be done.
-- And worst of all, **the Control Center still shows two independently
-  toggleable batches**. It will report that A can be rolled back. It cannot. The
-  UI lies, quietly, at the exact moment you are relying on it during an
-  incident.
-
-The index exists so that failure is a write error at planning time instead of a
-discovery at 2am. If it rejects your insert, that is the system working. Split
-the area, or wait for the other batch to complete.
+This used to be enforced by a unique index that refused the second claim on an
+area. That index is gone, so the check is yours to make: before you start, look
+at what else is in flight and confirm it does not touch the files you are about
+to touch. If it does, split the area or wait. Two v2 areas may share a *route
+tree*; they may not share a *file*.
 
 ---
 
@@ -178,8 +188,8 @@ which runs.
 ```tsx
 // apps/portal/src/app/(dashboard)/vehicles/page.tsx
 export default function VehiclesPage() {
-  const { batches } = useBatches();
-  const v2 = batches.includes('b7');
+  const { tenant } = useTenant();
+  const v2 = isV2('vehicles', tenant?.id);
 
   return (
     <div className={v2 ? 'grid-cols-3' : 'grid-cols-2'}>
@@ -192,7 +202,7 @@ export default function VehiclesPage() {
 ```
 
 Every `if` is a place v1 can break. The two designs are now welded into one
-file that neither of them owns. And the flag can never be deleted — removing it
+file that neither of them owns. And the gate can never be deleted — removing it
 means unpicking a dozen conditionals by hand, in a file that is by then also
 carrying bug fixes for both paths.
 
@@ -200,13 +210,14 @@ carrying bug fixes for both paths.
 
 ```tsx
 // apps/portal/src/app/(dashboard)/vehicles/page.tsx   ← the ONLY edit to v1
-import { getEnabledBatchKeys } from '@/lib/batches';
+import { isV2 } from '@/lib/v2';
+import { tenantIdFromHeaders } from '@/lib/tenant-server';
 import LegacyVehicles from '@/components/vehicles/legacy-vehicles';
 import VehiclesV2 from '@/components/vehicles-v2/vehicles-v2';
 
 export default async function VehiclesPage() {
-  const keys = await getEnabledBatchKeys();      // never throws; [] on failure
-  return keys.includes('b7') ? <VehiclesV2 /> : <LegacyVehicles />;
+  const tenantId = await tenantIdFromHeaders();   // never throws; null on failure
+  return isV2('vehicles', tenantId) ? <VehiclesV2 /> : <LegacyVehicles />;
 }
 ```
 
@@ -214,6 +225,9 @@ export default async function VehiclesPage() {
 apps/portal/src/components/vehicles/        ← v1. Untouched. Deleted at the end.
 apps/portal/src/components/vehicles-v2/     ← v2. Yours.
 ```
+
+Neither `@/lib/v2` nor `@/lib/tenant-server` exists in `apps/portal` yet. Write
+them once, with the first area, and every later route reuses them.
 
 There is a working example of this already in the repo, from the booking-v2
 landing page. Read it before you write your own:
@@ -234,20 +248,20 @@ Note what that example does with failure:
 }
 ```
 
-**A flag lookup that throws must resolve to v1.** If the flag read fails, every
+**A gate that throws must resolve to v1.** If resolving the tenant fails, every
 tenant gets the screen they already had. If it fails open to v2, one bad query
 puts every tenant on unfinished code at once.
 
-Resolve the flag on the **server**, not in a client effect. A client-side
-resolve either blanks the page for everyone while the flag loads, or paints v1
+Resolve the gate on the **server**, not in a client effect. A client-side
+resolve either blanks the page for everyone while the tenant loads, or paints v1
 and swaps — which reads as a broken page on exactly the tenants you switched on.
 
 ### Why this is the rule
 
-Separate files are what make the flag **deletable**. At the end of a batch's
+Separate files are what make the gate **deletable**. At the end of an area's
 life the cleanup is: delete the v1 directory, delete the branch in the route,
-delete the flag. Three deletions, no judgement calls. That is only true if
-nothing v2 wrote ever went inside a v1 file.
+delete the entry in `V2_AREAS`. Three deletions, no judgement calls. That is
+only true if nothing v2 wrote ever went inside a v1 file.
 
 The alternative — flags sprinkled through components — is how a codebase
 accumulates flags that can never be removed, and how a "temporary" migration
@@ -283,7 +297,7 @@ migration window. Every schema change must leave v1 working unchanged.
 | Change a function's signature | every existing caller, including edge functions you did not think to grep |
 
 If you genuinely need a column to change shape: **add the new column beside the
-old one**, write to both, migrate readers one batch at a time, and drop the old
+old one**, write to both, migrate readers one area at a time, and drop the old
 column only after v1 is switched off. That is the same strangler pattern, one
 level down.
 
@@ -308,15 +322,20 @@ GRANT SELECT (your_new_column) ON public.tenants TO anon;
 See `supabase/migrations/20260820150000_add_booking_v2_flag.sql`, which
 documents this in place.
 
-### Do not add flag #72
+### Do not add flag #74
 
 `public.tenants` currently has **269 columns, 73 of them boolean**. Many are
 orphaned — flags for features that shipped, were removed, or were never
 finished, still being selected on every tenant load.
 
-**New feature flags do not go on `tenants`.** They go through `tenant_batches`
-and are read via `get_enabled_batch_keys()`. That is the whole reason the
-Control Center exists.
+**New feature flags do not go on `tenants`.** The next boolean here is #74. It
+would be selected on every tenant load forever, it would need its own `anon`
+grant or it takes every booking site down on the day it lands, and it would
+outlive the feature it was added for exactly the way the orphans above did.
+
+v2 gates live in application code instead (§2), keyed on the tenant id. They
+cost no column, no grant, no migration and no query — and deleting one is
+deleting a line.
 
 ---
 
@@ -336,7 +355,7 @@ ledger_entries   RLS OFF   ( 0 policies)
 app_users        RLS OFF   ( 5 policies defined — all inert)
 ```
 
-**74 of 223 public tables have RLS disabled overall.**
+**74 of 220 public tables have RLS disabled overall.**
 
 Note the second column. Six of those seven tables have policies written on
 them. **Policies on a table with RLS disabled do not run.** They are visible in
@@ -392,7 +411,7 @@ breaking at the same time.** `CREATE TRIGGER` alters no column, so it passes a
 "did you change any columns?" review — and then it changes what happens every
 time v1 writes a row.
 
-There are **183 triggers** on public tables today. Two real ones show both
+There are **181 triggers** on public tables today. Two real ones show both
 shapes of the problem:
 
 **`queue_for_rag()`** — attached to `rentals`, `payments`, `customers` and
@@ -470,7 +489,7 @@ supabase/functions/create-checkout-session-v2/    ← v2. Point northwind at it.
 The caller picks, the same way a route picks a component:
 
 ```ts
-const fn = batchKeys.includes('b9')
+const fn = isV2('checkout', tenant.id)
   ? 'create-checkout-session-v2'
   : 'create-checkout-session';
 await supabase.functions.invoke(fn, { body });
@@ -492,7 +511,7 @@ secret. Do not add a branch to `stripe-webhook-live`.
 SUPABASE_ACCESS_TOKEN=sbp_... npm run v1:check
 ```
 
-Run it **before you start** a batch and **after you finish** one. It re-reads
+Run it **before you start** a change and **after you finish** one. It re-reads
 production, compares it to `scripts/v1-check/baseline.json`, and exits non-zero
 if v1 has moved. Everything it does is a `SELECT`; it never writes.
 
@@ -509,11 +528,16 @@ rotation.
 | `TRIGGERS` | new/dropped/altered triggers; a new one on a pre-existing table | **BREAKING** |
 | `EDGE FNS` | any v1 function directory whose contents changed | **BREAKING** |
 | `V1 FILES` | any file in the v1 manifest whose contents changed | WARN — never fails the run |
-| `SMOKE` | 9 read-only queries proving v1's core still answers | **BREAKING** if any fails |
+| `SMOKE` | 7 read-only queries proving v1's core still answers | **BREAKING** if any fails |
 | `RLS` | how many core tables have RLS off | NOTE — informational, never fails |
 
 New files and new tables are **not** findings. A new file beside an old one is
 the strangler pattern working exactly as intended.
+
+The smoke set was 9 checks until the admin rollout feature was withdrawn: the
+two that asserted its tables and its function went with it, from both the repo
+and the database, and the baseline was re-snapshotted in that commit. That is
+also why the baseline counts below are a little lower than they were.
 
 ### When something fails
 
@@ -550,8 +574,8 @@ Re-running the snapshot to silence a failing check is the one way to make this
 whole directory worthless. The baseline is the record of what was agreed; a
 baseline regenerated whenever it complains records nothing.
 
-The current baseline covers 223 tables, 3,328 columns, 1,162 constraints, 903
-indexes, 551 function signatures, 183 triggers, 324 edge functions and 1,935 v1
+The current baseline covers 220 tables, 3,297 columns, 1,148 constraints, 893
+indexes, 550 function signatures, 181 triggers, 324 edge functions and 1,930 v1
 source files.
 
 ---
@@ -562,14 +586,14 @@ source files.
 
 ```
 project ref   hviqoaokxvlancmftwuo
-tables        223 public   (74 without RLS)
-functions     551 public
-triggers      183 public
+tables        220 public   (74 without RLS)
+functions     550 public
+triggers      181 public
 edge fns      324  (67 with verify_jwt = false)
 tenants       57 rows      (32 with an active/trialing/past_due subscription)
 ```
 
-RLS helper functions, still used by the 149 tables that do have RLS on:
+RLS helper functions, still used by the 146 tables that do have RLS on:
 `get_user_tenant_id()`, `is_super_admin()`, `is_primary_super_admin()`,
 `is_global_master_admin()`. Super admins have `tenant_id = NULL` in `app_users`,
 which is a live source of bugs in any edge function that reads
@@ -583,7 +607,7 @@ Five, not four. `apps/bonzah` is a real fifth app (the Bonzah partner console).
 |---|---|---|
 | `apps/portal` | operator admin portal | 1,319 |
 | `apps/booking` | customer booking + customer portal | 351 |
-| `apps/admin` | super-admin dashboard (hosts the Control Center) | 179 |
+| `apps/admin` | super-admin dashboard | 179 |
 | `apps/web` | marketing site | 7 |
 | `apps/bonzah` | Bonzah partner console | 4 |
 | | **total** | **1,860** |
@@ -605,8 +629,11 @@ compile the same way.
 | `apps/booking` | false | **true** | true |
 | `apps/portal` | false | **false** | true |
 
-`apps/admin` is the strict one. The Control Center lives there, so anything you
-add to it must actually typecheck.
+`apps/admin` is the strict one: `strict: true` and no `ignoreBuildErrors`, so a
+type error there fails the build instead of shipping. `apps/portal` is the loose
+one — `strictNullChecks: false` — so code that compiles there will not
+necessarily compile anywhere else, and a null it tolerated becomes a build
+failure the moment it moves.
 
 **Multi-tenancy resolution.** Portal: `{tenant}.portal.drive-247.com`. Booking:
 `{tenant}.drive-247.com`. Both extract the slug from the subdomain and inject an
@@ -630,12 +657,11 @@ an expected warning after a schema change — re-snapshot with the migration.
 
 ---
 
-## 10. Shipping a batch — the checklist
+## 10. Shipping a v2 change — the checklist
 
 1. `npm run v1:check` — start from a clean, passing state.
-2. Create the batch in `/admin/v2-control-center`. Give it an `area`. If the
-   unique index rejects it, another live batch already owns that area (§2) —
-   resolve that first, do not work around it.
+2. Name the area. Confirm nothing else in flight touches the files you are about
+   to touch (§2). If something does, resolve that first; do not work around it.
 3. Build v2 in **new files** beside the old ones. The only edit to a v1 file is
    the one-line branch at the route or layout level (§3).
 4. Any migration: additive only (§4). Any new column on `tenants`: grant it to
@@ -646,22 +672,20 @@ an expected warning after a schema change — re-snapshot with the migration.
    PR — it is the one class of bug nothing else will catch.
 7. `npm run v1:check`. It must pass, or every finding must be an intentional,
    reviewed change committed together with a fresh baseline.
-8. Enable the batch for `northwind` only. Verify on the canary.
-9. Roll out: 1–2 friendly tenants → batches of 5 → everyone. Stop at any step
-   that surprises you.
-10. When `status = completed`: delete the v1 files for that area, delete the
-    branch in the route, delete the flag. Then re-snapshot.
+8. Gate the area to `northwind` only. Verify on the canary.
+9. Widen: 1–2 friendly tenants → everyone. Stop at any step that surprises
+   you.
+10. Once it is live for every tenant: delete the v1 files for that area, delete
+    the branch in the route, delete the entry from `V2_AREAS`. Then re-snapshot.
 
 ---
 
 ## 11. Files worth reading, in this order
 
 ```
-supabase/migrations/20260902120000_add_v2_control_center.sql
-    The batch model, with the reasoning in comments. The authority.
-
 apps/booking/src/app/page.tsx
-    The strangler pattern, done correctly, already in production.
+    The strangler pattern, done correctly, already in production. Read this
+    first — it is the shape every v2 gate copies.
 
 apps/booking/src/app/booking-v2/page.tsx
     The standing-preview route pattern.
@@ -672,10 +696,11 @@ supabase/migrations/20260820150000_add_booking_v2_flag.sql
 scripts/v1-check/shared.mjs
     Every query behind the numbers in this document.
 
-apps/admin/app/admin/(protected)/v2-control-center/page.tsx
-    The Control Center UI.
+scripts/v1-check/check.mjs
+    What the guardrail actually asserts, smoke queries included.
 
 CLAUDE.md
     The v1 architecture. Long, and parts of it have drifted — verify anything
-    load-bearing against the database rather than trusting the prose.
+    load-bearing against the database rather than trusting the prose. It is
+    wrong about portal's middleware, among other things (§9).
 ```
