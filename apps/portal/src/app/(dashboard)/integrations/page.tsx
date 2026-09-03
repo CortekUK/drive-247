@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { isV2 } from '@/lib/v2';
-import { tenantIdFromHeaders } from '@/lib/tenant-server';
+import { tenantSlugFromHeaders } from '@/lib/tenant-server';
 import { IntegrationsBoard } from './integrations-board';
 
 /**
@@ -16,7 +16,7 @@ import { IntegrationsBoard } from './integrations-board';
  * when this route did not exist at all. No v1 behaviour changes for anyone,
  * because there is no v1 behaviour here to change.
  *
- * `tenantIdFromHeaders()` never throws and returns null on any failure, so an
+ * `tenantSlugFromHeaders()` never throws and returns null on any failure, so an
  * unresolvable tenant falls through to `notFound()` too. The gate fails closed
  * onto the pre-existing behaviour, never open onto unfinished code.
  *
@@ -29,9 +29,9 @@ import { IntegrationsBoard } from './integrations-board';
  * without a flash — the two cannot be the same file.
  */
 export default async function IntegrationsPage() {
-  const tenantId = await tenantIdFromHeaders();
+  const tenantSlug = await tenantSlugFromHeaders();
 
-  if (!isV2('appearance', tenantId)) {
+  if (!isV2('appearance', tenantSlug)) {
     notFound();
   }
 

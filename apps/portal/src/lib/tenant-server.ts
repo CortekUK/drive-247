@@ -1,49 +1,38 @@
 import { headers } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
 
 /**
- * Server-side tenant resolution, for deciding which version of a screen renders.
+ * The current tenant's SLUG, read on the server, for deciding which version of
+ * a screen renders.
  *
- * Server-only by construction: `next/headers` throws if this is ever imported
- * into a Client Component, which is the guarantee we want. (`server-only` is
- * not a dependency of this app and is not worth adding one for.)
+ * There is deliberately no database call here. `src/proxy.ts` already extracts
+ * the slug from the subdomain ({tenant}.portal.drive-247.com) and injects it as
+ * `x-tenant-slug`, so the answer is sitting in the request headers. An earlier
+ * version of this file looked the slug up in Supabase to turn it into a tenant
+ * id, purely so the gate could compare UUIDs — a round trip on EVERY portal
+ * page load, for all 57 tenants, to learn something the request already knew.
  *
- * v2 gates are resolved HERE — on the server, once, at the route level — and
- * never in a client effect. Resolving after hydration would either blank the
- * page for every tenant while the tenant loads, or paint v1 and swap, which
- * reads as a broken page on exactly the tenants you switched on.
+ * Keying gates on the slug also removes an entire class of bug. `northwind`
+ * exists in production and on the staging branch with different primary keys,
+ * so an id-keyed gate silently resolved to v1 on localhost while working in
+ * production — no error, no failed build, no failed check. The slug is stable
+ * everywhere.
  *
- * `x-tenant-slug` is injected by `src/proxy.ts` from the subdomain
- * ({tenant}.portal.drive-247.com). Locally that means visiting
- * `northwind.portal.localhost:3001`, not plain `localhost:3001` — on the bare
- * host there is no slug, so this returns null and every gate falls back to v1.
+ * Server-only by construction: `next/headers` throws if this is imported into
+ * a Client Component, which is the guarantee we want. Client components read
+ * the resolved flags from `lib/v2-context` instead — see V2_PLAN §3.
+ *
+ * Locally this means visiting `northwind.portal.localhost:3001`, not plain
+ * `localhost:3001` — on the bare host there is no slug, this returns null, and
+ * every gate falls back to v1.
  *
  * NOTE: portal's tenant middleware lives in `proxy.ts`, not `middleware.ts`
  * (Next.js 16 renamed the hook). CLAUDE.md still says `middleware.ts` and is
  * wrong about it.
  */
-export async function tenantIdFromHeaders(): Promise<string | null> {
+export async function tenantSlugFromHeaders(): Promise<string | null> {
   try {
     const headersList = await headers();
-    const tenantSlug = headersList.get('x-tenant-slug');
-    if (!tenantSlug) return null;
-
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anonKey) return null;
-
-    const supabase = createClient(url, anonKey);
-
-    // `maybeSingle`, not `single`: an unknown slug is a normal condition here
-    // (a reserved subdomain, a typo, a deleted tenant) and must resolve to null
-    // rather than throwing.
-    const { data } = await supabase
-      .from('tenants')
-      .select('id')
-      .eq('slug', tenantSlug)
-      .maybeSingle();
-
-    return data?.id ?? null;
+    return headersList.get('x-tenant-slug');
   } catch {
     // Never let a gate lookup take a page down. Null means v1, and v1 is the
     // screen every tenant already had.

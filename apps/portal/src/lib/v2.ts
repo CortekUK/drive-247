@@ -20,23 +20,21 @@
  */
 
 /**
- * The canary. A real tenant row carrying synthetic data only.
+ * The canary's SLUG, not its id.
  *
- * TWO ids, because `northwind` exists in both databases with DIFFERENT primary
- * keys — the staging branch was seeded separately, not cloned. Local dev points
- * at staging (`npm run db:switch`), so a prod-only id here makes every gate
- * silently resolve to v1 on localhost while working correctly in production.
- * That is a confusing failure: the code is right, the build is right, and the
- * screen is simply never the new one.
+ * `northwind` exists in production and on the staging branch with DIFFERENT
+ * primary keys, because staging was seeded separately rather than cloned. An
+ * id-keyed gate therefore resolves to v1 in whichever environment it was not
+ * written against — silently, with no error, no failed build and no failed
+ * check, so the screen simply is never the new one and it reads as an
+ * unfinished feature. That happened here.
  *
- * Listing both is safe. A staging id can never match a production tenant, so
- * the extra entry widens nothing.
+ * The slug is stable across every environment, and it is already in the
+ * `x-tenant-slug` header the middleware sets — so keying on it also removes a
+ * per-request Supabase round trip that existed only to turn the slug back into
+ * an id in order to compare UUIDs.
  */
-export const NORTHWIND_PROD = '6e5c544f-b374-451f-a662-360a634bff15';
-export const NORTHWIND_STAGING = '8e6bc88f-86d6-4468-8610-73f7c8a88f6e';
-
-/** Every environment's canary. Use this in `V2_AREAS`, not a bare id. */
-export const NORTHWIND: readonly string[] = [NORTHWIND_PROD, NORTHWIND_STAGING];
+export const NORTHWIND = 'northwind';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -44,26 +42,28 @@ export const NORTHWIND: readonly string[] = [NORTHWIND_PROD, NORTHWIND_STAGING];
  * Widen one step at a time, and only once the previous step has been live long
  * enough to have failed:  northwind → 1–2 friendly tenants → everyone.
  */
-const V2_AREAS = {
+const V2_AREAS: Record<string, readonly string[]> = {
   /** Settings → Appearance. A new route; v1 has no counterpart. */
-  appearance: [...NORTHWIND],
-  /**
-   * The v2 design tokens, scoped to `.v2-theme` on <body>.
-   * Restyles every shadcn primitive for gated tenants without editing one of
-   * them — see styles/v2-theme.css.
-   */
-  theme: [...NORTHWIND],
+  appearance: [NORTHWIND],
+  /** The v2 design tokens, scoped to `.v2-theme` on <body>. */
+  theme: [NORTHWIND],
   /** The v2 dashboard — new home screen body and its widgets. */
-  dashboard: [...NORTHWIND],
+  dashboard: [NORTHWIND],
   /** The v2 sidebar, user menu and right-edge dock. */
-  chrome: [...NORTHWIND],
+  chrome: [NORTHWIND],
   /** The v2 split-hero login screen. */
-  login: [...NORTHWIND],
+  login: [NORTHWIND],
   /** The v2 rentals list filter panel. */
-  rentals: [...NORTHWIND],
-} satisfies Record<string, readonly string[]>;
+  rentals: [NORTHWIND],
+};
 
-export type V2Area = keyof typeof V2_AREAS;
+export type V2Area =
+  | 'appearance'
+  | 'theme'
+  | 'dashboard'
+  | 'chrome'
+  | 'login'
+  | 'rentals';
 
 /**
  * Is this tenant on v2 for this area?
@@ -73,7 +73,7 @@ export type V2Area = keyof typeof V2_AREAS;
  * unfinished code at once, which is the one outcome this whole model exists to
  * prevent.
  */
-export function isV2(area: V2Area, tenantId: string | null | undefined): boolean {
-  if (!tenantId) return false;
-  return V2_AREAS[area].includes(tenantId);
+export function isV2(area: V2Area, tenantSlug: string | null | undefined): boolean {
+  if (!tenantSlug) return false;
+  return V2_AREAS[area]?.includes(tenantSlug) ?? false;
 }

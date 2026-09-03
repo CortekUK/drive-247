@@ -8,7 +8,7 @@ import "@/global.css";
 import "@/styles/v2-theme.css";
 import { isV2, type V2Area } from "@/lib/v2";
 import { V2Provider, type V2Flags } from "@/lib/v2-context";
-import { tenantIdFromHeaders } from "@/lib/tenant-server";
+import { tenantSlugFromHeaders } from "@/lib/tenant-server";
 
 export const dynamic = "force-dynamic";
 
@@ -143,10 +143,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   // The v2 theme gate, resolved on the server so the page paints correctly on
-  // the first byte. `tenantIdFromHeaders` never throws and returns null on any
+  // the first byte. `tenantSlugFromHeaders` never throws and returns null on any
   // failure, so a lookup problem leaves every tenant on the v1 theme rather
   // than repainting them.
-  const tenantId = await tenantIdFromHeaders();
+  const tenantSlug = await tenantSlugFromHeaders();
 
   // Every gate for this request, answered once. Client components read these
   // through useV2() instead of looking the tenant up again — see lib/v2-context.
@@ -159,7 +159,7 @@ export default async function RootLayout({
     "rentals",
   ];
   const v2Flags: V2Flags = Object.fromEntries(
-    v2Areas.map((a) => [a, isV2(a, tenantId)])
+    v2Areas.map((a) => [a, isV2(a, tenantSlug)])
   );
 
   const themeClass = v2Flags.theme ? "v2-theme" : undefined;
