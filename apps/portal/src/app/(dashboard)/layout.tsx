@@ -33,6 +33,11 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
+import {
+  SidebarProvider as SidebarProviderV2,
+  SidebarTrigger as SidebarTriggerV2,
+  SidebarInset as SidebarInsetV2,
+} from "@/components/ui-v2/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
@@ -86,6 +91,15 @@ export default function DashboardLayout({
   // v2 chrome gate, resolved on the server in the root layout (V2_PLAN §3).
   // A plain context read: no query, no effect, no flash. Falls back to v1.
   const v2Chrome = useV2("chrome");
+  // The sidebar primitives carry a React CONTEXT, and ui/ and ui-v2/ each
+  // define their own. AppSidebarV2 calls useSidebar() from ui-v2, so it must
+  // sit inside ui-v2's SidebarProvider — pairing it with v1's provider throws
+  // "useSidebar must be used within a SidebarProvider" at runtime, which no
+  // amount of typechecking catches because both modules export the same names.
+  // Provider, inset and trigger therefore switch together, as one set.
+  const Provider = v2Chrome ? SidebarProviderV2 : SidebarProvider;
+  const Inset = v2Chrome ? SidebarInsetV2 : SidebarInset;
+  const Trigger = v2Chrome ? SidebarTriggerV2 : SidebarTrigger;
   const { tenant, loading: tenantLoading } = useTenant();
   const {
     isSubscribed,
@@ -329,11 +343,11 @@ export default function DashboardLayout({
 
   return (
     <DynamicThemeProvider>
-      <SidebarProvider>
+      <Provider>
         {v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
-        <SidebarInset className="overflow-x-hidden">
+        <Inset className="overflow-x-hidden">
           <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
-            <SidebarTrigger className="-ml-1 flex-shrink-0" />
+            <Trigger className="-ml-1 flex-shrink-0" />
             <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
               <HeaderSearch />
             </div>
@@ -361,7 +375,7 @@ export default function DashboardLayout({
           <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
             {children}
           </main>
-        </SidebarInset>
+        </Inset>
 
         {/* v2 right-edge quick dock. v2 chrome only — v1 tenants never mount it. */}
         {v2Chrome && <QuickDock />}
@@ -425,7 +439,7 @@ export default function DashboardLayout({
             subscription gate, the policy gate and the setup reminder before
             seeing a single screen. Same rule as FeedbackForcePrompt above. */}
         <WelcomePackPrompt suppressed={showGate} />
-      </SidebarProvider>
+      </Provider>
     </DynamicThemeProvider>
   );
 }
