@@ -155,7 +155,6 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   // see that vehicle's service state.
   '/fleet-health': 'vehicles',
   '/rentals': 'rentals',
-  '/quotes': 'rentals',
   '/pending-bookings': 'pending_bookings',
   '/blocked-dates': 'availability',
   '/vehicle-owners': 'vehicle_owners',
