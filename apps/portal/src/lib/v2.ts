@@ -31,6 +31,12 @@ export const NORTHWIND = '6e5c544f-b374-451f-a662-360a634bff15';
 const V2_AREAS = {
   /** Settings → Appearance. A new route; v1 has no counterpart. */
   appearance: [NORTHWIND],
+  /**
+   * The v2 design tokens, scoped to `.v2-theme` on <body>.
+   * Restyles every shadcn primitive for gated tenants without editing one of
+   * them — see styles/v2-theme.css.
+   */
+  theme: [NORTHWIND],
 } satisfies Record<string, readonly string[]>;
 
 export type V2Area = keyof typeof V2_AREAS;

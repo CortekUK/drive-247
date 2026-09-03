@@ -3,6 +3,11 @@ import { headers } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { Providers } from "./providers";
 import "@/global.css";
+// Scoped v2 design tokens. Inert unless <body> carries `v2-theme`, which is
+// decided per-tenant below — so importing it changes nothing for v1 tenants.
+import "@/styles/v2-theme.css";
+import { isV2 } from "@/lib/v2";
+import { tenantIdFromHeaders } from "@/lib/tenant-server";
 
 export const dynamic = "force-dynamic";
 
@@ -131,11 +136,19 @@ const brandingScript = `
 })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The v2 theme gate, resolved on the server so the page paints correctly on
+  // the first byte. `tenantIdFromHeaders` never throws and returns null on any
+  // failure, so a lookup problem leaves every tenant on the v1 theme rather
+  // than repainting them.
+  const themeClass = isV2("theme", await tenantIdFromHeaders())
+    ? "v2-theme"
+    : undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -148,7 +161,7 @@ export default function RootLayout({
         />
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
-      <body suppressHydrationWarning>
+      <body suppressHydrationWarning className={themeClass}>
         <Providers>{children}</Providers>
       </body>
     </html>
