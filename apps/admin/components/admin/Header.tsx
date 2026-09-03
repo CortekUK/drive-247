@@ -1,6 +1,5 @@
 'use client';
 
-import { Fragment } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSidebar } from './SidebarContext';
@@ -21,6 +20,7 @@ function useBreadcrumbs() {
   const routeLabels: Record<string, string> = {
     '/admin/dashboard': 'Dashboard',
     '/admin/rentals': 'Rental Companies',
+    '/admin/signup-plans': 'Signup Plans',
     '/admin/blacklist': 'Global Blacklist',
     '/admin/contacts': 'Contact Requests',
     '/admin/settings': 'Settings',
@@ -81,18 +81,16 @@ export function Header() {
       <Breadcrumb className="flex-1">
         <BreadcrumbList>
           {breadcrumbs.map((crumb, index) => (
-            <Fragment key={`${crumb.href ?? crumb.label}-${index}`}>
+            <BreadcrumbItem key={index}>
               {index > 0 && <BreadcrumbSeparator />}
-              <BreadcrumbItem>
-                {crumb.href ? (
-                  <BreadcrumbLink asChild>
-                    <Link href={crumb.href}>{crumb.label}</Link>
-                  </BreadcrumbLink>
-                ) : (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                )}
-              </BreadcrumbItem>
-            </Fragment>
+              {crumb.href ? (
+                <BreadcrumbLink asChild>
+                  <Link href={crumb.href}>{crumb.label}</Link>
+                </BreadcrumbLink>
+              ) : (
+                <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+              )}
+            </BreadcrumbItem>
           ))}
         </BreadcrumbList>
       </Breadcrumb>

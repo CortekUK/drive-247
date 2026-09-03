@@ -7,6 +7,9 @@ import { DASHBOARD_SLIDES } from "@/lib/constants";
 import { useFadeIn } from "@/hooks/use-fade-in";
 
 export function OperationsDashboard() {
+  // Destructured rather than kept as objects: the react-hooks/refs lint rule
+  // flags `videoRow.ref` as a ref read during render. Destructuring at the call
+  // site is the same idiom every other section uses (see timeline.tsx).
   const { ref: videoRowRef, visible: videoRowVisible } = useFadeIn();
   const { ref: tabsRowRef, visible: tabsRowVisible } = useFadeIn();
 
