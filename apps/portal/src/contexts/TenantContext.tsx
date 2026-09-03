@@ -48,6 +48,7 @@ interface Tenant {
   maintenance_banner_enabled: boolean | null;
   maintenance_banner_message: string | null;
   monthly_tier_days: number | null;
+  integration_tesla_fleet: boolean | null;
   security_deposit_enabled: boolean | null;
   global_deposit_amount: number | null;
   deposit_mode: string | null;
@@ -139,7 +140,7 @@ const TENANT_MINIMAL_COLUMNS =
   'id, slug, company_name, status, auth_logo_url, privacy_policy_version, terms_version, policies_accepted_at';
 
 const TENANT_OPTIONAL_COLUMNS =
-  'contact_email, phone, admin_name, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, integration_twilio_sms, twilio_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
+  'contact_email, phone, admin_name, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, integration_twilio_sms, twilio_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
