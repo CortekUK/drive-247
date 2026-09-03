@@ -10,15 +10,6 @@
  * keys. Revenue Optimiser was removed from the product in 1e447d08 and this
  * file went with it. It is reinstated here scoped to Finance Sync ONLY —
  * do not re-add the revenue_optimiser_* keys, that surface is intentionally gone.
- *
- * The last survivor of that feature was the `tenants.revenue_optimiser_enabled`
- * column. Audited 2026-09-03: it was true for 0 of 57 tenants, so there is no
- * tenant state to honour and nothing to migrate. Its drop is drafted in
- * supabase/migrations/PENDING_20260903_drop_dead_columns.sql.txt — a deliberate
- * .txt draft, unapplied, because this repo's migrations are additive-only.
- * Treat the flag as having no storage: do not read it, do not write it, and do
- * not re-add it here if you find it still listed in a generated types.ts (the
- * generated types lag the drop until someone regenerates them).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
