@@ -285,6 +285,7 @@ export function AppSidebar() {
           { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
         ] : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
+        { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
       ],
