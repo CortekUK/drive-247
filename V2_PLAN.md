@@ -95,24 +95,40 @@ pull it back.
 **In application code, keyed on the tenant.** Resolve the tenant, ask whether it
 is on v2 for this area, render v2 or v1.
 
+**Key the gate on the tenant SLUG, never on a tenant id.** The same tenant has
+a different primary key in every environment — `northwind` is
+`6e5c544f-…` in production but `8e6bc88f-…` on the staging branch, because
+staging was seeded rather than cloned. An id-keyed gate therefore resolves to
+**v1 on localhost while you are building v2**, with no error, no failed build
+and no failed check. The developer concludes the feature is not wired up yet.
+That is the worst failure this model can produce, and it has already happened
+once. The slug is stable across every environment; use it.
+
 ```ts
 // apps/portal/src/lib/v2.ts   ← create this with the first v2 area
-export const NORTHWIND = '6e5c544f-b374-451f-a662-360a634bff15';
+/** Canary tenants, by slug. Stable across prod, staging and local. */
+const CANARY = ['northwind'] as const;
 
 /** One entry per v2 area. Today every list is just the canary. */
-const V2_AREAS = {
-  vehicles:  [NORTHWIND],
-  dashboard: [NORTHWIND],
-} satisfies Record<string, readonly string[]>;
+const V2_AREAS: Record<string, readonly string[]> = {
+  vehicles:  CANARY,
+  dashboard: CANARY,
+};
 
 export function isV2(
   area: keyof typeof V2_AREAS,
-  tenantId: string | null | undefined,
+  tenantSlug: string | null | undefined,
 ): boolean {
-  if (!tenantId) return false;          // unknown tenant ⇒ v1, always
-  return V2_AREAS[area].includes(tenantId);
+  if (!tenantSlug) return false;        // unknown tenant ⇒ v1, always
+  return V2_AREAS[area].includes(tenantSlug);
 }
 ```
+
+Note `V2_AREAS` is annotated rather than `satisfies`-ed. With `as const` the
+value type narrows to a literal union, and `.includes()` on a `readonly
+['northwind']` rejects any other string — so the call silently stops being a
+membership test and starts being a type error that `ignoreBuildErrors: true`
+throws away. That has also already happened once.
 
 Widening an area is an edit to that one file and a deploy — reviewed like any
 other change, reverted like any other change, and recorded in `git log`, which
@@ -439,7 +455,13 @@ CREATE OR REPLACE FUNCTION public.my_v2_trigger() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   -- v1 tenants must leave this function having done nothing at all.
-  IF NEW.tenant_id <> '6e5c544f-b374-451f-a662-360a634bff15'::uuid THEN
+  -- Resolve the canary by SLUG, not by a literal id: the same tenant has a
+  -- different primary key in every environment, so a hardcoded uuid makes the
+  -- trigger a no-op everywhere except the one database it was written against.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.tenants
+    WHERE id = NEW.tenant_id AND slug = ANY (ARRAY['northwind'])
+  ) THEN
     RETURN NEW;
   END IF;
 
@@ -672,11 +694,59 @@ an expected warning after a schema change — re-snapshot with the migration.
    PR — it is the one class of bug nothing else will catch.
 7. `npm run v1:check`. It must pass, or every finding must be an intentional,
    reviewed change committed together with a fresh baseline.
-8. Gate the area to `northwind` only. Verify on the canary.
+8. Gate the area to `northwind` only, **keyed on slug** (§2). Then verify it
+   properly — see "Verifying a gate" below. A gate that resolves to v1 with no
+   error is the failure this model produces most often, and the one that looks
+   least like a failure.
 9. Widen: 1–2 friendly tenants → everyone. Stop at any step that surprises
    you.
 10. Once it is live for every tenant: delete the v1 files for that area, delete
     the branch in the route, delete the entry from `V2_AREAS`. Then re-snapshot.
+
+### Verifying a gate — three cases, and never on status codes
+
+`notFound()` under portal's `(dashboard)` tree returns **HTTP 200**, not 404.
+The dashboard layout streams the response before the nested page resolves, so
+the status is already committed. The 404 *screen* renders correctly; the status
+line lies. Any smoke check that proves a gate is closed by asserting on a
+status code will pass while proving nothing.
+
+So assert on **rendered content**, and test three tenants, not two:
+
+| Case | Expect |
+|---|---|
+| `northwind` | the v2 component is present in the HTML |
+| a real non-canary tenant | it is absent |
+| a slug that does not exist at all | it is absent |
+
+Two cases cannot distinguish "the gate correctly refused" from "tenant lookup
+returned nothing, so everything renders empty". The third is what separates
+them. Note also that the SSR HTML under `(dashboard)` is only the auth
+skeleton, so assert on something that survives to the client, or read the RSC
+payload.
+
+### Removing a feature — prove completeness, don't infer it
+
+`v1:check` **cannot** tell you a removal was complete. It detects files that
+changed or disappeared; a file that should have been deleted and wasn't has not
+changed, so it produces no finding at all. A 17-file removal and an 18-file
+removal both come back clean.
+
+After the removal commit, run a positive assertion built from the feature name,
+not from your delete list:
+
+```bash
+git ls-tree -r --name-only HEAD | grep -icE 'inshur'   # must be 0
+```
+
+Build the pattern independently of whatever produced the delete list, and make
+no separator assumptions — `cmd-` misses `add_cmd_poll_cron.sql`, and `inshur-`
+misses `use-inshur.ts` and `INSHUR.pdf`. A checklist inherits the blind spots of
+the pass that wrote it; checking it with the same pattern only confirms them.
+
+Removing the source does **not** undeploy an edge function, and does not
+unschedule a `pg_cron` job. Both outlive the commit. Check
+`cron.job` and the deployed function list separately.
 
 ---
 
