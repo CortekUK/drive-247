@@ -30,6 +30,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { isBonzahSellable } from "@/lib/bonzah";
+import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
+import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 import BonzahInsuranceSelector from "@/components/rentals/bonzah-insurance-selector";
 import type { CoverageOptions } from "@/hooks/use-bonzah-premium";
 import { useBonzahVehicleEligibility } from "@/hooks/use-bonzah-vehicle-eligibility";
@@ -202,6 +204,8 @@ const CreateRental = () => {
   // whole coverage block is hidden rather than merely disabled.
   const skipInsurance = !isBonzahConnected || !isBonzahSellable(tenant);
   const queryClient = useQueryClient();
+  // Lean tenants cannot open this form without a usable Stripe Connect account.
+  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
   const { isManager, canEdit } = useManagerPermissions();
   const { appUser, isAdmin } = useAuth();
   const { logAction } = useAuditLog();
@@ -2936,6 +2940,15 @@ const CreateRental = () => {
     if (process.env.NODE_ENV !== 'development') return;
     resetRentalForm();
   };
+
+  // ROUTE-LEVEL gate (lean tenants only). Every New Rental button also raises
+  // this dialog before navigating, but the check has to exist HERE too or the
+  // block is bypassed by typing /rentals/new into the address bar. Returning
+  // instead of the form — rather than early-returning higher up — keeps every
+  // hook above unconditionally called.
+  if (rentalCreationBlocked) {
+    return <ConnectStripeRequiredDialog open />;
+  }
 
   return (
     <>

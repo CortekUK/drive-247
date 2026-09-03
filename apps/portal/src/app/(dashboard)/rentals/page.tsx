@@ -59,6 +59,8 @@ import { CalendarView } from "@/components/rentals/calendar/calendar-view";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
+import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import {
   Pagination,
@@ -77,6 +79,9 @@ const RentalsList = () => {
   const [reviewRental, setReviewRental] = useState<EnhancedRental | null>(null);
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  // Lean tenants only; a constant false for everyone else.
+  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
+  const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);
 
   const currentView = searchParams.get("view") || "list";
 
@@ -305,7 +310,14 @@ const RentalsList = () => {
           </Button>
           {canEdit('rentals') && (
             <Button
-              onClick={() => router.push("/rentals/new")}
+              // Lean tenants without a usable Stripe Connect account get told
+              // why instead of a form that cannot take a payment. Non-lean
+              // tenants are never blocked, so this navigates as it always did.
+              onClick={() =>
+                rentalCreationBlocked
+                  ? setShowConnectStripeDialog(true)
+                  : router.push("/rentals/new")
+              }
               className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -657,6 +669,13 @@ const RentalsList = () => {
           }}
         />
       )}
+
+      {/* Lean tenants without usable Stripe Connect — dismissible here, because
+          there IS a page behind it to return to. */}
+      <ConnectStripeRequiredDialog
+        open={showConnectStripeDialog}
+        onOpenChange={setShowConnectStripeDialog}
+      />
     </div>
   );
 };

@@ -46,6 +46,8 @@ import { FineStatusBadge } from "@/components/shared/status/fine-status-badge";
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
+import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
+import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 import { formatCurrency, getCurrencySymbol } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { useGigDriverImages, useDeleteGigDriverImage } from "@/hooks/use-gig-driver-images";
@@ -126,6 +128,14 @@ const CustomerDetail = () => {
 
   const { tenant } = useTenant();
   const { toast } = useToast();
+  // Lean tenants only; a constant false for everyone else. All four New Rental
+  // entry points on this page route through goToNewRental below.
+  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
+  const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);
+  const goToNewRental = () =>
+    rentalCreationBlocked
+      ? setShowConnectStripeDialog(true)
+      : router.push(`/rentals/new?customer=${id}`);
   const currencyCode = tenant?.currency_code || 'USD';
 
   const { blockCustomer, unblockCustomer, isLoading: blockingLoading } = useCustomerBlockingActions();
@@ -473,7 +483,7 @@ const CustomerDetail = () => {
           <div className="flex flex-wrap items-center gap-2">
             {!customer.is_blocked ? (
               <>
-                <Button size="sm" onClick={() => router.push(`/rentals/new?customer=${id}`)}>
+                <Button size="sm" onClick={goToNewRental}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add Rental
                 </Button>
@@ -784,7 +794,7 @@ const CustomerDetail = () => {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Customer Rentals</span>
-                <Button onClick={() => router.push(`/rentals/new?customer=${id}`)} size="sm">
+                <Button onClick={goToNewRental} size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Rental
                 </Button>
@@ -895,7 +905,7 @@ const CustomerDetail = () => {
                   title="No rentals found"
                   description="This customer doesn't have any rental agreements yet."
                   actionLabel="Add First Rental"
-                  onAction={() => router.push(`/rentals/new?customer=${id}`)}
+                  onAction={goToNewRental}
                 />
               )}
             </CardContent>
@@ -1281,7 +1291,7 @@ const CustomerDetail = () => {
                   title="No vehicle history"
                   description="This customer hasn't rented any vehicles yet."
                   actionLabel="Add First Rental"
-                  onAction={() => router.push(`/rentals/new?customer=${id}`)}
+                  onAction={goToNewRental}
                 />
               )}
             </CardContent>
@@ -1681,6 +1691,13 @@ const CustomerDetail = () => {
           customerName={customer.name}
         />
       )}
+
+      {/* Lean tenants without usable Stripe Connect — dismissible here, because
+          there IS a page behind it to return to. */}
+      <ConnectStripeRequiredDialog
+        open={showConnectStripeDialog}
+        onOpenChange={setShowConnectStripeDialog}
+      />
     </div>
   );
 };
