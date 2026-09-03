@@ -19,8 +19,12 @@ out/
 # Turbo
 .turbo/
 
-# Incremental TypeScript build caches — regenerated on every build, noise in diffs
-apps/*/tsconfig.tsbuildinfo
+# Incremental TypeScript build caches — regenerated on every build, noise in diffs.
+# Unanchored and extension-only on purpose: the old "apps/*/tsconfig.tsbuildinfo"
+# matched none of the four that were actually committed — tsconfig.check.tsbuildinfo
+# (a ".check." infix), the root tsconfig.tsbuildinfo (not under apps/), and
+# v2/apps/web/tsconfig.tsbuildinfo (v2/ prefix).
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
