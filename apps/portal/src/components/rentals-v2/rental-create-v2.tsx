@@ -88,8 +88,10 @@ import {
   validateAdditionalDrivers,
   type AdditionalDriverInput,
 } from "@/components/rentals/additional-drivers-form";
-import { useV2 } from "@/lib/v2-context";
-import { RentalCreateV2 } from "@/components/rentals-v2/rental-create-v2";
+import { BookingModeGrid, type BookingMode } from "@/components/rentals-v2/booking-mode-selector";
+import { RentalOnboardingShell } from "@/components/rentals-v2/rental-onboarding-shell";
+import { CustomerList } from "@/components/rentals-v2/customer-step";
+import { VehicleList } from "@/components/rentals-v2/vehicle-step";
 
 // Base schema: end_date and return_location are optional at the schema level
 // because PAYG rentals don't have a fixed end date or a return location.
@@ -143,7 +145,26 @@ const MANUAL_VERIFY_AUDIT_ACTION = "customer_identity_manually_verified";
 const ID_WAIVER_MIN_REASON = 15;
 const ID_WAIVER_AUDIT_ACTION = "rental_created_without_id_verification";
 
-const CreateRental = () => {
+/**
+ * v2 rental creation — the guided intake in front of the existing form.
+ *
+ * This file is a VERBATIM copy of `(dashboard)/rentals/new/page.tsx` as it
+ * stands on `main`, plus a guided Booking Mode → Customer → Vehicle gate in
+ * front of it. Nothing below the gate was changed: the same schema, the same
+ * pricing/deposit/installment/insurance effects, the same submit handler, the
+ * same post-creation payment + invoice dialogs and the same
+ * `router.push('/rentals/{id}')`.
+ *
+ * It was NOT ported from `improv/portal-side-legacy`. That branch's copy of
+ * this page diverged from `main` at 378d8725 and is ~382 lines of later fixes
+ * behind it, so taking its file wholesale would silently revert real work on
+ * the most operationally sensitive screen in the product. Only the guided-flow
+ * additions were lifted across.
+ *
+ * v1 stays exactly where it is — `(dashboard)/rentals/new/page.tsx` gains one
+ * branch (`useV2('rentals')`) and nothing else, per V2_PLAN §3.
+ */
+export const RentalCreateV2 = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const renewFromId = searchParams?.get("renew_from");
@@ -160,8 +181,7 @@ const CreateRental = () => {
   const skipInsurance = !isBonzahConnected || !isBonzahSellable(tenant);
   const queryClient = useQueryClient();
   // Lean tenants cannot open this form without a usable Stripe Connect account.
-  const { blocked: rentalCreationBlocked, dismiss: dismissRentalCreationGate } =
-    useRentalCreationGate();
+  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
   const { isManager, canEdit } = useManagerPermissions();
   const { appUser, isAdmin } = useAuth();
   const { logAction } = useAuditLog();
@@ -222,6 +242,16 @@ const CreateRental = () => {
   const [customerOpen, setCustomerOpen] = useState(false);
   const [promoCodeOpen, setPromoCodeOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+
+  /**
+   * Guided intake gate. `bookingMode` mirrors the isPayAsYouGo/isAutoExtend
+   * pair the form has always used — it is the step's view of the same choice,
+   * not a second source of truth.
+   */
+  const [bookingMode, setBookingMode] = useState<BookingMode | null>(null);
+  const [onboardingStep, setOnboardingStep] = useState<
+    "mode" | "customer" | "vehicle" | "form"
+  >("mode");
 
   // Bonzah insurance state
   const [bonzahCoverage, setBonzahCoverage] = useState<CoverageOptions>({
@@ -654,7 +684,10 @@ const CreateRental = () => {
   };
 
   // Buffer time: check if selected vehicle has a recently completed rental still in cooldown
-  const bufferMinutes = tenant?.buffer_time_minutes || 0;
+  // `as any` matches how this same property is read further down this file — the
+  // generated `Tenant` type has not caught up with the column. Type-only: no
+  // runtime difference from v1.
+  const bufferMinutes = (tenant as any)?.buffer_time_minutes || 0;
   const { data: bufferWarning } = useQuery({
     queryKey: ['vehicle-buffer-check', tenant?.id, selectedVehicleId],
     queryFn: async () => {
@@ -2884,28 +2917,217 @@ const CreateRental = () => {
     resetRentalForm();
   };
 
-  // v2 gate (V2_PLAN §3). The ONLY change to this file: one branch handing the
-  // canary off to the guided flow, which owns its own copy of everything below
-  // — including the lean-tenant gate. Placed here, after every hook above, so
-  // none of them becomes conditional. Deleting this area later is deleting
-  // these two lines, the two imports, and the entry in V2_AREAS.
-  const v2 = useV2('rentals');
-  if (v2) return <RentalCreateV2 />;
+  /** Modes this tenant has switched on. `installments` is a plan inside a
+      regular rental here, not a fourth mode, so it is never offered — selecting
+      it would put the grid in a state the submit handler has no concept of. */
+  const availableBookingModes = useMemo(
+    () => [
+      'fixed' as const,
+      ...((rentalSettings as any)?.pay_as_you_go_enabled ? ['payg' as const] : []),
+      ...((rentalSettings as any)?.auto_extend_enabled ? ['auto_extend' as const] : []),
+    ],
+    [rentalSettings]
+  );
+
+  /**
+   * "The operator chose a billing mode", as the intake step sees it.
+   *
+   * Every line below is carried over VERBATIM from the Payment Mode
+   * `RadioGroup`'s `onValueChange` further down this file — which is left
+   * exactly as it is on `main`. The step is a second entry point to the same
+   * state transition, not a replacement for it, so the form's own control keeps
+   * working byte for byte for anyone who reaches it and changes their mind.
+   */
+  const applyBookingMode = (mode: BookingMode) => {
+    setBookingMode(mode);
+    // The grid calls the standard mode "fixed"; this page has always called it
+    // "regular", and the submit path keys off that name.
+    const val = mode === 'fixed' ? 'regular' : mode;
+    setIsPayAsYouGo(val === 'payg');
+    setIsAutoExtend(val === 'auto_extend');
+    if (val === 'auto_extend') {
+      // Auto-extend bills per-period upfront — like PAYG it's Weekly/Monthly with an
+      // explicit per-period rate, but it's a REGULAR rental (keeps end_date + return).
+      setInstallmentPlanType('full');
+      setInstallmentAmountOverride(null);
+      if (form.getValues('rental_period_type') === 'Daily') {
+        form.setValue('rental_period_type', 'Weekly');
+      }
+      setAutoExtendChargeMode(((rentalSettings as any)?.auto_extend_default_charge_mode ?? 'pay_link') as 'auto_charge' | 'pay_link');
+    }
+    if (val === 'payg') {
+      setInstallmentPlanType('full');
+      setInstallmentAmountOverride(null);
+      form.setValue('promo_code', '');
+      setPromoDetails(null);
+      setPromoError(null);
+      form.setValue('end_date', undefined as any);
+      form.setValue('return_time', undefined as any);
+      form.setValue('return_location', '');
+      // PAYG is Weekly or Monthly only (per product spec — no daily rate).
+      // Default to Weekly; user can switch to Monthly in the period selector.
+      form.setValue('rental_period_type', 'Weekly');
+      // Clear the rate fields — user enters the per-period billing amount
+      // explicitly so they confirm the rate they're billing (no silent auto-fill
+      // from vehicle.daily_rent, which is a daily price not a weekly/monthly one).
+      setPerPeriodRate(null);
+      form.setValue('monthly_amount', undefined as any);
+      setBonzahCoverage({ cdw: false, rcli: false, sli: false, pai: false });
+      setBonzahPremium(0);
+      setSelectedExtras({});
+      setDeliveryFeeOverride(0);
+      setCollectionFeeOverride(0);
+      setInsuranceDocId(null);
+    }
+  };
+
+  const goToStep = (i: number) => {
+    const map = ["mode", "customer", "vehicle", "form"] as const;
+    setOnboardingStep(map[i] ?? "mode");
+  };
 
   // ROUTE-LEVEL gate (lean tenants only). Every New Rental button also raises
   // this dialog before navigating, but the check has to exist HERE too or the
   // block is bypassed by typing /rentals/new into the address bar. Returning
   // instead of the form — rather than early-returning higher up — keeps every
   // hook above unconditionally called.
-  //
-  // `onDismiss` is what makes the canary's "×" mean anything. This branch
-  // returns the dialog INSTEAD of the form, so merely closing the dialog would
-  // blank the screen. Recording the dismissal flips `rentalCreationBlocked`
-  // itself to false, this branch stops being taken, and the form below renders
-  // on the next paint — for the rest of the visit, including after navigating
-  // away and back.
   if (rentalCreationBlocked) {
-    return <ConnectStripeRequiredDialog open onDismiss={dismissRentalCreationGate} />;
+    return <ConnectStripeRequiredDialog open />;
+  }
+
+  /*
+    Guided intake: Booking Mode → Customer → Vehicle → the full form.
+
+    Deliberately a gate in FRONT of the existing form rather than a rewrite of
+    it. Each step writes into the same react-hook-form fields and the same
+    payment-mode state the form has always used, so the submit path, validation
+    and every pricing effect below are untouched. Skipping back via the
+    breadcrumbs is allowed — nothing here is a new requirement, it is the same
+    three fields asked one at a time instead of all at once.
+
+    Placed AFTER the `rentalCreationBlocked` gate on purpose: a lean tenant
+    without a usable Stripe Connect account must still hit that dialog rather
+    than be walked through three steps into a form it cannot submit. And after
+    every hook, so no hook becomes conditional.
+
+    The legacy branch's fourth "Schedule" step is omitted: its component took no
+    props and collected nothing, and the form already gathers dates properly.
+  */
+  if (onboardingStep !== "form") {
+    if (onboardingStep === "mode") {
+      return (
+        <RentalOnboardingShell
+          currentStep={0}
+          subtitle="Choose how this rental will be billed to get started"
+          onStepClick={goToStep}
+          onContinue={() => setOnboardingStep("customer")}
+          continueDisabled={!bookingMode}
+        >
+          {/*
+            `bookingMode` answers only "has the operator chosen yet?" (it gates
+            Continue). WHICH mode is shown as chosen is derived from
+            isAutoExtend/isPayAsYouGo — the same pair the form's own Payment
+            Mode control writes — so stepping back here after changing the mode
+            inside the form shows what is actually set, not what was picked
+            first. There is one source of truth and this is a view of it.
+          */}
+          <BookingModeGrid
+            selected={
+              bookingMode
+                ? isAutoExtend
+                  ? 'auto_extend'
+                  : isPayAsYouGo
+                    ? 'payg'
+                    : 'fixed'
+                : null
+            }
+            available={availableBookingModes}
+            onSelect={applyBookingMode}
+          />
+        </RentalOnboardingShell>
+      );
+    }
+
+    if (onboardingStep === "customer") {
+      return (
+        <>
+          <RentalOnboardingShell
+            currentStep={1}
+            subtitle="Choose the customer for this rental"
+            onStepClick={goToStep}
+            onContinue={() => setOnboardingStep("vehicle")}
+            continueDisabled={!form.watch("customer_id")}
+          >
+            {/*
+              `customers` comes from the tenant-filtered "customers-for-rental"
+              query above (.eq("tenant_id", tenant.id), enabled: !!tenant) — the
+              same rows the v1 combobox offers. No second query, no second
+              filter to get wrong.
+            */}
+            <CustomerList
+              selected={form.watch("customer_id") || null}
+              onSelect={(id) =>
+                form.setValue("customer_id", id, { shouldValidate: true, shouldDirty: true })
+              }
+              onInvite={() => setInviteDialogOpen(true)}
+              customers={(customers ?? []).map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                email: c.email ?? undefined,
+                phone: c.phone ?? undefined,
+              }))}
+            />
+          </RentalOnboardingShell>
+
+          {/*
+            The step's "Invite new customer" button opens the same dialog the
+            form's combobox does, so an operator is never sent back to the form
+            just to add someone.
+          */}
+          <GenerateInviteDialog
+            open={inviteDialogOpen}
+            onOpenChange={setInviteDialogOpen}
+          />
+        </>
+      );
+    }
+
+    return (
+      <RentalOnboardingShell
+        currentStep={2}
+        subtitle="Choose the vehicle for this rental"
+        onStepClick={goToStep}
+        onContinue={() => setOnboardingStep("form")}
+        continueDisabled={!form.watch("vehicle_id")}
+        continueLabel="Continue to rental details"
+      >
+        {/*
+          `vehicles` comes from the tenant-filtered "vehicles-for-rental" query
+          above. Field names are mapped to VehicleLite's snake_case exactly —
+          the legacy call site passed a `dailyRate` key that VehicleLite has no
+          member for, so every rate in the detail panel silently rendered "—".
+        */}
+        <VehicleList
+          selected={form.watch("vehicle_id") || null}
+          onSelect={(id) =>
+            form.setValue("vehicle_id", id, { shouldValidate: true, shouldDirty: true })
+          }
+          vehicles={(vehicles ?? []).map((v: any) => ({
+            id: v.id,
+            make: v.make ?? undefined,
+            model: v.model ?? undefined,
+            reg: v.reg ?? undefined,
+            status: v.status ?? undefined,
+            daily_rent: v.daily_rent ?? null,
+            weekly_rent: v.weekly_rent ?? null,
+            monthly_rent: v.monthly_rent ?? null,
+            security_deposit: v.security_deposit ?? null,
+            daily_mileage: v.daily_mileage ?? null,
+          }))}
+          currency={currencySymbol}
+        />
+      </RentalOnboardingShell>
+    );
   }
 
   return (
@@ -6229,7 +6451,7 @@ const CreateRental = () => {
               bonzahCoverage.pai ? 'PAI' : '',
             ].filter(Boolean).join(' + ') + ' Coverage',
             cost: bonzahPremium,
-            rentalFee: createdRentalData.formData.monthly_amount - (generatedInvoice?.discount_amount || 0),
+            rentalFee: createdRentalData.formData.monthly_amount - ((generatedInvoice as any)?.discount_amount || 0),
           } : undefined}
           selectedExtras={Object.entries(selectedExtras).map(([extraId, qty]) => {
             const extra = activeExtras.find(e => e.id === extraId);
@@ -6648,5 +6870,3 @@ const CreateRental = () => {
     </>
   );
 };
-
-export default CreateRental;

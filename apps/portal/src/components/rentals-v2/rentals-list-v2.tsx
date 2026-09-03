@@ -1,16 +1,34 @@
 "use client";
 
+/**
+ * The v2 rentals list.
+ *
+ * A verbatim copy of `(dashboard)/rentals/page.tsx` as it stands on main, with
+ * three additions layered on top and nothing else changed:
+ *
+ *   1. the overview row above the table — status donut, new-rentals trend,
+ *      booked value, and the calendar-view card (`rentals-overview.tsx`)
+ *   2. the request chips beneath it (`rentals-request-chips.tsx`)
+ *   3. the v2 filter surface, which was previously swapped inline in the page
+ *
+ * Copied rather than shared, per V2_PLAN §3: the v1 page keeps working byte for
+ * byte for the tenants still on it, this file is free to move, and retiring the
+ * area is deleting a directory and one `if`.
+ *
+ * The query is untouched. `useEnhancedRentals` is called with exactly the same
+ * filters object the v1 page builds — the same rows, in the same order, for the
+ * same tenant. Everything added here is presentation above the table, or a
+ * count that filters by `tenant_id` itself (§5).
+ */
+
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+// CardHeader / CardTitle / CardDescription came across with the copy but the
+// only Card left on this screen is the table's shell — the four tiles they
+// titled are now `rentals-overview.tsx`, which imports its own.
+import { Card, CardContent } from "@/components/ui-v2/card";
+import { Badge } from "@/components/ui-v2/badge";
+import { Button } from "@/components/ui-v2/button";
 import {
   Table,
   TableBody,
@@ -18,7 +36,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@/components/ui-v2/table";
 import {
   FileText,
   Plus,
@@ -49,9 +67,9 @@ const formatTimeOfDay = (value: string | null | undefined): string | null => {
 import Link from "next/link";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
-import { RentalsFilters } from "@/components/rentals/rentals-filters";
-import { RentalsListV2 } from "@/components/rentals-v2/rentals-list-v2";
-import { useV2 } from "@/lib/v2-context";
+import { RentalsFilterBar } from "@/components/rentals-v2/rentals-filter-bar";
+import { RentalsOverview } from "@/components/rentals-v2/rentals-overview";
+import { RentalsRequestChips } from "@/components/rentals-v2/rentals-request-chips";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
@@ -69,9 +87,9 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from "@/components/ui-v2/pagination";
 
-const RentalsList = () => {
+export function RentalsListV2() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
@@ -84,11 +102,6 @@ const RentalsList = () => {
   const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);
 
   const currentView = searchParams.get("view") || "list";
-
-  // The rentals area's v2 gate, resolved on the server in the root layout and
-  // read here synchronously — no lookup, no effect, no flash. False for every
-  // tenant but the canary. Everything below this hook is v1, unchanged.
-  const v2 = useV2("rentals");
 
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
@@ -117,17 +130,21 @@ const RentalsList = () => {
       // Set by the app-wide deposit-hold banner CTAs. Without this the banner
       // counts N rentals and then hands the operator an unfiltered list.
       depositHold: searchParams.get("depositHold") || undefined,
+      // `useEnhancedRentals` has always read these three and the filter surface
+      // has always written them, but nothing parsed them back out of the URL —
+      // so a click set the parameter and the very next render dropped it again.
+      // They are parsed here rather than in the v1 page because v1's own bar
+      // offers the same three controls, and parsing them there would start
+      // narrowing the list for tenants whose rows must not move.
+      paymentType: (searchParams.get("paymentType") as "payg" | "regular" | null) || undefined,
+      extensionRequested: searchParams.get("extensionRequested") === "true" || undefined,
+      cancellationRequested:
+        searchParams.get("cancellationRequested") === "true" || undefined,
     }),
     [searchParams]
   );
 
   const { data, isLoading } = useEnhancedRentals(filters);
-
-  // The whole of the v2 branch — one `if`, after every hook so none of them
-  // becomes conditional, and nothing below it touched. V2_PLAN §3: the new
-  // screen is a separate file, so retiring this area is deleting that file,
-  // this branch and the entry in V2_AREAS.
-  if (v2) return <RentalsListV2 />;
 
   const { rentals, allRentals, stats, totalCount, totalPages } = data || {
     rentals: [],
@@ -318,49 +335,29 @@ const RentalsList = () => {
         </div>
       </div>
 
-      {/* Quick Stats — list view only */}
-      {currentView !== "calendar" && stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Total Rentals</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-success">
-                {stats.active}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Active</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-card hover:bg-accent/50 border transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
-                {stats.closed}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5 border-amber-500/20 hover:border-amber-500/40 transition-all duration-200 cursor-pointer hover:shadow-md">
-            <CardContent className="p-3 sm:p-4">
-              <div className="text-xl sm:text-2xl font-bold text-amber-500">
-                {stats.pending}
-              </div>
-              <p className="text-xs sm:text-sm text-muted-foreground">Pending</p>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Overview — list view only */}
+      {currentView !== "calendar" && (
+        <RentalsOverview
+          stats={stats}
+          rentals={allRentals}
+          currencySymbol={getCurrencySymbol(tenant?.currency_code || "USD")}
+          onOpenCalendar={() => handleViewChange("calendar")}
+        />
       )}
 
       {/* Filters — list view only */}
       {currentView !== "calendar" && (
-        <RentalsFilters
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          onClearFilters={handleClearFilters}
-        />
+        <div className="space-y-3">
+          <RentalsFilterBar
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onClearFilters={handleClearFilters}
+          />
+          {/* The two requests an operator has to answer, hoisted out of the
+              filter panel so they are visible without opening it. Same filter
+              keys, so the chip and the panel's Requests section stay in step. */}
+          <RentalsRequestChips filters={filters} onFiltersChange={handleFiltersChange} />
+        </div>
       )}
 
       {/* Calendar View */}
@@ -638,6 +635,13 @@ const RentalsList = () => {
           }}
           rental={{
             id: selectedRental.id,
+            // `ExtensionRequestDialog` declares `start_date` required and
+            // divides by (end_date - start_date) to price an extension. The v1
+            // page has never passed it, so that subtraction runs against
+            // undefined and quotes NaN days. Passing it here is what makes this
+            // file typecheck, and it is the same one-line fix the design branch
+            // carried; the v1 page keeps its behaviour byte for byte.
+            start_date: selectedRental.start_date || '',
             end_date: selectedRental.end_date || '',
             previous_end_date: selectedRental.previous_end_date || null,
             customers: {
@@ -662,6 +666,4 @@ const RentalsList = () => {
       />
     </div>
   );
-};
-
-export default RentalsList;
+}
