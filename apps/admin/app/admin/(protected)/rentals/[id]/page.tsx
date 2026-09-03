@@ -53,6 +53,7 @@ import { TenantCreditsTab } from '@/components/admin/tenant-credits-tab';
 import { TenantPaymentsTab } from '@/components/admin/tenant-payments-tab';
 import { FinanceEventsTab } from '@/components/admin/finance-events-tab';
 import { AdminTodosTab } from '@/components/admin-todos/admin-todos-tab';
+import { isLeanTenant } from '@/lib/lean-tenants';
 import {
   ArrowLeft,
   Pencil,
@@ -1704,7 +1705,15 @@ export default function TenantDetailsPage() {
           <TabsTrigger value="management">Management</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="finance">Finance Sync</TabsTrigger>
+          {/* Finance Sync is the per-tenant view of the parked Accounting
+              integration, so it follows the same gate as the tenant's own
+              Settings > Accounting tab. This is the ONLY tenant-scoped
+              accounting surface in the admin console; nothing cross-tenant is
+              gated, because the console is otherwise a view ACROSS tenants and
+              the park is per-tenant. */}
+          {!isLeanTenant(tenant.slug) && (
+            <TabsTrigger value="finance">Finance Sync</TabsTrigger>
+          )}
           <TabsTrigger value="todos">Todos</TabsTrigger>
         </TabsList>
 
@@ -2893,10 +2902,16 @@ export default function TenantDetailsPage() {
           </div>
         </TabsContent>
 
-        {/* Finance Sync Tab — super-admin debug view into the financial_events ledger */}
-        <TabsContent value="finance" className="space-y-6">
-          <FinanceEventsTab tenantId={tenant.id} />
-        </TabsContent>
+        {/* Finance Sync Tab — super-admin debug view into the financial_events
+            ledger. Gated alongside its trigger, not just the trigger: Tabs
+            keeps `?tab=` and programmatic `value` changes working even when no
+            trigger is rendered, so gating the trigger alone would still serve
+            the panel to anyone who typed or bookmarked the tab. */}
+        {!isLeanTenant(tenant.slug) && (
+          <TabsContent value="finance" className="space-y-6">
+            <FinanceEventsTab tenantId={tenant.id} />
+          </TabsContent>
+        )}
 
         {/* Todos Tab — per-tenant Kanban board (visible only on this tenant's page) */}
         <TabsContent value="todos" className="space-y-6">

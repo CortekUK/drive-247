@@ -226,6 +226,24 @@ const Settings = () => {
   // 7 tenants have the flag on and keep the switch.
   const hideVehicleOwnersToggle = isAreaHidden('owners', tenantSlug);
 
+  // Accounting (Xero + Zoho Books) is hidden from the lean canary and that
+  // tenant ONLY. Everything behind this tab stays on main: the 15 edge
+  // functions, both OAuth pairs, the sync worker, the token refresher and the
+  // void-on-refund hooks in reject-rental / cancel-rental-refund. This tab is
+  // the only way any of the other 56 tenants could ever connect a ledger, so
+  // hiding it from them would remove the feature in the only sense that
+  // matters — which is exactly what deleting it from main did.
+  const hideAccountingTab = isAreaHidden('accounting', tenantSlug);
+
+  // The tab actually rendered. Identical to `activeTab` for every tenant with
+  // the gate off; for a lean tenant it falls back to the first visible tab if
+  // `activeTab` is one the gate hides. See the note on <Tabs> below for why
+  // this is derived at render rather than corrected in an effect.
+  const effectiveTab =
+    activeTab === 'accounting' && hideAccountingTab
+      ? (visibleTabs.find(t => t !== 'accounting') || 'general')
+      : activeTab;
+
   // Vehicle Owners + Owner Payouts feature toggle
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
   const [savingVehicleOwners, setSavingVehicleOwners] = useState(false);
@@ -672,7 +690,16 @@ const Settings = () => {
   // Handle URL tab parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && allSettingsTabs.includes(tabParam) && canViewSettings(tabParam)) {
+    if (
+      tabParam &&
+      allSettingsTabs.includes(tabParam) &&
+      canViewSettings(tabParam) &&
+      // A hidden tab must not be reachable by typing or bookmarking its URL.
+      // This runs on mount, when `tenantSlug` can still be null for a tick, so
+      // it is the first of two guards — `effectiveTab` below is the one that
+      // holds once the slug actually resolves.
+      !(tabParam === 'accounting' && hideAccountingTab)
+    ) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -1716,8 +1743,15 @@ const Settings = () => {
         </div>
       </div>
 
-      {/* Settings Tabs */}
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
+      {/* Settings Tabs.
+          `effectiveTab` is derived rather than stored so that a tab hidden by
+          the lean gate cannot stay selected once `tenantSlug` resolves. The
+          slug is null for a tick on first paint, so `?tab=accounting` can slip
+          past the mount-time guard above and leave `activeTab` pointing at a
+          panel that is no longer rendered — which shows an empty settings body
+          rather than a tab. Recomputing here bounces to the first visible tab
+          instead, and costs nothing when the gate is off. */}
+      <Tabs value={effectiveTab} onValueChange={handleTabChange}>
         <div className="space-y-6">
           {/* Mobile: Horizontal scrollable nav (sidebar handles desktop nav) */}
           <div className="lg:hidden">
@@ -1743,6 +1777,10 @@ const Settings = () => {
                 // item that does not describe what they would find there.
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'accounting', icon: Landmark, label: 'Accounting' },
+                // NOTE: this list is the trigger row only. The gate for
+                // Accounting is applied in the .filter() chain below, next to
+                // E-Sign and Tesla, and again on the TabsContent — see
+                // hideAccountingTab.
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'push', icon: BellRing, label: 'Push' },
                 { value: 'templates', icon: FileText, label: 'Templates' },
@@ -1759,6 +1797,10 @@ const Settings = () => {
                 .filter(item => !(item.value === 'esign' && hideESignModeToggle))
                 // Lean tenants: no Tesla Fleet tab.
                 .filter(item => !(item.value === 'tesla' && hideTeslaTab))
+                // Lean tenants: no Accounting tab. Presentation only — the
+                // Xero/Zoho connections, mappings and sync log all stay put
+                // for every other tenant.
+                .filter(item => !(item.value === 'accounting' && hideAccountingTab))
                 .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
@@ -1769,13 +1811,13 @@ const Settings = () => {
 
           {/* Tab Content Area */}
           <div className="space-y-6">
-            {!canEditSettings(activeTab) && (
+            {!canEditSettings(effectiveTab) && (
               <div className="p-3 bg-muted/50 border rounded-lg flex items-center gap-2 text-sm text-muted-foreground">
                 <Eye className="h-4 w-4 shrink-0" />
                 You have view-only access to this settings tab.
               </div>
             )}
-            <div className={!canEditSettings(activeTab) ? "pointer-events-none select-none" : ""}>
+            <div className={!canEditSettings(effectiveTab) ? "pointer-events-none select-none" : ""}>
 
         {/* General Tab */}
         <TabsContent value="general" className="space-y-6">
@@ -2892,10 +2934,16 @@ const Settings = () => {
           <StripeConnectSettings />
         </TabsContent>
 
-        {/* Accounting Tab — Xero + Zoho Books connections (Growth+ tier) */}
-        <TabsContent value="accounting" className="space-y-6">
-          <AccountingSettings />
-        </TabsContent>
+        {/* Accounting Tab — Xero + Zoho Books connections (Growth+ tier).
+            Gated alongside its trigger, not just the trigger: `?tab=accounting`
+            is read straight out of the URL below and drives `activeTab`, so a
+            typed or bookmarked link would still open the panel if only the
+            trigger were hidden. */}
+        {!hideAccountingTab && (
+          <TabsContent value="accounting" className="space-y-6">
+            <AccountingSettings />
+          </TabsContent>
+        )}
 
         {/* Locations Tab */}
         <TabsContent value="locations" className="space-y-6">

@@ -485,6 +485,13 @@ export function AppSidebar() {
                   // functions and the hourly Supercharger sync all stay put for
                   // Jangram and every other operator running Teslas.
                   !(item.value === 'tesla' && isAreaHidden('tesla', tenantSlug)) &&
+                  // Accounting (Xero + Zoho Books) is hidden from the lean
+                  // canary and that tenant alone. Presentation only — the
+                  // Settings tab, both OAuth pairs, the sync worker and the
+                  // void-on-refund hooks all stay on main. This tab is the only
+                  // route by which any other tenant could connect a ledger, so
+                  // it must never be hidden from them.
+                  !(item.value === 'accounting' && isAreaHidden('accounting', tenantSlug)) &&
                   (query === "" || item.label.toLowerCase().includes(query))
                 ),
               }))

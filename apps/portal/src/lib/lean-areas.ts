@@ -137,8 +137,48 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * exactly where they are. So does the `permissions.ts` wiring: `canView`
  * treats an unmapped route as ALLOWED, so pulling the `expenses` tab key
  * while the route still exists would WIDEN manager access, not narrow it.
+ *
+ * `accounting` is Xero + Zoho Books — the Settings > Accounting tab, both OAuth
+ * pairs, the sync worker, the token refresher, the mappings and backfill
+ * screens, and the super-admin Finance Sync tab in apps/admin. It is the
+ * clearest case in this list of why the gate belongs here and not in a delete,
+ * because the delete was actually attempted: 41 files and 6,578 lines came off
+ * main (3e3d24af) before being restored.
+ *
+ * The production numbers cut the OPPOSITE way to Owner Payouts and Expenses,
+ * and that is the interesting part. `integration_xero` is on for 0 of the 57
+ * tenants and `integration_zoho_books` for exactly 1 — `test`, the internal
+ * tenant, which also owns all 3 rows of `accounting_connections`. Nobody live
+ * is using it. What made the removal wrong was not the data it would have
+ * stranded; it was that this tab is the ONLY way any of the other 56 tenants
+ * could ever connect a ledger. Deleting it did not hide a feature from one
+ * canary, it withdrew an unshipped feature from everyone — and took two live
+ * refund paths with it, since reject-rental and cancel-rental-refund each
+ * fire-and-forget a void into the accounting side.
+ *
+ * WHAT THIS GATE CANNOT REACH, and must not:
+ *  - `financial_events` (7,635 rows) and `financial_event_sync_state` (6,616)
+ *    are filled by the `ledger_entries` trigger and the nine
+ *    `enqueue_financial_event` callers. Server-side, fires for every writer,
+ *    unreachable from React — which is exactly why gating is safe.
+ *  - P&L is a DIFFERENT feature. `pnl_entries` holds 12,559 rows across 31
+ *    tenants; `/reports`, `/pl-dashboard`, `/reports/vehicle-profitability`
+ *    and the `get-vehicle-profitability` edge function read it directly and
+ *    have never needed a Xero or Zoho connection. Their one point of contact
+ *    with accounting was a shared tenant-resolution helper, and that now lives
+ *    at `_shared/resolve-tenant.ts` rather than under `_shared/accounting/`,
+ *    so even the implied coupling is gone. None of them is gated.
+ *
+ * Northwind has both flags false, 0 connections, 0 `financial_events` and 0
+ * `pnl_entries` — no accounting footprint at all — so this gate is purely
+ * cosmetic for the canary and costs nothing to anyone else. `permissions.ts`
+ * is deliberately untouched for the same reason as Expenses and Owners, with
+ * one extra twist that matters more here: `canViewSettings` opens with
+ * `if (!settingsKey) return true;`, so dropping the `accounting` →
+ * `settings.accounting` mapping would EXPOSE the tab to every manager,
+ * including those never granted it. Removing the key widens access.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners', 'expenses'] as const;
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners', 'expenses', 'accounting'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 
