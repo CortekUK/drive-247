@@ -87,6 +87,7 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
@@ -219,7 +220,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -385,19 +386,19 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       items: [
         { name: "Blocked Customers", href: "/blocked-customers", icon: Ban },
         // Enquiries folds into Leads once lead management is on — same as v1.
-        ...(leadManagementEnabled
+        ...(leadManagementEnabled || isAreaHidden("enquiries", tenantSlug)
           ? []
           : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
         { name: "Messages", href: "/messages", icon: MessageSquare, badge: chatUnreadCount || 0 },
       ],
     },
-    ...(leadManagementEnabled
+    ...(leadManagementEnabled && !isAreaHidden("leads", tenantSlug)
       ? [{
           label: "Pipeline",
           icon: Users,
           items: [
             { name: "Leads", href: "/leads", icon: UserPlus },
-            ...(automationsEnabled
+            ...(automationsEnabled && !isAreaHidden("automations", tenantSlug)
               ? [{ name: "Automations", href: "/automations", icon: Workflow }]
               : []),
           ],
