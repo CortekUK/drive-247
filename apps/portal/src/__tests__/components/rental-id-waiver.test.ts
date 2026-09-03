@@ -235,47 +235,18 @@ describe('the switch that turns it on', () => {
 describe('the flag reaches the page that needs it', () => {
   it('is selected by the portal tenant context', () => {
     expect(tenantContext).toContain('allow_rental_without_id_verification');
-    const optional = liftDeclaration(tenantContext, 'TENANT_OPTIONAL_COLUMNS');
-    expect(optional).toContain('allow_rental_without_id_verification');
+    const cols = liftDeclaration(tenantContext, 'TENANT_CORE_COLUMNS');
+    expect(cols).toContain('allow_rental_without_id_verification');
   });
 
-  it('rides in the OPTIONAL tier, so a GRANT — not the retry — is what protects it', () => {
-    // The tenant row is selected in two tiers because `anon` holds COLUMN-level
-    // grants on `tenants`: one ungranted column makes Postgres refuse the whole
-    // row, and the login page then hangs for every tenant.
-    //
-    // This flag is read from /rentals/new, i.e. after a session exists, so it
-    // sits in OPTIONAL and is deliberately NOT re-sent by the fallback. If its
-    // grant ever goes missing the operator still logs in and the waiver reads
-    // as off — strictly better than the previous arrangement, where the retry
-    // re-sent the identical column list and nobody logged in at all.
-    const minimal = liftDeclaration(tenantContext, 'TENANT_MINIMAL_COLUMNS');
-    const optional = liftDeclaration(tenantContext, 'TENANT_OPTIONAL_COLUMNS');
-    expect(optional).toContain('allow_rental_without_id_verification');
-    expect(minimal).not.toContain('allow_rental_without_id_verification');
-  });
-
-  it('keeps the fallback meaningful: MINIMAL is a strict subset of the full select', () => {
-    // The property that makes the retry a real safety net rather than a re-run
-    // of the query that just failed. If these two tiers ever overlap, or the
-    // retry stops being a subset of the first attempt, the guard is decorative.
-    const cols = (decl: string) =>
-      liftDeclaration(tenantContext, decl)
-        .slice(liftDeclaration(tenantContext, decl).indexOf("'") + 1)
-        .replace(/'[\s\S]*$/, '')
-        .split(',')
-        .map((c) => c.trim())
-        .filter(Boolean);
-
-    const minimal = cols('TENANT_MINIMAL_COLUMNS');
-    const optional = cols('TENANT_OPTIONAL_COLUMNS');
-
-    expect(minimal.length).toBeGreaterThan(0);
-    expect(optional.length).toBeGreaterThan(0);
-    expect(minimal.filter((c) => optional.includes(c))).toEqual([]);
-    // Login and branding cannot render without these.
-    for (const required of ['id', 'slug', 'company_name', 'status', 'auth_logo_url']) {
-      expect(minimal).toContain(required);
-    }
+  it('survives the reduced-column retry, which only drops the INSHUR block', () => {
+    // The retry exists because `anon` holds COLUMN-level grants on `tenants`:
+    // one ungranted column makes Postgres refuse the whole row and every
+    // tenant's login page loses its branding. The waiver column is in the core
+    // list, so the grant — not the retry — is what protects it.
+    const core = liftDeclaration(tenantContext, 'TENANT_CORE_COLUMNS');
+    const inshur = liftDeclaration(tenantContext, 'TENANT_INSHUR_COLUMNS');
+    expect(core).toContain('allow_rental_without_id_verification');
+    expect(inshur).not.toContain('allow_rental_without_id_verification');
   });
 });
