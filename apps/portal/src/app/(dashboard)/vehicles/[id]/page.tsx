@@ -62,7 +62,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VehicleCompliancePanel } from "@/components/vehicles/vehicle-compliance-panel";
 import { LastServiceCard } from "@/components/vehicles/last-service-card";
 import { ServiceHistoryTable } from "@/components/vehicles/service-history-table";
+import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
+import { HealthReasonsList } from "@/components/fleet-health/health-reasons-list";
+import { RecordOdometerDialog } from "@/components/fleet-health/record-odometer-dialog";
+import { ScheduleMaintenanceDialog } from "@/components/fleet-health/schedule-maintenance-dialog";
+import { ReportIssueDialog } from "@/components/fleet-health/report-issue-dialog";
+import { MaintenanceRulesEditor } from "@/components/fleet-health/maintenance-rules-editor";
+import { useVehicleHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health";
+import { useMaintenanceJobs, useCompleteMaintenanceJob } from "@/hooks/use-maintenance-jobs";
+import { confidenceLabel, JOB_PRIORITY_LABEL, JOB_STATUS_LABEL } from "@/types/fleet-health";
+import type { MaintenanceJob, VehicleHealthStatus } from "@/types/fleet-health";
 import { getDistanceUnitLong, getCurrencySymbol } from "@/lib/format-utils";
+// Fleet Health stores every distance in miles; the operator sees their own unit.
+// Anything read straight out of vehicles.current_mileage or vehicle_health_cache
+// is therefore a miles value and must be converted before it is shown under a
+// tenant-unit label — otherwise a km tenant reads 6,214 as "6,214 kilometres".
+import { fromStoredMiles } from "@/lib/fleet-health-units";
 
 interface Vehicle {
   id: string;
@@ -108,9 +123,9 @@ interface Vehicle {
   // Service fields
   last_service_date?: string;
   last_service_mileage?: number;
-  // Cached odometer value. Written by the handover flow — a suspect (backwards)
-  // reading is stored but never allowed to move this, so it can lag the newest
-  // row in vehicle_odometer_readings.
+  // Cached odometer value. Written only by the handover flow and by
+  // RecordOdometerDialog — a suspect (backwards) reading is stored but never
+  // allowed to move this, so it can lag the newest row in vehicle_odometer_readings.
   current_mileage?: number | null;
   // Security fields
   has_ghost?: boolean;
@@ -167,6 +182,132 @@ interface Rental {
   };
 }
 
+/**
+ * Completing a job writes exactly one service_records row, which posts to P&L and
+ * re-derives the vehicle's last-service fields. Cost and mileage are collected here
+ * rather than defaulted, because a silent $0 / null-mileage record would both
+ * understate the vehicle's running cost and leave the next interval without a
+ * baseline to count from.
+ *
+ * Deliberately not React Hook Form + Zod: the schema would have to live in
+ * client-schemas/ and this is a four-field confirmation, not a resource form.
+ */
+function CompleteJobDialog({
+  job,
+  currentMileage,
+  currencySymbol,
+  distanceUnit,
+  onOpenChange,
+  onConfirm,
+  isSubmitting,
+}: {
+  job: MaintenanceJob | null;
+  currentMileage: number | null;
+  currencySymbol: string;
+  distanceUnit: DistanceUnit;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (input: { serviceDate: string; mileage: number | null; cost: number; description: string | null }) => void;
+  isSubmitting: boolean;
+}) {
+  const [serviceDate, setServiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [mileage, setMileage] = useState("");
+  const [cost, setCost] = useState("");
+  const [description, setDescription] = useState("");
+
+  // Re-seed each time a different job is opened; the dialog instance is reused.
+  useEffect(() => {
+    if (!job) return;
+    setServiceDate(new Date().toISOString().slice(0, 10));
+    setMileage(currentMileage != null ? String(currentMileage) : "");
+    setCost("");
+    setDescription("");
+  }, [job?.id]);
+
+  return (
+    <Dialog open={!!job} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Complete job</DialogTitle>
+          <DialogDescription>
+            {job?.title} — this logs a service record against the vehicle and lifts the
+            maintenance block, unless another block or open job is still holding it.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="job-complete-date" className="text-xs">Completed on</Label>
+              <Input
+                id="job-complete-date"
+                type="date"
+                value={serviceDate}
+                onChange={(e) => setServiceDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="job-complete-mileage" className="text-xs">
+                Odometer ({getDistanceUnitLong(distanceUnit)})
+              </Label>
+              <Input
+                id="job-complete-mileage"
+                type="number"
+                min="0"
+                placeholder="Not recorded"
+                value={mileage}
+                onChange={(e) => setMileage(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="job-complete-cost" className="text-xs">Cost ({currencySymbol})</Label>
+            <Input
+              id="job-complete-cost"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={cost}
+              onChange={(e) => setCost(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Posted to this vehicle's P&amp;L as a Service cost. Leave blank if the work was free.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="job-complete-notes" className="text-xs">What was done</Label>
+            <Textarea
+              id="job-complete-notes"
+              rows={3}
+              placeholder="Parts replaced, garage, invoice reference…"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            disabled={isSubmitting || !serviceDate}
+            onClick={() => {
+              const parsedMileage = mileage.trim() === "" ? null : Number(mileage);
+              const parsedCost = cost.trim() === "" ? 0 : Number(cost);
+              onConfirm({
+                serviceDate,
+                mileage: parsedMileage != null && Number.isFinite(parsedMileage) ? parsedMileage : null,
+                cost: Number.isFinite(parsedCost) ? parsedCost : 0,
+                description: description.trim() || null,
+              });
+            }}
+          >
+            {isSubmitting ? "Saving…" : "Complete job"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function VehicleDetail() {
   const params = useParams();
@@ -209,6 +350,12 @@ export default function VehicleDetail() {
   // Tesla Fleet API state
   const [teslaChecking, setTeslaChecking] = useState(false);
 
+  // Fleet Health dialogs
+  const [showOdometerDialog, setShowOdometerDialog] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [showIssueDialog, setShowIssueDialog] = useState(false);
+  const [completingJob, setCompletingJob] = useState<MaintenanceJob | null>(null);
+  const [showRules, setShowRules] = useState(false);
 
   // Get date filtering from URL params
   const monthParam = searchParams.get('month');
@@ -239,6 +386,14 @@ export default function VehicleDetail() {
     isDeleting: isDeletingService,
   } = useVehicleServices(id!);
 
+  // Fleet Health
+  const fleetHealthEnabled = useFleetHealthEnabled();
+  const { data: health, isLoading: isLoadingHealth } = useVehicleHealth(id);
+  const { data: openJobs = [], isLoading: isLoadingJobs } = useMaintenanceJobs({
+    vehicleId: id,
+    status: "open",
+  });
+  const completeJob = useCompleteMaintenanceJob();
 
   // Files management hook
   const {
@@ -438,6 +593,13 @@ export default function VehicleDetail() {
 
   const netProfit = plSummary.totalRevenue - plSummary.totalCosts;
 
+  // `unknown` is a first-class status, not a fallback for "fine". A vehicle with no
+  // cache row has never been evaluated, and must read that way rather than as OK.
+  const healthStatus: VehicleHealthStatus = (health?.status as VehicleHealthStatus) ?? "unknown";
+  const healthReasons = health?.reasons ?? [];
+  const hasOdometer = vehicle?.current_mileage != null;
+  const hasProjection =
+    health?.next_due_date != null || health?.next_due_miles != null || health?.daily_burn != null;
 
   // Context-aware back navigation
   const getBackLink = () => {
@@ -662,6 +824,261 @@ export default function VehicleDetail() {
             />
           </div>
 
+          {/* Fleet Health Section — placed above the commercial blocks because
+              "what does this car need?" is the first question asked on this page.
+              Gated on the tenant flag (defaults off) so tenants who never enabled
+              the feature do not see an Unknown chip on every vehicle. */}
+          {fleetHealthEnabled && (
+          <div className="mb-6">
+            <Card className="shadow-card rounded-lg">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                      <Activity className="h-5 w-5" />
+                      Fleet Health
+                      {!isLoadingHealth && <HealthStatusChip status={healthStatus} />}
+                    </CardTitle>
+                    <CardDescription>
+                      An operational record of what this vehicle needs. It is not a roadworthiness certification.
+                    </CardDescription>
+                  </div>
+                  {canEdit('vehicles') && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setShowScheduleDialog(true)}>
+                        <CalendarRange className="h-4 w-4 mr-2" />
+                        Schedule maintenance
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setShowIssueDialog(true)}>
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Report an issue
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {isLoadingHealth ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Odometer. This button is the only place in the product where a
+                        human can enter or correct a reading, so it is deliberately the
+                        loudest control on the card and the empty state is not quiet. */}
+                    <div
+                      className={`flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${
+                        hasOdometer
+                          ? 'border-[#f1f5f9] dark:border-gray-800'
+                          : 'border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Gauge className={`mt-0.5 h-5 w-5 shrink-0 ${hasOdometer ? 'text-[#6366f1]' : 'text-amber-600'}`} />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Current mileage</p>
+                          {hasOdometer ? (
+                            <p className="text-2xl font-semibold tabular-nums text-[#080812] dark:text-gray-100">
+                              {fromStoredMiles(vehicle.current_mileage, distanceUnit)!.toLocaleString()}{' '}
+                              <span className="text-sm font-normal text-muted-foreground">
+                                {getDistanceUnitLong(distanceUnit)}
+                              </span>
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-base font-medium text-amber-800 dark:text-amber-300">
+                                No reading on record
+                              </p>
+                              <p className="text-xs text-amber-700 dark:text-amber-400">
+                                Mileage-based schedules cannot be checked for this vehicle until one is recorded.
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {canEdit('vehicles') && (
+                        <Button size="sm" className="shrink-0" onClick={() => setShowOdometerDialog(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Record reading
+                        </Button>
+                      )}
+                    </div>
+                    {canEdit('vehicles') && (
+                      <p className="-mt-3 text-xs text-muted-foreground">
+                        Recording a reading here is the only way to enter or correct this vehicle's
+                        odometer outside of key handover.
+                      </p>
+                    )}
+
+                    {/* Why the vehicle is in the status above. */}
+                    {healthReasons.length > 0 ? (
+                      <HealthReasonsList reasons={healthReasons} />
+                    ) : (
+                      <div className="rounded-lg border border-[#f1f5f9] dark:border-gray-800 p-4">
+                        <p className="text-sm font-medium text-[#080812] dark:text-gray-100">
+                          Nothing evaluated yet
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {hasOdometer
+                            ? "No maintenance schedule, inspection date or registration date is set for this vehicle, so there is nothing to check it against."
+                            : "Record an odometer reading, and set the inspection and registration dates under Edit Vehicle, to give Fleet Health something to check."}
+                        </p>
+                      </div>
+                    )}
+
+                    {hasProjection && (
+                      <div className="rounded-lg border border-[#f1f5f9] dark:border-gray-800 p-4">
+                        <div className="flex flex-wrap items-baseline gap-x-10 gap-y-3">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Next due</p>
+                            <p className="text-sm font-medium text-[#080812] dark:text-gray-100">
+                              {health?.next_due_date
+                                ? format(parseLocalDate(health.next_due_date), "MM/dd/yyyy")
+                                : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Next due at</p>
+                            <p className="text-sm font-medium tabular-nums text-[#080812] dark:text-gray-100">
+                              {health?.next_due_miles != null
+                                ? `${fromStoredMiles(Number(health.next_due_miles), distanceUnit)!.toLocaleString()} ${getDistanceUnitLong(distanceUnit)}`
+                                : '—'}
+                            </p>
+                          </div>
+                          {health?.daily_burn != null && (
+                            <div>
+                              <p className="text-xs text-muted-foreground">Average use</p>
+                              <p className="text-sm font-medium tabular-nums text-[#080812] dark:text-gray-100">
+                                {Math.round(fromStoredMiles(Number(health.daily_burn), distanceUnit)!).toLocaleString()}{' '}
+                                {distanceUnit === 'miles' ? 'miles' : 'km'}/day
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {/* A projection is only as good as the data behind it — an estimate
+                            from the platform median is a far weaker claim than one built from
+                            this vehicle's own readings, and must say so next to the number. */}
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          {confidenceLabel(health?.confidence)}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Open jobs */}
+                    <div>
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                        <Wrench className="h-4 w-4" />
+                        Open jobs {openJobs.length > 0 && `(${openJobs.length})`}
+                      </h3>
+                      <div className="overflow-x-auto rounded-md border border-[#f1f5f9] dark:border-gray-800">
+                        <Table className="min-w-[640px]">
+                          <TableHeader>
+                            <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                              <TableHead>Job</TableHead>
+                              <TableHead>Category</TableHead>
+                              <TableHead>Priority</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Scheduled</TableHead>
+                              <TableHead className="w-[120px] text-right">Action</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {isLoadingJobs ? (
+                              Array.from({ length: 2 }).map((_, i) => (
+                                <TableRow key={i}>
+                                  <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
+                                </TableRow>
+                              ))
+                            ) : openJobs.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                                  No open jobs for this vehicle.
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              openJobs.map((job) => (
+                                <TableRow key={job.id} className="hover:bg-muted/50">
+                                  <TableCell className="font-medium">
+                                    {job.title}
+                                    {job.vendor_name && (
+                                      <span className="block text-xs font-normal text-muted-foreground">
+                                        {job.vendor_name}
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">{job.category || '—'}</TableCell>
+                                  <TableCell>
+                                    <span
+                                      className={
+                                        job.priority === 'critical'
+                                          ? 'text-[#dc2626] font-medium'
+                                          : job.priority === 'high'
+                                            ? 'text-[#d97706] font-medium'
+                                            : 'text-[#404040] dark:text-gray-300'
+                                      }
+                                    >
+                                      {JOB_PRIORITY_LABEL[job.priority] ?? job.priority}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-[#404040] dark:text-gray-300">
+                                    {JOB_STATUS_LABEL[job.status] ?? job.status}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                                    {job.scheduled_start
+                                      ? `${format(parseLocalDate(job.scheduled_start), "MM/dd/yyyy")}${
+                                          job.scheduled_end
+                                            ? ` → ${format(parseLocalDate(job.scheduled_end), "MM/dd/yyyy")}`
+                                            : ''
+                                        }`
+                                      : 'Not scheduled'}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {canEdit('vehicles') && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCompletingJob(job)}
+                                      >
+                                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                                        Complete
+                                      </Button>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+
+                    {/* Schedules are opt-in and must not dominate: with none configured
+                        Fleet Health still reports compliance dates and service age. */}
+                    <Collapsible open={showRules} onOpenChange={setShowRules}>
+                      <div className="border-t border-[#f1f5f9] dark:border-gray-800 pt-4">
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground">
+                            <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                            Maintenance schedules
+                            <ChevronDown
+                              className={`ml-1.5 h-3.5 w-3.5 transition-transform ${showRules ? 'rotate-180' : ''}`}
+                            />
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-4">
+                          <MaintenanceRulesEditor vehicleId={vehicle.id} />
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+          )}
 
           {/* Tesla Fleet API Section */}
           {tenant?.integration_tesla_fleet && (
@@ -1586,6 +2003,46 @@ export default function VehicleDetail() {
         />
       )}
 
+      {/* Fleet Health Dialogs */}
+      <RecordOdometerDialog
+        vehicleId={vehicle.id}
+        currentMileage={vehicle.current_mileage ?? null}
+        open={showOdometerDialog}
+        onOpenChange={setShowOdometerDialog}
+      />
+
+      {/* Surfaces conflicting Active and Pending bookings with their payment status
+          and amount, and only passes force: true once the operator acknowledges them. */}
+      <ScheduleMaintenanceDialog
+        vehicleId={vehicle.id}
+        vehicleReg={vehicle.reg}
+        open={showScheduleDialog}
+        onOpenChange={setShowScheduleDialog}
+      />
+
+      <ReportIssueDialog
+        vehicleId={vehicle.id}
+        open={showIssueDialog}
+        onOpenChange={setShowIssueDialog}
+      />
+
+      <CompleteJobDialog
+        job={completingJob}
+        currentMileage={vehicle.current_mileage ?? null}
+        currencySymbol={getCurrencySymbol(currencyCode)}
+        distanceUnit={distanceUnit}
+        isSubmitting={completeJob.isPending}
+        onOpenChange={(open) => { if (!open) setCompletingJob(null); }}
+        onConfirm={(input) => {
+          if (!completingJob) return;
+          // The hook already maps RPC error codes to plain sentences and toasts
+          // both outcomes, so this only has to close on success.
+          completeJob.mutate(
+            { jobId: completingJob.id, ...input },
+            { onSuccess: () => setCompletingJob(null) }
+          );
+        }}
+      />
 
       {/* Edit Vehicle Dialog */}
       <EditVehicleDialog
