@@ -29,7 +29,6 @@ import {
   AlertTriangle,
   TrendingUp,
   Activity,
-  HeartPulse,
   BookOpen,
 } from 'lucide-react';
 
@@ -74,7 +73,6 @@ function useNavigation() {
       items: [
         { name: 'Platform Rentals', href: '/admin/platform-rentals', icon: Activity },
         { name: 'Tenant Readiness', href: '/admin/readiness', icon: ShieldCheck },
-        { name: 'Health Score', href: '/admin/health-score', icon: HeartPulse },
       ],
     },
     {
