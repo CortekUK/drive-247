@@ -51,11 +51,11 @@ type Integration = {
   iconColor?: string;
 };
 
-// Tesla, Xero and Zoho are brand logos via logo.dev rather than
+// Xero and Zoho are brand logos via logo.dev rather than
 // `react-icons/si` glyphs, as the original drew them. react-icons is not a
 // declared dependency of this app — it only resolved by walking up to the
-// root node_modules, which would break the moment that tree changed. These
-// four already have brand logos on the CDN the page uses for Stripe, Twilio
+// root node_modules, which would break the moment that tree changed. They
+// already have brand logos on the CDN the page uses for Stripe, Twilio
 // and BoldSign, so this removes the implicit dependency without touching
 // package.json or the lockfile, and renders the same real brand marks.
 const integrations: Integration[] = [
@@ -65,7 +65,6 @@ const integrations: Integration[] = [
   { name: "CheckMyDriver", category: "Verification", description: "Verify driver's licenses & identity.", connected: false, Icon: IdCard, iconColor: "#0EA5E9" },
   { name: "Twilio Messages", category: "Messaging", description: "SMS notifications, reminders & 2-way chat.", connected: true, domain: "twilio.com" },
   { name: "Twilio Calling", category: "Calling", description: "Call forwarding, voicemail & recordings.", connected: false, domain: "twilio.com" },
-  { name: "Tesla", category: "Fleet", description: "Supercharging & vehicle data via the Fleet API.", connected: false, domain: "tesla.com" },
   { name: "Branded Domain", category: "Website", description: "Use your own domain for booking & portal.", connected: true, fallbackGlobe: true },
   { name: "Xero", category: "Accounting", description: "Sync invoices & payments to Xero.", connected: false, domain: "xero.com" },
   { name: "Zoho", category: "Accounting", description: "Sync books & CRM with Zoho.", connected: false, domain: "zoho.com" },
