@@ -82,7 +82,7 @@ describe('vehiclePublicColumns — an allowlist, because RLS cannot hide a colum
 
   it('never serves the VIN, even to a tenant who shows plates', () => {
     // VIN is not displayed on any customer surface, and it is the identity key
-    // INSHUR binds cover against. There is no reason to publish it.
+    // insurance and registration systems bind against. No reason to publish it.
     expect(vehiclePublicColumns(showing).split(',').map(c => c.trim())).not.toContain('vin');
   });
 

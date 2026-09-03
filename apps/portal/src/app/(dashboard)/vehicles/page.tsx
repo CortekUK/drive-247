@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, BarChart3, ChevronDown, X, ShieldCheck } from "lucide-react";
+import { Eye, Plus, Search, BarChart3, ChevronDown, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
@@ -20,15 +20,6 @@ import { AddVehicleDialog } from "@/components/vehicles/add-vehicle-dialog";
 import { FleetSummaryCards } from "@/components/vehicles/fleet-summary-cards";
 import { VehicleStatusBadge, resolveVehicleStatus } from "@/components/vehicles/vehicle-status-badge";
 import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumbnail";
-import type { InshurEligibilityState } from "@/components/vehicles/inshur-eligibility-badge";
-import {
-  INSHUR_VEHICLE_FILTERS,
-  InshurEligibilityBadge,
-  deriveInshurEligibilityState,
-  useInshurEligibilityConfig,
-  useInshurEligibilityMap,
-  useInshurRecheck,
-} from "@/components/vehicles/inshur-eligibility-badge";
 import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
@@ -72,7 +63,6 @@ interface Vehicle {
   vehicle_owners?: { full_name: string } | null;
   pickup_location_id?: string | null;
   vin?: string | null;
-  garaging_state?: string | null;
 }
 
 type SortField = 'reg' | 'make_model' | 'year' | 'status';
@@ -175,15 +165,6 @@ export default function VehiclesListEnhanced() {
   const healthStatusFor = (vehicleId: string): VehicleHealthStatus =>
     healthByVehicle.get(vehicleId)?.status ?? 'unknown';
 
-  // INSHUR Period Z — cached eligibility only. The list never fires N checks.
-  const inshurConfig = useInshurEligibilityConfig();
-  const { byVehicleId: inshurEligibilityByVehicle } = useInshurEligibilityMap(inshurConfig.enabled);
-  const { recheck: recheckInshur, pendingVehicleId: inshurPendingVehicleId, failedVehicleIds: inshurFailedVehicleIds } = useInshurRecheck();
-
-  // Deep-linked from the dashboard metric and Settings' fleet-readiness counters.
-  const inshurFilter = searchParams.get('inshur');
-  const inshurFilterSpec = inshurFilter ? INSHUR_VEHICLE_FILTERS[inshurFilter] : undefined;
-
   // State from URL params
   const [filters, setFilters] = useState<FiltersState>({
     search: searchParams.get('search') || '',
@@ -224,8 +205,6 @@ export default function VehiclesListEnhanced() {
     });
     if (sortField) params.set('sort', sortField);
     if (sortDirection !== 'asc') params.set('dir', sortDirection);
-    // Not part of FiltersState, so it would otherwise be dropped by any filter change.
-    if (inshurFilter) params.set('inshur', inshurFilter);
     if (currentPage !== 1) params.set('page', currentPage.toString());
     if (pageSize !== 25) params.set('limit', pageSize.toString());
 
@@ -311,22 +290,6 @@ export default function VehiclesListEnhanced() {
       };
     });
   }, [vehicles, plData]);
-
-  // Derived once for the whole page so the filter and the badges can never disagree.
-  const inshurStateByVehicle = useMemo(() => {
-    const map = new Map<string, InshurEligibilityState>();
-    if (!inshurConfig.enabled) return map;
-    vehicles.forEach(vehicle => {
-      map.set(vehicle.id, deriveInshurEligibilityState({
-        vin: vehicle.vin,
-        garagingState: vehicle.garaging_state,
-        row: inshurEligibilityByVehicle.get(vehicle.id),
-        statesAllowed: inshurConfig.statesAllowed,
-        lastCheckFailed: inshurFailedVehicleIds.has(vehicle.id),
-      }));
-    });
-    return map;
-  }, [vehicles, inshurConfig.enabled, inshurConfig.statesAllowed, inshurEligibilityByVehicle, inshurFailedVehicleIds]);
 
   // Filter and sort vehicles
   const filteredVehicles = useMemo(() => {
@@ -415,14 +378,6 @@ export default function VehiclesListEnhanced() {
       });
     }
 
-    // INSHUR eligibility filter — deep-linked, not part of the filter bar
-    if (inshurFilterSpec) {
-      filtered = filtered.filter(vehicle => {
-        const state = inshurStateByVehicle.get(vehicle.id);
-        return !!state && inshurFilterSpec.states.includes(state);
-      });
-    }
-
     // Sort - only apply client-side sorting if user has explicitly selected a sort field
     // Otherwise, keep the database order (created_at DESC)
     if (sortField) {
@@ -464,7 +419,7 @@ export default function VehiclesListEnhanced() {
 
     console.log('Filtered and sorted vehicles:', filtered.map(v => ({ reg: v.reg, status: v.status, sortField, sortDirection })));
     return filtered;
-  }, [enhancedVehicles, filters, sortField, sortDirection, searchParams, inshurFilterSpec, inshurStateByVehicle, healthByVehicle]);
+  }, [enhancedVehicles, filters, sortField, sortDirection, searchParams, healthByVehicle]);
 
   // Pagination
   const totalPages = Math.ceil(filteredVehicles.length / pageSize);
@@ -681,29 +636,6 @@ export default function VehiclesListEnhanced() {
         );
       })()}
 
-      {/* INSHUR deep-link filter — set by the dashboard metric and Settings' readiness counters */}
-      {inshurFilterSpec && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#f1f5f9] bg-[#f8fafc] px-3 py-2 dark:border-gray-800 dark:bg-gray-900/40">
-          <ShieldCheck className="h-4 w-4 text-[#6366f1]" />
-          <span className="text-sm text-[#404040] dark:text-gray-300">
-            Showing {filteredVehicles.length} vehicle{filteredVehicles.length === 1 ? '' : 's'} that {inshurFilterSpec.predicate}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1 text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              const params = new URLSearchParams(searchParams.toString());
-              params.delete('inshur');
-              router.push(`?${params.toString()}`);
-            }}
-          >
-            <X className="h-3.5 w-3.5" />
-            Clear filter
-          </Button>
-        </div>
-      )}
-
       {/* Table */}
       {filteredVehicles.length === 0 ? (
         <EmptyState
@@ -731,7 +663,6 @@ export default function VehiclesListEnhanced() {
                   <TableHead>Color</TableHead>
                   <TableHead>Owner</TableHead>
                   {hasPickupLocations && <TableHead>Location</TableHead>}
-                  {inshurConfig.enabled && <TableHead>INSHUR</TableHead>}
                   <TableHead>Status</TableHead>
                   {fleetHealthEnabled && <TableHead>Health</TableHead>}
                   <TableHead className="text-right">Actions</TableHead>
@@ -793,22 +724,6 @@ export default function VehiclesListEnhanced() {
                         ) : (
                           <span className="text-sm text-muted-foreground">Any</span>
                         )}
-                      </TableCell>
-                    )}
-                    {inshurConfig.enabled && (
-                      /* The whole row navigates; the badge's re-check button must not. */
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <InshurEligibilityBadge
-                          compact
-                          state={inshurStateByVehicle.get(vehicle.id) ?? 'not_checked'}
-                          sourceMode={inshurEligibilityByVehicle.get(vehicle.id)?.source_mode ?? inshurConfig.mode}
-                          checkedAt={inshurEligibilityByVehicle.get(vehicle.id)?.checked_at}
-                          vin={vehicle.vin}
-                          vehicleState={vehicle.garaging_state}
-                          statesAllowed={inshurConfig.statesAllowed}
-                          isRechecking={inshurPendingVehicleId === vehicle.id}
-                          onRecheck={vehicle.vin ? () => recheckInshur(vehicle.id) : undefined}
-                        />
                       </TableCell>
                     )}
                     <TableCell className="text-center">

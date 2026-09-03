@@ -28,9 +28,9 @@ interface Tenant {
   // The tenant's Stripe Connect mode — i.e. whether renters are being charged
   // real money. Not the same as subscription_stripe_mode, which is how the
   // tenant pays US. Loaded because several safety warnings compare it against
-  // an integration's own mode: "INSHUR is simulated but Stripe is LIVE" means a
-  // renter can be charged for cover that does not exist, and that warning
-  // silently never fired while this column was absent from the select.
+  // an integration's own mode: an integration in sandbox while Stripe is LIVE
+  // means a renter can be charged for something that does not exist, and that
+  // warning silently never fired while this column was absent from the select.
   stripe_mode: 'test' | 'live' | null;
   // Which processor takes this tenant's customer money. Drives every
   // operator-facing label that used to say "Stripe" unconditionally.
@@ -38,16 +38,6 @@ interface Tenant {
   // select cannot lock the login page out the way an ungranted column would.
   payment_provider: 'stripe' | 'square' | null;
   subscription_stripe_mode: 'test' | 'live' | null;
-  integration_inshur: boolean | null;
-  inshur_mode: 'mock' | 'test' | 'live' | null;
-  inshur_customer_number: string | null;
-  inshur_policy_number: string | null;
-  inshur_states_allowed: string[] | null;
-  inshur_states_synced_at: string | null;
-  inshur_billing_mode: 'host_absorbs' | 'renter_pays' | null;
-  // Credentials (inshur_username / inshur_password / inshur_2fa_token) are
-  // deliberately NOT loaded here. This context is read by every page; the
-  // Settings panel and useInshur() fetch what they need on their own.
   timezone: string | null;
   currency_code: string | null;
   distance_unit: 'km' | 'miles' | null;
@@ -114,11 +104,49 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
-const TENANT_CORE_COLUMNS =
-  'id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
+/**
+ * The tenant row is loaded in two tiers so that one ungranted column cannot
+ * dark-screen every operator's login page.
+ *
+ * Why this is not paranoia: `anon` holds COLUMN-level grants on `tenants`, not
+ * a table grant (20260723090000_lock_down_tenants_rls.sql), and this provider
+ * runs on the login page before any session exists. A column `anon` cannot read
+ * does not come back null — Postgres refuses the ENTIRE row. `DynamicThemeProvider`
+ * only renders its children once `tenant` is non-null, so a single missing GRANT
+ * leaves every tenant staring at a spinner that never resolves. That has already
+ * happened once in production, with customer_theme_mode.
+ *
+ * MINIMAL is the set the unauthenticated login page and its branding cannot
+ * render without:
+ *   - id                      gates the branding query (`enabled: !!tenant?.id`)
+ *   - slug, status            identity + the query's own status filter, and the
+ *                             dashboard's "account suspended" screen
+ *   - company_name            the login wordmark
+ *   - auth_logo_url           branches the entire login logo panel
+ *   - privacy_policy_version, terms_version, policies_accepted_at
+ *                             gate the consent checkbox and the submit button
+ *
+ * OPTIONAL is everything else. Every one of those is read only from
+ * `app/(dashboard)/**`, i.e. after a session exists — so losing them degrades a
+ * logged-in surface instead of locking everyone out at the door.
+ *
+ * The ladder is MINIMAL+OPTIONAL, then MINIMAL alone. Both tiers must stay
+ * disjoint and the retry must be a strict subset of the first attempt —
+ * otherwise the fallback re-sends the query that just failed and is a safety
+ * net that catches nothing.
+ *
+ * Caveat, deliberately accepted: `Tenant` declares these fields as required and
+ * the row is cast (`data as Tenant`), so after a fallback the OPTIONAL fields
+ * are `undefined` at runtime while still type-checking as present. Making them
+ * optional in the type is the correct fix but touches a large number of
+ * dashboard call sites; the fallback is the rare path and a degraded dashboard
+ * beats a login page nobody can get past.
+ */
+const TENANT_MINIMAL_COLUMNS =
+  'id, slug, company_name, status, auth_logo_url, privacy_policy_version, terms_version, policies_accepted_at';
 
-const TENANT_INSHUR_COLUMNS =
-  'integration_inshur, inshur_mode, inshur_customer_number, inshur_policy_number, inshur_states_allowed, inshur_states_synced_at, inshur_billing_mode';
+const TENANT_OPTIONAL_COLUMNS =
+  'contact_email, phone, admin_name, integration_veriff, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
@@ -255,23 +283,22 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           .single();
 
       let { data, error: queryError } = await queryTenant(
-        `${TENANT_CORE_COLUMNS}, ${TENANT_INSHUR_COLUMNS}`
+        `${TENANT_MINIMAL_COLUMNS}, ${TENANT_OPTIONAL_COLUMNS}`
       );
 
-      // `anon` holds COLUMN-level grants on `tenants`, not a table grant
-      // (20260723090000_lock_down_tenants_rls.sql), and this provider runs on
-      // the login page where there is no session. A column without a grant does
-      // not come back null — Postgres refuses the whole row, so one ungranted
-      // column takes down branding and login for every tenant. That has already
-      // happened once, with customer_theme_mode. Retry without the newest
-      // columns rather than let a missing GRANT lock operators out.
+      // See the tier comment above: one ungranted column makes Postgres refuse
+      // the whole row, which would otherwise hang every tenant's login page on a
+      // spinner. Fall back to the columns login and branding actually need, so a
+      // missing GRANT costs a degraded dashboard rather than the door.
       if (queryError && queryError.code !== 'PGRST116') {
         console.warn(
-          '[TenantContext] Full tenant select failed; retrying without the INSHUR columns. ' +
-            'If this persists, GRANT SELECT on them to anon. Cause:',
+          '[TenantContext] Full tenant select failed; retrying with the minimal ' +
+            'login/branding columns. Some dashboard settings will read as ' +
+            'undefined until this is fixed — GRANT SELECT on the missing column ' +
+            'to anon. Cause:',
           queryError.message
         );
-        ({ data, error: queryError } = await queryTenant(TENANT_CORE_COLUMNS));
+        ({ data, error: queryError } = await queryTenant(TENANT_MINIMAL_COLUMNS));
       }
 
       if (queryError) {
