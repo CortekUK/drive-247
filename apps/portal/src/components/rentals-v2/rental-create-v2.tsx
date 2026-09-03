@@ -181,7 +181,8 @@ export const RentalCreateV2 = () => {
   const skipInsurance = !isBonzahConnected || !isBonzahSellable(tenant);
   const queryClient = useQueryClient();
   // Lean tenants cannot open this form without a usable Stripe Connect account.
-  const { blocked: rentalCreationBlocked } = useRentalCreationGate();
+  const { blocked: rentalCreationBlocked, dismiss: dismissRentalCreationGate } =
+    useRentalCreationGate();
   const { isManager, canEdit } = useManagerPermissions();
   const { appUser, isAdmin } = useAuth();
   const { logAction } = useAuditLog();
@@ -2991,8 +2992,17 @@ export const RentalCreateV2 = () => {
   // block is bypassed by typing /rentals/new into the address bar. Returning
   // instead of the form — rather than early-returning higher up — keeps every
   // hook above unconditionally called.
+  //
+  // `onDismiss` is what makes the canary's "×" mean anything, and it must be
+  // passed HERE as well as on the v1 route: this component is what /rentals/new
+  // returns for a v2 tenant, so it shadows the v1 call site entirely. Without
+  // it the "×" renders (closability is derived from the tenant inside the
+  // dialog) but closing does nothing, because this branch returns the dialog
+  // INSTEAD of the form and no dismissal is recorded. Routing it through the
+  // hook's `dismiss` flips `rentalCreationBlocked` itself to false, so this
+  // branch stops being taken and the form renders on the next paint.
   if (rentalCreationBlocked) {
-    return <ConnectStripeRequiredDialog open />;
+    return <ConnectStripeRequiredDialog open onDismiss={dismissRentalCreationGate} />;
   }
 
   /*
