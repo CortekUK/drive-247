@@ -281,7 +281,12 @@ export function AppSidebar() {
               badgeTone: "amber" as const,
             }]
           : []),
-        ...(vehicleOwnersEnabled ? [
+        // Same predicate as the v2 rail, deliberately. northwind renders v2, so
+        // this arm is only ever evaluated by the other tenants -- but keeping
+        // the two identical means there is one rule to reason about rather than
+        // two that can drift. The `vehicle_owners_enabled` flag still decides
+        // for everyone else; the lean gate only ever subtracts the canary.
+        ...(vehicleOwnersEnabled && !isAreaHidden("owners", tenantSlug) ? [
           { name: "Vehicle Owners", href: "/vehicle-owners", icon: AnimatedUsers },
           { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
         ] : []),

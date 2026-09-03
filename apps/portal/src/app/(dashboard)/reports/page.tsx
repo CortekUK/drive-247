@@ -25,6 +25,7 @@ import {
 } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
+import { isAreaHidden } from '@/lib/lean-areas';
 import { formatCurrency } from '@/lib/format-utils';
 
 // --- Chart configs ---
@@ -64,7 +65,7 @@ export interface ReportFilters {
 }
 
 const Reports = () => {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const [filters, setFilters] = useState<ReportFilters>({
     fromDate: subDays(new Date(), 30),
     toDate: new Date(),
@@ -650,7 +651,11 @@ const Reports = () => {
                         exportingReport={exportingReport}
                       />
                     ))}
-                    <OwnerPayoutsExportCard />
+                    {/* Owner Payouts CSV. Sits behind no feature flag, so it
+                        renders for every tenant today -- the lean gate is the
+                        only thing that takes it off the canary's Reports page,
+                        and it takes it off nobody else's. */}
+                    {!isAreaHidden('owners', tenantSlug) && <OwnerPayoutsExportCard />}
                   </div>
                 </>
               )}

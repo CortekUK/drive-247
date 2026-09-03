@@ -764,10 +764,15 @@ export default function VehicleDetail() {
             </div>
           )}
 
-          {/* Ownership Section */}
-          <div className="mt-6">
-            <VehicleOwnershipPanel vehicleId={vehicle.id} />
-          </div>
+          {/* Ownership Section. Also behind no feature flag today, so every
+              tenant sees the owner/commission editor on every vehicle. Gated for
+              the canary only; the panel, its hook and vehicles.owner_id are
+              untouched -- jangramrentals has 12 vehicles assigned and GMT 9. */}
+          {!isAreaHidden('owners', tenantSlug) && (
+            <div className="mt-6">
+              <VehicleOwnershipPanel vehicleId={vehicle.id} />
+            </div>
+          )}
 
           {/* Vehicle Pricing — Trax suggestions vs the network */}
           <div className="mt-6">

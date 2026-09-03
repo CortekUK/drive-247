@@ -79,8 +79,35 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * tables and the super-admin authoring screen in apps/admin all stay exactly
  * where they are and keep serving everyone else; only what northwind SEES
  * changes.
+ *
+ * `owners` is Vehicle Owners + Owner Payouts — the per-vehicle ownership
+ * splits, the payout runs, and the CSV export that settles them. It is gated
+ * here rather than removed because it is settling real money right now:
+ * `vehicle_owners_enabled` is ON for 7 tenants, `vehicle_owners` holds 9 rows
+ * across 4 tenants, and `owner_payouts` holds 19 rows — 15 of them Global
+ * Motion Transport's, totalling 4,978.55 in `net_owed`, with
+ * `owner_payout_lines` underneath. GMT is a live Chicago operator that pays
+ * three vehicle owners out of this screen; deleting it from main would take
+ * their payout ledger away to hide one nav group from one canary, the same
+ * inversion Fleet Quotes and Tesla Fleet already cost us twice.
+ *
+ * So nothing moves: the three routes, four dialogs, four hooks, the
+ * `vehicle_owners` / `owner_payouts` / `owner_payout_lines` tables, the
+ * `vehicles.owner_id` column, the five migrations and the two
+ * `permissions.ts` tab keys all stay exactly where they are. Note in
+ * particular that the `permissions.ts` wiring is deliberately untouched:
+ * `canView` treats an unmapped route as ALLOWED, so removing a tab key while
+ * the route still exists would WIDEN manager access rather than narrow it.
+ *
+ * Northwind already has `vehicle_owners_enabled = false`, so the two sidebar
+ * groups are dark for it today — but the flag gates only the nav. The routes
+ * answer a typed URL regardless, the Settings → Features switch lets the
+ * canary turn the whole thing back on, and the Reports export card, the
+ * vehicle-detail Ownership panel and the vehicles-list Owner column/filter
+ * are not behind the flag at all and render for every tenant today. This gate
+ * is what actually closes those, and only for the canary.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome'] as const;
+export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners'] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 

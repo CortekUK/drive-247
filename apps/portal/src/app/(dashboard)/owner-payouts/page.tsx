@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Plus, Wallet, CircleAlert, CheckCircle2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { useOwnerPayouts, useCancelPayout } from "@/hooks/use-owner-payouts";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { CreatePayoutDialog } from "@/components/vehicle-owners/create-payout-dialog";
@@ -21,7 +23,18 @@ import { formatCurrency } from "@/lib/format-utils";
 import { PAYOUT_STATUS_LABEL, type OwnerPayout, type PayoutStatus } from "@/types/vehicle-owners";
 
 export default function OwnerPayoutsPage() {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // Load-bearing, and NOT redundant with the two sidebar gates or with
+  // `vehicle_owners_enabled`. Hiding a nav entry hides the LINK, not the page:
+  // a typed URL, a bookmark, or the `/vehicle-owners/{id}` link still rendered
+  // from the vehicles list would open the whole area for a lean tenant. The
+  // sidebars decide what is offered; this decides what exists.
+  //
+  // Fails open on an unresolved slug (see isAreaHidden), so the tenants
+  // actually settling payouts here -- Global Motion Transport above all, with
+  // 15 live owner_payouts rows -- keep the page during the first-paint tick
+  // before TenantContext resolves.
+  if (isAreaHidden("owners", tenantSlug)) notFound();
   const currency = tenant?.currency_code || "USD";
   const today = new Date();
 

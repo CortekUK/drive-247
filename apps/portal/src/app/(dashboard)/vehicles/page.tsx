@@ -23,6 +23,7 @@ import { VehiclePhotoThumbnail } from "@/components/vehicles/vehicle-photo-thumb
 import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
@@ -133,7 +134,13 @@ export default function VehiclesListEnhanced() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // The Owner column and the Ownership filter are behind no feature flag --
+  // every tenant gets them today, whatever `vehicle_owners_enabled` says. The
+  // column also renders a live `/vehicle-owners/{id}` link, which would walk
+  // straight into the area the routes above now 404 for the canary. Hidden for
+  // the canary only; the query, the filter logic and vehicles.owner_id stay.
+  const ownersHidden = isAreaHidden("owners", tenantSlug);
   const { canEdit } = useManagerPermissions();
   const { data: vehicleOwnersList = [] } = useVehicleOwners({ includeInactive: false });
   const { locations: pickupLocationsList } = usePickupLocations();
@@ -544,7 +551,7 @@ export default function VehiclesListEnhanced() {
               />
             </div>
 
-            {(() => {
+            {!ownersHidden && (() => {
               const ownershipOptions = [
                 { value: 'all', label: 'All vehicles' },
                 { value: 'own', label: 'Own fleet' },
@@ -605,7 +612,7 @@ export default function VehiclesListEnhanced() {
                   <TableHead>Make/Model</TableHead>
                   <TableHead>Year</TableHead>
                   <TableHead>Color</TableHead>
-                  <TableHead>Owner</TableHead>
+                  {!ownersHidden && <TableHead>Owner</TableHead>}
                   {hasPickupLocations && <TableHead>Location</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -647,6 +654,7 @@ export default function VehiclesListEnhanced() {
                     </TableCell>
                     <TableCell>{vehicle.year || '—'}</TableCell>
                     <TableCell>{vehicle.colour}</TableCell>
+                    {!ownersHidden && (
                     <TableCell>
                       {vehicle.owner_id ? (
                         <Link
@@ -660,6 +668,7 @@ export default function VehiclesListEnhanced() {
                         <Badge variant="outline" className="text-xs border-gray-300 text-[#737373]">Own fleet</Badge>
                       )}
                     </TableCell>
+                    )}
                     {hasPickupLocations && (
                       <TableCell>
                         {vehicle.pickup_location_id ? (

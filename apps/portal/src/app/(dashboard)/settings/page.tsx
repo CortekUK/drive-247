@@ -219,6 +219,12 @@ const Settings = () => {
   // who actually run Teslas — Jangram bills Supercharger sessions through it
   // hourly. Presentation-layer gate, exactly like Enquiries/Leads/Automations.
   const hideTeslaTab = isAreaHidden('tesla', tenantSlug);
+  // Vehicle Owners + Owner Payouts. Hiding the two nav entries is not enough
+  // on its own: this switch writes `tenants.vehicle_owners_enabled`, so a lean
+  // tenant left holding it could turn the whole area back on for itself. The
+  // toggle, the handler and the column are all untouched for everyone else --
+  // 7 tenants have the flag on and keep the switch.
+  const hideVehicleOwnersToggle = isAreaHidden('owners', tenantSlug);
 
   // Vehicle Owners + Owner Payouts feature toggle
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -1906,6 +1912,7 @@ const Settings = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!hideVehicleOwnersToggle && (
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">
                   <h4 className="font-medium">Vehicle Owners &amp; Owner Payouts</h4>
@@ -1922,6 +1929,7 @@ const Settings = () => {
                   aria-label="Toggle Vehicle Owners feature"
                 />
               </div>
+              )}
 
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">

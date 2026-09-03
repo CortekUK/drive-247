@@ -511,7 +511,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           ],
         } as NavGroup]
       : []),
-    ...(vehicleOwnersEnabled
+    // Vehicle Owners + Owner Payouts. The `vehicle_owners_enabled` flag is the
+    // tenant's own switch and stays first; the lean gate is the second half and
+    // must stay, because the canary can flip that switch on from
+    // Settings -> Features. Nothing is removed -- the 7 tenants with the flag
+    // on, Global Motion Transport among them (3 owners, 15 payouts), are
+    // untouched.
+    ...(vehicleOwnersEnabled && !isAreaHidden("owners", tenantSlug)
       ? [{
           label: "Owners",
           icon: Users,

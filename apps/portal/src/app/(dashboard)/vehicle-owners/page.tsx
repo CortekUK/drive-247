@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Plus, Users, Car, Wallet, Search, Eye } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { useOwnerPayouts } from "@/hooks/use-owner-payouts";
 import { OwnerFormDialog } from "@/components/vehicle-owners/owner-form-dialog";
@@ -22,7 +24,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 
 export default function VehicleOwnersPage() {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // Load-bearing, and NOT redundant with the two sidebar gates or with
+  // `vehicle_owners_enabled`. Hiding a nav entry hides the LINK, not the page:
+  // a typed URL, a bookmark, or the `/vehicle-owners/{id}` link still rendered
+  // from the vehicles list would open the whole area for a lean tenant. The
+  // sidebars decide what is offered; this decides what exists.
+  //
+  // Fails open on an unresolved slug (see isAreaHidden), so the tenants
+  // actually settling payouts here -- Global Motion Transport above all, with
+  // 15 live owner_payouts rows -- keep the page during the first-paint tick
+  // before TenantContext resolves.
+  if (isAreaHidden("owners", tenantSlug)) notFound();
   const [includeInactive, setIncludeInactive] = useState(false);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
