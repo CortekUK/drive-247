@@ -51,7 +51,7 @@ type Integration = {
   iconColor?: string;
 };
 
-// WhatsApp, Tesla, Xero and Zoho are brand logos via logo.dev rather than
+// Tesla, Xero and Zoho are brand logos via logo.dev rather than
 // `react-icons/si` glyphs, as the original drew them. react-icons is not a
 // declared dependency of this app — it only resolved by walking up to the
 // root node_modules, which would break the moment that tree changed. These
@@ -65,7 +65,6 @@ const integrations: Integration[] = [
   { name: "CheckMyDriver", category: "Verification", description: "Verify driver's licenses & identity.", connected: false, Icon: IdCard, iconColor: "#0EA5E9" },
   { name: "Twilio Messages", category: "Messaging", description: "SMS notifications, reminders & 2-way chat.", connected: true, domain: "twilio.com" },
   { name: "Twilio Calling", category: "Calling", description: "Call forwarding, voicemail & recordings.", connected: false, domain: "twilio.com" },
-  { name: "WhatsApp", category: "Messaging", description: "Collection & signing details via WhatsApp.", connected: false, domain: "whatsapp.com" },
   { name: "Tesla", category: "Fleet", description: "Supercharging & vehicle data via the Fleet API.", connected: false, domain: "tesla.com" },
   { name: "Branded Domain", category: "Website", description: "Use your own domain for booking & portal.", connected: true, fallbackGlobe: true },
   { name: "Xero", category: "Accounting", description: "Sync invoices & payments to Xero.", connected: false, domain: "xero.com" },

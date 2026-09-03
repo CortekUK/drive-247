@@ -172,9 +172,8 @@ Deno.serve(async (req) => {
       let advanceTo: Step | null = nextStepAfter(snapshot.steps, stepCursor.id);
 
       switch (stepCursor.step_type) {
-        case "sms":
-        case "whatsapp": {
-          action = stepCursor.step_type === "sms" ? "Would send SMS" : "Would send WhatsApp";
+        case "sms": {
+          action = "Would send SMS";
           let bodyTxt = (cfg.body as string) ?? "";
           if (cfg.templateId) {
             const { data: tpl } = await supabase

@@ -43,7 +43,6 @@ interface Customer {
   phone: string;
   type: string;
   status: string;
-  whatsapp_opt_in: boolean;
   high_switcher?: boolean;
   license_number?: string;
   id_number?: string;

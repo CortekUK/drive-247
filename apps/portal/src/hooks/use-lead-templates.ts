@@ -12,7 +12,7 @@ export interface LeadMessageTemplate {
   id: string;
   tenant_id: string;
   name: string;
-  channel: "sms" | "email" | "whatsapp";
+  channel: "sms" | "email";
   category: "welcome" | "doc_request" | "approval" | "offer" | "reminder" | "decline" | "followup" | "custom";
   subject: string | null;
   body: string;

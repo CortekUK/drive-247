@@ -38,7 +38,6 @@ const SOURCE_ICON = {
   admin_manual: Calendar,
   inbound_sms: Phone,
   inbound_email: Mail,
-  inbound_whatsapp: Phone,
   legacy_enquiry: Mail,
   ad_landing: Mail,
 } as const;

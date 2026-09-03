@@ -31,7 +31,6 @@ interface Step {
     | "wait"
     | "condition"
     | "stop"
-    | "whatsapp"
     | "move_stage"
     | "assign_staff"
     | "create_task"
@@ -240,38 +239,6 @@ Deno.serve(async (req) => {
             .update({ status: "completed", ended_at: new Date().toISOString(), current_step_id: step.id })
             .eq("id", run.id);
           advance = false;
-          break;
-        }
-        case "whatsapp": {
-          if (run.entity_type !== "lead") {
-            logStatus = "skipped";
-            logOutput = { reason: "Non-lead entities not supported in V1" };
-            break;
-          }
-          const { data: conv } = await supabase
-            .from("conversations")
-            .select("id")
-            .eq("lead_id", run.entity_id)
-            .maybeSingle();
-          if (!conv?.id) {
-            logStatus = "failed";
-            logError = "No conversation for lead";
-            break;
-          }
-          const cfg = step.config as { templateId?: string; body?: string };
-          await supabase.functions.invoke("send-lead-message", {
-            body: {
-              tenantId: run.tenant_id,
-              leadId: run.entity_id,
-              conversationId: conv.id,
-              channel: "whatsapp",
-              body: cfg.body ?? "",
-              templateId: cfg.templateId,
-              systemTriggered: true,
-              variables: run.context,
-            },
-          });
-          logOutput = { channel: "whatsapp" };
           break;
         }
         case "move_stage": {
