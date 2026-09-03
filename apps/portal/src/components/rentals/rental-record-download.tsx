@@ -70,7 +70,13 @@ export function RentalRecordDownload({
       const { data: rental, error: rentalError } = await supabase
         .from("rentals")
         .select(
-          "id, rental_number, start_date, end_date, original_end_date, previous_end_date, pickup_time, return_time, customer_timezone, status, rental_period_type, pickup_location, return_location, is_pay_as_you_go, customers:customer_id(name, email, phone), vehicles:vehicle_id(reg, make, model, year)",
+          // NOT `customer_timezone`: types.ts and a migration file both declare
+          // it on `rentals`, but the column does not exist in production — the
+          // migration was never applied. PostgREST rejects the whole SELECT with
+          // a 400 for one unknown column, so naming it here would break this
+          // download entirely. Nothing needs it: the record is rendered in the
+          // operator's timezone by design (see resolveAgreementTimeZone).
+          "id, rental_number, start_date, end_date, original_end_date, previous_end_date, pickup_time, return_time, status, rental_period_type, pickup_location, return_location, is_pay_as_you_go, customers:customer_id(name, email, phone), vehicles:vehicle_id(reg, make, model, year)",
         )
         .eq("id", rentalId)
         .single();
