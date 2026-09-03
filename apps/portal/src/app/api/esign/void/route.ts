@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isLeanTenant } from '@/lib/lean-areas';
 
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
 
@@ -80,10 +81,15 @@ export async function POST(request: NextRequest) {
             } else if (rental.tenant_id) {
                 const { data: tenant } = await supabase
                     .from('tenants')
-                    .select('boldsign_mode')
+                    .select('boldsign_mode, slug')
                     .eq('id', rental.tenant_id)
                     .single();
-                if (tenant?.boldsign_mode) mode = tenant.boldsign_mode as 'test' | 'live';
+                // Lean tenants are always live; everyone else keeps the column.
+                if (isLeanTenant(tenant?.slug)) {
+                    mode = 'live';
+                } else if (tenant?.boldsign_mode) {
+                    mode = tenant.boldsign_mode as 'test' | 'live';
+                }
             }
         }
 

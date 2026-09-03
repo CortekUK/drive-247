@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isLeanTenant } from '@/lib/lean-tenants';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -104,10 +105,15 @@ export async function POST(request: NextRequest) {
     if (boldsignMode === 'test' && rental.tenant_id) {
       const { data: tenantData } = await supabase
         .from('tenants')
-        .select('boldsign_mode')
+        .select('boldsign_mode, slug')
         .eq('id', rental.tenant_id)
         .single();
-      if (tenantData?.boldsign_mode) boldsignMode = tenantData.boldsign_mode as 'test' | 'live';
+      // Lean tenants are always live; everyone else keeps the column.
+      if (isLeanTenant(tenantData?.slug)) {
+        boldsignMode = 'live';
+      } else if (tenantData?.boldsign_mode) {
+        boldsignMode = tenantData.boldsign_mode as 'test' | 'live';
+      }
     }
 
     const BOLDSIGN_API_KEY = getBoldSignApiKey(boldsignMode);
