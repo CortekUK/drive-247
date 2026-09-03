@@ -189,11 +189,6 @@ verify_jwt = true
 [functions.onboarding-daily-digest]
 verify_jwt = false
 
-# Tenant Health Score — the function verifies either x-platform-secret for cron
-# or a Super Admin user JWT for manual evaluations before doing any work.
-[functions.evaluate-health-scores]
-verify_jwt = false
-
 # GHL is an external provider and cannot present a Supabase JWT. The handler
 # verifies the raw-body X-GHL-Signature with Ed25519 before parsing/persisting.
 [functions.ghl-strategy-call-webhook]
