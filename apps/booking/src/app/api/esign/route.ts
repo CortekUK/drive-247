@@ -6,6 +6,15 @@ import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
+import {
+    buildRentalTimeFacts,
+    buildTimeVariables,
+    formatZonedDate,
+    formatZonedDateTime,
+    removeEmptyTableRows,
+    type HandoverRow,
+    type RentalTimeFacts,
+} from '@/lib/agreement-datetime';
 import { resolveBoldSignMode } from '@/lib/lean-tenants';
 
 // BoldSign configuration — resolved per-request based on tenant mode
@@ -99,7 +108,12 @@ function formatCurrency(amount: number | null, currencyCode: string = 'USD'): st
 }
 
 // Process template variables
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any, termsBlock: string = ''): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any, termsBlock: string = '', timeFacts?: RentalTimeFacts): string {
+    // Mirrors the portal engine: collection/return times resolved once, and every
+    // "today" field stamped in the tenant's zone rather than the server's (UTC on
+    // Vercel), which put tomorrow's date on evening-generated agreements.
+    const _times = timeFacts ?? buildRentalTimeFacts(rental, tenant as any, []);
+    const _todayInTenantZone = formatZonedDate(new Date(), _times.timeZone);
     const cc = tenant?.currency_code || 'USD';
 
     // Compose full address from separate fields
@@ -267,8 +281,10 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         pickup_location: rental?.pickup_location || '',
         return_location: rental?.return_location || '',
         delivery_address: rental?.delivery_address || '',
-        pickup_time: rental?.pickup_time || '',
-        return_time: rental?.return_time || '',
+        // Scheduled AND actual collection/return times. {{pickup_time}} and
+        // {{return_time}} previously interpolated the raw Postgres `time` value,
+        // so signed contracts read "Pickup Time: 14:00:00".
+        ...buildTimeVariables(_times),
         promo_code: rental?.promo_code || '',
 
         // Company / Tenant
@@ -280,9 +296,9 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         admin_email: tenant?.admin_email || '',
 
         // Dates
-        agreement_date: formatDate(new Date()),
-        today_date: formatDate(new Date()),
-        current_date: formatDate(new Date()),
+        agreement_date: _todayInTenantZone,
+        today_date: _todayInTenantZone,
+        current_date: _todayInTenantZone,
     };
 
     let result = template;
@@ -320,7 +336,9 @@ function htmlToText(html: string): string {
 }
 
 // Generate default agreement
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, termsText: string = ''): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, termsText: string = '', timeFacts?: RentalTimeFacts): string {
+    // No processTemplate on this path, so the times are composed here too.
+    const _times = timeFacts ?? buildRentalTimeFacts(rental, tenant as any, []);
     const companyName = tenant?.company_name || 'Drive 247';
     const cc = tenant?.currency_code || 'USD';
 
@@ -328,7 +346,7 @@ function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tena
 RENTAL AGREEMENT
 ${'='.repeat(70)}
 
-Date: ${formatDate(new Date())}
+Date: ${formatZonedDate(new Date(), _times.timeZone)}
 Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
 
 ${'='.repeat(70)}
@@ -360,6 +378,19 @@ Excess Mileage Rate: ${resolveAgreementMileage(rental, vehicle, (tenant as any)?
 
 ${'='.repeat(70)}
 
+VEHICLE COLLECTION & RETURN:
+${[
+    _times.scheduledPickup ? `Scheduled Collection: ${_times.scheduledPickup}` : '',
+    _times.scheduledReturn ? `Scheduled Return: ${_times.scheduledReturn}` : '',
+    _times.collectedAt ? `Vehicle Collected: ${_times.collectedAt}` : '',
+    _times.returnedAt ? `Vehicle Returned: ${_times.returnedAt}` : '',
+    _times.collectionMileage ? `Odometer at Collection: ${_times.collectionMileage}` : '',
+    _times.returnMileage ? `Odometer at Return: ${_times.returnMileage}` : '',
+    `Times Recorded In: ${_times.timeZone}`,
+].filter(Boolean).join('\n')}
+
+${'='.repeat(70)}
+
 TERMS:
 1. Customer agrees to rent the vehicle for the specified period.
 2. Customer will maintain the vehicle in good condition.
@@ -376,7 +407,7 @@ Customer Signature: _________________________
 Date: ______________
 
 ${'='.repeat(70)}
-${companyName} - Generated: ${new Date().toISOString()}
+${companyName} - Generated: ${formatZonedDateTime(new Date(), _times.timeZone)}
 `;
 }
 
@@ -445,13 +476,32 @@ export async function POST(request: NextRequest) {
             console.log('Verification data:', verification ? 'found' : 'none');
         }
 
+        // Key handovers — the ACTUAL times the vehicle changed hands. At most two
+        // rows per rental (UNIQUE on rental_id, handover_type). A row with
+        // handed_at = NULL is the normal pre-handover state (rows are created by
+        // photo/note/odometer entry), and buildRentalTimeFacts treats it as
+        // "not yet handed over" rather than rendering a blank timestamp.
+        let handoverRows: HandoverRow[] = [];
+        if (body.rentalId) {
+            const { data: handoverData, error: handoverError } = await supabase
+                .from('rental_key_handovers')
+                .select('handover_type, handed_at, mileage')
+                .eq('rental_id', body.rentalId);
+            // Logged, never thrown — a missing timestamp must not block a tenant
+            // from issuing the contract itself.
+            if (handoverError) {
+                console.error('Failed to load key handovers for agreement:', handoverError);
+            }
+            handoverRows = (handoverData as HandoverRow[]) || [];
+        }
+
         // Fetch tenant info
         if (tenantId) {
             const { data: tenantData } = await supabase
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
                 // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
-                .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled')
+                .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled, timezone')
                 .eq('id', tenantId)
                 .single();
             tenant = tenantData;
@@ -496,6 +546,10 @@ export async function POST(request: NextRequest) {
                 rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30
             ).isUnspecified;
 
+            // Built here rather than at fetch time: the tenant row (and with it
+            // the timezone) is only resolved above.
+            const timeFacts = buildRentalTimeFacts(rental, tenant as any, handoverRows);
+
             if (templateData?.template_content) {
                 console.log('Using admin custom template:', templateData.template_name);
                 const processed = processTemplate(
@@ -507,13 +561,19 @@ export async function POST(request: NextRequest) {
                         // Charged deposits only: stored templates predate them and
                         // either say nothing or describe a card hold.
                         hasDepositClause: (tenant as any)?.deposit_charge_enabled === true,
+                        // Only when the rental carries a time worth stating.
+                        hasHandoverTimes: timeFacts.hasAnyTimes,
                     }),
-                    rental, customer, vehicle, tenant, verification, termsBlockHtml
+                    rental, customer, vehicle, tenant, verification, termsBlockHtml, timeFacts
                 );
-                documentContent = htmlToText(processed);
+                // This engine has no equivalent of the portal's removeEmptyFields,
+                // so an unanswered label reached the BoldSign document as
+                // "Vehicle Returned:" followed by nothing. On a page an insurer
+                // reads, a labelled blank is a recorded blank.
+                documentContent = htmlToText(removeEmptyTableRows(processed));
             } else {
                 console.log('No active template found, using default');
-                documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, termsPlain);
+                documentContent = generateDefaultAgreement(rental, customer, vehicle, tenant, termsPlain, timeFacts);
             }
         } else {
             console.log('No tenant ID, using default template');

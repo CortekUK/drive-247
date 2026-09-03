@@ -89,6 +89,24 @@ export interface InjectionOptions {
    */
   hasBonzahAddendum: boolean;
   /**
+   * Ensure the agreement states WHEN the vehicle changed hands, not just on
+   * which dates the rental ran.
+   *
+   * Every stored template predates the time placeholders, so a signed agreement
+   * carried dates alone. That gap only surfaces at the worst moment: after an
+   * accident, when the renter's insurer asks for the time the vehicle was
+   * collected and returned and the operator has no document that states it —
+   * only an admin screen to screenshot.
+   *
+   * Gated at the call site on the rental carrying any time information at all
+   * (`RentalTimeFacts.hasAnyTimes`) — NOT on a confirmed handover. An agreement
+   * is signed before the vehicle is collected, so gating on the actual handover
+   * would leave the contract the customer actually signs stating no times, which
+   * is the very gap being closed. A tenant who records no time of day on their
+   * rentals still sees nothing.
+   */
+  hasHandoverTimes: boolean;
+  /**
    * Ensure the agreement states what happens to the renter's deposit. Needed
    * because most tenants' stored templates predate charged deposits and either
    * say nothing or describe a card HOLD — which is the wrong legal statement
@@ -212,6 +230,44 @@ function injectDepositClause(template: string): string {
 }
 
 /**
+ * Collection/return times, as a self-contained heading + table.
+ *
+ * Literal rather than imported from agreement-datetime.ts for the same reason
+ * the Bonzah block is literal: this module stays byte-identical across the
+ * portal, booking and Deno copies, and Deno needs a ".ts" suffix on relative
+ * imports that the bundlers do not. Must stay in step with
+ * HANDOVER_TIMES_BLOCK_HTML in agreement-datetime.ts.
+ *
+ * It is its OWN table, never rows appended to the document's last table. The
+ * PDF renderer sets every column width to CONTENT_W / (max cells in any row of
+ * that table), so 2-cell rows landing in a table that has a 3-cell row anywhere
+ * — the installment schedule has one — shrink every column to 165pt, and the
+ * renderer then truncates the overflow one character at a time with no ellipsis.
+ * A silently chopped timestamp on a document an insurer reads is worse than no
+ * timestamp at all.
+ */
+const HANDOVER_TIMES_BLOCK =
+  "<h2>Vehicle Collection &amp; Return</h2>\n" +
+  "<table>\n" +
+  "<tr><td><strong>Scheduled Collection</strong></td><td>{{pickup_datetime}}</td></tr>\n" +
+  "<tr><td><strong>Scheduled Return</strong></td><td>{{return_datetime}}</td></tr>\n" +
+  "<tr><td><strong>Vehicle Collected</strong></td><td>{{vehicle_collected_at}}</td></tr>\n" +
+  "<tr><td><strong>Vehicle Returned</strong></td><td>{{vehicle_returned_at}}</td></tr>\n" +
+  "<tr><td><strong>Odometer at Collection</strong></td><td>{{collection_mileage}}</td></tr>\n" +
+  "<tr><td><strong>Odometer at Return</strong></td><td>{{return_mileage}}</td></tr>\n" +
+  "<tr><td><strong>Times Recorded In</strong></td><td>{{rental_timezone}}</td></tr>\n" +
+  "</table>";
+
+/**
+ * Put the times immediately above the signature area, alongside the other
+ * injected clauses. A renter should be able to read what the document asserts
+ * about when they took and returned the vehicle before signing it.
+ */
+function injectHandoverTimes(template: string): string {
+  return insertBeforeSignature(template, "\n" + HANDOVER_TIMES_BLOCK + "\n");
+}
+
+/**
  * Ensure the rendered agreement states mileage, incorporates the tenant's terms
  * and carries the Bonzah addendum, without modifying the stored template.
  *
@@ -220,7 +276,13 @@ function injectDepositClause(template: string): string {
  */
 export function injectAgreementClauses(
   template: string,
-  { hasMileage, hasTerms, hasBonzahAddendum, hasDepositClause }: InjectionOptions,
+  {
+    hasMileage,
+    hasTerms,
+    hasBonzahAddendum,
+    hasDepositClause,
+    hasHandoverTimes,
+  }: InjectionOptions,
 ): string {
   if (!template) return template;
   let out = template;
@@ -241,6 +303,31 @@ export function injectAgreementClauses(
   if (hasMileage && !alreadyStatesMileage) {
     out = injectMileage(out);
   }
+  // AFTER injectMileage, and this ordering is load-bearing rather than
+  // cosmetic. injectMileage appends its rows to the document's LAST </table>.
+  // The collection/return block is spliced in above the signature, which in most
+  // templates makes it the last table — so injecting it first silently captured
+  // the mileage rows, and a contract ended up stating "Mileage Allowance" under
+  // the heading "Vehicle Collection & Return" instead of under Vehicle Details.
+  //
+  // Skipped when the template already places ANY of these placeholders itself:
+  // the operator has chosen where the times belong, and injecting on top would
+  // state them twice in one contract. Checking every name in the block (not just
+  // the obvious ones) is what keeps re-rendering the same agreement idempotent
+  // as more of these variables become individually pickable in the editor.
+  const alreadyStatesTimes = [
+    "pickup_datetime",
+    "return_datetime",
+    "vehicle_collected_at",
+    "vehicle_returned_at",
+    "collection_mileage",
+    "return_mileage",
+    "rental_timezone",
+  ].some((name) => hasPlaceholder(out, name));
+  if (hasHandoverTimes && !alreadyStatesTimes) {
+    out = injectHandoverTimes(out);
+  }
+
   if (hasTerms && !hasPlaceholder(out, "terms_and_conditions")) {
     out = injectTerms(out);
   }

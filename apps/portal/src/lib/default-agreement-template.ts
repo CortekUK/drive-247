@@ -41,6 +41,17 @@ export const DEFAULT_AGREEMENT_TEMPLATE = `<h1>RENTAL AGREEMENT</h1>
 <tr><td><strong>Rental Price</strong></td><td>{{rental_price}} ({{rental_period_type}})</td></tr>
 </table>
 
+<h2>Vehicle Collection &amp; Return</h2>
+<table>
+<tr><td><strong>Scheduled Collection</strong></td><td>{{pickup_datetime}}</td></tr>
+<tr><td><strong>Scheduled Return</strong></td><td>{{return_datetime}}</td></tr>
+<tr><td><strong>Vehicle Collected</strong></td><td>{{vehicle_collected_at}}</td></tr>
+<tr><td><strong>Vehicle Returned</strong></td><td>{{vehicle_returned_at}}</td></tr>
+<tr><td><strong>Odometer at Collection</strong></td><td>{{collection_mileage}}</td></tr>
+<tr><td><strong>Odometer at Return</strong></td><td>{{return_mileage}}</td></tr>
+<tr><td><strong>Times Recorded In</strong></td><td>{{rental_timezone}}</td></tr>
+</table>
+
 {{installment_schedule}}
 
 <hr>
@@ -113,6 +124,17 @@ export const PAYG_AGREEMENT_TEMPLATE = `<h1>PAY AS YOU GO RENTAL AGREEMENT</h1>
 <tr><td><strong>Return Location</strong></td><td>{{return_location}}</td></tr>
 </table>
 <p><em>Pay As You Go rentals are open-ended. The End Date is shown as "Ongoing" because the rental continues to accrue daily charges until the Customer requests return and the Rental Company closes the rental.</em></p>
+
+<h2>Vehicle Collection &amp; Return</h2>
+<table>
+<tr><td><strong>Scheduled Collection</strong></td><td>{{pickup_datetime}}</td></tr>
+<tr><td><strong>Scheduled Return</strong></td><td>{{return_datetime}}</td></tr>
+<tr><td><strong>Vehicle Collected</strong></td><td>{{vehicle_collected_at}}</td></tr>
+<tr><td><strong>Vehicle Returned</strong></td><td>{{vehicle_returned_at}}</td></tr>
+<tr><td><strong>Odometer at Collection</strong></td><td>{{collection_mileage}}</td></tr>
+<tr><td><strong>Odometer at Return</strong></td><td>{{return_mileage}}</td></tr>
+<tr><td><strong>Times Recorded In</strong></td><td>{{rental_timezone}}</td></tr>
+</table>
 
 <p><strong>Billing summary.</strong> The Customer agrees to pay <strong>{{payg_billing_amount}}</strong> per <strong>{{payg_period_label}}</strong> for the use of the Vehicle. For clarity, this is equivalent to <strong>{{payg_daily_rate}}</strong> per day, <strong>{{payg_weekly_rate}}</strong> per week, or <strong>{{payg_monthly_rate}}</strong> per month. The Rental Company will charge the daily equivalent automatically each 24-hour period the Vehicle remains in the Customer's possession.</p>
 
@@ -202,6 +224,17 @@ export const EXTENSION_AGREEMENT_TEMPLATE = `<h1>RENTAL EXTENSION AGREEMENT</h1>
 <tr><td><strong>Excess Mileage Rate</strong></td><td>{{excess_mileage_rate}}</td></tr>
 </table>
 
+<h2>Vehicle Collection &amp; Return</h2>
+<table>
+<tr><td><strong>Scheduled Collection</strong></td><td>{{pickup_datetime}}</td></tr>
+<tr><td><strong>Scheduled Return</strong></td><td>{{return_datetime}}</td></tr>
+<tr><td><strong>Vehicle Collected</strong></td><td>{{vehicle_collected_at}}</td></tr>
+<tr><td><strong>Vehicle Returned</strong></td><td>{{vehicle_returned_at}}</td></tr>
+<tr><td><strong>Odometer at Collection</strong></td><td>{{collection_mileage}}</td></tr>
+<tr><td><strong>Odometer at Return</strong></td><td>{{return_mileage}}</td></tr>
+<tr><td><strong>Times Recorded In</strong></td><td>{{rental_timezone}}</td></tr>
+</table>
+
 {{installment_schedule}}
 
 <hr>
@@ -264,6 +297,17 @@ export const DEFAULT_INSTALLMENT_AGREEMENT_TEMPLATE = `<h1>Installment Payment P
 <tr><td><strong>Rental Period</strong></td><td>{{rental_start_date}} to {{rental_end_date}}</td></tr>
 <tr><td><strong>Pickup</strong></td><td>{{pickup_location}}</td></tr>
 <tr><td><strong>Return</strong></td><td>{{return_location}}</td></tr>
+</table>
+
+<h2>Vehicle Collection &amp; Return</h2>
+<table>
+<tr><td><strong>Scheduled Collection</strong></td><td>{{pickup_datetime}}</td></tr>
+<tr><td><strong>Scheduled Return</strong></td><td>{{return_datetime}}</td></tr>
+<tr><td><strong>Vehicle Collected</strong></td><td>{{vehicle_collected_at}}</td></tr>
+<tr><td><strong>Vehicle Returned</strong></td><td>{{vehicle_returned_at}}</td></tr>
+<tr><td><strong>Odometer at Collection</strong></td><td>{{collection_mileage}}</td></tr>
+<tr><td><strong>Odometer at Return</strong></td><td>{{return_mileage}}</td></tr>
+<tr><td><strong>Times Recorded In</strong></td><td>{{rental_timezone}}</td></tr>
 </table>
 <p><em>This document supplements the Operator's standard Vehicle Rental Agreement. Terms defined there have the same meaning here. Where this document conflicts with the standard agreement, this document prevails for matters of payment.</em></p>
 

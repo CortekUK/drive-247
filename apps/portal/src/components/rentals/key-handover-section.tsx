@@ -31,6 +31,7 @@ import { LockboxSendTimeline } from "@/components/rentals/lockbox-send-timeline"
 import { LockboxCountdownTicker } from "@/components/rentals/lockbox-countdown-ticker";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { formatZonedDateTime, resolveAgreementTimeZone } from "@/lib/agreement-datetime";
 import { useToast } from "@/hooks/use-toast";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import {
@@ -205,6 +206,16 @@ export const KeyHandoverSection = ({
 
   const givingCompleted = !!givingHandover?.handed_at;
   const receivingCompleted = !!receivingHandover?.handed_at;
+
+  // These timestamps were rendered with a bare toLocaleString, i.e. in whatever
+  // zone the viewer's browser happens to be in, while the rental page's own
+  // footer told the operator they were "shown in {tenant.timezone}". For an
+  // operator abroad, or support staff in another country reading a US tenant's
+  // rental, the label and the number disagreed — and these are the timestamps
+  // that get quoted to an insurer after an accident. Pin them to the same zone
+  // the agreement PDF and the rental record use, and print the abbreviation so
+  // the reading is unambiguous on its own.
+  const handoverTimeZone = resolveAgreementTimeZone(null, tenant as never);
 
   const handleUpload = (type: HandoverType) => (file: File) => {
     uploadPhoto.mutate({ type, file });
@@ -633,7 +644,7 @@ export const KeyHandoverSection = ({
             {/* Handed timestamp */}
             {givingCompleted && givingHandover?.handed_at && (
               <p className="text-sm text-muted-foreground">
-                Collected on: {new Date(givingHandover.handed_at).toLocaleString('en-US')}
+                Collected on: {formatZonedDateTime(givingHandover.handed_at, handoverTimeZone)}
               </p>
             )}
 
@@ -783,7 +794,7 @@ export const KeyHandoverSection = ({
             {/* Handed timestamp */}
             {receivingCompleted && receivingHandover?.handed_at && (
               <p className="text-sm text-muted-foreground">
-                Returned on: {new Date(receivingHandover.handed_at).toLocaleString('en-US')}
+                Returned on: {formatZonedDateTime(receivingHandover.handed_at, handoverTimeZone)}
               </p>
             )}
 

@@ -3,6 +3,7 @@
 
 import { formatCurrency } from "@/lib/format-utils";
 import { computePaygDailyRate } from "@/lib/payg-rate";
+import { buildRentalTimeFacts, buildTimeVariables } from "@/lib/agreement-datetime";
 
 export interface TemplateVariable {
   key: string;
@@ -519,6 +520,96 @@ export const TEMPLATE_VARIABLES: TemplateVariable[] = [
     category: 'rental',
   },
 
+  // Collection & return times.
+  //
+  // {{pickup_time}} and {{return_time}} already substituted at send time but were
+  // never listed here, so the picker did not offer them and the editor preview
+  // left them as literal text — an operator who typed one by hand concluded it
+  // was broken. They are also the times an insurer asks for after an accident,
+  // which is why the whole group is surfaced.
+  //
+  // SCHEDULED (what was agreed) and ACTUAL (when the keys really changed hands)
+  // are deliberately separate variables. They routinely differ — a booking for
+  // 10am collected at 2:46pm the next day is ordinary — and a document that
+  // blurs them misstates the record it exists to prove.
+  {
+    key: 'pickup_time',
+    label: 'Scheduled Pickup Time',
+    description: 'Agreed time of day for collection. Empty when the rental has no pickup time set.',
+    sample: '10:00 AM',
+    category: 'rental',
+  },
+  {
+    key: 'return_time',
+    label: 'Scheduled Return Time',
+    description: 'Agreed time of day for return. Empty when the rental has no return time set.',
+    sample: '4:30 PM',
+    category: 'rental',
+  },
+  {
+    key: 'pickup_datetime',
+    label: 'Scheduled Collection (Date & Time)',
+    description: 'Agreed collection date and time together, with the timezone named.',
+    sample: 'August 3, 2026 at 10:00 AM EDT',
+    category: 'rental',
+  },
+  {
+    key: 'return_datetime',
+    label: 'Scheduled Return (Date & Time)',
+    description: 'Agreed return date and time together, with the timezone named.',
+    sample: 'August 13, 2026 at 4:30 PM EDT',
+    category: 'rental',
+  },
+  {
+    key: 'vehicle_collected_at',
+    label: 'Vehicle Collected (Actual)',
+    description: 'When the keys were actually handed to the customer. Empty until the collection is confirmed in the portal.',
+    sample: 'August 4, 2026 at 2:46 PM EDT',
+    category: 'rental',
+  },
+  {
+    key: 'vehicle_returned_at',
+    label: 'Vehicle Returned (Actual)',
+    description: 'When the keys were actually handed back. Empty until the return is confirmed in the portal.',
+    sample: 'August 13, 2026 at 11:12 AM EDT',
+    category: 'rental',
+  },
+  {
+    key: 'collection_mileage',
+    label: 'Odometer at Collection',
+    description: 'Odometer reading recorded when the vehicle was collected.',
+    sample: '48,210',
+    category: 'rental',
+  },
+  {
+    key: 'return_mileage',
+    label: 'Odometer at Return',
+    description: 'Odometer reading recorded when the vehicle was returned.',
+    sample: '48,935',
+    category: 'rental',
+  },
+  {
+    key: 'rental_start_datetime',
+    label: 'Rental Start (Date & Time)',
+    description: 'Alias of Scheduled Collection — the rental start date with its agreed time of day.',
+    sample: 'August 3, 2026 at 10:00 AM EDT',
+    category: 'rental',
+  },
+  {
+    key: 'rental_end_datetime',
+    label: 'Rental End (Date & Time)',
+    description: 'Alias of Scheduled Return — the rental end date with its agreed time of day.',
+    sample: 'August 13, 2026 at 4:30 PM EDT',
+    category: 'rental',
+  },
+  {
+    key: 'rental_timezone',
+    label: 'Rental Timezone',
+    description: 'The timezone every date and time in this agreement is stated in.',
+    sample: 'America/New_York',
+    category: 'rental',
+  },
+
   // Company variables
   {
     key: 'company_name',
@@ -956,6 +1047,14 @@ export function buildTemplateData(
     pickup_location: rental?.pickup_location || '',
     return_location: rental?.return_location || '',
     delivery_address: rental?.delivery_address || '',
+    // Collection & return times. The preview renders the SCHEDULED times from
+    // the rental itself, but leaves the two ACTUAL times blank: they come from
+    // rental_key_handovers, which this preview does not query, and inventing a
+    // plausible timestamp in a preview of a legal document is worse than a gap.
+    // The picker still shows operators a sample for each.
+    ...buildTimeVariables(
+      buildRentalTimeFacts(rental as never, tenant as never, []),
+    ),
     // Pre-formatted by the BoldSign edge function when sending; in the
     // template editor preview the rental row doesn't carry this so it
     // resolves to an empty string (acceptable — operators see the sample

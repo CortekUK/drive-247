@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RentalRecordDownload } from '@/components/rentals/rental-record-download';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -595,10 +596,18 @@ export function AgreementTimeline({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <FileSignature className="h-5 w-5 text-blue-600" />
-          Rental Agreements
-        </CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2">
+            <FileSignature className="h-5 w-5 text-blue-600" />
+            Rental Agreements
+          </CardTitle>
+          {/* A whole-rental artefact, so it sits at card level rather than in a
+              per-agreement action row. It is placed here because this is where
+              an operator already comes looking when someone asks them for
+              "the paperwork" — and the signed agreements alone cannot answer a
+              claims request for collection and return TIMES. */}
+          <RentalRecordDownload rentalId={rentalId} />
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         {isLoading ? (

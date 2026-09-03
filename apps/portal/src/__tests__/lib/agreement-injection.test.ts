@@ -7,7 +7,7 @@ import {
 } from '@/lib/bonzah-addendum';
 
 /** Nothing on, so each test opts in to exactly the clause it is about. */
-const OFF = { hasMileage: false, hasTerms: false, hasBonzahAddendum: false, hasDepositClause: false };
+const OFF = { hasMileage: false, hasTerms: false, hasBonzahAddendum: false, hasDepositClause: false, hasHandoverTimes: false };
 
 const ADDENDUM = `{{${BONZAH_ADDENDUM_PLACEHOLDER}}}`;
 const TERMS = '{{terms_and_conditions}}';

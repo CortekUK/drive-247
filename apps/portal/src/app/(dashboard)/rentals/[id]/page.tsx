@@ -27,6 +27,7 @@ import { TakeDepositDialog } from "@/components/shared/dialogs/take-deposit-dial
 import { AddHoldDialog } from "@/components/shared/dialogs/add-hold-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
+import { resolveAgreementTimeZone } from "@/lib/agreement-datetime";
 import { isBonzahSellable, bonzahBlockedReason } from "@/lib/bonzah";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
@@ -5765,7 +5766,7 @@ const RentalDetail = () => {
                 so spell it out explicitly. Tenant timezone wins; falls back to
                 the browser's resolved zone. */}
             <p className="text-xs text-muted-foreground mt-3 italic">
-              Times shown in {tenant?.timezone || (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "local time")}
+              Times shown in {resolveAgreementTimeZone(rental as never, tenant as never)}
             </p>
 
             {/* Extension History */}

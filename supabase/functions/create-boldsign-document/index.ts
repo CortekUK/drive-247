@@ -7,6 +7,14 @@ import { resolveAgreementMileage } from '../_shared/agreement-mileage.ts';
 import { fetchTenantTermsBlock } from '../_shared/agreement-terms.ts';
 import { injectAgreementClauses } from '../_shared/agreement-injection.ts';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '../_shared/bonzah-addendum.ts';
+import {
+  buildRentalTimeFacts,
+  buildTimeVariables,
+  formatZonedDate,
+  removeEmptyTableRows,
+  type HandoverRow,
+  type RentalTimeFacts,
+} from '../_shared/agreement-datetime.ts';
 import { resolveBoldSignMode } from '../_shared/lean-tenants.ts';
 
 interface CreateDocumentRequest {
@@ -136,8 +144,14 @@ function processTemplate(
   tenant: Record<string, unknown>,
   verification?: Record<string, unknown> | null,
   installment?: InstallmentData | null,
-  termsBlock: string = ''
+  termsBlock: string = '',
+  timeFacts?: RentalTimeFacts,
 ): string {
+  // Collection/return times, and a "today" stamped in the tenant's zone rather
+  // than the Deno runtime's (UTC), which put tomorrow's date on every agreement
+  // generated after 20:00 Eastern.
+  const _times = timeFacts ?? buildRentalTimeFacts(rental as never, tenant as never, []);
+  const _todayInTenantZone = formatZonedDate(new Date(), _times.timeZone);
   // Compose full address from separate fields
   const customerAddress = [
     customer?.address_street as string,
@@ -380,8 +394,10 @@ function processTemplate(
     pickup_location: (rental?.pickup_location as string) || '',
     return_location: (rental?.return_location as string) || '',
     delivery_address: (rental?.delivery_address as string) || '',
-    pickup_time: (rental?.pickup_time as string) || '',
-    return_time: (rental?.return_time as string) || '',
+    // Scheduled AND actual collection/return times. {{pickup_time}} and
+    // {{return_time}} previously interpolated the raw Postgres `time` value,
+    // so signed contracts read "Pickup Time: 14:00:00".
+    ...buildTimeVariables(_times),
 
     // Company / Tenant
     company_name: (tenant?.company_name as string) || 'Drive 247',
@@ -390,9 +406,9 @@ function processTemplate(
     company_address: (tenant?.address as string) || '',
 
     // Dates
-    agreement_date: formatDate(new Date()),
-    today_date: formatDate(new Date()),
-    current_date: formatDate(new Date()),
+    agreement_date: _todayInTenantZone,
+    today_date: _todayInTenantZone,
+    current_date: _todayInTenantZone,
 
     // Installment payment schedule
     installment_schedule: installment ? buildInstallmentScheduleHtml(installment) : '',
@@ -457,13 +473,16 @@ function generateDefaultTemplate(
   customer: Record<string, unknown>,
   vehicle: Record<string, unknown>,
   tenant: Record<string, unknown> | null,
-  installment?: InstallmentData | null
+  installment?: InstallmentData | null,
+  timeFacts?: RentalTimeFacts,
 ): string {
+  // No processTemplate on this path, so the times are composed here too.
+  const _times = timeFacts ?? buildRentalTimeFacts(rental as never, (tenant || {}) as never, []);
   return `${'='.repeat(70)}
                          RENTAL AGREEMENT
 ${'='.repeat(70)}
 
-Agreement Date: ${formatDate(new Date())}
+Agreement Date: ${formatZonedDate(new Date(), _times.timeZone)}
 Rental Reference: ${(rental?.id as string)?.substring(0, 8)?.toUpperCase() || 'N/A'}
 
 ${'─'.repeat(70)}
@@ -489,6 +508,19 @@ ${'─'.repeat(70)}
 Start Date:    ${formatDate(rental?.start_date as string)}
 End Date:      ${rental?.end_date ? formatDate(rental.end_date as string) : 'Ongoing'}
 Rental Price:  ${(() => { const t = (rental?.rental_period_type as string) || 'Monthly'; const r = t === 'Daily' ? vehicle?.daily_rent as number : t === 'Weekly' ? vehicle?.weekly_rent as number : vehicle?.monthly_rent as number; return formatCurrency(r); })()} (${(rental?.rental_period_type as string) || 'Monthly'})
+
+${'\u2500'.repeat(70)}
+VEHICLE COLLECTION & RETURN
+${'\u2500'.repeat(70)}
+${[
+    _times.scheduledPickup ? `Scheduled Collection:   ${_times.scheduledPickup}` : '',
+    _times.scheduledReturn ? `Scheduled Return:       ${_times.scheduledReturn}` : '',
+    _times.collectedAt ? `Vehicle Collected:      ${_times.collectedAt}` : '',
+    _times.returnedAt ? `Vehicle Returned:       ${_times.returnedAt}` : '',
+    _times.collectionMileage ? `Odometer at Collection: ${_times.collectionMileage}` : '',
+    _times.returnMileage ? `Odometer at Return:     ${_times.returnMileage}` : '',
+    `Times Recorded In:      ${_times.timeZone}`,
+].filter(Boolean).join('\n')}
 
 ${installment ? buildInstallmentScheduleText(installment) : ''}${'='.repeat(70)}
                       TERMS & CONDITIONS
@@ -598,7 +630,8 @@ async function generateDocument(
   const { data: tenant } = await supabase
     .from('tenants')
     // integration_bonzah drives the Bonzah insurance addendum below.
-    .select('company_name, contact_email, contact_phone, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled')
+    // `timezone` drives every date and time in the document.
+    .select('company_name, contact_email, contact_phone, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled, timezone')
     .eq('id', tenantId)
     .single();
 
@@ -608,6 +641,22 @@ async function generateDocument(
   if (installment) {
     console.log(`Installment plan found: ${installment.plan_type}, ${installment.number_of_installments} payments of ${installment.installment_amount}`);
   }
+
+  // Key handovers — the ACTUAL times the vehicle changed hands. At most two rows
+  // per rental (UNIQUE on rental_id, handover_type). handed_at = NULL is the
+  // normal pre-handover state and renders as no timestamp at all.
+  let handoverRows: HandoverRow[] = [];
+  if (rentalId) {
+    const { data: handoverData, error: handoverError } = await supabase
+      .from('rental_key_handovers')
+      .select('handover_type, handed_at, mileage')
+      .eq('rental_id', rentalId);
+    if (handoverError) {
+      console.error('Failed to load key handovers for agreement:', handoverError);
+    }
+    handoverRows = (handoverData as HandoverRow[]) || [];
+  }
+  const timeFacts = buildRentalTimeFacts(rental as never, (tenant || {}) as never, handoverRows);
 
   const templateCategory = (rental as Record<string, unknown>)?.is_pay_as_you_go ? 'payg' : 'standard';
   const template = await getActiveTemplate(supabase, tenantId, templateCategory);
@@ -643,14 +692,18 @@ async function generateDocument(
         // Charged deposits only: stored templates predate them and either say
         // nothing or describe a card hold.
         hasDepositClause: (tenant as any)?.deposit_charge_enabled === true,
+        // Only when the rental carries a time worth stating.
+        hasHandoverTimes: timeFacts.hasAnyTimes,
       }),
-      rentalWithExtras, customer, vehicle, tenant || {}, verification, installment, termsBlockHtml,
+      rentalWithExtras, customer, vehicle, tenant || {}, verification, installment, termsBlockHtml, timeFacts,
     );
-    return htmlToText(processedContent);
+    // Same reason as the booking engine: no removeEmptyFields here, so an
+    // unanswered label would render as a recorded blank.
+    return htmlToText(removeEmptyTableRows(processedContent));
   }
 
   console.log('Using default template');
-  return generateDefaultTemplate(rentalWithExtras, customer, vehicle, tenant, installment);
+  return generateDefaultTemplate(rentalWithExtras, customer, vehicle, tenant, installment, timeFacts);
 }
 
 // ============================================================================

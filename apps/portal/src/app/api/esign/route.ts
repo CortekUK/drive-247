@@ -8,6 +8,14 @@ import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
+import {
+    buildRentalTimeFacts,
+    buildTimeVariables,
+    formatZonedDate,
+    formatZonedDateTime,
+    type HandoverRow,
+    type RentalTimeFacts,
+} from '@/lib/agreement-datetime';
 import { resolveBoldSignMode } from '@/lib/lean-areas';
 
 // BoldSign configuration — resolved per-request based on tenant mode
@@ -154,7 +162,15 @@ function buildAdditionalDriverSlotFields(drivers: AdditionalDriverRow[]): Record
     return fields;
 }
 
-function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, installment?: InstallmentData | null, termsBlock: string = ''): string {
+function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', verification?: any, extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, installment?: InstallmentData | null, termsBlock: string = '', timeFacts?: RentalTimeFacts): string {
+    // Collection/return times, resolved once. Falls back to a facts object built
+    // from the rental alone so a caller that has not fetched handovers still gets
+    // correctly formatted SCHEDULED times rather than the raw "14:00:00".
+    const _times = timeFacts ?? buildRentalTimeFacts(rental, tenant, []);
+    // Every "today" field is stamped in the tenant's zone. These render on
+    // Vercel's Node runtime where TZ=UTC, so a bare toLocaleDateString put
+    // TOMORROW's date on every agreement generated after 20:00 Eastern.
+    const _todayInTenantZone = formatZonedDate(new Date(), _times.timeZone);
     // Compose full address from separate fields (DB stores street/city/state/zip separately)
     const customerAddress = [
         customer?.address_street,
@@ -354,8 +370,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         pickup_location: rental?.pickup_location || '',
         return_location: rental?.return_location || '',
         delivery_address: rental?.delivery_address || '',
-        pickup_time: rental?.pickup_time || '',
-        return_time: rental?.return_time || '',
+        // Scheduled AND actual collection/return times. {{pickup_time}} and
+        // {{return_time}} previously interpolated the raw Postgres `time` value,
+        // so signed contracts read "Pickup Time: 14:00:00"; they now come from
+        // the shared formatter along with the new datetime placeholders.
+        ...buildTimeVariables(_times),
         promo_code: rental?.promo_code || '',
 
         // Company / Tenant
@@ -367,9 +386,11 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         admin_email: tenant?.admin_email || '',
 
         // Dates
-        agreement_date: formatDate(new Date()),
-        today_date: formatDate(new Date()),
-        current_date: formatDate(new Date()),
+        // Stamped in the tenant's timezone, not the server's. See
+        // _todayInTenantZone above for why a bare toLocaleDateString was wrong.
+        agreement_date: _todayInTenantZone,
+        today_date: _todayInTenantZone,
+        current_date: _todayInTenantZone,
 
         // Extension (empty if not an extension agreement — non-breaking)
         extension_previous_end_date: extensionData?.previousEndDate ? formatDate(extensionData.previousEndDate) : '',
@@ -1105,8 +1126,12 @@ async function recordSendFailure(
     }
 }
 
-function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, termsText: string = ''): string {
+function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, currencyCode: string = 'USD', extensionData?: { previousEndDate?: string; newEndDate?: string; extensionNumber?: number; extensionAmount?: number }, termsText: string = '', timeFacts?: RentalTimeFacts): string {
     const companyName = tenant?.company_name || 'Drive 247';
+    // This path never touches processTemplate, so the times have to be composed
+    // here too — a tenant with no stored template must not be the one tenant
+    // whose contract omits when the vehicle changed hands.
+    const _times = timeFacts ?? buildRentalTimeFacts(rental, tenant, []);
     const line = (label: string, value: string | null | undefined) => value ? `${label}: ${value}` : '';
     const lines = (...parts: string[]) => parts.filter(Boolean).join('\n');
 
@@ -1119,7 +1144,7 @@ function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tena
 ${agreementTitle}
 ${'='.repeat(70)}
 
-Date: ${formatDate(new Date())}
+Date: ${formatZonedDate(new Date(), _times.timeZone)}
 ${isExtension ? `Agreement Type: Extension #${extensionData!.extensionNumber}` : 'Agreement Type: Original Rental Agreement'}
 Reference: ${rental?.id?.substring(0, 8)?.toUpperCase() || 'N/A'}
 
@@ -1165,6 +1190,22 @@ ${lines(
     line('Mileage Allowance', resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).allowance),
     line('Excess Mileage Rate', resolveAgreementMileage(rental, vehicle, (tenant as any)?.monthly_tier_days ?? 30).excessRate)
 )}
+
+${'='.repeat(70)}
+
+VEHICLE COLLECTION & RETURN:
+${lines(
+    line('Scheduled Collection', _times.scheduledPickup),
+    line('Scheduled Return', _times.scheduledReturn),
+    // The two lines an insurer asks for. `line()` returns '' for a falsy value
+    // and `lines()` filters those out, so a rental whose keys have not changed
+    // hands prints no empty label rather than an unanswered one.
+    line('Vehicle Collected', _times.collectedAt),
+    line('Vehicle Returned', _times.returnedAt),
+    line('Odometer at Collection', _times.collectionMileage),
+    line('Odometer at Return', _times.returnMileage),
+    line('Times Recorded In', _times.timeZone)
+)}
 ${isExtension ? `
 ${'='.repeat(70)}
 
@@ -1201,7 +1242,7 @@ Customer Signature: _________________________
 Date: ______________
 
 ${'='.repeat(70)}
-${companyName} - Generated: ${new Date().toISOString()}
+${companyName} - Generated: ${formatZonedDateTime(new Date(), _times.timeZone)}
 `;
 }
 
@@ -1291,7 +1332,7 @@ export async function POST(request: NextRequest) {
                 .from('tenants')
                 // integration_bonzah drives the Bonzah insurance addendum below.
                 // `slug` feeds resolveBoldSignMode() — the lean gate is slug-keyed.
-                .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled')
+                .select('slug, company_name, contact_email, contact_phone, phone, address, admin_name, admin_email, currency_code, logo_url, boldsign_mode, boldsign_test_brand_id, boldsign_live_brand_id, monthly_tier_days, integration_bonzah, deposit_charge_enabled, deposit_mode, global_deposit_amount, security_deposit_enabled, timezone')
                 .eq('id', body.tenantId)
                 .single();
             tenant = tenantData;
@@ -1302,6 +1343,32 @@ export async function POST(request: NextRequest) {
         // disclosure that Bonzah is available, not a receipt for a purchase, so it
         // appears whether or not this renter bought coverage. See bonzah-addendum.ts.
         const isBonzahTenant = (tenant as any)?.integration_bonzah === true;
+
+        // Key handovers — the ACTUAL times the vehicle changed hands, which is
+        // what an insurer asks for after an accident and what no document this
+        // system produced had ever stated. At most two rows exist per rental
+        // (UNIQUE on rental_id, handover_type), so this is an unfiltered read.
+        //
+        // A row here does NOT mean the handover happened: rows are created as
+        // soon as anyone uploads a condition photo or types an odometer reading,
+        // and carry handed_at = NULL until an operator confirms. That NULL is the
+        // only completion flag in the schema, and buildRentalTimeFacts treats it
+        // as "not yet handed over" rather than rendering a blank timestamp.
+        let handoverRows: HandoverRow[] = [];
+        if (body.rentalId) {
+            const { data: handoverData, error: handoverError } = await supabase
+                .from('rental_key_handovers')
+                .select('handover_type, handed_at, mileage')
+                .eq('rental_id', body.rentalId);
+            // Logged, never thrown. A missing timestamp must degrade to a row
+            // that drops out of the document; it must never block a tenant from
+            // issuing the contract itself.
+            if (handoverError) {
+                console.error('Failed to load key handovers for agreement:', handoverError);
+            }
+            handoverRows = (handoverData as HandoverRow[]) || [];
+        }
+        const timeFacts = buildRentalTimeFacts(rental, tenant, handoverRows);
 
         // Fetch installment plan if rental has one
         let installment: InstallmentData | null = null;
@@ -1439,7 +1506,7 @@ export async function POST(request: NextRequest) {
                 console.log('Using admin template (structured HTML → PDF)');
                 hasCustomTemplate = true;
                 processedHtml = removeEmptyFields(
-                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml, hasBonzahAddendum: isBonzahTenant, hasDepositClause: (tenant as any)?.deposit_charge_enabled === true }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml)
+                    processTemplate(injectAgreementClauses(templateData.template_content, { hasMileage: hasMileageConfigured, hasTerms: !!termsBlockHtml, hasBonzahAddendum: isBonzahTenant, hasDepositClause: (tenant as any)?.deposit_charge_enabled === true, hasHandoverTimes: timeFacts.hasAnyTimes }), rental, customer, vehicle, tenant, currencyCode, verification, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, installment, termsBlockHtml, timeFacts)
                 );
 
                 // Ensure a signature tag exists
@@ -1456,7 +1523,7 @@ export async function POST(request: NextRequest) {
 
         if (!hasCustomTemplate) {
             console.log('Using default template (text → PDF)');
-            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, buildTermsPlainText(termsBlockHtml ? [{ section_key: 'terms_content', content: { content: termsBlockHtml }, is_visible: true }] : null));
+            let textContent = generateDefaultAgreement(rental, customer, vehicle, tenant, currencyCode, body.extensionPreviousEndDate ? { previousEndDate: body.extensionPreviousEndDate, newEndDate: body.extensionNewEndDate, extensionNumber: body.extensionNumber, extensionAmount: body.extensionAmount } : undefined, buildTermsPlainText(termsBlockHtml ? [{ section_key: 'terms_content', content: { content: termsBlockHtml }, is_visible: true }] : null), timeFacts);
 
             // Inject sig tag
             const hasSig = /\{\{@sig1\}\}/.test(textContent);

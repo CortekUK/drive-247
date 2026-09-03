@@ -161,6 +161,10 @@ export function OccurrenceConfigDialog({
           hasTerms: false,
           hasBonzahAddendum: isBonzahTenant,
           hasDepositClause: isChargedDepositTenant,
+          // This preview promises to show what the customer will actually sign,
+          // so it must show the collection/return block the send path injects
+          // into templates that predate the time placeholders.
+          hasHandoverTimes: true,
         }),
         { ...data, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '', deposit_terms_clause: isChargedDepositTenant ? DEPOSIT_CLAUSE_SAMPLE : '' },
       );

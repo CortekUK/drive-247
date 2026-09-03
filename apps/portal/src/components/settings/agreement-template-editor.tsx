@@ -212,6 +212,12 @@ export const AgreementTemplateEditor: React.FC<AgreementTemplateEditorProps> = (
       hasTerms: false,
       hasBonzahAddendum: isBonzahTenant,
       hasDepositClause: isChargedDepositTenant,
+      // This preview promises to show what the customer will actually sign, so
+      // it must show the collection/return block the send path injects into
+      // templates that predate the time placeholders. Unconditionally true here
+      // because a preview has no rental to check for a real handover — the send
+      // path still gates on one existing.
+      hasHandoverTimes: true,
     }),
     { ...sampleData, bonzah_insurance_addendum: isBonzahTenant ? BONZAH_INSURANCE_ADDENDUM_HTML : '', deposit_terms_clause: isChargedDepositTenant ? DEPOSIT_CLAUSE_SAMPLE : '' },
   );
