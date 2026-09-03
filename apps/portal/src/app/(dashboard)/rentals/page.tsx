@@ -50,6 +50,8 @@ import Link from "next/link";
 import { formatLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilters } from "@/components/rentals/rentals-filters";
+import { RentalsFilterBar } from "@/components/rentals-v2/rentals-filter-bar";
+import { useV2 } from "@/lib/v2-context";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
@@ -78,6 +80,11 @@ const RentalsList = () => {
 
   const currentView = searchParams.get("view") || "list";
 
+  // The rentals area's v2 gate, resolved on the server in the root layout and
+  // read here synchronously — no lookup, no effect, no flash. False for every
+  // tenant but the canary, which is the whole of what changes below.
+  const v2 = useV2("rentals");
+
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
     () => ({
@@ -105,8 +112,23 @@ const RentalsList = () => {
       // Set by the app-wide deposit-hold banner CTAs. Without this the banner
       // counts N rentals and then hands the operator an unfiltered list.
       depositHold: searchParams.get("depositHold") || undefined,
+      // v2 only, and gated for that reason. `useEnhancedRentals` already reads
+      // these three, and both filter bars already write them — but they were
+      // never parsed back out of the URL here, so a click set the parameter and
+      // the very next render dropped it again. Parsing them unconditionally
+      // would therefore start narrowing the list for v1 tenants, whose old bar
+      // offers the same three controls; their rows must not move.
+      ...(v2
+        ? {
+            paymentType:
+              (searchParams.get("paymentType") as "payg" | "regular" | null) || undefined,
+            extensionRequested: searchParams.get("extensionRequested") === "true" || undefined,
+            cancellationRequested:
+              searchParams.get("cancellationRequested") === "true" || undefined,
+          }
+        : {}),
     }),
-    [searchParams]
+    [searchParams, v2]
   );
 
   const { data, isLoading } = useEnhancedRentals(filters);
@@ -330,13 +352,20 @@ const RentalsList = () => {
       )}
 
       {/* Filters — list view only */}
-      {currentView !== "calendar" && (
-        <RentalsFilters
-          filters={filters}
-          onFiltersChange={handleFiltersChange}
-          onClearFilters={handleClearFilters}
-        />
-      )}
+      {currentView !== "calendar" &&
+        (v2 ? (
+          <RentalsFilterBar
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onClearFilters={handleClearFilters}
+          />
+        ) : (
+          <RentalsFilters
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onClearFilters={handleClearFilters}
+          />
+        ))}
 
       {/* Calendar View */}
       {currentView === "calendar" ? (

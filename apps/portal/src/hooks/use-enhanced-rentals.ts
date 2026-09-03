@@ -105,6 +105,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     captureStatus,
     bonzahStatus,
     depositHold,
+    paymentType,
     extensionRequested,
     cancellationRequested
   } = filters;
@@ -129,6 +130,7 @@ export const useEnhancedRentals = (filters: RentalFilters = {}) => {
     captureStatus,
     bonzahStatus,
     depositHold,
+    paymentType,
     extensionRequested,
     cancellationRequested
   ];

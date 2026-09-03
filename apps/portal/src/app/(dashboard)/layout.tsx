@@ -20,6 +20,10 @@ import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { HeaderSearch } from "@/components/shared/layout/header-search";
 import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
+import { useV2 } from "@/lib/v2-context";
+import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
+import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
+import { QuickDock } from "@/components/shared/layout/quick-dock";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { CreditBalance } from "@/components/shared/layout/credit-balance";
 import { BonzahBalance } from "@/components/shared/layout/bonzah-balance";
@@ -79,6 +83,9 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { user, appUser, loading, profileUnavailable, refetchAppUser, signOut } = useAuth();
+  // v2 chrome gate, resolved on the server in the root layout (V2_PLAN §3).
+  // A plain context read: no query, no effect, no flash. Falls back to v1.
+  const v2Chrome = useV2("chrome");
   const { tenant, loading: tenantLoading } = useTenant();
   const {
     isSubscribed,
@@ -323,7 +330,7 @@ export default function DashboardLayout({
   return (
     <DynamicThemeProvider>
       <SidebarProvider>
-        <AppSidebar />
+        {v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
         <SidebarInset className="overflow-x-hidden">
           <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
             <SidebarTrigger className="-ml-1 flex-shrink-0" />
@@ -338,7 +345,7 @@ export default function DashboardLayout({
               </div>
               <NotificationBell />
               <ThemeToggle />
-              <UserMenu />
+              {v2Chrome ? <UserMenuV2 /> : <UserMenu />}
             </div>
           </header>
           <MaintenanceBanner />
@@ -355,6 +362,9 @@ export default function DashboardLayout({
             {children}
           </main>
         </SidebarInset>
+
+        {/* v2 right-edge quick dock. v2 chrome only — v1 tenants never mount it. */}
+        {v2Chrome && <QuickDock />}
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />

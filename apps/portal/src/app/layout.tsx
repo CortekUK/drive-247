@@ -6,7 +6,8 @@ import "@/global.css";
 // Scoped v2 design tokens. Inert unless <body> carries `v2-theme`, which is
 // decided per-tenant below — so importing it changes nothing for v1 tenants.
 import "@/styles/v2-theme.css";
-import { isV2 } from "@/lib/v2";
+import { isV2, type V2Area } from "@/lib/v2";
+import { V2Provider, type V2Flags } from "@/lib/v2-context";
 import { tenantIdFromHeaders } from "@/lib/tenant-server";
 
 export const dynamic = "force-dynamic";
@@ -145,9 +146,23 @@ export default async function RootLayout({
   // the first byte. `tenantIdFromHeaders` never throws and returns null on any
   // failure, so a lookup problem leaves every tenant on the v1 theme rather
   // than repainting them.
-  const themeClass = isV2("theme", await tenantIdFromHeaders())
-    ? "v2-theme"
-    : undefined;
+  const tenantId = await tenantIdFromHeaders();
+
+  // Every gate for this request, answered once. Client components read these
+  // through useV2() instead of looking the tenant up again — see lib/v2-context.
+  const v2Areas: V2Area[] = [
+    "appearance",
+    "theme",
+    "dashboard",
+    "chrome",
+    "login",
+    "rentals",
+  ];
+  const v2Flags: V2Flags = Object.fromEntries(
+    v2Areas.map((a) => [a, isV2(a, tenantId)])
+  );
+
+  const themeClass = v2Flags.theme ? "v2-theme" : undefined;
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -162,7 +177,9 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
       </head>
       <body suppressHydrationWarning className={themeClass}>
-        <Providers>{children}</Providers>
+        <V2Provider flags={v2Flags}>
+          <Providers>{children}</Providers>
+        </V2Provider>
       </body>
     </html>
   );

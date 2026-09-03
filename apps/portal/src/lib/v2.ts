@@ -53,6 +53,14 @@ const V2_AREAS = {
    * them — see styles/v2-theme.css.
    */
   theme: [...NORTHWIND],
+  /** The v2 dashboard — new home screen body and its widgets. */
+  dashboard: [...NORTHWIND],
+  /** The v2 sidebar, user menu and right-edge dock. */
+  chrome: [...NORTHWIND],
+  /** The v2 split-hero login screen. */
+  login: [...NORTHWIND],
+  /** The v2 rentals list filter panel. */
+  rentals: [...NORTHWIND],
 } satisfies Record<string, readonly string[]>;
 
 export type V2Area = keyof typeof V2_AREAS;

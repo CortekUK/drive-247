@@ -34,6 +34,8 @@ import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTheme } from "next-themes";
+import { useV2 } from "@/lib/v2-context";
+import { LoginV2 } from "@/components/auth-v2/login-v2";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hviqoaokxvlancmftwuo.supabase.co";
@@ -519,6 +521,9 @@ function LoginPageContent() {
 }
 
 export default function LoginPage() {
+  const v2 = useV2('login');
+  if (v2) return <LoginV2 />;
+
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-background">

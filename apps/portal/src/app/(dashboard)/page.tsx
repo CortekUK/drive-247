@@ -36,6 +36,8 @@ import { usePlatformStatus } from "@/hooks/use-platform-status";
 import { useAuth } from "@/stores/auth-store";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useV2 } from "@/lib/v2-context";
+import { DashboardV2 } from "@/components/dashboard-v2/dashboard-v2";
 import {
   format,
   startOfMonth,
@@ -76,6 +78,7 @@ const getDateRanges = (): DateRange[] => {
 };
 
 export default function DashboardPage() {
+  const v2 = useV2('dashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { appUser } = useAuth();
@@ -148,6 +151,7 @@ export default function DashboardPage() {
     return cards;
   }, [canView]);
 
+  if (v2) return <DashboardV2 />;
 
   return (
     <div className="container mx-auto py-4 space-y-4 px-3 sm:px-4">

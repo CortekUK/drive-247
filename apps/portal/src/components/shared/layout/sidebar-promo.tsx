@@ -1,0 +1,101 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { X, ArrowRight } from "lucide-react";
+
+/**
+ * The banner currently on air. Only ever advertise something that exists on
+ * this branch — the slot is seen by every tenant this sidebar is gated on, and
+ * a card pointing at a feature they cannot open reads as a broken portal, not
+ * a teaser.
+ *
+ * To retire a banner, swap this object; bump `dismissKey` at the same time so
+ * the new one re-appears for people who dismissed the previous one.
+ */
+const PROMO = {
+  dismissKey: "sidebar-promo:appearance-v1",
+  title: "Portal Appearance",
+  body: "Pick your brand colour and logo, and watch the portal change as you do.",
+  href: "/settings/appearance",
+  cta: "Try it",
+};
+
+/**
+ * Promo / announcement banner for the bottom of the sidebar — a glossy,
+ * 3D "liquid glass" card (sculpted depth via layered highlights + shadows,
+ * a single soft light source, minimal movement). Use this slot for feature
+ * releases, training, or promotions. Dismissal persists via localStorage.
+ *
+ * The gradient runs down the darker half of the brand chart ramp (3 → 4 → 5)
+ * rather than a fixed indigo. Two reasons it is the ramp and not `primary`
+ * alone: a single colour flattens the card, and the ramp's lower steps stay
+ * dark enough that the white text on top survives a pale brand colour. Every
+ * shadow is neutral black for the same reason — an indigo-tinted shadow read
+ * as a bruise against any other hue.
+ *
+ * `--chart-3..5` are defined by the v2 theme (`styles/v2-theme.css`, scoped to
+ * `.v2-theme` on <body>). Each falls back to `--primary` so that widening the
+ * `chrome` gate ahead of `theme` degrades to a flat brand card rather than an
+ * invalid gradient — which would paint white text onto nothing.
+ */
+export function SidebarPromo() {
+  const [dismissed, setDismissed] = useState(true);
+
+  useEffect(() => {
+    // Reading localStorage throws in some privacy modes; a promo card is never
+    // worth taking the sidebar down for.
+    try {
+      setDismissed(localStorage.getItem(PROMO.dismissKey) === "1");
+    } catch {
+      setDismissed(false);
+    }
+  }, []);
+
+  if (dismissed) return null;
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(PROMO.dismissKey, "1");
+    } catch {
+      /* dismissal simply does not persist */
+    }
+    setDismissed(true);
+  };
+
+  return (
+    <div
+      className="group relative isolate overflow-hidden rounded-xl p-2.5 text-white
+        bg-gradient-to-br from-[hsl(var(--chart-3,var(--primary)))] via-[hsl(var(--chart-4,var(--primary)))] to-[hsl(var(--chart-5,var(--primary)))]
+        ring-1 ring-inset ring-white/20
+        shadow-[0_16px_32px_-12px_rgba(0,0,0,0.55),0_4px_10px_-4px_rgba(0,0,0,0.35),inset_0_1px_0_0_rgba(255,255,255,0.5),inset_0_-8px_16px_-8px_rgba(0,0,0,0.45)]
+        transition-transform duration-200 ease-out hover:-translate-y-0.5"
+    >
+      {/* Static glossy top sheen — the glass reflection */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-1/2 bg-gradient-to-b from-white/30 to-transparent" />
+      {/* Single soft light source (top-left) for a 3D feel */}
+      <div className="pointer-events-none absolute -left-10 -top-12 -z-10 h-28 w-28 rounded-full bg-white/35 blur-2xl" />
+
+      <button
+        onClick={dismiss}
+        aria-label="Dismiss"
+        className="absolute right-1.5 top-1.5 z-10 cursor-pointer rounded-md p-1 text-white/70 transition-colors hover:bg-white/20 hover:text-white"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+
+      <div className="relative">
+        <p className="pr-5 text-[12px] font-semibold leading-tight drop-shadow-sm">{PROMO.title}</p>
+
+        <p className="mt-0.5 text-[10.5px] leading-snug text-white/85">{PROMO.body}</p>
+
+        <Link
+          href={PROMO.href}
+          className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-1 rounded-lg bg-white/20 px-2 py-1 text-[11px] font-semibold ring-1 ring-inset ring-white/30 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_3px_8px_-2px_rgba(0,0,0,0.4)] transition-all hover:bg-white/30 active:translate-y-px"
+        >
+          {PROMO.cta} <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
+    </div>
+  );
+}
