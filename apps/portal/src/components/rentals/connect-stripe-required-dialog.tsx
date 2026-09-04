@@ -46,8 +46,13 @@ interface ConnectStripeRequiredDialogProps {
  * ------------------------
  * Only the canary (`northwind`), which will never have a real Connect account
  * because it exists to exercise the flow in Stripe TEST mode. For everybody
- * else there is NO "×" in the DOM at all, and Escape and click-outside are
- * both suppressed — the block is total.
+ * else there is NO "×" in the DOM at all, NO "Skip for now" button, and Escape
+ * and click-outside are both suppressed — the block is total.
+ *
+ * The canary gets a LABELLED skip as well as the "×". They do the same thing,
+ * and the duplication is the point: the "×" is a dismiss affordance, not an
+ * invitation, so an operator testing the flow reads the dialog as a dead end
+ * and turns back. A button that says what it does is the discoverable half.
  *
  * Closability is derived HERE, from the tenant, rather than taken as a prop.
  * Three call sites raise this dialog; a prop would let any one of them forget
@@ -112,6 +117,31 @@ export function ConnectStripeRequiredDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-2">
+          {/*
+            Canary-only, and rendered conditionally rather than disabled: for a
+            paying tenant the button must not EXIST, so there is nothing to
+            re-enable from devtools and nothing to mis-read as an option.
+
+            It routes through `handleOpenChange` rather than calling `onDismiss`
+            directly, so it inherits the `!closable` refusal there too. That is
+            belt and braces — if this conditional were ever loosened by mistake,
+            the handler still declines and the block holds.
+
+            Same funnel as the "×", so on /rentals/new it records the dismissal
+            that flips `blocked` false and lets the form render behind. Skipping
+            reaches a FORM, never a payment: the server still refuses to charge
+            without a connected account.
+          */}
+          {closable && (
+            <Button
+              type="button"
+              variant="ghost"
+              className="sm:mr-auto"
+              onClick={() => handleOpenChange(false)}
+            >
+              Skip for now (testing)
+            </Button>
+          )}
           <Button variant="outline" onClick={() => router.push("/rentals")}>
             Back to rentals
           </Button>
