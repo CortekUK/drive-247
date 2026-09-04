@@ -18,20 +18,32 @@ import {
   type SignupPlan,
   type SignupPlanId,
 } from "@/lib/plans";
+import { checkSlugShape, normalizeSlugClient } from "@/lib/signup-validation";
 import { getBrowserSupabase } from "@/lib/supabase/browser";
 
 import {
   fetchSignupMeta,
   signupBegin,
+  signupBeginOauth,
   signupPaymentIntent,
   signupProvision,
   signupResume,
   signupSlugCheck,
+  slugAvailabilityAnon,
   toOnboardingError,
   type ClientSignupMeta,
   type ProvisionRequest,
   type ResumeSignupDTO,
 } from "./onboarding-api";
+import {
+  clearPendingOauth,
+  clearTenantDraft,
+  draftToBusiness,
+  readPendingOauth,
+  resolveTenantDraft,
+  saveTenantDraft,
+  writePendingOauth,
+} from "./tenant-draft";
 import { OnboardingDialog } from "./onboarding-dialog";
 import { ProvisioningScreen } from "./provisioning-screen";
 import {
@@ -39,6 +51,7 @@ import {
   PROVISION_MILESTONES,
   SIGNUP_ERROR_COPY,
   type AccountFormValues,
+  type AccountStepMode,
   type BusinessDraft,
   type OnboardingContextValue,
   type OnboardingError,
@@ -48,6 +61,7 @@ import {
   type ProvisionResult,
   type SignupStep,
   type SlugCheckResult,
+  type TenantFormValues,
 } from "./onboarding-types";
 
 // ---------------------------------------------------------------------------
@@ -86,23 +100,25 @@ const STALL_MESSAGE = "This is taking longer than it should.";
  * `plan` is the closed/idle state, so it is reachable from everywhere (closing)
  * and leads everywhere (opening / resuming).
  *
- * Two edges are NOT in the spec's table and are here on purpose:
- *  - `payment|business|provisioning -> account` is the SESSION_LOST /
- *    UNAUTHENTICATED recovery. It undoes nothing — the auth user still exists
- *    and the card is still charged; it only puts the sign-in panel back on
- *    screen so the user can re-attach a session and resume forwards.
+ * Three edges are NOT in the spec's table and are here on purpose:
+ *  - `payment|provisioning -> account` is the SESSION_LOST / UNAUTHENTICATED
+ *    recovery. It undoes nothing — the auth user still exists and the card is
+ *    still charged; it only puts the sign-in panel back on screen so the user
+ *    can re-attach a session and resume forwards.
  *  - `provisioning -> payment` is extended from PAYMENT_EXPIRED to
  *    PAYMENT_REQUIRED, because the remedy is identical.
+ *  - `account -> provisioning` is the account step in `tenant` mode: a paid
+ *    signup whose tenant details had to be re-asked. There is nothing to pay,
+ *    so payment is not on the way.
  */
 const ALLOWED_TRANSITIONS: Record<SignupStep, readonly SignupStep[]> = {
-  plan: ["plan", "account", "payment", "business", "provisioning", "done"],
-  account: ["account", "payment", "plan"],
+  plan: ["plan", "account", "payment", "provisioning", "done"],
+  account: ["account", "payment", "provisioning", "plan"],
   // `payment -> done` is the second-tab recovery: signup-payment-intent answers
   // ALREADY_PROVISIONED when another tab has already finished the whole signup,
   // and the only coherent destination from there is the success panel.
-  payment: ["payment", "business", "account", "done", "plan"],
-  business: ["business", "provisioning", "account", "plan"],
-  provisioning: ["provisioning", "done", "business", "payment", "account", "plan"],
+  payment: ["payment", "provisioning", "account", "done", "plan"],
+  provisioning: ["provisioning", "done", "payment", "account", "plan"],
   done: ["done", "plan"],
 };
 
@@ -121,15 +137,9 @@ type Action =
   | { type: "result"; result: ProvisionResult | null }
   | { type: "resumed"; resumed: boolean };
 
-/** `EMPTY_BUSINESS_DRAFT` is a shared module constant; its nested schedule must not be aliased into state. */
+/** `EMPTY_BUSINESS_DRAFT` is a shared module constant; state must never alias it. */
 function freshBusinessDraft(): BusinessDraft {
-  return {
-    ...EMPTY_BUSINESS_DRAFT,
-    schedule: {
-      ...EMPTY_BUSINESS_DRAFT.schedule,
-      days: [...EMPTY_BUSINESS_DRAFT.schedule.days],
-    },
-  };
+  return { ...EMPTY_BUSINESS_DRAFT };
 }
 
 const INITIAL_STATE: OnboardingState = {
@@ -196,18 +206,7 @@ function reducer(state: OnboardingState, action: Action): OnboardingState {
     case "payment":
       return { ...state, payment: { ...state.payment, ...action.patch } };
     case "business":
-      return {
-        ...state,
-        business: {
-          ...state.business,
-          ...action.patch,
-          // Schedule is patched field-by-field so a caller can send
-          // { schedule: { alwaysOpen: true } } without wiping the day list.
-          schedule: action.patch.schedule
-            ? { ...state.business.schedule, ...action.patch.schedule }
-            : state.business.schedule,
-        },
-      };
+      return { ...state, business: { ...state.business, ...action.patch } };
     case "provisioning":
       return { ...state, provisioning: { ...state.provisioning, ...action.patch } };
     case "milestones":
@@ -258,12 +257,40 @@ interface OnboardingShellValue {
    * cross-builder contract and stays byte-identical.
    */
   plans: readonly SignupPlan[];
+  /**
+   * Which face the account step is wearing.
+   *
+   * `create` everywhere except one recovery: a signup that is already PAID but
+   * whose tenant details cannot be found in either draft store. Rendering the
+   * create-account form there would ask a paying customer to sign up again, so
+   * the step drops to the three tenant fields instead.
+   */
+  accountMode: AccountStepMode;
+  /**
+   * Whether "Continue with Google" is offered.
+   *
+   * Read from `NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED` at module scope and OFF unless
+   * it is exactly "true". Two things have to be true on the server before the
+   * button can work — a Google provider configured on the Supabase project, and
+   * `signup-begin-oauth` deployed — and neither is visible from the browser, so
+   * the switch is explicit rather than inferred. A sign-in button that answers
+   * with a Supabase 400 is worse than no button.
+   */
+  googleEnabled: boolean;
 }
+
+/**
+ * `"true"` and nothing else. Read once, at module scope: `NEXT_PUBLIC_` values
+ * are inlined at build time, so there is nothing to re-read per render.
+ */
+const GOOGLE_ENABLED = process.env.NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED === "true";
 
 const OnboardingShellContext = createContext<OnboardingShellValue>({
   resolving: false,
   planSwitchBlocked: null,
   plans: SIGNUP_PLANS,
+  accountMode: "create",
+  googleEnabled: GOOGLE_ENABLED,
 });
 
 export function useOnboarding(): OnboardingContextValue {
@@ -350,87 +377,58 @@ function suggestionsFrom(e: OnboardingError): string[] {
   return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === "string") : [];
 }
 
-/** Map the server's business snapshot back onto the form draft so a resumed user re-reads their own answers. */
+/**
+ * Map the server's business snapshot back onto the form draft.
+ *
+ * Only reached when `signup-provision` has already run at least once (it is the
+ * only writer of that snapshot), so it is a fallback behind the operator's own
+ * draft rather than the primary source.
+ */
 function draftFromSnapshot(b: NonNullable<ResumeSignupDTO["business"]>): BusinessDraft {
-  const base = freshBusinessDraft();
   return {
-    ...base,
     companyName: b.companyName ?? "",
     slug: b.slug ?? "",
     // The slug came back from the server, so it is already the value we want —
-    // re-deriving it from the company name would silently overwrite a hand-edit.
+    // re-deriving it from the company name would silently overwrite a choice.
     slugTouched: Boolean(b.slug),
-    location: b.location ?? "",
-    businessPhone: b.businessPhone ?? "",
-    fleetSize: b.fleetSize ?? "",
-    vehicleType: b.vehicleType ?? "",
-    businessColours: b.businessColours ?? "",
-    logoUrl: b.logoUrl ?? "",
-    schedule: {
-      alwaysOpen: b.operatingSchedule?.alwaysOpen ?? base.schedule.alwaysOpen,
-      days: b.operatingSchedule?.days ?? base.schedule.days,
-      opensAt: b.operatingSchedule?.opensAt ?? base.schedule.opensAt,
-      closesAt: b.operatingSchedule?.closesAt ?? base.schedule.closesAt,
-    },
     // A snapshot only exists because a submit carrying acceptedTerms === true
     // reached the server. Making them re-tick it would be theatre.
     acceptedTerms: true,
   };
 }
 
-function buildProvisionRequest(d: BusinessDraft): ProvisionRequest {
-  const trimmedOrUndefined = (v: string) => {
-    const t = v.trim();
-    return t ? t : undefined;
-  };
-  return {
-    companyName: d.companyName.trim(),
-    // `slug` is deliberately NOT sent. The business form no longer asks for a
-    // web address, so anything we put here would be a value the operator never
-    // saw and cannot correct. `signup-provision` derives it from the company
-    // name instead, and — unlike a supplied slug, which it must reject as
-    // SLUG_TAKEN — the derived path auto-suffixes on collision. Two operators
-    // both called "Elite Motors" therefore both succeed, as elite-motors and
-    // elite-motors-2, rather than the second hitting a dead end with no field
-    // to fix it.
-    location: trimmedOrUndefined(d.location),
-    businessPhone: trimmedOrUndefined(d.businessPhone),
-    fleetSize: trimmedOrUndefined(d.fleetSize),
-    vehicleType: trimmedOrUndefined(d.vehicleType),
-    businessColours: trimmedOrUndefined(d.businessColours),
-    logoUrl: trimmedOrUndefined(d.logoUrl),
-    operatingSchedule: {
-      alwaysOpen: d.schedule.alwaysOpen,
-      days: d.schedule.alwaysOpen ? [] : d.schedule.days,
-      opensAt: d.schedule.opensAt,
-      closesAt: d.schedule.closesAt,
-    },
-    acceptedTerms: d.acceptedTerms,
-  };
+/**
+ * The draft as something safe to provision with, or null when it is not
+ * complete enough to try.
+ *
+ * Null is not an error here — it is the signal that the tenant details have to
+ * be recovered from a store or asked for again, which is exactly what
+ * `continueToProvisioning` does with it.
+ */
+function tenantValuesFrom(d: BusinessDraft): TenantFormValues | null {
+  const companyName = d.companyName.trim();
+  const slug = normalizeSlugClient(d.slug);
+  if (companyName.length < 2) return null;
+  if (!checkSlugShape(slug).ok) return null;
+  if (!d.acceptedTerms) return null;
+  return { companyName, slug, acceptedTerms: true };
 }
 
-
 /**
- * A last line of defence before we tear the dialog down and mount the boot
- * screen. B3 validates the same rules inline and the server validates them
- * again authoritatively — this exists so a malformed draft can never reach the
- * point where the UI is showing a provisioning animation for a request that was
- * always going to 400.
+ * The provision body.
+ *
+ * `slug` IS sent, unlike the previous design. The operator picked it on the
+ * account step and watched it come back available, so letting the server derive
+ * its own from the company name would hand them a different address than the one
+ * they chose. `signup-provision` validates and claims it, and answers SLUG_TAKEN
+ * with suggestions if it lost a race — which the boot screen can now fix inline.
  */
-function validateBusinessLocally(d: BusinessDraft): OnboardingError | null {
-  if (d.companyName.trim().length < 2) {
-    return err("VALIDATION_FAILED", { field: "companyName" });
-  }
-  // No slug guard: the field is gone and the server derives the address. The
-  // business step still validates that the NAME can produce a usable web
-  // address, which is the thing the operator can actually act on.
-  if (!d.schedule.alwaysOpen && d.schedule.days.length === 0) {
-    return err("VALIDATION_FAILED", { field: "operatingSchedule" });
-  }
-  if (!d.acceptedTerms) {
-    return err("TERMS_NOT_ACCEPTED", { field: "acceptedTerms" });
-  }
-  return null;
+function buildProvisionRequest(v: TenantFormValues): ProvisionRequest {
+  return {
+    companyName: v.companyName,
+    slug: v.slug,
+    acceptedTerms: v.acceptedTerms,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -461,6 +459,7 @@ export function OnboardingProvider({
   const [hasResumableSignup, setHasResumableSignup] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [planSwitchBlocked, setPlanSwitchBlocked] = useState<SignupPlanId | null>(null);
+  const [accountMode, setAccountMode] = useState<AccountStepMode>("create");
 
   // Async work reads state through this ref, never through the closure it was
   // created in: a poller created once must see the newest state on every tick.
@@ -489,6 +488,18 @@ export function OnboardingProvider({
   const paymentIntentInFlightRef = useRef(false);
   const markPaidInFlightRef = useRef(false);
 
+  /**
+   * `continueToProvisioning`, reachable from code defined above it.
+   *
+   * The callbacks form a genuine cycle — `startPaymentInternal` needs to hand
+   * off to provisioning when Stripe reports the plan is already paid for, and
+   * `handleProvisionFailure` needs to hand back to `startPaymentInternal` on a
+   * PAYMENT_REQUIRED — so one of the two edges has to go through a ref. This is
+   * the one that does, because it is the rarer path and keeps the dependency
+   * arrays of the common ones honest.
+   */
+  const continueToProvisioningRef = useRef<(() => Promise<void>) | null>(null);
+
   // -------------------------------------------------------------------------
   // Poller
   // -------------------------------------------------------------------------
@@ -505,6 +516,12 @@ export function OnboardingProvider({
       if (provisionSettledRef.current) return;
       provisionSettledRef.current = true;
       stopPoller();
+      // The tenant exists; the local draft has no job left. The `user_metadata`
+      // copy is left in place — clearing it would cost a GoTrue round trip on
+      // the success screen to delete three values the operator typed about their
+      // own business, and `signup-provision` is idempotent, so a stale copy can
+      // only ever re-describe the tenant it already built.
+      clearTenantDraft();
       dispatch({ type: "result", result });
       dispatch({
         type: "provisioning",
@@ -661,7 +678,11 @@ export function OnboardingProvider({
               paid: true,
             },
           });
-          dispatch({ type: "goto", step: "business" });
+          // Nothing left to collect and nothing left to charge — go straight to
+          // building. `continueToProvisioning` finds the tenant details (state,
+          // localStorage, or user_metadata) and asks for them again only if all
+          // three are empty.
+          void continueToProvisioningRef.current?.();
           return;
         }
         dispatch({
@@ -814,6 +835,55 @@ export function OnboardingProvider({
     [handleProvisionFailure, settleSuccess, startPoller],
   );
 
+  /**
+   * The single door from "paid" to "building".
+   *
+   * There is no business step to pass through any more, so every caller that
+   * used to send the operator to one — the payment step finishing, and a resume
+   * that lands on the server's `business` step — comes here instead. It has one
+   * job: find the tenant details, then start the provision.
+   *
+   * Three places are tried, in order of trustworthiness:
+   *   1. React state, which is where they are on the happy path (the operator
+   *      typed them on the account step minutes ago and never left the tab);
+   *   2. `localStorage`, which survives a refresh and the Stripe redirect;
+   *   3. the operator's own `user_metadata`, which survives a device switch.
+   *
+   * If all three come back empty — which needs a mid-payment device switch AND a
+   * failed metadata write — the account step is dropped into `tenant` mode and
+   * asks for the three fields again. That is the honest answer: the alternative
+   * is inventing a business name for someone who has already been charged.
+   */
+  const continueToProvisioning = useCallback(async () => {
+    const inState = tenantValuesFrom(stateRef.current.business);
+    const values = inState ?? (await resolveTenantDraft());
+
+    if (!values) {
+      console.warn("[onboarding] paid signup with no tenant draft — asking again");
+      setAccountMode("tenant");
+      // `resumeTo`, not `goto`: this is not user navigation and must not be
+      // policed by ALLOWED_TRANSITIONS, which cannot express "backwards, but
+      // only to re-collect something we lost".
+      dispatch({ type: "resumeTo", step: "account" });
+      setIsOpen(true);
+      return;
+    }
+
+    if (!inState) dispatch({ type: "business", patch: draftToBusiness(values) });
+    dispatch({ type: "resumeTo", step: "provisioning" });
+    await runProvision(buildProvisionRequest(values));
+  }, [runProvision]);
+
+  /**
+   * Kept in an effect rather than assigned during render: writing a ref while
+   * rendering is exactly what React asks you not to do, and there is no need to
+   * here. Every caller that reads this ref is either a click handler or an async
+   * continuation of one, so it cannot run before mount effects have flushed.
+   */
+  useEffect(() => {
+    continueToProvisioningRef.current = continueToProvisioning;
+  }, [continueToProvisioning]);
+
   // -------------------------------------------------------------------------
   // Resume
   // -------------------------------------------------------------------------
@@ -824,6 +894,9 @@ export function OnboardingProvider({
       // click a different card and we re-mint the intent for it (edge case 28).
       const planLocked =
         dto.paid ||
+        // The server still calls the paid-but-unbuilt state "business" — that
+        // is its own step name, not ours, and renaming it would mean redeploying
+        // `signup-resume`. It maps onto `provisioning` here.
         dto.resumeStep === "business" ||
         dto.resumeStep === "provisioning" ||
         dto.resumeStep === "done";
@@ -880,7 +953,10 @@ export function OnboardingProvider({
           void startPaymentInternal(planId);
           break;
         case "business":
-          dispatch({ type: "resumeTo", step: "business" });
+          // Paid, and no provision currently in flight. There is nothing left to
+          // ask, so this goes straight to building — or, if the tenant details
+          // are genuinely unrecoverable, to the `tenant` recovery form.
+          void continueToProvisioning();
           break;
         case "provisioning":
           // The server believes a provision is under way. Watch, do not write.
@@ -897,7 +973,7 @@ export function OnboardingProvider({
           break;
       }
     },
-    [runProvision, startPaymentInternal],
+    [continueToProvisioning, runProvision, startPaymentInternal],
   );
 
   const resolveResume = useCallback(
@@ -1104,6 +1180,112 @@ export function OnboardingProvider({
     open(planId);
   }, [hasResumableSignup, open, plans]);
 
+  /**
+   * The other end of "Continue with Google".
+   *
+   * Google sends the browser back to `?signup=google&code=…` — a completely
+   * fresh page load, no React state, and (deliberately) a Supabase client with
+   * `detectSessionInUrl: false`, so nothing has consumed that code yet. This is
+   * the only place that does, and only for a URL carrying our own marker.
+   *
+   * Then the piece that has no equivalent on the password path:
+   * `signup-begin-oauth`. Google created the `auth.users` row, so nothing has
+   * written `app_metadata.d247_signup` — and every later endpoint keys off that
+   * blob and would answer SIGNUP_NOT_FOUND without it. That call stamps it.
+   *
+   * `signup-begin` cannot do this job. It CREATES the user and hard-requires a
+   * password; a user who already exists is refused with EMAIL_EXISTS_SIGN_IN by
+   * its "auth user with no profile" probe.
+   */
+  const completeGoogleReturn = useCallback(
+    async (code: string | null, oauthError: string | null) => {
+      const pending = readPendingOauth();
+      if (!pending && !code && !oauthError) return;
+
+      setIsOpen(true);
+      setResolving(true);
+      try {
+        if (oauthError) {
+          clearPendingOauth();
+          console.error("[onboarding] Google returned an error:", oauthError);
+          dispatch({ type: "goto", step: "account" });
+          dispatch({ type: "error", error: err("SIGN_IN_FAILED") });
+          return;
+        }
+
+        if (code) {
+          const { error: exchangeError } =
+            await getBrowserSupabase().auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            clearPendingOauth();
+            console.error("[onboarding] code exchange failed", exchangeError);
+            dispatch({ type: "goto", step: "account" });
+            dispatch({ type: "error", error: err("SESSION_LOST") });
+            return;
+          }
+        }
+
+        if (!pending) {
+          // A session may well exist now, but we do not know which plan they
+          // chose or what they called their business. Falling back to the plain
+          // resume path is the only honest move — it asks the server.
+          console.warn("[onboarding] Google return with no stashed handoff");
+          return;
+        }
+
+        dispatch({ type: "setPlan", planId: pending.planId });
+        dispatch({ type: "business", patch: draftToBusiness(pending.values) });
+
+        await signupBeginOauth({ planId: pending.planId });
+        // Only now — the draft is worth keeping only against a signup that
+        // actually exists.
+        await saveTenantDraft(pending.values);
+        clearPendingOauth();
+
+        resumeHintRef.current = await fetchSignupMeta();
+        setHasResumableSignup(true);
+        // The server decides the step, exactly as it does for a password resume.
+        // For a signup that has just been stamped that is always `payment`.
+        await resolveResume(pending.planId);
+      } catch (e) {
+        const error = toOnboardingError(e);
+        console.error("[onboarding] Google signup could not be started", error);
+        dispatch({ type: "goto", step: "account" });
+        dispatch({ type: "error", error });
+      } finally {
+        setResolving(false);
+      }
+    },
+    [resolveResume],
+  );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signup") !== "google") return;
+
+    const code = params.get("code");
+    const oauthError = params.get("error_description") ?? params.get("error");
+
+    // Strip every OAuth parameter before doing anything with them: a refresh
+    // must not re-run the exchange (the code is single-use and the second
+    // attempt would fail), and a single-use code has no business sitting in the
+    // address bar or in the Referer of the next request the page makes.
+    params.delete("signup");
+    params.delete("code");
+    params.delete("error");
+    params.delete("error_code");
+    params.delete("error_description");
+    params.delete("state");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+
+    void completeGoogleReturn(code, oauthError);
+  }, [completeGoogleReturn]);
+
   const closeNow = useCallback(() => {
     setCloseConfirmOpen(false);
     setIsOpen(false);
@@ -1123,7 +1305,7 @@ export function OnboardingProvider({
     // Writes are in flight. Abandoning here is what creates orphans, so the
     // request is ignored outright rather than confirmed away.
     if (s.step === "provisioning" && s.provisioning.phase === "running") return;
-    if (s.step === "payment" || s.step === "business") {
+    if (s.step === "payment") {
       setCloseConfirmOpen(true);
       return;
     }
@@ -1152,8 +1334,18 @@ export function OnboardingProvider({
         return;
       }
 
+      const tenant: TenantFormValues = {
+        companyName: values.companyName.trim(),
+        slug: normalizeSlugClient(values.slug),
+        acceptedTerms: values.acceptedTerms,
+      };
+
       dispatch({ type: "busy", busy: true });
       dispatch({ type: "error", error: null });
+      // Held in state from here so a failed `signup-begin` (a taken email, a
+      // rate limit) does not also throw away the business name and address the
+      // operator just typed — the step re-renders from this.
+      dispatch({ type: "business", patch: draftToBusiness(tenant) });
       let handedOff = false;
       try {
         await signupBegin({
@@ -1190,6 +1382,16 @@ export function OnboardingProvider({
           account: { fullName: values.fullName.trim(), email: values.email.trim().toLowerCase() },
         });
         dispatch({ type: "signInPrompt", prompt: null });
+
+        // Persist the tenant details NOW, in the one window where a session
+        // exists and nothing has been charged yet. `signup-begin` does not take
+        // them and no other endpoint stores them before `signup-provision`, so
+        // between here and the end of the card form they live only in these two
+        // stores. Awaited rather than fired and forgotten: the `user_metadata`
+        // copy is what survives a device switch, and this is the last moment we
+        // are certain to be able to write it.
+        await saveTenantDraft(tenant);
+
         // From here there is something to come back to, in this page session or
         // a later one — which is what makes the `?signup=resume` return path and
         // the reopen-after-close path work for a first-time visitor.
@@ -1217,6 +1419,92 @@ export function OnboardingProvider({
     },
     [startPaymentInternal],
   );
+
+  /**
+   * `tenant` mode's submit. Reached only from the recovery form described on
+   * `continueToProvisioning`: the account exists, the card has been charged, and
+   * the only thing missing is the three fields this collects.
+   */
+  const submitTenantDetails = useCallback(
+    async (values: TenantFormValues) => {
+      const s = stateRef.current;
+      if (s.busy) return;
+      const tenant: TenantFormValues = {
+        companyName: values.companyName.trim(),
+        slug: normalizeSlugClient(values.slug),
+        acceptedTerms: values.acceptedTerms,
+      };
+      dispatch({ type: "busy", busy: true });
+      dispatch({ type: "error", error: null });
+      try {
+        dispatch({ type: "business", patch: draftToBusiness(tenant) });
+        await saveTenantDraft(tenant);
+        setAccountMode("create");
+        dispatch({ type: "goto", step: "provisioning" });
+        await runProvision(buildProvisionRequest(tenant));
+      } catch (e) {
+        dispatch({ type: "error", error: toOnboardingError(e) });
+      } finally {
+        dispatch({ type: "busy", busy: false });
+      }
+    },
+    [runProvision],
+  );
+
+  /**
+   * "Continue with Google" — the point of no return for this page load.
+   *
+   * The redirect throws away every byte of React state, so everything needed on
+   * the other side is written down first: the plan, and the three tenant fields.
+   * `redirectTo` is the CURRENT path, so the operator lands back on the same
+   * route (`/signup-preview` today, the marketing page if self-serve is ever
+   * switched on) with the provider mounted and ready to pick the return up.
+   *
+   * `prompt: "select_account"` because an operator signing up for a business
+   * account very often has two Google identities in the browser, and silently
+   * reusing the last one used means creating the portal under the wrong address
+   * — which nothing in this flow can undo afterwards.
+   */
+  const startGoogleSignup = useCallback(async (values: TenantFormValues) => {
+    const s = stateRef.current;
+    const planId = s.planId;
+    if (!planId) {
+      dispatch({ type: "error", error: err("PLAN_UNKNOWN") });
+      return;
+    }
+    const tenant: TenantFormValues = {
+      companyName: values.companyName.trim(),
+      slug: normalizeSlugClient(values.slug),
+      acceptedTerms: values.acceptedTerms,
+    };
+    dispatch({ type: "busy", busy: true });
+    dispatch({ type: "error", error: null });
+    dispatch({ type: "business", patch: draftToBusiness(tenant) });
+    try {
+      writePendingOauth(planId, tenant);
+      const redirectTo = `${window.location.origin}${window.location.pathname}?signup=google`;
+      const { error: oauthError } = await getBrowserSupabase().auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo, queryParams: { prompt: "select_account" } },
+      });
+      if (oauthError) {
+        // The commonest cause by far is that no Google provider is configured on
+        // the Supabase project, which answers 400. Nothing was created, so the
+        // stashed handoff would only confuse a later attempt.
+        clearPendingOauth();
+        console.error("[onboarding] Google sign-in could not start", oauthError);
+        dispatch({ type: "error", error: err("CONFIG_MISSING") });
+        dispatch({ type: "busy", busy: false });
+      }
+      // On success the browser is already navigating away. `busy` is left set on
+      // purpose: clearing it would re-enable the form for the fraction of a
+      // second before the page unloads.
+    } catch (e) {
+      clearPendingOauth();
+      dispatch({ type: "error", error: toOnboardingError(e) });
+      dispatch({ type: "busy", busy: false });
+    }
+  }, []);
 
   const signInExisting = useCallback(
     async (values: { email: string; password: string }) => {
@@ -1328,84 +1616,114 @@ export function OnboardingProvider({
 
       // Advance even when the server could not confirm yet: an async payment
       // method sits in `processing` for minutes, and holding a paying customer
-      // on a card form they have already completed is worse than letting them
-      // fill in the business form while Stripe settles. `signup-provision`
-      // re-verifies before writing anything, so nothing can be provisioned on an
-      // unpaid subscription.
-      dispatch({ type: "goto", step: "business" });
+      // on a card form they have already completed is worse than starting the
+      // build while Stripe settles. `signup-provision` re-verifies the money
+      // before it writes anything, so nothing can be provisioned on an unpaid
+      // subscription — the worst case is a PAYMENT_INCOMPLETE the boot screen
+      // already knows how to retry.
+      //
+      // There is nothing left to ask for: the business name, the web address and
+      // the terms were all answered on the account step, before the card.
+      await continueToProvisioning();
     } finally {
       markPaidInFlightRef.current = false;
       dispatch({ type: "busy", busy: false });
     }
-  }, [handleSessionLoss]);
+  }, [continueToProvisioning, handleSessionLoss]);
 
   const updateBusiness = useCallback((patch: Partial<BusinessDraft>) => {
     dispatch({ type: "business", patch });
   }, []);
 
-  const checkSlug = useCallback(async (slug: string): Promise<SlugCheckResult> => {
-    const companyName = stateRef.current.business.companyName.trim();
-    try {
-      const res = await signupSlugCheck({
-        slug,
-        companyName: companyName || undefined,
-      });
+  /**
+   * Live availability for the web-address field.
+   *
+   * Two backends, because the field moved to a step that runs BEFORE the auth
+   * user exists:
+   *
+   * - **Signed in, with a signup in flight** — `signup-slug-check`. It is the
+   *   authoritative endpoint, it rate-limits per user and it returns
+   *   server-generated suggestions. Unchanged, and still deployed as it is.
+   * - **Not signed in yet** — a direct read of `tenants`. That endpoint refuses
+   *   an anonymous caller by design (SIGNUP_NOT_FOUND without a `d247_signup`
+   *   blob), and its availability test is the same one-row lookup that
+   *   `tenants_public_select` already grants `anon`. See `slugAvailabilityAnon`.
+   *
+   * A SIGNUP_NOT_FOUND or UNAUTHENTICATED from the endpoint falls through to the
+   * anon path rather than surfacing: it means the session is not one that
+   * endpoint serves (a Google user before `signup-begin-oauth` has stamped
+   * them), which is not something the operator can act on.
+   *
+   * Shape and the reserved list are answered locally, with no round trip at all.
+   */
+  const checkSlug = useCallback(async (raw: string): Promise<SlugCheckResult> => {
+    const shape = checkSlugShape(raw);
+    if (!shape.ok) {
       return {
-        slug: res.slug ?? slug,
-        available: Boolean(res.available),
-        reason: res.reason ?? (res.available ? "ok" : "taken"),
-        suggestions: Array.isArray(res.suggestions) ? res.suggestions : [],
+        slug: shape.slug,
+        available: false,
+        reason: shape.problem === "reserved" ? "reserved" : "invalid",
+        suggestions: [],
       };
+    }
+    const slug = shape.slug;
+    const companyName = stateRef.current.business.companyName.trim();
+
+    const viaEndpoint = async (): Promise<SlugCheckResult | null> => {
+      const { data } = await getBrowserSupabase().auth.getSession();
+      if (!data.session) return null;
+      try {
+        const res = await signupSlugCheck({ slug, companyName: companyName || undefined });
+        return {
+          slug: res.slug ?? slug,
+          available: Boolean(res.available),
+          reason: res.reason ?? (res.available ? "ok" : "taken"),
+          suggestions: Array.isArray(res.suggestions) ? res.suggestions : [],
+        };
+      } catch (e) {
+        const error = toOnboardingError(e);
+        // The three slug verdicts also arrive as error codes (that is how the
+        // endpoint reports them). Fold them back into a result so the field
+        // renders one consistent UI wherever the verdict came from.
+        if (error.code === "SLUG_TAKEN") {
+          return { slug, available: false, reason: "taken", suggestions: suggestionsFrom(error) };
+        }
+        if (error.code === "SLUG_RESERVED") {
+          return { slug, available: false, reason: "reserved", suggestions: suggestionsFrom(error) };
+        }
+        if (error.code === "SLUG_INVALID") {
+          return { slug, available: false, reason: "invalid", suggestions: [] };
+        }
+        if (error.code === "SIGNUP_NOT_FOUND" || isSessionLoss(error)) return null;
+        throw e;
+      }
+    };
+
+    try {
+      return (await viaEndpoint()) ?? (await slugAvailabilityAnon(slug));
     } catch (e) {
       const error = toOnboardingError(e);
-      // The three slug verdicts can also arrive as error codes (that is how
-      // signup-provision reports them). Fold them back into a result so the
-      // field renders one consistent UI wherever the verdict came from.
-      if (error.code === "SLUG_TAKEN") {
-        return { slug, available: false, reason: "taken", suggestions: suggestionsFrom(error) };
-      }
-      if (error.code === "SLUG_RESERVED") {
-        return { slug, available: false, reason: "reserved", suggestions: suggestionsFrom(error) };
-      }
-      if (error.code === "SLUG_INVALID") {
-        const normalised = error.detail?.slug;
-        return {
-          slug: typeof normalised === "string" ? normalised : slug,
-          available: false,
-          reason: "invalid",
-          suggestions: [],
-        };
-      }
       if (isSessionLoss(error)) {
         handleSessionLoss(error);
-      } else {
-        dispatch({ type: "error", error });
       }
       // We could not perform the check. Reporting "taken" would block a
-      // legitimate address over a network blip; the banner above the form
-      // explains what happened, and signup-provision re-checks the slug and
-      // returns a recoverable SLUG_TAKEN if we were wrong.
-      return { slug, available: true, reason: "ok", suggestions: [] };
+      // legitimate address over a network blip, and reporting "available" would
+      // promise something we did not verify — so the field renders an
+      // "unchecked" state from `reason: "unknown"` and lets the operator
+      // continue. `signup-provision` re-checks the slug authoritatively and
+      // answers a recoverable SLUG_TAKEN if we were wrong.
+      return { slug, available: true, reason: "unknown", suggestions: [] };
     }
   }, [handleSessionLoss]);
 
-  const submitBusiness = useCallback(async () => {
-    const s = stateRef.current;
-    if (s.busy) return;
-    if (s.step !== "business") {
-      console.warn("[onboarding] submitBusiness ignored outside the business step");
-      return;
-    }
-    const invalid = validateBusinessLocally(s.business);
-    if (invalid) {
-      dispatch({ type: "error", error: invalid });
-      return;
-    }
-    const body = buildProvisionRequest(s.business);
-    dispatch({ type: "goto", step: "provisioning" });
-    await runProvision(body);
-  }, [runProvision]);
-
+  /**
+   * Safe to press as often as the operator likes: `signup-provision` returns the
+   * existing tenant when one exists and never re-touches Stripe money.
+   *
+   * It re-reads the draft rather than closing over one, because the boot
+   * screen's inline "pick a different address" panel edits `state.business` and
+   * this is the button it hands the operator afterwards.
+   */
   const retryProvision = useCallback(async () => {
     const s = stateRef.current;
     if (s.step !== "provisioning") {
@@ -1413,18 +1731,8 @@ export function OnboardingProvider({
       return;
     }
     if (s.provisioning.phase === "running") return;
-    // Safe to press: the server returns the existing tenant when one exists and
-    // never re-charges the card.
-    await runProvision(buildProvisionRequest(s.business));
-  }, [runProvision]);
-
-  const editBusinessAfterFailure = useCallback(() => {
-    stopPoller();
-    provisionSettledRef.current = true;
-    dispatch({ type: "provisioning", patch: { phase: "idle", failure: null } });
-    dispatch({ type: "goto", step: "business" });
-    setIsOpen(true);
-  }, [stopPoller]);
+    await continueToProvisioning();
+  }, [continueToProvisioning]);
 
   /**
    * The step components' only channel back into the shell.
@@ -1493,6 +1801,8 @@ export function OnboardingProvider({
       confirmClose,
       cancelClose,
       submitAccount,
+      submitTenantDetails,
+      startGoogleSignup,
       signInExisting,
       useDifferentEmail,
       signInInstead,
@@ -1500,9 +1810,7 @@ export function OnboardingProvider({
       markPaid,
       updateBusiness,
       checkSlug,
-      submitBusiness,
       retryProvision,
-      editBusinessAfterFailure,
       setError,
     }),
     [
@@ -1516,6 +1824,8 @@ export function OnboardingProvider({
       confirmClose,
       cancelClose,
       submitAccount,
+      submitTenantDetails,
+      startGoogleSignup,
       signInExisting,
       useDifferentEmail,
       signInInstead,
@@ -1523,16 +1833,20 @@ export function OnboardingProvider({
       markPaid,
       updateBusiness,
       checkSlug,
-      submitBusiness,
       retryProvision,
-      editBusinessAfterFailure,
       setError,
     ],
   );
 
   const shellValue = useMemo<OnboardingShellValue>(
-    () => ({ resolving, planSwitchBlocked, plans }),
-    [resolving, planSwitchBlocked, plans],
+    () => ({
+      resolving,
+      planSwitchBlocked,
+      plans,
+      accountMode,
+      googleEnabled: GOOGLE_ENABLED,
+    }),
+    [resolving, planSwitchBlocked, plans, accountMode],
   );
 
   const overlayMounted = state.step === "provisioning" || state.step === "done";

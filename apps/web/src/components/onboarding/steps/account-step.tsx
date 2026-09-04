@@ -28,14 +28,22 @@
  */
 
 import * as React from "react";
-import { Check, Circle, Loader2, UserRound, Zap } from "lucide-react";
+import { Building2, Check, Circle, Loader2, UserRound, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type { AccountStepProps } from "@/components/onboarding/onboarding-types";
+import type {
+  AccountStepProps,
+  TenantFormValues,
+} from "@/components/onboarding/onboarding-types";
 import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
+import {
+  TenantIdentityFields,
+  type SlugState,
+} from "@/components/onboarding/tenant-identity-fields";
 import {
   PasswordToggle,
   STRENGTH_BAR_CLASS,
@@ -45,10 +53,13 @@ import {
   FIELD_MAX,
   firstErrorField,
   normalizeEmail,
+  normalizeSlugClient,
   passwordRuleState,
   passwordStrength,
   suggestEmailCorrection,
+  TENANT_FIELD_ORDER,
   validateAccount,
+  validateTenant,
   type AccountField,
   type FieldErrors,
 } from "@/lib/signup-validation";
@@ -68,6 +79,12 @@ const SERVER_FIELD_ERRORS: Partial<Record<string, AccountField>> = {
   EMAIL_DISPOSABLE: "email",
   EMAIL_IS_CUSTOMER: "email",
   WEAK_PASSWORD: "password",
+  // The three slug verdicts land on the field that caused them again, now that
+  // the operator picks the address instead of having it derived for them.
+  SLUG_INVALID: "slug",
+  SLUG_RESERVED: "slug",
+  SLUG_TAKEN: "slug",
+  TERMS_NOT_ACCEPTED: "acceptedTerms",
 };
 
 /** What the shell needs to know about the password-reset detour. */
@@ -105,11 +122,18 @@ export interface AccountStepShellProps extends AccountStepProps {
 
 export function AccountStep({
   plan,
+  mode,
   initialValues,
+  tenant,
+  onTenantChange,
   signInPrompt,
   busy,
   error,
+  googleEnabled,
   onSubmit,
+  onSubmitTenant,
+  onGoogle,
+  onCheckSlug,
   onSignIn,
   onUseDifferentEmail,
   onSignInInstead,
@@ -200,6 +224,67 @@ export function AccountStep({
   const emailRef = React.useRef<HTMLInputElement>(null);
   const passwordRef = React.useRef<HTMLInputElement>(null);
   const signInPasswordRef = React.useRef<HTMLInputElement>(null);
+  const companyNameRef = React.useRef<HTMLInputElement>(null);
+  const slugRef = React.useRef<HTMLInputElement>(null);
+  const termsRef = React.useRef<HTMLButtonElement>(null);
+
+  /**
+   * The live verdict from the address field, mirrored up so submit can act on
+   * it. Submitting a slug we have ALREADY been told is taken would create the
+   * auth user and charge the card before the collision surfaced — at which point
+   * the operator is paying to be told something the form knew a minute ago.
+   */
+  const [slugState, setSlugState] = React.useState<SlugState>({ kind: "idle" });
+
+  /** The three tenant answers, normalised the way the provider will send them. */
+  const tenantValues = (): TenantFormValues => ({
+    companyName: tenant.companyName.trim(),
+    slug: normalizeSlugClient(tenant.slug),
+    acceptedTerms: tenant.acceptedTerms,
+  });
+
+  /**
+   * Validate the tenant half and, if it passes, refuse a slug the field has
+   * already reported unavailable. Returns the errors to render, or null when it
+   * is safe to submit.
+   */
+  const tenantErrors = (): FieldErrors<AccountField> | null => {
+    const found = validateTenant(tenantValues());
+    if (slugState.kind === "unavailable" && !found.slug) {
+      found.slug =
+        slugState.reason === "reserved"
+          ? SIGNUP_ERROR_COPY.SLUG_RESERVED
+          : slugState.reason === "invalid"
+            ? SIGNUP_ERROR_COPY.SLUG_INVALID
+            : SIGNUP_ERROR_COPY.SLUG_TAKEN;
+    }
+    return Object.keys(found).length > 0 ? found : null;
+  };
+
+  /** Focus whichever field the first error belongs to. */
+  const focusFirst = (
+    found: FieldErrors<AccountField>,
+    order: readonly AccountField[],
+  ) => {
+    const first = firstErrorField(found, order);
+    const target =
+      first === "fullName"
+        ? fullNameRef.current
+        : first === "email"
+          ? emailRef.current
+          : first === "password"
+            ? passwordRef.current
+            : first === "companyName"
+              ? companyNameRef.current
+              : first === "slug"
+                ? slugRef.current
+                : termsRef.current;
+    target?.focus();
+  };
+
+  const clearFieldError = React.useCallback((field: AccountField) => {
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+  }, []);
 
   /**
    * Captured once, on mount. `signup-begin` compares it against the server
@@ -284,19 +369,15 @@ export function AccountStep({
     // even on a fast double-click or an Enter key held down.
     if (busy) return;
 
-    const values = { fullName, email, password };
-    const nextErrors = validateAccount(values);
+    const tenantValue = tenantValues();
+    const nextErrors: FieldErrors<AccountField> = {
+      ...validateAccount({ fullName, email, password, ...tenantValue }),
+      ...(tenantErrors() ?? {}),
+    };
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      const first = firstErrorField(nextErrors, ACCOUNT_FIELD_ORDER);
-      const target =
-        first === "fullName"
-          ? fullNameRef.current
-          : first === "email"
-            ? emailRef.current
-            : passwordRef.current;
-      target?.focus();
+      focusFirst(nextErrors, ACCOUNT_FIELD_ORDER);
       return;
     }
 
@@ -304,6 +385,7 @@ export function AccountStep({
       fullName: fullName.trim(),
       email: normalizeEmail(email),
       password,
+      ...tenantValue,
       // Read from the DOM rather than from state: the whole point of the
       // honeypot is that only an automated filler touches it, and a bot that
       // sets `.value` directly never fires React's onChange.
@@ -312,6 +394,41 @@ export function AccountStep({
       // is the safe direction (a zero would read as an implausibly old form).
       formStartedAt: formStartedAtRef.current || Date.now(),
     });
+  };
+
+  /**
+   * `tenant` mode's submit. No credentials to check — the account exists and is
+   * already paid for — so only the three tenant answers are validated.
+   */
+  const handleTenantSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    const found = tenantErrors();
+    setErrors(found ?? {});
+    if (found) {
+      focusFirst(found, TENANT_FIELD_ORDER);
+      return;
+    }
+    onSubmitTenant(tenantValues());
+  };
+
+  /**
+   * "Continue with Google" — validated BEFORE the browser leaves.
+   *
+   * The redirect is one-way: an operator who is bounced to Google with an empty
+   * business name comes back signed in, with a real auth user, and has to be
+   * asked for it afterwards. Checking here means the only thing that can go
+   * wrong on the far side is Google itself.
+   */
+  const handleGoogle = () => {
+    if (busy) return;
+    const found = tenantErrors();
+    setErrors(found ?? {});
+    if (found) {
+      focusFirst(found, TENANT_FIELD_ORDER);
+      return;
+    }
+    onGoogle(tenantValues());
   };
 
   const handleSignIn = (event: React.FormEvent<HTMLFormElement>) => {
@@ -519,6 +636,52 @@ export function AccountStep({
   }
 
   // -------------------------------------------------------------------------
+  // Branch: `tenant` mode — the account exists and is paid for, and only the
+  // tenant details are missing. See `AccountStepMode`.
+  // -------------------------------------------------------------------------
+  if (mode === "tenant") {
+    return (
+      <form
+        id="signup-account-form"
+        onSubmit={handleTenantSubmit}
+        noValidate
+        className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+      >
+        <div className="flex size-10 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/40">
+          <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+        </div>
+        <h3 className="mt-4 text-lg font-semibold tracking-tight">
+          One last thing
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Your {plan.name} subscription is active. Tell us what to call your
+          portal and we&apos;ll build it now.
+        </p>
+
+        <div className="mt-5 space-y-4">
+          <TenantIdentityFields
+            value={tenant}
+            busy={busy}
+            errors={{
+              companyName: fieldError("companyName"),
+              slug: fieldError("slug"),
+              acceptedTerms: fieldError("acceptedTerms"),
+            }}
+            onChange={onTenantChange}
+            onClearError={clearFieldError}
+            onCheckSlug={onCheckSlug}
+            onSlugStateChange={setSlugState}
+            companyNameRef={companyNameRef}
+            slugRef={slugRef}
+            termsRef={termsRef}
+            autoFocusCompanyName
+          />
+        </div>
+      </form>
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // Default: create the account.
   // -------------------------------------------------------------------------
   const nameError = fieldError("fullName");
@@ -542,6 +705,34 @@ export function AccountStep({
           </span>
         </p>
       </div>
+
+      {googleEnabled && (
+        <>
+          {/*
+            Placed ABOVE the fields, but it still needs the business name and
+            web address below it — those are ours to collect whichever way the
+            operator signs in, and they have to be captured before the redirect
+            takes the page away. `handleGoogle` validates them and focuses the
+            first empty one rather than leaving for Google without them.
+          */}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={handleGoogle}
+            className="mt-5 h-10 w-full"
+          >
+            <GoogleMark />
+            Continue with Google
+          </Button>
+
+          <div className="mt-5 flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <Separator className="flex-1" />
+          </div>
+        </>
+      )}
 
       {/*
         Honeypot. Positioned off-screen rather than `display: none` — a fair
@@ -762,6 +953,31 @@ export function AccountStep({
             You&apos;ll use this to sign in to your portal.
           </p>
         </div>
+
+        {/*
+          The tenant half. It sits on THIS step, before payment, because a web
+          address that turns out to be taken has to be fixable while changing it
+          is still free — the previous design asked for it after the card was
+          charged, which made a collision a dead end.
+        */}
+        <Separator className="!my-6" />
+
+        <TenantIdentityFields
+          value={tenant}
+          busy={busy}
+          errors={{
+            companyName: fieldError("companyName"),
+            slug: fieldError("slug"),
+            acceptedTerms: fieldError("acceptedTerms"),
+          }}
+          onChange={onTenantChange}
+          onClearError={clearFieldError}
+          onCheckSlug={onCheckSlug}
+          onSlugStateChange={setSlugState}
+          companyNameRef={companyNameRef}
+          slugRef={slugRef}
+          termsRef={termsRef}
+        />
       </div>
 
       {/*
@@ -809,6 +1025,38 @@ export function AccountStep({
 // ---------------------------------------------------------------------------
 // Bits
 // ---------------------------------------------------------------------------
+
+/**
+ * Google's mark, inline.
+ *
+ * Inline rather than a remote asset because Google's brand guidelines require
+ * the four-colour mark to be shown unaltered on the button, and an <img> to
+ * fonts.gstatic/ssl.gstatic would be a third-party request on the highest-intent
+ * form on the site — one that fails silently behind a content blocker and leaves
+ * an unlabelled button.
+ */
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 18 18" aria-hidden="true" className="h-4 w-4 shrink-0">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.35 0-4.34-1.58-5.05-3.71H.96v2.33A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.95 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l2.99-2.33Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l2.99 2.33C4.66 5.16 6.65 3.58 9 3.58Z"
+      />
+    </svg>
+  );
+}
 
 /**
  * Four different situations put the user on the sign-in panel, and the honest

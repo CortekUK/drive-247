@@ -31,11 +31,15 @@ export interface PaymentIntentRequest {
 export interface ProvisionRequest {
   companyName: string;
   /**
-   * Optional, and normally OMITTED. The business form no longer asks for a web
-   * address; `signup-provision` derives one from `companyName` and auto-suffixes
-   * on collision. The field survives in the contract because the endpoint still
-   * honours a supplied slug — which keeps an older cached browser bundle, and
-   * any future admin-side caller, working against the same function.
+   * The address the operator chose on the account step, and the reason this is
+   * sent again.
+   *
+   * `signup-provision` honours a supplied slug (validating shape, the reserved
+   * list and availability, and answering SLUG_TAKEN with suggestions) and only
+   * derives one from `companyName` when it is absent. Omitting it would mean the
+   * operator saw "acme is available", paid, and was silently given
+   * "acme-rentals-3" — so it is always sent, and a collision comes back against
+   * the field they picked.
    */
   slug?: string;
   location?: string;
@@ -61,6 +65,16 @@ export interface SignupBeginResponse {
   email: string;
   planId: SignupPlanId;
   stage: "account_created";
+}
+export interface SignupBeginOauthRequest {
+  planId: SignupPlanId;
+}
+export interface SignupBeginOauthResponse {
+  success: true;
+  email: string;
+  planId: SignupPlanId;
+  /** `already_in_signup` when this user was already stamped — the call is idempotent. */
+  stage: "account_created" | "already_in_signup";
 }
 export interface SlugCheckResponse extends SlugCheckResult {
   success: true;
@@ -387,6 +401,126 @@ export function signupSlugCheck(b: SlugCheckRequest): Promise<SlugCheckResponse>
     retries: 1,
     dedupeKey: `signup-slug-check:${b.slug}`,
   });
+}
+
+/**
+ * The Google half of step 1.
+ *
+ * `signup-begin` cannot serve this path: it CREATES the auth user and hard-requires
+ * a 10-character password, and a user Google has already created hits its
+ * "auth user with no profile" probe and is refused with EMAIL_EXISTS_SIGN_IN.
+ * Every later step then 404s with SIGNUP_NOT_FOUND, because they all key off
+ * `app_metadata.d247_signup` — which only `signup-begin` writes.
+ *
+ * So this endpoint takes the session Google just minted and stamps that same
+ * blob onto the existing user. It creates nothing and charges nothing.
+ *
+ * Session-authed by definition, and idempotent server-side, so it is safe to
+ * retry when the browser comes back from a redirect twice.
+ */
+export function signupBeginOauth(
+  b: SignupBeginOauthRequest,
+): Promise<SignupBeginOauthResponse> {
+  return callFunction<SignupBeginOauthResponse>("signup-begin-oauth", b, {
+    auth: "session",
+    timeoutMs: 25_000,
+    dedupeKey: `signup-begin-oauth:${b.planId}`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Slug availability without a session
+// ---------------------------------------------------------------------------
+
+/**
+ * The web-address field moved onto the account step, which runs BEFORE the auth
+ * user exists — and `signup-slug-check` cannot serve it there. That function
+ * requires a session AND an existing `d247_signup` blob (it refuses with
+ * SIGNUP_NOT_FOUND otherwise), deliberately, so that holding the anon key is not
+ * enough to enumerate tenant slugs.
+ *
+ * This is the pre-session equivalent, and it is the SAME query: the edge
+ * function's availability test is literally `select id from tenants where slug =
+ * $1`, and `tenants` carries a `tenants_public_select` policy with `USING (true)`
+ * for `anon`. So this reads exactly what the endpoint reads, through a policy
+ * that already grants it — it opens nothing that the booking sites (which
+ * resolve their own tenant by slug from the browser) have not needed all along.
+ *
+ * Shape and the reserved list are checked by the CALLER before this runs, so a
+ * malformed address never costs a round trip.
+ *
+ * It is advisory either way. `signup-provision` re-runs every check and holds
+ * the `tenants_slug_key` unique index, which is the only thing that actually
+ * closes the check-then-insert race.
+ */
+export async function slugAvailabilityAnon(slug: string): Promise<SlugCheckResult> {
+  const supabase = getBrowserSupabase();
+
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) throw new OnboardingApiError("NETWORK", SIGNUP_ERROR_COPY.NETWORK);
+  if (!data) return { slug, available: true, reason: "ok", suggestions: [] };
+
+  return {
+    slug,
+    available: false,
+    reason: "taken",
+    suggestions: await suggestFreeSlugs(supabase, slug),
+  };
+}
+
+/**
+ * Up to three free alternatives, in one round trip.
+ *
+ * Mirrors `suggestSlugs` in `_shared/tenant-provisioning.ts` — same candidates
+ * (`-rentals`, `-cars`, then `1`…`9`), same "ask which of them exist and return
+ * the rest" shape — so the operator is offered the same names whichever side
+ * answered them.
+ *
+ * Suggestions are a nicety. A failed lookup returns none rather than turning
+ * "that address is taken" into an error.
+ */
+async function suggestFreeSlugs(
+  supabase: ReturnType<typeof getBrowserSupabase>,
+  base: string,
+  limit = 3,
+): Promise<string[]> {
+  const root = base.slice(0, 40).replace(/-+$/g, "");
+  if (!root) return [];
+
+  const candidates: string[] = [];
+  const push = (candidate: string) => {
+    if (
+      candidate.length >= 3 &&
+      candidate.length <= 50 &&
+      /^[a-z][a-z0-9-]*$/.test(candidate) &&
+      candidate !== base &&
+      !candidates.includes(candidate)
+    ) {
+      candidates.push(candidate);
+    }
+  };
+  push(`${root}-rentals`);
+  push(`${root}-cars`);
+  for (let n = 1; n <= 9 && candidates.length < limit + 6; n += 1) push(`${root}${n}`);
+  if (!candidates.length) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from("tenants")
+      .select("slug")
+      .in("slug", candidates);
+    if (error) throw error;
+    const taken = new Set((data ?? []).map((row: { slug: string }) => row.slug));
+    return candidates.filter((c) => !taken.has(c)).slice(0, limit);
+  } catch (e) {
+    console.warn("[onboarding] slug suggestion lookup failed (non-fatal)", e);
+    return [];
+  }
 }
 
 /**

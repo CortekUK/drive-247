@@ -24,6 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 import { useOnboarding } from "./onboarding-provider";
+import { TenantIdentityFields } from "./tenant-identity-fields";
 import {
   MILESTONE_COPY,
   PROVISION_MILESTONES,
@@ -68,9 +69,22 @@ function lockBodyScroll(): () => void {
 }
 
 export function ProvisioningScreen() {
-  const { state, requestClose, retryProvision, editBusinessAfterFailure } = useOnboarding();
+  const { state, requestClose, retryProvision, updateBusiness, checkSlug } =
+    useOnboarding();
   const { provisioning, result, business, account, payment } = state;
   const { completed, phase, failure, activeSince } = provisioning;
+
+  /**
+   * The inline fix panel, replacing the old "Edit details" button that sent the
+   * operator back to a business step which no longer exists.
+   *
+   * Every code in `RECOVERABLE_PROVISION_CODES` is about one of the three fields
+   * this renders — a taken or reserved web address, a malformed one, a company
+   * name that failed validation, or an unticked terms box — so the fix is
+   * offered where the failure appeared rather than by unwinding a paid signup
+   * back through the dialog.
+   */
+  const [fixing, setFixing] = useState(false);
 
   const succeeded = phase === "succeeded" || (state.step === "done" && result !== null);
   const failed = phase === "failed" && !succeeded;
@@ -239,15 +253,25 @@ export function ProvisioningScreen() {
                   onClick={() => window.location.assign(portalHref)}
                   className="mt-8 w-full bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
                 >
-                  Take me to my portal
+                  Go to portal
                   <ArrowRight className="h-4 w-4" />
                 </Button>
 
-                {result.portalSignInUrl === null && (
-                  <p className="mt-2 text-center text-xs text-muted-foreground">
-                    Sign in with the email and password you just created.
-                  </p>
-                )}
+                {/*
+                  The address itself, spelled out. The button is the fast path,
+                  but this is the one thing the operator has to be able to write
+                  down or find again later — nothing renames a tenant slug, and
+                  an unlabelled button leaves them with no idea what their portal
+                  is actually called.
+                */}
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {result.portalUrl.replace(/^https?:\/\//, "")}
+                  </span>
+                  {result.portalSignInUrl === null
+                    ? " — sign in with the email and password you just created."
+                    : null}
+                </p>
 
                 <a
                   href={result.bookingUrl}
@@ -368,8 +392,8 @@ export function ProvisioningScreen() {
                         <RotateCcw className="h-4 w-4" />
                         Try again
                       </Button>
-                      {recoverable && (
-                        <Button variant="outline" onClick={editBusinessAfterFailure}>
+                      {recoverable && !fixing && (
+                        <Button variant="outline" onClick={() => setFixing(true)}>
                           <Pencil className="h-4 w-4" />
                           Edit details
                         </Button>
@@ -381,6 +405,29 @@ export function ProvisioningScreen() {
                         </a>
                       </Button>
                     </div>
+
+                    {recoverable && fixing && (
+                      <div className="mt-6 space-y-4 rounded-lg border p-4 text-left animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                        <TenantIdentityFields
+                          value={business}
+                          // Always editable here: this panel only renders inside
+                          // the `failed` branch, so nothing is in flight.
+                          busy={false}
+                          // The provision's own failure is already rendered in
+                          // the alert above; painting it under a field as well
+                          // would say the same thing twice.
+                          errors={{}}
+                          onChange={updateBusiness}
+                          onClearError={() => {}}
+                          onCheckSlug={checkSlug}
+                          autoFocusCompanyName
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Nothing is charged again — your subscription is already
+                          active.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

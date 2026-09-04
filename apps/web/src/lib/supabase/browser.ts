@@ -12,8 +12,16 @@ let _client: SupabaseClient | null = null;
  *
  * - `storageKey` is namespaced so a session created here can never collide with
  *   anything else served from drive-247.com.
- * - `detectSessionInUrl: false` — the marketing site is not an auth callback and
- *   must not try to consume tokens from a URL hash.
+ * - `detectSessionInUrl: false` — the marketing site has no auth-callback route,
+ *   and a client that silently consumes whatever it finds in the URL would act
+ *   on a token an attacker put there. The one place a redirect DOES come back
+ *   (signup's "Continue with Google") calls `exchangeCodeForSession` itself,
+ *   from a handler that has already checked the URL is one it started.
+ * - `flowType: "pkce"` — the library still defaults to `implicit`, which returns
+ *   the access AND refresh token in the URL fragment: they land in history, in
+ *   the Referer header of anything the page loads next, and in any extension
+ *   reading `location`. PKCE returns a single-use code that is worthless without
+ *   the verifier this client keeps in its own storage.
  * - The session persists on purpose: it is what makes an abandoned signup
  *   resumable after a refresh or a tab close.
  *
@@ -36,6 +44,7 @@ export function getBrowserSupabase(): SupabaseClient {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      flowType: "pkce",
       storageKey: "d247-web-auth",
     },
   });

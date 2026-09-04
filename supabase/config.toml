@@ -437,6 +437,15 @@ verify_jwt = true
 [functions.signup-begin]
 verify_jwt = false
 
+# The Google half of step 1. NOT DEPLOYED — see the banner at the top of
+# supabase/functions/signup-begin-oauth/index.ts. Listed here so that whenever it
+# IS deployed it lands with the right setting: JWT-verified, because it acts on
+# the session Google just minted. verify_jwt is not the gate on its own (the anon
+# key satisfies it), so the function calls auth.getUser() itself, as every other
+# signup function does.
+[functions.signup-begin-oauth]
+verify_jwt = true
+
 # Password recovery for the signup dialog. Public by necessity — the whole point
 # is that the caller has lost the credential, so there is no session to present.
 # It carries its own controls in code: default-deny account eligibility (only a

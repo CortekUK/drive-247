@@ -3,11 +3,22 @@ import type { SignupPlan, SignupPlanId } from "@/lib/plans";
 // ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
+/**
+ * The flow is `plan -> account -> payment -> provisioning -> done`.
+ *
+ * There is deliberately no `business` step any more. It used to sit between
+ * payment and provisioning and ask for the company name, location, fleet size,
+ * opening hours and branding — AFTER the card had been charged, which is the
+ * worst possible place to discover a validation problem. Everything the server
+ * actually requires to mint a tenant (a company name and an accepted terms box)
+ * now lives on the `account` step, alongside the web address the operator picks
+ * for themselves; everything else is collected by the portal's own first-run
+ * wizard, where it can be edited afterwards.
+ */
 export type SignupStep =
   | "plan"
   | "account"
   | "payment"
-  | "business"
   | "provisioning"
   | "done";
 
@@ -139,7 +150,12 @@ export const SIGNUP_ERROR_COPY: Record<SignupErrorCode, string> = {
   INTERNAL: "Something went wrong on our end. Please try again.",
 };
 
-/** Codes that mean "go back to the business form and change something". */
+/**
+ * Codes the operator can fix themselves without leaving the boot screen. All
+ * four are about the web address, so the provisioning screen answers them with
+ * an inline "pick a different address" panel rather than sending a customer who
+ * has already paid back through a form.
+ */
 export const RECOVERABLE_PROVISION_CODES: readonly SignupErrorCode[] = [
   "SLUG_TAKEN",
   "SLUG_RESERVED",
@@ -199,114 +215,66 @@ export const SLOW_MILESTONE: ProvisionMilestone = "brand_ready";
 export const SLOW_MILESTONE_HINT_MS = 6000;
 
 // ---------------------------------------------------------------------------
-// Business form
+// Tenant identity
+//
+// What is LEFT of the old business form. `signup-provision` requires exactly
+// two things from the operator — a company name and an accepted terms box — and
+// honours a `slug` when one is supplied. Those three now sit on the account
+// step, before any money moves, so a name that cannot become a legal hostname
+// is caught while the form is still free to fix.
+//
+// Everything the old step also asked for (location, phone, fleet size, vehicle
+// type, brand colours, logo, opening hours) is gone from this flow. All of it is
+// optional server-side, all of it is editable in the portal afterwards, and
+// asking for it here meant a paid customer sitting in front of a nine-field form
+// before they could reach the thing they had just bought.
 // ---------------------------------------------------------------------------
-export interface OperatingScheduleDraft {
-  alwaysOpen: boolean;
-  /** Lowercase day names: "monday" … "sunday". */
-  days: string[];
-  /** "HH:MM", 24-hour. */
-  opensAt: string;
-  closesAt: string;
-}
 
 export interface BusinessDraft {
+  /** Trading name. Written to `tenants.company_name` and used for the brand palette. */
   companyName: string;
   /**
-   * DERIVED, never typed by the operator.
+   * The subdomain the operator chose: `{slug}.drive-247.com` and
+   * `{slug}.portal.drive-247.com`.
    *
-   * The business step no longer asks for a web address — the subdomain is
-   * derived from the business name and communicated after provisioning. The
-   * field stays on the draft because `onboarding-provider.tsx` still posts it
-   * as `ProvisionRequest.slug` and guards on its shape before it will hand the
-   * dialog over to the boot screen; an empty string there would kill every
-   * signup. The step keeps it in sync with `companyName`, and the server
-   * derives its own copy authoritatively.
+   * Typed by the operator now, not derived behind their back. It is sent to
+   * `signup-provision` as `ProvisionRequest.slug`, which validates and claims it
+   * — so an address the operator saw confirmed as free is the address they get,
+   * and a collision is reported against a field they can actually edit.
    */
   slug: string;
   /**
-   * Vestigial. It used to mean "the user hand-edited the slug, stop
-   * auto-deriving it" — there is no slug field to hand-edit any more, so
-   * nothing reads it. Optional (rather than deleted) purely so the resume path
-   * in `onboarding-provider.tsx` can keep setting it without a type error.
+   * True once the operator edits the web address by hand. While it is false the
+   * field tracks the company name; the first keystroke in it stops that for
+   * good, so auto-derivation can never overwrite a deliberate choice.
    */
-  slugTouched?: boolean;
-  location: string;
-  businessPhone: string;
-  /**
-   * How many vehicles the operator runs, as a plain integer in text form
-   * ("8"). Empty string means "not answered yet" — it is kept as a string so
-   * the input stays controlled and an in-progress entry is never coerced to 0.
-   * Validated against the selected plan's `maxVehicles`.
-   */
-  fleetSize: string;
-  /** One of VEHICLE_TYPE_OPTIONS. */
-  vehicleType: string;
-  businessColours: string;
-  logoUrl: string;
-  schedule: OperatingScheduleDraft;
+  slugTouched: boolean;
   acceptedTerms: boolean;
 }
 
 export const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
   companyName: "",
   slug: "",
-  location: "",
-  businessPhone: "",
-  fleetSize: "",
-  vehicleType: "",
-  businessColours: "",
-  logoUrl: "",
-  schedule: {
-    alwaysOpen: false,
-    days: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-    opensAt: "09:00",
-    closesAt: "18:00",
-  },
+  slugTouched: false,
   acceptedTerms: false,
 };
-
-// FLEET_SIZE_OPTIONS used to live here. It is gone because its bands
-// (1–4 / 5–10 / 11–25 / 25+) did not line up with the plan bands
-// (1–4 / 5–15 / 16–40), so "5–10" matched no plan boundary and "11–25"
-// straddled two — the fleet answer could not be checked against the plan the
-// operator had just paid for. The step now asks for a number. The lead forms
-// (consultation-form, strategy-call) keep their own local band lists; they feed
-// a CRM, not a plan check.
-
-export const VEHICLE_TYPE_OPTIONS: readonly string[] = [
-  "Economy",
-  "SUV & crossover",
-  "Luxury & performance",
-  "Vans & commercial",
-  "Mixed fleet",
-] as const;
-
-export const DAY_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: "monday", label: "Mon" },
-  { value: "tuesday", label: "Tue" },
-  { value: "wednesday", label: "Wed" },
-  { value: "thursday", label: "Thu" },
-  { value: "friday", label: "Fri" },
-  { value: "saturday", label: "Sat" },
-  { value: "sunday", label: "Sun" },
-] as const;
-
-/** "HH:MM" in 30-minute increments, 00:00 … 23:30. Built once at module scope. */
-export const TIME_OPTIONS: readonly string[] = Array.from({ length: 48 }, (_, i) => {
-  const h = String(Math.floor(i / 2)).padStart(2, "0");
-  const m = i % 2 === 0 ? "00" : "30";
-  return `${h}:${m}`;
-});
 
 // ---------------------------------------------------------------------------
 // Slug availability
 // ---------------------------------------------------------------------------
 export interface SlugCheckResult {
-  /** The NORMALISED slug the server evaluated (may differ from what was sent). */
+  /** The NORMALISED slug that was evaluated (may differ from what was typed). */
   slug: string;
   available: boolean;
-  reason: "ok" | "reserved" | "invalid" | "taken";
+  /**
+   * `"unknown"` is a CLIENT-ONLY verdict the server never sends. It means the
+   * availability lookup itself failed — offline, a 500, a dead endpoint — and is
+   * kept distinct from `"ok"` so the field can say "we couldn't check this"
+   * rather than showing a green tick it did not earn. `available` is true
+   * alongside it so a network blip does not block a legitimate address;
+   * `signup-provision` re-checks authoritatively either way.
+   */
+  reason: "ok" | "reserved" | "invalid" | "taken" | "unknown";
   suggestions: string[];
 }
 
@@ -370,25 +338,85 @@ export interface OnboardingState {
 }
 
 // ---------------------------------------------------------------------------
-// Step component props — B3 implements exactly these signatures.
+// Step component props
 // ---------------------------------------------------------------------------
+
+/** Everything the account step collects when it is creating the account. */
 export interface AccountFormValues {
   fullName: string;
   email: string;
   password: string;
+  companyName: string;
+  /** Already normalised by the step — lowercase, `[a-z0-9-]`, no edge hyphens. */
+  slug: string;
+  acceptedTerms: boolean;
   /** Honeypot. Always posted; a non-empty value means bot. */
   companyWebsite: string;
   /** Date.now() captured when the step mounted. */
   formStartedAt: number;
 }
 
+/**
+ * The tenant half on its own.
+ *
+ * Two callers need it without the credential half: the Google button (the
+ * identity comes back from Google, so only these three are ours to collect) and
+ * the `tenant` mode below.
+ */
+export interface TenantFormValues {
+  companyName: string;
+  slug: string;
+  acceptedTerms: boolean;
+}
+
+/**
+ * `create` — the normal first-visit form: name, email, password, business name,
+ * web address, terms.
+ *
+ * `tenant` — the recovery form. It renders ONLY the business name, web address
+ * and terms, and is reached in one situation: a signup that is already paid for
+ * but whose tenant details cannot be found (the draft lives in the operator's
+ * own `user_metadata` and in `localStorage`, so this needs both to be missing —
+ * a mid-payment device switch with a failed metadata write). Without it a paying
+ * customer would be resumed onto a create-account form for an account they
+ * already have.
+ */
+export type AccountStepMode = "create" | "tenant";
+
 export interface AccountStepProps {
   plan: SignupPlan;
+  mode: AccountStepMode;
   initialValues: { fullName: string; email: string };
+  /**
+   * The tenant fields are CONTROLLED by the provider, unlike the credential
+   * fields which the step owns.
+   *
+   * They have to outlive this component: they are re-rendered after a failed
+   * `signup-begin`, they cross the Google redirect, and they are what the
+   * provision is eventually built from. Local state would drop them on any of
+   * those.
+   */
+  tenant: BusinessDraft;
+  onTenantChange(patch: Partial<BusinessDraft>): void;
   signInPrompt: { email: string; reason: SignupErrorCode } | null;
   busy: boolean;
   error: OnboardingError | null;
+  /**
+   * Whether to offer "Continue with Google".
+   *
+   * Off unless `NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED` is "true". The button is
+   * useless — a Supabase 400 — until a Google provider is configured on the
+   * project AND `signup-begin-oauth` is deployed, and a sign-in button that
+   * fails is worse than no button at all.
+   */
+  googleEnabled: boolean;
   onSubmit(values: AccountFormValues): void;
+  /** `tenant` mode's submit: the account already exists and is paid for. */
+  onSubmitTenant(values: TenantFormValues): void;
+  /** Leaves the page for Google, carrying these three values across the redirect. */
+  onGoogle(values: TenantFormValues): void;
+  /** Live availability for the web address. Debounced by the step. */
+  onCheckSlug(slug: string): Promise<SlugCheckResult>;
   onSignIn(values: { email: string; password: string }): void;
   /** Clears signInPrompt and returns to the create-account form. */
   onUseDifferentEmail(): void;
@@ -414,23 +442,6 @@ export interface PaymentStepProps {
   onError(err: OnboardingError): void;
 }
 
-export interface BusinessStepProps {
-  plan: SignupPlan;
-  value: BusinessDraft;
-  busy: boolean;
-  error: OnboardingError | null;
-  onChange(patch: Partial<BusinessDraft>): void;
-  /**
-   * OPTIONAL and unused by the step. The web-address field is gone, so nothing
-   * checks slug availability while typing any more. The prop is kept so
-   * `onboarding-dialog.tsx` can keep passing the provider's `checkSlug`
-   * harmlessly, and so the live `signup-slug-check` endpoint keeps a caller
-   * shape to come back to.
-   */
-  onCheckSlug?(slug: string): Promise<SlugCheckResult>;
-  onSubmit(): void;
-}
-
 // ---------------------------------------------------------------------------
 // Context value
 // ---------------------------------------------------------------------------
@@ -448,6 +459,10 @@ export interface OnboardingContextValue {
   cancelClose(): void;
 
   submitAccount(values: AccountFormValues): Promise<void>;
+  /** `tenant`-mode submit: store the details and start provisioning straight away. */
+  submitTenantDetails(values: TenantFormValues): Promise<void>;
+  /** Stash the tenant details, then hand the browser to Google. Never returns. */
+  startGoogleSignup(values: TenantFormValues): Promise<void>;
   signInExisting(values: { email: string; password: string }): Promise<void>;
   useDifferentEmail(): void;
   /** Switch to the sign-in panel for an email the user has already typed. */
@@ -458,10 +473,8 @@ export interface OnboardingContextValue {
 
   updateBusiness(patch: Partial<BusinessDraft>): void;
   checkSlug(slug: string): Promise<SlugCheckResult>;
-  submitBusiness(): Promise<void>;
 
   retryProvision(): Promise<void>;
-  editBusinessAfterFailure(): void;
 
   setError(err: OnboardingError | null): void;
 }

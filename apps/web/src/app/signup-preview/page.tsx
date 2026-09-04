@@ -7,6 +7,17 @@ import { fetchSignupPlans } from "@/lib/plans-server";
 /**
  * Standing preview of the self-serve signup flow. OFF by default.
  *
+ * THE FLOW, AS IT STANDS
+ * ----------------------
+ *   pricing card -> account -> payment -> provisioning -> "Go to portal"
+ *
+ * The account step collects the credential (email + password, or Google when
+ * that is switched on) AND the tenant identity: business name, the web address
+ * with live availability, and the terms tick. There is no separate business step
+ * any more — everything it used to ask for after the card was charged is either
+ * required here, before any money moves, or collected by the portal's own
+ * first-run wizard where it can be edited.
+ *
  * WHY THIS ROUTE EXISTS
  * ---------------------
  * The public marketing page (`(marketing)/page.tsx`) deliberately does NOT
@@ -52,6 +63,11 @@ import { fetchSignupPlans } from "@/lib/plans-server";
  * `(marketing)/page.tsx`, render it between <Timeline /> and <FAQSection />,
  * take the `#pricing` links in header.tsx and footer.tsx from the source
  * branch, and delete this route. Nothing else moves.
+ *
+ * The Google button is a separate switch again, and off by default:
+ * `NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED`. It needs a Google provider enabled on the
+ * Supabase project (currently disabled on prod AND staging) and
+ * `supabase/functions/signup-begin-oauth` deployed. See .env.example.
  *
  * NOT A TENANT GATE, deliberately. The v2 canary model keys on tenant slug
  * (`lib/v2.ts`, `lib/lean-areas.ts`), but a visitor reading the marketing site

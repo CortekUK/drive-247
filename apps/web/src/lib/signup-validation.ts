@@ -24,17 +24,7 @@
  * same failure are literally the same string and can never drift apart.
  */
 
-import {
-  SIGNUP_ERROR_COPY,
-  type BusinessDraft,
-  type OperatingScheduleDraft,
-} from "@/components/onboarding/onboarding-types";
-import {
-  maxSelfServeVehicles,
-  SIGNUP_PLANS,
-  smallestPlanFor,
-  type SignupPlan,
-} from "@/lib/plans";
+import { SIGNUP_ERROR_COPY } from "@/components/onboarding/onboarding-types";
 
 // ---------------------------------------------------------------------------
 // Shared shapes (LOCAL to the client — the wire contracts all live in
@@ -44,22 +34,21 @@ import {
 /** field name -> the message to render under that field. */
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
-export type AccountField = "fullName" | "email" | "password";
-
 /**
- * `slug` is deliberately absent: the operator no longer picks a web address, so
- * there is no field to hang a slug message on. A slug problem is now always a
- * problem with the BUSINESS NAME it was derived from, and is reported there.
+ * One form now, so one field union.
+ *
+ * `companyName`, `slug` and `acceptedTerms` moved up from the deleted business
+ * step. `slug` has a field of its own again — the operator picks the address
+ * rather than having one derived from their trading name — so a SLUG_TAKEN can
+ * be reported against the input that caused it instead of being rewritten into
+ * a message about the business name.
  */
-export type BusinessField =
+export type AccountField =
+  | "fullName"
+  | "email"
+  | "password"
   | "companyName"
-  | "location"
-  | "businessPhone"
-  | "fleetSize"
-  | "vehicleType"
-  | "businessColours"
-  | "logoUrl"
-  | "schedule"
+  | "slug"
   | "acceptedTerms";
 
 /**
@@ -331,11 +320,14 @@ export function passwordStrength(password: string): PasswordStrength {
 // ---------------------------------------------------------------------------
 
 /**
- * Nobody types a slug any more — the business step dropped the web-address
- * field, and the subdomain is derived from the business name (here, and
- * authoritatively again on the server). What survives in this section is
- * exactly what that derivation needs: normalise, shape-check, reserved-check.
- * The keystroke-safe `sanitizeSlugInput` went with the input it existed for.
+ * The operator types this again. It is the single most consequential thing on
+ * the form — it becomes {slug}.drive-247.com AND {slug}.portal.drive-247.com,
+ * and nothing in the platform renames a tenant slug afterwards — so it gets its
+ * own input, live availability, and suggestions when it is taken.
+ *
+ * Three functions, three jobs: `sanitizeSlugInput` is safe to run on every
+ * keystroke, `normalizeSlugClient` produces the canonical form we send, and
+ * `checkSlugShape` decides whether that form is legal.
  */
 
 /**
@@ -350,6 +342,24 @@ export function normalizeSlugClient(raw: string): string {
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Keystroke-safe normalisation for the live input.
+ *
+ * Deliberately NOT `normalizeSlugClient`: that strips trailing hyphens, so
+ * typing "acme-" to get to "acme-rentals" would delete the hyphen the moment it
+ * was typed and the word could never be started. Runs of hyphens and leading
+ * ones are still collapsed — those are always mistakes — and the canonical form
+ * is applied on blur and again before anything is sent.
+ */
+export function sanitizeSlugInput(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, FIELD_MAX.slug);
 }
 
 /** The subdomain a business name produces. Mirrors the server's derivation. */
@@ -455,231 +465,106 @@ export function checkSlugShape(raw: string): SlugVerdict {
 }
 
 // ---------------------------------------------------------------------------
-// Phone / URL
-// ---------------------------------------------------------------------------
-
-/**
- * Digits plus an optional leading `+`. Identical to `normalizePhone` in
- * create-sales-onboarding/index.ts:142 — and, like it, we deliberately do NOT
- * guess a country code. A wrong prefix does not fail loudly; it silently breaks
- * every SMS and WhatsApp we send that tenant for the rest of their life.
- */
-export function normalizePhoneClient(raw: string): string {
-  const plus = raw.trim().startsWith("+") ? "+" : "";
-  return plus + raw.replace(/\D/g, "");
-}
-
-export function phoneDigitCount(raw: string): number {
-  return raw.replace(/\D/g, "").length;
-}
-
-/** Only http(s). A `javascript:` or `data:` "logo" must never reach an <img src>. */
-export function isHttpUrl(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Step 1 — account form
+// The one form
 // ---------------------------------------------------------------------------
 
 export interface AccountInput {
   fullName: string;
   email: string;
   password: string;
+  companyName: string;
+  slug: string;
+  acceptedTerms: boolean;
 }
 
-export function validateAccount(values: AccountInput): FieldErrors<AccountField> {
+/** Just the three tenant fields — what the Google path and `tenant` mode collect. */
+export type TenantInput = Pick<
+  AccountInput,
+  "companyName" | "slug" | "acceptedTerms"
+>;
+
+/**
+ * The tenant half, validated on its own.
+ *
+ * Availability is NOT checked here — that is a network round trip the step owns
+ * and debounces. This decides only whether the values are worth sending.
+ */
+export function validateTenant(values: TenantInput): FieldErrors<AccountField> {
   const errors: FieldErrors<AccountField> = {};
 
-  const fullName = values.fullName.trim();
-  if (fullName.length < 2) {
-    errors.fullName = "Please enter your full name.";
-  } else if (fullName.length > FIELD_MAX.fullName) {
-    errors.fullName = `Please keep your name to ${FIELD_MAX.fullName} characters or fewer.`;
-  }
-
-  const email = normalizeEmail(values.email);
-  if (!email) {
-    errors.email = "Please enter your work email address.";
-  } else if (!isValidEmail(email)) {
-    errors.email = SIGNUP_ERROR_COPY.EMAIL_INVALID;
-  } else if (isDisposableEmail(email)) {
-    errors.email = SIGNUP_ERROR_COPY.EMAIL_DISPOSABLE;
-  }
-
-  if (!isPasswordAcceptable(values.password)) {
-    errors.password = SIGNUP_ERROR_COPY.WEAK_PASSWORD;
-  }
-
-  return errors;
-}
-
-// ---------------------------------------------------------------------------
-// Step 3 — business form
-// ---------------------------------------------------------------------------
-
-/**
- * True when the schedule will produce usable opening-hours columns.
- *
- * The server's `scheduleToHourCols` returns null (and silently falls back to
- * platform defaults) when no day is ticked and 24/7 is off — so this is not a
- * hard server error, it is a quiet loss of the answer the user gave us. We
- * block it on the client instead, which is the only place it can be explained.
- */
-export function isScheduleUsable(schedule: OperatingScheduleDraft): boolean {
-  if (schedule.alwaysOpen) return true;
-  return schedule.days.length > 0;
-}
-
-/**
- * The number the operator typed, or null when the box does not hold a positive
- * whole number.
- *
- * The input already strips non-digits, so this mostly guards paste, autofill
- * and a resumed draft that still carries one of the old band strings
- * ("5–10 vehicles") from before the field became numeric.
- */
-export function parseFleetSize(raw: string): number | null {
-  const trimmed = raw.trim();
-  if (!/^\d+$/.test(trimmed)) return null;
-  const n = Number(trimmed);
-  return Number.isSafeInteger(n) && n > 0 ? n : null;
-}
-
-/**
- * True when no self-serve plan covers this fleet, so the answer is "call us".
- *
- * `catalogue` defaults to the hardcoded plans, but callers inside the signup
- * dialog pass the live one: an admin who raises a plan's `max_vehicles` moves
- * this boundary, and answering from a stale copy would send an operator to a
- * strategy call for a fleet the platform now sells to self-serve.
- */
-export function fleetNeedsSalesCall(
-  raw: string,
-  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
-): boolean {
-  const n = parseFleetSize(raw);
-  return n !== null && n > maxSelfServeVehicles(catalogue);
-}
-
-/**
- * The check the user actually asked for. It can only be written now that a plan
- * carries a single `maxVehicles` number — the old band dropdown had no boundary
- * in common with the plan bands, so there was nothing to compare.
- *
- * Every failure names a way forward: the plan that does fit, or the strategy
- * call for a fleet no plan covers. This step runs AFTER the card is charged, so
- * a message that only says "no" is a dead end.
- */
-export function validateFleetSize(
-  raw: string,
-  plan: SignupPlan,
-  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
-): string | undefined {
-  const count = parseFleetSize(raw);
-  if (count === null) return "Enter how many vehicles you run.";
-  if (count <= plan.maxVehicles) return undefined;
-
-  const fits = smallestPlanFor(count, catalogue);
-  if (!fits) {
-    // The link is rendered by the step — see `fleetNeedsSalesCall`. The
-    // sentence stays complete on its own so it still reads correctly to a
-    // screen reader that announces the text before reaching the link.
-    return `Fleets over ${maxSelfServeVehicles(catalogue)} vehicles are set up with our team.`;
-  }
-  return `${plan.name} covers up to ${plan.maxVehicles} vehicles. For ${count} you'll need ${fits.name}.`;
-}
-
-export function validateBusiness(
-  draft: BusinessDraft,
-  plan: SignupPlan,
-  catalogue: readonly SignupPlan[] = SIGNUP_PLANS,
-): FieldErrors<BusinessField> {
-  const errors: FieldErrors<BusinessField> = {};
-
-  const companyName = draft.companyName.trim();
+  const companyName = values.companyName.trim();
   if (companyName.length < 2) {
     errors.companyName = "Please enter your business name.";
   } else if (companyName.length > FIELD_MAX.companyName) {
     errors.companyName = `Please keep your business name to ${FIELD_MAX.companyName} characters or fewer.`;
-  } else {
-    // The web address is derived from this name now, so a name that cannot
-    // produce a legal DNS label is a problem with the NAME — and it has to be
-    // caught here. `onboarding-provider.tsx` re-checks the derived slug before
-    // it will start provisioning and refuses with SLUG_INVALID, which no longer
-    // has a field of its own to land on.
-    const derived = checkSlugShape(deriveSlugFromCompanyName(companyName));
-    if (!derived.ok) {
-      errors.companyName =
-        derived.problem === "reserved"
-          ? "That name maps to a web address we keep for ourselves. Please add a word to it."
-          : "We couldn't build a web address from that name. Please use at least three letters or numbers.";
-    }
   }
 
-  // Assigned only when it fails: callers count `Object.keys(errors)`, so
-  // writing `undefined` would leave a key behind and block submit forever.
-  const fleetError = validateFleetSize(draft.fleetSize, plan, catalogue);
-  if (fleetError) errors.fleetSize = fleetError;
+  // The address is its own field again, so a slug problem is reported against
+  // the slug — not rewritten into a message about the business name, which is
+  // what the previous derived-slug design had to do.
+  const verdict = checkSlugShape(values.slug);
+  if (!verdict.ok) errors.slug = verdict.message ?? SIGNUP_ERROR_COPY.SLUG_INVALID;
 
-  if (draft.location.trim().length > FIELD_MAX.location) {
-    errors.location = `Please keep this to ${FIELD_MAX.location} characters or fewer.`;
-  }
-
-  // Phone is optional; when supplied it must be dialable. 7–15 digits is the
-  // E.164 range the server enforces.
-  const phone = draft.businessPhone.trim();
-  if (phone) {
-    const digits = phoneDigitCount(phone);
-    if (digits < 7 || digits > 15 || phone.length > FIELD_MAX.phone) {
-      errors.businessPhone =
-        "Please enter a phone number with 7 to 15 digits, including your country code.";
-    }
-  }
-
-  if (draft.businessColours.trim().length > FIELD_MAX.colours) {
-    errors.businessColours = `Please keep this to ${FIELD_MAX.colours} characters or fewer.`;
-  }
-
-  const logoUrl = draft.logoUrl.trim();
-  if (logoUrl && (!isHttpUrl(logoUrl) || logoUrl.length > FIELD_MAX.url)) {
-    errors.logoUrl =
-      "Please use a full https:// link to an image, or leave this blank.";
-  }
-
-  if (!isScheduleUsable(draft.schedule)) {
-    errors.schedule = "Pick at least one day you're open, or tick Open 24/7.";
-  }
-
-  if (!draft.acceptedTerms) {
+  if (!values.acceptedTerms) {
     errors.acceptedTerms = SIGNUP_ERROR_COPY.TERMS_NOT_ACCEPTED;
   }
 
   return errors;
 }
 
-/** The order fields appear in, so "focus the first error" focuses the top one. */
-export const BUSINESS_FIELD_ORDER: readonly BusinessField[] = [
-  "companyName",
-  "location",
-  "businessPhone",
-  "fleetSize",
-  "vehicleType",
-  "schedule",
-  "businessColours",
-  "logoUrl",
-  "acceptedTerms",
-];
+/**
+ * The whole account step.
+ *
+ * `requireCredentials` is false on the Google path: the name, the address and
+ * the credential all come back from Google, so asking for them here would be
+ * asking for something we are about to throw away.
+ */
+export function validateAccount(
+  values: AccountInput,
+  { requireCredentials = true }: { requireCredentials?: boolean } = {},
+): FieldErrors<AccountField> {
+  const errors: FieldErrors<AccountField> = { ...validateTenant(values) };
 
+  if (requireCredentials) {
+    const fullName = values.fullName.trim();
+    if (fullName.length < 2) {
+      errors.fullName = "Please enter your full name.";
+    } else if (fullName.length > FIELD_MAX.fullName) {
+      errors.fullName = `Please keep your name to ${FIELD_MAX.fullName} characters or fewer.`;
+    }
+
+    const email = normalizeEmail(values.email);
+    if (!email) {
+      errors.email = "Please enter your work email address.";
+    } else if (!isValidEmail(email)) {
+      errors.email = SIGNUP_ERROR_COPY.EMAIL_INVALID;
+    } else if (isDisposableEmail(email)) {
+      errors.email = SIGNUP_ERROR_COPY.EMAIL_DISPOSABLE;
+    }
+
+    if (!isPasswordAcceptable(values.password)) {
+      errors.password = SIGNUP_ERROR_COPY.WEAK_PASSWORD;
+    }
+  }
+
+  return errors;
+}
+
+/** The order fields appear in, so "focus the first error" focuses the top one. */
 export const ACCOUNT_FIELD_ORDER: readonly AccountField[] = [
   "fullName",
   "email",
   "password",
+  "companyName",
+  "slug",
+  "acceptedTerms",
+];
+
+/** `tenant` mode renders a subset, so it needs its own order. */
+export const TENANT_FIELD_ORDER: readonly AccountField[] = [
+  "companyName",
+  "slug",
+  "acceptedTerms",
 ];
 
 /** First key of `errors` in display order, or null when there are none. */

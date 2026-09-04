@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Building2,
   CircleCheck,
   CreditCard,
   Info,
@@ -32,31 +31,38 @@ import {
   type SignupStep,
 } from "./onboarding-types";
 import { AccountStep, type ResetShellState } from "./steps/account-step";
-import { BusinessStep } from "./steps/business-step";
 import { PaymentStep } from "./steps/payment-step";
 
 /**
- * One form id per step. The footer holds the single primary action for all
- * three steps and submits the active step's form by id, which is the only way
- * to keep `useStripe()`/`useElements()` inside `<Elements>` while the button
- * that triggers them lives outside it.
+ * One form id per step. The footer holds the single primary action for both
+ * steps and submits the active step's form by id, which is the only way to keep
+ * `useStripe()`/`useElements()` inside `<Elements>` while the button that
+ * triggers them lives outside it.
  */
-const FORM_IDS: Record<"account" | "payment" | "business", string> = {
+const FORM_IDS: Record<"account" | "payment", string> = {
   account: "signup-account-form",
   payment: "signup-payment-form",
-  business: "signup-business-form",
 };
 
+/**
+ * Two steps, not three.
+ *
+ * The "Business" step is gone: the business name, the web address and the terms
+ * are collected on Account, before the card, and everything else it used to ask
+ * for is collected by the portal's first-run wizard afterwards. What the visitor
+ * sees is now "details, pay, done" — and `provisioning` and `done` are not in
+ * this list because they are owned by the full-screen boot overlay, not by the
+ * dialog.
+ */
 const STEP_META = [
   { key: "account", label: "Account", Icon: UserRound },
   { key: "payment", label: "Payment", Icon: CreditCard },
-  { key: "business", label: "Business", Icon: Building2 },
 ] as const;
 
 type DialogStep = (typeof STEP_META)[number]["key"];
 
 function isDialogStep(step: SignupStep): step is DialogStep {
-  return step === "account" || step === "payment" || step === "business";
+  return step === "account" || step === "payment";
 }
 
 /**
@@ -95,12 +101,14 @@ export function OnboardingDialog() {
     signInInstead,
     startPayment,
     markPaid,
+    submitTenantDetails,
+    startGoogleSignup,
     updateBusiness,
     checkSlug,
-    submitBusiness,
     setError,
   } = useOnboarding();
-  const { resolving, planSwitchBlocked } = useOnboardingShell();
+  const { resolving, planSwitchBlocked, accountMode, googleEnabled } =
+    useOnboardingShell();
 
   const keepGoingRef = useRef<HTMLButtonElement>(null);
 
@@ -191,25 +199,19 @@ export function OnboardingDialog() {
         icon: "info",
       });
     }
-    if (step === "business" && plan) {
-      out.push(
-        state.payment.paid
-          ? {
-              key: "paid",
-              text: `Your ${plan.name} subscription is active. Finish setting up your portal below.`,
-              icon: "info",
-            }
-          : {
-              // Reached only when the PaymentIntent came back `processing` — an
-              // async method that Stripe has accepted but not yet settled.
-              key: "processing",
-              text: "Your payment is going through. You can carry on setting up.",
-              icon: "info",
-            },
-      );
+    // `tenant` mode is only ever reached after payment, so the notice is about
+    // reassuring someone who has already been charged that nothing was lost.
+    if (step === "account" && accountMode === "tenant" && !state.payment.paid) {
+      out.push({
+        // Reached when the PaymentIntent came back `processing` — an async
+        // method that Stripe has accepted but not yet settled.
+        key: "processing",
+        text: "Your payment is going through. You can carry on setting up.",
+        icon: "info",
+      });
     }
     return out;
-  }, [state.resumed, state.payment.paid, planSwitchBlocked, plan, step]);
+  }, [state.resumed, state.payment.paid, planSwitchBlocked, plan, step, accountMode]);
 
   if (!plan || !dialogStep) return null;
 
@@ -217,10 +219,10 @@ export function OnboardingDialog() {
     dialogStep === "account"
       ? state.signInPrompt
         ? { label: "Continue", busyLabel: "Signing in…" }
-        : { label: "Create account", busyLabel: "Creating account…" }
-      : dialogStep === "payment"
-        ? { label: `Pay $${plan.priceUsd} and continue`, busyLabel: "Processing payment…" }
-        : { label: "Complete setup", busyLabel: "Setting up…" };
+        : accountMode === "tenant"
+          ? { label: "Build my portal", busyLabel: "Setting up…" }
+          : { label: "Continue to payment", busyLabel: "Creating account…" }
+      : { label: `Pay $${plan.priceUsd} and continue`, busyLabel: "Processing payment…" };
 
   // Steps that hand the user a different set of buttons inside the body own the
   // whole decision — a footer "Create account" next to "Use a different email"
@@ -317,9 +319,8 @@ export function OnboardingDialog() {
                 <TriangleAlert className="mx-auto h-5 w-5 text-amber-600 dark:text-amber-400" />
                 <h3 className="mt-3 text-base font-semibold tracking-tight">Leave setup?</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                  {step === "payment"
-                    ? "Your account is saved. You can come back to drive-247.com and pick up right here — nothing has been charged yet."
-                    : "Your payment is complete and your account is saved. Come back to drive-247.com any time to finish setting up your portal."}
+                  Your account is saved. You can come back to drive-247.com and
+                  pick up right here — nothing has been charged yet.
                 </p>
               </div>
             ) : null}
@@ -373,14 +374,21 @@ export function OnboardingDialog() {
                   {dialogStep === "account" ? (
                     <AccountStep
                       plan={plan}
+                      mode={accountMode}
                       initialValues={{
                         fullName: state.account?.fullName ?? "",
                         email: state.account?.email ?? state.signInPrompt?.email ?? "",
                       }}
+                      tenant={state.business}
+                      onTenantChange={updateBusiness}
                       signInPrompt={state.signInPrompt}
                       busy={state.busy}
                       error={state.error}
+                      googleEnabled={googleEnabled}
                       onSubmit={(values) => void submitAccount(values)}
+                      onSubmitTenant={(values) => void submitTenantDetails(values)}
+                      onGoogle={(values) => void startGoogleSignup(values)}
+                      onCheckSlug={checkSlug}
                       onSignIn={(values) => void signInExisting(values)}
                       onUseDifferentEmail={useDifferentEmail}
                       onSignInInstead={signInInstead}
@@ -403,17 +411,6 @@ export function OnboardingDialog() {
                     />
                   ) : null}
 
-                  {dialogStep === "business" ? (
-                    <BusinessStep
-                      plan={plan}
-                      value={state.business}
-                      busy={state.busy}
-                      error={state.error}
-                      onChange={updateBusiness}
-                      onCheckSlug={checkSlug}
-                      onSubmit={() => void submitBusiness()}
-                    />
-                  ) : null}
                 </div>
               )}
             </div>
