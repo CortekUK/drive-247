@@ -224,7 +224,12 @@ const TURO_LABEL = {
   challenge:     "Turo is showing a security check",
   unreachable:   "Could not reach Turo",
   no_vehicles:   "Signed in, but no vehicles found",
-  unreadable:    "Turo answered in a shape we do not recognise",
+  /* THE CATCH-ALL, and it leads with the fix that usually works. A signed-out
+     turo.com does not reliably answer /api/vehicles/me with a clean 401 — it
+     can return a login page, or JSON in a shape the reader has never seen,
+     and both land here. Telling someone the extension is broken when they are
+     simply signed out sends them to support instead of to a login form. */
+  unreadable:    "Check you are signed in to turo.com as the host — if you are, this extension may need an update",
 };
 
 /**
@@ -283,6 +288,12 @@ function paintSyncGate() {
   const ready = turoOk && d247Ok;
 
   els.syncAll.disabled = !ready || els.syncAll.dataset.busy === "1";
+  /* THE SECOND BUTTON OBEYS THE SAME RULE. "Sync one reservation" writes to
+     Drive247 from Turo exactly as the full sync does, only less of it, so a
+     gate that stops one and not the other is not a gate — it is a speed bump
+     with a way round it. It was sitting enabled underneath a disabled primary
+     button and a note explaining why syncing was unavailable. */
+  els.sync.disabled = !ready || els.sync.dataset.busy === "1";
 
   if (ready) {
     els.syncGate.hidden = true;
@@ -497,9 +508,12 @@ function setBusyAll(busy) {
   paintSyncGate();
 }
 function setBusyOne(busy) {
-  els.sync.disabled = busy;
+  // Same two-reasons-to-be-disabled split as setBusyAll: a run in flight, and a
+  // missing connection. paintSyncGate() owns the second.
+  els.sync.dataset.busy = busy ? "1" : "";
   els.spinner.hidden = !busy;
   els.syncLabel.textContent = busy ? "Syncing…" : "Sync one reservation";
+  paintSyncGate();
 }
 
 // ============================================================ live updates ==

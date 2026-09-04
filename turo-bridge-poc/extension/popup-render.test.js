@@ -595,6 +595,7 @@ async function main() {
       ok("...naming the tenant, not an id", /Acme Rentals/.test(text(doc, "connD247Detail")), text(doc, "connD247Detail"));
       ok("...and Turo proves it with the fleet it read", /3 vehicles/.test(text(doc, "connTuroDetail")), text(doc, "connTuroDetail"));
       eq("the sync button is available", doc.getElementById("syncAll").disabled, false);
+      eq("...and so is the single-reservation one", doc.getElementById("sync").disabled, false);
       ok("and nothing explains a block that is not there", doc.getElementById("syncGate").hidden);
       eq("the button names the direction", text(doc, "syncAllLabel"), "Sync Turo to Drive247");
     }
@@ -608,6 +609,11 @@ async function main() {
          good Drive247 sign-in look broken. */
       eq("Drive247 is untouched by it", doc.getElementById("connD247").dataset.state, "on");
       eq("the sync button is shut", doc.getElementById("syncAll").disabled, true);
+      /* BOTH BUTTONS, OR IT IS NOT A GATE. "Sync one reservation" writes to
+         Drive247 from Turo exactly as the full sync does, only less of it. It
+         shipped enabled underneath a disabled primary and a note explaining
+         that syncing was unavailable — a speed bump with a way round it. */
+      eq("...and so is the single-reservation one", doc.getElementById("sync").disabled, true);
       const note = text(doc, "syncGate");
       ok("and it says WHICH half is missing", /Connect Turo/i.test(note), note);
       ok("...while confirming the other is fine", /Drive247 account is ready/i.test(note), note);
@@ -636,6 +642,42 @@ async function main() {
          twice. */
       ok("it names both", /Connect Turo and sign in to Drive247/i.test(note), note);
     }
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA host with no vehicles is not a parser failure");
+  {
+    /* readVehicles() goes through the same readPage() as everything else, so an
+       empty fleet comes back as EMPTY_UNCONFIRMED. That was landing in the
+       catch-all and telling operators the extension did not understand Turo,
+       when it had understood perfectly and there were no cars. */
+    const { doc } = renderInPopup(null, null, {
+      auth: SIGNED_IN,
+      turo: { connected: false, reason: "no_vehicles", outcome: "EMPTY_UNCONFIRMED" },
+    });
+    await tick(40);
+    const detail = text(doc, "connTuroDetail");
+    ok("it says there were no vehicles", /no vehicles/i.test(detail), detail);
+    ok("...and does not blame the extension", !/do not recognise|does not recognise|needs? an update/i.test(detail), detail);
+    /* The parser's own verdict is for the console and storage, never the row. */
+    ok("the reader's outcome never reaches the screen", !/EMPTY_UNCONFIRMED/.test(doc.body.textContent));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe catch-all leads with the fix that usually works");
+  {
+    const { doc } = renderInPopup(null, null, {
+      auth: SIGNED_IN,
+      turo: { connected: false, reason: "unreadable", outcome: "UNKNOWN" },
+    });
+    await tick(40);
+    const detail = text(doc, "connTuroDetail");
+    /* A signed-out turo.com does not reliably answer with a clean 401 — it can
+       return a login page, which lands here. Leading with "the extension is
+       broken" sends someone to support instead of to a login form. */
+    ok("it suggests signing in to Turo first", /signed in to turo\.com/i.test(detail), detail);
+    ok("...and only then admits it may be our problem", /may need an update/i.test(detail), detail);
+    ok("no parser vocabulary leaks", !/UNKNOWN|UNPARSEABLE|SHAPE_CHANGED/.test(doc.body.textContent));
   }
 
   // ------------------------------------------------------------------

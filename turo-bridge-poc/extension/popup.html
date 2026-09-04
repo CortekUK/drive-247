@@ -217,7 +217,9 @@
     <hr class="rule">
 
     <!-- ==================================== the original one-click demo == -->
-    <button type="button" class="secondary" id="sync">
+    <!-- Starts disabled for the same reason the primary does: it writes to
+         Drive247 from Turo too, just less of it. paintSyncGate() opens both. -->
+    <button type="button" class="secondary" id="sync" disabled>
       <span class="spinner" id="spinner" hidden></span>
       <span id="syncLabel">Sync one reservation</span>
     </button>

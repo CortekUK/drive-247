@@ -755,17 +755,11 @@ async function findTuroTab() {
   }
 }
 
-/* What the popup is told, and the only vocabulary it renders. Kept here so the
-   sentences live next to the conditions that produce them. */
-const TURO_REASONS = {
-  no_tab:      "Open turo.com in a tab and sign in as the host.",
-  not_signed_in: "You are not signed in to Turo. Open turo.com and sign in as the host.",
-  challenge:   "Turo is showing a security check. Open turo.com, clear it, then check again.",
-  unreachable: "Could not reach Turo just now. Check your connection and try again.",
-  no_vehicles: "Signed in to Turo, but no vehicles were found on this account. Check you are signed in as the host.",
-  unreadable:  "Turo answered in a shape this extension does not recognise. It may need an update.",
-  ok:          null,
-};
+/* The tenant-facing sentences live in popup.js (TURO_LABEL), next to the
+   element that renders them. A second copy lived here briefly and was never
+   read — two sets of words for one condition is exactly how a UI ends up
+   saying something the code stopped meaning. This side owns the REASON
+   CODES only; the popup owns how they read. */
 
 /**
  * Is the operator's Turo session usable right now?
@@ -794,14 +788,26 @@ async function probeTuroStatus() {
   }
 
   if (read.outcome !== R.OUTCOME.OK) {
-    /* Map the reader's vocabulary onto the four things a person can DO about
-       it. The full taxonomy belongs in the run panel, not in a status line. */
+    /* Map the reader's vocabulary onto the handful of things a person can DO
+       about it. The full taxonomy belongs in the run panel, not a status line.
+
+       EMPTY_UNCONFIRMED IS NOT A FAILURE TO READ. readVehicles() goes through
+       the same readPage() as everything else, and an empty container comes back
+       as EMPTY_UNCONFIRMED — so a host account with no vehicles listed was
+       landing in the catch-all and being told the extension did not understand
+       Turo. It understood perfectly; there were no cars. */
     const reason =
       read.outcome === R.OUTCOME.NOT_LOGGED_IN ? "not_signed_in" :
       read.outcome === R.OUTCOME.BOT_BLOCKED ? "challenge" :
       read.outcome === R.OUTCOME.UNREACHABLE || read.outcome === R.OUTCOME.RATE_LIMITED ? "unreachable" :
+      read.outcome === R.OUTCOME.EMPTY_UNCONFIRMED || read.outcome === R.OUTCOME.NO_TRIPS ? "no_vehicles" :
       "unreadable";
-    return await writeTuroStatus({ connected: false, reason });
+    /* The reader's own verdict, kept for whoever has to diagnose this. It goes
+       to the console and into storage, NEVER onto the tenant's screen — the
+       status line says what to do, not what the parser thought. */
+    console.warn("[TuroBridge] Turo probe: " + read.outcome + " -> " + reason +
+      (read.message ? " (" + read.message + ")" : ""));
+    return await writeTuroStatus({ connected: false, reason, outcome: read.outcome });
   }
 
   /* THE SAME JUDGEMENT THE SYNC USES. buildSessionProbe refuses to call a

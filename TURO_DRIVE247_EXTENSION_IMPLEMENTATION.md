@@ -290,6 +290,18 @@ Six outcomes, each with its own instruction:
 | `challenge` | Turo is showing a security check |
 | `unreachable` | Could not reach Turo |
 | `no_vehicles` | Signed in, but no vehicles found |
+| `unreadable` | Check you are signed in to turo.com as the host — if you are, this extension may need an update |
+
+`readVehicles()` goes through the same `readPage()` as everything else, so an
+empty fleet returns `EMPTY_UNCONFIRMED` — that maps to `no_vehicles`, not to the
+catch-all, because "there were no cars" and "the parser failed" are different
+things to tell someone. The catch-all leads with *signed in to turo.com?* rather
+than *the extension is broken*, since a signed-out turo.com does not reliably
+answer with a clean 401 and often returns a login page instead.
+
+The reader's own outcome (`EMPTY_UNCONFIRMED`, `UNKNOWN`, …) goes to the console
+and into storage for diagnosis, and **never onto the screen** — the row says what
+to do, not what the parser thought. Tests assert both.
 
 A test asserts each renders a **distinct** sentence and that **none of them
 mentions Drive247** — telling someone to sign into the portal again because
@@ -303,6 +315,10 @@ underneath names the missing one:
 - neither → "Connect Turo and sign in to Drive247 to sync."
 - Turo missing → "Connect Turo to sync. Your Drive247 account is ready."
 - Drive247 missing → "Sign in to Drive247 to sync. Your Turo session is ready."
+
+**Both sync buttons obey it**, not just the primary one. "Sync one reservation"
+writes to Drive247 from Turo exactly as the full sync does, only less of it, so a
+gate that stops one and not the other is a speed bump with a way round it.
 
 Naming one half when both are missing sends someone round the loop twice, so
 that case has its own sentence. The button has two independent reasons to be
@@ -816,7 +832,7 @@ The US and GB Turo builds differ structurally; the reader carries both and repor
 # Extension — four suites, no browser and no Turo account required
 node turo-bridge-poc/extension/auth.test.js                     # 144 assertions
 node turo-bridge-poc/extension/background-orchestrator.test.js  # 125 assertions
-node turo-bridge-poc/extension/popup-render.test.js             # 142 assertions (needs jsdom)
+node turo-bridge-poc/extension/popup-render.test.js             # 150 assertions (needs jsdom)
 node turo-bridge-poc/extension/turo-read-contract.test.js       # ALL PASS
 node turo-bridge-poc/extension/rls-app-users.test.js            # 19 static pass;
                                                                 # 9 live checks FAIL
@@ -881,6 +897,9 @@ Automated coverage is noted per row. Rows marked *manual* need a live Supabase p
 | 35c | Drive247 missing | Button shut; note names Drive247 and confirms Turo is fine | `popup-render.test.js` |
 | 35d | Neither | Button shut; one note naming both | `popup-render.test.js` |
 | 35e | Each Turo failure | 5 reasons, 5 distinct sentences, none mentioning Drive247 | `popup-render.test.js` |
+| 35f | Both sync buttons gated | "Sync one reservation" is disabled with the primary, not just alongside it | `popup-render.test.js` |
+| 35g | Empty fleet | `EMPTY_UNCONFIRMED` reads as "no vehicles", never as a parser failure | `popup-render.test.js` |
+| 35h | Catch-all wording | Leads with "signed in to turo.com?"; no parser vocabulary on screen | `popup-render.test.js` |
 | 35 | Cross-tenant read blocked | Tenant B gets zero rows for tenant A, by `tenant_id` and by `auth_user_id` | `rls-app-users.test.js` — *needs `D247_TEST_B_*`* |
 
 **Manual, against a live project:**
