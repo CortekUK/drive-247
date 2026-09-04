@@ -23,11 +23,9 @@ import {
   Megaphone,
   MessageSquareText,
   Sparkles,
-  ShieldCheck,
   AlertTriangle,
   TrendingUp,
   Activity,
-  HeartPulse,
   BookOpen,
 } from 'lucide-react';
 
@@ -70,8 +68,6 @@ function useNavigation() {
       label: 'Monitoring',
       items: [
         { name: 'Platform Rentals', href: '/admin/platform-rentals', icon: Activity },
-        { name: 'Tenant Readiness', href: '/admin/readiness', icon: ShieldCheck },
-        { name: 'Health Score', href: '/admin/health-score', icon: HeartPulse },
       ],
     },
     {

@@ -363,8 +363,9 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true);
   const [filtersLoading, setFiltersLoading] = useState(true);
 
-  // Health Score deep-links here for investigation. Read after mount to avoid
-  // coupling this client page to Next's static useSearchParams boundary.
+  // A ?tenant_id= query param deep-links here for investigation. Read after
+  // mount to avoid coupling this client page to Next's static
+  // useSearchParams boundary.
   useEffect(() => {
     const tenantId = new URLSearchParams(window.location.search).get('tenant_id');
     if (tenantId) setTenantFilter(tenantId);

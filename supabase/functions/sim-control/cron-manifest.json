@@ -21,6 +21,5 @@
   "process-accounting-sync":        { "kind": "fn",  "path": "process-accounting-sync",        "cronJobName": "process-accounting-sync",               "schedule": "*/2 * * * *",  "authType": "service", "expectedRef": "hviqoaokxvlancmftwuo" },
   "process-backfill-jobs":          { "kind": "fn",  "path": "process-backfill-jobs",          "cronJobName": "process-backfill-jobs",                 "schedule": "* * * * *",    "authType": "service", "expectedRef": "hviqoaokxvlancmftwuo" },
   "sync-vehicle-maintenance":       { "kind": "sql", "rpc": "sync_vehicle_maintenance_status", "cronJobName": "sync-vehicle-maintenance",              "schedule": "0 1 * * *",                          "expectedRef": "hviqoaokxvlancmftwuo" },
-  "onboarding-daily-digest":        { "kind": "fn",  "path": "onboarding-daily-digest",        "cronJobName": "onboarding-daily-digest",               "schedule": "0 6 * * *",    "authType": "platform-secret", "expectedRef": "hviqoaokxvlancmftwuo" },
-  "evaluate-health-scores":         { "kind": "fn",  "path": "evaluate-health-scores",         "cronJobName": "evaluate-health-scores",                "schedule": "30 6 * * *",   "authType": "platform-secret", "expectedRef": "hviqoaokxvlancmftwuo" }
+  "onboarding-daily-digest":        { "kind": "fn",  "path": "onboarding-daily-digest",        "cronJobName": "onboarding-daily-digest",               "schedule": "0 6 * * *",    "authType": "platform-secret", "expectedRef": "hviqoaokxvlancmftwuo" }
 }

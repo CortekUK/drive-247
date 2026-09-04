@@ -253,6 +253,12 @@ export function edgeFunctionHashes() {
   for (const f of files) {
     const m = f.match(/^supabase\/functions\/([^/]+)\//);
     if (!m) continue;
+    // A file git still tracks but that is gone from the working tree is a
+    // DELETION in progress. Skip it rather than readFileSync-ing it: a
+    // function deleted wholesale then has no entry here, which is exactly
+    // what check.mjs already reports as `edge function removed`. Without
+    // this guard the guardrail crashed with ENOENT instead of reporting.
+    if (!existsSync(join(REPO, f))) continue;
     (perFn[m[1]] ||= []).push(f);
   }
   const out = {};
