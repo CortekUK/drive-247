@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useBonzahBalance, getBonzahPortalUrl } from "@/hooks/use-bonzah-balance";
@@ -49,7 +50,11 @@ export interface PlatformStatus {
 }
 
 export function usePlatformStatus(): PlatformStatus {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  // The two CMD rows below are "coming soon" teasers for CheckMyDriver, which
+  // the lean product does not carry. Dropped from the canary's checklist only;
+  // every other tenant still sees them. Fails OPEN on an unresolved slug.
+  const cmdHidden = isAreaHidden("cmd", tenantSlug);
   const {
     isSubscribed,
     isTrialing,
@@ -248,6 +253,32 @@ export function usePlatformStatus(): PlatformStatus {
       comingSoon: true,
       icon: "twilio",
     },
+    ...(cmdHidden
+      ? []
+      : [
+          {
+            id: "cmd-driver-verification",
+            label: "CMD Driver Verification",
+            description: "Automated driver licence & identity checks",
+            isComplete: false,
+            actionLabel: "Learn more",
+            actionPath: "/settings?tab=requirements",
+            priority: 22,
+            comingSoon: true,
+            icon: "cmd-driver",
+          },
+          {
+            id: "cmd-insurance-verification",
+            label: "CMD Insurance Verification",
+            description: "Automated motor insurance validation",
+            isComplete: false,
+            actionLabel: "Learn more",
+            actionPath: "/settings?tab=insurance",
+            priority: 23,
+            comingSoon: true,
+            icon: "cmd-insurance",
+          },
+        ]),
   ];
 
   const activeItems = checklist.filter((i) => !i.comingSoon);

@@ -13,6 +13,8 @@
 // comment there.
 
 import { type ComponentType, useState } from "react";
+import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { Card, CardContent, CardTitle } from "@/components/ui-v2/card";
 import { Badge } from "@/components/ui-v2/badge";
 import { Button } from "@/components/ui-v2/button";
@@ -85,6 +87,17 @@ function IntegrationLogo({ it, size }: { it: Integration; size: number }) {
 }
 
 export function IntegrationsBoard() {
+  // CheckMyDriver is not part of the lean product, so the canary is not offered
+  // the card. The entry stays in `integrations` above and keeps rendering for
+  // everyone else — only what a lean tenant SEES changes. Fails OPEN on an
+  // unresolved slug (see isAreaHidden), so a null slug on first paint shows the
+  // full board rather than silently dropping a card from every tenant.
+  const { tenantSlug } = useTenant();
+  const cmdHidden = isAreaHidden("cmd", tenantSlug);
+  const visibleIntegrations = cmdHidden
+    ? integrations.filter((i) => i.name !== "CheckMyDriver")
+    : integrations;
+
   const [selected, setSelected] = useState<Integration | null>(null);
   const [connectedMap, setConnectedMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(integrations.map((i) => [i.name, i.connected]))
@@ -104,7 +117,7 @@ export function IntegrationsBoard() {
 
       {/* Grid */}
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
-        {integrations.map((it) => (
+        {visibleIntegrations.map((it) => (
           <Card
             key={it.name}
             onClick={() => setSelected(it)}
