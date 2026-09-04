@@ -86,6 +86,7 @@ import { AdditionalDriversCard } from "@/components/rentals/additional-drivers-c
 import { useRentalInsurancePolicies } from "@/hooks/use-rental-insurance-policies";
 import { useRentalExtensionTotals } from "@/hooks/use-rental-extension-totals";
 import { InsuranceTimeline } from "@/components/rentals/InsuranceTimeline";
+import { InshurCoverageBlock } from "@/components/rentals/inshur-coverage-block";
 import { RentalInsuranceVerificationsCard } from "@/components/insurance/rental-insurance-verifications-card";
 import { AddReminderDialog } from "@/components/reminders/add-reminder-dialog";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
@@ -540,6 +541,11 @@ const RentalDetail = () => {
   // already — the canary has no Tesla vehicles, so none of this would render for
   // it anyway — but gated explicitly so the predicate is the same everywhere.
   const teslaHidden = isAreaHidden('tesla', tenantSlug);
+  // INSHUR Period Z is hidden from the lean canary and that tenant alone. This
+  // one is NOT data-driven: InshurCoverageBlock deliberately explains its own
+  // absence when the integration is off, so without this gate the canary would
+  // see an INSHUR card on every rental telling it to go and configure INSHUR.
+  const inshurHidden = isAreaHidden('inshur', tenantSlug);
   // Renew opens /rentals/new, so it is a rental-creation entry point too.
   // Lean tenants only; a constant false for everyone else.
   const { blocked: rentalCreationBlocked } = useRentalCreationGate();
@@ -6056,6 +6062,12 @@ const RentalDetail = () => {
           }}
           onUploadExtensionInsuranceFor={(extId) => uploadInsuranceDoc({ extensionId: extId })}
         />
+      )}
+
+      {/* INSHUR Period Z — per-rental liability cover. Renders nothing unless the
+          tenant has the integration on; it explains its own absence otherwise. */}
+      {!inshurHidden && (
+        <InshurCoverageBlock rentalId={id} rental={rental} canEdit={canEdit('rentals')} />
       )}
 
       {/* AI-verified insurance documents attached to this rental */}

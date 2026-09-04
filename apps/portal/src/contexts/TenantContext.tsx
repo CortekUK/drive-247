@@ -37,6 +37,16 @@ interface Tenant {
   // select cannot lock the login page out the way an ungranted column would.
   payment_provider: 'stripe' | 'square' | null;
   subscription_stripe_mode: 'test' | 'live' | null;
+  integration_inshur: boolean | null;
+  inshur_mode: 'mock' | 'test' | 'live' | null;
+  inshur_customer_number: string | null;
+  inshur_policy_number: string | null;
+  inshur_states_allowed: string[] | null;
+  inshur_states_synced_at: string | null;
+  inshur_billing_mode: 'host_absorbs' | 'renter_pays' | null;
+  // Credentials (inshur_username / inshur_password / inshur_2fa_token) are
+  // deliberately NOT loaded here. This context is read by every page; the
+  // Settings panel and useInshur() fetch what they need on their own.
   timezone: string | null;
   currency_code: string | null;
   distance_unit: 'km' | 'miles' | null;
@@ -141,6 +151,32 @@ const TENANT_MINIMAL_COLUMNS =
 
 const TENANT_OPTIONAL_COLUMNS =
   'contact_email, phone, admin_name, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, integration_twilio_sms, twilio_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled';
+
+/**
+ * INSHUR / Period Z, in a tier of its OWN — deliberately not folded into
+ * OPTIONAL, and this is measured rather than defensive.
+ *
+ * On production `anon` holds column-level SELECT on 242 columns of `tenants`
+ * and on NONE of the 11 inshur_* ones; `authenticated` holds all 11. This
+ * provider runs on the login page with the anon key, and an ungranted column
+ * makes Postgres refuse the ENTIRE row — so a select that names these columns
+ * always fails before a session exists.
+ *
+ * Folding them into OPTIONAL would therefore make the first attempt fail on
+ * every login and drop the tenant straight to MINIMAL, costing all ~45 OPTIONAL
+ * fields that anon CAN read. Its own tier keeps the failure proportional: lose
+ * the INSHUR columns, keep everything else.
+ *
+ * The ladder is MINIMAL+OPTIONAL+INSHUR, then MINIMAL+OPTIONAL, then MINIMAL —
+ * each rung a strict subset of the one above it, which is what makes a retry a
+ * safety net rather than a re-run of the query that just failed.
+ *
+ * Credentials (inshur_username / inshur_password / inshur_2fa_token) are NOT
+ * here. This context is read by every page; the Settings panel and useInshur()
+ * fetch those themselves, under an authenticated session.
+ */
+const TENANT_INSHUR_COLUMNS =
+  'integration_inshur, inshur_mode, inshur_customer_number, inshur_policy_number, inshur_states_allowed, inshur_states_synced_at, inshur_billing_mode';
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
@@ -277,13 +313,28 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           .single();
 
       let { data, error: queryError } = await queryTenant(
-        `${TENANT_MINIMAL_COLUMNS}, ${TENANT_OPTIONAL_COLUMNS}`
+        `${TENANT_MINIMAL_COLUMNS}, ${TENANT_OPTIONAL_COLUMNS}, ${TENANT_INSHUR_COLUMNS}`
       );
 
-      // See the tier comment above: one ungranted column makes Postgres refuse
-      // the whole row, which would otherwise hang every tenant's login page on a
-      // spinner. Fall back to the columns login and branding actually need, so a
-      // missing GRANT costs a degraded dashboard rather than the door.
+      // Rung 2: drop the INSHUR tier. anon has no grant on those columns, so
+      // this is the EXPECTED path on the login page — not an error condition.
+      // Logged at debug rather than warn so it does not read as a fault.
+      if (queryError && queryError.code !== 'PGRST116') {
+        console.debug(
+          '[TenantContext] Tenant select failed with the INSHUR columns; ' +
+            'retrying without them. Expected before a session exists — anon ' +
+            'holds no grant on them. Cause:',
+          queryError.message
+        );
+        ({ data, error: queryError } = await queryTenant(
+          `${TENANT_MINIMAL_COLUMNS}, ${TENANT_OPTIONAL_COLUMNS}`
+        ));
+      }
+
+      // Rung 3: one ungranted column makes Postgres refuse the whole row, which
+      // would otherwise hang every tenant's login page on a spinner. Fall back to
+      // the columns login and branding actually need, so a missing GRANT costs a
+      // degraded dashboard rather than the door.
       if (queryError && queryError.code !== 'PGRST116') {
         console.warn(
           '[TenantContext] Full tenant select failed; retrying with the minimal ' +

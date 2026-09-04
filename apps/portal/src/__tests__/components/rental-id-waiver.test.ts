@@ -278,4 +278,39 @@ describe('the flag reaches the page that needs it', () => {
       expect(minimal).toContain(required);
     }
   });
+
+  it('keeps INSHUR in a tier of its own, because anon has no grant on those columns', () => {
+    // Measured on production: `anon` holds column-level SELECT on 242 columns of
+    // `tenants` and on NONE of the 11 inshur_* ones, while `authenticated` holds
+    // all 11. This provider runs on the login page with the anon key, and one
+    // ungranted column makes Postgres refuse the WHOLE row.
+    //
+    // So the INSHUR columns must never be merged into OPTIONAL: doing so makes
+    // the first attempt fail on every single login and drops the tenant to
+    // MINIMAL, costing all ~45 OPTIONAL fields anon can actually read. Its own
+    // rung keeps the failure proportional — lose INSHUR, keep the rest.
+    const cols = (decl: string) =>
+      liftDeclaration(tenantContext, decl)
+        .slice(liftDeclaration(tenantContext, decl).indexOf("'") + 1)
+        .replace(/'[\s\S]*$/, '')
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
+
+    const minimal = cols('TENANT_MINIMAL_COLUMNS');
+    const optional = cols('TENANT_OPTIONAL_COLUMNS');
+    const inshur = cols('TENANT_INSHUR_COLUMNS');
+
+    expect(inshur.length).toBeGreaterThan(0);
+    expect(inshur).toContain('integration_inshur');
+    // Disjoint from both other tiers, so each retry rung is a strict subset.
+    expect(inshur.filter((c) => optional.includes(c))).toEqual([]);
+    expect(inshur.filter((c) => minimal.includes(c))).toEqual([]);
+    // The waiver flag rides in OPTIONAL, so dropping INSHUR must not drop it.
+    expect(inshur).not.toContain('allow_rental_without_id_verification');
+    // Credentials are fetched under an authenticated session, never here.
+    for (const secret of ['inshur_username', 'inshur_password', 'inshur_2fa_token']) {
+      expect(inshur).not.toContain(secret);
+    }
+  });
 });

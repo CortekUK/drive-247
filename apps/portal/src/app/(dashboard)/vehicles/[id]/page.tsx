@@ -47,6 +47,7 @@ import { VehicleDailyPricingCalendar } from "@/components/vehicles/vehicle-daily
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { TraxIcon } from "@/components/chat/TraxIcon";
 import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-panel";
+import { InshurEligibilityCard, useInshurEligibilityConfig } from "@/components/vehicles/inshur-eligibility-badge";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { isAreaHidden } from "@/lib/lean-areas";
 import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange } from "lucide-react";
@@ -157,6 +158,8 @@ interface Vehicle {
   description?: string;
   // VIN field
   vin?: string;
+  // US state the vehicle is garaged in — required on every INSHUR rental period
+  garaging_state?: string | null;
   // Tesla Fleet API
   tesla_fleet_enabled?: boolean;
   tesla_fleet_vehicle_id?: string;
@@ -323,6 +326,10 @@ export default function VehicleDetail() {
   const queryClient = useQueryClient();
   const { settings: rentalSettings } = useRentalSettings();
   const { canEdit } = useManagerPermissions();
+  const inshurConfig = useInshurEligibilityConfig();
+  // INSHUR Period Z, hidden from the lean canary and that tenant alone. The
+  // hook, the eligibility cache and vehicles.garaging_state are untouched.
+  const inshurHidden = isAreaHidden('inshur', tenantSlug);
   const distanceUnit = (tenant?.distance_unit || 'miles') as DistanceUnit;
   const currencyCode = tenant?.currency_code || 'USD';
   const [showAddFineDialog, setShowAddFineDialog] = useState(false);
@@ -1178,6 +1185,20 @@ export default function VehicleDetail() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {/* INSHUR Period Z Section */}
+          {inshurConfig.enabled && !inshurHidden && (
+            <div className="mt-6">
+              <InshurEligibilityCard
+                vehicleId={vehicle.id}
+                vehicleReg={vehicle.reg}
+                vin={vehicle.vin}
+                garagingState={vehicle.garaging_state}
+                canEdit={canEdit('vehicles')}
+                onGaragingStateSaved={() => queryClient.invalidateQueries({ queryKey: ['vehicle', id] })}
+              />
             </div>
           )}
 

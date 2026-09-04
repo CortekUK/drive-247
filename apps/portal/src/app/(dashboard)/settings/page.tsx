@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -41,6 +41,7 @@ import { AccountingSettings } from '@/components/settings/accounting-settings';
 import { LocationSettings } from '@/components/settings/location-settings';
 import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
+import { InshurSettings } from '@/components/settings/inshur-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
 import { isAreaHidden, isLeanTenant } from '@/lib/lean-areas';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
@@ -174,7 +175,7 @@ const Settings = () => {
     'requirements', 'duration', 'lockbox',
     'pricing', 'fees', 'preauth', 'installments', 'payg', 'auto-extend', 'promos', 'extras', 'payments', 'accounting',
     'reminders', 'push', 'templates',
-    'messaging', 'insurance', 'esign', 'tesla', 'blacklist',
+    'messaging', 'insurance', 'inshur', 'esign', 'tesla', 'blacklist',
     'subscription',
   ];
   const visibleTabs = allSettingsTabs.filter(t => canViewSettings(t));
@@ -235,14 +236,35 @@ const Settings = () => {
   // matters — which is exactly what deleting it from main did.
   const hideAccountingTab = isAreaHidden('accounting', tenantSlug);
 
+  // INSHUR / Period Z fleet insurance is hidden from the lean canary and that
+  // tenant ONLY. Everything behind this tab stays on main: the seven edge
+  // functions, the ABI client, the eligibility and coverage hooks and the three
+  // inshur_* tables. Drive247 is in active commercial talks to ship this as
+  // native off-trip cover alongside Bonzah (which is on-trip only), so this tab
+  // is the only route any of the other 56 tenants will ever have to it.
+  // Presentation-layer gate, exactly like Accounting above.
+  //
+  // NOTE: the `inshur -> settings.integrations` mapping in lib/permissions.ts is
+  // deliberately NOT removed. canViewSettings() opens with
+  // `if (!settingsKey) return true;`, so dropping that line would EXPOSE the ABI
+  // credential panel to every manager regardless of their granted permissions.
+  // Removing the key widens access; it does not narrow it.
+  const hideInshurTab = isAreaHidden('inshur', tenantSlug);
+
+  // The tabs the lean gate hides, as one set so the fallback below can never
+  // land on another hidden tab.
+  const hiddenSettingsTabs = new Set<string>([
+    ...(hideAccountingTab ? ['accounting'] : []),
+    ...(hideInshurTab ? ['inshur'] : []),
+  ]);
+
   // The tab actually rendered. Identical to `activeTab` for every tenant with
   // the gate off; for a lean tenant it falls back to the first visible tab if
   // `activeTab` is one the gate hides. See the note on <Tabs> below for why
   // this is derived at render rather than corrected in an effect.
-  const effectiveTab =
-    activeTab === 'accounting' && hideAccountingTab
-      ? (visibleTabs.find(t => t !== 'accounting') || 'general')
-      : activeTab;
+  const effectiveTab = hiddenSettingsTabs.has(activeTab)
+    ? (visibleTabs.find(t => !hiddenSettingsTabs.has(t)) || 'general')
+    : activeTab;
 
   // Vehicle Owners + Owner Payouts feature toggle
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -750,7 +772,8 @@ const Settings = () => {
       // This runs on mount, when `tenantSlug` can still be null for a tick, so
       // it is the first of two guards — `effectiveTab` below is the one that
       // holds once the slug actually resolves.
-      !(tabParam === 'accounting' && hideAccountingTab)
+      !(tabParam === 'accounting' && hideAccountingTab) &&
+      !(tabParam === 'inshur' && hideInshurTab)
     ) {
       setActiveTab(tabParam);
     }
@@ -1838,6 +1861,7 @@ const Settings = () => {
                 { value: 'templates', icon: FileText, label: 'Templates' },
                 { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
                 { value: 'insurance', icon: Shield, label: 'Insurance' },
+                { value: 'inshur', icon: ShieldCheck, label: 'INSHUR' },
                 { value: 'esign', icon: FilePenLine, label: 'E-Sign' },
                 { value: 'tesla', icon: Zap, label: 'Tesla' },
                 { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
@@ -1853,6 +1877,10 @@ const Settings = () => {
                 // Xero/Zoho connections, mappings and sync log all stay put
                 // for every other tenant.
                 .filter(item => !(item.value === 'accounting' && hideAccountingTab))
+                // Lean tenants: no INSHUR tab. Presentation only — the ABI
+                // credentials, eligibility cache and coverage rows all stay put
+                // for every other tenant.
+                .filter(item => !(item.value === 'inshur' && hideInshurTab))
                 .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
@@ -5335,6 +5363,15 @@ const Settings = () => {
         <TabsContent value="insurance" className="space-y-6">
           <BonzahSettings />
         </TabsContent>
+
+        {/* INSHUR Period Z Tab. Guarded here as well as on the tab trigger so
+            ?tab=inshur typed directly cannot surface the ABI credential panel
+            for a lean tenant. */}
+        {!hideInshurTab && (
+          <TabsContent value="inshur" className="space-y-6">
+            <InshurSettings />
+          </TabsContent>
+        )}
 
         {/* E-Signatures Tab */}
         <TabsContent value="esign" className="space-y-6">
