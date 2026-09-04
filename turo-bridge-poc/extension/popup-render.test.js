@@ -541,6 +541,41 @@ async function main() {
     }
   }
 
+  // ------------------------------------------------------------------
+  console.log("\nThe source badge says where the data came from, never that a session is healthy");
+  {
+    /* THE CONTRADICTION THIS PREVENTS. `mode` is fixed when the run starts and
+       only ever distinguishes live data from bundled sample data. Wording it as
+       "Live Turo session" put a green badge asserting a healthy session directly
+       above the panel explaining that the session could NOT be verified -- the
+       screen disagreeing with itself, with the badge in the wrong. */
+    const state = await runOrchestrator("waf_empty_200");
+    const { doc } = renderInPopup(state);
+    await new Promise((r) => setTimeout(r, 20));
+
+    const badge = text(doc, "runSource");
+    ok("the badge still names the source", badge.length > 0, badge);
+    ok("...and never claims a session", !/session/i.test(badge), badge);
+
+    /* The whole panel must not contradict itself: this run's own verdict is
+       that the response could not be trusted. */
+    const whole = doc.getElementById("run").textContent;
+    ok("the panel says the response could not be verified", /could not verify|not trust/i.test(whole));
+    ok("and nothing on screen asserts a live session", !/live turo session/i.test(whole));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA sample run is still unmistakably sample");
+  {
+    const state = await runOrchestrator(null);
+    const { doc } = renderInPopup(state);
+    await new Promise((r) => setTimeout(r, 20));
+    /* The load-bearing half of the badge, unchanged: confusing demo data for a
+       real booking is the one mistake this pill exists to prevent. */
+    ok("the fixture badge still says 'sample'", /sample/i.test(text(doc, "runSource")), text(doc, "runSource"));
+  }
+
+
   console.log("\n" + passed + " passed, " + failed + " failed\n");
   process.exit(failed ? 1 : 0);
 }

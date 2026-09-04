@@ -436,7 +436,17 @@ function renderRun(s) {
 
   /* The source badge is the one place this UI uses a filled pill, because
      "is this real data?" must be impossible to miss on stage. Never let a
-     refactor collapse the live and sample paths into one label. */
+     refactor collapse the live and sample paths into one label.
+
+     IT ANSWERS EXACTLY ONE QUESTION: real data, or bundled sample data. It read
+     "Live Turo session" until it turned up on screen beside "Turo returned an
+     empty response we could not verify" — a green badge asserting a healthy
+     session directly above a panel explaining the session could NOT be
+     confirmed. The extension appeared to be arguing with itself, and of the two
+     the badge was the one making a claim it had no evidence for: `mode` is set
+     when the run STARTS and only ever means live-versus-fixture. Session health
+     is decided by the probe in turo-read-contract.js:1199 and reported by the
+     run panel. This says where the bytes came from, and nothing more. */
   if (s.mode === "fixture") {
     els.runSource.hidden = false;
     els.runSource.dataset.source = "fixture";
@@ -444,7 +454,7 @@ function renderRun(s) {
   } else if (s.mode === "live") {
     els.runSource.hidden = false;
     els.runSource.dataset.source = "turo";
-    els.runSource.textContent = "Live Turo session";
+    els.runSource.textContent = "Live Turo data";
   } else {
     els.runSource.hidden = true;
   }
@@ -725,7 +735,9 @@ function renderOne(run) {
   if (run.source === "turo" || run.source === "fixture") {
     els.badge.hidden = false;
     els.badge.dataset.source = run.source;
-    els.badge.textContent = run.source === "turo" ? "Live Turo session" : "Bundled sample data";
+    // Same rule as the run panel's badge: the data's origin, never a claim
+    // about the health of the Turo session.
+    els.badge.textContent = run.source === "turo" ? "Live Turo data" : "Bundled sample data";
   } else {
     els.badge.hidden = true;
   }
