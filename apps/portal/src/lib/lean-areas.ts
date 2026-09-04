@@ -177,8 +177,38 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * `if (!settingsKey) return true;`, so dropping the `accounting` →
  * `settings.accounting` mapping would EXPOSE the tab to every manager,
  * including those never granted it. Removing the key widens access.
+ *
+ * `cmd` is CheckMyDriver (Modives) driver-licence verification and `inshur`
+ * is the Inshur / Period Z fleet-insurance integration. Both were DELETED
+ * from main (92f3a57b, 66dbb8a4) and are being restored and gated here
+ * instead, for the same reason as everything above it: a delete hides the
+ * feature from ONE canary by withdrawing it from the other 56 tenants.
+ *
+ * These two keys are registered AHEAD of their call sites on purpose. An area
+ * that is gated but never registered is silently inert — `isAreaHidden`
+ * returns false, the screen never changes, and nothing errors. That exact bug
+ * shipped once already with `fleet-health`. Registering first makes the
+ * failure mode impossible in the other direction: an unused key gates nothing.
+ *
+ * `tenant-health` is the super-admin Tenant Health Score screen. It lives in
+ * apps/admin, which is not tenant-scoped, so the key here is a placeholder for
+ * any portal-side surface only.
  */
-export const LEAN_HIDDEN_AREAS = ['enquiries', 'leads', 'automations', 'quotes', 'tesla', 'welcome', 'owners', 'expenses', 'accounting', 'fleet-health'] as const;
+export const LEAN_HIDDEN_AREAS = [
+  'enquiries',
+  'leads',
+  'automations',
+  'quotes',
+  'tesla',
+  'welcome',
+  'owners',
+  'expenses',
+  'accounting',
+  'fleet-health',
+  'cmd',
+  'inshur',
+  'tenant-health',
+] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
 
