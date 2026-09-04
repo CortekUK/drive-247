@@ -51,11 +51,19 @@ export function TenantNotFound({ slug, message }: TenantNotFoundProps) {
           </h1>
         </div>
 
+        {/* The address gets its own full-width line. Sharing a line with the
+            label pushed it into a mid-token wrap ("...drive-2 / 47.com"), and
+            this string exists to be compared character by character against the
+            one the reader expects — a one-character difference is exactly what
+            they are hunting for. Breaking it in the middle works against the
+            only job this screen has. */}
         {host && (
-          <p className="text-sm text-muted-foreground mb-4">
-            You are visiting{" "}
-            <span className="font-mono text-foreground break-all">{host}</span>
-          </p>
+          <div className="mb-4">
+            <p className="text-sm text-muted-foreground mb-1">You are visiting</p>
+            <p className="font-mono text-sm text-foreground break-all leading-relaxed">
+              {host}
+            </p>
+          </div>
         )}
 
         <p className="text-sm text-muted-foreground mb-5">
