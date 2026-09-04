@@ -55,6 +55,13 @@ const els = {
   connTuro: $("connTuro"), connTuroDetail: $("connTuroDetail"), connTuroCheck: $("connTuroCheck"),
   connD247: $("connD247"), connD247Detail: $("connD247Detail"), syncGate: $("syncGate"),
 
+  // views and chrome
+  viewMain: $("viewMain"), viewAuth: $("viewAuth"), viewSettings: $("viewSettings"),
+  backBtn: $("backBtn"), settingsBtn: $("settingsBtn"), goSignIn: $("goSignIn"),
+  hero: $("hero"), bannerOk: $("bannerOk"), lastSyncCard: $("lastSyncCard"),
+  openPortal: $("openPortal"), openPortal2: $("openPortal2"), signOut2: $("signOut2"),
+  setAccount: $("setAccount"), setVersion: $("setVersion"), forgotLink: $("forgotLink"),
+
   // full sync
   syncAll: $("syncAll"), syncAllLabel: $("syncAllLabel"), spinnerAll: $("spinnerAll"),
   run: $("run"), runStep: $("runStep"), runSource: $("runSource"), runBatch: $("runBatch"),
@@ -213,6 +220,63 @@ function rememberEmail(value) {
   chrome.storage.local.set({ lastEmail: email }).catch(() => {});
 }
 
+/* ================================== VIEWS =================================
+   Three screens in one document, because a popup that navigates loses
+   everything: this page is destroyed the moment it closes, and a real
+   navigation would destroy it sooner. Swapping [hidden] keeps every element
+   alive, so the run panel carries on rendering from storage while somebody is
+   reading the settings screen.
+
+   PORTAL_URL is the only outbound link. It is a constant rather than something
+   read from storage, because a URL a page can influence is a URL an attacker
+   can point somewhere else. */
+const PORTAL_URL = "https://portal.drive-247.com";
+
+let view = "main";
+
+function show(next) {
+  view = next;
+  els.viewMain.hidden = next !== "main";
+  els.viewAuth.hidden = next !== "auth";
+  els.viewSettings.hidden = next !== "settings";
+  /* Back replaces Settings in the same slot: on a sub-screen the useful action
+     is to leave it, and two competing exits is one too many for a 396px popup. */
+  els.backBtn.hidden = next === "main";
+  els.settingsBtn.hidden = next !== "main";
+  if (next === "settings") paintSettings();
+}
+
+els.settingsBtn.addEventListener("click", () => show("settings"));
+els.backBtn.addEventListener("click", () => show("main"));
+els.goSignIn.addEventListener("click", () => {
+  if (conn.d247 && conn.d247.signedIn && conn.d247.identity) { show("settings"); return; }
+  show("auth");
+  /* Focus the first EMPTY field. A remembered email means the password is what
+     they came here to type, and landing the caret on a filled field just makes
+     them tab past it. */
+  (els.email.value ? els.password : els.email).focus();
+});
+
+function openPortal() {
+  try { chrome.tabs.create({ url: PORTAL_URL }); }
+  catch (_) { window.open(PORTAL_URL, "_blank", "noopener"); }
+}
+els.openPortal.addEventListener("click", openPortal);
+els.openPortal2.addEventListener("click", openPortal);
+els.forgotLink.setAttribute("href", PORTAL_URL + "/login");
+
+/* Sign out lives on two screens and must behave identically on both. */
+els.signOut2.addEventListener("click", () => els.signOut.click());
+
+function paintSettings() {
+  const id = conn.d247 && conn.d247.identity;
+  els.setAccount.textContent = id
+    ? (id.email || id.name || "Signed in") + " · " + (id.tenantName || "")
+    : "Not signed in";
+  try { els.setVersion.textContent = chrome.runtime.getManifest().version; }
+  catch (_) { els.setVersion.textContent = "—"; }
+}
+
 /* ============================ THE TWO CONNECTIONS =========================
    Held here rather than re-read per render, because the sync button depends on
    BOTH and a half-updated pair would flicker the button on and off. */
@@ -268,8 +332,20 @@ function paintConnections() {
     els.connD247Detail.textContent = "Connected · " + (d.identity.tenantName || "your account");
   } else {
     els.connD247.dataset.state = "off";
-    els.connD247Detail.textContent = d.expired ? "Sign-in expired" : "Sign in below";
+    els.connD247Detail.textContent = d.expired ? "Sign-in expired" : "Not signed in";
   }
+
+  /* THE HERO EARNS ITS SPACE OR LOSES IT. Somebody who has finished connecting
+     does not need to be sold the idea again, and 92px of illustration above the
+     controls they came to use is just scrolling. */
+  const bothOn = !!(conn.turo && conn.turo.connected) && !!(d && d.signedIn && d.identity);
+  els.hero.hidden = bothOn;
+  els.bannerOk.hidden = !bothOn;
+
+  /* The card's own action follows its state: sign in, or manage the account. */
+  const inAccount = !!(d && d.signedIn && d.identity);
+  els.goSignIn.textContent = inAccount ? "Manage" : "Sign in";
+  els.goSignIn.classList.toggle("solid", !inAccount);
 
   paintSyncGate();
 }
@@ -343,9 +419,14 @@ async function refreshAuth() {
  */
 function paintAuth(state) {
   const inAccount = !!(state && state.signedIn && state.identity);
-  els.authForm.hidden = inAccount;
   els.work.hidden = !inAccount;
   els.acct.hidden = !inAccount;
+
+  /* A session that ends while the popup is open drops the person back onto the
+     sign-in screen rather than leaving them on a settings page for an account
+     they no longer have. */
+  if (!inAccount && view === "settings") show("auth");
+  if (inAccount && view === "auth") show("main");
 
   if (!inAccount) {
     els.acctTenant.textContent = "";
@@ -432,6 +513,10 @@ els.authForm.addEventListener("submit", async (e) => {
      the value has served its purpose. */
   els.password.value = "";
   await refreshAuth();
+  show("main");
+  /* Both halves may now be live, and the Turo row was last checked before the
+     sign-in. Re-ask rather than leave a stale verdict next to a fresh one. */
+  refreshTuro(false);
 });
 
 els.signOut.addEventListener("click", async () => {
@@ -544,6 +629,7 @@ function renderLastSync(entry) {
   if (!entry || !entry.at) {
     els.lastSync.hidden = true;
     els.lastSync.textContent = "";
+    if (els.lastSyncCard) els.lastSyncCard.hidden = true;
     return;
   }
   const when = new Date(entry.at);
@@ -555,9 +641,10 @@ function renderLastSync(entry) {
   const n = Number(entry.records) || 0;
   const what = n === 1 ? "1 booking" : n + " bookings";
   els.lastSync.textContent =
-    "Last synced " + stamp + " · " + what +
+    stamp + " · " + what +
     (entry.complete === false ? " · part of your calendar only" : "");
   els.lastSync.hidden = false;
+  if (els.lastSyncCard) els.lastSyncCard.hidden = false;
 }
 
 // =============================================== render: the multi-batch run ==

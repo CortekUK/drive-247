@@ -10,7 +10,15 @@
 </head>
 <body>
 
+  <!-- ===================================================== the chrome ==== -->
   <header class="head">
+    <button type="button" class="icon-btn back" id="backBtn" hidden aria-label="Back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path>
+      </svg>
+    </button>
+
     <div class="mark" aria-hidden="true">
       <!-- Inline SVG: no network fetch, so it cannot fail to load. -->
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -19,9 +27,10 @@
         <path d="m13 6 6 6-6 6"></path>
       </svg>
     </div>
+
     <div class="head-text">
       <h1>Turo Bridge</h1>
-      <p id="headSub">Drive247</p>
+      <p id="headSub">DRIVE247</p>
     </div>
 
     <!-- WHO IS SIGNED IN. Rendered from d247Identity, which holds a name, an
@@ -32,215 +41,379 @@
       <p class="acct-sub" id="acctEmail"></p>
       <button type="button" class="linkish subtle" id="signOut">Sign out</button>
     </div>
+
+    <button type="button" class="icon-btn" id="settingsBtn" aria-label="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"></path>
+      </svg>
+    </button>
   </header>
 
   <main class="body">
 
-    <!-- ================================ the two connections ==============
-         TWO ACCOUNTS THAT ARE NOT THE SAME THING, shown as two rows so nobody
-         has to infer it:
+    <!-- ============================================== VIEW: the bridge === -->
+    <section id="viewMain">
 
-           Turo      the operator's own browser session. Read-only, and this
-                     extension has never asked for that password.
-           Drive247  an email and password typed below, which resolves to a
-                     tenant on the server.
-
-         A tenant who cannot sync needs to know WHICH one to go and fix, and the
-         two fixes have nothing in common. -->
-    <section class="conns" id="conns" aria-label="Connections">
-
-      <div class="conn" id="connTuro" data-state="checking">
-        <span class="conn-dot" aria-hidden="true"></span>
-        <div class="conn-text">
-          <p class="conn-name" id="connTuroName">Turo</p>
-          <p class="conn-detail" id="connTuroDetail">Checking…</p>
-        </div>
-        <button type="button" class="linkish subtle" id="connTuroCheck">Check</button>
-      </div>
-
-      <div class="conn" id="connD247" data-state="checking">
-        <span class="conn-dot" aria-hidden="true"></span>
-        <div class="conn-text">
-          <p class="conn-name" id="connD247Name">Drive247</p>
-          <p class="conn-detail" id="connD247Detail">Checking…</p>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ==================================================== the sign-in == -->
-    <!-- A real <form>, so Enter submits and a password manager can fill it.
-         The submit handler calls preventDefault(): a navigation inside an
-         extension popup would replace this document and lose the state. -->
-    <form class="auth" id="authForm" hidden autocomplete="on">
-      <p class="auth-lede">Sign in with your Drive247 account to sync your Turo calendar into Drive247.</p>
-
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" required
-               autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"
-               placeholder="you@example.com">
-      </div>
-
-      <div class="field">
-        <label for="password">Password</label>
-        <!-- The wrapper is what positions the eye INSIDE the input; the input
-             carries right padding so text never runs under the button. -->
-        <div class="input-wrap">
-          <input id="password" name="password" type="password" required
-                 autocomplete="current-password" placeholder="••••••••">
-          <!-- type="button" is load-bearing. Inside a <form>, a button with no
-               type defaults to type="submit", so revealing the password would
-               submit the form. -->
-          <button type="button" class="eye" id="reveal"
-                  aria-label="Show password" aria-pressed="false" title="Show password">
-            <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
+      <!-- THE HERO, shown only while something is still unconnected. Once both
+           halves are live it is replaced by the success banner: a person who
+           has finished connecting does not need to be sold the idea again. -->
+      <div class="hero" id="hero">
+        <div class="hero-art" aria-hidden="true">
+          <span class="hero-glow"></span>
+          <span class="hero-grid"></span>
+          <span class="hero-car">
+            <svg viewBox="0 0 220 84" fill="none" aria-hidden="true">
+              <path d="M12 62h196" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".35"/>
+              <path d="M28 62c0-6 4-10 10-10h14l16-18c4-4 9-6 14-6h38c6 0 11 2 15 7l13 17h13c8 0 14 5 14 11v5c0 3-2 5-5 5H33c-3 0-5-2-5-5z"
+                    fill="currentColor" opacity=".16"/>
+              <path d="M28 62c0-6 4-10 10-10h14l16-18c4-4 9-6 14-6h38c6 0 11 2 15 7l13 17h13c8 0 14 5 14 11v5c0 3-2 5-5 5H33c-3 0-5-2-5-5z"
+                    stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M72 45l12-13c2-2 5-3 8-3h26c4 0 7 1 9 4l10 12z" stroke="currentColor" stroke-width="1.5" opacity=".7"/>
+              <circle cx="66" cy="68" r="11" fill="currentColor" opacity=".2"/>
+              <circle cx="66" cy="68" r="11" stroke="currentColor" stroke-width="2"/>
+              <circle cx="160" cy="68" r="11" fill="currentColor" opacity=".2"/>
+              <circle cx="160" cy="68" r="11" stroke="currentColor" stroke-width="2"/>
             </svg>
-            <svg class="eye-shut" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
-              <path d="M10.7 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.6 3.7"></path>
-              <path d="M6.3 6.3A18.6 18.6 0 0 0 2 12s3.5 7 10 7a10.4 10.4 0 0 0 4-.8"></path>
-              <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"></path>
-              <path d="m2 2 20 20"></path>
-            </svg>
+          </span>
+        </div>
+        <h2 class="hero-title">Connect Turo<br>with <span class="accent">Drive247</span></h2>
+        <p class="hero-sub">Bring your Turo calendar into Drive247 and manage your rentals in one place.</p>
+      </div>
+
+      <!-- Replaces the hero once both connections are live. -->
+      <div class="banner ok" id="bannerOk" hidden>
+        <span class="banner-icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </span>
+        <div>
+          <p class="banner-title">All connected</p>
+          <p class="banner-sub">Your accounts are linked and ready to sync.</p>
+        </div>
+      </div>
+
+      <!-- ================================ the two connections ============
+           TWO ACCOUNTS THAT ARE NOT THE SAME THING, shown as two cards so
+           nobody has to infer it:
+
+             Turo      the operator's own browser session. Read-only, and this
+                       extension has never asked for that password.
+             Drive247  an email and password typed on the next screen, which
+                       resolves to a tenant on the server.
+
+           A tenant who cannot sync needs to know WHICH one to go and fix, and
+           the two fixes have nothing in common. -->
+      <section class="conns" aria-label="Connections">
+
+        <div class="conn" id="connTuro" data-state="checking">
+          <span class="brand turo" aria-hidden="true">TURO</span>
+          <div class="conn-text">
+            <p class="conn-name">Turo</p>
+            <p class="conn-status"><span class="conn-dot" aria-hidden="true"></span><span id="connTuroDetail">Checking…</span></p>
+          </div>
+          <button type="button" class="chip" id="connTuroCheck">Check</button>
+        </div>
+
+        <div class="conn" id="connD247" data-state="checking">
+          <span class="brand d247" aria-hidden="true">D</span>
+          <div class="conn-text">
+            <p class="conn-name">Drive247</p>
+            <p class="conn-status"><span class="conn-dot" aria-hidden="true"></span><span id="connD247Detail">Checking…</span></p>
+          </div>
+          <button type="button" class="chip solid" id="goSignIn">Sign in</button>
+        </div>
+
+      </section>
+
+      <!-- ========================================= everything behind the gate
+           Hidden outright while signed out. The renderers below still run
+           against whatever is in storage, because the popup is a view over
+           storage and a run can finish while the popup is closed — but nothing
+           in here is on screen, and nothing in here can be actioned, until the
+           tenant is authenticated and a tenant has been resolved for them. -->
+      <div id="work" hidden>
+
+        <p class="section-label">Quick actions</p>
+        <div class="quick">
+          <button type="button" class="quick-card" id="syncAll" disabled>
+            <span class="quick-icon" aria-hidden="true">
+              <span class="spinner" id="spinnerAll" hidden></span>
+              <svg class="quick-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-7.35-3.82"></path>
+                <path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 7.35 3.82"></path>
+                <path d="M21 3v5h-5"></path><path d="M3 21v-5h5"></path>
+              </svg>
+            </span>
+            <span class="quick-title" id="syncAllLabel">Sync now</span>
+            <span class="quick-sub">Pull your latest Turo bookings</span>
+          </button>
+
+          <button type="button" class="quick-card" id="openPortal">
+            <span class="quick-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                <path d="M16 2v4M8 2v4M3 10h18"></path>
+              </svg>
+            </span>
+            <span class="quick-title">View bookings</span>
+            <span class="quick-sub">Open the Drive247 portal</span>
           </button>
         </div>
-      </div>
 
-      <!-- RESERVED SPACE. The slot is always in the layout and only its
-           contents appear, so an error does not shove the Sign in button down
-           the moment a tenant most wants to click it again. -->
-      <div class="auth-error-slot">
-        <p class="auth-error" id="authError" role="alert" hidden></p>
-      </div>
+        <!-- Says which half is missing. A disabled button with no explanation is
+             a puzzle; this is the answer to it. -->
+        <p class="gate-note" id="syncGate" hidden></p>
 
-      <button type="submit" class="primary" id="signIn">
-        <span class="spinner" id="spinnerAuth" hidden></span>
-        <span id="signInLabel">Sign in</span>
-      </button>
+        <!-- Last successful sync. Written only by a run Drive247 accepted. -->
+        <div class="lastsync-card" id="lastSyncCard" hidden>
+          <div>
+            <p class="section-label tight">Last sync</p>
+            <p class="lastsync" id="lastSync"></p>
+          </div>
+        </div>
 
-      <p class="hint">Your Turo account is not involved. This extension has never
-        asked for a Turo password and never will.</p>
-    </form>
+        <!-- ============================================ the live run panel -->
+        <section class="run" id="run" data-phase="idle" aria-live="polite" hidden>
 
-    <!-- ========================================= everything behind the gate ==
-         Hidden outright while signed out. The renderers below still run against
-         whatever is in storage, because the popup is a view over storage and a
-         run can finish while the popup is closed — but nothing in here is on
-         screen, and nothing in here can be actioned, until the tenant is
-         authenticated and a tenant has been resolved for them. -->
-    <div id="work" hidden>
+          <div class="run-head">
+            <span class="dot" aria-hidden="true"></span>
+            <span id="runStep">Working…</span>
+            <span class="badge" id="runSource" data-source="" hidden></span>
+          </div>
 
-    <!-- ================================================== the full sync ==
-         Enabled ONLY when both connections are live. One-way, always:
-         Turo -> this extension -> Drive247. Nothing is ever written back to
-         Turo, and no Drive247 data is sent there. -->
-    <button type="button" class="primary" id="syncAll" disabled>
-      <span class="spinner" id="spinnerAll" hidden></span>
-      <span id="syncAllLabel">Sync Turo to Drive247</span>
-    </button>
+          <!-- BATCH COUNTER. "of N" is rendered ONLY once the walk has proved it
+               reached the end of the feed. Until then there is a number and no
+               denominator, because there is no honest denominator to show. -->
+          <p class="batch" id="runBatch"></p>
 
-    <!-- Says which half is missing. A disabled button with no explanation is a
-         puzzle; this is the answer to it. -->
-    <p class="gate-note" id="syncGate" hidden></p>
+          <div class="tiles" id="runTiles"></div>
 
-    <p class="lastsync" id="lastSync" hidden></p>
+          <!-- COVERAGE. The sentence that stops "8 of 8 green" on a partial read. -->
+          <p class="coverage" id="runCoverage"></p>
 
-    <!-- ============================================= the live run panel == -->
-    <section class="run" id="run" data-phase="idle" aria-live="polite" hidden>
+          <!-- THE TWO GATES, always shown separately. Writing what we read and
+               releasing what we did not see are different permissions. -->
+          <dl class="gates" id="runGates" hidden>
+            <div class="grow"><dt>Saved to Drive247</dt><dd id="gWrite"></dd></div>
+            <div class="grow"><dt>Blocks released</dt><dd id="gRelease"></dd></div>
+          </dl>
+          <p class="gate-reason" id="gReason"></p>
 
-      <div class="run-head">
-        <span class="dot" aria-hidden="true"></span>
-        <span id="runStep">Working…</span>
-        <span class="badge" id="runSource" data-source="" hidden></span>
-      </div>
+          <!-- TYPED ERROR STATE: what happened, and what a human can do about it. -->
+          <div class="alert" id="runAlert" hidden>
+            <p class="alert-kind" id="alertKind"></p>
+            <p class="alert-advice" id="alertAdvice"></p>
+            <p class="alert-detail" id="alertDetail"></p>
+            <div class="alert-actions">
+              <button type="button" class="secondary" id="continueBtn">Continue</button>
+              <button type="button" class="linkish subtle" id="stopBtn">Stop</button>
+            </div>
+          </div>
 
-      <!-- BATCH COUNTER. "of N" is rendered ONLY once the walk has proved it
-           reached the end of the feed. Until then there is a number and no
-           denominator, because there is no honest denominator to show. -->
-      <p class="batch" id="runBatch"></p>
+          <details class="drawer" id="unknownDrawer" hidden>
+            <summary><span id="unknownCount"></span></summary>
+            <ul class="kv" id="unknownList"></ul>
+            <p class="hint">These fields were not found in Turo's response. Nothing was guessed —
+              any trip missing a date or an id was left out rather than imported with an invented one.</p>
+          </details>
 
-      <div class="tiles" id="runTiles"></div>
+          <details class="drawer" id="rejectDrawer" hidden>
+            <summary><span id="rejectCount"></span></summary>
+            <ul class="kv" id="rejectList"></ul>
+            <p class="hint">Turo sent these, but not in a shape we could read. The key names below are
+              what it actually sent — send them to Drive247 support and the fix is a one-line change.</p>
+          </details>
 
-      <!-- COVERAGE. The sentence that stops "8 of 8 green" on a partial read. -->
-      <p class="coverage" id="runCoverage"></p>
+          <details class="drawer" id="tripDrawer" hidden>
+            <summary><span id="tripCount"></span></summary>
+            <ul class="trips" id="tripList"></ul>
+          </details>
 
-      <!-- THE TWO GATES, always shown separately. Writing what we read and
-           releasing what we did not see are different permissions. -->
-      <dl class="gates" id="runGates" hidden>
-        <div class="grow"><dt>Saved to Drive247</dt><dd id="gWrite"></dd></div>
-        <div class="grow"><dt>Blocks released</dt><dd id="gRelease"></dd></div>
-      </dl>
-      <p class="gate-reason" id="gReason"></p>
+          <details class="drawer" id="absenceDrawer" hidden>
+            <summary><span id="absenceCount"></span></summary>
+            <ul class="kv" id="absenceList"></ul>
+            <p class="hint">A trip that simply did not appear is never treated as cancelled. Its dates stay
+              blocked until Turo positively tells us otherwise.</p>
+          </details>
+        </section>
 
-      <!-- TYPED ERROR STATE: what happened, and what a human can do about it. -->
-      <div class="alert" id="runAlert" hidden>
-        <p class="alert-kind" id="alertKind"></p>
-        <p class="alert-advice" id="alertAdvice"></p>
-        <p class="alert-detail" id="alertDetail"></p>
-        <div class="alert-actions">
-          <button type="button" class="secondary" id="continueBtn">Continue</button>
-          <button type="button" class="linkish subtle" id="stopBtn">Stop</button>
+        <hr class="rule">
+
+        <!-- ==================================== the original one-click demo -->
+        <button type="button" class="secondary" id="sync" disabled>
+          <span class="spinner" id="spinner" hidden></span>
+          <span id="syncLabel">Sync one reservation</span>
+        </button>
+
+        <section class="status" id="status" data-phase="idle" aria-live="polite">
+          <div class="status-head">
+            <span class="dot" aria-hidden="true"></span>
+            <span id="statusTitle">Ready</span>
+          </div>
+          <p class="status-detail" id="statusDetail"></p>
+          <span class="badge" id="badge" data-source="" hidden></span>
+
+          <dl class="result" id="result" hidden>
+            <div class="row"><dt>Trip</dt><dd class="mono" id="rTrip"></dd></div>
+            <div class="row"><dt>Vehicle</dt><dd id="rVehicle"></dd></div>
+            <div class="row"><dt>Guest</dt><dd id="rGuest"></dd></div>
+            <div class="row"><dt>Dates</dt><dd id="rDates"></dd></div>
+          </dl>
+        </section>
+
+      </div><!-- /#work -->
+    </section><!-- /#viewMain -->
+
+    <!-- ============================================== VIEW: the sign-in === -->
+    <section id="viewAuth" hidden>
+
+      <!-- Two steps, and Drive247 is first on purpose: the Turo half needs no
+           form at all, so the only thing a person has to DO here is this. -->
+      <ol class="steps" aria-label="Setup steps">
+        <li class="step current"><span class="step-n">1</span><span class="step-l">Drive247 login</span></li>
+        <li class="step"><span class="step-n">2</span><span class="step-l">Connect Turo</span></li>
+      </ol>
+
+      <h2 class="view-title">Sign in to Drive247</h2>
+      <p class="view-sub">Use your Drive247 account to sync your Turo calendar.</p>
+
+      <!-- A real <form>, so Enter submits and a password manager can fill it.
+           The submit handler calls preventDefault(): a navigation inside an
+           extension popup would replace this document and lose the state. -->
+      <form class="auth" id="authForm" autocomplete="on">
+
+        <div class="field">
+          <label for="email">Email</label>
+          <div class="input-wrap">
+            <span class="input-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                <path d="m22 7-10 6L2 7"></path>
+              </svg>
+            </span>
+            <input id="email" name="email" type="email" required
+                   autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"
+                   placeholder="you@example.com">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <span class="input-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </span>
+            <input id="password" name="password" type="password" required
+                   autocomplete="current-password" placeholder="••••••••">
+            <!-- type="button" is load-bearing. Inside a <form>, a button with no
+                 type defaults to type="submit", so revealing the password would
+                 submit the form. -->
+            <button type="button" class="eye" id="reveal"
+                    aria-label="Show password" aria-pressed="false" title="Show password">
+              <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg class="eye-shut" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+                <path d="M10.7 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.6 3.7"></path>
+                <path d="M6.3 6.3A18.6 18.6 0 0 0 2 12s3.5 7 10 7a10.4 10.4 0 0 0 4-.8"></path>
+                <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"></path>
+                <path d="m2 2 20 20"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="rowline">
+          <span class="hint">Stays signed in until you sign out.</span>
+          <a class="linkish" id="forgotLink" href="#" target="_blank" rel="noopener">Forgot password?</a>
+        </div>
+
+        <!-- RESERVED SPACE. The slot is always in the layout and only its
+             contents appear, so an error does not shove the Sign in button down
+             the moment a tenant most wants to click it again. -->
+        <div class="auth-error-slot">
+          <p class="auth-error" id="authError" role="alert" hidden></p>
+        </div>
+
+        <button type="submit" class="primary" id="signIn">
+          <span class="spinner" id="spinnerAuth" hidden></span>
+          <span id="signInLabel">Sign in</span>
+          <svg class="btn-arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path>
+          </svg>
+        </button>
+
+        <p class="hint centred">Your Turo account is not involved. This extension has never
+          asked for a Turo password and never will.</p>
+      </form>
+    </section><!-- /#viewAuth -->
+
+    <!-- ============================================= VIEW: the settings === -->
+    <section id="viewSettings" hidden>
+      <h2 class="view-title">Settings</h2>
+      <p class="view-sub">Manage your extension preferences.</p>
+
+      <div class="setting-group">
+        <div class="setting">
+          <span class="setting-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </span>
+          <div class="setting-text">
+            <p class="setting-title">Signed in as</p>
+            <p class="setting-sub" id="setAccount">Not signed in</p>
+          </div>
+        </div>
+
+        <div class="setting">
+          <span class="setting-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path>
+            </svg>
+          </span>
+          <div class="setting-text">
+            <p class="setting-title">Version</p>
+            <p class="setting-sub" id="setVersion">—</p>
+          </div>
         </div>
       </div>
 
-      <details class="drawer" id="unknownDrawer" hidden>
-        <summary><span id="unknownCount"></span></summary>
-        <ul class="kv" id="unknownList"></ul>
-        <p class="hint">These fields were not found in Turo's response. Nothing was guessed —
-          any trip missing a date or an id was left out rather than imported with an invented one.</p>
-      </details>
-
-      <details class="drawer" id="rejectDrawer" hidden>
-        <summary><span id="rejectCount"></span></summary>
-        <ul class="kv" id="rejectList"></ul>
-        <p class="hint">Turo sent these, but not in a shape we could read. The key names below are
-          what it actually sent — send them to Drive247 support and the fix is a one-line change.</p>
-      </details>
-
-      <details class="drawer" id="tripDrawer" hidden>
-        <summary><span id="tripCount"></span></summary>
-        <ul class="trips" id="tripList"></ul>
-      </details>
-
-      <details class="drawer" id="absenceDrawer" hidden>
-        <summary><span id="absenceCount"></span></summary>
-        <ul class="kv" id="absenceList"></ul>
-        <p class="hint">A trip that simply did not appear is never treated as cancelled. Its dates stay
-          blocked until Turo positively tells us otherwise.</p>
-      </details>
-    </section>
-
-    <hr class="rule">
-
-    <!-- ==================================== the original one-click demo == -->
-    <!-- Starts disabled for the same reason the primary does: it writes to
-         Drive247 from Turo too, just less of it. paintSyncGate() opens both. -->
-    <button type="button" class="secondary" id="sync" disabled>
-      <span class="spinner" id="spinner" hidden></span>
-      <span id="syncLabel">Sync one reservation</span>
-    </button>
-
-    <section class="status" id="status" data-phase="idle" aria-live="polite">
-      <div class="status-head">
-        <span class="dot" aria-hidden="true"></span>
-        <span id="statusTitle">Ready</span>
+      <!-- WHY THERE IS NO AUTO-SYNC TOGGLE HERE: see the note in popup.js.
+           Turo runs Cloudflare, PerimeterX and reCAPTCHA Enterprise, and this
+           extension is careful never to issue an unattended request into a
+           challenge. A timer that pulls the feed on its own is the one feature
+           most likely to get an operator's own Turo account blocked. -->
+      <div class="note">
+        <p class="note-title">Syncing is manual, on purpose</p>
+        <p class="note-body">Turo watches for automated traffic. The extension only reads
+          when you ask it to, so your Turo account is never put at risk by a
+          background timer.</p>
       </div>
-      <p class="status-detail" id="statusDetail"></p>
-      <span class="badge" id="badge" data-source="" hidden></span>
 
-      <dl class="result" id="result" hidden>
-        <div class="row"><dt>Trip</dt><dd class="mono" id="rTrip"></dd></div>
-        <div class="row"><dt>Vehicle</dt><dd id="rVehicle"></dd></div>
-        <div class="row"><dt>Guest</dt><dd id="rGuest"></dd></div>
-        <div class="row"><dt>Dates</dt><dd id="rDates"></dd></div>
-      </dl>
-    </section>
-
-    </div><!-- /#work -->
+      <div class="setting-actions">
+        <button type="button" class="secondary" id="openPortal2">Open Drive247</button>
+        <button type="button" class="danger" id="signOut2">Sign out</button>
+      </div>
+    </section><!-- /#viewSettings -->
 
   </main>
 

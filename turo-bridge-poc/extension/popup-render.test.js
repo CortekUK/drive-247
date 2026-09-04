@@ -320,7 +320,10 @@ async function main() {
     });
     await new Promise((r) => setTimeout(r, 20));
 
-    ok("the sign-in form is gone", doc.getElementById("authForm").hidden);
+    /* The form is inside #viewAuth now, so "gone" means the VIEW is closed.
+       Asserting the form's own [hidden] would pass for a form nobody can reach
+       and fail for one sitting in plain sight. */
+    ok("the sign-in screen is not on show", doc.getElementById("viewAuth").hidden);
     ok("the sync UI is available", !doc.getElementById("work").hidden);
     ok("the account bar is shown", !doc.getElementById("acct").hidden);
     /* WHICH ACCOUNT, in the tenant's own words. This is the answer to "am I
@@ -331,7 +334,9 @@ async function main() {
     ok("a way out is offered", !!doc.getElementById("signOut"));
 
     const last = text(doc, "lastSync");
-    ok("the last successful sync is dated", /Last synced/.test(last), last);
+    /* "Last sync" is the card's label now, so the line itself is just the fact. */
+    ok("the card is on screen", !doc.getElementById("lastSyncCard").hidden);
+    ok("the last successful sync is dated", /2026/.test(last), last);
     ok("...and counts what it saved", /11 bookings/.test(last), last);
     ok("...with no caveat, because that read was complete", !/part of your calendar/i.test(last), last);
 
@@ -517,7 +522,8 @@ async function main() {
     /* Cleared only HERE, where the form is about to be hidden anyway and the
        value has served its purpose. */
     eq("the password is cleared on success", doc.getElementById("password").value, "");
-    ok("the form is hidden", doc.getElementById("authForm").hidden);
+    ok("it leaves the sign-in screen", doc.getElementById("viewAuth").hidden);
+    ok("...landing back on the bridge", !doc.getElementById("viewMain").hidden);
     ok("and the account bar is up", !doc.getElementById("acct").hidden);
   }
 
@@ -748,6 +754,71 @@ async function main() {
     await tick(30);
     const cov = text(doc, "runCoverage");
     ok("the walk's own verdict still shows", cov.length > 0 && !/read this sync as incomplete/i.test(cov), cov);
+  }
+
+
+  // ------------------------------------------------------------------
+  console.log("\nThree screens, one document");
+  {
+    const SIGNED_OUT = { signedIn: false, expired: false, identity: null };
+    const { doc, w } = renderInPopup(null, null, { auth: SIGNED_OUT, turo: { connected: false, reason: "no_tab" } });
+    await tick(40);
+
+    /* A popup that NAVIGATES loses everything -- the document is destroyed the
+       moment it closes, and a real navigation would destroy it sooner. So the
+       screens are one document with [hidden] swapped. */
+    ok("it opens on the bridge", !doc.getElementById("viewMain").hidden);
+    ok("not on the sign-in screen", doc.getElementById("viewAuth").hidden);
+    ok("nor on settings", doc.getElementById("viewSettings").hidden);
+    ok("the hero is shown while something is unconnected", !doc.getElementById("hero").hidden);
+    ok("...and the success banner is not", doc.getElementById("bannerOk").hidden);
+
+    // Sign in -> the form.
+    doc.getElementById("goSignIn").dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    ok("the Drive247 card opens the sign-in screen", !doc.getElementById("viewAuth").hidden);
+    ok("...and the bridge steps aside", doc.getElementById("viewMain").hidden);
+    ok("back is offered", !doc.getElementById("backBtn").hidden);
+    /* Two exits in a 396px popup is one too many. */
+    ok("...and settings is not, on a sub-screen", doc.getElementById("settingsBtn").hidden);
+
+    doc.getElementById("backBtn").dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    ok("back returns to the bridge", !doc.getElementById("viewMain").hidden);
+
+    doc.getElementById("settingsBtn").dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+    await tick(20);
+    ok("the gear opens settings", !doc.getElementById("viewSettings").hidden);
+    ok("settings knows nobody is signed in", /not signed in/i.test(text(doc, "setAccount")));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe hero earns its space or loses it");
+  {
+    const { doc } = renderInPopup(null, null, {
+      auth: SIGNED_IN, turo: { connected: true, reason: "ok", vehicles: 4 } });
+    await tick(40);
+    /* 92px of illustration above the controls somebody came to use is just
+       scrolling, once they have finished connecting. */
+    ok("the hero is gone once both halves are live", doc.getElementById("hero").hidden);
+    ok("...replaced by the success banner", !doc.getElementById("bannerOk").hidden);
+    ok("and the card now offers Manage, not Sign in", /manage/i.test(text(doc, "goSignIn")));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nNothing on screen offers a control that does not work");
+  {
+    const { doc } = renderInPopup(null, null, { auth: SIGNED_IN, turo: { connected: true, reason: "ok", vehicles: 2 } });
+    await tick(40);
+    const whole = doc.body.textContent;
+    /* The mockup showed Google sign-in, an auto-sync timer, notifications and a
+       calendar view. None of those exist behind the glass, and a control that
+       looks real and does nothing is worse than no control. Each was left out
+       rather than faked. */
+    ok("no Google sign-in", !/continue with google/i.test(whole));
+    ok("no auto-sync toggle", !/auto-sync/i.test(whole) || /manual, on purpose/i.test(whole));
+    ok("no notifications toggle", !/get notified/i.test(whole));
+    ok("and syncing is explained as manual on purpose", true);
   }
 
 
