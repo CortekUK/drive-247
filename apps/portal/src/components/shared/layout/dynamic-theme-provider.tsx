@@ -5,12 +5,18 @@ import { useDynamicTheme } from '@/hooks/use-dynamic-theme';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TenantNotFound } from '@/components/shared/layout/tenant-not-found';
 
 export function DynamicThemeProvider({ children }: { children: React.ReactNode }) {
   // This hook applies dynamic theme colors from org settings
   useDynamicTheme();
   const { isLoading: brandingLoading, branding } = useTenantBranding();
-  const { loading: tenantLoading, tenant } = useTenant();
+  const {
+    loading: tenantLoading,
+    tenant,
+    error: tenantError,
+    tenantSlug,
+  } = useTenant();
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -23,6 +29,23 @@ export function DynamicThemeProvider({ children }: { children: React.ReactNode }
       });
     }
   }, [tenant, tenantLoading, branding, brandingLoading]);
+
+  // Tenant resolution FINISHED and produced nothing. Waiting longer cannot help:
+  // TenantContext has already run its query, set an error and cleared `loading`,
+  // and it will not retry on its own.
+  //
+  // This branch is the whole point of the file. Without it the condition above
+  // simply never became true, so a subdomain that matched no tenant rendered the
+  // skeleton below forever — turning a one-character typo in the address into
+  // something indistinguishable from a platform outage, with no message on screen
+  // to suggest otherwise. It cost an operator an evening of bookings.
+  //
+  // Safe against a false positive during normal startup: `loading` initialises to
+  // `true` in TenantContext, so `!tenantLoading && !tenant` is unreachable until a
+  // real lookup has completed and failed.
+  if (!tenantLoading && !tenant) {
+    return <TenantNotFound slug={tenantSlug} message={tenantError} />;
+  }
 
   // Show loading state while tenant/branding is loading
   if (!isReady) {
