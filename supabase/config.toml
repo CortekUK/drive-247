@@ -121,6 +121,15 @@ verify_jwt = false
 [functions.send-payg-reminders]
 verify_jwt = false
 
+# Called by an operator's chatbot (Meta Messenger / a GPT Action), which has no
+# Supabase JWT to present. With verify_jwt on, the gateway returns 401 before the
+# function ever runs and the endpoint looks silently dead. The function performs
+# its own authentication on every request against public.tenant_api_keys, and
+# resolves tenant_id ONLY from the credential row — the caller cannot name a
+# tenant, so a forged one is not expressible in the wire format.
+[functions.fleet-quote-api]
+verify_jwt = false
+
 [functions.auto-extend-rentals]
 verify_jwt = false
 
