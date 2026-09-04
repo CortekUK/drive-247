@@ -90,6 +90,11 @@ export default function DashboardLayout({
   // v2 chrome gate, resolved on the server in the root layout (V2_PLAN §3).
   // A plain context read: no query, no effect, no flash. Falls back to v1.
   const v2Chrome = useV2("chrome");
+  // The v2 page tint. Separate from `chrome` on purpose: the wash is a THEME
+  // surface, not navigation furniture, and `.v2-theme` on <body> is what
+  // actually defines `.bg-app-gradient` (styles/v2-theme.css). Reading the
+  // matching gate keeps the class and its definition switched by the same flag.
+  const v2Theme = useV2("theme");
   // The sidebar primitives carry a React CONTEXT, and ui/ and ui-v2/ each
   // define their own. AppSidebarV2 calls useSidebar() from ui-v2, so it must
   // sit inside ui-v2's SidebarProvider — pairing it with v1's provider throws
@@ -342,7 +347,21 @@ export default function DashboardLayout({
 
   return (
     <DynamicThemeProvider>
-      <Provider>
+      {/* The v2 page tint lives HERE, on the sidebar wrapper, exactly as it
+          does on `improv/portal-side` — `<SidebarProvider className="bg-background
+          bg-app-gradient">`. It is not a token: `--background` is plain white in
+          both trees, and the wash is four radial gradients painted by the
+          `.bg-app-gradient` utility. The port brought the utility across into
+          styles/v2-theme.css but nothing ever applied the class, so the canary
+          had the definition and no consumer — cards on flat white instead of
+          floating on lavender, which is the single biggest visual gap.
+          `bg-background` is carried across verbatim from the branch even though
+          tailwind-merge resolves the pair down to `bg-app-gradient` alone: the
+          wash needs an opaque ground under it, and `body` already paints one
+          (`.v2-theme body { @apply bg-background }`), so the composite is the
+          same on both trees. `undefined` outside the gate leaves the element's
+          class list byte-for-byte what it was for the other 56 tenants. */}
+      <Provider className={v2Theme ? "bg-background bg-app-gradient" : undefined}>
         {v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
 
         {/* v2 has no top bar — and the SidebarTrigger lived in it. On desktop
@@ -361,7 +380,13 @@ export default function DashboardLayout({
           />
         )}
 
-        <Inset className="overflow-x-hidden">
+        {/* `bg-transparent` is load-bearing, and the branch carries it for the
+            same reason: SidebarInset's own base class is `bg-background`, an
+            opaque white pane that covers the whole content column — so without
+            this the wash above would be visible only in the 8px gutter and the
+            screen would still read as white. Gated, so the other 56 tenants
+            keep the opaque inset they have today. */}
+        <Inset className={v2Theme ? "overflow-x-hidden bg-transparent" : "overflow-x-hidden"}>
           {/* v1 only — the v2 chrome deletes this row outright, which is the
               single most visible difference between the two designs. Nothing
               in it is v2's last route to anything: search and the user menu

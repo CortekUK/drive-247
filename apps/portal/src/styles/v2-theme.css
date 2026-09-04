@@ -674,3 +674,141 @@ body.v2-theme {
  *     wires every `hsl(var(--…))` colour and every `animate-*` except
  *     `animate-wiggle`, which no component in this app uses.
  * =========================================================================== */
+
+
+/* ===========================================================================
+ * PART 3 — the v1 primitive bridge.
+ *
+ * WHY THIS SECTION EXISTS AT ALL
+ *
+ * `improv/portal-side` did not add a design system beside the old one; it
+ * REWROTE `components/ui/**` in place. So on the branch every screen — the
+ * 8,099-line rental detail page included — picks up the new Card, Button and
+ * Badge for free, because `import { Card } from "@/components/ui/card"` now
+ * resolves to the new file.
+ *
+ * On `main` that same rewrite lives in `components/ui-v2/**`, and only pages
+ * that have been migrated import from it. The rental detail page has not been:
+ * it still imports Card, Button, Badge and the rest from `components/ui/**`.
+ * The result is a canary screen wearing v2 COLOURS and v1 SURFACES — a white
+ * page, 1px grey card edges, 10px corners and a solid-red destructive button —
+ * which is exactly the "vibe difference" against the branch.
+ *
+ * Editing `components/ui/**` is not an option: no gate sits in front of it, so
+ * one character there repaints all 57 paying tenants. What CAN be scoped is
+ * CSS. The rules below re-dress the v1 primitives to their v2 equivalents for
+ * `.v2-theme` only, matching on the class signature each primitive emits.
+ *
+ * MATCHING ON CLASSES, AND WHY THE SIGNATURES ARE THE ONES THEY ARE
+ *
+ * v1's primitives carry no `data-slot` (v2's do — that is a v4-era shadcn
+ * addition), so the class list is the only handle. Every signature below is
+ * chosen to be the part of the base class string that `cn()`/tailwind-merge
+ * CANNOT strip when a call site passes its own className:
+ *
+ *   Card    `div.border.text-card-foreground`
+ *           `bg-card` is deliberately NOT in the selector: the stat cards on
+ *           the rental page are `<Card className="bg-emerald-500/5">`, and
+ *           twMerge drops the conflicting `bg-card`. Keying on it would have
+ *           skipped precisely the four cards Ghulam called out. `div` excludes
+ *           the Toast primitive, which shares `border` + `text-card-foreground`
+ *           but renders an `<li>` and already has its own elevation.
+ *
+ *   Button  `.rounded-md.whitespace-nowrap.ring-offset-background`
+ *           The only base in `components/ui/**` carrying all three; `toggle`
+ *           has two of them, inputs/selects/textarea have `rounded-md` and
+ *           `ring-offset-background` but never `whitespace-nowrap`.
+ *
+ * Radius is split onto its own rule, qualified with the DEFAULT radius class,
+ * so a call site that deliberately asked for another shape keeps it: passing
+ * `rounded-xl` makes twMerge delete `rounded-lg`, the selector stops matching,
+ * and nothing here overrides it.
+ *
+ * WHY `[class~="x"]` AND NOT `.x`
+ *
+ * Written as `.rounded-lg` these rules do not compile. This file is processed
+ * by Tailwind v3, which treats a rule whose selector names a utility class as a
+ * REDEFINITION of that utility — and the same file `@apply`s `rounded-lg` (in
+ * `.btn-primary`) and `rounded-md` (in `.input-focus`), so the build fails with
+ * "you cannot @apply the rounded-lg utility here because it creates a circular
+ * dependency". `[class~="rounded-lg"]` matches exactly the same elements, is
+ * invisible to that check, and has the same (0,1,0) specificity a class does —
+ * so every specificity argument in this section holds unchanged. All the class
+ * matches below use the attribute form for consistency, and so that this stays
+ * true if a future edit `@apply`s one of the others.
+ * ------------------------------------------------------------------------- */
+
+/* --- Card ---------------------------------------------------------------
+ * Branch: `rounded-4xl bg-card shadow-md ring-1 ring-foreground/5` and no
+ * border at all — under v4's Preflight `border-width` is 0 unless asked for.
+ *
+ * Reproduced as a TRANSPARENT border rather than `border-width: 0` on purpose:
+ * the 1px stays in the box model, so nothing on these pages reflows by 2px in
+ * either axis while the surface still reads borderless. Any `border-<colour>`
+ * a call site passes is a (0,1,0) utility and loses to this rule — which is
+ * the branch's behaviour too, where those colours land on a 0-width edge and
+ * are equally invisible.
+ *
+ * The shadow is v4's `ring-1` + `shadow-md` written as one composite, in v4's
+ * own layer order (ring before shadow). `shadow-md` is identical in v3.4 and
+ * v4, so the two literals are the same value the branch paints. */
+.v2-theme div[class~="border"][class~="text-card-foreground"] {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px hsl(var(--foreground) / 0.05),
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* `dark:ring-foreground/10` — the branch doubles the ring in dark mode, where
+ * a 5% hairline on a near-black card is invisible. Specificity (0,4,1) clears
+ * the light rule above it. */
+.dark .v2-theme div[class~="border"][class~="text-card-foreground"] {
+  box-shadow:
+    0 0 0 1px hsl(var(--foreground) / 0.1),
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* 26px, via the same `--v2-radius-4xl` the ui-v2 Card resolves `rounded-4xl`
+ * through, so the two card families cannot drift apart. */
+.v2-theme div[class~="border"][class~="text-card-foreground"][class~="rounded-lg"] {
+  border-radius: var(--v2-radius-4xl);
+}
+
+/* --- Destructive fill ---------------------------------------------------
+ * The loudest mismatch on the screen. v1 paints `bg-destructive
+ * text-destructive-foreground` — a solid 357°/100%/45% red with white text.
+ * Both v2 primitives replaced that with a soft tinted chip:
+ *   ui-v2/button.tsx   bg-destructive/10  text-destructive
+ *                      hover:bg-destructive/20
+ *                      dark:bg-destructive/20  dark:hover:bg-destructive/30
+ *   ui-v2/badge.tsx    the same treatment, minus the hover on non-links
+ *
+ * `:is(button, a, div, span)` covers v1's Button (a `<button>`, or the `<a>`
+ * it becomes under `asChild`) and v1's Badge (a `<div>`), and excludes the
+ * destructive Toast — an `<li>`, where the solid red IS the design and losing
+ * it would make an error toast indistinguishable from an ordinary one. */
+.v2-theme :is(button, a, div, span)[class~="bg-destructive"][class~="text-destructive-foreground"] {
+  background-color: hsl(var(--destructive) / 0.1);
+  color: hsl(var(--destructive));
+  border-color: transparent;
+}
+.v2-theme :is(button, a, div, span)[class~="bg-destructive"][class~="text-destructive-foreground"]:hover {
+  background-color: hsl(var(--destructive) / 0.2);
+}
+.dark .v2-theme :is(button, a, div, span)[class~="bg-destructive"][class~="text-destructive-foreground"] {
+  background-color: hsl(var(--destructive) / 0.2);
+}
+.dark .v2-theme :is(button, a, div, span)[class~="bg-destructive"][class~="text-destructive-foreground"]:hover {
+  background-color: hsl(var(--destructive) / 0.3);
+}
+
+/* --- Button radius ------------------------------------------------------
+ * v1's Button is `rounded-md` (8px under the v2 `--radius`); the branch's is
+ * `rounded-4xl` (26px), which is what every migrated ui-v2 surface on the same
+ * screen already wears. Without this, a v2 dialog's own buttons and a v1
+ * page's buttons sit side by side at two different radii. */
+.v2-theme [class~="rounded-md"][class~="whitespace-nowrap"][class~="ring-offset-background"] {
+  border-radius: var(--v2-radius-4xl);
+}
