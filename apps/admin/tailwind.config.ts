@@ -15,17 +15,20 @@ const config: Config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        // Dark-theme tokens used across the admin app (bg-dark-card, border-dark-border,
-        // text-dark-text-secondary, etc.). Defined as literal hex — matching the neon-purple
-        // theme's CSS variables — so they render reliably regardless of CSS-variable scope.
-        // Previously these classes were UNDEFINED and only "looked" dark by rendering
-        // transparent on top of a dark backdrop, which let invisible elements slip through.
-        "dark-bg": "#1c1535", // matches --background (258 30% 12%)
-        "dark-card": "#241c42", // matches --card (258 28% 15%)
-        "dark-border": "#362d54", // matches --border (258 22% 22%)
-        "dark-hover": "#2e2550", // hover surface between card and border
-        "dark-text": "#ddd1f0", // matches --foreground
-        "dark-text-secondary": "#8a74a8", // matches --muted-foreground (265 15% 55%)
+        // Historical names, kept because 161 call sites across 12 files spell them
+        // (bg-dark-card, border-dark-border, text-dark-text-secondary, …) and
+        // renaming all of those would be a refactor, not a restyle. What changed
+        // is what they RESOLVE to: they were literal hex pinned to the old
+        // neon-purple palette, which is why the app could only ever be dark. Each
+        // now points at the theme token it was hand-matched to, so they follow
+        // :root in light mode and .dark in dark mode like everything else.
+        // Read "dark-" as "the surface/border/text token", not as "dark mode".
+        "dark-bg": "hsl(var(--background))",
+        "dark-card": "hsl(var(--card))",
+        "dark-border": "hsl(var(--border))",
+        "dark-hover": "hsl(var(--muted))", // hover surface between card and border
+        "dark-text": "hsl(var(--foreground))",
+        "dark-text-secondary": "hsl(var(--muted-foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -81,13 +84,58 @@ const config: Config = {
           "5": "hsl(var(--chart-5))",
         },
       },
+      /* ------------------------------------------------------------------
+       * The v2 radius ramp.
+       *
+       * `improv/portal-side` runs Tailwind v4 and derives its whole radius
+       * scale from `--radius` inside `@theme`:
+       *     sm 0.6x  md 0.8x  lg 1x  xl 1.4x  2xl 1.8x  3xl 2.2x  4xl 2.6x
+       * At the v2 `--radius` of 0.625rem the three keys below already agree
+       * with that — `calc(--radius - 4px)` and `--radius * 0.6` are both 6px,
+       * `- 2px` and `* 0.8` are both 8px — which is why only the larger steps
+       * needed adding. v3 resolves `rounded-*` here at BUILD time, so these
+       * could not ride along with the custom properties in globals.css; each
+       * reads a `--v2-radius-*` set in exactly one place, that file's `:root`.
+       *
+       * `4xl` is different in kind: v3 has no such key, so `rounded-4xl`
+       * compiled to nothing at all. It is the radius v2 draws every card,
+       * button and dialog with, so it is added rather than overridden. The
+       * fallbacks are the values v3 already emitted (and v4's own 2rem for
+       * `4xl`), which keeps the utilities sane if --radius is ever unset.
+       * ------------------------------------------------------------------ */
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "var(--v2-radius-xl, 0.75rem)",
+        "2xl": "var(--v2-radius-2xl, 1rem)",
+        "3xl": "var(--v2-radius-3xl, 1.5rem)",
+        "4xl": "var(--v2-radius-4xl, 2rem)",
+      },
+      /* v3's ring scale is 0/1/2/4/8, so v2's `ring-3` focus rings would
+         compile to nothing. Purely additive — no `ring-3` existed before, so
+         no existing markup starts resolving differently. */
+      ringWidth: {
+        3: "3px",
+      },
+      /* v4 renumbered the blur ramp: its `blur-sm` is 8px where v3's is 4px
+         (v3's 4px became v4's `blur-xs`). Without this every v2 scrim — dialog,
+         sheet, drawer — is half as blurred as the design. */
+      backdropBlur: {
+        sm: "var(--v2-backdrop-blur-sm, 4px)",
+      },
+      /* v4 shifted the shadow ramp up one step as well: what it calls
+         `shadow-sm` is v3's `shadow`. The v2 primitives are drawn against the
+         v4 value, so `shadow-sm` is pinned to it here. */
+      boxShadow: {
+        sm: "var(--v2-shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05))",
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Manrope is the v2 typeface, loaded by next/font in app/layout.tsx —
+        // which is also why the render-blocking Google Fonts @import that used
+        // to head globals.css is gone. The fallbacks cover the frame before the
+        // font file lands and any context where the variable is unset.
+        sans: ['var(--font-manrope)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       keyframes: {
         "accordion-down": {

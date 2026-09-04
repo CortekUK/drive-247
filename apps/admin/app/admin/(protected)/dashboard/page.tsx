@@ -223,8 +223,8 @@ export default function DashboardPage() {
     <div className="p-8">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Platform Dashboard</h1>
-          <p className="mt-2 text-gray-400">
+          <h1 className="text-3xl font-bold text-foreground">Platform Dashboard</h1>
+          <p className="mt-2 text-muted-foreground">
             Showing {isLive ? 'live (production)' : 'test / sandbox'} rental companies and platform metrics
           </p>
         </div>
@@ -237,8 +237,8 @@ export default function DashboardPage() {
           value={m.companies}
           subtitle={`${m.activeCompanies} active`}
           icon=""
-          bgColor="bg-blue-900/20 border border-blue-800/50"
-          textColor="text-blue-400"
+          bgColor="bg-blue-500/10 border border-blue-500/25"
+          textColor="text-blue-600"
         />
 
         <MetricCard
@@ -246,8 +246,8 @@ export default function DashboardPage() {
           value={m.vehicles}
           subtitle={`Across all ${tenantWord} companies`}
           icon=""
-          bgColor="bg-green-900/20 border border-green-800/50"
-          textColor="text-green-400"
+          bgColor="bg-green-500/10 border border-green-500/25"
+          textColor="text-green-600"
         />
 
         <MetricCard
@@ -255,8 +255,8 @@ export default function DashboardPage() {
           value={m.rentals}
           subtitle="All-time bookings"
           icon=""
-          bgColor="bg-purple-900/20 border border-purple-800/50"
-          textColor="text-purple-400"
+          bgColor="bg-purple-500/10 border border-purple-500/25"
+          textColor="text-purple-600"
         />
 
         <MetricCard
@@ -264,8 +264,8 @@ export default function DashboardPage() {
           value={m.customers}
           subtitle={`${tenantWord} tenants`}
           icon=""
-          bgColor="bg-yellow-900/20 border border-yellow-800/50"
-          textColor="text-yellow-400"
+          bgColor="bg-yellow-500/10 border border-yellow-500/25"
+          textColor="text-yellow-600"
         />
 
         {/* Drive247's OWN revenue — subscription fees. This is the platform's top line. */}
@@ -274,8 +274,8 @@ export default function DashboardPage() {
           value={formatMoneyMap(m.mrr)}
           subtitle={`From tenant subscriptions · ${lifetimeLabel} collected all-time`}
           icon=""
-          bgColor="bg-indigo-900/20 border border-indigo-800/50"
-          textColor="text-indigo-400"
+          bgColor="bg-indigo-500/10 border border-indigo-500/25"
+          textColor="text-indigo-600"
         />
 
         {/* Platform SCALE — gross rental value flowing to tenants, NOT Drive247 income. */}
@@ -284,8 +284,8 @@ export default function DashboardPage() {
           value={formatMoneyMap(m.bookingVolume)}
           subtitle={`Gross rental value · ${tenantWord} tenants · not Drive247 revenue`}
           icon=""
-          bgColor="bg-cyan-900/20 border border-cyan-800/50"
-          textColor="text-cyan-400"
+          bgColor="bg-cyan-500/10 border border-cyan-500/25"
+          textColor="text-cyan-600"
         />
 
         <MetricCard
@@ -293,19 +293,19 @@ export default function DashboardPage() {
           value="Operational"
           subtitle="All systems running"
           icon=""
-          bgColor="bg-emerald-900/20 border border-emerald-800/50"
-          textColor="text-emerald-400"
+          bgColor="bg-emerald-500/10 border border-emerald-500/25"
+          textColor="text-emerald-600"
         />
       </div>
 
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-dark-card rounded-lg shadow p-6 border border-dark-border">
-          <h2 className="text-lg font-semibold text-white mb-4">Recent Activity</h2>
-          <p className="text-sm text-gray-400">Activity feed coming soon...</p>
+          <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
+          <p className="text-sm text-muted-foreground">Activity feed coming soon...</p>
         </div>
 
         <div className="bg-dark-card rounded-lg shadow p-6 border border-dark-border">
-          <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
           <div className="space-y-2">
             <QuickActionButton href="/admin/rentals" text="Add New Rental Company" />
             <QuickActionButton href="/admin/contacts" text="View Contact Requests" />
@@ -319,8 +319,8 @@ export default function DashboardPage() {
 
 function ModeToggle({ mode, onChange }: { mode: DashboardMode; onChange: (m: DashboardMode) => void }) {
   const options: { key: DashboardMode; label: string; activeClass: string; dot: string }[] = [
-    { key: 'live', label: 'Live', activeClass: 'bg-emerald-500/20 text-emerald-300', dot: 'bg-emerald-400' },
-    { key: 'test', label: 'Test', activeClass: 'bg-amber-500/20 text-amber-300', dot: 'bg-amber-400' },
+    { key: 'live', label: 'Live', activeClass: 'bg-emerald-500/20 text-emerald-600', dot: 'bg-emerald-400' },
+    { key: 'test', label: 'Test', activeClass: 'bg-amber-500/20 text-amber-600', dot: 'bg-amber-400' },
   ];
   return (
     <div
@@ -338,7 +338,7 @@ function ModeToggle({ mode, onChange }: { mode: DashboardMode; onChange: (m: Das
             onClick={() => onChange(opt.key)}
             className={cn(
               'flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-colors',
-              active ? opt.activeClass : 'text-gray-400 hover:text-gray-200'
+              active ? opt.activeClass : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <span className={cn('h-1.5 w-1.5 rounded-full', opt.dot, !active && 'opacity-40')} />
@@ -368,11 +368,11 @@ function MetricCard({
   return (
     <div className={`${bgColor} rounded-lg p-6 shadow`}>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-400">{title}</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
         <span className="text-2xl">{icon}</span>
       </div>
       <div className={`text-3xl font-bold ${textColor}`}>{value}</div>
-      <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+      <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
     </div>
   );
 }
@@ -381,7 +381,7 @@ function QuickActionButton({ href, text }: { href: string; text: string }) {
   return (
     <a
       href={href}
-      className="block w-full px-4 py-2 text-sm font-medium text-indigo-400 bg-indigo-900/20 rounded-lg hover:bg-indigo-900/40 border border-indigo-800/50 transition-colors"
+      className="block w-full px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-500/10 rounded-lg hover:bg-indigo-500/10 border border-indigo-500/25 transition-colors"
     >
       {text} →
     </a>

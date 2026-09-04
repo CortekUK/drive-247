@@ -6,7 +6,10 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   <div
     ref={ref}
     className={cn(
-      "rounded-lg border border-border/40 bg-card text-card-foreground transition-all duration-300 hover:border-primary/20",
+      // v2 card: the 26px `rounded-4xl`, a flat 1px ring instead of a border
+      // (a ring does not take part in layout, so it cannot shift content by a
+      // pixel the way the old border did) and the two-layer shadow-sm lift.
+      "rounded-4xl bg-card text-card-foreground shadow-sm ring-1 ring-foreground/10 transition-all duration-200 hover:ring-primary/20",
       className,
     )}
     {...props}

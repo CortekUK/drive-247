@@ -316,11 +316,11 @@ export default function RequestsPage() {
                     'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
                     filter === status
                       ? status === 'pending'
-                        ? 'bg-warning/15 text-amber-400 border-warning/30'
+                        ? 'bg-warning/15 text-amber-600 border-warning/30'
                         : status === 'approved'
-                        ? 'bg-success/15 text-emerald-400 border-success/30'
+                        ? 'bg-success/15 text-emerald-600 border-success/30'
                         : status === 'rejected'
-                        ? 'bg-destructive/15 text-red-400 border-destructive/30'
+                        ? 'bg-destructive/15 text-red-600 border-destructive/30'
                         : 'bg-primary/15 text-primary border-primary/30'
                       : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
                   )}

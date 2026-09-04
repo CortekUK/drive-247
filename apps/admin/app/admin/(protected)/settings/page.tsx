@@ -266,7 +266,7 @@ export default function SettingsPage() {
                     settings.maintenance_banner_enabled ? 'bg-amber-500' : 'bg-muted'
                   )}>
                     <div className={cn(
-                      "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                      "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
                       settings.maintenance_banner_enabled && 'translate-x-5'
                     )} />
                   </div>
@@ -318,7 +318,7 @@ export default function SettingsPage() {
                 <Label className="mb-2 block">Preview</Label>
                 <div className={cn(
                   "rounded-md px-4 py-3 text-sm font-medium border",
-                  settings.maintenance_banner_type === 'info' && 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+                  settings.maintenance_banner_type === 'info' && 'bg-blue-500/10 border-blue-500/30 text-blue-600',
                   settings.maintenance_banner_type === 'warning' && 'bg-warning/10 border-warning/30 text-warning',
                   settings.maintenance_banner_type === 'critical' && 'bg-destructive/10 border-destructive/30 text-destructive'
                 )}>
@@ -354,7 +354,7 @@ export default function SettingsPage() {
                     settings.subscription_gate_disabled ? 'bg-emerald-500' : 'bg-muted'
                   )}>
                     <div className={cn(
-                      "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                      "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
                       settings.subscription_gate_disabled && 'translate-x-5'
                     )} />
                   </div>
@@ -392,7 +392,7 @@ export default function SettingsPage() {
                   settings.contact_form_enabled ? 'bg-violet-500' : 'bg-muted'
                 )}>
                   <div className={cn(
-                    "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                    "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
                     settings.contact_form_enabled && 'translate-x-5'
                   )} />
                 </div>

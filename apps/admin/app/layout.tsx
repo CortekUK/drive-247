@@ -1,8 +1,22 @@
 import type { Metadata } from 'next';
+import { Manrope } from 'next/font/google';
 import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
+
+/**
+ * The v2 design's typeface, matching the portal canary. Self-hosted by
+ * next/font rather than pulled from fonts.googleapis.com at paint time, which
+ * is what globals.css used to do for Inter — an @import at the top of a
+ * stylesheet is render-blocking and costs a third-party round trip. Defines
+ * --font-manrope; tailwind.config.ts's `fontFamily.sans` reads it.
+ */
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Drive247 Admin Portal',
@@ -33,9 +47,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={manrope.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
-        <NextTopLoader color="#a470ff" height={2} showSpinner={false} />
+        {/* Indigo, matching --primary (248 68% 51%) — the loader sits above the
+            page so it cannot read a CSS variable from it. */}
+        <NextTopLoader color="#442dd7" height={2} showSpinner={false} />
         {/* Installs the worker that receives platform activity push while this
             dashboard is closed. */}
         <ServiceWorkerRegistrar />

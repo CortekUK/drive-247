@@ -41,24 +41,24 @@ export default function AdminLoginPage() {
           <h2 className="text-4xl font-extrabold gradient-text mb-2">
             CORTEK
           </h2>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Super Admin Portal
           </p>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-muted-foreground">
             Sign in to access the platform dashboard
           </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="rounded-md bg-red-900/20 border border-red-700/50 p-4">
-              <p className="text-sm text-red-400">{error}</p>
+            <div className="rounded-md bg-red-500/10 border border-red-700/50 p-4">
+              <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">
                 Email address
               </label>
               <input
@@ -69,13 +69,13 @@ export default function AdminLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="block w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="block w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
                 placeholder="admin@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-2">
                 Password
               </label>
               <input
@@ -86,7 +86,7 @@ export default function AdminLoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="block w-full px-4 py-3 bg-dark-bg border border-dark-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-transparent"
                 placeholder="••••••••"
               />
             </div>
@@ -96,7 +96,7 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary-900/50"
+              className="w-full py-3 px-4 bg-primary hover:bg-primary/80 text-primary-foreground rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/25"
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
@@ -104,7 +104,7 @@ export default function AdminLoginPage() {
         </form>
 
         <div className="text-center">
-          <a href="/" className="text-sm text-primary-400 hover:text-primary-300 transition">
+          <a href="/" className="text-sm text-primary hover:text-primary transition">
             ← Back to landing page
           </a>
         </div>

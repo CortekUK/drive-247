@@ -227,9 +227,9 @@ export default function BlacklistPage() {
   if (loading) {
     return (
       <div className="p-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Blocked Customers</h1>
-        <p className="text-gray-400 mb-8">All blocked customers across every tenant</p>
-        <div className="text-xl text-gray-400 text-center py-12">Loading...</div>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Blocked Customers</h1>
+        <p className="text-muted-foreground mb-8">All blocked customers across every tenant</p>
+        <div className="text-xl text-muted-foreground text-center py-12">Loading...</div>
       </div>
     );
   }
@@ -238,8 +238,8 @@ export default function BlacklistPage() {
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Blocked Customers</h1>
-        <p className="mt-2 text-gray-400">
+        <h1 className="text-3xl font-bold text-foreground">Blocked Customers</h1>
+        <p className="mt-2 text-muted-foreground">
           All blocked customers across every tenant
         </p>
       </div>
@@ -247,16 +247,16 @@ export default function BlacklistPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-dark-card rounded-lg border border-dark-border p-5">
-          <p className="text-sm text-gray-400">Total Blocked</p>
-          <p className="text-2xl font-bold text-red-400 mt-1">{totalBlocked}</p>
+          <p className="text-sm text-muted-foreground">Total Blocked</p>
+          <p className="text-2xl font-bold text-red-600 mt-1">{totalBlocked}</p>
         </div>
         <div className="bg-dark-card rounded-lg border border-dark-border p-5">
-          <p className="text-sm text-gray-400">Globally Blacklisted</p>
-          <p className="text-2xl font-bold text-orange-400 mt-1">{globallyBlacklisted}</p>
+          <p className="text-sm text-muted-foreground">Globally Blacklisted</p>
+          <p className="text-2xl font-bold text-orange-600 mt-1">{globallyBlacklisted}</p>
         </div>
         <div className="bg-dark-card rounded-lg border border-dark-border p-5">
-          <p className="text-sm text-gray-400">Tenants Affected</p>
-          <p className="text-2xl font-bold text-white mt-1">{uniqueTenants}</p>
+          <p className="text-sm text-muted-foreground">Tenants Affected</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{uniqueTenants}</p>
         </div>
       </div>
 
@@ -267,7 +267,7 @@ export default function BlacklistPage() {
           placeholder="Search by name, email, or tenant..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full max-w-md px-4 py-2 rounded-lg bg-dark-card border border-dark-border text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+          className="w-full max-w-md px-4 py-2 rounded-lg bg-dark-card border border-dark-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
         />
       </div>
 
@@ -276,23 +276,23 @@ export default function BlacklistPage() {
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase w-8" />
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase w-8" />
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                 Customer
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                 Tenant
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                 Reason
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                 Blocked At
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                 Actions
               </th>
             </tr>
@@ -304,22 +304,22 @@ export default function BlacklistPage() {
                   className="hover:bg-dark-hover cursor-pointer"
                   onClick={() => toggleRow(customer.id)}
                 >
-                  <td className="px-4 py-4 text-gray-400 text-sm">
+                  <td className="px-4 py-4 text-muted-foreground text-sm">
                     {expandedRows.has(customer.id) ? '▼' : '▶'}
                   </td>
                   <td className="px-4 py-4">
                     <div>
-                      <p className="text-sm font-medium text-white">{customer.name}</p>
-                      <p className="text-xs text-gray-400">{customer.email}</p>
+                      <p className="text-sm font-medium text-foreground">{customer.name}</p>
+                      <p className="text-xs text-muted-foreground">{customer.email}</p>
                     </div>
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
                     {customer.tenant_name}
                   </td>
-                  <td className="px-4 py-4 text-sm text-gray-400 max-w-[200px] truncate">
+                  <td className="px-4 py-4 text-sm text-muted-foreground max-w-[200px] truncate">
                     {customer.blocked_reason || '—'}
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm text-muted-foreground">
                     {customer.blocked_at
                       ? new Date(customer.blocked_at).toLocaleDateString('en-US')
                       : '—'}
@@ -327,17 +327,17 @@ export default function BlacklistPage() {
                   <td className="px-4 py-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
                       {customer.is_tenant_blocked && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-900/50 text-red-400 border border-red-700 w-fit">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-600 border border-red-700 w-fit">
                           Blocked
                         </span>
                       )}
                       {customer.is_globally_blacklisted && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-900/50 text-orange-400 border border-orange-700 w-fit">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-500/10 text-orange-600 border border-orange-700 w-fit">
                           Global Blacklist
                         </span>
                       )}
                       {customer.is_whitelisted && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/50 text-green-400 border border-green-700 w-fit">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500/10 text-green-600 border border-green-700 w-fit">
                           Whitelisted
                         </span>
                       )}
@@ -350,7 +350,7 @@ export default function BlacklistPage() {
                           e.stopPropagation();
                           openDialog('whitelist', customer.email);
                         }}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-green-900/30 text-green-400 border border-green-700 hover:bg-green-900/50 transition-colors"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-green-500/10 text-green-600 border border-green-700 hover:bg-green-500/10 transition-colors"
                       >
                         Whitelist
                       </button>
@@ -361,7 +361,7 @@ export default function BlacklistPage() {
                           e.stopPropagation();
                           openDialog('re-blacklist', customer.email);
                         }}
-                        className="text-xs px-3 py-1.5 rounded-lg bg-red-900/30 text-red-400 border border-red-700 hover:bg-red-900/50 transition-colors"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-600 border border-red-700 hover:bg-red-500/10 transition-colors"
                       >
                         Re-blacklist
                       </button>
@@ -376,7 +376,7 @@ export default function BlacklistPage() {
                       <div className="ml-8">
                         {customer.blocked_identities.length > 0 ? (
                           <>
-                            <p className="text-xs font-medium text-gray-400 uppercase mb-3">
+                            <p className="text-xs font-medium text-muted-foreground uppercase mb-3">
                               Blocked Identities
                             </p>
                             <div className="space-y-2">
@@ -385,13 +385,13 @@ export default function BlacklistPage() {
                                   key={idx}
                                   className="flex items-center gap-6 text-sm bg-dark-card rounded-lg px-4 py-3 border border-dark-border"
                                 >
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-bg text-gray-300 border border-dark-border min-w-[80px] justify-center capitalize">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-dark-bg text-muted-foreground border border-dark-border min-w-[80px] justify-center capitalize">
                                     {identity.identity_type}
                                   </span>
-                                  <span className="text-white font-mono text-sm">
+                                  <span className="text-foreground font-mono text-sm">
                                     {identity.identity_number}
                                   </span>
-                                  <span className="text-gray-400 flex-1 text-sm">
+                                  <span className="text-muted-foreground flex-1 text-sm">
                                     {identity.reason || 'No reason provided'}
                                   </span>
                                 </div>
@@ -399,12 +399,12 @@ export default function BlacklistPage() {
                             </div>
                           </>
                         ) : (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             No blocked identities recorded for this customer.
                           </p>
                         )}
                         {customer.phone && (
-                          <p className="text-xs text-gray-500 mt-3">
+                          <p className="text-xs text-muted-foreground mt-3">
                             Phone: {customer.phone}
                           </p>
                         )}
@@ -419,7 +419,7 @@ export default function BlacklistPage() {
 
         {filteredCustomers.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-400">
+            <p className="text-muted-foreground">
               {searchQuery
                 ? 'No blocked customers match your search.'
                 : 'No blocked customers found.'}
@@ -432,40 +432,40 @@ export default function BlacklistPage() {
       {dialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-black/30 supports-[backdrop-filter]:backdrop-blur-sm"
             onClick={() => !actionLoading && setDialogOpen(false)}
           />
           <div className="relative bg-dark-card border border-dark-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
-            <h2 className="text-xl font-bold text-white mb-1">
+            <h2 className="text-xl font-bold text-foreground mb-1">
               {dialogAction === 'whitelist'
                 ? 'Whitelist Customer'
                 : 'Re-blacklist Customer'}
             </h2>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               {dialogAction === 'whitelist'
                 ? 'This will allow the customer to book across all tenants.'
                 : 'This will block the customer across all tenants again.'}
             </p>
 
             <div className="mb-4">
-              <label className="block text-xs font-medium text-gray-400 uppercase mb-1">
+              <label className="block text-xs font-medium text-muted-foreground uppercase mb-1">
                 Email
               </label>
-              <p className="text-sm text-white bg-dark-bg rounded-lg px-3 py-2 border border-dark-border">
+              <p className="text-sm text-foreground bg-dark-bg rounded-lg px-3 py-2 border border-dark-border">
                 {dialogEmail}
               </p>
             </div>
 
             <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-400 uppercase mb-1">
-                Reason <span className="text-red-400">*</span>
+              <label className="block text-xs font-medium text-muted-foreground uppercase mb-1">
+                Reason <span className="text-red-600">*</span>
               </label>
               <textarea
                 value={dialogReason}
                 onChange={(e) => setDialogReason(e.target.value)}
                 placeholder="Provide a reason for this action..."
                 rows={3}
-                className="w-full px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 resize-none text-sm"
+                className="w-full px-3 py-2 rounded-lg bg-dark-bg border border-dark-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 resize-none text-sm"
               />
             </div>
 
@@ -473,7 +473,7 @@ export default function BlacklistPage() {
               <button
                 onClick={() => setDialogOpen(false)}
                 disabled={actionLoading}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 bg-dark-bg border border-dark-border hover:bg-dark-hover transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground bg-dark-bg border border-dark-border hover:bg-dark-hover transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>

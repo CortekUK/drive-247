@@ -59,9 +59,9 @@ interface RentalRow {
 }
 
 const SEV: Record<Severity, { label: string; dot: string; text: string; chipBg: string }> = {
-  critical: { label: 'Critical', dot: 'bg-red-500', text: 'text-red-400', chipBg: 'bg-destructive/15 border-destructive/30' },
-  warning: { label: 'Warning', dot: 'bg-amber-500', text: 'text-amber-400', chipBg: 'bg-warning/15 border-warning/30' },
-  ok: { label: 'Live', dot: 'bg-emerald-500', text: 'text-emerald-400', chipBg: 'bg-success/15 border-success/30' },
+  critical: { label: 'Critical', dot: 'bg-red-500', text: 'text-red-600', chipBg: 'bg-destructive/15 border-destructive/30' },
+  warning: { label: 'Warning', dot: 'bg-amber-500', text: 'text-amber-600', chipBg: 'bg-warning/15 border-warning/30' },
+  ok: { label: 'Live', dot: 'bg-emerald-500', text: 'text-emerald-600', chipBg: 'bg-success/15 border-success/30' },
 };
 
 function fmtDate(d?: string | null) {
@@ -387,7 +387,7 @@ export default function PlatformRentalsPage() {
                     </ul>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-emerald-400 text-sm font-medium">
+                  <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-emerald-600 text-sm font-medium">
                     Every integration was live-ready at creation.
                   </div>
                 )}
@@ -405,7 +405,7 @@ export default function PlatformRentalsPage() {
                         return (
                           <div key={k} className="flex items-center justify-between">
                             <span className="capitalize text-muted-foreground">{k}</span>
-                            <span className={cn('font-semibold', ready ? 'text-emerald-400' : 'text-red-400')}>
+                            <span className={cn('font-semibold', ready ? 'text-emerald-600' : 'text-red-600')}>
                               {ready ? 'live-ready' : (node.mode ?? node.tenant_mode ?? node.status ?? 'test')}
                             </span>
                           </div>

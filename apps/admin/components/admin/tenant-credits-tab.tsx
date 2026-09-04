@@ -101,7 +101,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-400" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
@@ -111,8 +111,8 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
       {/* Balance Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-dark-card rounded-lg p-5 border border-dark-border">
-          <p className="text-sm text-green-400 font-medium mb-1">Live Balance</p>
-          <p className="text-3xl font-bold text-white">{wallet?.balance?.toFixed(0) ?? '0'}</p>
+          <p className="text-sm text-green-600 font-medium mb-1">Live Balance</p>
+          <p className="text-3xl font-bold text-foreground">{wallet?.balance?.toFixed(0) ?? '0'}</p>
           <div className="mt-3 flex gap-4 text-xs text-dark-text-secondary">
             <span>Purchased: {wallet?.lifetime_purchased?.toFixed(0) ?? '0'}</span>
             <span>Used: {wallet?.lifetime_used?.toFixed(0) ?? '0'}</span>
@@ -120,8 +120,8 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
         </div>
 
         <div className="bg-dark-card rounded-lg p-5 border border-dark-border">
-          <p className="text-sm text-yellow-400 font-medium mb-1">Test Balance</p>
-          <p className="text-3xl font-bold text-white">{wallet?.test_balance?.toFixed(0) ?? '0'}</p>
+          <p className="text-sm text-yellow-600 font-medium mb-1">Test Balance</p>
+          <p className="text-3xl font-bold text-foreground">{wallet?.test_balance?.toFixed(0) ?? '0'}</p>
           <div className="mt-3 flex gap-4 text-xs text-dark-text-secondary">
             <span>Purchased: {wallet?.test_lifetime_purchased?.toFixed(0) ?? '0'}</span>
             <span>Used: {wallet?.test_lifetime_used?.toFixed(0) ?? '0'}</span>
@@ -131,7 +131,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
 
       {/* Adjust Credits */}
       <div className="bg-dark-card rounded-lg p-5 border border-dark-border">
-        <h3 className="text-lg font-semibold text-white mb-4">Adjust Credits</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-4">Adjust Credits</h3>
         <div className="space-y-4 max-w-md">
           <div>
             <label className="block text-sm text-dark-text-secondary mb-1">Mode</label>
@@ -141,7 +141,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
                 className={`px-3 py-1.5 rounded text-sm font-medium ${
                   adjustMode === 'live'
                     ? 'bg-green-600 text-white'
-                    : 'bg-dark-border text-dark-text-secondary hover:text-white'
+                    : 'bg-dark-border text-dark-text-secondary hover:text-foreground'
                 }`}
               >
                 Live
@@ -151,7 +151,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
                 className={`px-3 py-1.5 rounded text-sm font-medium ${
                   adjustMode === 'test'
                     ? 'bg-yellow-600 text-white'
-                    : 'bg-dark-border text-dark-text-secondary hover:text-white'
+                    : 'bg-dark-border text-dark-text-secondary hover:text-foreground'
                 }`}
               >
                 Test
@@ -168,7 +168,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustAmount}
               onChange={(e) => setAdjustAmount(e.target.value)}
               placeholder="e.g. 100 or -50"
-              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
 
@@ -179,7 +179,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
               value={adjustNote}
               onChange={(e) => setAdjustNote(e.target.value)}
               placeholder="Reason for adjustment"
-              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-white text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
 
@@ -196,7 +196,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
       {/* Transaction History */}
       <div className="bg-dark-card rounded-lg border border-dark-border">
         <div className="px-5 py-4 border-b border-dark-border">
-          <h3 className="text-lg font-semibold text-white">Transaction History</h3>
+          <h3 className="text-lg font-semibold text-foreground">Transaction History</h3>
           <p className="text-sm text-dark-text-secondary mt-0.5">Recent credit activity for this tenant</p>
         </div>
 
@@ -228,17 +228,17 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
                     <td className="py-2.5 px-4">
                       <span className="flex items-center gap-1.5">
                         <span className={`text-sm capitalize ${
-                          tx.type === 'purchase' ? 'text-green-400' :
-                          tx.type === 'usage' ? 'text-red-400' :
-                          tx.type === 'refund' ? 'text-blue-400' :
-                          tx.type === 'gift' ? 'text-purple-400' :
-                          tx.type === 'auto_refill' ? 'text-amber-400' :
+                          tx.type === 'purchase' ? 'text-green-600' :
+                          tx.type === 'usage' ? 'text-red-600' :
+                          tx.type === 'refund' ? 'text-blue-600' :
+                          tx.type === 'gift' ? 'text-purple-600' :
+                          tx.type === 'auto_refill' ? 'text-amber-600' :
                           'text-dark-text-secondary'
                         }`}>
                           {tx.type.replace('_', '-')}
                         </span>
                         {tx.is_test_mode && (
-                          <span className="text-[10px] px-1.5 py-0 rounded border border-orange-500/50 text-orange-400">TEST</span>
+                          <span className="text-[10px] px-1.5 py-0 rounded border border-orange-500/50 text-orange-600">TEST</span>
                         )}
                       </span>
                     </td>
@@ -249,7 +249,7 @@ export function TenantCreditsTab({ tenantId }: { tenantId: string }) {
                       {tx.category || '\u2014'}
                     </td>
                     <td className={`py-2.5 px-4 text-sm font-medium text-right ${
-                      tx.amount > 0 ? 'text-green-400' : tx.amount < 0 ? 'text-red-400' : 'text-dark-text-secondary'
+                      tx.amount > 0 ? 'text-green-600' : tx.amount < 0 ? 'text-red-600' : 'text-dark-text-secondary'
                     }`}>
                       {tx.amount > 0 ? '+' : ''}{tx.amount}
                     </td>

@@ -4,24 +4,31 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  // v2 pills: tinted surface, coloured ink, no border and no halo. The ink was
+  // pinned to the -400 end of each ramp, which is the value that reads on a
+  // near-black canvas and washes out on a light one; each now takes the theme
+  // token, so the pills follow :root and .dark like the rest of the app.
+  "inline-flex items-center rounded-3xl border border-transparent px-2.5 py-0.5 text-[11px] font-semibold transition-all focus:outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30",
   {
     variants: {
       variant: {
         default:
-          "border-primary/30 bg-primary/15 text-primary glow-purple-sm",
+          "bg-primary/10 text-primary",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground",
+          "bg-secondary text-secondary-foreground",
         destructive:
-          "border-destructive/30 bg-destructive/15 text-red-400 glow-red",
+          "bg-destructive/10 text-destructive",
         outline:
           "border-border text-foreground",
         success:
-          "border-success/30 bg-success/15 text-emerald-400 glow-green",
+          "bg-success/10 text-success",
         warning:
-          "border-warning/30 bg-warning/15 text-amber-400 glow-amber",
+          "bg-warning/15 text-warning",
+        // No token for "info" in the v2 set; sky is the nearest thing and is
+        // written per-mode because a single value cannot carry both — the -400
+        // step that reads on dark is unreadable on white.
         info:
-          "border-sky-500/30 bg-sky-500/15 text-sky-400 glow-cyan",
+          "bg-sky-500/10 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400",
       },
     },
     defaultVariants: {

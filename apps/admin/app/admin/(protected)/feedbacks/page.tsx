@@ -436,11 +436,11 @@ export default function FeedbacksPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
             <MessageSquareText className="h-6 w-6 text-primary" />
             Feedbacks
           </h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             What rental operators are telling us about the software.
           </p>
         </div>
@@ -458,8 +458,8 @@ export default function FeedbacksPage() {
           { label: 'Top category this week', value: stats.topCategory },
         ].map((s) => (
           <div key={s.label} className="rounded-lg border border-dark-border bg-dark-card p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-400">{s.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-white">{s.value}</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</p>
+            <p className="mt-1 text-2xl font-semibold text-foreground">{s.value}</p>
           </div>
         ))}
       </div>
@@ -468,11 +468,11 @@ export default function FeedbacksPage() {
       <div className="rounded-lg border border-dark-border bg-dark-card p-5 space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
               AI Insights
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {insight
                 ? `Generated ${new Date(insight.generated_at).toLocaleString()} from ${insight.feedback_count} items`
                 : 'Not generated yet'}
@@ -490,7 +490,7 @@ export default function FeedbacksPage() {
 
         {insight ? (
           <>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
               {insight.summary}
             </p>
             {themes.length > 0 && (
@@ -498,7 +498,7 @@ export default function FeedbacksPage() {
                 {themes.map((t, i) => (
                   <span
                     key={`${t.theme}-${i}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-dark-border bg-secondary px-2.5 py-1 text-xs text-gray-300"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-dark-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground"
                   >
                     {t.theme}
                     <span className="text-primary font-semibold">{t.count}</span>
@@ -508,7 +508,7 @@ export default function FeedbacksPage() {
             )}
           </>
         ) : (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             Hit Regenerate to summarise the last 90 days of feedback.
           </p>
         )}
@@ -516,7 +516,7 @@ export default function FeedbacksPage() {
         {/* Ad-hoc chat over the corpus. Held in component state only — never
             written to a table. */}
         <div className="rounded-md border border-dark-border bg-secondary/40 p-3 space-y-3">
-          <p className="text-xs font-medium text-gray-400">Ask about the feedback</p>
+          <p className="text-xs font-medium text-muted-foreground">Ask about the feedback</p>
 
           {chat.length > 0 && (
             <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
@@ -525,15 +525,15 @@ export default function FeedbacksPage() {
                   key={i}
                   className={
                     m.role === 'user'
-                      ? 'ml-auto max-w-[85%] rounded-lg bg-primary/15 px-3 py-2 text-sm text-white'
-                      : 'mr-auto max-w-[85%] rounded-lg bg-dark-card px-3 py-2 text-sm text-gray-300 whitespace-pre-wrap'
+                      ? 'ml-auto max-w-[85%] rounded-lg bg-primary/15 px-3 py-2 text-sm text-primary-foreground'
+                      : 'mr-auto max-w-[85%] rounded-lg bg-dark-card px-3 py-2 text-sm text-muted-foreground whitespace-pre-wrap'
                   }
                 >
                   {m.content}
                 </div>
               ))}
               {chatSending && (
-                <div className="mr-auto rounded-lg bg-dark-card px-3 py-2 text-sm text-gray-400 flex items-center gap-2">
+                <div className="mr-auto rounded-lg bg-dark-card px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   Thinking...
                 </div>
@@ -565,7 +565,7 @@ export default function FeedbacksPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-2 items-end">
         <div className="w-44">
-          <Label className="text-xs text-gray-400 mb-1 block">Category</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -577,7 +577,7 @@ export default function FeedbacksPage() {
           </Select>
         </div>
         <div className="w-36">
-          <Label className="text-xs text-gray-400 mb-1 block">Status</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -588,7 +588,7 @@ export default function FeedbacksPage() {
           </Select>
         </div>
         <div className="w-52">
-          <Label className="text-xs text-gray-400 mb-1 block">Tenant</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">Tenant</Label>
           <Select value={tenantFilter} onValueChange={setTenantFilter}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -600,15 +600,15 @@ export default function FeedbacksPage() {
           </Select>
         </div>
         <div className="w-40">
-          <Label className="text-xs text-gray-400 mb-1 block">From</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">From</Label>
           <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         </div>
         <div className="w-40">
-          <Label className="text-xs text-gray-400 mb-1 block">To</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">To</Label>
           <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         </div>
         <div className="flex-1 min-w-[200px]">
-          <Label className="text-xs text-gray-400 mb-1 block">Search</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">Search</Label>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -623,14 +623,14 @@ export default function FeedbacksPage() {
           <TableSkeleton />
         ) : items.length === 0 ? (
           <div className="p-10 text-center">
-            <MessageSquareText className="h-8 w-8 text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">No feedback matches these filters.</p>
+            <MessageSquareText className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No feedback matches these filters.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-dark-border text-left text-xs uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-dark-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3 font-medium">Tenant</th>
                   <th className="px-4 py-3 font-medium">Submitter</th>
                   <th className="px-4 py-3 font-medium">Category</th>
@@ -650,11 +650,11 @@ export default function FeedbacksPage() {
                       onClick={() => openDetail(f)}
                       className="border-b border-dark-border last:border-0 cursor-pointer hover:bg-secondary/40 transition-colors"
                     >
-                      <td className="px-4 py-3 text-white">{tenantName(f)}</td>
-                      <td className="px-4 py-3 text-gray-300">
+                      <td className="px-4 py-3 text-foreground">{tenantName(f)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
                         <div>{f.submitter_name || f.submitter_email || 'Unknown'}</div>
                         {f.submitter_role && (
-                          <div className="text-xs text-gray-500">{f.submitter_role}</div>
+                          <div className="text-xs text-muted-foreground">{f.submitter_role}</div>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -666,10 +666,10 @@ export default function FeedbacksPage() {
                           {meta.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-300 max-w-[320px]">
+                      <td className="px-4 py-3 text-muted-foreground max-w-[320px]">
                         <div className="flex items-center gap-2">
                           {f.screenshot_path && (
-                            <ImageIcon className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           )}
                           <span className="truncate">{f.message}</span>
                         </div>
@@ -678,14 +678,14 @@ export default function FeedbacksPage() {
                         <span
                           className={
                             f.status === 'open'
-                              ? 'text-xs font-medium text-amber-400'
-                              : 'text-xs font-medium text-green-400'
+                              ? 'text-xs font-medium text-amber-600'
+                              : 'text-xs font-medium text-green-600'
                           }
                         >
                           {f.status === 'open' ? 'Open' : 'Resolved'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                         {new Date(f.created_at).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -715,7 +715,7 @@ export default function FeedbacksPage() {
 
       {/* Pagination */}
       {totalCount > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-gray-400">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
           </span>
@@ -766,26 +766,26 @@ export default function FeedbacksPage() {
               </DialogHeader>
 
               <div className="space-y-4">
-                <div className="rounded-md border border-dark-border bg-secondary/40 p-3 text-sm text-gray-200 whitespace-pre-wrap">
+                <div className="rounded-md border border-dark-border bg-secondary/40 p-3 text-sm text-foreground whitespace-pre-wrap">
                   {detail.message}
                 </div>
 
                 {detail.page_path && (
-                  <div className="text-xs text-gray-400">
-                    <span className="text-gray-500">Page: </span>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground">Page: </span>
                     {detail.page_path}
                   </div>
                 )}
                 {detail.user_agent && (
-                  <div className="text-xs text-gray-400 break-all">
-                    <span className="text-gray-500">Browser: </span>
+                  <div className="text-xs text-muted-foreground break-all">
+                    <span className="text-muted-foreground">Browser: </span>
                     {detail.user_agent}
                   </div>
                 )}
 
                 {detail.screenshot_path && (
                   <div>
-                    <p className="text-xs text-gray-500 mb-2">Screenshot</p>
+                    <p className="text-xs text-muted-foreground mb-2">Screenshot</p>
                     {screenshotUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -794,7 +794,7 @@ export default function FeedbacksPage() {
                         className="max-h-80 rounded-md border border-dark-border"
                       />
                     ) : (
-                      <p className="text-xs text-gray-500">Loading screenshot…</p>
+                      <p className="text-xs text-muted-foreground">Loading screenshot…</p>
                     )}
                   </div>
                 )}
@@ -827,7 +827,7 @@ export default function FeedbacksPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <Label className="text-sm">Feedback form enabled</Label>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Turning this off removes the entry point from every portal and stops
                   both automatic prompts.
                 </p>
@@ -837,25 +837,25 @@ export default function FeedbacksPage() {
 
             <div className="space-y-2">
               <Label className="text-sm">Email alerts</Label>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Every submission is emailed to these addresses.
               </p>
               <div className="flex flex-wrap gap-2">
                 {recipients.length === 0 && (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-muted-foreground">
                     No recipients — submissions are stored but nobody is emailed.
                   </span>
                 )}
                 {recipients.map((r) => (
                   <span
                     key={r.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-dark-border bg-secondary px-2.5 py-1 text-xs text-gray-300"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-dark-border bg-secondary px-2.5 py-1 text-xs text-muted-foreground"
                   >
                     {r.email}
                     <button
                       onClick={() => removeRecipient(r.id)}
                       aria-label={`Remove ${r.email}`}
-                      className="text-gray-500 hover:text-red-400"
+                      className="text-muted-foreground hover:text-red-600"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -880,13 +880,13 @@ export default function FeedbacksPage() {
 
             <div className="space-y-2 border-t border-dark-border pt-4">
               <Label className="text-sm">Ask everyone for feedback</Label>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Prompts every operator across every tenant once, the next time they open
                 their portal. Anyone already prompted since the campaign started is
                 skipped.
               </p>
               {forceTriggeredAt && (
-                <p className="text-xs text-amber-400">
+                <p className="text-xs text-amber-600">
                   Campaign active since {new Date(forceTriggeredAt).toLocaleString()}.
                 </p>
               )}
@@ -906,7 +906,7 @@ export default function FeedbacksPage() {
             <div className="space-y-2 border-t border-dark-border pt-4">
               <Label className="text-sm">Sessions</Label>
               <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   Sign out every portal operator and booking customer on the platform.
                 </p>
                 <ForceLogoutAllControl className="whitespace-nowrap" />

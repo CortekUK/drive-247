@@ -80,13 +80,13 @@ function rangeStartIso(range: RangeKey): string {
 }
 
 function functionBadgeColor(fn: string): string {
-  if (fn === 'chat') return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-  if (fn === 'customer-chat') return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
-  if (fn === 'rental-insights') return 'bg-violet-500/10 text-violet-400 border-violet-500/20';
-  if (fn === 'rag-init' || fn === 'rag-sync') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-  if (fn.includes('ocr') || fn.includes('validate')) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (fn.includes('insurance')) return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-  if (fn.includes('call-recording')) return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+  if (fn === 'chat') return 'bg-blue-500/10 text-blue-600 border-blue-500/20';
+  if (fn === 'customer-chat') return 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20';
+  if (fn === 'rental-insights') return 'bg-violet-500/10 text-violet-600 border-violet-500/20';
+  if (fn === 'rag-init' || fn === 'rag-sync') return 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+  if (fn.includes('ocr') || fn.includes('validate')) return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+  if (fn.includes('insurance')) return 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+  if (fn.includes('call-recording')) return 'bg-purple-500/10 text-purple-600 border-purple-500/20';
   return 'bg-muted text-muted-foreground';
 }
 
@@ -276,13 +276,13 @@ export default function OpenAIUsagePage() {
             <div className="text-sm">
               {totals.errorCount > 0 && (
                 <p>
-                  <span className="font-medium text-amber-400">{totals.errorCount} failed call{totals.errorCount === 1 ? '' : 's'}</span>{' '}
+                  <span className="font-medium text-amber-600">{totals.errorCount} failed call{totals.errorCount === 1 ? '' : 's'}</span>{' '}
                   in this range. Errors still cost tokens — check the recent calls table for details.
                 </p>
               )}
               {totals.fallbackCount > 0 && (
                 <p className="mt-1">
-                  <span className="font-medium text-amber-400">{totals.fallbackCount} fallback retry{totals.fallbackCount === 1 ? '' : 'ies'}</span>{' '}
+                  <span className="font-medium text-amber-600">{totals.fallbackCount} fallback retry{totals.fallbackCount === 1 ? '' : 'ies'}</span>{' '}
                   triggered (insurance scan). Repeated fallbacks may indicate a bad document or primary key issue.
                 </p>
               )}
@@ -373,7 +373,7 @@ export default function OpenAIUsagePage() {
                     <TableCell className="text-right tabular-nums">{fmtTokens(f.tokens)}</TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">{fmtNum(f.avgTokens)}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {f.errors > 0 ? <span className="text-rose-400">{f.errors}</span> : <span className="text-muted-foreground">—</span>}
+                      {f.errors > 0 ? <span className="text-rose-600">{f.errors}</span> : <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{fmtUSD(f.cost)}</TableCell>
                   </TableRow>
@@ -501,7 +501,7 @@ export default function OpenAIUsagePage() {
                         {l.function_name}
                       </Badge>
                       {l.is_fallback && (
-                        <Badge variant="outline" className="ml-1 text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">
+                        <Badge variant="outline" className="ml-1 text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20">
                           fallback
                         </Badge>
                       )}
@@ -514,9 +514,9 @@ export default function OpenAIUsagePage() {
                     <TableCell className="text-right tabular-nums text-xs">{fmtUSD(Number(l.cost_usd))}</TableCell>
                     <TableCell className="text-right">
                       {l.status === 'success' ? (
-                        <span className="text-xs text-emerald-400">ok</span>
+                        <span className="text-xs text-emerald-600">ok</span>
                       ) : (
-                        <span className="text-xs text-rose-400" title={l.error_message || ''}>error</span>
+                        <span className="text-xs text-rose-600" title={l.error_message || ''}>error</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -546,10 +546,10 @@ function StatCard({
   accent: 'emerald' | 'blue' | 'violet' | 'amber';
 }) {
   const colors = {
-    emerald: 'text-emerald-400 bg-emerald-500/10',
-    blue: 'text-blue-400 bg-blue-500/10',
-    violet: 'text-violet-400 bg-violet-500/10',
-    amber: 'text-amber-400 bg-amber-500/10',
+    emerald: 'text-emerald-600 bg-emerald-500/10',
+    blue: 'text-blue-600 bg-blue-500/10',
+    violet: 'text-violet-600 bg-violet-500/10',
+    amber: 'text-amber-600 bg-amber-500/10',
   };
   return (
     <Card>

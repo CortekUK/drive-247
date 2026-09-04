@@ -1770,7 +1770,7 @@ export default function TenantDetailsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowForceLogoutConfirm(true)}
-                    className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                    className="text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
                   >
                     <LogOut className="w-3.5 h-3.5 mr-1" />
                     Force Logout All Users
@@ -1819,7 +1819,7 @@ export default function TenantDetailsPage() {
                         value={editForm.slug}
                         onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
                       />
-                      <p className="text-xs text-amber-400">
+                      <p className="text-xs text-amber-600">
                         Warning: Changing the slug will change the portal and booking URLs
                       </p>
                     </div>
@@ -2377,7 +2377,7 @@ export default function TenantDetailsPage() {
                       tenant.subscription_gate_disabled ? 'bg-emerald-500' : 'bg-muted'
                     )}>
                       <div className={cn(
-                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
                         tenant.subscription_gate_disabled && 'translate-x-5'
                       )} />
                     </div>
@@ -2395,7 +2395,7 @@ export default function TenantDetailsPage() {
             <CardContent className="pt-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <LayoutTemplate className="h-6 w-6 text-violet-400 shrink-0" />
+                  <LayoutTemplate className="h-6 w-6 text-violet-600 shrink-0" />
                   <div>
                     <h3 className="text-base font-semibold">Booking site design</h3>
                     <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
@@ -2403,7 +2403,7 @@ export default function TenantDetailsPage() {
                       on this tenant&apos;s home page. Only the home page changes &mdash; the fleet,
                       booking funnel and customer portal are untouched.
                     </p>
-                    <p className="text-xs text-amber-400/90 mt-2 max-w-xl">
+                    <p className="text-xs text-amber-600/90 mt-2 max-w-xl">
                       The new design is still a visual prototype: it shows placeholder vehicles,
                       rates and contact details, not this tenant&apos;s real inventory. Keep it off
                       for any tenant taking live traffic.
@@ -2434,7 +2434,7 @@ export default function TenantDetailsPage() {
                       tenant.booking_v2_enabled ? 'bg-violet-500' : 'bg-muted'
                     )}>
                       <div className={cn(
-                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform",
+                        "absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md ring-1 ring-black/5 transition-transform",
                         tenant.booking_v2_enabled && 'translate-x-5'
                       )} />
                     </div>
@@ -2452,7 +2452,7 @@ export default function TenantDetailsPage() {
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <Coins className="h-6 w-6 text-amber-400" />
+                  <Coins className="h-6 w-6 text-amber-600" />
                   <div>
                     <h3 className="text-base font-semibold">Credits</h3>
                     <p className="text-xs text-muted-foreground">Verification credit wallet — adjust balance and view transaction history</p>
@@ -2664,7 +2664,7 @@ export default function TenantDetailsPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Environment</span>
-                  <p className={cn("text-sm font-medium", tenant.boldsign_mode === 'live' ? "text-success" : "text-sky-400")}>
+                  <p className={cn("text-sm font-medium", tenant.boldsign_mode === 'live' ? "text-success" : "text-sky-600")}>
                     {tenant.boldsign_mode === 'live' ? 'Production' : 'Sandbox'}
                   </p>
                 </div>
@@ -3144,10 +3144,10 @@ export default function TenantDetailsPage() {
                           <TableCell>
                             <div className="flex items-center gap-1">
                               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openEditPlan(plan)}>Edit</Button>
-                              <Button variant="ghost" size="sm" className={cn("h-7 text-xs", plan.is_active ? "text-amber-400" : "text-emerald-400")} onClick={() => handleTogglePlanActive(plan)}>
+                              <Button variant="ghost" size="sm" className={cn("h-7 text-xs", plan.is_active ? "text-amber-600" : "text-emerald-600")} onClick={() => handleTogglePlanActive(plan)}>
                                 {plan.is_active ? 'Deactivate' : 'Activate'}
                               </Button>
-                              <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400" disabled={plan.active_subscriptions > 0} onClick={() => handleDeletePlan(plan)}>Delete</Button>
+                              <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600" disabled={plan.active_subscriptions > 0} onClick={() => handleDeletePlan(plan)}>Delete</Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -3329,7 +3329,7 @@ export default function TenantDetailsPage() {
           <DialogHeader>
             <DialogTitle>{editingPlan ? 'Edit Plan' : 'Add Plan'}</DialogTitle>
             {editingPlan && editingPlan.active_subscriptions > 0 && (
-              <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-400 mt-2">
+              <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600 mt-2">
                 This plan has {editingPlan.active_subscriptions} active subscriber{editingPlan.active_subscriptions > 1 ? 's' : ''}.
                 Changing the price will only apply to new subscriptions.
               </div>
@@ -3434,7 +3434,7 @@ export default function TenantDetailsPage() {
                     <span className="flex-1 px-3 py-1.5 bg-muted/50 border border-border/40 rounded-md text-sm">
                       {feature}
                     </span>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs text-red-400" onClick={() => removeFeature(index)}>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-red-600" onClick={() => removeFeature(index)}>
                       <X className="w-3 h-3" />
                     </Button>
                   </div>
@@ -3478,7 +3478,7 @@ export default function TenantDetailsPage() {
             <div className="flex items-center justify-between">
               <Label>Enable Banner</Label>
               <div className="flex items-center gap-2">
-                <span className={cn("text-xs font-medium", tenantBannerEnabled ? "text-amber-400" : "text-muted-foreground")}>
+                <span className={cn("text-xs font-medium", tenantBannerEnabled ? "text-amber-600" : "text-muted-foreground")}>
                   {tenantBannerEnabled ? 'Active' : 'Inactive'}
                 </span>
                 <Switch
@@ -3497,7 +3497,7 @@ export default function TenantDetailsPage() {
               />
             </div>
             {tenantBannerEnabled && tenantBannerMessage && (
-              <div className="rounded-lg px-4 py-3 text-sm font-medium bg-amber-500/10 border border-amber-500/30 text-amber-400">
+              <div className="rounded-lg px-4 py-3 text-sm font-medium bg-amber-500/10 border border-amber-500/30 text-amber-600">
                 {tenantBannerMessage}
               </div>
             )}
@@ -3527,7 +3527,7 @@ export default function TenantDetailsPage() {
                 : 'This will use the production Bonzah API. Real insurance policies will be issued.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600">
             Make sure everything is properly configured before switching.
           </div>
           <DialogFooter>
@@ -3547,7 +3547,7 @@ export default function TenantDetailsPage() {
               for <strong className="text-foreground">{tenant.company_name}</strong>.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <div className="rounded-lg px-4 py-3 text-sm bg-amber-500/10 border border-amber-500/30 text-amber-600">
             Users will need to sign in again to access their accounts.
           </div>
           <DialogFooter>
@@ -3569,7 +3569,7 @@ export default function TenantDetailsPage() {
           <DialogHeader>
             <DialogTitle>Delete Tenant</DialogTitle>
           </DialogHeader>
-          <div className="rounded-lg px-4 py-3 text-sm bg-red-500/10 border border-red-500/30 text-red-400 space-y-2">
+          <div className="rounded-lg px-4 py-3 text-sm bg-red-500/10 border border-red-500/30 text-red-600 space-y-2">
             <p>
               This will permanently delete <strong>{tenant.company_name}</strong> and ALL associated data including vehicles, customers, rentals, payments, and users.
             </p>

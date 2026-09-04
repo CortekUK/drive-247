@@ -426,8 +426,8 @@ export default function PaymentProviderPicker({
 
       {revertedFrom && (
         <div className="rounded-md border border-sky-500/30 bg-sky-500/10 p-3 flex gap-2.5">
-          <Info className="h-4 w-4 text-sky-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-sky-300">
+          <Info className="h-4 w-4 text-sky-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-sky-600">
             Switched back to Stripe: {revertedFrom} cannot process payments in{' '}
             {countryLabel ?? 'the country you selected'}.
           </p>
@@ -491,9 +491,9 @@ export default function PaymentProviderPicker({
       {selected.requiresPermanenceAck && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 space-y-3">
           <div className="flex gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-400">
+              <p className="text-sm font-semibold text-red-600">
                 A {selected.name} company permanently loses these features
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -505,7 +505,7 @@ export default function PaymentProviderPicker({
           <ul className="space-y-2">
             {selected.limitations.map((limitation) => (
               <li key={limitation.headline} className="flex gap-2">
-                <X className="h-3.5 w-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                <X className="h-3.5 w-3.5 text-red-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-semibold text-foreground">{limitation.headline}</p>
                   <p className="text-xs text-muted-foreground">{limitation.detail}</p>
@@ -519,7 +519,7 @@ export default function PaymentProviderPicker({
             <ul className="space-y-1.5">
               {selected.retained.map((item) => (
                 <li key={item} className="flex gap-2">
-                  <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                  <Check className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0 mt-0.5" />
                   <span className="text-xs text-muted-foreground">{item}</span>
                 </li>
               ))}

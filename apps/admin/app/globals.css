@@ -1,65 +1,197 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================================================================
+ * Drive247 super-admin — v2 design tokens.
+ *
+ * The same token set the portal's northwind canary runs on
+ * (apps/portal/src/styles/v2-theme.css), which was taken from the Tailwind v4
+ * `@theme` block on `origin/improv/portal-side`.
+ *
+ * GLOBAL, not scoped — and that difference from the portal is deliberate.
+ * The portal hangs these tokens off a `.v2-theme` class because ONE stylesheet
+ * there serves all 57 paying tenants, so an unscoped change repaints every
+ * operator at once. This app has no such constraint, verified rather than
+ * assumed:
+ *   • no `middleware.ts`             → no subdomain → no tenant resolution
+ *   • no TenantContext / useTenant   → nothing here is per-tenant
+ *   • no `lib/v2.ts` equivalent      → there is no canary to gate against
+ *   • audience is the super admins   → one surface, one look
+ * So the tokens live on `:root` and the whole app moves together. No class on
+ * <body>, no gate, nothing to widen later.
+ *
+ * LIGHT by default, and dark kept rather than dropped.
+ * This app used to render a neon-purple dark theme, but that dark was never a
+ * *choice*: `darkMode: 'class'` is configured while NOTHING in the tree ever
+ * puts `.dark` on an element — no next-themes, no ThemeProvider, no toggle, no
+ * persisted preference. Dark was simply the only palette that existed, so the
+ * 15 `dark:` utilities scattered through the components have always been dead.
+ * The canary's v2 look is light, so light is what `:root` carries now; the v2
+ * dark ramp is ported verbatim into `.dark` below so the palette is still there
+ * and those `dark:` utilities become correct the moment a toggle is ever added.
+ * =========================================================================== */
+
 @layer base {
   :root {
-    /* Neon purple theme — rich purple tones, glowy, dreamy */
-    --background: 258 30% 12%;           /* #1c1535 — deep violet */
-    --foreground: 270 25% 88%;           /* #ddd1f0 — warm lavender */
+    /* Light mode: indigo primary on neutral greys */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
 
-    --card: 258 28% 15%;                 /* #241c42 — rich purple card */
-    --card-foreground: 270 25% 88%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
 
-    --popover: 258 28% 17%;
-    --popover-foreground: 270 25% 88%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
 
-    --primary: 265 85% 65%;              /* #a470ff — bright neon violet */
-    --primary-foreground: 270 30% 98%;
+    --primary: 248 68% 51%;              /* #6366f1-family indigo */
+    --primary-foreground: 226 100% 97%;
+    --primary-hover: 248 68% 45%;
+    --primary-light: 248 68% 95%;
 
-    --secondary: 258 25% 20%;            /* #30264e */
-    --secondary-foreground: 270 20% 78%;
+    --secondary: 240 4% 96%;
+    --secondary-foreground: 240 6% 10%;
 
-    --muted: 258 25% 20%;
-    --muted-foreground: 265 15% 55%;     /* #8a74a8 — purple-gray */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 258 25% 23%;
-    --accent-foreground: 270 25% 88%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
 
-    --destructive: 350 70% 55%;          /* pinkish-red, fits purple */
-    --destructive-foreground: 270 30% 98%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 142 76% 94%;
 
-    --success: 160 60% 50%;              /* teal-green, complements purple */
-    --success-foreground: 270 30% 98%;
+    --warning: 41 92% 48%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 41 92% 94%;
 
-    --warning: 42 90% 58%;               /* warm gold */
-    --warning-foreground: 258 30% 12%;
+    --destructive: 357 100% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 84% 94%;
 
-    --border: 258 22% 22%;               /* #362d54 */
-    --input: 258 22% 24%;
-    --ring: 265 85% 65%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 63%;
 
-    --radius: 0.75rem;
+    --chart-1: 230 100% 82%;
+    --chart-2: 241 100% 69%;
+    --chart-3: 247 92% 60%;
+    --chart-4: 248 68% 51%;
+    --chart-5: 246 61% 42%;
 
-    /* Sidebar — richest purple layer */
-    --sidebar-background: 260 35% 10%;   /* #17102e */
-    --sidebar-foreground: 270 18% 75%;
-    --sidebar-primary: 265 85% 65%;
-    --sidebar-primary-foreground: 270 30% 98%;
-    --sidebar-accent: 265 85% 65%;
-    --sidebar-accent-foreground: 270 30% 98%;
-    --sidebar-border: 258 22% 18%;
-    --sidebar-ring: 265 85% 65%;
-    --sidebar-muted: 265 15% 55%;
+    --radius: 0.625rem;                  /* 10px — the v2 base */
 
-    /* Charts */
-    --chart-1: 265 85% 65%;             /* neon purple */
-    --chart-2: 190 90% 55%;             /* neon cyan */
-    --chart-3: 160 60% 50%;             /* teal */
-    --chart-4: 42 90% 58%;              /* gold */
-    --chart-5: 350 70% 55%;             /* pink-red */
+    /* Sidebar — tinted with the indigo canvas hue so it reads as part of the
+       app gradient rather than a standalone white slab. */
+    --sidebar-background: 248 44% 98%;
+    --sidebar-foreground: 0 0% 3.9%;
+    --sidebar-primary: 247 92% 60%;
+    --sidebar-primary-foreground: 226 100% 97%;
+    --sidebar-accent: 248 75% 94%;
+    --sidebar-accent-foreground: 248 60% 45%;
+    --sidebar-border: 248 25% 92%;
+    --sidebar-ring: 248 40% 70%;
+    /* Admin-only key (the group labels and the footer sub-title read it).
+       The portal set has no counterpart, so it tracks --muted-foreground. */
+    --sidebar-muted: 0 0% 45%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(248 68% 51%), hsl(248 68% 61%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
+    --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
+
+    /* --------------------------------------------------------------------
+     * Non-colour tokens.
+     *
+     * Tailwind v3 resolves `rounded-*`, `backdrop-blur-*` and `shadow-*` from
+     * tailwind.config.ts at BUILD time, so these cannot reach a utility on
+     * their own — the config reads each one through `var(--v2-…)`. They live
+     * here, next to the colours, because that is how the v4 branch expresses
+     * them: one `@theme` block for the whole design.
+     *
+     * The multipliers are the branch's own, written as calc() on --radius so
+     * they keep tracking it:
+     *   sm 0.6x  md 0.8x  lg 1x  xl 1.4x  2xl 1.8x  3xl 2.2x  4xl 2.6x
+     * `xl`/`2xl`/`3xl` differ from v3's defaults (12/16/24px) and `4xl` has no
+     * v3 equivalent at all — it is the radius the v2 cards, buttons and dialogs
+     * are drawn with.
+     * -------------------------------------------------------------------- */
+    --v2-radius-xl: calc(var(--radius) * 1.4);   /* 14px, v3 default 12px */
+    --v2-radius-2xl: calc(var(--radius) * 1.8);  /* 18px, v3 default 16px */
+    --v2-radius-3xl: calc(var(--radius) * 2.2);  /* 22px, v3 default 24px */
+    --v2-radius-4xl: calc(var(--radius) * 2.6);  /* 26px, v3 has no 4xl */
+
+    /* v4's blur ramp sits one step above v3's: its `blur-sm` is 8px where v3's
+       is 4px. Only `sm` differs — md and up are identical in both. */
+    --v2-backdrop-blur-sm: 8px;
+
+    /* NOT the branch's `--ds-shadow-sm`, which its @theme never wires to a
+       utility and is therefore dead code there. On the branch `shadow-sm`
+       resolves to Tailwind v4's OWN default, which is one step heavier than
+       v3's. This is that value verbatim; v4 does not dark-mode its shadows, so
+       one definition covers both themes. */
+    --v2-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+
+    --transition-all: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Ported so the palette survives, but currently inert: nothing in this app
+     puts `.dark` on an element. See the header note. */
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 9.1%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 9.1%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 246 61% 42%;
+    --primary-foreground: 226 100% 97%;
+    --primary-hover: 246 61% 50%;
+    --primary-light: 246 61% 22%;
+
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 63%;
+
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
+
+    --success: 142 76% 52%;
+    --success-foreground: 159 21% 8%;
+    --success-light: 142 76% 18%;
+
+    --warning: 41 92% 65%;
+    --warning-foreground: 159 21% 8%;
+    --warning-light: 41 92% 18%;
+
+    --destructive: 359 100% 70%;
+    --destructive-foreground: 159 21% 8%;
+    --destructive-light: 0 84% 18%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 24%;
+    --ring: 0 0% 45%;
+
+    --sidebar-background: 248 14% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 241 100% 69%;
+    --sidebar-primary-foreground: 226 100% 97%;
+    --sidebar-accent: 248 18% 17%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 248 12% 20%;
+    --sidebar-ring: 248 20% 45%;
+    --sidebar-muted: 0 0% 63%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(246 61% 42%), hsl(246 61% 52%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 52%), hsl(142 76% 60%));
+    --gradient-warning: linear-gradient(135deg, hsl(41 92% 65%), hsl(41 92% 75%));
   }
 
   * {
@@ -77,38 +209,50 @@
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-chart-3;
   }
 
-  /* Neon glow utilities — visible, dreamy, layered */
+  /* -----------------------------------------------------------------------
+   * The `glow-*` utilities, retuned rather than removed.
+   *
+   * 22 call sites across the sidebar, badges, KPI cards and six pages name
+   * these classes. Deleting them would mean editing every one of those — a
+   * refactor, not a restyle — so the names stay and only what they PAINT
+   * changes: the neon 20px halos that made sense over a near-black canvas are
+   * now the v2 flat treatment, a hairline 1px ring in the same hue plus the
+   * two-layer shadow-sm lift. Same affordance ("this element is emphasised"),
+   * expressed the way the rest of v2 expresses it.
+   * --------------------------------------------------------------------- */
   .glow-purple {
-    box-shadow: 0 0 20px -4px hsl(265 85% 65% / 0.45),
-                0 0 8px -2px hsl(265 85% 65% / 0.2),
-                inset 0 0 12px -8px hsl(265 85% 65% / 0.1);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.18), var(--v2-shadow-sm);
   }
 
   .glow-purple-sm {
-    box-shadow: 0 0 14px -4px hsl(265 85% 65% / 0.35),
-                0 0 5px -1px hsl(265 85% 65% / 0.15);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.14);
   }
 
   .glow-green {
-    box-shadow: 0 0 14px -4px hsl(160 60% 50% / 0.4),
-                0 0 5px -1px hsl(160 60% 50% / 0.15);
+    box-shadow: 0 0 0 1px hsl(var(--success) / 0.18);
   }
 
   .glow-red {
-    box-shadow: 0 0 14px -4px hsl(350 70% 55% / 0.4),
-                0 0 5px -1px hsl(350 70% 55% / 0.15);
+    box-shadow: 0 0 0 1px hsl(var(--destructive) / 0.18);
   }
 
   .glow-amber {
-    box-shadow: 0 0 14px -4px hsl(42 90% 58% / 0.4),
-                0 0 5px -1px hsl(42 90% 58% / 0.15);
+    box-shadow: 0 0 0 1px hsl(var(--warning) / 0.22);
   }
 
   .glow-cyan {
-    box-shadow: 0 0 14px -4px hsl(190 90% 55% / 0.4),
-                0 0 5px -1px hsl(190 90% 55% / 0.15);
+    box-shadow: 0 0 0 1px hsl(var(--chart-2) / 0.22);
+  }
+
+  /* Soft ambient page background — the faint indigo wash from the v2 shell. */
+  .bg-app-gradient {
+    background-image:
+      radial-gradient(70rem 50rem at 105% -10%, hsl(var(--primary) / 0.10), transparent 55%),
+      radial-gradient(60rem 48rem at -8% -6%, hsl(var(--chart-3) / 0.08), transparent 52%),
+      linear-gradient(180deg, hsl(var(--primary) / 0.04) 0%, transparent 45%);
+    background-repeat: no-repeat;
   }
 }

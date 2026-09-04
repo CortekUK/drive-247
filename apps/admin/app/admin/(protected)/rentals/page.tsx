@@ -89,17 +89,17 @@ function getPushStatus(t: Tenant, state: MigrationState): PushStatus {
 
 const MIGRATION_STATE_META: Record<MigrationState, { label: string; className: string }> = {
   uk: { label: 'UK', className: 'bg-secondary text-muted-foreground border-border' },
-  'partial-sub': { label: 'Partial · Sub UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  'partial-connect': { label: 'Partial · Connect UAE', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  uae: { label: 'UAE', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  'partial-sub': { label: 'Partial · Sub UAE', className: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
+  'partial-connect': { label: 'Partial · Connect UAE', className: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
+  uae: { label: 'UAE', className: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
 };
 
 const PUSH_STATUS_META: Record<PushStatus, { label: string; className: string }> = {
   hard: { label: 'Hard blocker', className: 'text-destructive' },
-  soft: { label: 'Soft blocker', className: 'text-amber-400' },
-  done: { label: 'Done', className: 'text-emerald-400' },
-  ready: { label: 'UAE-ready', className: 'text-sky-400' },
-  auto: { label: 'In progress', className: 'text-sky-400' },
+  soft: { label: 'Soft blocker', className: 'text-amber-600' },
+  done: { label: 'Done', className: 'text-emerald-600' },
+  ready: { label: 'UAE-ready', className: 'text-sky-600' },
+  auto: { label: 'In progress', className: 'text-sky-600' },
   'not-started': { label: 'Not started', className: 'text-muted-foreground' },
 };
 
@@ -183,10 +183,10 @@ type SubStatus =
   | 'paywall-not-set';
 
 const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> = {
-  active: { label: 'Subscribed', className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-  ending: { label: 'Ending', className: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
-  trialing: { label: 'Trialing', className: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
-  'past-due': { label: 'Past due', className: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  active: { label: 'Subscribed', className: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' },
+  ending: { label: 'Ending', className: 'bg-orange-500/15 text-orange-600 border-orange-500/30' },
+  trialing: { label: 'Trialing', className: 'bg-sky-500/15 text-sky-600 border-sky-500/30' },
+  'past-due': { label: 'Past due', className: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
   // CANCELED vs UNPAID vs EXPIRED are three different situations that used to
   // share one red "Expired" badge, which is wrong on the screen used to decide
   // who to chase:
@@ -196,7 +196,7 @@ const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> =
   //    owed. This is the one to chase hardest.
   //  - expired:  anything else terminal (e.g. paused), kept as a catch-all so
   //    a new Stripe status can never silently render as "Subscribed".
-  canceled: { label: 'Canceled', className: 'bg-slate-500/15 text-slate-400 border-slate-500/30' },
+  canceled: { label: 'Canceled', className: 'bg-slate-500/15 text-slate-600 border-slate-500/30' },
   unpaid: { label: 'Unpaid · retries exhausted', className: 'bg-destructive/15 text-destructive border-destructive/30' },
   expired: { label: 'Expired', className: 'bg-destructive/15 text-destructive border-destructive/30' },
   // Stripe 'incomplete' / 'incomplete_expired' means a Checkout was started and
@@ -205,9 +205,9 @@ const SUB_STATUS_META: Record<SubStatus, { label: string; className: string }> =
   // from a lapsed customer: they tried to pay us and could not. Previously both
   // were swept into red "Expired", hiding exactly the cohort the $1
   // authorization question was aimed at.
-  'not-converted': { label: 'Card added · not converted', className: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+  'not-converted': { label: 'Card added · not converted', className: 'bg-orange-500/15 text-orange-600 border-orange-500/30' },
   'paywall-set': { label: 'Not subscribed', className: 'bg-secondary text-muted-foreground border-border' },
-  'paywall-not-set': { label: 'Paywall not set', className: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/30' },
+  'paywall-not-set': { label: 'Paywall not set', className: 'bg-fuchsia-500/15 text-fuchsia-600 border-fuchsia-500/30' },
 };
 
 /** Statuses Stripe considers a live billing relationship. */
@@ -885,7 +885,7 @@ export default function RentalCompaniesPage() {
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all border',
                 showFavoritesOnly
-                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 glow-amber'
+                  ? 'bg-amber-500/15 text-amber-600 border-amber-500/30 glow-amber'
                   : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
               )}
             >
@@ -903,9 +903,9 @@ export default function RentalCompaniesPage() {
                     'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
                     typeFilter === type
                       ? type === 'production'
-                        ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                        ? 'bg-sky-500/15 text-sky-600 border-sky-500/30'
                         : type === 'test'
-                        ? 'bg-warning/15 text-amber-400 border-warning/30'
+                        ? 'bg-warning/15 text-amber-600 border-warning/30'
                         : 'bg-primary/15 text-primary border-primary/30'
                       : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
                   )}
@@ -928,7 +928,7 @@ export default function RentalCompaniesPage() {
                     'px-3 py-2 rounded-md text-xs font-semibold transition-all capitalize border',
                     statusFilter === status
                       ? status === 'active'
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
                         : status === 'suspended'
                         ? 'bg-destructive/15 text-destructive border-destructive/30'
                         : 'bg-primary/15 text-primary border-primary/30'
@@ -1073,7 +1073,7 @@ export default function RentalCompaniesPage() {
               })}
               {Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 && (
                 <div className="flex flex-col ml-auto text-right">
-                  <span className="text-xl font-semibold tabular-nums text-amber-400">
+                  <span className="text-xl font-semibold tabular-nums text-amber-600">
                     {formatByCurrency(subscriptionSummary.atRiskByCurrency)}
                   </span>
                   <span className="text-xs text-muted-foreground">At risk (owed)</span>
@@ -1085,7 +1085,7 @@ export default function RentalCompaniesPage() {
                   Object.keys(subscriptionSummary.atRiskByCurrency).length > 0 ? '' : 'ml-auto'
                 )}
               >
-                <span className="text-xl font-semibold tabular-nums text-emerald-400">
+                <span className="text-xl font-semibold tabular-nums text-emerald-600">
                   {formatByCurrency(subscriptionSummary.mrrByCurrency)}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -1174,7 +1174,7 @@ export default function RentalCompaniesPage() {
                       className={cn(
                         'h-4 w-4 transition-colors',
                         favorites.has(tenant.id)
-                          ? 'fill-amber-400 text-amber-400'
+                          ? 'fill-amber-400 text-amber-600'
                           : 'text-muted-foreground/40 hover:text-muted-foreground'
                       )}
                     />
@@ -1289,7 +1289,7 @@ export default function RentalCompaniesPage() {
                               className={cn(
                                 'text-[10px] font-medium whitespace-nowrap',
                                 cardVerifiedTenants.has(tenant.id)
-                                  ? 'text-sky-400'
+                                  ? 'text-sky-600'
                                   : 'text-muted-foreground'
                               )}
                             >
@@ -1334,7 +1334,7 @@ export default function RentalCompaniesPage() {
                             // No invoice will be issued — the subscription is
                             // already booked to cancel. Printing the period end
                             // as a due date promised a charge that never comes.
-                            <span className="font-medium text-orange-400">
+                            <span className="font-medium text-orange-600">
                               Ends {formatDay(due.date)} · no renewal
                             </span>
                           ) : due.date ? (
@@ -1372,9 +1372,9 @@ export default function RentalCompaniesPage() {
                                 : isVerificationCharge(inv) && inv.status === 'open'
                                 ? 'text-destructive'
                                 : inv.status === 'paid'
-                                ? 'text-emerald-400'
+                                ? 'text-emerald-600'
                                 : inv.status === 'open'
-                                ? ((inv.attempt_count ?? 0) > 0 ? 'text-destructive' : 'text-amber-400')
+                                ? ((inv.attempt_count ?? 0) > 0 ? 'text-destructive' : 'text-amber-600')
                                 : inv.status === 'uncollectible'
                                 ? 'text-destructive'
                                 : 'text-muted-foreground'

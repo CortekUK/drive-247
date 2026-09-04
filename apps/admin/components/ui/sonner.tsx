@@ -12,16 +12,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-[#141414] group-[.toaster]:text-gray-100 group-[.toaster]:border-[#262626] group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-gray-400",
+            "group toast group-[.toaster]:rounded-2xl group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+          description: "group-[.toast]:text-muted-foreground",
           actionButton:
-            "group-[.toast]:bg-primary-600 group-[.toast]:text-white",
+            "group-[.toast]:rounded-3xl group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
           cancelButton:
-            "group-[.toast]:bg-[#1a1a1a] group-[.toast]:text-gray-300",
-          success: "group-[.toast]:border-green-800/50",
-          error: "group-[.toast]:border-red-800/50",
-          info: "group-[.toast]:border-blue-800/50",
-          warning: "group-[.toast]:border-yellow-800/50",
+            "group-[.toast]:rounded-3xl group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+          success: "group-[.toast]:border-success/40",
+          error: "group-[.toast]:border-destructive/40",
+          info: "group-[.toast]:border-primary/40",
+          warning: "group-[.toast]:border-warning/40",
         },
       }}
       {...props}

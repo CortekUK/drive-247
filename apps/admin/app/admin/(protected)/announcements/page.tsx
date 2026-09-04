@@ -247,11 +247,11 @@ export default function AnnouncementsPage() {
     <div className="p-8">
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
             <Megaphone className="h-7 w-7 text-primary" />
             Announcements
           </h1>
-          <p className="mt-2 text-gray-400">
+          <p className="mt-2 text-muted-foreground">
             Publish what's-new updates to all customers across all tenants
           </p>
         </div>
@@ -268,8 +268,8 @@ export default function AnnouncementsPage() {
             onClick={() => setFilter(status)}
             className={`px-4 py-2 rounded-lg font-medium capitalize text-sm ${
               filter === status
-                ? 'bg-primary-600 text-white'
-                : 'bg-dark-card text-gray-300 hover:bg-dark-hover border border-dark-border'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-dark-card text-muted-foreground hover:bg-dark-hover border border-dark-border'
             }`}
           >
             {status}
@@ -281,12 +281,12 @@ export default function AnnouncementsPage() {
         <table className="min-w-full divide-y divide-dark-border">
           <thead className="bg-dark-bg">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Title</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Severity</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Published</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Reach</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Title</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Severity</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Published</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Reach</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-dark-card divide-y divide-dark-border">
@@ -295,9 +295,9 @@ export default function AnnouncementsPage() {
               return (
                 <tr key={item.id} className="hover:bg-dark-hover">
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-white">{item.title}</div>
+                    <div className="text-sm font-medium text-foreground">{item.title}</div>
                     {item.summary && (
-                      <div className="text-xs text-gray-500 mt-1 max-w-md truncate">
+                      <div className="text-xs text-muted-foreground mt-1 max-w-md truncate">
                         {item.summary}
                       </div>
                     )}
@@ -306,12 +306,12 @@ export default function AnnouncementsPage() {
                     <span
                       className={`text-xs font-semibold capitalize ${
                         item.severity === 'critical'
-                          ? 'text-red-400'
+                          ? 'text-red-600'
                           : item.severity === 'major'
-                            ? 'text-amber-400'
+                            ? 'text-amber-600'
                             : item.severity === 'minor'
-                              ? 'text-blue-400'
-                              : 'text-gray-400'
+                              ? 'text-blue-600'
+                              : 'text-muted-foreground'
                       }`}
                     >
                       {item.severity}
@@ -321,18 +321,18 @@ export default function AnnouncementsPage() {
                     <span
                       className={`text-xs font-semibold capitalize ${
                         item.status === 'published'
-                          ? 'text-green-400'
+                          ? 'text-green-600'
                           : item.status === 'scheduled'
-                            ? 'text-blue-400'
+                            ? 'text-blue-600'
                             : item.status === 'archived'
-                              ? 'text-gray-500'
-                              : 'text-yellow-400'
+                              ? 'text-muted-foreground'
+                              : 'text-yellow-600'
                       }`}
                     >
                       {item.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                     {item.published_at
                       ? new Date(item.published_at).toLocaleDateString('en-US', {
                           year: 'numeric',
@@ -341,16 +341,16 @@ export default function AnnouncementsPage() {
                         })
                       : '—'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                     {s ? (
                       <>
-                        <span className="text-white font-medium">{s.seen_count}</span>
-                        <span className="text-gray-500"> seen · </span>
-                        <span className="text-gray-300">{s.dismissed_count}</span>
-                        <span className="text-gray-500"> dismissed</span>
+                        <span className="text-foreground font-medium">{s.seen_count}</span>
+                        <span className="text-muted-foreground"> seen · </span>
+                        <span className="text-muted-foreground">{s.dismissed_count}</span>
+                        <span className="text-muted-foreground"> dismissed</span>
                       </>
                     ) : (
-                      <span className="text-gray-500">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm space-x-1">
@@ -383,7 +383,7 @@ export default function AnnouncementsPage() {
                       variant="ghost"
                       onClick={() => remove(item.id)}
                       title="Delete"
-                      className="text-red-400 hover:text-red-300"
+                      className="text-red-600 hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -396,8 +396,8 @@ export default function AnnouncementsPage() {
 
         {visible.length === 0 && (
           <div className="text-center py-12">
-            <Megaphone className="h-10 w-10 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400">No announcements yet.</p>
+            <Megaphone className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">No announcements yet.</p>
             <Button onClick={openCreate} className="mt-4">
               <Plus className="h-4 w-4" />
               Create your first
@@ -456,7 +456,7 @@ export default function AnnouncementsPage() {
                     className="h-16 w-24 object-cover rounded border border-dark-border"
                   />
                 ) : (
-                  <div className="h-16 w-24 bg-dark-bg rounded border border-dark-border flex items-center justify-center text-gray-600 text-xs">
+                  <div className="h-16 w-24 bg-dark-bg rounded border border-dark-border flex items-center justify-center text-muted-foreground text-xs">
                     No image
                   </div>
                 )}

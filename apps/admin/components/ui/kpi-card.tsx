@@ -34,7 +34,7 @@ export const KPICard = React.forwardRef<HTMLDivElement, KPICardProps>(
       <Card
         ref={ref}
         className={cn(
-          "h-[130px] group hover:border-primary/25 hover:glow-purple-sm transition-all duration-300",
+          "h-[130px] group hover:ring-primary/25 transition-all duration-200",
           className,
         )}
       >
