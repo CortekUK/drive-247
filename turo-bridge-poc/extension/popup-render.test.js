@@ -705,6 +705,52 @@ async function main() {
     }
   }
 
+  // ------------------------------------------------------------------
+  console.log("\nDrive247 outranks the walk when the two disagree");
+  {
+    /* THE EXACT RUN THAT EXPOSED THIS. 12 records seen, 9 ingested. The walk
+       reached the end of the feed, so the client called coverage complete and
+       the panel printed "Full, corroborated read -- absences can be trusted."
+       The database stored the same run as partial and NOT authoritative,
+       because three records never parsed. The generated column was protecting
+       the data while the screen said the opposite. */
+    const state = await runOrchestrator(null);
+    state.serverRun = {
+      state: "succeeded", completeness: "partial", is_authoritative: false,
+      records_seen: 12, records_ingested: 9,
+    };
+    state.gates = { mayWrite: true, mayRelease: false,
+      reason: "Drive247 read this sync as incomplete, so nothing may be released on its evidence. What was read has still been saved." };
+
+    const { doc } = renderInPopup(state);
+    await tick(30);
+
+    const cov = text(doc, "runCoverage");
+    ok("the coverage line defers to Drive247", /read this sync as incomplete/i.test(cov), cov);
+    ok("...and counts what was lost", /3 of 12 could not be read/i.test(cov), cov);
+    ok("it no longer claims absences can be trusted", !/absences can be trusted/i.test(cov), cov);
+    ok("nor calls the read full", !/full, corroborated/i.test(cov), cov);
+
+    eqText(doc, "the release gate is shut", "gRelease", "None - dates stay blocked".replace("-", "—"));
+    ok("but what WAS read is still saved", /yes/i.test(text(doc, "gWrite")), text(doc, "gWrite"));
+    ok("and the reason names Drive247, not the extension",
+       /Drive247 read this sync as incomplete/i.test(text(doc, "gReason")), text(doc, "gReason"));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA server that says nothing does not veto a good run");
+  {
+    /* An older ingest, or a finalisation the server never answered, must leave
+       the client's verdict alone rather than silently downgrading every run. */
+    const state = await runOrchestrator(null);
+    state.serverRun = null;
+    const { doc } = renderInPopup(state);
+    await tick(30);
+    const cov = text(doc, "runCoverage");
+    ok("the walk's own verdict still shows", cov.length > 0 && !/read this sync as incomplete/i.test(cov), cov);
+  }
+
+
   console.log("\n" + passed + " passed, " + failed + " failed\n");
   process.exit(failed ? 1 : 0);
 }

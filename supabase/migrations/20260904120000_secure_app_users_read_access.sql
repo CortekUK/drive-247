@@ -26,16 +26,35 @@
 --
 --   RLS:      DISABLED
 --   Grants:   ALL -> anon, authenticated, service_role
---   Policies: users_read_self             SELECT  PUBLIC  auth.uid() = auth_user_id
---             super_admin_read_all        SELECT  PUBLIC  is_super_admin()
+--   Policies: app_users_select_policy     SELECT  authenticated
+--                 (auth.uid() = auth_user_id)
+--              OR is_super_admin()
+--              OR (tenant_id = get_user_tenant_id()
+--                  AND get_user_role(auth.uid()) IN ('head_admin','admin'))
 --             p_update_own_password_flag  UPDATE  authenticated
 --                                                 USING/CHECK auth_user_id = auth.uid()
 --             super_admin_manage_all         INSERT  PUBLIC  CHECK is_super_admin()
 --             super_admin_manage_all_update  UPDATE  PUBLIC  is_super_admin()
 --             super_admin_manage_all_delete  DELETE  PUBLIC  is_super_admin()
 --
---   (Source: supabase/migrations/20251219083413_remote_schema.sql lines
---    8188-8260 and 9101-9103. No later migration alters them.)
+--   ⚠ CORRECTED AFTER READING THE LIVE DATABASE. This block originally quoted
+--   20251219083413_remote_schema.sql, which describes users_read_self and
+--   super_admin_read_all as two separate policies. THE LIVE PROJECT HAS NEITHER:
+--   somebody consolidated them into a single app_users_select_policy that
+--   already carries a same-tenant clause -- restricted to head_admin and admin.
+--   That work never became a migration file, so the repository disagreed with
+--   production and this file was written against the repository.
+--
+--   The consequence is why the snapshot is taken from the DATABASE and not from
+--   git: the app_users_read_same_tenant policy this file originally created
+--   would have WIDENED same-tenant reads from admins-only to every authenticated
+--   member of the tenant, quietly undoing a restriction somebody chose. It is
+--   removed below. Enabling RLS is the whole fix; the policy already there is
+--   correct and simply was never enforced.
+--
+--   Role impact of enforcing it, measured before applying: 67 of 75 non-super
+--   admins are head_admin or admin and are unaffected. 8 (4 manager, 3 ops,
+--   1 viewer) lose the tenant staff list.
 --
 -- ---------------------------------------------------------------------------
 -- WHY "OWN ROW ONLY" WOULD HAVE BROKEN THE PORTAL
@@ -127,34 +146,12 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.app_users TO authenticated;
 GRANT ALL ON TABLE public.app_users TO service_role;
 
 -- ---------------------------------------------------------------------------
--- 3. THE ONE POLICY THAT WAS MISSING.
+-- 3. NO NEW POLICY.
 --
---    Existing policies are left exactly as they are. They were never the
---    problem, and re-creating them would put six working rules at risk to fix
---    one that was absent.
+-- The live app_users_select_policy already covers own row, super admin, and
+-- same-tenant-for-admins. Adding one of my own would loosen it. See the
+-- correction note above: start strict, loosen only on evidence.
 -- ---------------------------------------------------------------------------
-DROP POLICY IF EXISTS app_users_read_same_tenant ON public.app_users;
-
-CREATE POLICY app_users_read_same_tenant
-  ON public.app_users
-  FOR SELECT
-  TO authenticated
-  USING (
-    -- get_user_tenant_id() is SECURITY DEFINER (defined in
-    -- 20251222150000_fix_super_admin_rls.sql:28), so its own read of app_users
-    -- runs as the owner and does not re-enter this policy. That is what keeps
-    -- this from recursing.
-    tenant_id IS NOT NULL
-    AND tenant_id = public.get_user_tenant_id()
-  );
-
-COMMENT ON POLICY app_users_read_same_tenant ON public.app_users IS
-  'Staff may read the staff list of their OWN tenant, and no other. Required by '
-  'the portal Users pages, the audit-log actor filter and admin notification '
-  'routing, all of which read colleague rows from the browser. tenant_id IS NOT '
-  'NULL is load-bearing: super admins carry tenant_id NULL, and without it a '
-  'NULL = NULL comparison would still be NULL rather than true, but the '
-  'condition states the intent rather than relying on that.';
 
 COMMIT;
 
@@ -165,8 +162,8 @@ COMMIT;
 --                          request is refused before any policy is consulted.
 --   authenticated, self    own row: SELECT (users_read_self),
 --                          UPDATE (p_update_own_password_flag)
---   authenticated, tenant  SELECT rows sharing their tenant_id
---                          (app_users_read_same_tenant)
+--   authenticated, tenant  SELECT rows sharing their tenant_id, but ONLY for
+--                          head_admin and admin (app_users_select_policy)
 --   authenticated, other   nothing. No policy grants a cross-tenant row to a
 --     tenant               non-super-admin.
 --   super admin            SELECT/INSERT/UPDATE/DELETE all rows
@@ -179,6 +176,10 @@ COMMIT;
 --     "$URL/rest/v1/app_users?select=email,tenant_id,auth_user_id"
 --   Expect 401/permission denied. A 200 with [] would ALSO be wrong here --
 --   that would mean the grant survived and only RLS is filtering.
+--
+-- APPLIED to hviqoaokxvlancmftwuo on 2026-09-04. Verified immediately after:
+-- all 10 anon probes in turo-bridge-poc/extension/rls-app-users.test.js refused,
+-- where all 10 had previously succeeded.
 --
 -- ROLLBACK: supabase/migrations/20260904120000_secure_app_users_read_access.ROLLBACK.sql
 -- ============================================================================

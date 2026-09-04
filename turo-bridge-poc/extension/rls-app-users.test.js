@@ -85,15 +85,15 @@ function staticChecks() {
   ok("it revokes anon's grant", /REVOKE ALL ON TABLE public\.app_users FROM anon/.test(sql));
   ok("it keeps service_role, which every edge function needs",
      /GRANT ALL ON TABLE public\.app_users TO service_role/.test(sql));
-  ok("it adds the same-tenant read policy the portal needs",
-     /CREATE POLICY app_users_read_same_tenant/.test(sql));
-
-  /* THE RECURSION TRAP. A policy on app_users that queries app_users directly
-     deadlocks the table. The same-tenant rule has to go through the existing
-     SECURITY DEFINER helper instead. */
-  const policyBlock = sql.slice(sql.indexOf("CREATE POLICY app_users_read_same_tenant"));
-  ok("...through the SECURITY DEFINER helper, not a nested app_users query",
-     /public\.get_user_tenant_id\(\)/.test(policyBlock) && !/FROM\s+(public\.)?app_users/i.test(policyBlock.slice(0, 600)));
+  /* IT MUST CREATE NO POLICY AT ALL. The live database already has
+     app_users_select_policy covering own row, super admin and
+     same-tenant-for-admins; it had simply never been enforced. An earlier draft
+     of this migration added a policy of its own, which would have widened
+     same-tenant reads from admins-only to every authenticated member of the
+     tenant -- quietly undoing a restriction somebody had chosen. Enabling RLS
+     was the entire fix. */
+  ok("it creates no policy of its own", !/CREATE POLICY/.test(sql.replace(/--.*$/gm, "")));
+  ok("...and says why in the file", /already covers own row, super admin/i.test(sql));
 
   ok("it does not FORCE RLS, which would recurse through the helpers",
      !/FORCE ROW LEVEL SECURITY/.test(sql.replace(/--.*$/gm, "")));

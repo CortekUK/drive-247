@@ -55,6 +55,32 @@
   display: none !important;
 }
 
+/* ── THE DESIGN SYSTEM'S TYPEFACES, ACTUALLY PRESENT ─────────────────────────
+   This file has named "DM Sans" and Inter since it was written, and neither has
+   ever rendered: the MV3 content security policy blocks remote stylesheets and
+   font files outright, so every declaration silently fell through to the system
+   sans. Bundling the woff2 alongside the extension is the only way to load
+   them, and it is why the portal ships its own copies too.
+
+   DM Sans for everything, Inter for button text and badge pills -- the split
+   the Drive247 portal uses. font-display: swap so a cold profile paints text
+   immediately in the fallback rather than showing an empty popup. */
+@font-face {
+  font-family: "DM Sans";
+  src: url("assets/fonts/dm-sans.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("assets/fonts/inter.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 html,
 body {
   margin: 0;
@@ -62,7 +88,10 @@ body {
 }
 
 body {
-  width: 372px;
+  /* 372 -> 384. The two connection rows, the account bar and the longer error
+     sentences were all wrapping to a second line at the old width, and a status
+     line that wraps reads as two facts instead of one. */
+  width: 384px;
   background: var(--surface);
   color: var(--body);
   font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -77,9 +106,12 @@ body {
 .head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
+  /* The one tinted surface in the chrome, so the header reads as a header
+     without a shadow. Flat, not elevated -- the portal's first rule. */
+  background: var(--sunken);
 }
 
 /* WHO IS SIGNED IN. Pushed to the right of the header so it reads as chrome
@@ -122,7 +154,7 @@ body {
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--indigo);
   color: #fff;
   display: flex;
@@ -224,10 +256,17 @@ input::placeholder {
 .conn {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
+  gap: 10px;
+  padding: 11px 12px;
   background: var(--surface);
+  transition: background 0.12s ease;
 }
+
+/* The Check button only matters when something is wrong, so it stays quiet
+   until the row is hovered or focused within. */
+.conn .linkish { opacity: 0.75; transition: opacity 0.12s ease; }
+.conn:hover .linkish,
+.conn:focus-within .linkish { opacity: 1; }
 
 .conn-text { min-width: 0; flex: 1; }
 
@@ -250,11 +289,24 @@ input::placeholder {
    which is what makes this readable to someone who cannot distinguish the
    green from the amber. */
 .conn-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   flex: none;
   border-radius: 50%;
   background: var(--muted);
+  /* A soft ring rather than a shadow: it reads at a glance without breaking the
+     no-elevation rule, and it is what makes the green legible on the dark
+     theme where a flat 9px dot disappears. */
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, transparent);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.conn[data-state="on"] .conn-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
+}
+
+.conn[data-state="off"] .conn-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 18%, transparent);
 }
 
 .conn[data-state="on"] .conn-dot { background: var(--green); }
@@ -280,16 +332,37 @@ input::placeholder {
 /* Why the sync button is shut. Sits directly under it so the two read as one
    statement rather than as a button and an unrelated remark. */
 .gate-note {
-  margin: -6px 0 0;
+  margin: -8px 0 0;
+  padding: 7px 10px;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--muted);
+  color: var(--body);
   text-align: center;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  /* Square top, rounded bottom: it reads as part of the button above it rather
+     than as a separate remark that happens to sit nearby. */
+  border-top: 0;
+  border-radius: 0 0 9px 9px;
 }
 
-.primary:disabled {
-  opacity: 0.5;
+/* DISABLED MUST NOT LOOK LIKE A DIMMED PRIMARY. A 50%-opacity indigo button
+   still reads as "the main action", so people keep clicking it and nothing
+   happens. Dropping it to the sunken surface with body-weight text says
+   unavailable in the shape of the control itself, not just its brightness. */
+.primary:disabled,
+.secondary:disabled {
+  background: var(--sunken);
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  opacity: 1;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+.primary:disabled:hover,
+.secondary:disabled:hover {
+  background: var(--sunken);
 }
 
 /* ---------------------------------------------------------------- sign-in -- */

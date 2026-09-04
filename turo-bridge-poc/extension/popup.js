@@ -669,6 +669,34 @@ function renderTiles(s) {
  */
 function renderCoverage(s) {
   if (!s.coverage) { els.runCoverage.textContent = ""; els.runCoverage.className = "coverage"; return; }
+
+  /* THE SERVER OUTRANKS THE WALK.
+     coverage.complete answers "did we reach the end of the feed?". Drive247's
+     is_authoritative answers "is this run good enough to conclude anything
+     from?" -- a GENERATED column computed from records_ingested against
+     records_seen, and generated exactly so a client cannot talk itself up.
+
+     They disagreed on the very first live run: the walk reached the end, so
+     this line printed "Full, corroborated read -- absences can be trusted",
+     while the row was stored as partial and NOT authoritative because three
+     records had failed to parse. The database was right. A screen that
+     contradicts it is the same confident lie, moved somewhere the database
+     cannot police. */
+  const server = s.serverRun || null;
+  const serverRefused = server && server.is_authoritative === false;
+
+  if (serverRefused) {
+    const seen = Number(server.records_seen);
+    const got = Number(server.records_ingested);
+    const shortfall = Number.isFinite(seen) && Number.isFinite(got) && seen > got
+      ? " " + (seen - got) + " of " + seen + " could not be read."
+      : "";
+    els.runCoverage.textContent =
+      "Drive247 read this sync as incomplete, so nothing can be released on it." + shortfall;
+    els.runCoverage.className = "coverage warn";
+    return;
+  }
+
   els.runCoverage.textContent = capitalise(s.coverage.display) + ".";
   els.runCoverage.className = "coverage " + (s.coverage.complete ? "good" : "warn");
 }

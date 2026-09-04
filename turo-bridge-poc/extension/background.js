@@ -1813,6 +1813,11 @@ async function finishRun(cursor) {
   const R = reader();
   const summary = await get(K.summary);
 
+  /* Filled in once the server has answered, below. Declared here because the
+     absence ledger is built in the same function and must consult it. */
+  let serverSaysAuthoritative = null;
+  const serverAuthorityAllows = () => serverSaysAuthoritative !== false;
+
   const outcome = cursor.recordsAccepted > 0
     ? R.worstOutcome(cursor.outcomes.length ? cursor.outcomes : ["OK"])
     : emptyRunOutcome(cursor, R);
@@ -1861,7 +1866,11 @@ async function finishRun(cursor) {
   const released = {};
   const absentCounts = {};
   for (const a of absences) {
-    if (a.releaseAllowed) released[a.reservationId] = true;
+    /* An id may only be FORGOTTEN by a run the server also called
+       authoritative. Dropping it from the manifest means it can never be
+       diffed again, so the stricter of the two verdicts has to win here too —
+       this is the write that is actually irreversible. */
+    if (a.releaseAllowed && serverAuthorityAllows()) released[a.reservationId] = true;
     else if (a.evidence === "absent_only") absentCounts[a.reservationId] = a.consecutiveAbsentRuns;
   }
 
@@ -1917,12 +1926,50 @@ async function finishRun(cursor) {
     }
   }
 
+  /* ── WHOSE AUTHORITY IS IT? ────────────────────────────────────────────────
+     The client computes mayRelease from what it saw: the outcome, a walk that
+     reached the end of the feed, and a corroborated session. The SERVER computes
+     is_authoritative as a GENERATED ALWAYS column, from records_ingested against
+     records_seen — and it is generated precisely so that "the client cannot
+     assert its own authority".
+
+     They can disagree, and the first real run proved it. 12 records seen, 9
+     ingested: the walk genuinely reached the end of the feed, so the client said
+     complete and the panel printed "Full, corroborated read — absences can be
+     trusted." The database stored that same run as completeness 'partial',
+     is_authoritative false, because three records never parsed.
+
+     Both are defensible readings and the server's is the one that counts —
+     otherwise the generated column protects the DATABASE while the SCREEN goes
+     on telling an operator the opposite. That is the confident lie this whole
+     feature is built to avoid, merely relocated from the data to the UI.
+
+     So the server can only ever take the gate AWAY. It is a conjunction, never
+     an override: a server that says authoritative cannot open a gate the client
+     had already closed for its own reasons (a bot challenge, a stalled walk).
+
+     A null — the server did not answer at all — leaves the client's verdict
+     alone rather than silently downgrading a good run into a refusal. */
+  const serverRun = (finalised && finalised.run) || null;
+  const serverAuthority = serverRun && typeof serverRun.is_authoritative === "boolean"
+    ? serverRun.is_authoritative
+    : null;
+  serverSaysAuthoritative = serverAuthority;
+  const mayRelease = serverAuthority === false ? false : run.mayRelease;
+  const gateReason = (run.mayRelease && serverAuthority === false)
+    ? "Drive247 read this sync as incomplete, so nothing may be released on its evidence. " +
+      "What was read has still been saved."
+    : run.gateReason;
+
   const finished = R.advanceCursor(cursor, {
     reconcileNote: reconcileNote,
     phase: "done", pending: null, finishedAt: new Date().toISOString(),
     finalOutcome: outcome, coverage: coverage, ingestJobId: null, gates: {
-      mayWrite: run.mayWrite, mayRelease: run.mayRelease, reason: run.gateReason
+      mayWrite: run.mayWrite, mayRelease: mayRelease, reason: gateReason
     },
+    /* What the SERVER concluded, carried through to the panel so the coverage
+       line can stop speaking for it. */
+    serverRun: serverRun,
     absences: absences
   });
   /* "LAST SUCCESSFUL SYNC" — the single date the popup shows a tenant, and the
@@ -2843,6 +2890,10 @@ function projectState(cursor, summary, note) {
     pagination: cursor.pagination ? { style: cursor.pagination.style, confidence: cursor.pagination.confidence, matchedKeys: cursor.pagination.matchedKeys } : null,
 
     outcome: outcome,
+    /* What Drive247 itself concluded about this run. The popup prefers this over
+       any locally-computed completeness, because the generated columns behind it
+       are the only claim that cannot be talked up by a confused client. */
+    serverRun: cursor.serverRun || null,
     /* The park's own headline, when it set one. Null everywhere else, so the
        popup falls back to the reader's vocabulary. */
     label: cursor.parkedLabel || null,
