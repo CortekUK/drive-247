@@ -10,7 +10,6 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { TenantProvider } from "@/contexts/TenantContext";
 import { RealtimeChatProvider } from "@/contexts/RealtimeChatContext";
-import DevPanel from "@/components/shared/DevPanel";
 import { ServiceWorkerRegistrar } from "@/components/push/service-worker-registrar";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
@@ -76,7 +75,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     <Toaster />
                     <Sonner />
                     {children}
-                    <DevPanel />
                   </GlobalKeyboardShortcuts>
                 </TooltipProvider>
               </ThemeProvider>

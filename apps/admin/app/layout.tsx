@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
-import DevPanel from '@/components/dev/DevPanel';
 import { ServiceWorkerRegistrar } from '@/components/push/service-worker-registrar';
 
 export const metadata: Metadata = {
@@ -42,7 +41,6 @@ export default function RootLayout({
         <ServiceWorkerRegistrar />
         {children}
         <Toaster />
-        <DevPanel />
       </body>
     </html>
   );

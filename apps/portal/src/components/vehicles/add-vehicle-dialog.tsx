@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,7 +27,6 @@ import { format, startOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import { addVehicleDialogSchema, type AddVehicleDialogFormValues } from "@/client-schemas/vehicles/add-vehicle-dialog";
 import { getCurrencySymbol } from "@/lib/format-utils";
-import { toast as sonnerToast } from "sonner";
 import { TraxPriceSuggestion } from "@/components/trax/trax-price-suggestion";
 import { TraxIcon } from "@/components/chat/TraxIcon";
 
@@ -91,55 +90,6 @@ export const AddVehicleDialog = ({ open, onOpenChange }: AddVehicleDialogProps) 
       pickup_location_id: "",
     },
   });
-
-  // DEV MODE: Listen for dev panel fill events (only in development)
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-
-    const handleDevFillVehicle = (e: CustomEvent<{
-      reg: string;
-      vin?: string;
-      make: string;
-      model: string;
-      year: number;
-      colour: string;
-      fuel_type: 'Petrol' | 'Diesel' | 'Hybrid' | 'Electric';
-      purchase_price?: number;
-      daily_rent: number;
-      weekly_rent: number;
-      monthly_rent: number;
-      acquisition_type: 'Purchase' | 'Finance';
-      acquisition_date: Date;
-      description?: string;
-    }>) => {
-      const data = e.detail;
-      console.log('DEV MODE: Filling vehicle form with:', data);
-
-      // Set form values
-      form.setValue('reg', data.reg);
-      if (data.vin) form.setValue('vin', data.vin);
-      form.setValue('make', data.make);
-      form.setValue('model', data.model);
-      form.setValue('year', data.year);
-      form.setValue('colour', data.colour);
-      form.setValue('fuel_type', data.fuel_type);
-      if (data.purchase_price) form.setValue('purchase_price', data.purchase_price);
-      form.setValue('daily_rent', data.daily_rent);
-      form.setValue('weekly_rent', data.weekly_rent);
-      form.setValue('monthly_rent', data.monthly_rent);
-      form.setValue('acquisition_type', data.acquisition_type);
-      form.setValue('acquisition_date', new Date(data.acquisition_date));
-      if (data.description) form.setValue('description', data.description);
-
-      // Trigger form validation
-      form.trigger();
-
-      sonnerToast.success('Vehicle form auto-filled by Dev Panel');
-    };
-
-    window.addEventListener('dev-fill-vehicle-form', handleDevFillVehicle as EventListener);
-    return () => window.removeEventListener('dev-fill-vehicle-form', handleDevFillVehicle as EventListener);
-  }, [form]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (onOpenChange) {

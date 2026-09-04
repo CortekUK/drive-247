@@ -168,40 +168,6 @@ export const CustomerFormModal = ({ open, onOpenChange, customer }: CustomerForm
     }
   }, [customer, verificationData, form]);
 
-  // DEV MODE: Listen for dev panel fill event (only in development)
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-
-    const handleDevFill = (e: CustomEvent<{
-      name: string;
-      email: string;
-      phone: string;
-      license_number: string;
-      id_number: string;
-      status?: 'Active' | 'Inactive';
-      notes?: string;
-    }>) => {
-      const data = e.detail;
-      // Fill basic fields
-      form.setValue('name', data.name);
-      form.setValue('email', data.email);
-      form.setValue('phone', data.phone);
-      form.setValue('license_number', data.license_number);
-      form.setValue('id_number', data.id_number || '');
-
-      // Fill additional fields if provided
-      if (data.status) form.setValue('status', data.status);
-      if (data.notes) form.setValue('notes', data.notes);
-
-      // Trigger validation
-      form.trigger();
-      console.log('DEV: Customer form filled with data:', data);
-    };
-
-    window.addEventListener('dev-fill-customer-form', handleDevFill as EventListener);
-    return () => window.removeEventListener('dev-fill-customer-form', handleDevFill as EventListener);
-  }, [form]);
-
   // Check if license or ID is blocked when values change (blocking is only by license, not email)
   const checkBlockedIdentity = async (identityNumber: string) => {
     if (!identityNumber || identityNumber.trim() === '') {

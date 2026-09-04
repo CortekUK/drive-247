@@ -96,47 +96,6 @@ const CreateFine = () => {
     }
   };
 
-  // DEV MODE: Listen for dev panel fill events (only in development)
-  useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
-
-    const handleDevFillFine = (e: CustomEvent<{
-      type: string;
-      vehicle_id: string;
-      customer_id: string;
-      reference_no: string;
-      issue_date: Date;
-      due_date: Date;
-      amount: number;
-      notes: string;
-    }>) => {
-      const data = e.detail;
-      console.log('DEV MODE: Filling fine form with:', data);
-
-      // Set form values
-      form.setValue('type', data.type);
-      setSelectedTypeOption(['PCN', 'Speeding'].includes(data.type) ? data.type : 'Other');
-      form.setValue('vehicle_id', data.vehicle_id);
-      form.setValue('customer_id', data.customer_id);
-      form.setValue('reference_no', data.reference_no);
-      form.setValue('issue_date', new Date(data.issue_date));
-      form.setValue('due_date', new Date(data.due_date));
-      form.setValue('amount', data.amount);
-      form.setValue('notes', data.notes);
-
-      // Trigger form validation
-      form.trigger();
-
-      toast({
-        title: "Form Auto-Filled",
-        description: "Fine form auto-filled by Dev Panel",
-      });
-    };
-
-    window.addEventListener('dev-fill-fine-form', handleDevFillFine as EventListener);
-    return () => window.removeEventListener('dev-fill-fine-form', handleDevFillFine as EventListener);
-  }, [form, toast]);
-
   // Fetch all customers and vehicles for searchable dropdowns
   const { data: customers } = useQuery({
     queryKey: ["customers-for-fines", tenant?.id],

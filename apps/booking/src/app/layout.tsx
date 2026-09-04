@@ -16,7 +16,6 @@ import ScrollToTopOnNavigate from '@/components/ScrollToTopOnNavigate';
 import { TenantProvider } from '@/contexts/TenantContext';
 import { CustomerAuthProvider } from '@/providers/CustomerAuthProvider';
 import { BookingPersistenceGuard } from '@/components/BookingPersistenceGuard';
-import DevJumpPanel from '@/components/DevJumpPanel';
 import { MaintenanceBanner } from '@/components/MaintenanceBanner';
 import { SuspendedGate } from '@/components/SuspendedGate';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
@@ -192,7 +191,6 @@ export default async function RootLayout({
                   <Sonner />
                   <ScrollToTopOnNavigate />
                   <GDPRConsent />
-                  <DevJumpPanel />
                   <MaintenanceBanner />
                   <SuspendedGate>{children}</SuspendedGate>
                 </TooltipProvider>
