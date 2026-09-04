@@ -620,6 +620,42 @@ async function refreshSession(refreshToken) {
   return { token: tokens.access_token, gone: false };
 }
 
+/**
+ * Is this access token still good? Asked of GoTrue, which is the only component
+ * entitled to answer.
+ *
+ * THIS EXISTS BECAUSE OF A REAL BUG. postReservation() used to treat any 401
+ * from the ingest as proof the sign-in had expired, and clear the session. Then
+ * a deployed-but-outdated turo-bridge-ingest — one that predates session auth
+ * and only understands pairing tokens — answered
+ * "401 Missing or malformed pairing token", and the extension logged the tenant
+ * out on every single sync. They signed in, pressed Sync, and were thrown back
+ * to the sign-in screen, over and over, with nothing wrong with their account.
+ *
+ * A 401 means "I am not accepting this request". It does NOT say whether the
+ * credential is bad or whether the SERVER does not understand the credential,
+ * and those call for opposite responses: sign them out, or leave them alone and
+ * report a server problem. Guessing picked the destructive one.
+ *
+ * @returns {Promise<boolean|null>} true / false, or null when we could not ask
+ *   — which must never be read as false.
+ */
+async function sessionStillValid(accessToken) {
+  if (!accessToken) return false;
+  try {
+    const res = await authFetch(`${AUTH_URL}/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` },
+    });
+    if (res.ok) return true;
+    // GoTrue rejecting its own token is the one authoritative "this is dead".
+    if (res.status === 401 || res.status === 403) return false;
+    return null;
+  } catch (_) {
+    // Offline. Unknown, and unknown is not dead.
+    return null;
+  }
+}
+
 async function authSignOut() {
   const s = await get(K.session);
   await revokeRemote(s && s.access_token);
@@ -2174,16 +2210,36 @@ async function postReservation(cred, reservation, meta) {
     try { body = await res.json(); } catch (_) {}
 
     if (!res.ok) {
-      /* 401 on the session path is an expired or revoked sign-in, not a bug in
-         the request. Clear it locally so the popup shows the sign-in screen
-         instead of asking the tenant to retry something that cannot succeed.
-         403 is deliberately NOT cleared: that is "this account may not do this",
-         and signing them out would hide the reason. */
-      if (res.status === 401 && cred && cred.kind === "session") await clearSession();
-      const detail = body && body.error
+      let detail = body && body.error
         ? body.error
         : `Drive247 answered HTTP ${res.status}.` +
           (res.status === 404 ? " The turo-bridge-ingest function is not deployed." : "");
+
+      /* A 401 ON THE SESSION PATH IS TWO DIFFERENT PROBLEMS, and only one of
+         them is the tenant's. So ask GoTrue rather than assume — see
+         sessionStillValid(). 403 is never cleared either way: that means "this
+         account may not do this", and signing them out would hide the reason. */
+      if (res.status === 401 && cred && cred.kind === "session") {
+        const valid = await sessionStillValid(cred.accessToken);
+        if (valid === false) {
+          // Genuinely expired or revoked. Clearing is the honest response.
+          await clearSession();
+        } else {
+          /* The session is fine (or we could not check). Drive247 refused the
+             credential for its own reasons — most likely a deployed ingest that
+             predates session auth and still expects a pairing token. Logging
+             the tenant out here is what produced "sign in, press Sync, get
+             thrown back to the sign-in screen" on a loop. */
+          console.error(
+            "[TuroBridge] the ingest rejected a VALID Drive247 session with 401. " +
+            "turo-bridge-ingest is most likely deployed at a version that predates " +
+            "session auth and still requires a pairing token. Server said: " + detail);
+          detail =
+            "Drive247 would not accept this sign-in, but your account is fine — you have " +
+            "not been signed out. The Drive247 server needs updating. Contact Drive247 support.";
+        }
+      }
+
       console.error("[TuroBridge] ingest failed:", res.status, detail);
       return { ok: false, detail, status: res.status, jobId: body.job_id || null };
     }

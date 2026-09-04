@@ -100,6 +100,14 @@ function makeFetch(plan, calls) {
       return r;
     }
     if (u.includes("/auth/v1/logout")) return jsonRes(200, {});
+    /* GET /auth/v1/user — the second opinion postReservation asks for before it
+       concludes a 401 from the ingest means the SESSION is dead. Defaults to
+       "still valid", because that is the case a test has to opt out of. */
+    if (u.includes("/auth/v1/user")) {
+      const r = plan.userCheck;
+      if (typeof r === "function") return r();
+      return r || jsonRes(200, { id: "auth-user-1" });
+    }
     if (u.includes("/rest/v1/app_users")) {
       const r = plan.appUsers;
       if (typeof r === "function") return r();
@@ -514,24 +522,73 @@ async function main() {
   }
 
   // -----------------------------------------------------------------------
-  console.log("\nA 401 from Drive247 mid-sync ends the session rather than looping");
+  console.log("\nA 401 from Drive247 is TWO problems, and only one is the tenant's");
   {
-    const store = {}, calls = [];
-    const listen = boot(store, {
-      password: jsonRes(200, TOKENS("13")),
-      appUsers: jsonRes(200, [STAFF()]),
-      ingest: jsonRes(401, { error: "Your Drive247 sign-in is no longer valid. Sign in again." })
-    }, calls);
-    await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+    /* ---- the session really is dead: sign them out ---- */
+    {
+      const store = {}, calls = [];
+      const listen = boot(store, {
+        password: jsonRes(200, TOKENS("13")),
+        appUsers: jsonRes(200, [STAFF()]),
+        ingest: jsonRes(401, { error: "Your Drive247 sign-in is no longer valid. Sign in again." }),
+        // GoTrue agrees the token is finished.
+        userCheck: jsonRes(401, { message: "invalid claim" })
+      }, calls);
+      await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+      await send(listen, { type: "SYNC_ONE" });
 
-    await send(listen, { type: "SYNC_ONE" });
+      /* Revoked, or the user deactivated. Retrying cannot succeed, and leaving
+         the popup on "Signed in as…" hides that from the tenant. */
+      ok("the session was cleared", !store.d247Session);
+      const state = await send(listen, { type: "AUTH_STATE" });
+      eq("so the popup shows the sign-in screen", state.signedIn, false);
+      ok("...and it asked GoTrue before deciding", calls.some((c) => c.url.includes("/auth/v1/user")));
+    }
 
-    /* The refresh check passed a moment ago, so the token died between then and
-       the request — revoked, or the user deactivated. Retrying cannot succeed,
-       and leaving the popup on "Signed in as…" hides that from the tenant. */
-    ok("the session was cleared", !store.d247Session);
-    const state = await send(listen, { type: "AUTH_STATE" });
-    eq("so the popup shows the sign-in screen", state.signedIn, false);
+    /* ---- THE REGRESSION. The session is fine; the SERVER is out of date ----
+       A deployed turo-bridge-ingest predating session auth answers
+       "401 Missing or malformed pairing token". Treating that as an expired
+       sign-in logged the tenant out on every single sync: sign in, press Sync,
+       land back on the sign-in screen, forever, with a perfectly good account. */
+    {
+      const store = {}, calls = [];
+      const listen = boot(store, {
+        password: jsonRes(200, TOKENS("14")),
+        appUsers: jsonRes(200, [STAFF()]),
+        ingest: jsonRes(401, { error: "Missing or malformed pairing token." }),
+        userCheck: jsonRes(200, { id: "auth-user-1" })   // the token is FINE
+      }, calls);
+      await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+      await send(listen, { type: "SYNC_ONE" });
+
+      ok("the tenant is STILL SIGNED IN", !!store.d247Session);
+      ok("...and their identity survives", !!store.d247Identity);
+      const state = await send(listen, { type: "AUTH_STATE" });
+      eq("the popup still shows the account", state.signedIn, true);
+
+      const shown = (store.lastRun && store.lastRun.detail) || "";
+      ok("the message says the account is fine", /account is fine|not been signed out/i.test(shown), shown);
+      ok("...and points at the server, not the tenant", /server needs updating|contact drive247/i.test(shown), shown);
+      /* The internal cause belongs in the console, never on a tenant's screen. */
+      ok("no endpoint name leaks to the UI", !/turo-bridge-ingest|pairing token/i.test(shown), shown);
+    }
+
+    /* ---- we could not ask: unknown is not dead ---- */
+    {
+      const store = {}, calls = [];
+      const listen = boot(store, {
+        password: jsonRes(200, TOKENS("15")),
+        appUsers: jsonRes(200, [STAFF()]),
+        ingest: jsonRes(401, { error: "nope" }),
+        userCheck: () => { throw new Error("net::ERR_INTERNET_DISCONNECTED"); }
+      }, calls);
+      await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+      await send(listen, { type: "SYNC_ONE" });
+
+      /* Same rule as the refresh path: a question we could not ask is not a
+         "no". Signing someone out over a dropped packet is the worst reading. */
+      ok("an unreachable check leaves the session alone", !!store.d247Session);
+    }
   }
 
   // -----------------------------------------------------------------------
