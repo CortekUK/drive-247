@@ -1356,6 +1356,13 @@ Deno.serve(async (req) => {
           // confident 8/8 green.
           progress_denominator: finishedJob.progress_denominator,
           records_seen: finishedJob.records_seen,
+          /* THE OTHER HALF OF is_authoritative. The generated column compares
+             ingested against seen, so a client shown only `records_seen` can
+             report that a run was refused but not by how much -- and "Drive247
+             read this sync as incomplete" without a number is a dead end for
+             whoever has to act on it. Sending both lets the popup say
+             "3 of 12 could not be read", which points straight at the cause. */
+          records_ingested: finishedJob.records_ingested,
           parsed_count: finishedJob.parsed_count,
         }
       : null,
