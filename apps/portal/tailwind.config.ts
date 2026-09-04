@@ -104,8 +104,56 @@ export default {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)", 
+        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+
+        /* ------------------------------------------------------------------
+         * The v2 radius ramp, wired so it is INERT for the other 56 tenants.
+         *
+         * `improv/portal-side` runs Tailwind v4 and derives its whole radius
+         * scale from `--radius` inside `@theme`:
+         *     sm 0.6x   md 0.8x   lg 1x   xl 1.4x   2xl 1.8x   3xl 2.2x   4xl 2.6x
+         * `sm`/`md`/`lg` already agree with the three keys above — at the v2
+         * `--radius` of 0.625rem, `calc(--radius - 4px)` and `--radius * 0.6`
+         * are both 6px, `- 2px` and `* 0.8` are both 8px — which is why the
+         * colour-only port looked right at the small end and wrong everywhere
+         * a card, dialog, sheet or pill used a larger step.
+         *
+         * v3 resolves `rounded-*` from THIS file at BUILD time, not from a CSS
+         * variable, so `xl`/`2xl`/`3xl` could not ride along with the colour
+         * custom properties that were scoped into `.v2-theme`. Each therefore
+         * reads a `--v2-radius-*` property that is set in EXACTLY ONE place —
+         * the `.v2-theme` block in src/styles/v2-theme.css, which lands on
+         * <body> only for tenants gated into the `theme` v2 area (lib/v2.ts).
+         * The fallback is byte-for-byte the value Tailwind v3 already emitted,
+         * so for every other tenant the COMPUTED radius is unchanged; only the
+         * CSS text differs. Nothing here is redefined to a new constant.
+         *
+         * `4xl` is different in kind: v3 has no such key, so `rounded-4xl`
+         * compiled to nothing at all and the port had to substitute
+         * `rounded-[2rem]` (32px) for the branch's 26px on every card, button,
+         * dialog, drawer and command palette. This adds the utility rather than
+         * overriding one, and its fallback is Tailwind v4's own default (2rem)
+         * so a non-v2 caller would get the upstream value.
+         * ------------------------------------------------------------------ */
+        xl: "var(--v2-radius-xl, 0.75rem)",
+        "2xl": "var(--v2-radius-2xl, 1rem)",
+        "3xl": "var(--v2-radius-3xl, 1.5rem)",
+        "4xl": "var(--v2-radius-4xl, 2rem)",
+      },
+      /* v3's ring scale is 0/1/2/4/8, so the branch's `ring-3` focus rings
+         compiled to nothing and the port downgraded all of them to `ring-2`.
+         Purely additive — no utility named `ring-3` existed before, so no
+         existing markup anywhere can start resolving differently. */
+      ringWidth: {
+        3: "3px",
+      },
+      /* v4 renumbered the blur ramp: its `blur-sm` is 8px where v3's is 4px
+         (v4's 4px moved to the new `blur-xs`). Every v2 scrim — dialog, sheet,
+         drawer, alert-dialog, the announcement carousel — was therefore half as
+         blurred as the design. Same inert-by-fallback wiring as the radii. */
+      backdropBlur: {
+        sm: "var(--v2-backdrop-blur-sm, 4px)",
       },
       transitionProperty: {
         'all': 'var(--transition-all)',

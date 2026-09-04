@@ -11,14 +11,19 @@ import { Textarea } from "@/components/ui-v2/textarea"
  *
  * Ported from the v2 branch, which had migrated to Tailwind v4. This app is on
  * v3.4, so the v4-only syntax is re-expressed rather than carried over:
- *   `rounded-4xl`        → `rounded-[2rem]`   (v3's radius scale stops at 3xl)
- *   `ring-3`             → `ring-2`           (v3's ring scale is 0/1/2/4/8)
  *   `**:X:y`             → `[&_X]:y`          (any-descendant variant)
  *   `in-data-[…]:z`      → `[[data-…]_&]:z`   (ancestor variant)
  *   `has-data-[k=v]:z`   → `has-[[data-k=v]]:z`
  *   `[.border-b]:z`      → `[&.border-b]:z`
  * `has-[…]`, `group-has-[…]` and named group modifiers are all v3.4 features
  * and carry over unchanged.
+ *
+ * `rounded-4xl` and `ring-3` DO carry over verbatim: v3 has neither key by
+ * default, so both were once substituted with near-misses (`rounded-[2rem]` =
+ * 32px against the design's 26px, `ring-2` against a 3px focus ring). Both keys
+ * are now defined in tailwind.config.ts — `4xl` reads a `--v2-radius-4xl` that
+ * only `.v2-theme` sets, `ring-3` is a new key nothing else uses — so the
+ * branch's own class names are the accurate ones again.
  *
  * New file. Nothing in v1 imports it.
  */
@@ -29,7 +34,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="input-group"
       role="group"
       className={cn(
-        "group/input-group relative flex h-9 w-full min-w-0 items-center rounded-[2rem] border border-transparent bg-input/50 outline-none transition-[color,box-shadow,background-color] [[data-slot=combobox-content]_&]:focus-within:border-inherit [[data-slot=combobox-content]_&]:focus-within:ring-0 has-[[data-align=block-end]]:rounded-3xl has-[[data-align=block-start]]:rounded-3xl has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/30 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-2 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[textarea]:rounded-2xl has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
+        "group/input-group relative flex h-9 w-full min-w-0 items-center rounded-4xl border border-transparent bg-input/50 outline-none transition-[color,box-shadow,background-color] [[data-slot=combobox-content]_&]:focus-within:border-inherit [[data-slot=combobox-content]_&]:focus-within:ring-0 has-[[data-align=block-end]]:rounded-3xl has-[[data-align=block-start]]:rounded-3xl has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/30 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[textarea]:rounded-2xl has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
         className
       )}
       {...props}
@@ -79,7 +84,7 @@ function InputGroupAddon({
 }
 
 const inputGroupButtonVariants = cva(
-  "flex items-center gap-2 rounded-[2rem] text-sm shadow-none",
+  "flex items-center gap-2 rounded-4xl text-sm shadow-none",
   {
     variants: {
       size: {

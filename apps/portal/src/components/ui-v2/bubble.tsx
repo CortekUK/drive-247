@@ -14,12 +14,16 @@ import { cn } from "@/lib/utils"
  * v3.4, so the v4-only syntax is re-expressed rather than carried over:
  *   `*:X:y`            → `[&>X]:y`          (direct-child variant)
  *   `wrap-break-word`  → `break-words`
- *   `ring-3`           → `ring-2`           (v3's ring scale is 0/1/2/4/8)
  *   `color-mix(in oklch, var(--secondary), …)` / `oklch(from var(--primary) …)`
  *                      → token opacity utilities. Portal's CSS variables hold
  *                        bare HSL triples, not colours, so `var(--primary)`
  *                        cannot be fed to a colour function — but `bg-primary/10`
  *                        resolves through the Tailwind theme and does.
+ *
+ * `ring-3` carries over verbatim: v3's ring scale is 0/1/2/4/8, so it was once
+ * substituted with `ring-2`. `ringWidth.3` is now a key in tailwind.config.ts —
+ * additive, nothing else in the app uses it — so the branch's 3px focus rings
+ * are accurate again.
  *
  * New file. Nothing in v1 imports it.
  */
@@ -98,7 +102,7 @@ function BubbleContent({
     <Comp
       data-slot="bubble-content"
       className={cn(
-        "w-fit min-w-0 max-w-full overflow-hidden break-words rounded-3xl border border-transparent px-3.5 py-2.5 text-sm leading-relaxed group-data-[align=end]/bubble:self-end [&_a]:transition-colors [&_a]:outline-none [&_a:focus-visible]:border-ring [&_a:focus-visible]:ring-2 [&_a:focus-visible]:ring-ring/30 [&_button]:text-left [&_button]:transition-colors [&_button]:outline-none [&_button:focus-visible]:border-ring [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ring/30",
+        "w-fit min-w-0 max-w-full overflow-hidden break-words rounded-3xl border border-transparent px-3.5 py-2.5 text-sm leading-relaxed group-data-[align=end]/bubble:self-end [&_a]:transition-colors [&_a]:outline-none [&_a:focus-visible]:border-ring [&_a:focus-visible]:ring-3 [&_a:focus-visible]:ring-ring/30 [&_button]:text-left [&_button]:transition-colors [&_button]:outline-none [&_button:focus-visible]:border-ring [&_button:focus-visible]:ring-3 [&_button:focus-visible]:ring-ring/30",
         className
       )}
       {...props}
@@ -107,7 +111,7 @@ function BubbleContent({
 }
 
 const bubbleReactionsVariants = cva(
-  "absolute z-10 flex w-fit shrink-0 items-center justify-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-sm ring-2 ring-card has-[button]:p-0",
+  "absolute z-10 flex w-fit shrink-0 items-center justify-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-sm ring-3 ring-card has-[button]:p-0",
   {
     variants: {
       side: {

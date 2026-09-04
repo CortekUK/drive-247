@@ -211,9 +211,53 @@
  * has, which `.dark .v2-theme` has already overridden on the same <body>.
  * ------------------------------------------------------------------------- */
 .v2-theme {
-  --shadow-sm: var(--ds-shadow-sm);
   --shadow-card: var(--ds-shadow-card);
   --shadow-hover: var(--ds-shadow-hover);
+
+  /* `shadow-sm` is NOT `--ds-shadow-sm`, despite the name.
+   *
+   * The branch's `@theme` block maps only `--shadow-card` and `--shadow-hover`;
+   * it never wires `--ds-shadow-sm` to a utility, so `--ds-shadow-sm` is dead
+   * code on the branch and `shadow-sm` there resolves to Tailwind v4's OWN
+   * default — which is v3's `shadow`, one step heavier than v3's `shadow-sm`
+   * (v4 renamed v3's `shadow-sm` to `shadow-xs` and moved everything up).
+   *
+   * Aliasing it to `--ds-shadow-sm`, as this block first did, therefore made
+   * the 23 `shadow-sm` surfaces in the v2 primitives noticeably flatter than
+   * the design: a 5%-opacity 2px smudge instead of a 10% 3px lift. The literal
+   * below is Tailwind v4.3's `--shadow-sm` verbatim. One value covers dark too,
+   * exactly as on the branch — v4 does not dark-mode its shadow ramp. */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+
+/* ---------------------------------------------------------------------------
+ * Non-colour design tokens — the half of the branch's `@theme` that the
+ * colour-only port left behind.
+ *
+ * Everything above this point is a colour. The branch expresses radius, font
+ * and shadow in the SAME `@theme` block, but Tailwind v3 resolves `rounded-*`
+ * and `backdrop-blur-*` from tailwind.config.ts at BUILD time — a CSS custom
+ * property alone cannot reach them. So the config now reads each of these
+ * through `var(--v2-…, <the v3 default>)`, and this is the only place in the
+ * codebase that ever SETS them. Outside `.v2-theme` the property is undefined,
+ * the fallback wins, and the emitted value is byte-for-byte what it always was.
+ *
+ * The formulas are the branch's own, not eyeballed:
+ *   --radius-xl: calc(var(--radius) * 1.4)   etc.  (src/global.css, @theme inline)
+ * Written as `calc()` on `--radius` rather than hardcoded px so they keep
+ * tracking `--radius` the way the branch does.
+ * ------------------------------------------------------------------------- */
+.v2-theme {
+  --v2-radius-xl: calc(var(--radius) * 1.4);   /* 14px, v3 default was 12px */
+  --v2-radius-2xl: calc(var(--radius) * 1.8);  /* 18px, v3 default was 16px */
+  --v2-radius-3xl: calc(var(--radius) * 2.2);  /* 22px, v3 default was 24px */
+  --v2-radius-4xl: calc(var(--radius) * 2.6);  /* 26px, v3 had no 4xl at all */
+
+  /* v4's blur ramp is one step up from v3's: v4 `blur-sm` is 8px, v3's is 4px.
+     Only `sm` differs — md/lg/xl/2xl/3xl are identical in both — so this is the
+     only blur token that needs bridging. */
+  --v2-backdrop-blur-sm: 8px;
 }
 
 
@@ -508,6 +552,26 @@ body.v2-theme {
 /* ===========================================================================
  * Utilities layer  (branch lines 488–565)
  * =========================================================================== */
+
+/* `no-scrollbar` — not from the branch stylesheet, from a package it imports.
+ *
+ * The branch's global.css opens with `@import "shadcn/tailwind.css"`, and that
+ * file declares `@utility no-scrollbar`. Neither `shadcn` nor `tw-animate-css`
+ * is a dependency here and `@utility` is v4-only syntax, so the class simply
+ * did not exist after the port — leaving a native scrollbar down the v2 sidebar
+ * body and the command palette list, where the design has none.
+ *
+ * Ported by hand rather than by adding the package: it is nine lines, and
+ * pulling in a v4-only stylesheet to get them would drag the whole v4 import
+ * graph into a v3 build. Scoped like every other rule in this file, so the two
+ * v1 call sites that mention the name in comments stay unaffected. */
+.v2-theme .no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.v2-theme .no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
 /* Scrollbar utilities */
 .v2-theme .scrollbar-thin {
