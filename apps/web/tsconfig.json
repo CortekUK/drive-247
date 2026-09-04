@@ -19,7 +19,21 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // This app is on React 19, but booking and portal are still on React 18,
+      // so npm hoists @types/react@18 to the monorepo root. Files under
+      // apps/web/src resolve the local 19 types correctly, but any dependency
+      // that only exists at the root (radix-ui, @supabase/supabase-js,
+      // @stripe/react-stripe-js) starts its @types lookup from
+      // <root>/node_modules and picks up 18 — so a single `children` prop ends
+      // up with two structurally different ReactNode types and every
+      // Slot/ComponentType boundary errors.
+      //
+      // Pinning the two type packages here forces one copy for the whole
+      // program. `paths` is type-resolution only; the runtime bundle is
+      // unaffected. Remove this once booking and portal reach React 19.
+      "react": ["./node_modules/@types/react"],
+      "react-dom": ["./node_modules/@types/react-dom"]
     }
   },
   "include": [

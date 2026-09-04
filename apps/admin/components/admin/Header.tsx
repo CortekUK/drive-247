@@ -21,6 +21,7 @@ function useBreadcrumbs() {
   const routeLabels: Record<string, string> = {
     '/admin/dashboard': 'Dashboard',
     '/admin/rentals': 'Rental Companies',
+    '/admin/signup-plans': 'Signup Plans',
     '/admin/blacklist': 'Global Blacklist',
     '/admin/contacts': 'Contact Requests',
     '/admin/settings': 'Settings',

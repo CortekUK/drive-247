@@ -426,3 +426,30 @@ verify_jwt = true
 # this is the only thing that stops a silent expiry.
 [functions.refresh-square-tokens]
 verify_jwt = true
+
+# Self-serve signup — step 1 creates the account, so the caller has no user JWT
+# yet by definition. The function does its own abuse control in code: honeypot,
+# minimum form dwell time, and an IP + email throttle. Every LATER signup step
+# (signup-resume, signup-slug-check, signup-payment-intent, signup-provision)
+# runs with the user's own session and keeps verify_jwt on — and each of those
+# still calls auth.getUser() itself, because verify_jwt only proves that SOME
+# project JWT was presented and the anon key qualifies.
+[functions.signup-begin]
+verify_jwt = false
+
+# Password recovery for the signup dialog. Public by necessity — the whole point
+# is that the caller has lost the credential, so there is no session to present.
+# It carries its own controls in code: default-deny account eligibility (only a
+# self-serve signup identity is resettable, never staff, super admins or
+# renters), hashed single-use codes from the CSPRNG, a per-email attempt cap, an
+# IP + email throttle, and a constant response with a timing floor so the
+# endpoint is not an existence oracle.
+[functions.signup-password-reset]
+verify_jwt = false
+
+# Super-admin management of the three PUBLIC signup plans. JWT-verified, and the
+# function additionally requires app_users.is_super_admin — verify_jwt alone
+# would be satisfied by the public anon key, which would make platform pricing
+# editable by anyone who opened the marketing site.
+[functions.manage-signup-plans]
+verify_jwt = true

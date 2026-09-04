@@ -27,6 +27,7 @@ import {
   TrendingUp,
   Activity,
   BookOpen,
+  BadgeDollarSign,
 } from 'lucide-react';
 
 interface NavItem {
@@ -74,6 +75,7 @@ function useNavigation() {
       label: 'Management',
       items: [
         { name: 'Rental Companies', href: '/admin/rentals', icon: Building2 },
+        { name: 'Signup Plans', href: '/admin/signup-plans', icon: BadgeDollarSign },
         { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
         { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
         { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
