@@ -45,6 +45,7 @@ import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-pr
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
+import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
 
 function LoadingSkeleton() {
   return (
@@ -496,6 +497,18 @@ export default function DashboardLayout({
             subscription gate, the policy gate and the setup reminder before
             seeing a single screen. Same rule as FeedbackForcePrompt above. */}
         <WelcomePackPrompt suppressed={showGate} />
+
+        {/* First-run onboarding wizard — step 5 of the signup flow, between
+            "Go to portal" and the dashboard. Full screen, shown exactly once,
+            and gated to the northwind canary INSIDE the component (on the
+            resolved tenant's slug, never its id) so no other tenant can meet
+            it. Mounted last so it sits above the dashboard, and suppressed
+            while the paywall owns the screen for the same reason the two
+            prompts above are: a new operator can already meet the subscription
+            gate, the policy gate and the setup reminder before seeing a single
+            screen, and two non-dismissible full-screen surfaces stacked on each
+            other leave them unable to act on either. */}
+        <FirstRunWizard suppressed={showGate} />
       </Provider>
     </DynamicThemeProvider>
   );
