@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Drive247 Turo Bridge (PoC)",
-  "version": "0.2.0",
-  "description": "Read your own Turo host calendar into Drive247. Never asks for your Turo password.",
+  "version": "0.3.0",
+  "description": "Sign in with Drive247 and read your own Turo host calendar into it. Never asks for your Turo password, and never changes anything on Turo.",
   "minimum_chrome_version": "116",
   "action": {
     "default_popup": "popup.html",

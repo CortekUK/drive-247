@@ -9,9 +9,18 @@
  * multi-batch sync that is not a nicety: the walk outlives the popup by design,
  * and the operator will close it.
  *
- * The one thing this file writes is the pairing token, and it writes it on
- * every keystroke, because the worker reads the token from storage and never
- * from this DOM.
+ * THIS FILE NEVER HOLDS A CREDENTIAL. Sign-in is a message to the worker
+ * carrying an email and a password that are read straight out of the form and
+ * are never stored, never echoed and never logged. What comes back is a
+ * decision, not a token. Everything the popup paints about the signed-in tenant
+ * comes from `d247Identity` in storage, which holds a name, an email and a
+ * tenant and no credential at all — the access and refresh tokens live under a
+ * different key that this file does not read.
+ *
+ * WHAT A TENANT IS ALLOWED TO SEE HERE: the sign-in form, who they are signed
+ * in as, the sync button, this sync's progress, when the last successful sync
+ * was, one plain sentence about how it went, and sign out. No endpoints, no
+ * tenant ids, no selectors, no tokens, no backend settings.
  *
  * =====================================================================
  * THE RULE THIS FILE EXISTS TO ENFORCE
@@ -35,11 +44,15 @@
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  token: $("token"), reveal: $("reveal"), tokenHint: $("tokenHint"), clear: $("clear"),
+  // auth
+  authForm: $("authForm"), email: $("email"), password: $("password"),
+  authError: $("authError"), signIn: $("signIn"), signInLabel: $("signInLabel"),
+  spinnerAuth: $("spinnerAuth"),
+  acct: $("acct"), acctTenant: $("acctTenant"), acctEmail: $("acctEmail"),
+  signOut: $("signOut"), work: $("work"), lastSync: $("lastSync"),
 
   // full sync
   syncAll: $("syncAll"), syncAllLabel: $("syncAllLabel"), spinnerAll: $("spinnerAll"),
-  useSample: $("useSample"), scenario: $("scenario"),
   run: $("run"), runStep: $("runStep"), runSource: $("runSource"), runBatch: $("runBatch"),
   runTiles: $("runTiles"), runCoverage: $("runCoverage"),
   runGates: $("runGates"), gWrite: $("gWrite"), gRelease: $("gRelease"), gReason: $("gReason"),
@@ -106,80 +119,141 @@ const VEHICLE_LABEL = {
 // ================================================================= startup ==
 
 (async function init() {
-  const bag = await chrome.storage.local.get(["pairingToken", "lastRun", "syncState", "useSample", "scenario"]);
-  els.token.value = bag.pairingToken || "";
-  paintTokenHint(bag.pairingToken || "");
-  els.useSample.checked = !!bag.useSample;
-  els.scenario.value = bag.scenario || "";
-  els.scenario.disabled = !els.useSample.checked;
+  /* The run panels are painted FIRST and unconditionally, from storage. A sync
+     outlives the popup by design, so what is on screen must reflect storage
+     whether or not the auth round-trip below has come back yet — and if the
+     session turns out to be gone, paintAuth() hides the whole panel anyway. */
+  const bag = await chrome.storage.local.get(["lastRun", "syncState", "lastSyncAt", "useSample", "scenario"]);
   renderOne(bag.lastRun || null);
   renderRun(bag.syncState || null);
+  renderLastSync(bag.lastSyncAt || null);
+
+  /* Ask the WORKER, not storage. Only the worker can tell an identity that is
+     still valid from one whose refresh token has since been rejected, because
+     only the worker can attempt the refresh. Reading d247Identity alone would
+     show a confident "Signed in as…" over a session that is actually dead. */
+  await refreshAuth();
 })();
 
-// ============================================================= token field ==
-
-els.token.addEventListener("input", () => {
-  const value = els.token.value.trim();
-  chrome.storage.local.set({ pairingToken: value });
-  paintTokenHint(value);
-});
-
-els.reveal.addEventListener("click", () => {
-  const showing = els.token.type === "text";
-  els.token.type = showing ? "password" : "text";
-  els.reveal.textContent = showing ? "Show" : "Hide";
-  els.reveal.setAttribute("aria-pressed", String(!showing));
-});
-
-els.clear.addEventListener("click", async () => {
-  await chrome.storage.local.remove([
-    "pairingToken", "lastRun", "syncState", "turoCursor", "syncPending", "syncSummary"
-  ]);
-  els.token.value = "";
-  els.token.type = "password";
-  els.reveal.textContent = "Show";
-  paintTokenHint("");
-  renderOne(null);
-  renderRun(null);
-});
+// ================================================================ sign-in ==
 
 /**
- * Never echoes the whole secret back onto the screen — a prefix is enough to
- * confirm the right token is loaded, and this popup gets screen-shared during
- * a demo.
+ * The fixture path still exists in the worker and is still exercised by the
+ * test suites, but it has NO CONTROL ON THIS SCREEN. "Use bundled sample data"
+ * and a scenario picker are development affordances, and a tenant seeing them
+ * can only be confused or misled by them. They are read from storage — where a
+ * developer can set them from the extension's own devtools — and nowhere else.
  */
-function paintTokenHint(value) {
-  if (!value) {
-    els.tokenHint.className = "hint";
-    els.tokenHint.textContent = "Paste the token from your Drive247 portal.";
+let devMode = { useSample: false, scenario: null };
+chrome.storage.local.get(["useSample", "scenario"]).then((bag) => {
+  devMode = { useSample: !!bag.useSample, scenario: bag.scenario || null };
+}).catch(() => {});
+
+async function refreshAuth() {
+  let state = null;
+  try { state = await chrome.runtime.sendMessage({ type: "AUTH_STATE" }); } catch (_) {}
+  paintAuth(state || { signedIn: false, expired: false, identity: null });
+}
+
+/**
+ * The gate. Signed out means the sync UI is not merely disabled but absent:
+ * a disabled button invites a tenant to work out how to enable it, and there is
+ * nothing to work out here except signing in.
+ */
+function paintAuth(state) {
+  const inAccount = !!(state && state.signedIn && state.identity);
+  els.authForm.hidden = inAccount;
+  els.work.hidden = !inAccount;
+  els.acct.hidden = !inAccount;
+
+  if (!inAccount) {
+    els.acctTenant.textContent = "";
+    els.acctEmail.textContent = "";
+    /* "Signed in again" vs "sign in" is the whole difference between a tenant
+       who thinks the extension broke and one who knows what to do next. */
+    if (state && state.expired) {
+      showAuthError("Your Drive247 sign-in has expired. Sign in again to continue.");
+    }
     return;
   }
-  if (value.length < 20) {
-    els.tokenHint.className = "hint warn";
-    els.tokenHint.textContent = "That looks too short to be a pairing token.";
+
+  const id = state.identity;
+  els.acctTenant.textContent = id.tenantName || "Drive247";
+  els.acctEmail.textContent = id.name || id.email || "";
+  hideAuthError();
+}
+
+function showAuthError(message) {
+  els.authError.textContent = message;
+  els.authError.hidden = false;
+}
+function hideAuthError() {
+  els.authError.textContent = "";
+  els.authError.hidden = true;
+}
+
+els.authForm.addEventListener("submit", async (e) => {
+  /* A form submit inside an extension popup would NAVIGATE this document,
+     which destroys it. The default is prevented on every path, including the
+     failure paths below. */
+  e.preventDefault();
+  hideAuthError();
+  setBusyAuth(true);
+
+  const email = els.email.value;
+  const password = els.password.value;
+
+  let result = null;
+  try {
+    result = await chrome.runtime.sendMessage({ type: "AUTH_SIGN_IN", email, password });
+  } catch (_) {
+    result = { ok: false, reason: "The extension could not reach its background worker. Try again." };
+  }
+
+  /* Cleared on success AND on failure. A password sitting in a DOM node after a
+     failed attempt is a password waiting to be shoulder-surfed or screen-shared,
+     and the tenant is about to retype it either way. */
+  els.password.value = "";
+  setBusyAuth(false);
+
+  if (!result || !result.ok) {
+    showAuthError((result && result.reason) || "Sign-in failed. Try again.");
     return;
   }
-  els.tokenHint.className = "hint good";
-  els.tokenHint.textContent = `Saved · ${value.slice(0, 14)}…`;
+  els.email.value = "";
+  await refreshAuth();
+});
+
+els.signOut.addEventListener("click", async () => {
+  try { await chrome.runtime.sendMessage({ type: "AUTH_SIGN_OUT" }); } catch (_) {}
+  /* The worker clears the session AND every run artefact that belonged to it.
+     Repaint from nothing so the next person at this machine sees no trace of
+     the last one's guest names. */
+  renderOne(null);
+  renderRun(null);
+  renderLastSync(null);
+  els.email.value = "";
+  els.password.value = "";
+  await refreshAuth();
+});
+
+function setBusyAuth(busy) {
+  els.signIn.disabled = busy;
+  els.spinnerAuth.hidden = !busy;
+  els.signInLabel.textContent = busy ? "Signing in…" : "Sign in";
+  els.email.disabled = busy;
+  els.password.disabled = busy;
 }
 
 // ================================================================ the clicks ==
-
-els.useSample.addEventListener("change", () => {
-  els.scenario.disabled = !els.useSample.checked;
-  chrome.storage.local.set({ useSample: els.useSample.checked });
-});
-els.scenario.addEventListener("change", () => {
-  chrome.storage.local.set({ scenario: els.scenario.value });
-});
 
 els.syncAll.addEventListener("click", async () => {
   setBusyAll(true);
   try {
     await chrome.runtime.sendMessage({
       type: "SYNC_ALL",
-      mode: els.useSample.checked ? "fixture" : "live",
-      scenario: els.useSample.checked ? (els.scenario.value || null) : null
+      mode: devMode.useSample ? "fixture" : "live",
+      scenario: devMode.useSample ? devMode.scenario : null
     });
   } catch (_) {
     // The worker was revived, or the popup raced it. Harmless: storage carries
@@ -218,8 +292,40 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.lastRun) renderOne(changes.lastRun.newValue);
   if (changes.syncState) renderRun(changes.syncState.newValue);
-  if (changes.pairingToken) paintTokenHint(changes.pairingToken.newValue || "");
+  if (changes.lastSyncAt) renderLastSync(changes.lastSyncAt.newValue || null);
+  /* The worker clears d247Identity when a refresh is rejected mid-sync. This is
+     how an expiry that happens while the popup is OPEN reaches the screen,
+     rather than sitting behind a stale "Signed in as…" until the next reopen. */
+  if (changes.d247Identity) refreshAuth();
 });
+
+/**
+ * "Last synced" — a date, and nothing that could be mistaken for one.
+ *
+ * Only ever written by a run whose writes Drive247 accepted (background.js), so
+ * this line never moves forward on a sync that saved nothing. A run that read
+ * only part of the calendar says so, because "last synced today" over a partial
+ * read is the same confident lie the batch counter exists to prevent.
+ */
+function renderLastSync(entry) {
+  if (!entry || !entry.at) {
+    els.lastSync.hidden = true;
+    els.lastSync.textContent = "";
+    return;
+  }
+  const when = new Date(entry.at);
+  const stamp = isNaN(when.getTime())
+    ? null
+    : when.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  if (!stamp) { els.lastSync.hidden = true; return; }
+
+  const n = Number(entry.records) || 0;
+  const what = n === 1 ? "1 booking" : n + " bookings";
+  els.lastSync.textContent =
+    "Last synced " + stamp + " · " + what +
+    (entry.complete === false ? " · part of your calendar only" : "");
+  els.lastSync.hidden = false;
+}
 
 // =============================================== render: the multi-batch run ==
 
@@ -357,7 +463,11 @@ function renderAlert(s) {
   const [label, tone] = OUTCOME_LABEL[s.outcome] || ["Something unexpected happened", "bad"];
   els.runAlert.hidden = false;
   els.runAlert.dataset.tone = tone;
-  els.alertKind.textContent = label;
+  /* `s.label` is set only when the worker parked for a reason the reader's
+     vocabulary describes badly — a Drive247 session that ended mid-run reaches
+     the server as NOT_LOGGED_IN, which is true, but "Not signed in to Turo" is
+     not the sentence that helps. */
+  els.alertKind.textContent = s.label || label;
   els.alertAdvice.textContent = s.advice || "";
   els.alertDetail.textContent = s.lastError && s.lastError !== s.advice ? s.lastError : "";
   els.alertDetail.hidden = !els.alertDetail.textContent;

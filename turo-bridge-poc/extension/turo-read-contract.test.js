@@ -12,8 +12,11 @@
  * trips", and an absence must not release a block.
  */
 
-require('/home/haseeb-raza/Desktop/drive-247/turo-bridge-poc/extension/turo-read-contract.js');
-require('/home/haseeb-raza/Desktop/drive-247/turo-bridge-poc/extension/fixture.js');
+/* Resolved relative to THIS file. These were absolute paths into one
+   developer's home directory, so the suite could not run anywhere else —
+   including in this repository's own checkout. */
+require('./turo-read-contract.js');
+require('./fixture.js');
 const R=globalThis.__d247TuroRead, O=R.OUTCOME;
 let fails=0;
 const ok=(n,c,x)=>{ if(!c){fails++;console.log('FAIL',n,JSON.stringify(x));} else console.log('ok  ',n); };

@@ -9,24 +9,49 @@
  * same `{ ok, success, action, tenantName, reservation }` the shipped popup and
  * apps/portal/src/hooks/use-turo-bridge.ts already read. Nothing was renamed.
  *
- * ─── AUTH MODEL (unchanged) ─────────────────────────────────────────────────
- * verify_jwt = false, and the pairing token in the JSON body is the ENTIRE
- * credential. The operator running the extension is signed into turo.com, not
- * into Drive247, so there is no Supabase session in that browser context.
+ * ─── AUTH MODEL — TWO DOORS, ONE INVARIANT ──────────────────────────────────
+ * verify_jwt = false, and this function does its own auth, because it accepts
+ * EITHER credential:
+ *
+ *   A. A DRIVE247 SESSION. `Authorization: Bearer <supabase access token>`,
+ *      minted by the tenant signing into the extension with their Drive247
+ *      account. Resolved to a tenant through app_users exactly the way
+ *      turo-bridge-reconcile:173 resolves its operator — same table, same
+ *      is_active gate, same "never from a header, never from the body" rule.
+ *      This is the door the shipped extension uses.
+ *
+ *   B. A PAIRING TOKEN in the JSON body. The original credential, kept working
+ *      byte-for-byte: tokens are already minted, already pasted into installed
+ *      extensions, and apps/portal/src/hooks/use-turo-bridge.ts still reads
+ *      this wire format. Removing it would break live installs for no gain.
+ *
+ * If BOTH arrive they must agree. A session and a token naming different
+ * tenants is the single worst thing that can happen here — one operator's trips
+ * landing in another operator's account — so it is refused with a 403 rather
+ * than resolved by precedence. Same rule, same wording, as
+ * turo-bridge-reconcile:279.
+ *
+ * The extension may still be signed out of Drive247 while signed into turo.com;
+ * that is not this function's problem. What it will never accept is a request
+ * carrying neither credential.
  *
  * The client NEVER names a tenant. tenant_id is resolved server-side from the
- * token alone, so a cross-tenant write is not expressible in the wire format —
- * even a caller holding a valid token plus a guessed tenant uuid cannot aim a
- * row at another operator. Any future change that lets the body carry a tenant
- * id or slug destroys this property; don't.
+ * credential alone, so a cross-tenant write is not expressible in the wire
+ * format — even a caller holding a valid credential plus a guessed tenant uuid
+ * cannot aim a row at another operator. Any future change that lets the body
+ * carry a tenant id or slug destroys this property; don't. `body.tenant_id` is
+ * read NOWHERE in this file, and that is deliberate, not an oversight.
  *
- * Do NOT move the token into an Authorization: Bearer header. The gateway may
- * try to parse that header as a JWT even with verify_jwt off, producing a 401
- * the handler never sees — which surfaces in DevTools as an unexplained CORS
- * failure. It cannot go in a custom header either: _shared/cors.ts:5 whitelists
- * only `authorization, x-client-info, apikey, content-type, x-tenant-slug`, so
- * an `x-turo-bridge-token` would fail preflight from a chrome-extension://
- * origin before this function ever runs. BODY ONLY.
+ * Do NOT move the PAIRING TOKEN into an Authorization: Bearer header. It is not
+ * a JWT, and the gateway may try to parse that header as one even with
+ * verify_jwt off, producing a 401 the handler never sees — which surfaces in
+ * DevTools as an unexplained CORS failure. It cannot go in a custom header
+ * either: _shared/cors.ts:5 whitelists only `authorization, x-client-info,
+ * apikey, content-type, x-tenant-slug`, so an `x-turo-bridge-token` would fail
+ * preflight from a chrome-extension:// origin before this function ever runs.
+ * PAIRING TOKEN: BODY ONLY. A real Supabase access token is a JWT and does
+ * belong in the Authorization header — that is door A above, and it is the same
+ * header turo-bridge-reconcile has always accepted from the portal.
  *
  * ⚠ TOKEN COLUMN — THE LIVE DEFECT THIS FILE NOW SURVIVES.
  *   turo-bridge-poc/sql/01-schema.sql adds `token_hash` and drops the plaintext
@@ -252,6 +277,45 @@ function extractToken(body: Record<string, unknown>): string {
     if (typeof c === "string" && c.trim() !== "") return c.trim();
   }
   return "";
+}
+
+/**
+ * DOOR A — the tenant behind a Drive247 sign-in.
+ *
+ * Byte-for-byte the same lookup as turo-bridge-reconcile:173. Identity comes
+ * from the JWT via app_users and from nowhere else: not from a header the
+ * caller chose, not from the body, and never from `tenants` (which would let a
+ * slug stand in for proof of membership).
+ *
+ * Returns null for every failure mode — bad JWT, no staff row, deactivated
+ * user — because the caller turns all of them into one 401. Distinguishing
+ * "your token expired" from "you were deactivated" to an unauthenticated
+ * caller tells a prober which accounts exist.
+ *
+ * A super admin (tenant_id NULL) resolves to a null tenantId, NOT to an error:
+ * the caller decides what to do with that, and for ingest the answer is to
+ * refuse, because a synced reservation has to land in exactly one account.
+ */
+async function resolveActor(
+  supabase: SupabaseClient,
+  authHeader: string | null,
+): Promise<{ appUserId: string; tenantId: string | null; isSuperAdmin: boolean } | null> {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const jwt = authHeader.slice(7).trim();
+  if (!jwt) return null;
+  const { data, error } = await supabase.auth.getUser(jwt);
+  if (error || !data?.user) return null;
+  const { data: appUser } = await supabase
+    .from("app_users")
+    .select("id, tenant_id, is_super_admin, is_active")
+    .eq("auth_user_id", data.user.id)
+    .maybeSingle();
+  if (!appUser || appUser.is_active === false) return null;
+  return {
+    appUserId: appUser.id as string,
+    tenantId: (appUser.tenant_id as string | null) ?? null,
+    isSuperAdmin: appUser.is_super_admin === true,
+  };
 }
 
 /**
@@ -526,7 +590,7 @@ function normaliseReservation(
   }
 
   const row: Record<string, unknown> = {
-    tenant_id: tenantId,           // from the token. Never from the request body.
+    tenant_id: tenantId,           // from the credential. Never from the request body.
     reservation_id: reservationId,
     source: resolvedSource,
     guest_name: guestName,
@@ -632,31 +696,80 @@ Deno.serve(async (req) => {
   }
 
   // ---- 1. The credential -------------------------------------------------
-  const token = extractToken(body);
-  if (token.length < TOKEN_MIN_LENGTH || token.length > TOKEN_MAX_LENGTH) {
-    // Deliberately the SAME message as an unknown token below. Whether a
-    // rejected string was the right length is not a fact worth confirming to
-    // someone probing the endpoint.
-    return errorResponse("Pairing token not recognised.", 401);
-  }
-
+  // Two doors (see the AUTH MODEL note at the top of this file). Whichever one
+  // opens supplies the tenant; if both open they must name the same one.
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const { pairing, hardError } = await resolvePairing(supabase, token);
 
-  if (hardError) {
-    console.error("[TURO-BRIDGE] Token lookup failed:", hardError);
-    // Fail closed: an unreadable token table is never an authorised request.
-    return errorResponse("Could not verify the pairing token.", 500);
-  }
-  if (!pairing) return errorResponse("Pairing token not recognised.", 401);
-  if (pairing.revoked_at) {
-    // Distinguishable on purpose: the holder of a revoked token is a known
-    // operator who needs to be told to get a new one, not an unknown prober.
-    return errorResponse("This pairing token has been revoked.", 401);
+  let tenantId: string | null = null;
+  let pairing: Pairing | null = null;
+  let credentialKind: "session" | "pairing_token" | "session+pairing_token" = "pairing_token";
+
+  /* Door B — the pairing token, if the body carries one. Checked first only
+     because it is the cheaper lookup; precedence between the doors is not a
+     thing, since disagreement is refused rather than resolved. */
+  const token = extractToken(body);
+  if (token) {
+    if (token.length < TOKEN_MIN_LENGTH || token.length > TOKEN_MAX_LENGTH) {
+      // Deliberately the SAME message as an unknown token below. Whether a
+      // rejected string was the right length is not a fact worth confirming to
+      // someone probing the endpoint.
+      return errorResponse("Pairing token not recognised.", 401);
+    }
+    const { pairing: found, hardError } = await resolvePairing(supabase, token);
+    if (hardError) {
+      console.error("[TURO-BRIDGE] Token lookup failed:", hardError);
+      // Fail closed: an unreadable token table is never an authorised request.
+      return errorResponse("Could not verify the pairing token.", 500);
+    }
+    if (!found) return errorResponse("Pairing token not recognised.", 401);
+    if (found.revoked_at) {
+      // Distinguishable on purpose: the holder of a revoked token is a known
+      // operator who needs to be told to get a new one, not an unknown prober.
+      return errorResponse("This pairing token has been revoked.", 401);
+    }
+    pairing = found;
+    tenantId = found.tenant_id;
   }
 
-  // THE ONLY SOURCE OF TENANT IDENTITY IN THIS FUNCTION.
-  const tenantId = pairing.tenant_id;
+  /* Door A — a Drive247 sign-in. This is the extension's normal path now. */
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const actor = await resolveActor(supabase, authHeader);
+    if (!actor) {
+      // One message for expired, revoked, unknown and deactivated alike.
+      return errorResponse("Your Drive247 sign-in is no longer valid. Sign in again.", 401);
+    }
+    if (!actor.tenantId) {
+      /* A super admin has tenant_id NULL by design (see CLAUDE.md: "Super
+         admins must have tenant_id = NULL in app_users"). There is therefore
+         no single account a scraped reservation could belong to, and guessing
+         one is precisely the cross-tenant write this function exists to make
+         impossible. Refused, with a message that says what to do instead. */
+      return errorResponse(
+        "This Drive247 account is not linked to a single rental account, so there is nothing to sync into. " +
+          "Sign in with the account that owns the vehicles.",
+        403,
+      );
+    }
+    if (tenantId && actor.tenantId !== tenantId) {
+      // The worst outcome in this system, refused rather than warned about.
+      // Same sentence as turo-bridge-reconcile:282.
+      return errorResponse(
+        "This pairing token belongs to a different Drive247 account than the one you are signed into.",
+        403,
+      );
+    }
+    credentialKind = tenantId ? "session+pairing_token" : "session";
+    tenantId = actor.tenantId;
+  }
+
+  if (!tenantId) {
+    return errorResponse("Sign in to Drive247 in the extension before syncing.", 401);
+  }
+
+  // THE ONLY SOURCE OF TENANT IDENTITY IN THIS FUNCTION. Narrowed to a plain
+  // string here so nothing below has to re-null-check what auth already proved.
+  const resolvedTenantId: string = tenantId;
   const nowIso = new Date().toISOString();
 
   // ---- 2. Provenance -----------------------------------------------------
@@ -672,17 +785,49 @@ Deno.serve(async (req) => {
     : Array.isArray(body.trips) ? body.trips
     : null;
 
-  if (!listed && !singleReservation) {
-    return errorResponse("Missing `reservations` array (or a single `reservation` object).", 400);
-  }
-  const incoming: unknown[] = listed ?? [singleReservation as unknown];
-  const legacySingle = !listed;
+  const incoming: unknown[] = listed ?? (singleReservation ? [singleReservation as unknown] : []);
+  const legacySingle = !listed && !!singleReservation;
 
   if (incoming.length > MAX_BATCH_RECORDS) {
     return errorResponse(
       `Too many reservations in one call (${incoming.length} > ${MAX_BATCH_RECORDS}). Send them a page at a time.`,
       413,
     );
+  }
+
+  /* ── STILL PRESENT, UNCHANGED ────────────────────────────────────────────
+     Ids the extension read this run and found byte-identical to what it last
+     had accepted, so it did not re-send the record itself.
+
+     THIS FIELD IS A PRESENCE SIGNAL AND NOTHING ELSE. It can move
+     last_seen_job_id forward and it can do nothing else — not a date, not a
+     status, not a guest name. That restriction is load-bearing, because
+     "unchanged" is the extension's opinion and the extension is the component
+     most likely to be stale, confused, or three versions old. The worst a
+     wrong opinion can do here is keep a block that should have been released,
+     which ages out; the worst an unrestricted version could do is overwrite a
+     real row with an assumption.
+
+     It is equally load-bearing that this exists AT ALL. Reconcile decides
+     absence by `last_seen_job_id !== jobId` (turo-bridge-reconcile:780), so an
+     extension that simply skipped unchanged records would report every steady
+     booking as missing and walk them toward release. Skipping the payload is
+     safe; skipping the id is not. */
+  const stillPresent = Array.isArray(body.seen_reservation_ids)
+    ? [...new Set(
+        (body.seen_reservation_ids as unknown[])
+          .map((v) => asText(v, 200))
+          .filter((v): v is string => !!v),
+      )]
+    : [];
+  if (stillPresent.length > MAX_BATCH_RECORDS) {
+    return errorResponse(
+      `Too many ids in one call (${stillPresent.length} > ${MAX_BATCH_RECORDS}).`,
+      413,
+    );
+  }
+  if (!listed && !singleReservation && stillPresent.length === 0) {
+    return errorResponse("Nothing to record: no reservations and no seen ids.", 400);
   }
 
   const declaredSource =
@@ -732,8 +877,11 @@ Deno.serve(async (req) => {
   // progress_denominator are GENERATED ALWAYS and are not writable from here —
   // by anyone, service_role included.
   const jobObservations: Record<string, unknown> = {
-    tenant_id: tenantId,
-    token_id: pairing.id,
+    tenant_id: resolvedTenantId,
+    /* Nullable by design (03-foundation-schema.sql:121). A run authorised by a
+       Drive247 sign-in has no token row to point at, and inventing one would be
+       a lie in the audit trail. */
+    token_id: pairing?.id ?? null,
     job_kind: jobKind,
     source: resolvedSource,
     saw_end_of_feed: asBool(job.saw_end_of_feed),
@@ -778,7 +926,7 @@ Deno.serve(async (req) => {
     }
     // A job id from the body that is not ours is not an error we explain — it
     // is simply not found. Cross-tenant probing gets nothing back.
-    if (!existingJob || existingJob.tenant_id !== tenantId) {
+    if (!existingJob || existingJob.tenant_id !== resolvedTenantId) {
       return errorResponse("Unknown sync run.", 404);
     }
     if (existingJob.state !== "running") {
@@ -833,7 +981,7 @@ Deno.serve(async (req) => {
       const rawPath = asText(page.url_path ?? page.path, 300) ?? "";
       const prRaw = asText(page.degraded_reason, 40);
       return {
-        tenant_id: tenantId,
+        tenant_id: resolvedTenantId,
         job_id: jobId,
         seq: asInt(page.seq ?? page.index) ?? 0,
         requested_at: asTimestamp(page.requested_at) ?? nowIso,
@@ -884,7 +1032,7 @@ Deno.serve(async (req) => {
         notes: unsafeReason,
       })
       .eq("id", jobId)
-      .eq("tenant_id", tenantId);
+      .eq("tenant_id", resolvedTenantId);
     if (finErr) console.error("[TURO-BRIDGE] could not finalise a degraded run:", finErr.message);
 
     console.warn(`[TURO-BRIDGE] degraded run ${jobId} wrote nothing: ${unsafeReason}`);
@@ -914,7 +1062,7 @@ Deno.serve(async (req) => {
   const supersessions: { predecessor: string; successor: string }[] = [];
 
   for (const item of incoming) {
-    const n = normaliseReservation(item, tenantId, resolvedSource, jobId, parserVersion, nowIso);
+    const n = normaliseReservation(item, resolvedTenantId, resolvedSource, jobId, parserVersion, nowIso);
     if (!n.ok) {
       results.push({
         reservation_id: n.reservationId,
@@ -951,7 +1099,7 @@ Deno.serve(async (req) => {
       const { data: found } = await supabase
         .from("turo_bridge_reservations")
         .select("reservation_id")
-        .eq("tenant_id", tenantId)
+        .eq("tenant_id", resolvedTenantId)
         .in("reservation_id", ids.slice(i, i + 200));
       for (const r of found ?? []) existingIds.add(r.reservation_id as string);
     }
@@ -1005,7 +1153,7 @@ Deno.serve(async (req) => {
         notes: `batch write failed: ${writeFailure}`,
       })
       .eq("id", jobId)
-      .eq("tenant_id", tenantId);
+      .eq("tenant_id", resolvedTenantId);
 
     return jsonResponse({
       ok: false,
@@ -1033,7 +1181,7 @@ Deno.serve(async (req) => {
     const { data: stamped, error: supError } = await supabase
       .from("turo_bridge_reservations")
       .update({ superseded_by_reservation_id: link.successor, superseded_at: nowIso, updated_at: nowIso })
-      .eq("tenant_id", tenantId)
+      .eq("tenant_id", resolvedTenantId)
       .eq("reservation_id", link.predecessor)
       .is("superseded_by_reservation_id", null)
       .select("id");
@@ -1065,11 +1213,52 @@ Deno.serve(async (req) => {
   }
   const rejected = results.filter((r) => r.action === "rejected").length;
 
+  // ---- 7c. Touch the rows that were present and unchanged ----------------
+  // Reached only past the degraded gate in section 4, so a read we could not
+  // trust never advances anyone's presence.
+  //
+  // Scoped to `tenant_id` like every other statement in this file. A caller who
+  // guessed another tenant's reservation_id still touches nothing: the filter is
+  // (tenant_id, reservation_id) and tenant_id came from the credential.
+  let touched = 0;
+  if (stillPresent.length > 0) {
+    for (let i = 0; i < stillPresent.length; i += 200) {
+      const { data: bumped, error: touchErr } = await supabase
+        .from("turo_bridge_reservations")
+        .update({ last_seen_at: nowIso, last_seen_job_id: jobId })
+        .eq("tenant_id", resolvedTenantId)
+        .in("reservation_id", stillPresent.slice(i, i + 200))
+        .select("id");
+      if (touchErr) {
+        /* NOT FATAL, and deliberately not silent. A missed touch means a live
+           booking looks absent to the next reconcile, which is the direction
+           that HOLDS a block rather than releases one — reconcile needs a
+           positive read to release, and this failure produces the opposite of
+           one. So the import still stands, and the log says what happened. */
+        console.error("[TURO-BRIDGE] presence touch failed:", touchErr.message);
+      } else {
+        touched += (bumped ?? []).length;
+      }
+    }
+    if (touched < stillPresent.length) {
+      /* Ids the extension believed we held and we do not. Almost always a row
+         the operator deleted, or a fresh install syncing against a wiped
+         table. Harmless — the next run re-sends the full record, because the
+         extension only claims "unchanged" for records THIS install saw
+         accepted — but worth a line when someone is reading logs. */
+      console.warn(
+        `[TURO-BRIDGE] run ${jobId}: ${stillPresent.length - touched} unchanged id(s) matched no row.`,
+      );
+    }
+  }
+
   // ---- 8. Advance the run ------------------------------------------------
   // On a NEW run the insert already stamped this page's numbers, so only a
   // CONTINUATION adds to them. Getting this wrong double-counts page 1 and
   // makes a 3-trip fleet look like 6.
-  const cumulativeSeen = (asInt(jobRow?.records_seen) ?? 0) + (isContinuation ? incoming.length : 0);
+  const cumulativeSeen =
+    (asInt(jobRow?.records_seen) ?? 0) +
+    (isContinuation ? incoming.length + stillPresent.length : stillPresent.length);
   const cumulativeIngested = (asInt(jobRow?.records_ingested) ?? 0) + rows.length;
   const cumulativeParsed = (asInt(jobRow?.parsed_count) ?? 0) + rows.length;
   const priorVehicles = asStringArray(jobRow?.observed_turo_vehicle_ids);
@@ -1104,7 +1293,7 @@ Deno.serve(async (req) => {
     .from("turo_sync_jobs")
     .update(jobUpdate)
     .eq("id", jobId)
-    .eq("tenant_id", tenantId)
+    .eq("tenant_id", resolvedTenantId)
     .select("id, state, completeness, is_authoritative, observed_complete, degraded, progress_denominator, records_seen, records_ingested, parsed_count, window_start, window_end")
     .maybeSingle();
 
@@ -1116,11 +1305,15 @@ Deno.serve(async (req) => {
   }
 
   // Best effort — a failed touch must never fail an import that already landed.
-  const { error: touchError } = await supabase
-    .from("turo_bridge_tokens")
-    .update({ last_used_at: nowIso })
-    .eq("id", pairing.id);
-  if (touchError) console.error("[TURO-BRIDGE] last_used_at touch failed:", touchError.message);
+  // Skipped entirely on the session path: there is no token row to touch, and
+  // "when was this token last used" must stay honest about tokens only.
+  if (pairing) {
+    const { error: touchError } = await supabase
+      .from("turo_bridge_tokens")
+      .update({ last_used_at: nowIso })
+      .eq("id", pairing.id);
+    if (touchError) console.error("[TURO-BRIDGE] last_used_at touch failed:", touchError.message);
+  }
 
   // Display name for the popup's "Synced to <tenant>" line. Fetched AFTER the
   // write so a slow/failed tenant read can never cost us a landed reservation.
@@ -1128,14 +1321,16 @@ Deno.serve(async (req) => {
   const { data: tenant } = await supabase
     .from("tenants")
     .select("slug, company_name")
-    .eq("id", tenantId)
+    .eq("id", resolvedTenantId)
     .maybeSingle();
   const tenantName =
     (tenant?.company_name as string | null) ?? (tenant?.slug as string | null) ?? "Drive247";
 
   console.log(
     `[TURO-BRIDGE] run ${jobId}: +${created} new, ${updated} updated, ${rejected} rejected ` +
-      `(source=${resolvedSource}, tenant ${tenantId}, token column '${pairing.column_used}')`,
+      (touched ? ` (+${touched} unchanged)` : "") +
+      ` (source=${resolvedSource}, tenant ${resolvedTenantId}, auth ${credentialKind}` +
+        (pairing ? `, token column '${pairing.column_used}'` : "") + ")",
   );
 
   // ---- 9. Respond --------------------------------------------------------

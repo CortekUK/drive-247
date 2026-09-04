@@ -390,7 +390,7 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
-  console.log("\nA changed pairing token abandons the run rather than cross-writing");
+  console.log("\nA changed credential abandons the run rather than cross-writing");
   {
     const store = { pairingToken: "d247_turo_" + "a".repeat(40) };
     const posts = [];
@@ -632,6 +632,90 @@ async function main() {
     eq("the run is handed to reconcile, exactly once", reconciles.length, 1);
     eq("...citing the run it just closed", reconciles[0].job_id, finals[0].job.job_id);
     ok("...and demo data can never move a real row", reconciles[0].dry_run === true);
+  }
+
+  // ---------------------------------------------------------------------
+  console.log("\nA second sync of an unchanged calendar re-sends nothing, and still reports every id");
+  {
+    const store = { pairingToken: "d247_turo_" + "u".repeat(40) };
+    const posts = [], finals = [], reconciles = [];
+
+    let listen = boot(store, posts, null, finals, reconciles);
+    await send(listen, { type: "SYNC_ALL", mode: "fixture" });
+    await settle(store);
+
+    const firstPosts = posts.length;
+    ok("the first run sent the records", firstPosts > 0);
+    const firstIds = (store.syncSummary.ids || []).slice().sort();
+    ok("...and it recorded a digest for each", Object.keys(store.syncDigests || {}).length === firstPosts,
+       JSON.stringify(Object.keys(store.syncDigests || {}).length));
+
+    // Second sync, same calendar, same everything.
+    listen = boot(store, posts, null, finals, reconciles);
+    await send(listen, { type: "SYNC_ALL", mode: "fixture" });
+    await settle(store);
+
+    eq("the second run sent no record payloads at all", posts.length, firstPosts);
+
+    /* THE HALF THAT MATTERS. turo-bridge-reconcile decides a booking is missing
+       when last_seen_job_id does not name the run — so a sync that goes quiet
+       about a steady booking is a sync that walks it toward a released block.
+       Not sending the record is fine. Not sending the id is not. */
+    const final = finals[finals.length - 1];
+    const reported = (final.seen_reservation_ids || []).slice().sort();
+    eq("every id was still reported as present", reported.length, firstIds.length);
+    ok("...and they are the same ids", JSON.stringify(reported) === JSON.stringify(firstIds),
+       JSON.stringify({ reported, firstIds }));
+
+    eq("the run still finished", store.syncState.phase, "done");
+    eq("and still counted them as read", store.syncState.counts.offered, 11);
+  }
+
+  // ---------------------------------------------------------------------
+  console.log("\nA record that CHANGED is sent again, digest or no digest");
+  {
+    const store = { pairingToken: "d247_turo_" + "v".repeat(40) };
+    const posts = [], finals = [];
+
+    let listen = boot(store, posts, null, finals);
+    await send(listen, { type: "SYNC_ALL", mode: "fixture" });
+    await settle(store);
+    const firstPosts = posts.length;
+
+    /* Corrupt one stored digest, which is exactly what a real content change
+       looks like from the flush's point of view: the record no longer hashes to
+       what Drive247 was last known to hold. */
+    const anyId = Object.keys(store.syncDigests)[0];
+    store.syncDigests[anyId] = "0000000000000000";
+
+    listen = boot(store, posts, null, finals);
+    await send(listen, { type: "SYNC_ALL", mode: "fixture" });
+    await settle(store);
+
+    eq("exactly the changed record was re-sent", posts.length, firstPosts + 1);
+    eq("...and it was the right one", posts[posts.length - 1].id, anyId);
+    const final = finals[finals.length - 1];
+    eq("the rest were still reported present", (final.seen_reservation_ids || []).length, firstPosts - 1);
+    ok("and the changed one is NOT in that list", !(final.seen_reservation_ids || []).includes(anyId));
+  }
+
+  // ---------------------------------------------------------------------
+  console.log("\nA rejected record earns no digest, so it is retried in full");
+  {
+    const store = { pairingToken: "d247_turo_" + "w".repeat(40) };
+    const posts = [], finals = [];
+
+    /* The server takes every record but marks the first one rejected — a
+       validation failure, not a transport failure. Drive247 does NOT hold it,
+       so nothing about it may be skipped next time. */
+    let n = 0;
+    const behaviour = () => ({ ok: true, rejectFirst: n++ === 0 });
+    let listen = boot(store, posts, behaviour, finals);
+    await send(listen, { type: "SYNC_ALL", mode: "fixture" });
+    await settle(store);
+
+    ok("some records landed", posts.length > 0);
+    ok("a digest exists for the accepted ones", Object.keys(store.syncDigests || {}).length > 0);
   }
 
   console.log("\n" + passed + " passed, " + failed + " failed\n");

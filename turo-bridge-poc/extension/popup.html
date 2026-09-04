@@ -21,21 +21,62 @@
     </div>
     <div class="head-text">
       <h1>Turo Bridge</h1>
-      <p>Drive247</p>
+      <p id="headSub">Drive247</p>
+    </div>
+
+    <!-- WHO IS SIGNED IN. Rendered from d247Identity, which holds a name, an
+         email and a tenant and NO credential — the popup never reads the token
+         half of the session at all. -->
+    <div class="acct" id="acct" hidden>
+      <p class="acct-name" id="acctTenant"></p>
+      <p class="acct-sub" id="acctEmail"></p>
+      <button type="button" class="linkish subtle" id="signOut">Sign out</button>
     </div>
   </header>
 
   <main class="body">
 
-    <div class="field">
-      <div class="label-row">
-        <label for="token">Pairing token</label>
-        <button type="button" class="linkish subtle" id="reveal" aria-pressed="false">Show</button>
+    <!-- ==================================================== the sign-in == -->
+    <!-- A real <form>, so Enter submits and a password manager can fill it.
+         The submit handler calls preventDefault(): a navigation inside an
+         extension popup would replace this document and lose the state. -->
+    <form class="auth" id="authForm" hidden autocomplete="on">
+      <p class="auth-lede">Sign in with your Drive247 account to sync your Turo calendar into Drive247.</p>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required
+               autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"
+               placeholder="you@example.com">
       </div>
-      <input id="token" type="password" placeholder="d247_turo_…"
-             autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <p class="hint" id="tokenHint">Paste the token from your Drive247 portal.</p>
-    </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required
+               autocomplete="current-password" placeholder="••••••••">
+      </div>
+
+      <!-- ONE message for every rejection. See popup.js: telling an
+           unauthenticated caller which half was wrong makes this form an
+           oracle for which Drive247 accounts exist. -->
+      <p class="auth-error" id="authError" role="alert" hidden></p>
+
+      <button type="submit" class="primary" id="signIn">
+        <span class="spinner" id="spinnerAuth" hidden></span>
+        <span id="signInLabel">Sign in</span>
+      </button>
+
+      <p class="hint">Your Turo account is not involved. This extension has never
+        asked for a Turo password and never will.</p>
+    </form>
+
+    <!-- ========================================= everything behind the gate ==
+         Hidden outright while signed out. The renderers below still run against
+         whatever is in storage, because the popup is a view over storage and a
+         run can finish while the popup is closed — but nothing in here is on
+         screen, and nothing in here can be actioned, until the tenant is
+         authenticated and a tenant has been resolved for them. -->
+    <div id="work" hidden>
 
     <!-- ================================================== the full sync == -->
     <button type="button" class="primary" id="syncAll">
@@ -43,22 +84,7 @@
       <span id="syncAllLabel">Sync my Turo calendar</span>
     </button>
 
-    <div class="rowline">
-      <label class="check">
-        <input type="checkbox" id="useSample">
-        <span>Use bundled sample data</span>
-      </label>
-      <select id="scenario" class="mini" aria-label="Sample scenario" disabled>
-        <option value="">Normal (3 batches)</option>
-        <option value="waf_empty_200">Empty 200 (WAF)</option>
-        <option value="bot_challenge">Bot challenge</option>
-        <option value="session_expired">Session expired</option>
-        <option value="renamed_envelope">Renamed envelope</option>
-        <option value="truncated_stream">Cut-off stream</option>
-        <option value="rate_limited">Rate limited</option>
-        <option value="silent_truncation">Silent truncation</option>
-      </select>
-    </div>
+    <p class="lastsync" id="lastSync" hidden></p>
 
     <!-- ============================================= the live run panel == -->
     <section class="run" id="run" data-phase="idle" aria-live="polite" hidden>
@@ -149,11 +175,13 @@
       </dl>
     </section>
 
+    </div><!-- /#work -->
+
   </main>
 
   <footer class="foot">
-    <p class="hint">Reads the Turo session already open in this browser. Never asks for your Turo password.</p>
-    <button type="button" class="linkish subtle" id="clear">Clear</button>
+    <p class="hint">Reads the Turo session already open in this browser, and never
+      changes anything there. Never asks for your Turo password.</p>
   </footer>
 
   <script src="popup.js"></script>

@@ -82,6 +82,42 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
+/* WHO IS SIGNED IN. Pushed to the right of the header so it reads as chrome
+   rather than as content — it is a fact about the session, not a step. */
+.acct {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 0;
+}
+
+.acct-name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-sub {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct .linkish {
+  margin-top: 2px;
+}
+
 .mark {
   width: 32px;
   height: 32px;
@@ -138,6 +174,7 @@ label {
 }
 
 input[type="password"],
+input[type="email"],
 input[type="text"] {
   width: 100%;
   padding: 9px 11px;
@@ -151,9 +188,58 @@ input[type="text"] {
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
+input[type="email"],
+input[type="password"] {
+  /* The monospace face was there so a pasted token's characters were
+     distinguishable. An email and a password are typed, not proofread, and the
+     body face reads better at 13px. */
+  font-family: inherit;
+}
+
+input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 input::placeholder {
   color: var(--muted);
   font-family: inherit;
+}
+
+/* ---------------------------------------------------------------- sign-in -- */
+
+.auth {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-lede {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--body);
+}
+
+/* ONE error line, and it is loud. A tenant who cannot get in has exactly one
+   thing to read on this screen. */
+.auth-error {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* "Last synced …" — quiet, because it is a fact and not an instruction. */
+.lastsync {
+  margin: -4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 input:focus {

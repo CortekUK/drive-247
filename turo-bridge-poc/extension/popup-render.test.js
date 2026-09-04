@@ -104,12 +104,22 @@ async function runOrchestrator(scenario) {
 // Render a state through the real popup.
 // ---------------------------------------------------------------------------
 
-function renderInPopup(state, lastRun) {
+/* The signed-in tenant every run test renders as. Not a credential — this is
+   the shape of d247Identity, which is deliberately the only auth data the popup
+   is given. */
+const SIGNED_IN = {
+  signedIn: true, expired: false,
+  identity: { userId: "u1", tenantId: "tenant-A", tenantName: "Acme Rentals", name: "Dana Okafor", email: "dana@acme.test" }
+};
+
+function renderInPopup(state, lastRun, opts) {
+  opts = opts || {};
   const html = fs.readFileSync(path.join(DIR, "popup.html"), "utf8");
   const dom = new JSDOM(html, { runScripts: "outside-only" });
   const w = dom.window;
 
-  const store = { syncState: state, lastRun: lastRun || null, pairingToken: "d247_turo_" + "x".repeat(40) };
+  const auth = opts.auth === undefined ? SIGNED_IN : opts.auth;
+  const store = { syncState: state, lastRun: lastRun || null, lastSyncAt: opts.lastSyncAt || null };
   w.chrome = {
     storage: {
       local: {
@@ -118,7 +128,12 @@ function renderInPopup(state, lastRun) {
       },
       onChanged: { addListener() {} }
     },
-    runtime: { async sendMessage() {} }
+    runtime: {
+      async sendMessage(msg) {
+        if (msg && msg.type === "AUTH_STATE") return auth;
+        return undefined;
+      }
+    }
   };
 
   w.eval(fs.readFileSync(path.join(DIR, "popup.js"), "utf8"));
@@ -126,6 +141,8 @@ function renderInPopup(state, lastRun) {
 }
 
 const text = (doc, id) => (doc.getElementById(id).textContent || "").trim();
+const eqText = (doc, name, id, expected) =>
+  ok(name, text(doc, id) === expected, "got " + JSON.stringify(text(doc, id)));
 const shown = (doc, id) => !doc.getElementById(id).hidden;
 
 // ================================================================== tests ===
@@ -229,6 +246,79 @@ async function main() {
     ok("with the reservation id", text(doc, "rTrip") === "R-900000001", text(doc, "rTrip"));
     ok("and says 'sample' out loud", /sample/i.test(text(doc, "badge")), text(doc, "badge"));
     ok("the run panel stays hidden when no full sync has happened", !shown(doc, "run"));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe popup is a sign-in screen until the tenant signs in");
+  {
+    const { doc } = renderInPopup(null, null, { auth: { signedIn: false, expired: false, identity: null } });
+    await new Promise((r) => setTimeout(r, 20));
+
+    ok("the sign-in form is on screen", !doc.getElementById("authForm").hidden);
+    /* ABSENT, not disabled. A greyed-out sync button invites a tenant to work
+       out how to enable it; there is nothing to work out except signing in. */
+    ok("and the sync UI is not merely disabled but gone", doc.getElementById("work").hidden);
+    ok("no account is claimed", doc.getElementById("acct").hidden);
+
+    const whole = doc.body.textContent;
+    /* THE THINGS A TENANT MAY NEVER SEE HERE. Each of these leaked from the
+       screen this one replaced. */
+    ok("no pairing token field", !doc.getElementById("token"));
+    ok("no backend URL", !/supabase|functions\/v1/i.test(whole), whole.slice(0, 120));
+    ok("no sample-data or scenario controls", !doc.getElementById("useSample") && !doc.getElementById("scenario"));
+    ok("and it says the Turo password is not wanted", /never asks for your Turo password/i.test(whole));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nAn expired session says so, rather than just failing");
+  {
+    const { doc } = renderInPopup(null, null, { auth: { signedIn: false, expired: true, identity: null } });
+    await new Promise((r) => setTimeout(r, 20));
+
+    ok("the error line is shown", !doc.getElementById("authError").hidden);
+    ok("...and says the sign-in expired", /expired/i.test(text(doc, "authError")), text(doc, "authError"));
+    ok("...and says what to do about it", /sign in again/i.test(text(doc, "authError")));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA signed-in tenant sees which account they are syncing into");
+  {
+    const state = await runOrchestrator(null);
+    const { doc } = renderInPopup(state, null, {
+      lastSyncAt: { at: "2026-03-01T09:30:00.000Z", records: 11, complete: true }
+    });
+    await new Promise((r) => setTimeout(r, 20));
+
+    ok("the sign-in form is gone", doc.getElementById("authForm").hidden);
+    ok("the sync UI is available", !doc.getElementById("work").hidden);
+    ok("the account bar is shown", !doc.getElementById("acct").hidden);
+    /* WHICH ACCOUNT, in the tenant's own words. This is the answer to "am I
+       about to sync into the right place?", and it is the one question the
+       pairing-token screen could never answer. */
+    eqText(doc, "names the tenant, not an id", "acctTenant", "Acme Rentals");
+    ok("and the person signed in", /Dana Okafor/.test(text(doc, "acctEmail")), text(doc, "acctEmail"));
+    ok("a way out is offered", !!doc.getElementById("signOut"));
+
+    const last = text(doc, "lastSync");
+    ok("the last successful sync is dated", /Last synced/.test(last), last);
+    ok("...and counts what it saved", /11 bookings/.test(last), last);
+    ok("...with no caveat, because that read was complete", !/part of your calendar/i.test(last), last);
+
+    /* Still nothing technical, now that there IS a screen behind the gate. */
+    const whole = doc.body.textContent;
+    ok("no tenant id is ever printed", !/tenant-A/.test(whole));
+    ok("no endpoint is ever printed", !/supabase|functions\/v1/i.test(whole));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA partial read never claims a clean 'last synced'");
+  {
+    const { doc } = renderInPopup(null, null, {
+      lastSyncAt: { at: "2026-03-01T09:30:00.000Z", records: 4, complete: false }
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    const last = text(doc, "lastSync");
+    ok("it says the calendar was only partly read", /part of your calendar only/i.test(last), last);
   }
 
   console.log("\n" + passed + " passed, " + failed + " failed\n");

@@ -162,13 +162,23 @@ const AUTO_RESUMABLE = new Set(["RATE_LIMITED", "UNREACHABLE", "TRUNCATED", "PAG
 
 /* Storage keys. Every one of these is the durable half of a rule above. */
 const K = {
+  /* THE CREDENTIAL, and the durable half of the sign-in. `session` holds the
+     Drive247 access + refresh tokens and is read ONLY by this worker;
+     `identity` holds the name, email and tenant the popup paints and carries
+     no credential at all, so the popup never has to touch the secret half. */
+  session: "d247Session",
+  identity: "d247Identity",
+  /* Legacy. No UI writes this any more — kept because installed extensions
+     still hold a pasted token and turo-bridge-ingest still honours it. */
   token: "pairingToken",
   lastRun: "lastRun",        // the PoC single-click status (unchanged shape)
   cursor: "turoCursor",      // RunCursor + our run-scoped counters
   state: "syncState",        // the popup's view model
   pending: "syncPending",    // records read but not yet acknowledged by ingest
   summary: "syncSummary",    // light per-record rows + diagnostics for the UI
-  manifest: "syncManifest"   // the LAST run's ids, for the absence ledger
+  manifest: "syncManifest",  // the LAST run's ids, for the absence ledger
+  lastSync: "lastSyncAt",    // the one date the tenant is shown, see below
+  digests: "syncDigests"     // reservation_id -> digest of what we last sent
 };
 
 /* Resets to false if the worker is killed, which is exactly right: a dead
@@ -176,11 +186,428 @@ const K = {
    MODULE SCOPE AND IT HOLDS NO PROGRESS. */
 let pumping = false;
 
+// ========================================================= DRIVE247 SIGN-IN ==
+//
+// The tenant signs into DRIVE247 here, inside the extension. That is the whole
+// change: the credential used to be a pairing token pasted into the popup, and
+// it is now a real Drive247 session belonging to a real person.
+//
+// WHAT THIS BUYS, beyond convenience. A pairing token proves WHICH TENANT and
+// never WHICH PERSON, cannot be deactivated by deactivating the employee who
+// holds it, and is a bearer string that survives being pasted into a chat
+// window. A Supabase session is attributable, expires, and dies the moment
+// app_users.is_active goes false. turo-bridge-ingest enforces all three.
+//
+// WHAT DID NOT CHANGE, and must not: THE EXTENSION STILL NEVER NAMES A TENANT.
+// It sends a credential; the server resolves the tenant from it. `tenant_id`
+// appears nowhere in any request body this file builds. The sign-in swaps one
+// credential for a better one — it does not move the trust boundary.
+//
+// WHERE THE SECRETS LIVE. chrome.storage.local, which is readable only by this
+// extension's own contexts — never by turo.com, never by any injected script,
+// never by the DOM. The tokens are deliberately NOT in chrome.storage.session
+// (which would be memory-only and strictly safer) because the requirement is
+// that a tenant who closes Chrome and comes back tomorrow is still signed in,
+// and that needs a refresh token that outlives the browser process. The
+// mitigation is that the popup never reads this key: it reads K.identity, which
+// holds a name, an email and a tenant, and no credential at all.
+//
+// TURO CREDENTIALS ARE NOT INVOLVED. This extension has never asked for a Turo
+// password and still does not. It reads the turo.com session the operator's own
+// browser already holds, and it writes nothing back there.
+
+const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
+const REST_URL = `${SUPABASE_URL}/rest/v1`;
+const AUTH_TIMEOUT_MS = 15000;
+
+/* Refresh this far BEFORE the stated expiry. A token that is valid for another
+   four seconds when we check it is not valid by the time a slow batch POST
+   reaches the gateway, and the failure mode is a 401 in the middle of a run
+   that was otherwise going fine. */
+const REFRESH_SKEW_MS = 60 * 1000;
+
+/* A second module-scope mutable, held to the same rule as `pumping`: IT HOLDS
+   NO PROGRESS. It exists because a run's flush loop can ask for the access
+   token several times in the same tick, and two concurrent refreshes race to
+   spend the same single-use refresh token — the loser gets a 400 and signs the
+   operator out mid-sync. Resets to null when the worker dies, which is correct:
+   a dead worker has no in-flight refresh to join. */
+let refreshInFlight = null;
+
+/** Timed fetch. Never logs the body — these are all credential exchanges. */
+async function authFetch(url, init) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AUTH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Read the tenant's own staff row, then their account's display name.
+ *
+ * Read AS THE USER (their access token in the Authorization header), not with
+ * any elevated key — so RLS is the thing deciding what comes back, exactly as
+ * it does for the portal. If a policy ever tightens, this tightens with it
+ * rather than quietly retaining access the portal no longer grants.
+ *
+ * The gates below are copied from apps/portal/src/stores/auth-store.ts on
+ * purpose. Two places that decide "may this person act for this tenant" must
+ * not drift, and the portal's answer is the canonical one.
+ */
+async function loadProfile(accessToken, userId) {
+  const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` };
+
+  let res;
+  try {
+    res = await authFetch(
+      `${REST_URL}/app_users?select=id,tenant_id,is_active,is_super_admin,must_change_password,name,email,role` +
+        `&auth_user_id=eq.${encodeURIComponent(userId)}&limit=1`,
+      { headers },
+    );
+  } catch (_) {
+    // Offline or timed out. Same answer as a non-2xx below: unknown, retryable.
+    return { ok: false, retryable: true, reason: "Drive247 could not be reached. Check your connection and try again." };
+  }
+  if (!res.ok) {
+    /* A transport failure is NOT a denial. auth-store.ts calls this
+       `profileUnavailable` and treats it as "unknown" for the same reason: a
+       network blip must not read as "you are not allowed", because the user's
+       only available response to that message is to stop trying. */
+    return { ok: false, retryable: true, reason: "Drive247 could not be reached. Check your connection and try again." };
+  }
+  const rows = await res.json().catch(() => []);
+  const user = Array.isArray(rows) && rows.length ? rows[0] : null;
+
+  if (!user) {
+    return { ok: false, reason: "This Drive247 account has no portal access. Ask your administrator to add you." };
+  }
+  /* Super admins bypass is_active, matching auth-store.ts:183. They do not
+     bypass the tenant check below, and that is the point. */
+  if (!user.is_super_admin && user.is_active === false) {
+    return { ok: false, reason: "This Drive247 account has been deactivated." };
+  }
+  if (user.must_change_password && !user.is_super_admin) {
+    return { ok: false, reason: "Set a new password in the Drive247 portal first, then sign in here." };
+  }
+  if (!user.tenant_id) {
+    /* Super admins carry tenant_id NULL by design. There is no single account
+       a scraped Turo trip could belong to, so there is nothing this extension
+       could safely do for them. turo-bridge-ingest refuses the same case with
+       the same reasoning; refusing here too means the tenant finds out at
+       sign-in rather than at the end of their first sync. */
+    return {
+      ok: false,
+      reason: "Super admin accounts are not tied to one rental account. Sign in with the account that owns the vehicles.",
+    };
+  }
+
+  /* `tenants` has no `name` column — company_name is the display name
+     (turo-bridge-ingest/index.ts reads the same two columns). Failure here is
+     cosmetic: a missing display name must never block a valid sign-in. */
+  let tenantName = null;
+  try {
+    const tRes = await authFetch(
+      `${REST_URL}/tenants?select=slug,company_name&id=eq.${encodeURIComponent(user.tenant_id)}&limit=1`,
+      { headers },
+    );
+    if (tRes.ok) {
+      const tRows = await tRes.json().catch(() => []);
+      const t = Array.isArray(tRows) && tRows.length ? tRows[0] : null;
+      tenantName = (t && (t.company_name || t.slug)) || null;
+    }
+  } catch (_) { /* cosmetic only */ }
+
+  return {
+    ok: true,
+    identity: {
+      userId: String(userId),
+      appUserId: user.id,
+      email: user.email || null,
+      name: user.name || null,
+      role: user.role || null,
+      tenantId: user.tenant_id,
+      tenantName: tenantName || "your Drive247 account",
+      signedInAt: new Date().toISOString(),
+    },
+  };
+}
+
+/** Persist a GoTrue token response plus the resolved identity. */
+async function storeSession(tokens, identity) {
+  await chrome.storage.local.set({
+    [K.session]: {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      /* Epoch MILLISECONDS. GoTrue sends expires_in (seconds) and, on newer
+         versions, expires_at (epoch seconds). Deriving it from expires_in is
+         the one form present in every version. */
+      expires_at_ms: Date.now() + (Number(tokens.expires_in) || 3600) * 1000,
+      user_id: identity.userId,
+    },
+    [K.identity]: identity,
+  });
+}
+
+/**
+ * Sign in with a Drive247 email and password.
+ *
+ * The password is used once, in this call, and is never stored, never logged
+ * and never written to storage. Neither is the Turo password — this extension
+ * has never had one.
+ */
+async function authSignIn(email, password) {
+  const mail = String(email || "").trim();
+  const pass = String(password || "");
+  if (!mail || !pass) return { ok: false, reason: "Enter your Drive247 email and password." };
+
+  let res;
+  try {
+    res = await authFetch(`${AUTH_URL}/token?grant_type=password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email: mail, password: pass }),
+    });
+  } catch (e) {
+    const aborted = e && e.name === "AbortError";
+    return { ok: false, reason: aborted ? "Drive247 did not respond in time." : "Could not reach Drive247. Check your connection." };
+  }
+
+  if (!res.ok) {
+    /* ONE message for wrong password, unknown email and unconfirmed account
+       alike. Distinguishing them turns this form into an oracle for which
+       Drive247 accounts exist. 429 is called out separately because the user's
+       correct response to it is different: wait, not retype. */
+    if (res.status === 429) return { ok: false, reason: "Too many attempts. Wait a minute and try again." };
+    return { ok: false, reason: "Email or password is incorrect." };
+  }
+
+  const tokens = await res.json().catch(() => null);
+  if (!tokens || !tokens.access_token || !tokens.user || !tokens.user.id) {
+    return { ok: false, reason: "Drive247 sent an unexpected sign-in response." };
+  }
+
+  const profile = await loadProfile(tokens.access_token, tokens.user.id);
+  if (!profile.ok) {
+    /* A REFUSAL IS NOT THE SAME AS A FAILURE TO ASK.
+
+       Refused (deactivated, no staff row, super admin, forced password change):
+       a session now exists server-side for an account we have just decided may
+       not use this extension, so revoke it rather than leave a usable refresh
+       token behind.
+
+       Could not ask (the profile read timed out or the connection dropped):
+       revoking would make a network blip cost the tenant their password again,
+       which is the same mistake refreshSession() is careful not to make. Leave
+       the session alone and let them press the button once more. */
+    if (!profile.retryable) await revokeRemote(tokens.access_token);
+    return { ok: false, reason: profile.reason };
+  }
+
+  await storeSession(tokens, profile.identity);
+  return { ok: true, identity: profile.identity };
+}
+
+/** Best effort, local scope only. */
+async function revokeRemote(accessToken) {
+  if (!accessToken) return;
+  try {
+    /* scope=local revokes THIS session's refresh token and nothing else. A
+       global logout would also end the tenant's portal session in another tab,
+       which is not what "sign out of the extension" means to anyone. */
+    await authFetch(`${AUTH_URL}/logout?scope=local`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (_) { /* the local clear below is what actually matters */ }
+}
+
+/** Drop every trace of the session, and every run that belonged to it. */
+async function clearSession() {
+  const stale = await get(K.session);
+  await chrome.storage.local.remove([
+    K.session, K.identity,
+    /* A run is the property of the account that started it. Leaving a cursor,
+       a pending flush queue or a summary behind would let the NEXT person to
+       sign in on this machine resume someone else's sync and see someone
+       else's guest names. */
+    K.cursor, K.state, K.pending, K.summary, K.manifest, K.lastRun, K.lastSync,
+    /* The digests belong to the account too. Keeping them across a sign-out
+       would let a new tenant's identical reservation id be skipped as
+       "unchanged" against a row it has never had. */
+    K.digests,
+  ]);
+  await clearAlarm().catch(() => {});
+  return stale;
+}
+
+/**
+ * A usable access token, refreshing when it is close to expiry.
+ *
+ * @returns {Promise<{token: string|null, expired: boolean}>} `expired` is true
+ *   only when there WAS a session and it could not be renewed — the one case
+ *   where the honest thing to tell the tenant is "sign in again" rather than
+ *   "sign in".
+ */
+async function currentAccessToken() {
+  const s = await get(K.session);
+  if (!s || !s.access_token || !s.refresh_token) return { token: null, expired: false };
+  if (Date.now() < (s.expires_at_ms || 0) - REFRESH_SKEW_MS) return { token: s.access_token, expired: false };
+
+  if (!refreshInFlight) refreshInFlight = refreshSession(s.refresh_token).finally(() => { refreshInFlight = null; });
+  const refreshed = await refreshInFlight;
+  /* `gone` is the whole point of the distinction: only a session the SERVER
+     rejected is reported as expired. A refresh we could not even deliver
+     leaves `expired` false, so the tenant is not told to sign in again over
+     what was actually a dropped connection. */
+  return { token: refreshed.token, expired: refreshed.gone };
+}
+
+/**
+ * @returns {Promise<{token: string|null, gone: boolean}>} `gone` is true ONLY
+ *   when the server told us the session is finished. Every other failure —
+ *   offline, timeout, a 500 — leaves it false and leaves the session in place
+ *   to retry with.
+ */
+async function refreshSession(refreshToken) {
+  let res;
+  try {
+    res = await authFetch(`${AUTH_URL}/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  } catch (_) {
+    /* NETWORK FAILURE IS NOT EXPIRY. Signing the tenant out because their wifi
+       dropped for four seconds — losing a half-finished run in the process —
+       is the worst possible reading of a timeout. Keep the session, report not
+       gone, let the caller park the run and retry. */
+    return { token: null, gone: false };
+  }
+  if (!res.ok) {
+    /* 400/401/403 from the refresh endpoint IS the end of a session — expired,
+       revoked, or the user deactivated. This is the only path that ends a
+       session on its own. A 5xx is Supabase having a bad minute and must not. */
+    const gone = res.status === 400 || res.status === 401 || res.status === 403;
+    if (gone) await clearSession();
+    return { token: null, gone };
+  }
+  const tokens = await res.json().catch(() => null);
+  if (!tokens || !tokens.access_token) return { token: null, gone: false };
+
+  const identity = await get(K.identity);
+  const prior = await get(K.session);
+  await chrome.storage.local.set({
+    [K.session]: {
+      access_token: tokens.access_token,
+      /* GoTrue rotates the refresh token on every use; keeping the old one
+         would work exactly once more and then lock the tenant out. */
+      refresh_token: tokens.refresh_token || refreshToken,
+      expires_at_ms: Date.now() + (Number(tokens.expires_in) || 3600) * 1000,
+      user_id: (identity && identity.userId) || (prior && prior.user_id) || null,
+    },
+  });
+  return { token: tokens.access_token, gone: false };
+}
+
+async function authSignOut() {
+  const s = await get(K.session);
+  await revokeRemote(s && s.access_token);
+  await clearSession();
+  return { ok: true };
+}
+
+/** What the popup is allowed to know. Contains no credential. */
+async function authState() {
+  const identity = await get(K.identity);
+  if (!identity) return { signedIn: false, expired: false, identity: null };
+  const { token, expired } = await currentAccessToken();
+  if (!token) return { signedIn: false, expired, identity: expired ? null : identity };
+  return { signedIn: true, expired: false, identity };
+}
+
+/**
+ * THE CREDENTIAL FOR ONE REQUEST — the single place the rest of this file asks
+ * "who are we, and may we sync?".
+ *
+ * `identity` is what the run's tenant guard fingerprints. For a session it is
+ * the TENANT ID and not the access token, which matters: access tokens rotate
+ * on every refresh, so fingerprinting one would abandon a healthy run roughly
+ * once an hour and blame it on the operator switching accounts. The tenant is
+ * the thing whose change actually endangers a run, and it is stable.
+ */
+async function credential() {
+  const { token: accessToken, expired } = await currentAccessToken();
+  const identity = await get(K.identity);
+  if (accessToken && identity && identity.tenantId) {
+    return {
+      ok: true,
+      kind: "session",
+      accessToken,
+      pairingToken: null,
+      identity: "tenant:" + identity.tenantId,
+      tenantName: identity.tenantName || null,
+      reason: null,
+    };
+  }
+
+  /* The legacy door, kept working. Installed extensions still hold pasted
+     tokens, and turo-bridge-ingest still accepts them. There is no UI to enter
+     one any more; this only ever fires for an install that already had one. */
+  const pairingToken = (await get(K.token) || "").trim();
+  if (pairingToken) {
+    return { ok: true, kind: "token", accessToken: null, pairingToken, identity: pairingToken, tenantName: null, reason: null };
+  }
+
+  return {
+    ok: false,
+    kind: null,
+    accessToken: null,
+    pairingToken: null,
+    identity: null,
+    tenantName: null,
+    reason: expired
+      ? "Your Drive247 sign-in has expired. Sign in again to continue."
+      : "Sign in with your Drive247 account to start a sync.",
+  };
+}
+
 // ================================================================= wiring ==
 
 // Registered at the top level so they survive every worker revival.
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || !msg.type) return false;
+
+  /* SENDER VALIDATION. `externally_connectable` is absent from the manifest, so
+     a web page cannot reach this listener at all — but "cannot today" is not a
+     reason to omit the check, and content scripts CAN reach it, from inside
+     turo.com. So: same extension id, and for anything that touches the session,
+     no tab behind it either. content-turo.js runs in a page and has no business
+     signing anyone in or reading who is signed in; it returns scraped rows and
+     nothing else. */
+  const sameExtension = !sender || !sender.id || sender.id === chrome.runtime.id;
+  if (!sameExtension) return false;
+  const fromExtensionPage = !sender || !sender.tab;
+
+  if (msg.type === "AUTH_STATE") {
+    if (!fromExtensionPage) return false;
+    authState().then((r) => reply(sendResponse, r)).catch(() => reply(sendResponse, { signedIn: false, expired: false, identity: null }));
+    return true;
+  }
+  if (msg.type === "AUTH_SIGN_IN") {
+    if (!fromExtensionPage) return false;
+    authSignIn(msg.email, msg.password)
+      .then((r) => reply(sendResponse, r))
+      .catch(() => reply(sendResponse, { ok: false, reason: "Sign-in failed unexpectedly. Try again." }));
+    return true;
+  }
+  if (msg.type === "AUTH_SIGN_OUT") {
+    if (!fromExtensionPage) return false;
+    authSignOut().then((r) => reply(sendResponse, r)).catch(() => reply(sendResponse, { ok: true }));
+    return true;
+  }
 
   if (msg.type === "SYNC_ONE") {
     syncOne()
@@ -254,13 +681,9 @@ async function syncOne() {
   if (inFlight) return await setStatus({ phase: "running", title: "Already syncing…" });
   inFlight = true;
   try {
-    const token = (await get(K.token) || "").trim();
-    if (!token) {
-      return await setStatus({
-        phase: "error",
-        title: "No pairing token",
-        detail: "Paste the pairing token from your Drive247 portal, then click Sync."
-      });
+    const cred = await credential();
+    if (!cred.ok) {
+      return await setStatus({ phase: "error", title: "Not signed in", detail: cred.reason });
     }
 
     await setStatus({ phase: "running", title: "Reading your Turo session…" });
@@ -281,7 +704,7 @@ async function syncOne() {
       source: read.source
     });
 
-    const response = await postReservation(token, read.reservation, {
+    const response = await postReservation(cred, read.reservation, {
       source: read.source, reason: read.reason, detail: read.detail, diagnostics: read.diagnostics
     });
 
@@ -388,20 +811,25 @@ async function startRun(mode, scenario) {
   const R = reader();
   if (!R) return await writeState(errorState("The reader did not load in the service worker" + (IMPORT_ERROR ? ": " + IMPORT_ERROR : ".")));
 
-  const token = (await get(K.token) || "").trim();
-  if (!token) {
-    return await writeState(errorState("Paste the pairing token from your Drive247 portal, then start the sync."));
-  }
+  const cred = await credential();
+  if (!cred.ok) return await writeState(errorState(cred.reason));
 
   const runId = "run-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 
   /* THE TENANT GUARD, planted at the start of the run.
-     One Chrome profile holds ONE Turo cookie jar and can be paired to TWO
-     Drive247 tenants over its life. Every later step re-checks the live token
-     against this fingerprint and ABANDONS rather than resumes on a mismatch.
-     Flushing tenant A's pages under tenant B's token is the worst outcome
-     available in this system and it is unrecoverable once written. */
-  const tokenFingerprint = (await R.fingerprint(token)).slice(0, 16);
+     One Chrome profile holds ONE Turo cookie jar and can be signed into TWO
+     Drive247 tenants over its life. Every later step re-checks the live
+     credential against this fingerprint and ABANDONS rather than resumes on a
+     mismatch. Flushing tenant A's pages under tenant B's credential is the
+     worst outcome available in this system and it is unrecoverable once
+     written.
+
+     What is fingerprinted is cred.identity — the TENANT ID on the session path,
+     not the access token. Access tokens rotate on every refresh, so hashing one
+     would abandon a perfectly healthy run about once an hour and blame it on an
+     account switch that never happened. The tenant is the thing whose change is
+     actually dangerous, and it is stable for as long as the sign-in lasts. */
+  const tokenFingerprint = (await R.fingerprint(cred.identity)).slice(0, 16);
 
   const firstPage = { pageKey: "p0", path: R.TRIPS_PATH, index: 0 };
   let cursor = R.newCursor(runId, tokenFingerprint, firstPage);
@@ -584,16 +1012,21 @@ async function stepOnce(cursor) {
   const R = reader();
 
   // The tenant guard, re-checked on EVERY step and not just on resume. The
-  // operator can paste a different pairing token into the popup mid-run.
-  const token = (await get(K.token) || "").trim();
-  if (!token) {
-    await parkRun(cursor, "NOT_LOGGED_IN", "The pairing token was cleared, so the sync stopped. Paste it again to continue.");
+  // operator can sign out and into a different Drive247 account mid-run.
+  //
+  // PARKED, NOT ABANDONED, when the credential merely goes away: a sign-out or
+  // an expiry is recoverable by signing back in, and the run's progress is
+  // still true. Only a credential that resolves to a DIFFERENT TENANT abandons,
+  // because that progress can no longer be attributed to anyone safely.
+  const cred = await credential();
+  if (!cred.ok) {
+    await parkRun(cursor, "NOT_LOGGED_IN", cred.reason, null, "Signed out of Drive247");
     return { stop: true, waitMs: 0 };
   }
-  const fp = (await R.fingerprint(token)).slice(0, 16);
+  const fp = (await R.fingerprint(cred.identity)).slice(0, 16);
   if (fp !== cursor.tokenFingerprint) {
     await abandonRun(cursor,
-      "The pairing token changed while this sync was running — it belongs to a different Drive247 tenant. The sync was abandoned rather than risk writing one operator's trips into another's account.");
+      "The signed-in account changed while this sync was running — it belongs to a different Drive247 tenant. The sync was abandoned rather than risk writing one operator's trips into another's account.");
     return { stop: true, waitMs: 0 };
   }
 
@@ -944,10 +1377,39 @@ async function stepFlush(cursor) {
     return { stop: false, waitMs: 0 };
   }
 
-  const token = (await get(K.token) || "").trim();
+  const cred = await credential();
 
   if (pending.records.length > 0) {
     const record = pending.records[0];
+
+    /* UNCHANGED? Then report the id at finalisation and send nothing else.
+       The digest map is only ever written from an ACKNOWLEDGED write, so
+       "unchanged" always means "identical to something Drive247 confirmed it
+       holds" — never "identical to something we tried to send". */
+    const digests = (await get(K.digests)) || {};
+    const digest = await recordDigest(record);
+    const carried = (cursor.unchangedIds || []).length;
+    if (digest && digests[record.reservation_id] === digest && carried < MAX_UNCHANGED_IDS) {
+      pending.records = pending.records.slice(1);
+      await set(K.pending, pending);
+
+      const summaryU = await get(K.summary);
+      /* Counted as seen, because it WAS seen. Leaving it out would make the
+         coverage arithmetic — and therefore the release gate — read a full
+         calendar as a partial one. */
+      if (summaryU.ids.indexOf(record.reservation_id) === -1) summaryU.ids.push(record.reservation_id);
+      if (summaryU.rows.length < 500) summaryU.rows.push(lightRow(record, "unchanged"));
+      await set(K.summary, summaryU);
+
+      cursor = R.advanceCursor(cursor, {
+        recordsFlushed: cursor.recordsFlushed + 1,
+        unchangedIds: (cursor.unchangedIds || []).concat(record.reservation_id)
+      });
+      await set(K.cursor, cursor);
+      await writeState(projectState(cursor, summaryU, null));
+      return { stop: false, waitMs: 0 };
+    }
+
     const summaryNow = await get(K.summary);
     /* THE REASON WE SEND MUST BE THE ONE WE ACTUALLY HAVE.
        This was a hardcoded "OK", so every record a run flushed claimed a clean
@@ -959,7 +1421,7 @@ async function stepFlush(cursor) {
        worstOutcome() over what has been seen SO FAR is the honest answer: true
        at the moment of the write, and it can only get worse. */
     const soFar = R.worstOutcome(cursor.outcomes && cursor.outcomes.length ? cursor.outcomes : ["OK"]);
-    const res = await postReservation(token, null, {
+    const res = await postReservation(cred, null, {
       source: cursor.mode === "fixture" ? "fixture" : "turo",
       reason: soFar,
       detail: soFar === "OK"
@@ -1010,6 +1472,17 @@ async function stepFlush(cursor) {
     // receipt exists only after the acknowledgement.
     pending.records = pending.records.slice(1);
     await set(K.pending, pending);
+
+    /* THE RECEIPT THAT LICENSES A FUTURE SKIP. Written here and nowhere else:
+       after the server said it took this exact payload. A rejected record
+       leaves no digest, so it is re-sent in full next time — which is the
+       whole point, since a rejection is precisely the case where Drive247 does
+       NOT hold what we think it does. */
+    if (digest && !res.rejected) {
+      const bag = (await get(K.digests)) || {};
+      bag[record.reservation_id] = digest;
+      await set(K.digests, bag);
+    }
 
     const summary = await get(K.summary);
     if (summary.ids.indexOf(record.reservation_id) === -1) summary.ids.push(record.reservation_id);
@@ -1163,8 +1636,8 @@ async function finishRun(cursor) {
      trip must never be able to move a real row's presence state. */
   let reconcileNote = null;
   if (finalised && finalised.ok && finalised.writeSafe !== false) {
-    const token = (await get(K.token) || "").trim();
-    const rec = await reconcileRun(token, finalised.jobId || cursor.ingestJobId, cursor.mode);
+    const cred = await credential();
+    const rec = await reconcileRun(cred, finalised.jobId || cursor.ingestJobId, cursor.mode);
     if (!rec.ok) {
       reconcileNote =
         "The bookings were saved, but Drive247 could not check them against the previous sync yet. " +
@@ -1180,6 +1653,21 @@ async function finishRun(cursor) {
     },
     absences: absences
   });
+  /* "LAST SUCCESSFUL SYNC" — the single date the popup shows a tenant, and the
+     only claim in this UI that a person will act on without reading anything
+     else. It is therefore written ONLY when Drive247 actually accepted the
+     writes: a run the server refused (write_safe false), a parked run, and an
+     abandoned run all leave the previous date standing rather than moving it
+     forward on a sync that saved nothing. A stale-but-true date is recoverable;
+     a fresh-but-false one means a tenant stops checking. */
+  if (run.mayWrite && cursor.mode !== "fixture") {
+    await set(K.lastSync, {
+      at: new Date().toISOString(),
+      records: (summary && summary.ids && summary.ids.length) || 0,
+      complete: !!(coverage && coverage.complete)
+    });
+  }
+
   await set(K.cursor, finished);
   await set(K.pending, null);
   await clearAlarm();
@@ -1201,10 +1689,18 @@ function emptyRunOutcome(cursor, R) {
   return R.OUTCOME.EMPTY_UNCONFIRMED;
 }
 
-async function parkRun(cursor, outcome, advice, detail) {
+/**
+ * @param {string} [label] Overrides the popup's headline for this park.
+ *   The outcome vocabulary is the READER's — it describes what Turo did — and
+ *   `NOT_LOGGED_IN` therefore renders as "Not signed in to Turo". That is right
+ *   almost always and wrong in exactly one case: a Drive247 session that ended
+ *   mid-run. The server-side reason (`not_signed_in`) is true either way, so
+ *   the outcome stays; only the sentence a human reads is corrected.
+ */
+async function parkRun(cursor, outcome, advice, detail, label) {
   const R = reader();
   let parked = R.advanceCursor(cursor, {
-    phase: "parked", parkedReason: outcome,
+    phase: "parked", parkedReason: outcome, parkedLabel: label || null,
     lastError: detail ? advice + " (" + detail + ")" : advice,
     outcomes: cursor.outcomes.concat([outcome === "INGEST_FAILED" ? "UNREACHABLE" : outcome])
   });
@@ -1251,7 +1747,7 @@ async function abandonRun(cursor, message) {
 
 async function decideResume(cursor) {
   const R = reader();
-  const token = (await get(K.token) || "").trim();
+  const cred = await credential();
   /* ⚠ turoAccountFingerprint is deliberately NULL here, and that is a FIX, not
      an omission. This used to pass `cursor.turoAccountFingerprint`, which made
      resumeDecision()'s Turo-account guard compare the cursor's own stored value
@@ -1266,7 +1762,7 @@ async function decideResume(cursor) {
      is read. Passing null here makes resumeDecision skip a check it cannot
      honestly perform, rather than appearing to perform it. */
   const ctx = {
-    tokenFingerprint: token ? (await R.fingerprint(token)).slice(0, 16) : null,
+    tokenFingerprint: cred.ok ? (await R.fingerprint(cred.identity)).slice(0, 16) : null,
     turoAccountFingerprint: null
   };
   const d = R.resumeDecision(cursor, ctx);
@@ -1457,20 +1953,63 @@ function withTimeout(promise, ms, message) {
   });
 }
 
+// ================================================= unchanged-record skipping ==
+//
+// THE REQUIREMENT: do not send the same record over and over. THE TRAP: a
+// booking that stops being SENT looks, to the server, exactly like a booking
+// that stopped EXISTING — and turo-bridge-reconcile decides absence by
+// `last_seen_job_id !== jobId`. Skipping the record while still reporting the
+// id is safe. Skipping the id would walk every steady booking toward a released
+// block, which is this system's one unrecoverable failure.
+//
+// So an unchanged record costs one string on the finalisation call and nothing
+// else. It is not silence.
+
+/* Bounded so the finalisation call can never exceed the ingest's own
+   MAX_BATCH_RECORDS (500). Past this, records go back to being sent in full —
+   slower, and correct. */
+const MAX_UNCHANGED_IDS = 400;
+
+/**
+ * A digest of everything about a record that we actually transmit.
+ *
+ * Computed over the WIRE PAYLOAD, not the parsed reservation, so any field that
+ * could reach a column is inside the hash by construction. A date shift, a
+ * status change, a renamed guest, a re-matched vehicle — each changes the
+ * payload and therefore the digest, and the record is sent in full. There is no
+ * hand-maintained list of "fields that matter" to fall out of date.
+ */
+async function recordDigest(record) {
+  const R = reader();
+  if (!R) return null;
+  /* Stable key order. JSON.stringify follows insertion order, and two runs that
+     built the same object by different paths would otherwise hash differently
+     and defeat the whole mechanism. */
+  const stable = JSON.stringify(record, Object.keys(record).sort());
+  return await R.fingerprint(stable);
+}
+
 // ================================================================= the POST ==
 
 /**
  * POST /functions/v1/turo-bridge-ingest — ONE reservation.
  *
- * Shape and headers follow the portal's own convention for calling an edge
- * function without a Supabase session: an `apikey` header plus the caller's
- * identity in the BODY.
+ * TWO CREDENTIAL SHAPES, and the header is chosen by which one we hold.
  *
- * THE TOKEN MUST TRAVEL IN THE BODY. supabase/functions/_shared/cors.ts
- * whitelists exactly `authorization, x-client-info, apikey, content-type,
- * x-tenant-slug`, so a custom header would fail the OPTIONS preflight and the
- * function body would never run — the extension would see a bare network error
- * with nothing in the server logs.
+ *   session — `Authorization: Bearer <supabase access token>`. A real JWT, in
+ *     the header it belongs in, exactly as turo-bridge-reconcile has always
+ *     accepted from the portal.
+ *   token — the pairing token, in the BODY. It is not a JWT, and the gateway
+ *     may try to parse the Authorization header as one even with
+ *     verify_jwt = false, producing a 401 the function never sees. It cannot go
+ *     in a custom header either: supabase/functions/_shared/cors.ts whitelists
+ *     exactly `authorization, x-client-info, apikey, content-type,
+ *     x-tenant-slug`, so an `x-turo-bridge-token` would fail the OPTIONS
+ *     preflight and the function body would never run — the extension would see
+ *     a bare network error with nothing in the server logs.
+ *
+ * Neither shape ever carries a tenant id. The server resolves the tenant from
+ * whichever credential arrived, which is the whole security model.
  *
  * Note the deliberate absence of `credentials: "include"`: cors.ts answers
  * Access-Control-Allow-Origin: '*', which browsers reject for credentialed
@@ -1480,18 +2019,21 @@ function withTimeout(promise, ms, message) {
  * cross-origin fetch from an injected script would be subject to CORS, while
  * the worker is exempt by host permission.
  */
-async function postReservation(token, reservation, meta) {
+async function postReservation(cred, reservation, meta) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
   try {
+    const headers = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY };
+    if (cred && cred.accessToken) headers.Authorization = `Bearer ${cred.accessToken}`;
     const res = await fetch(INGEST_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      headers,
       signal: controller.signal,
       body: JSON.stringify({
-        // The credential. Never a tenant id — the server resolves the tenant
-        // from this token, which is the whole security model.
-        token,
+        // The legacy credential, sent only when that is what we hold. Never a
+        // tenant id — the server resolves the tenant from the credential, which
+        // is the whole security model.
+        token: (cred && cred.pairingToken) || undefined,
         // "turo" | "fixture". Stays on the wire, is persisted, and is never
         // merely inferable. It is the single thing preventing sample data from
         // being mistaken downstream for a real reservation.
@@ -1507,6 +2049,12 @@ async function postReservation(token, reservation, meta) {
            eleven complete syncs of one trip each. `job.job_id` (null on the first
            POST, the server's id thereafter) is what makes it ONE run. */
         job: meta.job || undefined,
+        /* PRESENCE WITHOUT PAYLOAD. Ids the extension read this run and found
+           unchanged. The server may move last_seen_job_id for them and nothing
+           else — see the note on `seen_reservation_ids` in
+           supabase/functions/turo-bridge-ingest/index.ts. */
+        seen_reservation_ids:
+          meta.seenReservationIds && meta.seenReservationIds.length ? meta.seenReservationIds : undefined,
         /* Batch shape. `reservations: []` is a legal finalisation call — it
            advances and closes the run without writing a reservation row. */
         reservation: reservation || undefined,
@@ -1518,6 +2066,12 @@ async function postReservation(token, reservation, meta) {
     try { body = await res.json(); } catch (_) {}
 
     if (!res.ok) {
+      /* 401 on the session path is an expired or revoked sign-in, not a bug in
+         the request. Clear it locally so the popup shows the sign-in screen
+         instead of asking the tenant to retry something that cannot succeed.
+         403 is deliberately NOT cleared: that is "this account may not do this",
+         and signing them out would hide the reason. */
+      if (res.status === 401 && cred && cred.kind === "session") await clearSession();
       const detail = body && body.error
         ? body.error
         : `Drive247 answered HTTP ${res.status}.` +
@@ -1691,13 +2245,19 @@ function degradedReasonFor(outcome, cursor) {
  * never fire.
  */
 async function finaliseIngestRun(cursor, summary, outcome, coverage, mayWrite) {
-  const token = (await get(K.token) || "").trim();
-  if (!token) return { ok: false, detail: "No pairing token." };
-  const res = await postReservation(token, null, {
+  const cred = await credential();
+  if (!cred.ok) return { ok: false, detail: cred.reason };
+  const res = await postReservation(cred, null, {
     source: cursor.mode === "fixture" ? "fixture" : "turo",
     reason: outcome,
     detail: null,
     reservations: [],
+    /* The ids we read and did not re-send. They travel on the FINALISATION
+       call, which is the last thing to happen before reconcile is asked to
+       conclude anything — so either the whole run lands, ids included, or the
+       run never finalises and reconcile is never called at all. An interrupted
+       sync therefore cannot leave a live booking looking absent. */
+    seenReservationIds: cursor.unchangedIds || [],
     job: buildJobEnvelope(cursor, summary, {
       finalize: true, outcome: outcome, coverage: coverage, mayWrite: mayWrite
     }),
@@ -1731,18 +2291,27 @@ async function finaliseIngestRun(cursor, summary, outcome, coverage, mayWrite) {
  * landed, which is the valuable half. An unreconciled run means a stale block,
  * which ages out; a wrongly reconciled one means a double-sold car.
  */
-async function reconcileRun(token, jobId, mode) {
+async function reconcileRun(cred, jobId, mode) {
   if (!jobId) return { ok: false, detail: "No run id to reconcile." };
+  if (!cred || !cred.ok) return { ok: false, detail: (cred && cred.reason) || "Not signed in." };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
   try {
+    const headers = { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY };
+    if (cred.accessToken) headers.Authorization = `Bearer ${cred.accessToken}`;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/turo-bridge-reconcile`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+      headers,
       signal: controller.signal,
-      // The pairing token is the credential here exactly as it is for ingest —
-      // this path makes no operator decision, so it needs no operator.
-      body: JSON.stringify({ token, action: "reconcile", job_id: jobId, dry_run: mode === "fixture" })
+      /* turo-bridge-reconcile already accepted both credentials (index.ts:258 —
+         a pairing token in the body, or a portal JWT in the header) and 403s
+         when the two name different tenants, so this needed no server change.
+         The `reconcile` action makes no operator decision, which is why it is
+         reachable with either. */
+      body: JSON.stringify({
+        token: cred.pairingToken || undefined,
+        action: "reconcile", job_id: jobId, dry_run: mode === "fixture"
+      })
     });
     let body = {};
     try { body = await res.json(); } catch (_) {}
@@ -1982,7 +2551,12 @@ function projectState(cursor, summary, note) {
     pagination: cursor.pagination ? { style: cursor.pagination.style, confidence: cursor.pagination.confidence, matchedKeys: cursor.pagination.matchedKeys } : null,
 
     outcome: outcome,
-    advice: policy ? policy.advice : null,
+    /* The park's own headline, when it set one. Null everywhere else, so the
+       popup falls back to the reader's vocabulary. */
+    label: cursor.parkedLabel || null,
+    /* A labelled park has already said the useful thing in `lastError`; the
+       reader's policy advice would be about Turo, which is not what went wrong. */
+    advice: cursor.parkedLabel ? (cursor.lastError || null) : (policy ? policy.advice : null),
     lastError: cursor.lastError || null,
     /* Said out loud rather than swallowed: the trips landed but Drive247 has not
        yet compared them against the previous sync, so nothing has been released
@@ -2020,7 +2594,7 @@ function errorState(message) {
     counts: { offered: 0, accepted: 0, rejected: 0, flushed: 0, review: 0, needVehicle: 0, cancelled: 0, vehicles: 0 },
     progressTotal: null, declaredTotal: null,
     coverage: null, session: null, gates: null, pagination: null,
-    outcome: "UNKNOWN", advice: message, lastError: message, ingestFailures: 0,
+    outcome: "UNKNOWN", label: null, advice: message, lastError: message, ingestFailures: 0,
     canResume: false, autoResumes: false, nextAllowedAt: null,
     rows: [], unknownFields: [], rejected: [], absences: [], envelopeKeys: [], keyHistogram: {}
   };
