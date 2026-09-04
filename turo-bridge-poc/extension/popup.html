@@ -36,6 +36,38 @@
 
   <main class="body">
 
+    <!-- ================================ the two connections ==============
+         TWO ACCOUNTS THAT ARE NOT THE SAME THING, shown as two rows so nobody
+         has to infer it:
+
+           Turo      the operator's own browser session. Read-only, and this
+                     extension has never asked for that password.
+           Drive247  an email and password typed below, which resolves to a
+                     tenant on the server.
+
+         A tenant who cannot sync needs to know WHICH one to go and fix, and the
+         two fixes have nothing in common. -->
+    <section class="conns" id="conns" aria-label="Connections">
+
+      <div class="conn" id="connTuro" data-state="checking">
+        <span class="conn-dot" aria-hidden="true"></span>
+        <div class="conn-text">
+          <p class="conn-name" id="connTuroName">Turo</p>
+          <p class="conn-detail" id="connTuroDetail">Checking…</p>
+        </div>
+        <button type="button" class="linkish subtle" id="connTuroCheck">Check</button>
+      </div>
+
+      <div class="conn" id="connD247" data-state="checking">
+        <span class="conn-dot" aria-hidden="true"></span>
+        <div class="conn-text">
+          <p class="conn-name" id="connD247Name">Drive247</p>
+          <p class="conn-detail" id="connD247Detail">Checking…</p>
+        </div>
+      </div>
+
+    </section>
+
     <!-- ==================================================== the sign-in == -->
     <!-- A real <form>, so Enter submits and a password manager can fill it.
          The submit handler calls preventDefault(): a navigation inside an
@@ -102,11 +134,18 @@
          authenticated and a tenant has been resolved for them. -->
     <div id="work" hidden>
 
-    <!-- ================================================== the full sync == -->
-    <button type="button" class="primary" id="syncAll">
+    <!-- ================================================== the full sync ==
+         Enabled ONLY when both connections are live. One-way, always:
+         Turo -> this extension -> Drive247. Nothing is ever written back to
+         Turo, and no Drive247 data is sent there. -->
+    <button type="button" class="primary" id="syncAll" disabled>
       <span class="spinner" id="spinnerAll" hidden></span>
-      <span id="syncAllLabel">Sync my Turo calendar</span>
+      <span id="syncAllLabel">Sync Turo to Drive247</span>
     </button>
+
+    <!-- Says which half is missing. A disabled button with no explanation is a
+         puzzle; this is the answer to it. -->
+    <p class="gate-note" id="syncGate" hidden></p>
 
     <p class="lastsync" id="lastSync" hidden></p>
 

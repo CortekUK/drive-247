@@ -51,6 +51,10 @@ const els = {
   acct: $("acct"), acctTenant: $("acctTenant"), acctEmail: $("acctEmail"),
   signOut: $("signOut"), work: $("work"), lastSync: $("lastSync"),
 
+  // the two connections
+  connTuro: $("connTuro"), connTuroDetail: $("connTuroDetail"), connTuroCheck: $("connTuroCheck"),
+  connD247: $("connD247"), connD247Detail: $("connD247Detail"), syncGate: $("syncGate"),
+
   // full sync
   syncAll: $("syncAll"), syncAllLabel: $("syncAllLabel"), spinnerAll: $("spinnerAll"),
   run: $("run"), runStep: $("runStep"), runSource: $("runSource"), runBatch: $("runBatch"),
@@ -140,6 +144,12 @@ const VEHICLE_LABEL = {
      only the worker can attempt the refresh. Reading d247Identity alone would
      show a confident "Signed in as…" over a session that is actually dead. */
   await refreshAuth();
+
+  /* Cached first so the row paints immediately, then a live check. Blocking the
+     popup on a network round trip to turo.com is how a status line becomes
+     something people stop reading. */
+  await refreshTuro(true);
+  refreshTuro(false);
 })();
 
 // ================================================================ sign-in ==
@@ -203,10 +213,116 @@ function rememberEmail(value) {
   chrome.storage.local.set({ lastEmail: email }).catch(() => {});
 }
 
+/* ============================ THE TWO CONNECTIONS =========================
+   Held here rather than re-read per render, because the sync button depends on
+   BOTH and a half-updated pair would flicker the button on and off. */
+let conn = { turo: null, d247: null };
+
+const TURO_LABEL = {
+  no_tab:        "Open turo.com and sign in as the host",
+  not_signed_in: "Not signed in to Turo",
+  challenge:     "Turo is showing a security check",
+  unreachable:   "Could not reach Turo",
+  no_vehicles:   "Signed in, but no vehicles found",
+  unreadable:    "Turo answered in a shape we do not recognise",
+};
+
+/**
+ * Paint one connection row and, once both are known, decide the button.
+ *
+ * The two rows are deliberately INDEPENDENT. A tenant whose Turo session has
+ * lapsed should not be told to sign into Drive247 again, and vice versa —
+ * that is the whole reason there are two of them rather than one "not
+ * connected" line covering both accounts.
+ */
+function paintConnections() {
+  // ---- Turo -------------------------------------------------------------
+  const t = conn.turo;
+  if (!t) {
+    els.connTuro.dataset.state = "checking";
+    els.connTuroDetail.textContent = "Checking…";
+  } else if (t.connected) {
+    els.connTuro.dataset.state = "on";
+    /* "Turo Connected", plus the one fact that proves it rather than asserts
+       it: we read this operator's own fleet. */
+    els.connTuroDetail.textContent = typeof t.vehicles === "number" && t.vehicles > 0
+      ? "Connected · " + t.vehicles + (t.vehicles === 1 ? " vehicle" : " vehicles")
+      : "Connected";
+  } else {
+    els.connTuro.dataset.state = "off";
+    els.connTuroDetail.textContent = TURO_LABEL[t.reason] || "Not connected";
+  }
+
+  // ---- Drive247 ---------------------------------------------------------
+  const d = conn.d247;
+  if (!d) {
+    els.connD247.dataset.state = "checking";
+    els.connD247Detail.textContent = "Checking…";
+  } else if (d.signedIn && d.identity) {
+    els.connD247.dataset.state = "on";
+    els.connD247Detail.textContent = "Connected · " + (d.identity.tenantName || "your account");
+  } else {
+    els.connD247.dataset.state = "off";
+    els.connD247Detail.textContent = d.expired ? "Sign-in expired" : "Sign in below";
+  }
+
+  paintSyncGate();
+}
+
+/**
+ * The sync button opens only when BOTH halves are live, and says which one is
+ * missing when it does not.
+ *
+ * A disabled button with no explanation is a puzzle. Naming the missing half
+ * is the difference between a tenant fixing it in ten seconds and a tenant
+ * filing a support ticket.
+ */
+function paintSyncGate() {
+  const turoOk = !!(conn.turo && conn.turo.connected);
+  const d247Ok = !!(conn.d247 && conn.d247.signedIn && conn.d247.identity);
+  const ready = turoOk && d247Ok;
+
+  els.syncAll.disabled = !ready || els.syncAll.dataset.busy === "1";
+
+  if (ready) {
+    els.syncGate.hidden = true;
+    els.syncGate.textContent = "";
+    return;
+  }
+  /* Both missing is its own sentence: telling someone to fix Turo when they
+     have not signed into Drive247 either just sends them round twice. */
+  els.syncGate.textContent =
+    !turoOk && !d247Ok ? "Connect Turo and sign in to Drive247 to sync."
+    : !turoOk ? "Connect Turo to sync. Your Drive247 account is ready."
+    : "Sign in to Drive247 to sync. Your Turo session is ready.";
+  els.syncGate.hidden = false;
+}
+
+/** Ask the worker for the Turo half. `cached` paints instantly on open. */
+async function refreshTuro(cached) {
+  try {
+    conn.turo = await chrome.runtime.sendMessage({ type: "TURO_STATUS", cached: !!cached });
+  } catch (_) {
+    conn.turo = { connected: false, reason: "unreachable" };
+  }
+  paintConnections();
+}
+
+els.connTuroCheck.addEventListener("click", async () => {
+  els.connTuroCheck.disabled = true;
+  els.connTuro.dataset.state = "checking";
+  els.connTuroDetail.textContent = "Checking…";
+  await refreshTuro(false);
+  els.connTuroCheck.disabled = false;
+});
+
 async function refreshAuth() {
   let state = null;
   try { state = await chrome.runtime.sendMessage({ type: "AUTH_STATE" }); } catch (_) {}
-  paintAuth(state || { signedIn: false, expired: false, identity: null });
+  const resolved = state || { signedIn: false, expired: false, identity: null };
+  conn.d247 = resolved;
+  paintAuth(resolved);
+  paintConnections();
 }
 
 /**
@@ -321,6 +437,8 @@ els.signOut.addEventListener("click", async () => {
   els.password.value = "";
   const bag = await chrome.storage.local.get("lastEmail").catch(() => ({}));
   els.email.value = (bag && bag.lastEmail) || "";
+  /* Only the Drive247 half. Signing out of the portal has no bearing on the
+     operator's Turo session, and clearing that row too would imply it did. */
   await refreshAuth();
 });
 
@@ -370,9 +488,13 @@ els.sync.addEventListener("click", async () => {
 });
 
 function setBusyAll(busy) {
-  els.syncAll.disabled = busy;
+  /* The button has TWO reasons to be disabled — a run in flight, and a missing
+     connection — and they are set from different places. The flag is what stops
+     a finished run re-enabling a button the gate wants shut. */
+  els.syncAll.dataset.busy = busy ? "1" : "";
   els.spinnerAll.hidden = !busy;
-  els.syncAllLabel.textContent = busy ? "Syncing…" : "Sync my Turo calendar";
+  els.syncAllLabel.textContent = busy ? "Syncing…" : "Sync Turo to Drive247";
+  paintSyncGate();
 }
 function setBusyOne(busy) {
   els.sync.disabled = busy;
@@ -391,6 +513,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
      how an expiry that happens while the popup is OPEN reaches the screen,
      rather than sitting behind a stale "Signed in as…" until the next reopen. */
   if (changes.d247Identity) refreshAuth();
+  /* The worker re-probes Turo during a run; reflect that here rather than
+     leaving a stale "Connected" over a session that has since lapsed. */
+  if (changes.turoStatus) { conn.turo = changes.turoStatus.newValue || null; paintConnections(); }
 });
 
 /**

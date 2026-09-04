@@ -144,6 +144,9 @@ function renderInPopup(state, lastRun, opts) {
       async sendMessage(msg) {
         sent.push(msg);
         if (msg && msg.type === "AUTH_STATE") return auth;
+        if (msg && msg.type === "TURO_STATUS") {
+          return opts.turo === undefined ? { connected: true, reason: "ok", vehicles: 3 } : opts.turo;
+        }
         if (msg && msg.type === "AUTH_SIGN_IN") {
           if (opts.hold) return await new Promise((r) => { releaseSignIn = r; });
           return opts.signInResult || { ok: false, code: "bad_credentials", reason: "Email or password is incorrect." };
@@ -575,6 +578,90 @@ async function main() {
     ok("the fixture badge still says 'sample'", /sample/i.test(text(doc, "runSource")), text(doc, "runSource"));
   }
 
+
+  // ------------------------------------------------------------------
+  console.log("\nTwo accounts, two verdicts, and they never speak for each other");
+  {
+    const TURO_OFF = { connected: false, reason: "not_signed_in" };
+    const TURO_ON = { connected: true, reason: "ok", vehicles: 3 };
+    const D247_OFF = { signedIn: false, expired: false, identity: null };
+
+    // ---- both live ----
+    {
+      const { doc } = renderInPopup(null, null, { auth: SIGNED_IN, turo: TURO_ON });
+      await tick(40);
+      eq("Turo reads as connected", doc.getElementById("connTuro").dataset.state, "on");
+      eq("Drive247 reads as connected", doc.getElementById("connD247").dataset.state, "on");
+      ok("...naming the tenant, not an id", /Acme Rentals/.test(text(doc, "connD247Detail")), text(doc, "connD247Detail"));
+      ok("...and Turo proves it with the fleet it read", /3 vehicles/.test(text(doc, "connTuroDetail")), text(doc, "connTuroDetail"));
+      eq("the sync button is available", doc.getElementById("syncAll").disabled, false);
+      ok("and nothing explains a block that is not there", doc.getElementById("syncGate").hidden);
+      eq("the button names the direction", text(doc, "syncAllLabel"), "Sync Turo to Drive247");
+    }
+
+    // ---- Turo missing ----
+    {
+      const { doc } = renderInPopup(null, null, { auth: SIGNED_IN, turo: TURO_OFF });
+      await tick(40);
+      eq("Turo reads as not connected", doc.getElementById("connTuro").dataset.state, "off");
+      /* THE POINT OF TWO ROWS. A lapsed Turo session must not make a perfectly
+         good Drive247 sign-in look broken. */
+      eq("Drive247 is untouched by it", doc.getElementById("connD247").dataset.state, "on");
+      eq("the sync button is shut", doc.getElementById("syncAll").disabled, true);
+      const note = text(doc, "syncGate");
+      ok("and it says WHICH half is missing", /Connect Turo/i.test(note), note);
+      ok("...while confirming the other is fine", /Drive247 account is ready/i.test(note), note);
+    }
+
+    // ---- Drive247 missing ----
+    {
+      const { doc } = renderInPopup(null, null, { auth: D247_OFF, turo: TURO_ON });
+      await tick(40);
+      eq("Turo is still connected", doc.getElementById("connTuro").dataset.state, "on");
+      eq("Drive247 is not", doc.getElementById("connD247").dataset.state, "off");
+      eq("the sync button is shut", doc.getElementById("syncAll").disabled, true);
+      const note = text(doc, "syncGate");
+      ok("and it points at Drive247", /Sign in to Drive247/i.test(note), note);
+      ok("...while confirming Turo is fine", /Turo session is ready/i.test(note), note);
+      ok("the sign-in form is the thing on screen", !doc.getElementById("authForm").hidden);
+    }
+
+    // ---- neither ----
+    {
+      const { doc } = renderInPopup(null, null, { auth: D247_OFF, turo: TURO_OFF });
+      await tick(40);
+      eq("the sync button is shut", doc.getElementById("syncAll").disabled, true);
+      const note = text(doc, "syncGate");
+      /* Naming one half when both are missing sends someone round the loop
+         twice. */
+      ok("it names both", /Connect Turo and sign in to Drive247/i.test(note), note);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nEach Turo failure says what to do about that failure");
+  {
+    const cases = [
+      ["no_tab", /open turo\.com/i],
+      ["not_signed_in", /not signed in to turo/i],
+      ["challenge", /security check/i],
+      ["unreachable", /could not reach turo/i],
+      ["no_vehicles", /no vehicles/i],
+    ];
+    const seen = new Set();
+    for (const [reason, pattern] of cases) {
+      const { doc } = renderInPopup(null, null, { auth: SIGNED_IN, turo: { connected: false, reason } });
+      await tick(40);
+      const detail = text(doc, "connTuroDetail");
+      ok(reason + " has its own sentence", pattern.test(detail), detail);
+      ok("  ...distinct from the others", !seen.has(detail), detail);
+      seen.add(detail);
+      /* NEVER the Drive247 advice. Telling someone to sign into the portal
+         again because their Turo tab is closed is the confusion two rows
+         exist to prevent. */
+      ok("  ...and never mentions signing in to Drive247", !/drive247/i.test(detail), detail);
+    }
+  }
 
   console.log("\n" + passed + " passed, " + failed + " failed\n");
   process.exit(failed ? 1 : 0);

@@ -28,6 +28,7 @@ extension's perspective.**
 | **Sign-in error taxonomy** (13 distinct outcomes, not one blanket message) | **Added by this change** | `background.js` |
 | **Email retention, password retention on failure, password reveal toggle** | **Added by this change** | `popup.{html,js,css}` |
 | **`app_users` RLS — closing anonymous read/write of every staff record** | **Written, NOT YET DEPLOYED** | `supabase/migrations/20260904120000_secure_app_users_read_access.sql` |
+| **Two independent connection statuses, and a sync button gated on both** | **Added by this change** | `background.js` (probe), `popup.{html,js,css}` |
 
 The credential was previously a **pairing token pasted into the popup**. It is now a
 **Drive247 account sign-in**. The pairing-token path is retained as a fallback because
@@ -237,6 +238,79 @@ producing a `401` the function never sees. A custom header fails the OPTIONS pre
 because `_shared/cors.ts` whitelists exactly `authorization, x-client-info, apikey,
 content-type, x-tenant-slug`. A real Supabase access token **is** a JWT and does belong
 in that header — it is the same header `turo-bridge-reconcile` has always accepted.
+
+---
+
+## 4a. Two connections, shown separately
+
+The extension depends on **two unrelated accounts**, and merging them into one
+"connected / not connected" line was costing people time: a lapsed Turo tab and
+an expired Drive247 session produce the same symptom (sync does not work) and
+have nothing in common to fix.
+
+| | Turo | Drive247 |
+|---|---|---|
+| Credential | the operator's **existing browser session** | email + password typed in the popup |
+| Password | **never requested, never stored** | used once, in one request, never stored |
+| Direction | **read only** | write (staged reservations) |
+| Proven by | one `GET /api/vehicles/me` through a tab they already have open | `app_users.auth_user_id = auth.uid()` → `tenant_id` |
+| Fixed by | opening turo.com and signing in as the host | signing in below |
+
+Both are rendered as their own row with their own verdict and its own sentence,
+above everything else in the popup — including the sign-in form, because the
+sign-in form only answers half the question.
+
+### The Turo probe
+
+`probeTuroStatus()` in `background.js`. It **reuses the sync's own reader**
+(`collectVehicles` → `buildSessionProbe`) rather than re-implementing session
+detection: two answers to "is Turo signed in?" would drift, and the sync's is the
+one that matters. Deliberate properties:
+
+- **It never opens a tab.** `findTuroTab()` queries for an existing, loaded
+  turo.com tab and returns nothing if there is none — unlike `getTuroTab()`,
+  which creates one and is right only for a sync the operator asked for. Opening
+  a turo.com tab because someone glanced at the popup is how an extension gets
+  uninstalled.
+- **It is no more optimistic than the gate it feeds.** `buildSessionProbe`
+  refuses to call a session live on zero vehicles; the status line inherits that,
+  so the button cannot light up for a sync that would then refuse itself.
+- **It stores a fingerprint, never the host id** — the popup only needs to know
+  the account changed, and a hashed value cannot be read off a shared screen.
+- **It is read-only**, like everything else pointed at Turo: one GET, no writes,
+  ever.
+
+Six outcomes, each with its own instruction:
+
+| Reason | What the row says |
+|---|---|
+| `ok` | Connected · *N* vehicles |
+| `no_tab` | Open turo.com and sign in as the host |
+| `not_signed_in` | Not signed in to Turo |
+| `challenge` | Turo is showing a security check |
+| `unreachable` | Could not reach Turo |
+| `no_vehicles` | Signed in, but no vehicles found |
+
+A test asserts each renders a **distinct** sentence and that **none of them
+mentions Drive247** — telling someone to sign into the portal again because
+their Turo tab is closed is exactly the confusion two rows exist to remove.
+
+### The gate
+
+`Sync Turo to Drive247` is disabled unless **both** halves are live, and a line
+underneath names the missing one:
+
+- neither → "Connect Turo and sign in to Drive247 to sync."
+- Turo missing → "Connect Turo to sync. Your Drive247 account is ready."
+- Drive247 missing → "Sign in to Drive247 to sync. Your Turo session is ready."
+
+Naming one half when both are missing sends someone round the loop twice, so
+that case has its own sentence. The button has two independent reasons to be
+disabled — a run in flight, and a missing connection — tracked separately so a
+finished run cannot re-enable a button the gate wants shut.
+
+Signing out of Drive247 clears the Drive247 half only. It has no bearing on the
+operator's Turo session, and clearing that row too would imply it did.
 
 ---
 
@@ -740,9 +814,9 @@ The US and GB Turo builds differ structurally; the reader carries both and repor
 
 ```bash
 # Extension — four suites, no browser and no Turo account required
-node turo-bridge-poc/extension/auth.test.js                     # 136 assertions
+node turo-bridge-poc/extension/auth.test.js                     # 144 assertions
 node turo-bridge-poc/extension/background-orchestrator.test.js  # 125 assertions
-node turo-bridge-poc/extension/popup-render.test.js             # 102 assertions (needs jsdom)
+node turo-bridge-poc/extension/popup-render.test.js             # 142 assertions (needs jsdom)
 node turo-bridge-poc/extension/turo-read-contract.test.js       # ALL PASS
 node turo-bridge-poc/extension/rls-app-users.test.js            # 19 static pass;
                                                                 # 9 live checks FAIL
@@ -802,6 +876,11 @@ Automated coverage is noted per row. Rows marked *manual* need a live Supabase p
 | 32 | No service-role key in the extension | 4 files scanned for the claim and for encoded key fragments | `rls-app-users.test.js` (static) |
 | 33 | Extension profile lookup survives RLS | `auth_user_id = auth.uid()` returns exactly one row | `rls-app-users.test.js` — *needs `D247_TEST_A_*`* |
 | 34 | Same-tenant staff list survives RLS | A tenant can still list its own staff | `rls-app-users.test.js` — *needs `D247_TEST_A_*`* |
+| 35a | Both connections live | Sync enabled, no gate note, button reads "Sync Turo to Drive247" | `popup-render.test.js` |
+| 35b | Turo missing | Button shut; note names Turo and confirms Drive247 is fine; Drive247 row stays green | `popup-render.test.js` |
+| 35c | Drive247 missing | Button shut; note names Drive247 and confirms Turo is fine | `popup-render.test.js` |
+| 35d | Neither | Button shut; one note naming both | `popup-render.test.js` |
+| 35e | Each Turo failure | 5 reasons, 5 distinct sentences, none mentioning Drive247 | `popup-render.test.js` |
 | 35 | Cross-tenant read blocked | Tenant B gets zero rows for tenant A, by `tenant_id` and by `auth_user_id` | `rls-app-users.test.js` — *needs `D247_TEST_B_*`* |
 
 **Manual, against a live project:**
@@ -829,6 +908,15 @@ Automated coverage is noted per row. Rows marked *manual* need a live Supabase p
   8. Close and reopen the popup → the email is restored, the password is empty.
   9. Reopen again → the session is restored without signing in.
   10. Run a sync and confirm scraping and one-way sync still behave as before.
+- **The two connection rows**, which need no deployment:
+  1. Close every turo.com tab, open the popup -> Turo row amber, "Open turo.com and
+     sign in as the host"; sync button disabled with a note naming Turo.
+  2. Open turo.com signed out -> **Check** -> "Not signed in to Turo".
+  3. Sign in to turo.com as a host with vehicles -> **Check** -> green,
+     "Connected · N vehicles"; with Drive247 also signed in the button enables.
+  4. Sign out of Drive247 -> the Turo row must stay green and the note must now
+     name Drive247 only.
+  5. Confirm opening the popup with no turo.com tab does **not** open one.
 - **After deploying the `app_users` migration**, in this order:
   1. `node turo-bridge-poc/extension/rls-app-users.test.js` → every live check must pass.
   2. Anon probe by hand:
@@ -856,7 +944,7 @@ Automated coverage is noted per row. Rows marked *manual* need a live Supabase p
   snapshot-based rollback, entirely commented out.
 - `turo-bridge-poc/extension/rls-app-users.test.js` — 19 static + 9 live + 5 optional
   signed-in assertions on the access model.
-- `turo-bridge-poc/extension/auth.test.js` — 136 assertions covering sign-in, gates,
+- `turo-bridge-poc/extension/auth.test.js` — 144 assertions covering sign-in, gates,
   refresh, expiry-vs-failure, sign-out cleanup, credential placement on the wire, sender
   validation, and the one-way property.
 - `TURO_DRIVE247_EXTENSION_IMPLEMENTATION.md` — this file, the canonical document.
@@ -875,7 +963,8 @@ Automated coverage is noted per row. Rows marked *manual* need a live Supabase p
   tenant guard now fingerprinting the tenant rather than the rotating access token,
   `lastSyncAt`, and unchanged-record suppression.
 - `turo-bridge-poc/extension/popup.html` — sign-in form, account bar, gated work area,
-  last-sync line; pairing-token field and sample/scenario controls removed.
+  last-sync line; pairing-token field and sample/scenario controls removed. Then the two
+  connection rows, and a sync button that starts disabled with a reason underneath.
 - `turo-bridge-poc/extension/popup.js` — auth gate and rendering, sign-in/sign-out
   handlers, last-sync rendering, expiry messaging; token-field code removed.
 - `turo-bridge-poc/extension/popup.css` — account bar, sign-in form, error line,
@@ -914,10 +1003,14 @@ Automated coverage is noted per row. Rows marked *manual* need a live Supabase p
 7. **Deploy `20260904120000_secure_app_users_read_access.sql`** — the highest-priority
    item here. It is written, reviewed and statically tested, and until it is applied the
    exposure in §10a is live. Run the §16 post-deployment checklist immediately after.
-8. **Audit the other anon-readable tables** — `tenants`, `customers`, `rentals`,
+8. **Verify the Turo probe against a live host account.** The dual-status UI is fully
+   covered by tests, but the probe itself has only ever run against the bundled fixture
+   here — no Turo host account was available. It reuses the sync's reader, so a
+   mismatch would surface as a status line disagreeing with the run panel.
+9. **Audit the other anon-readable tables** — `tenants`, `customers`, `rentals`,
    `vehicles`, `audit_logs`. Same root cause is likely (RLS never enabled), but each
    needs its own consumer audit before a fix: the booking site legitimately reads some of
    them anonymously, so the `app_users` pattern cannot simply be copied across.
-9. **Audit `booking_v2_enabled`** — unrelated to this feature, but it has silently
+10. **Audit `booking_v2_enabled`** — unrelated to this feature, but it has silently
    reverted to `false` three times with no cron job or trigger accounting for it. It needs
    an audit trigger before go-live.

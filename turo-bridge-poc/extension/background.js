@@ -178,7 +178,8 @@ const K = {
   summary: "syncSummary",    // light per-record rows + diagnostics for the UI
   manifest: "syncManifest",  // the LAST run's ids, for the absence ledger
   lastSync: "lastSyncAt",    // the one date the tenant is shown, see below
-  digests: "syncDigests"     // reservation_id -> digest of what we last sent
+  digests: "syncDigests",    // reservation_id -> digest of what we last sent
+  turo: "turoStatus"         // the Turo half of the two-connection display
 };
 
 /* Resets to false if the worker is killed, which is exactly right: a dead
@@ -718,6 +719,116 @@ async function credential() {
   };
 }
 
+// ======================================================== TURO CONNECTION ==
+//
+// TWO ACCOUNTS, TWO STATUSES, AND THEY ARE NOT INTERCHANGEABLE.
+//
+//   Turo      — the operator's own session, already in this browser. We never
+//               ask for that password and never store it. We only READ.
+//   Drive247  — an email and password the operator types here, which resolves
+//               to a tenant server-side.
+//
+// Conflating them is the confusion this whole display exists to remove: a
+// tenant staring at "not connected" needs to know WHICH account to go and fix,
+// and the two fixes have nothing in common.
+//
+// The probe reuses the reader the sync already uses (collectVehicles ->
+// buildSessionProbe). It does not re-implement session detection, because two
+// implementations of "is Turo signed in?" would drift and the sync's answer is
+// the one that matters.
+
+/**
+ * An existing, loaded turo.com tab — or nothing.
+ *
+ * DELIBERATELY NOT getTuroTab(): that one CREATES a tab when none exists, which
+ * is right for a sync the operator asked for and wrong for a status line that
+ * paints itself every time the popup opens. Opening a turo.com tab because
+ * someone glanced at the popup is the kind of thing that gets an extension
+ * uninstalled.
+ */
+async function findTuroTab() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ["https://turo.com/*", "https://*.turo.com/*"] });
+    return tabs.find((t) => t.status === "complete" && !t.discarded) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/* What the popup is told, and the only vocabulary it renders. Kept here so the
+   sentences live next to the conditions that produce them. */
+const TURO_REASONS = {
+  no_tab:      "Open turo.com in a tab and sign in as the host.",
+  not_signed_in: "You are not signed in to Turo. Open turo.com and sign in as the host.",
+  challenge:   "Turo is showing a security check. Open turo.com, clear it, then check again.",
+  unreachable: "Could not reach Turo just now. Check your connection and try again.",
+  no_vehicles: "Signed in to Turo, but no vehicles were found on this account. Check you are signed in as the host.",
+  unreadable:  "Turo answered in a shape this extension does not recognise. It may need an update.",
+  ok:          null,
+};
+
+/**
+ * Is the operator's Turo session usable right now?
+ *
+ * Read-only in the strictest sense: one GET of the host's own fleet, through
+ * the tab they already have open. Nothing is written to Turo here or anywhere
+ * else in this extension.
+ */
+async function probeTuroStatus() {
+  const R = reader();
+  if (!R) {
+    return await writeTuroStatus({ connected: false, reason: "unreadable" });
+  }
+
+  const tab = await findTuroTab();
+  if (!tab) return await writeTuroStatus({ connected: false, reason: "no_tab" });
+
+  let read;
+  try {
+    read = await callInTab(tab.id, "ISOLATED", "collectVehicles", [], null);
+  } catch (e) {
+    return await writeTuroStatus({ connected: false, reason: "unreachable" });
+  }
+  if (!read || read.__tabError) {
+    return await writeTuroStatus({ connected: false, reason: "unreachable" });
+  }
+
+  if (read.outcome !== R.OUTCOME.OK) {
+    /* Map the reader's vocabulary onto the four things a person can DO about
+       it. The full taxonomy belongs in the run panel, not in a status line. */
+    const reason =
+      read.outcome === R.OUTCOME.NOT_LOGGED_IN ? "not_signed_in" :
+      read.outcome === R.OUTCOME.BOT_BLOCKED ? "challenge" :
+      read.outcome === R.OUTCOME.UNREACHABLE || read.outcome === R.OUTCOME.RATE_LIMITED ? "unreachable" :
+      "unreadable";
+    return await writeTuroStatus({ connected: false, reason });
+  }
+
+  /* THE SAME JUDGEMENT THE SYNC USES. buildSessionProbe refuses to call a
+     session live on zero vehicles — "an operator we are migrating OFF Turo owns
+     cars by definition" — and the status line must not be more optimistic than
+     the thing it is gating, or the button lights up and the sync then refuses. */
+  const probe = R.buildSessionProbe(read, false);
+  if (!probe.liveSession) {
+    return await writeTuroStatus({ connected: false, reason: "no_vehicles" });
+  }
+
+  return await writeTuroStatus({
+    connected: true,
+    reason: "ok",
+    vehicles: typeof read.itemCount === "number" ? read.itemCount : null,
+    /* A FINGERPRINT, never the id. The popup only needs to know the account
+       changed, and a hashed value cannot be read off a shared screen. */
+    account: probe.turoHostId ? (await R.fingerprint(probe.turoHostId)).slice(0, 8) : null,
+  });
+}
+
+async function writeTuroStatus(status) {
+  const full = Object.assign({ checkedAt: new Date().toISOString() }, status);
+  await set(K.turo, full);
+  return full;
+}
+
 // ================================================================= wiring ==
 
 // Registered at the top level so they survive every worker revival.
@@ -734,6 +845,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const sameExtension = !sender || !sender.id || sender.id === chrome.runtime.id;
   if (!sameExtension) return false;
   const fromExtensionPage = !sender || !sender.tab;
+
+  if (msg.type === "TURO_STATUS") {
+    if (!fromExtensionPage) return false;
+    /* `cached` paints instantly on open; the popup then asks for a fresh one.
+       A status line that blocks the whole popup on a network round trip is a
+       status line people learn to ignore. */
+    (msg.cached ? get(K.turo).then((v) => v || null) : probeTuroStatus())
+      .then((r) => reply(sendResponse, r))
+      .catch(() => reply(sendResponse, { connected: false, reason: "unreachable", checkedAt: new Date().toISOString() }));
+    return true;
+  }
 
   if (msg.type === "AUTH_STATE") {
     if (!fromExtensionPage) return false;

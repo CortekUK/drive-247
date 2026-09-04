@@ -206,6 +206,92 @@ input::placeholder {
   font-family: inherit;
 }
 
+/* ------------------------------------------------------------ connections -- */
+
+/* TWO ROWS, NEVER ONE. The whole point is that "Turo" and "Drive247" are
+   different accounts with different fixes, so they get equal weight and
+   separate verdicts rather than a single merged "not connected". */
+.conns {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.conn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  background: var(--surface);
+}
+
+.conn-text { min-width: 0; flex: 1; }
+
+.conn-name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.conn-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* The dot carries the state at a glance; the text carries what to do about it.
+   Colour is never the only signal — the detail line always says it in words,
+   which is what makes this readable to someone who cannot distinguish the
+   green from the amber. */
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.conn[data-state="on"] .conn-dot { background: var(--green); }
+.conn[data-state="on"] .conn-detail { color: var(--green); }
+.conn[data-state="off"] .conn-dot { background: var(--amber); }
+.conn[data-state="off"] .conn-detail { color: var(--amber); }
+
+.conn[data-state="checking"] .conn-dot {
+  background: var(--muted);
+  animation: connPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes connPulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
+}
+
+/* Motion is decoration here: the word "Checking…" already says it. */
+@media (prefers-reduced-motion: reduce) {
+  .conn[data-state="checking"] .conn-dot { animation: none; opacity: 0.6; }
+}
+
+/* Why the sync button is shut. Sits directly under it so the two read as one
+   statement rather than as a button and an unrelated remark. */
+.gate-note {
+  margin: -6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ---------------------------------------------------------------- sign-in -- */
 
 .auth {
