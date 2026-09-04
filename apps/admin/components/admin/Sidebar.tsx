@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useSidebar } from './SidebarContext';
-import { useBonzahPendingCount } from '@/lib/use-bonzah-pending-count';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -25,7 +24,6 @@ import {
   MessageSquareText,
   Sparkles,
   ShieldCheck,
-  ClipboardCheck,
   AlertTriangle,
   TrendingUp,
   Activity,
@@ -47,7 +45,6 @@ interface NavGroup {
 
 function useNavigation() {
   const { user } = useAuthStore();
-  const bonzahPendingCount = useBonzahPendingCount();
 
   const salesOnly = !!user?.is_sales_agent && !user?.is_super_admin;
 
@@ -84,12 +81,6 @@ function useNavigation() {
         { name: 'Global Blacklist', href: '/admin/blacklist', icon: Ban },
         { name: 'Contact Requests', href: '/admin/contacts', icon: Mail },
         { name: 'Mode Requests', href: '/admin/requests', icon: ArrowUpCircle },
-        {
-          name: 'Onboarding',
-          href: '/admin/onboarding',
-          icon: ClipboardCheck,
-          badgeCount: bonzahPendingCount,
-        },
         { name: 'Announcements', href: '/admin/announcements', icon: Megaphone },
         { name: 'Welcome Pack', href: '/admin/welcome-pack', icon: BookOpen },
         { name: 'Feedbacks', href: '/admin/feedbacks', icon: MessageSquareText },
