@@ -69,22 +69,6 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * In-memory, per-isolate rate limiting. Honest about what it is: Deno may run
- * several isolates, so this is a cost-control speed bump, not a security
- * boundary. The security boundary is the credential. Recorded here rather than
- * silently pretended-away so nobody later mistakes it for the latter.
- */
-const hits = new Map<string, number[]>();
-function rateLimited(keyId: string): boolean {
-  const now = Date.now();
-  const recent = (hits.get(keyId) ?? []).filter((t) => now - t < 60_000);
-  recent.push(now);
-  hits.set(keyId, recent);
-  if (hits.size > 5_000) hits.clear(); // crude unbounded-growth guard
-  return recent.length > RATE_LIMIT_PER_MIN;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return fail("method_not_allowed", "Use POST.", 405);
@@ -119,7 +103,20 @@ Deno.serve(async (req) => {
   }
   const tenantId = keyRow.tenant_id as string; // the ONLY source of tenant identity
 
-  if (rateLimited(keyRow.id as string)) {
+  // Rate limiting lives in the DB, not in this process. An in-memory counter was
+  // tried first and verified NOT to work — 35 rapid calls all returned 200,
+  // because Deno serves from multiple isolates and each starts with an empty
+  // Map. The RPC does an atomic check-and-increment on the key row, so the
+  // window is shared however many isolates are running.
+  const { data: limited, error: rlErr } = await supabase.rpc("tenant_api_key_rate_limited", {
+    p_key_id: keyRow.id,
+    p_limit: RATE_LIMIT_PER_MIN,
+    p_window_seconds: 60,
+  });
+  // Fail CLOSED: if the limiter cannot be consulted we refuse rather than serve
+  // an unbounded number of requests.
+  if (rlErr || limited === true) {
+    if (rlErr) console.error("[fleet-quote-api] rate limiter unavailable:", rlErr.message);
     return fail("rate_limited", "Too many requests. Try again in a minute.", 429);
   }
 
