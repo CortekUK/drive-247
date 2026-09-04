@@ -234,6 +234,105 @@ const REFRESH_SKEW_MS = 60 * 1000;
    a dead worker has no in-flight refresh to join. */
 let refreshInFlight = null;
 
+/* ── WHY THIS FILE HAS AN ERROR TAXONOMY AT ALL ─────────────────────────────
+   The first version of this module answered EVERY non-2xx from the password
+   grant with "Email or password is incorrect.". The reasoning was sound —
+   distinguishing a wrong password from an unknown email turns a login form into
+   an oracle for which accounts exist — but it was applied one level too wide,
+   and it swallowed things that are not credential problems at all:
+
+     401 "Invalid API key"        -> the extension is misconfigured
+     400 validation_failed        -> we sent a malformed body; our bug
+     400 unsupported_grant_type   -> ALSO reported as error_code
+                                     "invalid_credentials", which is the trap
+                                     that makes naive status-code matching wrong
+     5xx                          -> Supabase is down
+     a thrown fetch               -> the tenant is offline
+
+   All five rendered as "your password is wrong", so a typo'd email domain and a
+   dead deployment produced identical, equally unactionable screens. THE
+   ENUMERATION DEFENCE SURVIVES: exactly one condition below yields the
+   credentials message, and it covers wrong password, unknown email and
+   unconfirmed account alike. Everything else is a different question, and
+   answering it honestly reveals nothing about who has an account.
+
+   Each failure carries a stable `code` as well as a sentence. Tests assert on
+   the code; only humans read the sentence. */
+const AUTH_ERRORS = {
+  offline:        "Could not reach Drive247. Check your internet connection and try again.",
+  timeout:        "Drive247 did not respond in time. Try again in a moment.",
+  unavailable:    "Drive247's sign-in service is temporarily unavailable. Try again shortly.",
+  misconfigured:  "This extension is not set up correctly and cannot reach Drive247. Reinstall it, or contact Drive247 support.",
+  bad_credentials:"Email or password is incorrect.",
+  unconfirmed:    "This email address has not been confirmed yet. Check your inbox for the Drive247 confirmation link.",
+  rate_limited:   "Too many sign-in attempts. Wait a minute and try again.",
+  unexpected:     "Drive247 sent a response this extension did not understand. Try again, or contact Drive247 support.",
+  no_profile:     "This account exists, but it has no Drive247 portal access. Ask your administrator to add you.",
+  inactive:       "This Drive247 account has been deactivated. Ask your administrator to reactivate it.",
+  must_change_password:
+                  "You need to set a new password before signing in. Open the Drive247 portal, change your password there, then come back.",
+  no_tenant:      "This Drive247 account is not linked to a rental account, so there is nothing to sync into.",
+  super_admin:    "Super admin accounts are not tied to a single rental account. Sign in with the account that owns the vehicles.",
+  profile_lookup: "Signed in, but Drive247 would not return your account details. Try again, or contact Drive247 support.",
+};
+
+const fail = (code, extra) => ({ ok: false, code, reason: AUTH_ERRORS[code] + (extra ? " " + extra : "") });
+
+/**
+ * Is this build pointed at a real Supabase project?
+ *
+ * A missing or truncated constant is a build mistake, not a tenant mistake, and
+ * it must never reach the screen as "your password is wrong". Checked before
+ * the first request rather than inferred from its failure.
+ */
+function authConfigProblem(url, key) {
+  url = url === undefined ? SUPABASE_URL : url;
+  key = key === undefined ? SUPABASE_ANON_KEY : key;
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url || "")) return "url";
+  // A JWT is three dot-separated segments; the anon key is a long one.
+  if (!key || key.split(".").length !== 3 || key.length < 100) return "key";
+  return null;
+}
+
+/* A test seam, following the convention turo-read-contract.js already sets with
+   globalThis.__d247TuroRead. PURE FUNCTIONS ONLY — a classifier and a config
+   check. Nothing here reads storage, holds a credential, or can sign anyone in,
+   so exposing it costs nothing even though the popup could reach it. */
+globalThis.__d247Auth = { authConfigProblem, classifyGoTrue, AUTH_ERRORS };
+
+/**
+ * Turn one GoTrue failure response into a code.
+ *
+ * `body` is whatever parsed out of the response, which may be nothing.
+ */
+function classifyGoTrue(status, body) {
+  const errorCode = (body && (body.error_code || body.error)) || "";
+  const msg = String((body && (body.msg || body.message || body.error_description)) || "");
+
+  /* 401 here is never the tenant's password. GoTrue answers a bad password with
+     400; a 401 means the gateway rejected our API key before GoTrue saw the
+     request at all. */
+  if (status === 401 || status === 403) return "misconfigured";
+  if (status === 404) return "misconfigured";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "unavailable";
+
+  if (status === 400 || status === 422) {
+    if (errorCode === "validation_failed") return "misconfigured";
+    /* THE TRAP: an unsupported grant_type comes back as
+       error_code "invalid_credentials" with msg "unsupported_grant_type".
+       Matching on the code alone would report a broken request as a bad
+       password — the exact confusion this taxonomy exists to end. */
+    if (/grant/i.test(msg)) return "misconfigured";
+    if (/email.?not.?confirmed/i.test(errorCode) || /not confirmed/i.test(msg)) return "unconfirmed";
+    if (errorCode === "invalid_credentials" || errorCode === "invalid_grant" || /invalid login/i.test(msg)) {
+      return "bad_credentials";
+    }
+    return "unexpected";
+  }
+  return "unexpected";
+}
+
 /** Timed fetch. Never logs the body — these are all credential exchanges. */
 async function authFetch(url, init) {
   const controller = new AbortController();
@@ -269,39 +368,38 @@ async function loadProfile(accessToken, userId) {
     );
   } catch (_) {
     // Offline or timed out. Same answer as a non-2xx below: unknown, retryable.
-    return { ok: false, retryable: true, reason: "Drive247 could not be reached. Check your connection and try again." };
+    return { ...fail("offline"), retryable: true };
   }
   if (!res.ok) {
     /* A transport failure is NOT a denial. auth-store.ts calls this
        `profileUnavailable` and treats it as "unknown" for the same reason: a
        network blip must not read as "you are not allowed", because the user's
-       only available response to that message is to stop trying. */
-    return { ok: false, retryable: true, reason: "Drive247 could not be reached. Check your connection and try again." };
-  }
-  const rows = await res.json().catch(() => []);
-  const user = Array.isArray(rows) && rows.length ? rows[0] : null;
+       only available response to that message is to stop trying.
 
-  if (!user) {
-    return { ok: false, reason: "This Drive247 account has no portal access. Ask your administrator to add you." };
+       Nor is it a credential problem: the password has already been accepted by
+       this point, so whatever went wrong here is ours or the server's. */
+    return { ...fail(res.status >= 500 ? "unavailable" : "profile_lookup"), retryable: true };
   }
+  const rows = await res.json().catch(() => null);
+  if (!Array.isArray(rows)) return { ...fail("unexpected"), retryable: true };
+  const user = rows.length ? rows[0] : null;
+
+  if (!user) return fail("no_profile");
   /* Super admins bypass is_active, matching auth-store.ts:183. They do not
      bypass the tenant check below, and that is the point. */
-  if (!user.is_super_admin && user.is_active === false) {
-    return { ok: false, reason: "This Drive247 account has been deactivated." };
-  }
-  if (user.must_change_password && !user.is_super_admin) {
-    return { ok: false, reason: "Set a new password in the Drive247 portal first, then sign in here." };
-  }
+  if (!user.is_super_admin && user.is_active === false) return fail("inactive");
+  if (user.must_change_password && !user.is_super_admin) return fail("must_change_password");
   if (!user.tenant_id) {
     /* Super admins carry tenant_id NULL by design. There is no single account
        a scraped Turo trip could belong to, so there is nothing this extension
        could safely do for them. turo-bridge-ingest refuses the same case with
        the same reasoning; refusing here too means the tenant finds out at
        sign-in rather than at the end of their first sync. */
-    return {
-      ok: false,
-      reason: "Super admin accounts are not tied to one rental account. Sign in with the account that owns the vehicles.",
-    };
+    /* Two different accounts land here and they need different sentences: a
+       super admin has no tenant BY DESIGN and should use a different login,
+       while an ordinary staff row with a null tenant is a data problem their
+       administrator has to fix. */
+    return fail(user.is_super_admin ? "super_admin" : "no_tenant");
   }
 
   /* `tenants` has no `name` column — company_name is the display name
@@ -361,7 +459,16 @@ async function storeSession(tokens, identity) {
 async function authSignIn(email, password) {
   const mail = String(email || "").trim();
   const pass = String(password || "");
-  if (!mail || !pass) return { ok: false, reason: "Enter your Drive247 email and password." };
+  if (!mail) return { ok: false, code: "no_email", reason: "Enter your Drive247 email address." };
+  if (!pass) return { ok: false, code: "no_password", reason: "Enter your Drive247 password." };
+
+  /* Checked here, not at load, so a broken build fails at the moment someone
+     tries to use it and says so in the one place they are looking. */
+  const configProblem = authConfigProblem();
+  if (configProblem) {
+    console.error("[TuroBridge] auth is misconfigured: the Supabase " + configProblem + " constant is missing or malformed.");
+    return fail("misconfigured");
+  }
 
   let res;
   try {
@@ -371,22 +478,23 @@ async function authSignIn(email, password) {
       body: JSON.stringify({ email: mail, password: pass }),
     });
   } catch (e) {
-    const aborted = e && e.name === "AbortError";
-    return { ok: false, reason: aborted ? "Drive247 did not respond in time." : "Could not reach Drive247. Check your connection." };
+    return fail(e && e.name === "AbortError" ? "timeout" : "offline");
   }
 
   if (!res.ok) {
-    /* ONE message for wrong password, unknown email and unconfirmed account
-       alike. Distinguishing them turns this form into an oracle for which
-       Drive247 accounts exist. 429 is called out separately because the user's
-       correct response to it is different: wait, not retype. */
-    if (res.status === 429) return { ok: false, reason: "Too many attempts. Wait a minute and try again." };
-    return { ok: false, reason: "Email or password is incorrect." };
+    const body = await res.json().catch(() => null);
+    const code = classifyGoTrue(res.status, body);
+    /* Sanitised: a status and OUR classification. Never the email, never the
+       password, never the response body — GoTrue echoes neither today, and a
+       log line is the wrong place to find out that it started to. */
+    console.warn("[TuroBridge] sign-in refused: HTTP " + res.status + " -> " + code);
+    return fail(code);
   }
 
   const tokens = await res.json().catch(() => null);
-  if (!tokens || !tokens.access_token || !tokens.user || !tokens.user.id) {
-    return { ok: false, reason: "Drive247 sent an unexpected sign-in response." };
+  if (!tokens || !tokens.access_token || !tokens.refresh_token || !tokens.user || !tokens.user.id) {
+    console.error("[TuroBridge] sign-in succeeded but the token response was missing required fields.");
+    return fail("unexpected");
   }
 
   const profile = await loadProfile(tokens.access_token, tokens.user.id);
@@ -403,7 +511,7 @@ async function authSignIn(email, password) {
        which is the same mistake refreshSession() is careful not to make. Leave
        the session alone and let them press the button once more. */
     if (!profile.retryable) await revokeRemote(tokens.access_token);
-    return { ok: false, reason: profile.reason };
+    return { ok: false, code: profile.code, reason: profile.reason };
   }
 
   await storeSession(tokens, profile.identity);

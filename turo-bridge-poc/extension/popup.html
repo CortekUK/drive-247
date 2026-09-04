@@ -52,14 +52,38 @@
 
       <div class="field">
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" required
-               autocomplete="current-password" placeholder="••••••••">
+        <!-- The wrapper is what positions the eye INSIDE the input; the input
+             carries right padding so text never runs under the button. -->
+        <div class="input-wrap">
+          <input id="password" name="password" type="password" required
+                 autocomplete="current-password" placeholder="••••••••">
+          <!-- type="button" is load-bearing. Inside a <form>, a button with no
+               type defaults to type="submit", so revealing the password would
+               submit the form. -->
+          <button type="button" class="eye" id="reveal"
+                  aria-label="Show password" aria-pressed="false" title="Show password">
+            <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg class="eye-shut" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden>
+              <path d="M10.7 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.6 3.7"></path>
+              <path d="M6.3 6.3A18.6 18.6 0 0 0 2 12s3.5 7 10 7a10.4 10.4 0 0 0 4-.8"></path>
+              <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"></path>
+              <path d="m2 2 20 20"></path>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <!-- ONE message for every rejection. See popup.js: telling an
-           unauthenticated caller which half was wrong makes this form an
-           oracle for which Drive247 accounts exist. -->
-      <p class="auth-error" id="authError" role="alert" hidden></p>
+      <!-- RESERVED SPACE. The slot is always in the layout and only its
+           contents appear, so an error does not shove the Sign in button down
+           the moment a tenant most wants to click it again. -->
+      <div class="auth-error-slot">
+        <p class="auth-error" id="authError" role="alert" hidden></p>
+      </div>
 
       <button type="submit" class="primary" id="signIn">
         <span class="spinner" id="spinnerAuth" hidden></span>

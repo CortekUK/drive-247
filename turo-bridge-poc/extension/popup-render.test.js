@@ -119,28 +119,56 @@ function renderInPopup(state, lastRun, opts) {
   const w = dom.window;
 
   const auth = opts.auth === undefined ? SIGNED_IN : opts.auth;
-  const store = { syncState: state, lastRun: lastRun || null, lastSyncAt: opts.lastSyncAt || null };
+  const store = Object.assign(
+    { syncState: state, lastRun: lastRun || null, lastSyncAt: opts.lastSyncAt || null },
+    opts.store || {},
+  );
+  const sent = [];
+  /* A sign-in verdict the test controls, and a promise the test can resolve
+     itself — which is how the "still loading" assertions get to look at the
+     form MID-REQUEST rather than after it. */
+  let releaseSignIn = null;
   w.chrome = {
     storage: {
       local: {
-        async get(keys) { const o = {}; for (const k of [].concat(keys)) if (k in store) o[k] = store[k]; return o; },
-        async set() {}, async remove() {}
+        async get(keys) {
+          if (typeof keys === "string") { const o = {}; if (keys in store) o[keys] = store[keys]; return o; }
+          const o = {}; for (const k of [].concat(keys)) if (k in store) o[k] = store[k]; return o;
+        },
+        async set(patch) { Object.assign(store, patch); },
+        async remove(keys) { for (const k of [].concat(keys)) delete store[k]; }
       },
       onChanged: { addListener() {} }
     },
     runtime: {
       async sendMessage(msg) {
+        sent.push(msg);
         if (msg && msg.type === "AUTH_STATE") return auth;
+        if (msg && msg.type === "AUTH_SIGN_IN") {
+          if (opts.hold) return await new Promise((r) => { releaseSignIn = r; });
+          return opts.signInResult || { ok: false, code: "bad_credentials", reason: "Email or password is incorrect." };
+        }
         return undefined;
       }
     }
   };
 
   w.eval(fs.readFileSync(path.join(DIR, "popup.js"), "utf8"));
-  return { dom, w, doc: w.document };
+  return { dom, w, doc: w.document, store, sent, release: (v) => releaseSignIn && releaseSignIn(v) };
+}
+
+const tick = (ms) => new Promise((r) => setTimeout(r, ms || 20));
+
+/** Fill the form and submit it the way a person does. */
+function submitForm(doc, w, email, password) {
+  doc.getElementById("email").value = email;
+  doc.getElementById("password").value = password;
+  doc.getElementById("authForm").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
 }
 
 const text = (doc, id) => (doc.getElementById(id).textContent || "").trim();
+const eq = (name, actual, expected) =>
+  ok(name, actual === expected, "got " + JSON.stringify(actual) + ", expected " + JSON.stringify(expected));
 const eqText = (doc, name, id, expected) =>
   ok(name, text(doc, id) === expected, "got " + JSON.stringify(text(doc, id)));
 const shown = (doc, id) => !doc.getElementById(id).hidden;
@@ -319,6 +347,198 @@ async function main() {
     await new Promise((r) => setTimeout(r, 20));
     const last = text(doc, "lastSync");
     ok("it says the calendar was only partly read", /part of your calendar only/i.test(last), last);
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA failed sign-in keeps BOTH fields, so nothing has to be retyped");
+  {
+    const { doc, w } = renderInPopup(null, null, { auth: { signedIn: false, expired: false, identity: null } });
+    await tick();
+
+    submitForm(doc, w, "dana@acme.test", "hunter2");
+    await tick(40);
+
+    /* THE BUG THIS REPLACES. The password used to be wiped on every rejection,
+       so a tenant whose real problem was a typo'd email domain retyped a
+       correct password over and over and got the same sentence each time. */
+    eq("the email survived", doc.getElementById("email").value, "dana@acme.test");
+    eq("and so did the password", doc.getElementById("password").value, "hunter2");
+    ok("the error is shown", !doc.getElementById("authError").hidden);
+    ok("...and the form was not replaced", !!doc.getElementById("authForm"));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe email is remembered across popup closes; the password is not");
+  {
+    const { doc, w, store } = renderInPopup(null, null, { auth: { signedIn: false, expired: false, identity: null } });
+    await tick();
+    submitForm(doc, w, "dana@acme.test", "hunter2");
+    await tick(40);
+
+    eq("the email was saved", store.lastEmail, "dana@acme.test");
+    /* THE LINE THAT MATTERS. A password in chrome.storage is a password on
+       disk, for the benefit of saving one field of typing. */
+    const persisted = JSON.stringify(store);
+    ok("the password was NOT saved anywhere", !persisted.includes("hunter2"), persisted.slice(0, 200));
+    ok("...under any key at all", !Object.keys(store).some((k) => /pass/i.test(k)));
+
+    // Reopen the popup against that same storage.
+    const second = renderInPopup(null, null, {
+      auth: { signedIn: false, expired: false, identity: null },
+      store: { lastEmail: "dana@acme.test" }
+    });
+    await tick();
+    eq("a reopened popup restores the email", second.doc.getElementById("email").value, "dana@acme.test");
+    eq("and leaves the password empty", second.doc.getElementById("password").value, "");
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe eye reveals the password without losing it or submitting");
+  {
+    const { doc, w, sent } = renderInPopup(null, null, { auth: { signedIn: false, expired: false, identity: null } });
+    await tick();
+
+    const pw = doc.getElementById("password");
+    const eye = doc.getElementById("reveal");
+    pw.value = "hunter2";
+
+    /* type="button" is what stops this submitting: inside a <form>, a button
+       with no type IS a submit button. */
+    eq("the toggle is not a submit button", eye.getAttribute("type"), "button");
+    eq("it starts masked", pw.type, "password");
+    eq("and says what it will do", eye.getAttribute("aria-label"), "Show password");
+    eq("...as a pressed-state too", eye.getAttribute("aria-pressed"), "false");
+
+    const before = sent.length;
+    eye.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+    await tick();
+
+    eq("clicking reveals it", pw.type, "text");
+    eq("the value is untouched", pw.value, "hunter2");
+    eq("the label flips", eye.getAttribute("aria-label"), "Hide password");
+    eq("...and so does the pressed state", eye.getAttribute("aria-pressed"), "true");
+    eq("nothing was submitted", sent.length, before);
+
+    eye.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+    await tick();
+    eq("clicking again hides it", pw.type, "password");
+    eq("still untouched", pw.value, "hunter2");
+    eq("and the label is back", eye.getAttribute("aria-label"), "Show password");
+    eq("still nothing submitted", sent.length, before);
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe loading state is visible, blocks a second attempt, and clears nothing");
+  {
+    const { doc, w, sent } = renderInPopup(null, null, {
+      auth: { signedIn: false, expired: false, identity: null },
+      hold: true
+    });
+    await tick();
+
+    submitForm(doc, w, "dana@acme.test", "hunter2");
+    await tick(30);   // mid-request: the harness is holding the reply
+
+    eq("the button says what is happening", text(doc, "signInLabel"), "Signing in…");
+    ok("the spinner is up", !doc.getElementById("spinnerAuth").hidden);
+    ok("the button is disabled", doc.getElementById("signIn").disabled);
+
+    /* A disabled input keeps its value; a RECREATED one does not. The loading
+       state must never rebuild the form. */
+    eq("the email is still there", doc.getElementById("email").value, "dana@acme.test");
+    eq("the password is still there", doc.getElementById("password").value, "hunter2");
+
+    const during = sent.filter((m) => m.type === "AUTH_SIGN_IN").length;
+    doc.getElementById("authForm").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+    await tick();
+    eq("a second submit while in flight is ignored", sent.filter((m) => m.type === "AUTH_SIGN_IN").length, during);
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nAn error does not move the Sign in button");
+  {
+    const { doc, w } = renderInPopup(null, null, { auth: { signedIn: false, expired: false, identity: null } });
+    await tick();
+
+    /* The slot is in the layout whether or not it holds anything, so the
+       button does not jump downward at the exact moment a tenant is reaching
+       for it. jsdom reports no geometry, so the structural guarantee is what is
+       asserted: the slot exists, is always present, and only its CONTENTS are
+       toggled. */
+    const slot = doc.querySelector(".auth-error-slot");
+    ok("the error has a reserved slot", !!slot);
+    ok("the slot itself is never hidden", !slot.hidden);
+    ok("only the message inside it is", doc.getElementById("authError").hidden);
+
+    submitForm(doc, w, "dana@acme.test", "hunter2");
+    await tick(40);
+
+    ok("the slot is still the same element", doc.querySelector(".auth-error-slot") === slot);
+    ok("now holding the message", !doc.getElementById("authError").hidden);
+    ok("and the button is still its child-order sibling",
+       slot.nextElementSibling && slot.nextElementSibling.id === "signIn");
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nEmpty fields are caught before a request is made");
+  {
+    const { doc, w, sent } = renderInPopup(null, null, { auth: { signedIn: false, expired: false, identity: null } });
+    await tick();
+
+    submitForm(doc, w, "", "hunter2");
+    await tick();
+    eq("no sign-in was attempted", sent.filter((m) => m.type === "AUTH_SIGN_IN").length, 0);
+    ok("and it says which field", /email/i.test(text(doc, "authError")), text(doc, "authError"));
+    eq("the password was not cleared by that", doc.getElementById("password").value, "hunter2");
+
+    submitForm(doc, w, "dana@acme.test", "");
+    await tick();
+    eq("still no request", sent.filter((m) => m.type === "AUTH_SIGN_IN").length, 0);
+    ok("and now it names the password", /password/i.test(text(doc, "authError")), text(doc, "authError"));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA successful sign-in clears the password and shows the account");
+  {
+    const { doc, w } = renderInPopup(null, null, {
+      auth: SIGNED_IN,
+      signInResult: { ok: true, identity: SIGNED_IN.identity }
+    });
+    await tick();
+
+    doc.getElementById("email").value = "dana@acme.test";
+    doc.getElementById("password").value = "hunter2";
+    doc.getElementById("authForm").dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
+    await tick(40);
+
+    /* Cleared only HERE, where the form is about to be hidden anyway and the
+       value has served its purpose. */
+    eq("the password is cleared on success", doc.getElementById("password").value, "");
+    ok("the form is hidden", doc.getElementById("authForm").hidden);
+    ok("and the account bar is up", !doc.getElementById("acct").hidden);
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nThe popup shows the real reason, not a blanket password error");
+  {
+    const reasons = [
+      ["misconfigured", "This extension is not set up correctly and cannot reach Drive247."],
+      ["offline", "Could not reach Drive247. Check your internet connection and try again."],
+      ["no_tenant", "This Drive247 account is not linked to a rental account, so there is nothing to sync into."],
+      ["inactive", "This Drive247 account has been deactivated."],
+    ];
+    for (const [code, reason] of reasons) {
+      const { doc, w } = renderInPopup(null, null, {
+        auth: { signedIn: false, expired: false, identity: null },
+        signInResult: { ok: false, code, reason }
+      });
+      await tick();
+      submitForm(doc, w, "dana@acme.test", "hunter2");
+      await tick(40);
+      eq("shows the " + code + " message", text(doc, "authError"), reason);
+      ok("  ...and both fields survive it", doc.getElementById("email").value === "dana@acme.test" &&
+                                            doc.getElementById("password").value === "hunter2");
+    }
   }
 
   console.log("\n" + passed + " passed, " + failed + " failed\n");

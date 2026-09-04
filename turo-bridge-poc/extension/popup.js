@@ -47,7 +47,7 @@ const els = {
   // auth
   authForm: $("authForm"), email: $("email"), password: $("password"),
   authError: $("authError"), signIn: $("signIn"), signInLabel: $("signInLabel"),
-  spinnerAuth: $("spinnerAuth"),
+  spinnerAuth: $("spinnerAuth"), reveal: $("reveal"),
   acct: $("acct"), acctTenant: $("acctTenant"), acctEmail: $("acctEmail"),
   signOut: $("signOut"), work: $("work"), lastSync: $("lastSync"),
 
@@ -123,10 +123,17 @@ const VEHICLE_LABEL = {
      outlives the popup by design, so what is on screen must reflect storage
      whether or not the auth round-trip below has come back yet — and if the
      session turns out to be gone, paintAuth() hides the whole panel anyway. */
-  const bag = await chrome.storage.local.get(["lastRun", "syncState", "lastSyncAt", "useSample", "scenario"]);
+  const bag = await chrome.storage.local.get(["lastRun", "syncState", "lastSyncAt", "lastEmail", "useSample", "scenario"]);
   renderOne(bag.lastRun || null);
   renderRun(bag.syncState || null);
   renderLastSync(bag.lastSyncAt || null);
+
+  /* THE EMAIL, AND ONLY THE EMAIL. Retyping an address on every attempt is the
+     single most tedious thing about a popup that is destroyed each time it
+     closes. The password is deliberately NOT remembered — see the note on
+     rememberEmail() — so a reopened popup shows a filled email and an empty
+     password, which is also the shape every browser password manager expects. */
+  if (bag.lastEmail && !els.email.value) els.email.value = bag.lastEmail;
 
   /* Ask the WORKER, not storage. Only the worker can tell an identity that is
      still valid from one whose refresh token has since been rejected, because
@@ -149,6 +156,53 @@ chrome.storage.local.get(["useSample", "scenario"]).then((bag) => {
   devMode = { useSample: !!bag.useSample, scenario: bag.scenario || null };
 }).catch(() => {});
 
+/**
+ * Show / hide the password.
+ *
+ * Touches `type` and nothing else. It does not rewrite `value` (which would
+ * lose an unsaved keystroke in some browsers), does not re-render the form, and
+ * cannot submit it — the button is explicitly type="button", because inside a
+ * <form> an untyped button IS a submit button.
+ *
+ * Focus is returned to the input at the caret's previous position, so a tenant
+ * who reveals the password mid-typing carries on where they were instead of
+ * being dumped at the start of the field or left focused on the icon.
+ */
+els.reveal.addEventListener("click", () => {
+  const showing = els.password.type === "text";
+  const start = els.password.selectionStart;
+  const end = els.password.selectionEnd;
+
+  els.password.type = showing ? "password" : "text";
+  els.reveal.setAttribute("aria-pressed", String(!showing));
+  els.reveal.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+  els.reveal.setAttribute("title", showing ? "Show password" : "Hide password");
+  els.reveal.querySelector(".eye-open").hidden = !showing;
+  els.reveal.querySelector(".eye-shut").hidden = showing;
+
+  try {
+    els.password.focus();
+    if (start !== null && end !== null) els.password.setSelectionRange(start, end);
+  } catch (_) {
+    /* setSelectionRange throws on some input types in some engines. Never let a
+       cosmetic focus restore break the toggle itself. */
+  }
+});
+
+/**
+ * Remember the email. NEVER the password.
+ *
+ * A password in chrome.storage.local is a password on disk, readable by anyone
+ * who can read the profile directory, for the benefit of saving one field of
+ * typing. The browser's own password manager already solves this properly, and
+ * the form is marked up (`autocomplete="current-password"`) so it can.
+ */
+function rememberEmail(value) {
+  const email = String(value || "").trim();
+  if (!email) return;
+  chrome.storage.local.set({ lastEmail: email }).catch(() => {});
+}
+
 async function refreshAuth() {
   let state = null;
   try { state = await chrome.runtime.sendMessage({ type: "AUTH_STATE" }); } catch (_) {}
@@ -169,6 +223,8 @@ function paintAuth(state) {
   if (!inAccount) {
     els.acctTenant.textContent = "";
     els.acctEmail.textContent = "";
+    /* Deliberately NOT touching els.email / els.password here. paintAuth runs on
+       every storage change, including ones a half-typed form should survive. */
     /* "Signed in again" vs "sign in" is the whole difference between a tenant
        who thinks the extension broke and one who knows what to do next. */
     if (state && state.expired) {
@@ -192,35 +248,62 @@ function hideAuthError() {
   els.authError.hidden = true;
 }
 
+/* THE SUBMIT LATCH. Enter and a click on Sign in raise the same submit event,
+   and a popup on a slow connection invites a second press. Two concurrent
+   password grants against the same account is how you find the rate limiter. */
+let signingIn = false;
+
 els.authForm.addEventListener("submit", async (e) => {
   /* A form submit inside an extension popup would NAVIGATE this document,
      which destroys it. The default is prevented on every path, including the
-     failure paths below. */
+     failure paths below. Enter-to-submit works because this is a real <form>
+     with a real submit button. */
   e.preventDefault();
+  if (signingIn) return;
+
+  const email = els.email.value.trim();
+  const password = els.password.value;
+
+  /* Checked here so an empty field never costs a network round trip, and never
+     comes back looking like a server rejection. */
+  if (!email) { showAuthError("Enter your Drive247 email address."); els.email.focus(); return; }
+  if (!password) { showAuthError("Enter your Drive247 password."); els.password.focus(); return; }
+
+  signingIn = true;
   hideAuthError();
   setBusyAuth(true);
-
-  const email = els.email.value;
-  const password = els.password.value;
+  rememberEmail(email);
 
   let result = null;
   try {
     result = await chrome.runtime.sendMessage({ type: "AUTH_SIGN_IN", email, password });
   } catch (_) {
-    result = { ok: false, reason: "The extension could not reach its background worker. Try again." };
+    result = { ok: false, reason: "The extension could not reach its background worker. Reload the extension and try again." };
   }
 
-  /* Cleared on success AND on failure. A password sitting in a DOM node after a
-     failed attempt is a password waiting to be shoulder-surfed or screen-shared,
-     and the tenant is about to retype it either way. */
-  els.password.value = "";
+  signingIn = false;
   setBusyAuth(false);
 
   if (!result || !result.ok) {
+    /* BOTH FIELDS SURVIVE A FAILURE, and that is the deliberate reversal of
+       what this used to do. Wiping the password on every rejection meant a
+       tenant whose real problem was a typo'd email domain — or a dropped
+       connection — retyped a correct password over and over. The popup is
+       destroyed the moment it closes, so nothing here outlives the window, and
+       the value is in a password field the browser already masks.
+
+       Nothing is re-rendered on this path either: the error is written into a
+       slot that is always present in the layout, so the inputs are never
+       recreated and never lose their values or the caret. */
     showAuthError((result && result.reason) || "Sign-in failed. Try again.");
+    els.password.focus();
+    els.password.select();
     return;
   }
-  els.email.value = "";
+
+  /* Cleared only on SUCCESS, when the form is about to be hidden anyway and
+     the value has served its purpose. */
+  els.password.value = "";
   await refreshAuth();
 });
 
@@ -232,17 +315,28 @@ els.signOut.addEventListener("click", async () => {
   renderOne(null);
   renderRun(null);
   renderLastSync(null);
-  els.email.value = "";
+  /* The password goes; the email stays. Signing out is not the same as
+     forgetting who you are, and the next sign-in is overwhelmingly the same
+     person. `lastEmail` is not a credential. */
   els.password.value = "";
+  const bag = await chrome.storage.local.get("lastEmail").catch(() => ({}));
+  els.email.value = (bag && bag.lastEmail) || "";
   await refreshAuth();
 });
 
+/**
+ * Loading state. Sets `disabled` and label text ONLY.
+ *
+ * It must never assign to `.value`, and it must never rebuild the form: a
+ * disabled input keeps what is in it, a recreated one does not. The submit
+ * button is what stops a second attempt; the inputs stay enabled so a tenant
+ * who spots their own typo mid-request can start fixing it.
+ */
 function setBusyAuth(busy) {
   els.signIn.disabled = busy;
   els.spinnerAuth.hidden = !busy;
   els.signInLabel.textContent = busy ? "Signing in…" : "Sign in";
-  els.email.disabled = busy;
-  els.password.disabled = busy;
+  els.authForm.dataset.busy = busy ? "1" : "";
 }
 
 // ================================================================ the clicks ==

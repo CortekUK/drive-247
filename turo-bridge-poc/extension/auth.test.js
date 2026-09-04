@@ -138,6 +138,9 @@ const STAFF = (over) => Object.assign({
   role: "admin"
 }, over || {});
 
+/** No staff row at all — the account exists in auth but not in the portal. */
+const STAFF_ABSENT = [];
+
 function boot(store, plan, calls) {
   for (const f of ["fixture.js", "turo-read-contract.js", "content-turo.js", "background.js"]) {
     delete require.cache[path.join(DIR, f)];
@@ -206,7 +209,11 @@ async function main() {
 
     const r = await send(listen, { type: "AUTH_SIGN_IN", email: "dana@acme.test", password: "wrong" });
     eq("refused", r.ok, false);
-    eq("one message for every rejection", r.reason, "Email or password is incorrect.");
+    eq("classified as a credential problem", r.code, "bad_credentials");
+    eq("and worded plainly", r.reason, "Email or password is incorrect.");
+    /* THE ENUMERATION DEFENCE SURVIVES THE TAXONOMY. Wrong password, unknown
+       email and unknown domain all land on this one code, so the form still
+       tells a prober nothing about which Drive247 accounts exist. */
     ok("nothing was stored", !store.d247Session && !store.d247Identity);
     ok("app_users was never consulted", !calls.some((c) => c.url.includes("app_users")));
   }
@@ -266,7 +273,7 @@ async function main() {
       }, calls);
       const r = await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
       eq("sign-in does not complete", r.ok, false);
-      ok("but it blames the connection, not the tenant", /could not be reached/i.test(r.reason), r.reason);
+      eq("but it blames the connection, not the tenant", r.code, "offline");
       /* The password WAS right. Revoking here would make four seconds of bad
          wifi cost them their password again — the same mistake the refresh path
          is careful not to make. */
@@ -542,6 +549,169 @@ async function main() {
     const writes = turo.filter((c) => c.method && c.method.toUpperCase() !== "GET");
     eq("no non-GET request was ever aimed at turo.com", writes.length, 0);
     ok("and no Turo password was asked for or stored", !JSON.stringify(store).toLowerCase().includes("turopassword"));
+  }
+
+  // -----------------------------------------------------------------------
+  console.log("\nEvery non-credential failure says what it actually is");
+  {
+    /* THE BUG THIS SUITE EXISTS FOR. Each of these once rendered as "Email or
+       password is incorrect.", which sent tenants to retype a correct password
+       at a server that was down, a build that was misconfigured, or an email
+       whose domain they had typo'd. The real GoTrue bodies below were captured
+       from the live project. */
+    const cases = [
+      ["a rejected API key is OUR problem, not theirs",
+        jsonRes(401, { message: "Invalid API key", hint: "Double check your Supabase anon or service_role API key." }),
+        "misconfigured"],
+      ["a malformed request is our bug",
+        jsonRes(400, { code: 400, error_code: "validation_failed", msg: "missing email or phone" }),
+        "misconfigured"],
+      /* THE TRAP. GoTrue reports an unsupported grant_type with error_code
+         "invalid_credentials". Matching the code alone would blame the tenant's
+         password for a broken request. */
+      ["an unsupported grant type is NOT a bad password",
+        jsonRes(400, { code: 400, error_code: "invalid_credentials", msg: "unsupported_grant_type" }),
+        "misconfigured"],
+      ["a missing endpoint is a configuration problem",
+        jsonRes(404, { message: "not found" }),
+        "misconfigured"],
+      ["an unconfirmed email says so",
+        jsonRes(400, { code: 400, error_code: "email_not_confirmed", msg: "Email not confirmed" }),
+        "unconfirmed"],
+      ["too many attempts says to wait",
+        jsonRes(429, { msg: "over_request_rate_limit" }),
+        "rate_limited"],
+      ["a dead auth server is not a wrong password",
+        jsonRes(503, { message: "service unavailable" }),
+        "unavailable"],
+      ["an unreadable answer is admitted as such",
+        jsonRes(418, { weird: true }),
+        "unexpected"],
+    ];
+
+    for (const [name, response, expected] of cases) {
+      const store = {}, calls = [];
+      const listen = boot(store, { password: response }, calls);
+      const r = await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+      eq(name, r.code, expected);
+      ok("  ...and never says the password was wrong", r.reason !== "Email or password is incorrect.", r.reason);
+      ok("  ...and stores nothing", !store.d247Session);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  console.log("\nBeing offline is reported as being offline");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, { password: () => { throw new Error("net::ERR_INTERNET_DISCONNECTED"); } }, calls);
+    const r = await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+    eq("classified as offline", r.code, "offline");
+    ok("and the sentence names the connection", /internet connection/i.test(r.reason), r.reason);
+  }
+
+  // -----------------------------------------------------------------------
+  console.log("\nA profile lookup that FAILS is not a profile that says no");
+  {
+    // A 500 from PostgREST. The password was already accepted at this point.
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      password: jsonRes(200, TOKENS("pf")),
+      appUsers: jsonRes(500, { message: "boom" })
+    }, calls);
+    const r = await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+    eq("reported as a server problem", r.code, "unavailable");
+    ok("not as a credential problem", r.reason !== "Email or password is incorrect.");
+    ok("and the session is left alone to retry with", !calls.some((c) => c.url.includes("/auth/v1/logout")));
+
+    // A 403 from PostgREST — RLS refusing the read, which is also not a denial
+    // of the person; it is a denial of our query.
+    const store2 = {}, calls2 = [];
+    const listen2 = boot(store2, {
+      password: jsonRes(200, TOKENS("pf2")),
+      appUsers: jsonRes(403, { message: "permission denied for table app_users" })
+    }, calls2);
+    const r2 = await send(listen2, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+    eq("an RLS refusal is a lookup failure", r2.code, "profile_lookup");
+  }
+
+  // -----------------------------------------------------------------------
+  console.log("\nEach account-shaped refusal has its own words");
+  {
+    const cases = [
+      ["no staff row", STAFF_ABSENT, "no_profile"],
+      ["deactivated", [STAFF({ is_active: false })], "inactive"],
+      ["forced password change", [STAFF({ must_change_password: true })], "must_change_password"],
+      ["super admin", [STAFF({ tenant_id: null, is_super_admin: true })], "super_admin"],
+      ["staff row with no tenant", [STAFF({ tenant_id: null })], "no_tenant"],
+    ];
+    const seen = new Set();
+    for (const [name, rows, expected] of cases) {
+      const store = {}, calls = [];
+      const listen = boot(store, { password: jsonRes(200, TOKENS("acc")), appUsers: jsonRes(200, rows) }, calls);
+      const r = await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "p" });
+      eq(name, r.code, expected);
+      ok("  ...with a sentence of its own", !seen.has(r.reason), r.reason);
+      seen.add(r.reason);
+    }
+    /* A super admin and an ordinary staff row with a null tenant both have "no
+       tenant", and they are DIFFERENT problems: one should use another login,
+       the other needs an administrator. Same wall, different signposts. */
+    ok("super admin and no-tenant are not the same message", seen.size === cases.length);
+  }
+
+  // -----------------------------------------------------------------------
+  console.log("\nA broken build is caught before it blames anyone");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {}, calls);
+    const A = globalThis.__d247Auth;
+
+    /* THE CONFIG GUARD runs before the first request, so a build pointed at
+       nothing cannot possibly surface as "your password is wrong". */
+    eq("the shipped constants pass", A.authConfigProblem(), null);
+    eq("a missing URL is caught", A.authConfigProblem("", "x.y." + "z".repeat(100)), "url");
+    eq("so is a non-Supabase URL", A.authConfigProblem("https://example.com", "x.y." + "z".repeat(100)), "url");
+    eq("a missing key is caught", A.authConfigProblem("https://abc.supabase.co", ""), "key");
+    eq("so is a truncated one", A.authConfigProblem("https://abc.supabase.co", "eyJ.abc.def"), "key");
+    eq("and one that is not a JWT at all", A.authConfigProblem("https://abc.supabase.co", "z".repeat(200)), "key");
+    ok("and the message never blames the tenant",
+       !/password/i.test(A.AUTH_ERRORS.misconfigured), A.AUTH_ERRORS.misconfigured);
+
+    // Empty fields never reach the network either.
+    const r = await send(listen, { type: "AUTH_SIGN_IN", email: "x@y.z", password: "" });
+    eq("an empty password never reaches the network", r.code, "no_password");
+    ok("...and no request was made", !calls.length);
+
+    const r2 = await send(listen, { type: "AUTH_SIGN_IN", email: "", password: "p" });
+    eq("nor does an empty email", r2.code, "no_email");
+    ok("...still no request", !calls.length);
+  }
+
+  // -----------------------------------------------------------------------
+  console.log("\nThe password is never written anywhere that outlives the attempt");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      password: jsonRes(400, { code: 400, error_code: "invalid_credentials", msg: "Invalid login credentials" })
+    }, calls);
+    await send(listen, { type: "AUTH_SIGN_IN", email: "dana@acme.test", password: "correct-horse-battery" });
+
+    const everything = JSON.stringify(store);
+    ok("not in storage after a FAILED attempt", !everything.includes("correct-horse-battery"));
+    ok("...and neither is the email, under any key we did not choose",
+       !Object.keys(store).some((k) => k !== "lastEmail" && String(store[k]).includes("dana@acme.test")));
+
+    // And after a successful one.
+    const store2 = {}, calls2 = [];
+    const listen2 = boot(store2, { password: jsonRes(200, TOKENS("pw")), appUsers: jsonRes(200, [STAFF()]) }, calls2);
+    await send(listen2, { type: "AUTH_SIGN_IN", email: "dana@acme.test", password: "correct-horse-battery" });
+    ok("nor after a SUCCESSFUL one", !JSON.stringify(store2).includes("correct-horse-battery"));
+
+    /* The request body is the one place it legitimately appears, and it appears
+       exactly once — in the grant, over TLS, and nowhere else. */
+    const carrying = calls2.filter((c) => JSON.stringify(c.body || {}).includes("correct-horse-battery"));
+    eq("it travels in exactly one request", carrying.length, 1);
+    ok("...the password grant", carrying[0].url.includes("grant_type=password"));
   }
 
   console.log("\n" + passed + " passed, " + failed + " failed\n");

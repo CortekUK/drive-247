@@ -221,10 +221,65 @@ input::placeholder {
   color: var(--body);
 }
 
+/* THE PASSWORD FIELD AND ITS EYE.
+   The wrapper is the positioning context; the input reserves room on the right
+   so a long password never runs underneath the button. */
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-wrap input {
+  padding-right: 38px;
+}
+
+.eye {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.eye:hover { color: var(--ink); background: var(--line); }
+
+/* The icon is a real control, so it gets a real focus ring — it is reachable by
+   keyboard and a tenant tabbing through the form must be able to see where
+   they are. */
+.eye:focus-visible {
+  outline: none;
+  color: var(--indigo);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--indigo) 40%, transparent);
+}
+
+/* RESERVED SPACE FOR THE ERROR.
+   The slot is always in the layout, so the Sign in button does not jump down
+   the instant an error appears — which is the exact moment a tenant is moving
+   their cursor toward it. Roughly one line; a two-line message grows the slot,
+   which is honest, and a hidden one costs a few pixels of whitespace. */
+.auth-error-slot {
+  min-height: 34px;
+  display: flex;
+  align-items: stretch;
+}
+
 /* ONE error line, and it is loud. A tenant who cannot get in has exactly one
    thing to read on this screen. */
 .auth-error {
   margin: 0;
+  width: 100%;
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
   border-radius: 8px;
@@ -232,6 +287,13 @@ input::placeholder {
   color: var(--red);
   font-size: 12px;
   line-height: 1.4;
+}
+
+/* The whole form dims while a sign-in is in flight, so the state is visible
+   even to someone not looking at the button. Values are untouched — this is
+   opacity, not a re-render. */
+.auth[data-busy="1"] .field {
+  opacity: 0.7;
 }
 
 /* "Last synced …" — quiet, because it is a fact and not an instruction. */
