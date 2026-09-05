@@ -1573,10 +1573,31 @@ async function stepReadPage(cursor) {
      between reading and posting loses nothing. They are the ONLY bulky thing we
      persist, they are bounded to one page, and each one is removed as it is
      acknowledged — so the stored blob shrinks as the flush proceeds. */
+  /* ── ONE ROW PER BOOKING, NOT PER FEED ITEM ────────────────────────────────
+     Turo's host feed emits a row for the START of a trip and another for its
+     END -- `upcomingTripFeedItemType: "OWNER_TRIP_START" | "OWNER_TRIP_END"` --
+     both carrying the same reservationId and the same interval. Measured on a
+     real account: 71 items for 41 bookings.
+
+     Posting both halves was not wrong, exactly: the upsert on
+     (tenant_id, reservation_id) collapsed them and the database ended up
+     correct. But it cost 30 pointless POSTs, and it broke the arithmetic that
+     matters -- the run reported 71 seen against 42 written, so completeness came
+     out 'partial', is_authoritative false, and the panel told the operator
+     "29 of 71 could not be read" when nothing had failed at all. A sync that
+     works perfectly must not describe itself as half broken, and a run that is
+     never authoritative can never release a block.
+
+     mergeRecords already existed and does exactly this, last-write-wins on the
+     id; nothing had wired it in. Deduping here rather than server-side keeps the
+     count the client REPORTS equal to the work it actually did. */
+  const deduped = [];
+  const merge = R.mergeRecords(deduped, read.records);
+
   const pendingBlob = {
     pageKey: pageRequest.pageKey,
     index: pageRequest.index,
-    records: read.records.map((r) => toWire(r, cursor)),
+    records: deduped.map((r) => toWire(r, cursor)),
     nextPage: stall.stalled ? null : read.next
   };
   const fitted = fitToStorage(pendingBlob);
@@ -1605,7 +1626,12 @@ async function stepReadPage(cursor) {
     seenPageKeys: cursor.seenPageKeys.concat([pageRequest.pageKey]),
     pagesRead: cursor.pagesRead + 1,
     recordsOffered: cursor.recordsOffered + read.itemCount,
-    recordsAccepted: cursor.recordsAccepted + read.records.length,
+    /* THE DEDUPED COUNT, not the raw feed length. This is what the server
+       receives as records_seen and compares against the rows it wrote, so
+       counting feed items here while writing bookings there is what made a
+       clean run report "29 of 71 could not be read". Count the thing we
+       actually send. */
+    recordsAccepted: cursor.recordsAccepted + deduped.length,
     recordsRejected: cursor.recordsRejected + (read.rejected || []).length,
     outcomes: outcomes,
     sawTrips: cursor.sawTrips || read.records.length > 0,
