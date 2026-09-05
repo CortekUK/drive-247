@@ -103,13 +103,30 @@ CREATE POLICY "Tenant users can update their own first-run row"
   USING (tenant_id = get_user_tenant_id() OR is_super_admin())
   WITH CHECK (tenant_id = get_user_tenant_id() OR is_super_admin());
 
--- Deleting a row re-arms the wizard for that tenant. Support-only, on purpose:
--- an operator must not be able to clear their own onboarding record, and this
--- is the switch for "put northwind back to a fresh signup" during testing.
+-- Deleting a row re-arms the wizard for that tenant. Two policies:
+--
+--   - super admins, for support — the switch for "put northwind back to a
+--     fresh signup";
+--   - the tenant's OWN head admin, so the local-only /dev page's "Start as a
+--     first-time operator" action works from the head_admin session it is
+--     actually used from. Without this a tenant-role DELETE is a silent no-op
+--     under RLS — PostgREST answers success with zero rows — which is exactly
+--     the failure that page exists to make impossible. Scoped to the caller's
+--     own tenant through get_user_tenant_id() and to the head_admin role
+--     through has_role(), the same STABLE SECURITY DEFINER helpers the rest of
+--     this schema's policies lean on.
+--
+-- Lesser roles (admin, manager, ops, viewer) still cannot clear the record:
+-- the wizard is a one-time surface and re-arming it is an owner's decision.
 DROP POLICY IF EXISTS "Super admins can delete a first-run row" ON public.tenant_first_run;
 CREATE POLICY "Super admins can delete a first-run row"
   ON public.tenant_first_run FOR DELETE
   USING (is_super_admin());
+
+DROP POLICY IF EXISTS "Head admins can delete their own tenant's first-run row" ON public.tenant_first_run;
+CREATE POLICY "Head admins can delete their own tenant's first-run row"
+  ON public.tenant_first_run FOR DELETE
+  USING (tenant_id = get_user_tenant_id() AND has_role(auth.uid(), 'head_admin'));
 
 -- Explicit, matching the RLS above. Supabase's default privileges usually cover
 -- this, but a table whose absence silently blocks the dashboard's first paint

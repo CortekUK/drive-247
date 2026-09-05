@@ -1395,9 +1395,10 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </div>
         )}
 
-        {/* Local-only dev affordance. Self-gating: NODE_ENV, then localhost,
-            then the northwind slug — see dev-section.tsx. Renders null in
-            every other case, and is dropped from a production build entirely. */}
+        {/* Local-only dev affordance: a link to the /dev page. Self-gating:
+            NODE_ENV, then localhost, then the northwind slug — see
+            dev-section.tsx. Renders null in every other case, and is dropped
+            from a production build entirely. */}
         {!collapsed && <DevSection />}
 
         <SidebarMenu>

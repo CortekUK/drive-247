@@ -178,6 +178,17 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/cms': 'cms',
   '/audit-logs': 'audit_logs',
   '/settings': 'settings',
+  // Developer page — local-only, northwind-only (app/(dashboard)/dev). 'dev' is
+  // deliberately NOT in TAB_KEYS: the edge functions that write
+  // manager_permissions validate against their ALLOWED_TAB_KEYS, so no manager
+  // can ever hold this grant, and canView('dev') is therefore false for every
+  // manager. The entry has to exist all the same, because getTabKeyForRoute()
+  // returns null for an unlisted route and canAccessRoute() treats null as
+  // ALLOWED — an unmapped /dev would be open to every manager on the canary.
+  // Non-manager roles are unaffected (canAccessRoute short-circuits to true for
+  // them); the page's own NODE_ENV / localhost / slug / notFound() gates decide
+  // the rest.
+  '/dev': 'dev',
 };
 
 /**
