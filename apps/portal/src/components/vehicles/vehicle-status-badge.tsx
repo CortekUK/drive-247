@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Car, AlertTriangle, CheckCircle, XCircle, Wrench } from "lucide-react";
+import { Car, AlertTriangle, CalendarClock, CheckCircle, XCircle, Wrench } from "lucide-react";
 
 interface VehicleStatusBadgeProps {
   status: string;
@@ -25,8 +25,38 @@ export function resolveVehicleStatus(v: {
   available_daily?: boolean | null;
   available_weekly?: boolean | null;
   available_monthly?: boolean | null;
+  /**
+   * Whether a rental is actually RUNNING on this car right now. Optional on
+   * purpose: every existing caller omits it and keeps today's behaviour exactly.
+   * Pass it only where the answer is known, and 'Rented' splits into the two
+   * states it has always conflated.
+   */
+  has_active_rental?: boolean | null;
 }): string {
   if (v.is_paused) return 'Paused';
+
+  // 'Rented' has always meant two different things, and the badge told the
+  // operator the wrong one. The column is flipped to 'Rented' the moment a
+  // rental row is created -- the portal's New Rental handler does it explicitly
+  // "even for pending rentals" -- but a Pending rental is the PRE-KEY-HANDOVER
+  // state: booked, not yet collected. So a car booked for next week reads
+  // "currently rented out" while it is sitting on the forecourt. An operator
+  // then finds no one holding it, concludes the booking is a ghost, and asks
+  // why the system will not let them re-book it.
+  //
+  // Splitting the label is deliberately done HERE, at the read layer, and not
+  // by changing what gets written. Rewriting the column would move 10 live
+  // vehicles across 6 tenants out of 'Rented', dropping fleet-utilisation KPIs
+  // ~20% overnight with no explanation, and a blanket backfill would also
+  // resurrect the one vehicle that is 'Rented' AND is_disposed. Deriving it
+  // costs no write, no backfill and no audit gap.
+  //
+  // 'Reserved' is NOT 'Available': the car is genuinely claimed and
+  // check_rental_overlap will still refuse a clashing booking. That is the
+  // point -- the badge now agrees with the guard instead of contradicting it.
+  if ((v.status ?? '').toLowerCase() === 'rented' && v.has_active_rental === false) {
+    return 'Reserved';
+  }
   // All three hire durations off = not quotable on any tier. NOTE: this is
   // "off sale", NOT "cannot be booked" — the enquiry picker and the staff New
   // Rental picker both still offer it. Only Pause closes every path.
@@ -63,6 +93,13 @@ const getStatusConfig = (status: string) => {
         icon: Car,
         className: 'bg-slate-800 text-slate-100 hover:bg-slate-700',
         tooltip: 'Vehicle is currently rented out'
+      };
+    case 'reserved':
+      return {
+        variant: 'secondary' as const,
+        icon: CalendarClock,
+        className: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200',
+        tooltip: 'Booked but not yet collected. The car is here, but it is claimed by an upcoming rental, so it cannot be double-booked over those dates.'
       };
     case 'maintenance':
       return {

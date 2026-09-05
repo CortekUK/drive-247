@@ -1277,7 +1277,16 @@ export default function VehicleDetail() {
                     <Car className="h-5 w-5" />
                     Vehicle Details
                   </CardTitle>
-                  <VehicleStatusBadge status={resolveVehicleStatus(vehicle)} showTooltip />
+                  <VehicleStatusBadge
+                    status={resolveVehicleStatus({
+                      ...vehicle,
+                      // `rentals` undefined = still loading. Passing undefined rather
+                      // than false keeps today's label until the answer is known, so
+                      // the badge cannot flicker Rented -> Reserved -> Rented.
+                      has_active_rental: rentals ? activeRentals.length > 0 : undefined,
+                    })}
+                    showTooltip
+                  />
                 </div>
                 <CardDescription>Basic vehicle information and specifications</CardDescription>
               </CardHeader>

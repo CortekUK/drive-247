@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -285,6 +285,41 @@ export default function VehiclesListEnhanced() {
     enabled: !!tenant,
   });
 
+  // Which cars have a rental RUNNING right now, as opposed to merely booked.
+  // vehicles.status is flipped to 'Rented' the moment a rental row is created --
+  // the New Rental handler does it explicitly "even for pending rentals" -- so
+  // the column alone cannot tell "someone is driving it" from "someone has
+  // booked it for next week". Only the badge consumes this; no count, KPI or
+  // utilisation figure reads it, so nothing on this page moves except the label.
+  const { data: activeRentalVehicleIds } = useQuery({
+    queryKey: ["vehicles-active-rental-ids", tenant?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rentals")
+        .select("vehicle_id")
+        .eq("tenant_id", tenant!.id)
+        .eq("status", "Active")
+        .not("vehicle_id", "is", null);
+      if (error) throw error;
+      return new Set((data ?? []).map((r: { vehicle_id: string }) => r.vehicle_id));
+    },
+    enabled: !!tenant,
+  });
+
+  // Undefined while that query is in flight. Returning undefined (not false)
+  // matters: `has_active_rental === false` is what triggers the 'Reserved'
+  // split, so before the data lands every car keeps its existing label and the
+  // badge never flickers Rented -> Reserved -> Rented.
+  const withRentalSignal = useCallback(
+    (v: Vehicle) => ({
+      ...v,
+      has_active_rental: activeRentalVehicleIds
+        ? activeRentalVehicleIds.has((v as { id: string }).id)
+        : undefined,
+    }),
+    [activeRentalVehicleIds]
+  );
+
   const { data: plData = [], isLoading: plLoading } = useQuery({
     queryKey: ["vehicles-pl", tenant?.id],
     queryFn: async () => {
@@ -366,7 +401,7 @@ export default function VehiclesListEnhanced() {
       // operator can see. Filtering on the raw column made 'Unavailable'
       // unselectable and hid paused cars under 'Available'.
       filtered = filtered.filter(
-        vehicle => resolveVehicleStatus(vehicle).toLowerCase() === filters.status.toLowerCase()
+        vehicle => resolveVehicleStatus(withRentalSignal(vehicle)).toLowerCase() === filters.status.toLowerCase()
       );
     }
 
@@ -846,7 +881,7 @@ export default function VehiclesListEnhanced() {
                       </TableCell>
                     )}
                     <TableCell className="text-center">
-                      <VehicleStatusBadge status={resolveVehicleStatus(vehicle)} />
+                      <VehicleStatusBadge status={resolveVehicleStatus(withRentalSignal(vehicle))} />
                     </TableCell>
                     {fleetHealthEnabled && (
                       <TableCell>
