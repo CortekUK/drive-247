@@ -822,6 +822,37 @@ async function main() {
   }
 
 
+  // ------------------------------------------------------------------
+  console.log("\nThe panel says whether the car is actually booked out");
+  {
+    /* The two gates say what was SAVED and what may be RELEASED. Neither
+       answers the only question an operator has -- is my car busy now? -- so
+       the import result leads the reason line. */
+    const state = await runOrchestrator(null);
+    state.gates = { mayWrite: true, mayRelease: false, reason: "Nothing was released." };
+    state.importNote = "3 bookings were imported and their cars are now booked out in Drive247. 2 need you to confirm which car they belong to.";
+    const { doc } = renderInPopup(state);
+    await tick(30);
+    const reason = text(doc, "gReason");
+    ok("it says the cars are booked out", /booked out in Drive247/i.test(reason), reason);
+    ok("...and how many still need a person", /2 need you to confirm/i.test(reason), reason);
+    ok("...without losing the gate's own reason", /Nothing was released/i.test(reason), reason);
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nA run that imported nothing does not invent a note");
+  {
+    const state = await runOrchestrator(null);
+    state.gates = { mayWrite: true, mayRelease: false, reason: "Nothing was released." };
+    state.importNote = null;
+    const { doc } = renderInPopup(state);
+    await tick(30);
+    const reason = text(doc, "gReason");
+    ok("only the gate reason shows", reason === "Nothing was released.", reason);
+    ok("no import claim is made", !/booked out/i.test(reason), reason);
+  }
+
+
   console.log("\n" + passed + " passed, " + failed + " failed\n");
   process.exit(failed ? 1 : 0);
 }

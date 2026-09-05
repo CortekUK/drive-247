@@ -804,7 +804,13 @@ function renderGates(s) {
   els.gWrite.className = s.gates.mayWrite ? "good" : "warn";
   els.gRelease.textContent = s.gates.mayRelease ? "Allowed" : "None — dates stay blocked";
   els.gRelease.className = s.gates.mayRelease ? "good" : "warn";
-  els.gReason.textContent = s.gates.reason || "";
+  /* THE LINE THAT ANSWERS "so is my car booked out now?". The gates above say
+     what was SAVED and what may be RELEASED; neither of them says whether the
+     booking reached the calendar, which is the only thing an operator actually
+     wanted. */
+  var reason = s.gates.reason || "";
+  if (s.importNote) reason = reason ? (s.importNote + " " + reason) : s.importNote;
+  els.gReason.textContent = reason;
 }
 
 /**

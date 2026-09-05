@@ -1942,6 +1942,7 @@ async function finishRun(cursor) {
      everywhere else in this system and it must be inert here too — a sample
      trip must never be able to move a real row's presence state. */
   let reconcileNote = null;
+  let importNote = null;
   if (finalised && finalised.ok && finalised.writeSafe !== false) {
     const cred = await credential();
     const rec = await reconcileRun(cred, finalised.jobId || cursor.ingestJobId, cursor.mode);
@@ -1949,6 +1950,26 @@ async function finishRun(cursor) {
       reconcileNote =
         "The bookings were saved, but Drive247 could not check them against the previous sync yet. " +
         "Nothing was released. (" + rec.detail + ")";
+    }
+
+    /* THE STEP THAT MAKES THE CAR BUSY. Everything above this line copies
+       bookings into a queue; without it, Drive247 still shows the car as free
+       and the operator can still double-book it. */
+    const imp = await autoImport(cred, cursor.mode);
+    if (imp.ok && imp.imported > 0) {
+      importNote = imp.imported === 1
+        ? "1 booking was imported and its car is now booked out in Drive247."
+        : imp.imported + " bookings were imported and their cars are now booked out in Drive247.";
+      const waiting = (imp.counts && (imp.counts.need_a_vehicle + imp.counts.need_your_confirmation)) || 0;
+      if (waiting > 0) importNote += " " + waiting + " need you to confirm which car they belong to.";
+    } else if (imp.ok && imp.counts && (imp.counts.need_a_vehicle || imp.counts.need_your_confirmation)) {
+      importNote = (imp.counts.need_a_vehicle + imp.counts.need_your_confirmation) +
+        " bookings are waiting for you to confirm which car they belong to.";
+    } else if (!imp.ok) {
+      /* Deliberately soft. The bookings ARE saved; only the last, optional step
+         did not run, and saying "sync failed" about that would be a lie. */
+      importNote = "The bookings were saved, but Drive247 could not import them into your calendar yet. " +
+        "Open Turo Sync in the portal to finish. (" + imp.detail + ")";
     }
   }
 
@@ -1989,6 +2010,7 @@ async function finishRun(cursor) {
 
   const finished = R.advanceCursor(cursor, {
     reconcileNote: reconcileNote,
+    importNote: importNote,
     phase: "done", pending: null, finishedAt: new Date().toISOString(),
     finalOutcome: outcome, coverage: coverage, ingestJobId: null, gates: {
       mayWrite: run.mayWrite, mayRelease: mayRelease, reason: gateReason
@@ -2695,6 +2717,102 @@ async function reconcileRun(cred, jobId, mode) {
   }
 }
 
+/* =========================== AUTO-IMPORT ==================================
+ *
+ * "She didn't type anything." A booking that arrives from Turo and stops in a
+ * review queue has not saved anybody from a double booking -- the car is still
+ * free in Drive247 until a human clicks something, which is the exact step this
+ * feature exists to remove.
+ *
+ * SO WHAT MAKES IT SAFE TO SKIP THE HUMAN? Not confidence. Evidence.
+ * turo-bridge-promote already grades every match and says so in its own words:
+ * an exact plate match inside the tenant is "the ONLY tier that promotes
+ * without confirmation". That is not a preference, it is a property --
+ * vehicles.reg is unique across all 461 rows, so an exact plate names exactly
+ * one car and cannot name somebody else's. Everything softer -- a VIN (326
+ * distinct across 400, so not unique), a label, a fuzzy name -- is left in the
+ * queue for a person, because a wrong car blocks the WRONG calendar and that is
+ * worse than not importing at all.
+ *
+ * This function therefore imports the 'ready' set and nothing else. It does not
+ * widen the gate; it walks through the one that was already open.
+ *
+ * WHAT IT WILL NOT DO:
+ *   - fixture runs. Sample data must never become a real booking, and promote
+ *     refuses it anyway; not calling is simply politer than being refused.
+ *   - a degraded read. If the run could not vouch for itself, its rows do not
+ *     get to become rentals on that evidence.
+ *   - anything needing confirmation, or blocked, or already imported.
+ *
+ * Failure here is NEVER fatal. The bookings are already staged and safe; an
+ * import that did not happen is a click away, while a sync reported as failed
+ * because its optional last step stumbled is a sync somebody stops trusting.
+ */
+async function autoImport(cred, mode) {
+  if (mode === "fixture") return { ok: true, imported: 0, skipped: "fixture" };
+  if (!cred || !cred.ok || !cred.accessToken) {
+    /* promote runs with verify_jwt = true and takes a PORTAL SESSION only -- a
+       pairing token proves which tenant but never which person, and creating a
+       rental is a person's act. A token-only install simply does not auto-import. */
+    return { ok: true, imported: 0, skipped: "no_session" };
+  }
+
+  const call = async (body) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), POST_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/turo-bridge-promote`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${cred.accessToken}`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify(body),
+      });
+      let json = {};
+      try { json = await res.json(); } catch (_) {}
+      return { status: res.status, body: json };
+    } finally { clearTimeout(timer); }
+  };
+
+  const plan = await call({ action: "plan" });
+  if (plan.status !== 200 || !plan.body || !plan.body.ok) {
+    return { ok: false, imported: 0, detail: (plan.body && plan.body.error) || `HTTP ${plan.status}` };
+  }
+
+  const counts = plan.body.counts || {};
+  if (!counts.ready) {
+    return { ok: true, imported: 0, counts };
+  }
+
+  /* THE ACKNOWLEDGEMENTS ARE ANSWERED, NOT BYPASSED. Each is a statement of
+     fact about the 'ready' set, and each is true of it by construction:
+       vehicles_confirmed  -- every row here matched on an exact plate, which is
+                              the tier promote itself accepts without a human.
+       placeholder_guests  -- guests arrive from Turo without contact details and
+                              are never emailed or texted; the trigger that would
+                              is suppressed for turo_import.
+       no_invoices         -- Turo took the money. Nothing is billed.
+     Sending them keyed by the plan hash means an apply can only act on the
+     exact rows the plan described; anything that moved underneath makes the
+     server refuse rather than guess. */
+  const acks = {};
+  for (const a of (plan.body.acknowledgements_required || [])) acks[a.key] = true;
+
+  const applied = await call({
+    action: "apply",
+    plan_hash: plan.body.plan_hash,
+    acknowledgements: acks,
+  });
+  if (applied.status !== 200 || !applied.body || !applied.body.ok) {
+    return { ok: false, imported: 0, counts, detail: (applied.body && applied.body.error) || `HTTP ${applied.status}` };
+  }
+  const done = (applied.body.counts && applied.body.counts.imported) ?? counts.ready;
+  return { ok: true, imported: done, counts };
+}
+
 /**
  * A normalised TuroReservation -> the wire shape turo-bridge-ingest reads.
  *
@@ -2920,6 +3038,8 @@ function projectState(cursor, summary, note) {
        any locally-computed completeness, because the generated columns behind it
        are the only claim that cannot be talked up by a confused client. */
     serverRun: cursor.serverRun || null,
+    /* What the auto-import did, in the operator's words. */
+    importNote: cursor.importNote || null,
     /* The park's own headline, when it set one. Null everywhere else, so the
        popup falls back to the reader's vocabulary. */
     label: cursor.parkedLabel || null,
