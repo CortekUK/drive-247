@@ -554,12 +554,12 @@ export const PAGES: PageSpec[] = [
           { key: "email.response_time", label: "Reply time", type: "text", fallback: "Response within 2 hours" },
           { key: "office.address", label: "Address", type: "textarea" },
           { key: "whatsapp.number", label: "WhatsApp", type: "text", hint: "Falls back to your phone number." },
-          { key: "whatsapp.description", label: "WhatsApp note", type: "text", fallback: "Quick response for urgent enquiries" },
+          { key: "whatsapp.description", label: "WhatsApp note", type: "text", fallback: "Quick response for urgent inquiries" },
         ],
       },
       {
         key: "contact_form",
-        title: "Enquiry form",
+        title: "Inquiry form",
         fields: [
           { key: "title", label: "Heading", type: "text", fallback: "Send us a message" },
           { key: "subtitle", label: "Subheading", type: "textarea" },
