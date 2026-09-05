@@ -40,13 +40,21 @@ ALTER TABLE public.tenants
   ALTER COLUMN turo_bridge_enabled SET DEFAULT true;
 
 
--- ── 2. the tenants this was applied for ─────────────────────────────────────
--- Named one at a time and never as a blanket UPDATE. A WHERE clause that
--- matched more rows than intended is how 59 businesses would find a feature
--- they never asked for switched on in their sidebar.
-UPDATE public.tenants
-   SET turo_bridge_enabled = true
- WHERE slug IN ('jangramrentals');
+-- ── 2. existing tenants: DELIBERATELY UNTOUCHED ─────────────────────────────
+-- APPLIED STATE, 2026-09-06: step 1 only. The default is now true, so every
+-- tenant created from here on starts with Turo Sync available. The 59 tenants
+-- that have it off keep it off and can switch it on themselves in
+-- Settings -> General.
+--
+-- jangramrentals was switched on by its own operator through that screen, not
+-- by this file. Nothing here has ever run a blanket UPDATE: a WHERE clause
+-- that matched more rows than intended is how 59 businesses would find a
+-- feature they never asked for sitting in their sidebar.
+--
+-- If a single tenant needs it enabling out of band, name it explicitly:
+--
+--   UPDATE public.tenants SET turo_bridge_enabled = true
+--    WHERE slug IN ('some-tenant-slug');
 
 
 -- ── 3. proof ────────────────────────────────────────────────────────────────
