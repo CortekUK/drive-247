@@ -1258,7 +1258,30 @@
       return { liveSession: false, evidence: "none", turoHostId: null, turoAccountFingerprint: null, probeOutcome: vehiclesRead ? vehiclesRead.outcome : OUTCOME.UNREACHABLE, probedAt: now };
     }
     var hostId = vehiclesRead.turoHostId || null;
-    if (vehiclesRead.items && vehiclesRead.items.length > 0) {
+
+    /* HOW MANY VEHICLES DID WE ACTUALLY SEE?
+       This used to read `vehiclesRead.items` only, and that key NEVER SURVIVES
+       THE TAB BOUNDARY: collectVehicles() in content-turo.js returns
+       { vehicles, itemCount, turoHostId } and drops `items` on the way back
+       through chrome.scripting. So `vehicles_nonempty` could not fire for a
+       real read, and a host with a full fleet was told "no vehicles found".
+
+       It went unnoticed because the bundled fixture's vehicles carry an `owner`
+       key, so the probe fell through to `host_id_in_envelope` and still called
+       the session live. Real Turo vehicles have no owner field on them --
+       measured: { automaticTransmission, id, image, listingCreatedTime, make,
+       marketAreaId, marketCountry, marketCurrency, model, name, registration,
+       status, trim, type, url, vin, year } -- so the fallback was absent too and
+       the whole thing collapsed to vehicles_empty.
+
+       All three shapes are accepted now, because this function is called from
+       both sides of that boundary and must not care which one it got. */
+    var seen =
+      (vehiclesRead.items && vehiclesRead.items.length) ||
+      (vehiclesRead.vehicles && vehiclesRead.vehicles.length) ||
+      (typeof vehiclesRead.itemCount === "number" ? vehiclesRead.itemCount : 0);
+
+    if (seen > 0) {
       return { liveSession: true, evidence: "vehicles_nonempty", turoHostId: hostId, turoAccountFingerprint: null, probeOutcome: OUTCOME.OK, probedAt: now };
     }
     if (hostId) {

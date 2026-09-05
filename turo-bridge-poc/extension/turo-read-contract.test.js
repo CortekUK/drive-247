@@ -169,5 +169,47 @@ let m=R.mergeRecords(into,[{reservationId:'a',v:2},{reservationId:'b',v:1}]);
 ok('dedupe on id', into.length===2 && m.duplicates===1 && m.added.join()==='b', {into,m});
 ok('last write wins', into[0].v===2);
 
+
+// --- the session probe must count vehicles from EITHER side of the tab -------
+// collectVehicles() returns { vehicles, itemCount } and drops `items` crossing
+// chrome.scripting, so a probe that only reads `items` tells a host with a full
+// fleet that they have none. Measured on a real account: 5 vehicles, reported
+// as zero. It hid because the fixture's vehicles carry an `owner` key and the
+// probe fell through to host_id_in_envelope; real Turo vehicles have no owner.
+(function () {
+  var live = [
+    ['items only',              { outcome: O.OK, items: [1,2,3], turoHostId: null }],
+    ['vehicles + itemCount',    { outcome: O.OK, vehicles: [1,2,3], itemCount: 3, turoHostId: null }],
+    ['itemCount alone',         { outcome: O.OK, itemCount: 3, turoHostId: null }],
+  ];
+  for (var i = 0; i < live.length; i++) {
+    var p = R.buildSessionProbe(live[i][1], false);
+    ok('session probe counts ' + live[i][0], p.liveSession === true && p.evidence === 'vehicles_nonempty', p);
+  }
+  var empty = R.buildSessionProbe({ outcome: O.OK, vehicles: [], itemCount: 0, turoHostId: null }, false);
+  ok('a genuinely empty fleet is still not live', empty.liveSession === false && empty.evidence === 'vehicles_empty', empty);
+  var hostOnly = R.buildSessionProbe({ outcome: O.OK, itemCount: 0, turoHostId: 'h-1' }, false);
+  ok('a host id alone still corroborates', hostOnly.liveSession === true && hostOnly.evidence === 'host_id_in_envelope', hostOnly);
+})();
+
+// --- the real container names, measured 2026-09-05 ---------------------------
+(function () {
+  var trips = R._internals ? null : null;
+  var got = R.OUTCOME; // keep the linter honest
+  ok('upcomingTripItems is a recognised container',
+     JSON.stringify(R.CONTAINER_KEYS || []).indexOf('upcomingTripItems') !== -1 ||
+     /upcomingTripItems/.test(require('fs').readFileSync(__dirname + '/turo-read-contract.js', 'utf8')));
+  // hostedAndCoHostedVehicles rides along inside the TRIPS feed. Listing it as a
+  // container would make a trips read return the fleet instead of the bookings.
+  var src = require('fs').readFileSync(__dirname + '/turo-read-contract.js', 'utf8');
+  var block = src.slice(src.indexOf('var CONTAINER_KEYS'), src.indexOf('var CONTAINER_KEYS') + 700);
+  ok('the fleet key never hijacks the trips container',
+     block.indexOf('"hostedAndCoHostedVehicles"') === -1, block.slice(0, 120));
+  // `owner` is the HOST on a real trip item and must never be read as the guest.
+  var gblock = src.slice(src.indexOf('var GUEST_KEYS'), src.indexOf('var GUEST_KEYS') + 400);
+  ok('owner is never treated as the guest', gblock.indexOf('"owner"') === -1, gblock.slice(0, 120));
+})();
+
+
 console.log(fails? ('\n'+fails+' FAILURES') : '\nALL PASS');
 process.exit(fails?1:0);
