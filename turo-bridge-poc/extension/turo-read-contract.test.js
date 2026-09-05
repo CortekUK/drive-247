@@ -211,5 +211,27 @@ ok('last write wins', into[0].v===2);
 })();
 
 
+
+// --- the plate can arrive wrapped in an object ------------------------------
+// Measured on a real host feed: vehicle.registration is
+//   { insuranceCardUrl, licensePlate: "DNKP44", regionRequired, state: "CO" }
+// `registration` is in PLATE_KEYS and matched first, so the plate resolved to an
+// object and 41 real bookings landed with no plate at all. vehicles.reg is
+// unique 461/461 and is the only safe join key to a Drive247 car, so losing it
+// pushes every booking into the review queue.
+(function () {
+  var nested = R.readVehicle({ id: 'v1', make: 'Toyota', model: 'Venza',
+    registration: { insuranceCardUrl: null, licensePlate: 'DNKP44',
+                    regionRequired: false, state: 'CO' } }, null);
+  ok('plate unwrapped from registration object', nested.plateRaw === 'DNKP44', nested);
+  ok('...and normalised', nested.plateNormalised === 'DNKP44', nested);
+
+  var flat = R.readVehicle({ id: 'v2', licensePlate: 'AB12 CDE' }, null);
+  ok('a flat plate still works', flat.plateRaw === 'AB12 CDE' && flat.plateNormalised === 'AB12CDE', flat);
+
+  var none = R.readVehicle({ id: 'v3', make: 'VW' }, null);
+  ok('no plate stays null rather than guessed', none.plateRaw === null && none.plateNormalised === null, none);
+})();
+
 console.log(fails? ('\n'+fails+' FAILURES') : '\nALL PASS');
 process.exit(fails?1:0);

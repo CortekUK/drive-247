@@ -935,6 +935,29 @@
     if (idHit.value !== undefined) { out.turoVehicleId = String(idHit.value).trim(); if (claim) claim(idHit.key); }
 
     var plateHit = pickE(node, PLATE_KEYS);
+
+    /* THE PLATE CAN ARRIVE WRAPPED. Measured on a real host feed, a vehicle's
+       `registration` is not a string at all:
+
+         registration: { insuranceCardUrl, licensePlate: "DNKP44",
+                         regionRequired, state: "CO" }
+
+       `registration` is in PLATE_KEYS and matched first, so the plate resolved
+       to an OBJECT, failed the string test below, and every one of 41 real
+       bookings landed with no plate. That is the expensive field to lose:
+       vehicles.reg is unique 461/461 and is the only safe join key to a
+       Drive247 car, so without it every booking falls back to weaker evidence
+       and lands in the operator's review queue.
+
+       So when the hit is an object, look inside it for the string. The inner
+       names are tried in the same order as the outer ones. */
+    if (plateHit.value && typeof plateHit.value === "object") {
+      var innerPlate = pickE(plateHit.value, PLATE_KEYS);
+      if (typeof innerPlate.value === "string" && innerPlate.value.trim()) {
+        plateHit = { value: innerPlate.value, key: plateHit.key + "." + innerPlate.key };
+      }
+    }
+
     if (typeof plateHit.value === "string" && plateHit.value.trim()) {
       out.plateRaw = plateHit.value.trim();
       out.plateNormalised = out.plateRaw.toUpperCase().replace(/[^A-Z0-9]/g, "") || null;
