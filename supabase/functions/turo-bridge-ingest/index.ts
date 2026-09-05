@@ -319,6 +319,16 @@ async function resolveActor(
 }
 
 /**
+ * The same shape as the database's turo_norm_label(): lowercased, collapsed
+ * whitespace, trimmed. Kept in step deliberately — match_key is what the
+ * UNIQUE (tenant_id, match_key) index dedupes on, so a client and a server that
+ * normalise differently would create two rows for one guest.
+ */
+function normaliseName(value: string): string {
+  return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
  * Normalise the provenance label onto the two values the CHECK constraint
  * permits. One sibling emits "live", the other emits "turo"; both mean the same
  * thing. An UNRECOGNISED value is rejected rather than defaulted, because the
@@ -770,6 +780,51 @@ Deno.serve(async (req) => {
   // THE ONLY SOURCE OF TENANT IDENTITY IN THIS FUNCTION. Narrowed to a plain
   // string here so nothing below has to re-null-check what auth already proved.
   const resolvedTenantId: string = tenantId;
+
+  /* ── THE FEATURE TOGGLE, ENFORCED SERVER-SIDE ──────────────────────────────
+     tenants.turo_bridge_enabled was being honoured by turo-bridge-promote and
+     by the portal's sidebar, and by nothing else. So a tenant who had the
+     feature switched OFF still accumulated staged reservations, sync jobs and
+     guest records the moment anybody pointed an extension at their account —
+     the switch hid a tab and stopped nothing.
+
+     It is checked HERE rather than in the extension because a client-side gate
+     is a suggestion. The extension is the component most likely to be stale,
+     and "is this tenant allowed to use the feature" is not a question we
+     delegate to it, for the same reason we never let it name its own tenant.
+
+     Read AFTER the credential, so the answer is about the tenant the
+     credential actually resolved to and never one named by the caller. */
+  const { data: tenantFlag, error: tenantFlagError } = await supabase
+    .from("tenants")
+    .select("turo_bridge_enabled")
+    .eq("id", resolvedTenantId)
+    .maybeSingle();
+
+  if (tenantFlagError) {
+    /* FAIL CLOSED. An unreadable tenants row is not permission to write. The
+       one exception is a database that predates the column (42703 =
+       undefined_column), where refusing would break every existing install for
+       a flag that cannot yet be set. */
+    if (tenantFlagError.code === "42703") {
+      console.warn(
+        "[TURO-BRIDGE] tenants.turo_bridge_enabled is absent — APPLY " +
+        "turo-bridge-poc/sql/04-turo-sync-flag.sql. Syncing without a feature gate.",
+      );
+    } else {
+      console.error("[TURO-BRIDGE] could not read the tenant flag:", tenantFlagError.message);
+      return errorResponse("Could not verify whether Turo Sync is enabled for this account.", 500);
+    }
+  } else if (tenantFlag?.turo_bridge_enabled !== true) {
+    /* 403, not 401: the credential was perfectly good and re-authenticating
+       will not help. The fix is a switch in the portal, and the message says
+       so rather than sending somebody back to a login screen. */
+    console.warn(`[TURO-BRIDGE] refused: Turo Sync is disabled for tenant ${resolvedTenantId}`);
+    return errorResponse(
+      "Turo Sync is switched off for this Drive247 account. Turn it on in Settings, then sync again.",
+      403,
+    );
+  }
   const nowIso = new Date().toISOString();
 
   // ---- 2. Provenance -----------------------------------------------------
@@ -1121,7 +1176,7 @@ Deno.serve(async (req) => {
       .from("turo_bridge_reservations")
       .upsert(rows, { onConflict: "tenant_id,reservation_id" })
       .select(
-        "id, reservation_id, source, guest_name, vehicle_label, vehicle_plate, starts_at, ends_at, status, turo_status, sync_state, presence_state, total_amount, currency, synced_at",
+        "id, reservation_id, source, guest_name, turo_guest_id, vehicle_label, vehicle_plate, starts_at, ends_at, status, turo_status, sync_state, presence_state, total_amount, currency, synced_at",
       );
 
     if (writeError) {
@@ -1212,6 +1267,103 @@ Deno.serve(async (req) => {
     if (s) { r.row_id = s.id; r.sync_state = s.sync_state; r.presence_state = s.presence_state; }
   }
   const rejected = results.filter((r) => r.action === "rejected").length;
+
+  /* Declared HERE, above the block that assigns it. It previously sat beside
+     `touched` further down, which put the assignment below in the temporal dead
+     zone -- the guests were written and the request then died with a bare 500,
+     which is the worst shape of bug: the work lands and the caller is told it
+     failed. */
+  let stagedGuests = 0;
+
+  // ---- 7b2. Stage the guests as customers --------------------------------
+  //
+  // turo_bridge_customers existed, the portal read it, and NOTHING EVER WROTE
+  // IT — 0 rows against 10 staged reservations. The customers surface was a
+  // table that could only ever be empty.
+  //
+  // Derived here from the reservations that just landed rather than sent as a
+  // second payload by the extension, for three reasons: the wire format does
+  // not change, an older extension starts populating customers the moment this
+  // deploys, and the guest identity can never disagree with the booking it came
+  // from because there is only one copy of it.
+  //
+  // MATCHING IS NOT DONE HERE. Rows land as 'unmatched' with matched_customer_id
+  // NULL, which is what turo_bridge_customers_unmatched_has_no_target insists
+  // on. Deciding that a Turo guest IS a particular Drive247 customer merges two
+  // people's histories, and that is an operator's decision made in the portal —
+  // the same reasoning that keeps confirmed_by NOT NULL on the vehicle map.
+  if (saved.length > 0) {
+    /* One row per guest, not per booking: a guest with three trips is one
+       customer. Keyed on the Turo guest id when there is one, and otherwise on
+       the normalised name, which is the only other identity Turo gives us. */
+    const guests = new Map<string, Record<string, unknown>>();
+    for (const row of saved) {
+      const guestId = asText(row.turo_guest_id, 200);
+      const name = asText(row.guest_name, 200);
+      if (!guestId && !name) continue;              // nothing to identify them by
+
+      /* THE DATABASE GENERATES THIS KEY; we only mirror it.
+         match_key is GENERATED ALWAYS as
+             gid:<lower(trim(turo_guest_id))>   when there is a guest id
+             nm:<turo_norm_label(display_name)> otherwise
+         so the expression below exists purely to dedupe WITHIN this batch and
+         to ask which keys we already hold. Sending the column is an error --
+         "cannot insert a non-DEFAULT value into a generated column" -- and that
+         is the schema doing the right thing: guest identity is derived, not
+         asserted by whichever client happened to call. */
+      const key = guestId ? "gid:" + guestId.trim().toLowerCase() : "nm:" + normaliseName(name as string);
+      if (key === "nm:") continue;
+
+      const existing = guests.get(key);
+      if (existing) {
+        // Keep the fullest identity we saw across the batch.
+        if (!existing.turo_guest_id && guestId) existing.turo_guest_id = guestId;
+        if (!existing.display_name && name) existing.display_name = name;
+        continue;
+      }
+      guests.set(key, {
+        tenant_id: resolvedTenantId,
+        turo_guest_id: guestId,
+        display_name: name,
+        /* display_name_norm and match_key are BOTH generated columns. Supplying
+           either is rejected outright, so they are deliberately absent here. */
+        match_state: "unmatched",
+        last_seen_job_id: jobId,
+        last_seen_at: nowIso,
+        updated_at: nowIso,
+        /* Provenance, so a support question can be answered without guessing
+           which sync a guest arrived on. */
+        raw: { source: resolvedSource, first_reservation_id: row.reservation_id },
+      });
+    }
+
+    if (guests.size > 0) {
+      const rows = [...guests.values()];
+      /* first_seen_job_id only on rows we have never held, exactly as
+         reservations do it — otherwise every re-sync rewrites history. */
+      const keys = [...guests.keys()];
+      const { data: known } = await supabase
+        .from("turo_bridge_customers")
+        .select("match_key")
+        .eq("tenant_id", resolvedTenantId)
+        .in("match_key", keys);
+      const knownKeys = new Set((known ?? []).map((k) => k.match_key as string));
+      let i = 0;
+      for (const k of guests.keys()) { if (!knownKeys.has(k)) rows[i].first_seen_job_id = jobId; i++; }
+
+      const { error: custError } = await supabase
+        .from("turo_bridge_customers")
+        .upsert(rows, { onConflict: "tenant_id,match_key" });
+      if (custError) {
+        /* NEVER FATAL. The reservations already landed and they are the
+           valuable half; a guest row that failed to stage costs a name in a
+           list, not a booking. */
+        console.error("[TURO-BRIDGE] guest staging failed:", custError.message);
+      } else {
+        stagedGuests = guests.size;
+      }
+    }
+  }
 
   // ---- 7c. Touch the rows that were present and unchanged ----------------
   // Reached only past the degraded gate in section 4, so a read we could not
@@ -1329,6 +1481,7 @@ Deno.serve(async (req) => {
   console.log(
     `[TURO-BRIDGE] run ${jobId}: +${created} new, ${updated} updated, ${rejected} rejected ` +
       (touched ? ` (+${touched} unchanged)` : "") +
+      (stagedGuests ? ` (${stagedGuests} guest${stagedGuests === 1 ? "" : "s"})` : "") +
       ` (source=${resolvedSource}, tenant ${resolvedTenantId}, auth ${credentialKind}` +
         (pairing ? `, token column '${pairing.column_used}'` : "") + ")",
   );
