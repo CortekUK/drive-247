@@ -120,10 +120,10 @@ export function ContactView() {
       message: sanitizeTextArea(v.message),
     });
     if (error) {
-      toast.error("Your enquiry could not be sent. Please try again or call us.");
+      toast.error("Your inquiry could not be sent. Please try again or call us.");
       throw error;
     }
-    toast.success("Enquiry sent — we'll be in touch shortly.");
+    toast.success("Inquiry sent — we'll be in touch shortly.");
   };
 
   return (

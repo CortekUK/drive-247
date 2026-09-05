@@ -327,7 +327,7 @@ export function ContactPage({
 
         <Reveal delay={80}>
           <form onSubmit={submit} className="cbp-card p-6 sm:p-7">
-            <h2 className="cbp-h3">Send an enquiry</h2>
+            <h2 className="cbp-h3">Send an inquiry</h2>
             <p className="mt-1 text-[13px] text-[var(--body)]">
               Tell us what you need and we&apos;ll get back to you.
             </p>
@@ -335,7 +335,7 @@ export function ContactPage({
             {sent && (
               <p className="mt-5 flex items-center gap-2 rounded-[var(--r-sm)] bg-[var(--brand-soft)] px-4 py-3 text-[13px] font-semibold text-[var(--brand-ink)]">
                 <Icon name="checkCircle" className="h-4 w-4 shrink-0" />
-                Thanks — your enquiry has been sent.
+                Thanks — your inquiry has been sent.
               </p>
             )}
 
@@ -362,7 +362,7 @@ export function ContactPage({
             </label>
 
             <button type="submit" disabled={sending} className="cbp-btn cbp-btn-primary mt-5 w-full">
-              {sending ? "Sending…" : "Send enquiry"}
+              {sending ? "Sending…" : "Send inquiry"}
               {!sending && <Icon name="arrow" className="cbp-arrow h-4 w-4" />}
             </button>
           </form>

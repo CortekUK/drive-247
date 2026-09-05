@@ -410,7 +410,7 @@ function EnquireLink({ vehicleId }: { vehicleId: string }) {
       onClick={() => openEnquiry(vehicleId)}
       className="cbp-form-link !text-[13px] !font-semibold"
     >
-      Enquire
+      Inquire
     </button>
   );
 }

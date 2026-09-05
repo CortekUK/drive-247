@@ -96,7 +96,7 @@ export function CbpEnquiryDialog({
       });
 
       if (error) {
-        toast.error(error.message || "Failed to submit enquiry. Please try again.");
+        toast.error(error.message || "Failed to submit inquiry. Please try again.");
         return;
       }
       if (data && (data as { error?: string }).error) {
@@ -105,7 +105,7 @@ export function CbpEnquiryDialog({
       }
 
       setDone(true);
-      toast.success("Enquiry submitted — we'll be in touch shortly.");
+      toast.success("Inquiry submitted — we'll be in touch shortly.");
     } catch (err) {
       console.error("submit-enquiry invoke error", err);
       toast.error("Something went wrong. Please try again.");
@@ -130,7 +130,7 @@ export function CbpEnquiryDialog({
     <CbpModal
       open={open}
       onOpenChange={onOpenChange}
-      title={done ? "Enquiry sent" : "Send an enquiry"}
+      title={done ? "Inquiry sent" : "Send an inquiry"}
       description={done
         ? undefined
         : "Tell us what you need and when. We'll come back to you on availability — even for dates you can't book online."}
@@ -229,7 +229,7 @@ export function CbpEnquiryDialog({
             <button type="submit" className="cbp-btn cbp-btn-primary" disabled={submitting}>
               {submitting
                 ? <><span className="cbp-spinner" aria-hidden="true" /> Sending…</>
-                : <>Send enquiry <Icon name="arrow" className="cbp-arrow h-4 w-4" /></>}
+                : <>Send inquiry <Icon name="arrow" className="cbp-arrow h-4 w-4" /></>}
             </button>
           </div>
         </form>

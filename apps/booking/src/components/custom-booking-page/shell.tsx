@@ -101,7 +101,7 @@ export function Nav({ c, mode, onToggleMode }: { c: CbpContent; mode: CbpMode | 
               className="cbp-btn cbp-btn-ghost cbp-hide-sm !py-2.5"
             >
               <Icon name="chat" className="h-4 w-4 shrink-0" />
-              Enquiry
+              Inquiry
             </button>
           )}
           {c.phoneHref && (
