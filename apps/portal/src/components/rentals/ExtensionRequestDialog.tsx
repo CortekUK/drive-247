@@ -270,11 +270,33 @@ export function ExtensionRequestDialog({
         .eq('tenant_id', tenant.id);
 
       if (updateError) {
-        // Catch DB exclusion constraint violation with a friendly message
-        if (updateError.message?.includes('no_overlapping_vehicle_rentals')) {
-          throw new Error('Cannot approve extension: another rental overlaps with the new dates on this vehicle. Please resolve the scheduling conflict first.');
+        // This used to test for the exclusion constraint `no_overlapping_vehicle_rentals`.
+        // That constraint no longer exists -- pg_constraint holds only
+        // `blocked_dates_no_overlapping_maintenance` -- so the branch was dead and every
+        // clash fell through to the raw-message line below. Overlaps are now raised by the
+        // check_rental_overlap trigger, which is why we key on the SQLSTATE instead of a
+        // name: 23P01 rental-vs-rental, 23P02 maintenance hold, 23P05 operator block.
+        //
+        // The trigger puts the conflict's identity in DETAIL (rental number, status and
+        // dates) precisely so a human can act on it; appending it is the whole point.
+        // This is a staff-only portal screen, so surfacing it here is safe -- the
+        // customer-facing booking app deliberately reads .message only.
+        const code = (updateError as { code?: string }).code;
+        const detail =
+          (updateError as { details?: string }).details ||
+          (updateError as { hint?: string }).hint ||
+          '';
+        const suffix = detail ? ` ${detail}` : '';
+
+        if (code === '23P01' || /vehicle rental overlap/i.test(updateError.message || '')) {
+          throw new Error(
+            `Cannot approve extension: another rental overlaps the new dates on this vehicle.${suffix} Please resolve the scheduling conflict first.`
+          );
         }
-        throw new Error(`Failed to approve extension: ${updateError.message}`);
+        if (code === '23P02' || code === '23P05') {
+          throw new Error(`Cannot approve extension: ${updateError.message}${suffix}`);
+        }
+        throw new Error(`Failed to approve extension: ${updateError.message}${suffix}`);
       }
 
       // Create Stripe checkout FIRST — the edge function (service role) creates
