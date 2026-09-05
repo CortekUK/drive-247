@@ -1522,6 +1522,22 @@
       parts.push(done === 1
         ? "1 booking was imported and its car is now booked out in Drive247."
         : done + " bookings were imported and their cars are now booked out in Drive247.");
+    } else if (n(c.ready)) {
+      /* THE CASE THAT SHIPPED SILENT. Drive247 answered 200, said 42 bookings
+         were READY, and imported none of them -- because every insert hit a
+         column that does not exist. Nothing in the counts was an error, so
+         every branch here was false and the panel printed an empty string on a
+         run that had just half-applied itself into a live account.
+
+         "Ready but none imported" is never a normal outcome. A plan that can
+         name the rows it would create and then creates none has failed, and
+         the operator has to hear that even when the server called it a
+         success. */
+      parts.push((n(c.ready) === 1
+        ? "1 booking was ready to import but was not created"
+        : n(c.ready) + " bookings were ready to import but none were created") +
+        ". Nothing is booked out yet — this is a fault on the Drive247 side, not your data. " +
+        "Contact Drive247 support and quote this sync.");
     }
 
     var waiting = n(c.need_a_vehicle) + n(c.need_your_confirmation);

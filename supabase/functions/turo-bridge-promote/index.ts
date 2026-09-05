@@ -709,13 +709,28 @@ Deno.serve(async (req) => {
           detail: {
             turo_reservation_id: row.reservation_id,
             vehicle_reg: v.vehicle_reg,
-            note: "Drive247 already has a booking on this car for these dates, so the Turo trip was not imported. Someone needs to look at this: two people may be expecting the same car.",
+            /* The database's own sentence, verbatim. It distinguishes an
+               existing booking from maintenance from an operator block, and
+               those need three different actions from a person -- a fixed
+               string claiming "already has a booking" would be wrong two times
+               in three. */
+            reason: outcome.reason,
+            note: "This car is not free for these dates in Drive247, so the Turo trip was not imported. Someone needs to look at this: two people may be expecting the same car.",
           },
         });
         await supabase.from("turo_bridge_reservations")
           .update({ sync_state: "conflict", state_reason: "overlaps an existing Drive247 booking", updated_at: nowIso })
           .eq("id", row.id).eq("tenant_id", tenantId);
       }
+      /* SAY IT OUT LOUD. `because` only ever reached the HTTP response, so 41
+         consecutive failures of the same kind produced ZERO log lines and the
+         batch recorded a bare "0 imported" with no reason attached to it. The
+         reason is the whole diagnosis; it belongs where someone reading the
+         logs after the fact will find it. */
+      console.error(
+        `[TURO-PROMOTE] not imported (${outcome.conflict ? "conflict" : "error"}) ` +
+        `reservation ${row.reservation_id}: ${outcome.reason}`,
+      );
       results.push({ reservation_id: row.reservation_id, imported: false, because: outcome.reason });
       continue;
     }
@@ -977,18 +992,38 @@ async function insertRental(
         // document_status stays at its 'pending' default. Turo held its own
         // agreement; claiming 'completed' would be a lie, and the booking
         // appearing in the agreements queue with a Turo badge is honest.
-        notes: `Imported from Turo trip ${row.reservation_id}. Payment was collected by Turo; no Drive247 invoice was raised.`,
+        //
+        // ⚠ THERE IS NO `notes` COLUMN ON `rentals`. One was written here, and
+        //   PostgREST rejected EVERY insert for it -- 41 real bookings on a live
+        //   account produced 41 customers, 11 vehicle mappings, and not one
+        //   rental. The provenance that sentence carried is already on the row
+        //   and in stronger form: `source = 'turo_import'`,
+        //   `turo_reservation_id`, `turo_promoted_at` and `turo_total_amount`
+        //   are queryable, which prose never was. Do not reinstate it against a
+        //   column that does not exist.
       })
       .select("id, rental_number").single();
 
     if (!error) return { ok: true, rentalId: data!.id as string, rentalNumber: (data!.rental_number as string) ?? null };
 
-    // 23P01 exclusion_violation / 23P02 — check_rental_overlap. The car is
-    // already sold for these dates. A same-day turnaround lands here too:
-    // rentals dates are DATE with an INCLUSIVE end, so a 10:00 handback and a
-    // 16:00 pickup on one date read as an overlap. Reported for a human; never
-    // silently date-shifted to make it fit.
-    if (error.code === "23P01" || error.code === "23P02" || /overlap/i.test(error.message)) {
+    /* check_rental_overlap() raises THREE distinct codes, and this used to
+       recognise two:
+         23P01  another active or pending rental covers these dates
+         23P02  the vehicle is off the road for maintenance
+         23P05  the operator has blocked these dates
+       Only the first two were matched, and 23P05's message ("Vehicle is
+       unavailable: the operator has blocked ...") contains no word the
+       /overlap/i fallback could catch -- so a car the operator had
+       deliberately blocked was reported as an unexplained failure instead of
+       as the collision it is. All three mean the same thing to an importer:
+       THIS CAR IS NOT FREE THEN. Reported for a human; never silently
+       date-shifted to make it fit.
+
+       A same-day turnaround lands here too: rental dates are DATE with an
+       INCLUSIVE end, so a 10:00 handback and a 16:00 pickup on one date read
+       as an overlap. */
+    if (error.code === "23P01" || error.code === "23P02" || error.code === "23P05" ||
+        /overlap/i.test(error.message)) {
       return { ok: false, reason: error.message, conflict: true };
     }
     // Only a rental_number collision is worth another spin of the wheel.

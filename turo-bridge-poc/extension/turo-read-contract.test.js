@@ -283,5 +283,34 @@ ok('last write wins', into[0].v===2);
   ok('a missing result stays null', R.importOutcomeNote(null) === null);
 })();
 
+
+// --- ready, but nothing created -------------------------------------------
+// This shipped silent. A real import on a live account returned HTTP 200 with
+// counts {ready: 42, imported: 0}: every rental insert had failed against a
+// column that does not exist, so 41 customers and 11 vehicle mappings were
+// written and not one booking. No count said "error", so every branch was
+// false and the panel printed nothing at all.
+(function () {
+  var stuck = R.importOutcomeNote({
+    ok: true, imported: 0,
+    counts: { ready: 42, need_a_vehicle: 0, need_your_confirmation: 0, already_imported: 0, cannot_import: 0 }
+  });
+  ok('a plan that created nothing is never silent', !!stuck, stuck);
+  ok('...it says how many should have landed', stuck.indexOf('42 bookings were ready') === 0, stuck);
+  // The phrase appears as a DENIAL ("Nothing is booked out yet"); what must
+  // never appear is the claim that cars ARE now booked out.
+  ok('...it does not claim any car is booked out', stuck.indexOf('now booked out') === -1, stuck);
+  ok('...and it does not blame the operator', /fault on the Drive247 side/.test(stuck), stuck);
+
+  var one = R.importOutcomeNote({ ok: true, imported: 0, counts: { ready: 1 } });
+  ok('singular reads as English', one.indexOf('1 booking was ready to import but was not created') === 0, one);
+
+  // A run with nothing ready is a different thing and still says nothing.
+  ok('nothing ready stays quiet', R.importOutcomeNote({ ok: true, imported: 0, counts: { ready: 0 } }) === null);
+  // And a partial success reports the half that worked, not the half that did not.
+  var half = R.importOutcomeNote({ ok: true, imported: 3, counts: { ready: 3 } });
+  ok('a successful import is unaffected', half.indexOf('3 bookings were imported') === 0, half);
+})();
+
 console.log(fails? ('\n'+fails+' FAILURES') : '\nALL PASS');
 process.exit(fails?1:0);
