@@ -20,6 +20,7 @@ import { AlertTriangle, CheckCircle2, CircleDashed, Database, Info, XCircle } fr
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  TURO_FOUNDATION_MISSING_DETAIL,
   TURO_SYNC_STATE_LABEL,
   type SyncStateReading,
   type TuroSyncState,
@@ -154,10 +155,21 @@ export function SchemaMissing({
           <Database className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
         </div>
         <h3 className="text-lg font-semibold mb-2 text-center">{what} is not set up yet</h3>
-        <p className="text-muted-foreground text-center max-w-lg text-sm">{message}</p>
+        {/*
+          `message` is operator copy and stays free of file paths. The engineering
+          detail rides along as hover text so a support call can still get the
+          exact outstanding step out of the screen without it being shouted at
+          somebody who cannot act on it.
+        */}
+        <p
+          className="text-muted-foreground text-center max-w-lg text-sm"
+          title={TURO_FOUNDATION_MISSING_DETAIL}
+        >
+          {message}
+        </p>
         <p className="text-xs text-muted-foreground text-center max-w-lg mt-3">
-          This is not the same as having no records. Until the schema is installed, this screen
-          cannot tell you whether there is work here or not — so it will not pretend there is
+          This is not the same as having nothing to do. Until setup is finished, this screen
+          cannot tell you whether there is work waiting here — so it will not pretend there is
           none.
         </p>
       </CardContent>
@@ -271,7 +283,7 @@ export function SyncStateText({ reading }: { reading: SyncStateReading }) {
     return (
       <span
         className="text-sm text-muted-foreground italic"
-        title="This row has no reconciliation state — the Turo foundation schema is not installed, so nothing has classified it yet."
+        title="Drive247 has not classified this trip yet — that part of Turo Sync is not set up on this account."
       >
         Not classified
       </span>

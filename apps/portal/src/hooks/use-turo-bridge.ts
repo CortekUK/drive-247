@@ -462,14 +462,27 @@ export function isMissingColumn(error: unknown): boolean {
 }
 
 /**
- * The message an operator should see when the Turo foundation schema has not
- * been applied. It names the file, because the fix is one `psql` run and the
- * person reading this screen is usually the person who can do it.
+ * What an OPERATOR sees when the Turo foundation schema has not been applied.
+ *
+ * This used to name the two .sql files, on the reasoning that whoever reads
+ * this screen can apply them. That is true of us and false of the person this
+ * product is for: a rental operator cannot act on "turo-bridge-poc/sql/
+ * 03-foundation-schema.sql", and pasting a repo path into their portal reads as
+ * a crash rather than as a setup step. So the sentence now says what is
+ * unavailable, that their trips are safe, and who unblocks it — the three
+ * things they can actually use — and the file names moved to
+ * TURO_FOUNDATION_MISSING_DETAIL, which the UI carries as hover text so support
+ * and engineering lose nothing.
  */
 export const TURO_FOUNDATION_MISSING_MESSAGE =
-  "The Turo reconciliation schema is not installed on this database yet " +
-  "(turo-bridge-poc/sql/01-schema.sql and 03-foundation-schema.sql have not been applied). " +
-  "Reservations already synced are still listed; sync history, vehicle mapping and promotion are unavailable until it is.";
+  "Turo Sync is not fully set up on this account yet. Trips already synced are safe and still " +
+  "listed, but they cannot be matched to your cars, imported as bookings, or shown in a sync " +
+  "history until Drive247 finishes the setup. Contact Drive247 support to have it completed.";
+
+/** The engineering half of the sentence above. Hover text, never body copy. */
+export const TURO_FOUNDATION_MISSING_DETAIL =
+  "Setup step outstanding: turo-bridge-poc/sql/01-schema.sql and 03-foundation-schema.sql have " +
+  "not been applied to this database.";
 
 /**
  * `supabase.functions.invoke` collapses every non-2xx into a generic
@@ -1251,5 +1264,130 @@ export function useTuroPromotion() {
     /** The plan currently approved-in-UI, or null. */
     currentPlan: (plan.data as TuroPromotionPlan | undefined) ?? null,
     reset,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * 7. FRESHNESS — the only liveness fact this database can actually answer
+ * ──────────────────────────────────────────────────────────────────────────*/
+
+/**
+ * ⚠ READ THIS BEFORE USING ANY OF IT.
+ *
+ * `turo_sync_jobs` does not exist on this project (see the file header), so
+ * `useTuroSyncHealth` is permanently `schemaMissing` and every job-derived
+ * freshness claim — "last read", "complete", "partial" — is structurally
+ * unanswerable. That left the screen with NO working freshness signal at all,
+ * and silence on a page like this reads as "up to date", which is the single
+ * claim this feature must never make.
+ *
+ * The one liveness fact that IS live today is MAX(synced_at) over the rows we
+ * hold. It answers a NARROWER question than a job would, and the difference is
+ * load-bearing rather than pedantic:
+ *
+ *   MAX(synced_at)          = when a trip row was last WRITTEN.
+ *   job.finished_at         = when a sync last RAN.
+ *
+ * A sync that reached Turo, read the whole calendar and found nothing new can
+ * leave `synced_at` untouched, so this signal can eventually accuse a perfectly
+ * healthy setup of being stale. It cannot do the opposite — it can never claim
+ * freshness that did not happen — and that asymmetry is why it is safe to ship
+ * as an interim: it errs toward "go and check", never toward "all good".
+ *
+ * Every consumer must carry that caveat in its copy. The moment
+ * 03-foundation-schema.sql lands, replace this with `health.latest.finished_at`
+ * and delete it; it is a stopgap with a named successor, not a design.
+ */
+
+/** Hours since the last row was written before we stop calling it fresh. */
+export const TURO_FRESHNESS_STALE_HOURS = 24;
+/** Hours after which the list must be described as a stale copy, not a copy. */
+export const TURO_FRESHNESS_VERY_STALE_HOURS = 72;
+
+export type TuroFreshnessTier = "never" | "fresh" | "stale" | "very_stale";
+
+export interface TuroFreshness {
+  /** ISO timestamp of the newest `synced_at` we hold, or null if there are none. */
+  lastSyncedAt: string | null;
+  /** Hours since `lastSyncedAt`. Null when nothing has ever been synced. */
+  ageHours: number | null;
+  /** Whole days since `lastSyncedAt`, floored. Null when never. */
+  ageDays: number | null;
+  tier: TuroFreshnessTier;
+  /**
+   * The caveat above, in one sentence, so a component cannot render this value
+   * without having the honest qualifier to hand.
+   */
+  caveat: string;
+}
+
+export const TURO_FRESHNESS_CAVEAT =
+  "This is the last time a trip row was written. A sync that reached Turo and found nothing " +
+  "new may not move it.";
+
+/**
+ * Newest `synced_at` across the given rows.
+ *
+ * Computed explicitly rather than read off `rows[0]`. The list query orders by
+ * `synced_at desc` today, so `rows[0]` would be correct today — and would
+ * silently start lying the first time somebody changes that ORDER BY or feeds
+ * this a filtered subset. A freshness signal that depends on a sibling's sort
+ * order is exactly the kind of quiet wrongness this feature exists to avoid.
+ * Rows with an unparseable timestamp are skipped rather than treated as epoch 0.
+ */
+export function readLastSyncedAt(rows: readonly TuroBridgeRow[]): string | null {
+  let bestIso: string | null = null;
+  let bestT = -Infinity;
+  for (const row of rows) {
+    if (!row?.synced_at) continue;
+    const t = new Date(row.synced_at).getTime();
+    if (!Number.isFinite(t)) continue;
+    if (t > bestT) {
+      bestT = t;
+      bestIso = row.synced_at;
+    }
+  }
+  return bestIso;
+}
+
+/**
+ * How stale the list is, in the three bands the page renders differently.
+ *
+ * Note there is no "fresh enough, say nothing" band. Even under 24h the caller
+ * is expected to say what is NOT on the page — anything booked or cancelled on
+ * Turo since the last write — because a Turo calendar changes without asking us.
+ */
+export function describeSyncFreshness(
+  rows: readonly TuroBridgeRow[],
+  now: Date = new Date(),
+): TuroFreshness {
+  const lastSyncedAt = readLastSyncedAt(rows);
+  if (!lastSyncedAt) {
+    return {
+      lastSyncedAt: null,
+      ageHours: null,
+      ageDays: null,
+      tier: "never",
+      caveat: TURO_FRESHNESS_CAVEAT,
+    };
+  }
+  // Clamp at zero: a row written by a server whose clock is a minute ahead of
+  // the browser's must not render as "in 1 minute".
+  const ageHours = Math.max(
+    0,
+    (now.getTime() - new Date(lastSyncedAt).getTime()) / 3_600_000,
+  );
+  const tier: TuroFreshnessTier =
+    ageHours >= TURO_FRESHNESS_VERY_STALE_HOURS
+      ? "very_stale"
+      : ageHours >= TURO_FRESHNESS_STALE_HOURS
+        ? "stale"
+        : "fresh";
+  return {
+    lastSyncedAt,
+    ageHours,
+    ageDays: Math.floor(ageHours / 24),
+    tier,
+    caveat: TURO_FRESHNESS_CAVEAT,
   };
 }

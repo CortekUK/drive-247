@@ -74,6 +74,27 @@ interface Tenant {
   lead_management_enabled: boolean | null;
   automations_enabled: boolean | null;
   vehicle_owners_enabled: boolean | null;
+  /**
+   * Turo Sync. When true this tenant's portal shows the Turo Sync screen and
+   * its sidebar entry; when false both are hidden.
+   *
+   * This is a VISIBILITY PREFERENCE, not an authorization boundary. The Turo
+   * rows are fenced by RLS on turo_bridge_reservations (tenant_id =
+   * get_user_tenant_id() OR is_super_admin()) and the flag appears in no
+   * policy — so a session that can already read this tenant's Turo rows can
+   * still read them from PostgREST with the flag off.
+   *
+   * anon SHOULD hold a column-level SELECT grant for this (see the note on
+   * allow_rental_without_id_verification below for the full mechanism —
+   * Postgres refuses the whole ROW, not the column), applied by
+   * turo-bridge-poc/sql/04-turo-sync-flag.sql. It is NOT a ship blocker: this
+   * column lives in TENANT_OPTIONAL_COLUMNS rather than the core list precisely
+   * so the 42501 retry sheds it, which means merging this file before that SQL
+   * costs the login page a flag it never reads instead of costing every tenant
+   * its branding. That is also why the type is nullable and every reader must
+   * use `=== true` — undefined is a real, expected value here.
+   */
+  turo_bridge_enabled?: boolean | null;
   lead_stale_threshold_hours: number | null;
   lead_auto_lost_threshold_hours: number | null;
   communication_tone: string | null;
@@ -119,6 +140,38 @@ const TENANT_CORE_COLUMNS =
 
 const TENANT_INSHUR_COLUMNS =
   'integration_inshur, inshur_mode, inshur_customer_number, inshur_policy_number, inshur_states_allowed, inshur_states_synced_at, inshur_billing_mode';
+
+/**
+ * Columns the portal WANTS but can survive without, kept out of the core list
+ * on purpose so the 42501 retry below can shed them.
+ *
+ * `anon` holds COLUMN-level grants on `tenants` and no table grant, and
+ * Postgres refuses the whole ROW when any selected column is ungranted — so a
+ * column added to the CORE list before its GRANT lands takes branding and login
+ * down for every tenant at once (it has happened, with customer_theme_mode).
+ * Putting a new flag here first removes that ordering hazard entirely: the
+ * authenticated dashboard, which holds a table-level grant, gets it on the
+ * first attempt; the anon login page falls back and simply does without it.
+ *
+ * `turo_bridge_enabled` (the Turo Sync switch) is only ever read inside the
+ * authenticated dashboard — the sidebar entry and the Turo Sync route guard.
+ *
+ * ⚠ Do NOT read that as "shedding it on the anon path costs nothing". This
+ * provider fetches ONCE on mount with `[]` deps and never refetches on an auth
+ * change, and the login page redirects with router.replace(), which keeps the
+ * root layout — and therefore this provider — mounted. The tenant object built
+ * on the LOGGED-OUT login page is the one the dashboard then uses for the whole
+ * session, so anything shed here is missing in the dashboard too, until a hard
+ * refresh. That is why the retry ladder below has a middle rung: these columns
+ * are shed only when they are themselves ungranted, never as collateral damage
+ * from the INSHUR group, which anon can never read.
+ *
+ * Until turo-bridge-poc/sql/04-turo-sync-flag.sql is applied the flag reads
+ * undefined on the anon path and the feature renders as OFF — fail-closed, no
+ * outage. Once it is applied, rung 2 picks it up. Promoting it into the core
+ * list buys nothing and reintroduces the ordering hazard; leave it here.
+ */
+const TENANT_OPTIONAL_COLUMNS = 'turo_bridge_enabled';
 
 // Domains that belong to us — NOT custom tenant domains
 const PLATFORM_DOMAINS = ['drive-247.com', 'localhost', 'vercel.app'];
@@ -255,7 +308,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           .single();
 
       let { data, error: queryError } = await queryTenant(
-        `${TENANT_CORE_COLUMNS}, ${TENANT_INSHUR_COLUMNS}`
+        `${TENANT_CORE_COLUMNS}, ${TENANT_INSHUR_COLUMNS}, ${TENANT_OPTIONAL_COLUMNS}`
       );
 
       // `anon` holds COLUMN-level grants on `tenants`, not a table grant
@@ -265,10 +318,53 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // column takes down branding and login for every tenant. That has already
       // happened once, with customer_theme_mode. Retry without the newest
       // columns rather than let a missing GRANT lock operators out.
+      //
+      // The ladder sheds ONE GROUP AT A TIME, and the order matters.
+      //
+      // It was briefly two rungs — everything, then core-only — which quietly
+      // made TENANT_OPTIONAL_COLUMNS unreadable for anyone without a session.
+      // Measured against production 2026-09-05: `anon` holds ZERO grants on all
+      // seven INSHUR columns, so rung 1 does not merely *sometimes* fail on the
+      // anon path, it fails EVERY time (HTTP 401, code 42501). A two-rung ladder
+      // therefore dropped the optional columns on every single logged-out load,
+      // whether or not they had a grant of their own.
+      //
+      // That is not confined to the login page, because nothing here refetches:
+      // loadTenant() runs once on mount with `[]` deps, and signing in navigates
+      // with router.replace() — a client-side push that keeps the root layout,
+      // and therefore this provider, mounted. So the tenant object assembled
+      // ANONYMOUSLY survives into the authenticated dashboard for the rest of
+      // the session: an operator with Turo Sync switched ON would see no sidebar
+      // entry until their next hard refresh, which reads as a broken toggle.
+      //
+      // Rung 2 separates those two failures. INSHUR is shed first because it is
+      // the group known to be ungranted; the optional flags then get their own
+      // chance and reach rung 3 only if they are genuinely ungranted too. Safe
+      // in both directions: before the GRANT lands rung 3 catches it and nobody
+      // is locked out, and after it lands the flag is readable without a session.
+      //
+      // Anything in TENANT_CORE_COLUMNS still has NO fallback — every rung keeps
+      // the core list — which is exactly why a new flag belongs in
+      // TENANT_OPTIONAL_COLUMNS until its GRANT has been applied and proven with
+      // a real anon-key read.
       if (queryError && queryError.code !== 'PGRST116') {
         console.warn(
           '[TenantContext] Full tenant select failed; retrying without the INSHUR columns. ' +
             'If this persists, GRANT SELECT on them to anon. Cause:',
+          queryError.message
+        );
+        ({ data, error: queryError } = await queryTenant(
+          `${TENANT_CORE_COLUMNS}, ${TENANT_OPTIONAL_COLUMNS}`
+        ));
+      }
+
+      if (queryError && queryError.code !== 'PGRST116') {
+        console.warn(
+          '[TenantContext] Retry without INSHUR also failed; falling back to the core columns ' +
+            'alone. The optional columns (' +
+            TENANT_OPTIONAL_COLUMNS +
+            ') will read as undefined for this load, so the features behind them render as ' +
+            'OFF. Apply the column GRANT in turo-bridge-poc/sql/04-turo-sync-flag.sql. Cause:',
           queryError.message
         );
         ({ data, error: queryError } = await queryTenant(TENANT_CORE_COLUMNS));
@@ -278,6 +374,21 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         if (queryError.code === 'PGRST116') {
           console.warn(`[TenantContext] No active tenant found for slug: ${slug}`);
           setError(`Tenant "${slug}" not found or inactive`);
+        } else if (queryError.code === '42501') {
+          // No rung below this one: 42501 here means an ungranted column in
+          // TENANT_CORE_COLUMNS. Say so explicitly, because Postgres will not.
+          // It answers HTTP 401 with 'permission denied for table tenants' —
+          // blaming the TABLE and never naming the column — which is what turns
+          // a one-line GRANT into an afternoon spent chasing a phantom auth bug.
+          console.error(
+            '[TenantContext] COLUMN GRANT MISSING. A column in TENANT_CORE_COLUMNS is not ' +
+              'readable by this role, so Postgres refused the WHOLE tenant row. Branding and ' +
+              'login are down for EVERY tenant, not just this one. Find the column with the ' +
+              'DEPLOY GATE query at the bottom of turo-bridge-poc/sql/04-turo-sync-flag.sql, ' +
+              'then GRANT SELECT (<column>) ON public.tenants TO anon. Cause:',
+            queryError.message
+          );
+          setError(queryError.message);
         } else {
           console.error('[TenantContext] Error loading tenant:', queryError);
           setError(queryError.message);

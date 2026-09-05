@@ -119,10 +119,10 @@ export function ReservationsScreen({
 
       {!foundationApplied && allRows.length > 0 && (
         <Notice tone="warn">
-          These rows carry no reconciliation state, so the{" "}
-          <span className="font-medium text-foreground">Status</span> column reads{" "}
-          <span className="italic">Not classified</span> for all of them. That is the honest
-          answer: nothing has classified them yet, and it is not the same as
+          The <span className="font-medium text-foreground">Status</span> column is showing you
+          Turo&apos;s own status for each trip. Drive247 has not classified any of these trips
+          yet — that part of Turo Sync is not set up on this account — so nothing here tells you
+          whether a trip is ready to import or needs a decision from you. It is not the same as
           &ldquo;nothing to do&rdquo;.
         </Notice>
       )}
@@ -159,7 +159,7 @@ export function ReservationsScreen({
           {counts.unknownState > 0 && (
             <span
               className="rounded-md border border-dashed border-[#e0e7ff] px-2.5 py-1 text-xs text-muted-foreground dark:border-border"
-              title="These rows have no reconciliation state at all, so they cannot be filtered by one."
+              title="Drive247 has not classified these trips, so they cannot be filtered by status."
             >
               Not classified
               <span className="ml-1.5 tabular-nums opacity-70">{counts.unknownState}</span>
@@ -207,7 +207,7 @@ export function ReservationsScreen({
                       {allRows.length === 0
                         ? "No trips have been synced yet."
                         : filterUnavailable
-                          ? "This filter cannot be applied until the reconciliation schema is installed."
+                          ? "This filter cannot be used until Drive247 finishes setting up Turo Sync on this account."
                           : "No trips match this filter."}
                     </p>
                     {allRows.length > 0 && stateFilter !== "all" && (
@@ -228,6 +228,7 @@ export function ReservationsScreen({
                     key={r.id}
                     row={r}
                     currency={currency}
+                    foundationApplied={foundationApplied}
                     onOpen={() => setDetail(r)}
                     onGoToMapping={onGoToMapping}
                   />
@@ -263,7 +264,7 @@ function FilterChip({
       disabled={disabled}
       title={
         disabled
-          ? "The reconciliation schema is not installed, so rows have no state to filter by."
+          ? "Drive247 has not classified these trips yet, so there is no status to filter by. That part of Turo Sync is not set up on this account."
           : undefined
       }
       className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -281,11 +282,14 @@ function FilterChip({
 function ReservationRow({
   row,
   currency,
+  foundationApplied,
   onOpen,
   onGoToMapping,
 }: {
   row: TuroBridgeRow;
   currency: string;
+  /** False while the reconciliation columns are absent — see the Status cell. */
+  foundationApplied: boolean;
   onOpen: () => void;
   onGoToMapping: () => void;
 }) {
@@ -358,12 +362,50 @@ function ReservationRow({
         )}
       </TableCell>
 
+      {/*
+        STATUS, and which of the two statuses leads.
+
+        There are two different facts competing for this cell: what Turo says
+        about the trip ("Booked", "Cancelled"), and what Drive247 has decided
+        about it ("Ready to import", "Possibly cancelled"). Normally the Drive247
+        reading leads, because that is the one the operator acts on here.
+
+        But while the reconciliation columns are absent, EVERY row's Drive247
+        reading is "Not classified" — so on a 40-row table the leading line of
+        the Status column is forty identical italics, and the one fact that
+        actually varies is buried at 11px underneath it. That is a column
+        carrying no information at the size it is read at.
+
+        So while `foundationApplied` is false the two swap: Turo's own status
+        leads, verbatim, and "Not classified by Drive247 yet" drops to the
+        subline. The header stays "Status" in both modes — it is the same
+        question, answered by whoever can currently answer it. Nothing is
+        hidden and nothing is invented; only the reading order changes.
+      */}
       <TableCell className="align-top">
-        <SyncStateText reading={stateReading} />
-        {tripStatus.value && (
-          <div className="text-xs text-muted-foreground mt-0.5">
-            Turo says: {tripStatus.value}
-          </div>
+        {!foundationApplied ? (
+          <>
+            {tripStatus.value ? (
+              <span className="text-sm font-medium text-foreground">{tripStatus.value}</span>
+            ) : (
+              <Unknown why="Turo's own trip status did not survive the read, and Drive247 has not classified this trip yet." />
+            )}
+            <div
+              className="text-xs text-muted-foreground mt-0.5 italic"
+              title="Drive247 has not classified this trip yet — that part of Turo Sync is not set up on this account."
+            >
+              Not classified by Drive247 yet
+            </div>
+          </>
+        ) : (
+          <>
+            <SyncStateText reading={stateReading} />
+            {tripStatus.value && (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Turo says: {tripStatus.value}
+              </div>
+            )}
+          </>
         )}
         {stateReading.state === "pending_match" && (
           <button
@@ -460,7 +502,7 @@ function ReservationDetailDialog({
           <DetailGrid
             items={[
               [
-                "Reconciliation state",
+                "Drive247 status",
                 <SyncStateText key="s" reading={readSyncState(row)} />,
               ],
               [

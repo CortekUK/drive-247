@@ -497,6 +497,75 @@ const Settings = () => {
     }
   };
 
+  // Turo Sync feature toggle.
+  //
+  // Reads and writes through TenantContext rather than the rental-settings row
+  // (which is how Fleet Health above does it) because TWO consumers need this
+  // flag: the sidebar entry AND the Turo Sync route guard. TenantContext is the
+  // one place both already read from, and `await refetchTenant()` below is what
+  // makes the sidebar move the instant this switch lands — no reload.
+  //
+  // /!\ The column lives in TENANT_OPTIONAL_COLUMNS, deliberately, so a missing
+  // anon GRANT sheds it instead of refusing the whole tenant row. Until
+  // turo-bridge-poc/sql/04-turo-sync-flag.sql is applied this write succeeds but
+  // the refetch may read the flag back as undefined on a tenant object that was
+  // first fetched anonymously, and the sidebar entry will lag until a hard
+  // refresh. Apply that file; do not "fix" it by promoting the column to the
+  // core list, which is the version that takes branding and login down.
+  const [pendingTuroSync, setPendingTuroSync] = useState<boolean | null>(null);
+  const persistedTuroSync =
+    (tenant as { turo_bridge_enabled?: boolean } | null)?.turo_bridge_enabled === true;
+  const turoSyncEnabled = pendingTuroSync ?? persistedTuroSync;
+  const [savingTuroSync, setSavingTuroSync] = useState(false);
+  const handleToggleTuroSync = async (next: boolean) => {
+    if (!tenant?.id) {
+      // A bare return here is the hardest failure to diagnose from a bug report:
+      // the switch does not move, nothing is written, no error appears.
+      toast({
+        title: "Could not save",
+        description:
+          "The portal has not resolved your tenant yet. Reload the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const previous = turoSyncEnabled;
+    setPendingTuroSync(next);
+    setSavingTuroSync(true);
+    try {
+      // supabaseUntyped: `turo_bridge_enabled` postdates the last
+      // `supabase gen types` run, and the typed client rejects an unknown column
+      // inside a .select() literal. .select() at all so an RLS-blocked zero-row
+      // write cannot read as success — PostgREST returns error:null for it.
+      const { data, error } = await supabaseUntyped
+        .from("tenants")
+        .update({ turo_bridge_enabled: next })
+        .eq("id", tenant.id)
+        .select("turo_bridge_enabled");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You do not have permission to change this setting.");
+      }
+      // refetchTenant, not a cache patch: the sidebar and the Turo Sync route
+      // guard both read TenantContext, and they must agree the moment this
+      // returns — a hidden tab whose page still opens is worse than neither.
+      await refetchTenant();
+      setPendingTuroSync(null);
+      toast({
+        title: next ? "Turo Sync enabled" : "Turo Sync disabled",
+        description: next
+          ? "\u201CTuro Sync\u201D has been added to your Fleet & Bookings sidebar. Install the browser extension and run a sync to fill it."
+          : "The Turo Sync entry is hidden and the page is no longer reachable. Nothing was deleted — trips already synced and bookings already imported are kept. This does not stop the sync: remove the Chrome extension if you want that.",
+      });
+    } catch (error: unknown) {
+      setPendingTuroSync(previous === persistedTuroSync ? null : previous);
+      const msg = error instanceof Error ? error.message : String(error);
+      toast({ title: "Failed to update", description: msg, variant: "destructive" });
+    } finally {
+      setSavingTuroSync(false);
+    }
+  };
+
   // Rental settings form state
   const [rentalForm, setRentalForm] = useState<{
     minimum_rental_age: number | '';
@@ -1982,6 +2051,37 @@ const Settings = () => {
                   disabled={savingFleetHealth || !canEditSettings('general')}
                   className="flex-shrink-0"
                   aria-label="Toggle Fleet Health feature"
+                />
+              </div>
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Turo Sync</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Adds a &quot;Turo Sync&quot; entry to your Fleet &amp; Bookings sidebar. It lists
+                    every trip the Drive247 browser extension has read from your Turo host
+                    account, lets you match each Turo listing to one of your cars, and lets you
+                    import the trips you choose as Drive247 bookings.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Turning it off only hides the tab. Trips already synced are kept, any bookings
+                    you have already imported stay exactly as they are, and the extension carries
+                    on reading your Turo trips in the background — remove it from Chrome if you
+                    want the reading to stop.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    This switch only controls what you see in Drive247. To actually fill the page
+                    you also need the Drive247 Turo Bridge extension installed in Chrome and a
+                    Turo host session signed in. The extension reads the Turo page already open in
+                    your browser — it never asks for your Turo password, and nothing is ever
+                    written back to Turo.
+                  </p>
+                </div>
+                <Switch
+                  checked={turoSyncEnabled}
+                  onCheckedChange={handleToggleTuroSync}
+                  disabled={savingTuroSync || !canEditSettings('general')}
+                  className="flex-shrink-0"
+                  aria-label="Toggle Turo Sync feature"
                 />
               </div>
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">

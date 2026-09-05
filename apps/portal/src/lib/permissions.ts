@@ -155,12 +155,19 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   // see that vehicle's service state.
   '/fleet-health': 'vehicles',
   '/rentals': 'rentals',
-  // Turo Bridge (PoC) inherits the 'rentals' tab key. REQUIRED, not cosmetic:
+  // Turo Sync ("/turo-bridge" internally) inherits the 'rentals' tab key.
+  // REQUIRED, not cosmetic:
   // getTabKeyForRoute() returns null for any unlisted route and canAccessRoute()
   // treats null as "allowed", so omitting it would open this page to every
   // manager regardless of grants. Reusing 'rentals' also avoids having to mirror
   // a new key into the hardcoded ALLOWED_TAB_KEYS arrays in
   // update-manager-permissions / admin-create-user / admin-update-role.
+  //
+  // Orthogonal to the tenant feature flag, and both gates stay: this entry
+  // answers "may this manager see the page", `tenants.turo_bridge_enabled`
+  // answers "does this tenant use the feature". Turning the flag off does not
+  // make this line redundant — it is what stops a manager without the 'rentals'
+  // grant reaching the page on a tenant that has the feature ON.
   '/turo-bridge': 'rentals',
   '/quotes': 'rentals',
   '/pending-bookings': 'pending_bookings',

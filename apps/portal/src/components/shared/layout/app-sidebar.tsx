@@ -169,6 +169,13 @@ export function AppSidebar() {
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
+  // Turo Sync. Same shape as the flags above, and it MUST stay that shape —
+  // `=== true`, because the value is legitimately undefined sometimes. It comes
+  // from `tenants.turo_bridge_enabled` via TENANT_OPTIONAL_COLUMNS, not the core
+  // list, so an unapplied anon GRANT sheds it instead of 42501-ing the whole
+  // tenant row. The column keeps the internal `turo_bridge` name; only what the
+  // operator reads says "Turo Sync".
+  const turoSyncEnabled = (tenant as { turo_bridge_enabled?: boolean } | null)?.turo_bridge_enabled === true;
   // `fleet_health_enabled` is not in TenantContext's explicit column list, so it is
   // read from the rental-settings row (a SELECT * on `tenants`) — which is also the
   // cache the settings toggle writes through, so flipping it moves this entry with
@@ -288,11 +295,25 @@ export function AppSidebar() {
         { name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign },
         ...(showPendingBookings ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }] : []),
         { name: "Availability", href: "/blocked-dates", icon: AnimatedCalendarDays },
-        // Turo Bridge (PoC). Deliberately NOT behind a tenant feature flag: the
+        // Turo Sync. This entry used to be ungated, on the reasoning that the
         // flagged siblings above read a column with `=== true`, so an absent
         // column evaluates false and the item silently vanishes — which on demo
-        // day is indistinguishable from a broken build.
-        { name: "Turo Bridge", href: "/turo-bridge", icon: DownloadCloud },
+        // day is indistinguishable from a broken build. The operator asked for
+        // it behind a switch, so it is gated now, and that old worry is real
+        // rather than dismissed: until the anon GRANT in
+        // turo-bridge-poc/sql/04-turo-sync-flag.sql is applied, this reads
+        // undefined on any tenant object assembled before login and the entry
+        // will not appear until a hard refresh. That is a missing GRANT, not a
+        // missing feature — check the console for the retry warning
+        // TenantContext logs before assuming the toggle is broken.
+        //
+        // Hiding this entry is NOT protection: /turo-bridge still resolves for
+        // anyone who types it. The same flag is enforced on the page itself, and
+        // the actual boundaries stay where they were — RLS on
+        // turo_bridge_reservations, and ROUTE_TO_TAB['/turo-bridge'] for managers.
+        ...(turoSyncEnabled
+          ? [{ name: "Turo Sync", href: "/turo-bridge", icon: DownloadCloud }]
+          : []),
       ],
     },
     {
