@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Loader2, SlidersHorizontal, Undo2 } from "lucide-react";
+import { ExternalLink, Loader2, SlidersHorizontal, Undo2, UploadCloud } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
@@ -203,19 +203,25 @@ export function CmsVisualEditor({
               )}
             />
             {live ? "On your website" : "Not on your website"}
+            {/* There is no Save button and there never will be — typing IS the
+                save. So the save state has to be said out loud here, or the
+                operator has no way to know their words are safe. */}
             {saving > 0 ? (
               <>
                 <span className="mx-1">·</span>
-                <Loader2 className="size-3 animate-spin" /> Saving
+                <Loader2 className="size-3 animate-spin" /> Saving…
               </>
             ) : pending > 0 ? (
               <>
                 <span className="mx-1">·</span>
-                {pending} change{pending === 1 ? "" : "s"} not published
+                <span className="font-medium text-warning">
+                  {pending} saved change{pending === 1 ? "" : "s"} not on the website yet
+                </span>
               </>
             ) : ready ? (
               <>
-                <span className="mx-1">·</span>Click any text to edit it
+                <span className="mx-1">·</span>
+                {live ? "Everything here is published" : "Click any text to edit it"}
               </>
             ) : null}
           </p>
@@ -246,17 +252,27 @@ export function CmsVisualEditor({
             Discard
           </Button>
         )}
-        {!readOnly && (pending > 0 || !live) && (
+        {/* ALWAYS rendered, disabled when there is nothing to do.
+            It used to appear only when something was pending, which meant the
+            one control the whole screen is built around was missing from a
+            clean page — and "where is the publish button?" is not a question a
+            publish button should ever provoke. Disabled-and-present says
+            "nothing to publish"; absent says "this app has no publish". */}
+        {!readOnly && (
           <Button
             size="sm"
-            disabled={isPublishing || isDiscarding || saving > 0}
+            disabled={isPublishing || isDiscarding || saving > 0 || (live && pending === 0)}
             onClick={async () => {
               await publish();
               post({ type: "cms:refresh" });
             }}
           >
-            {isPublishing && <Loader2 className="size-3.5 animate-spin" />}
-            {live ? "Publish changes" : "Put it on the website"}
+            {isPublishing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <UploadCloud className="size-3.5" />
+            )}
+            {!live ? "Put it on the website" : pending > 0 ? "Publish changes" : "Published"}
           </Button>
         )}
       </div>
