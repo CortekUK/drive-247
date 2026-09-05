@@ -749,19 +749,52 @@ Deno.serve(async (req) => {
       // One message for expired, revoked, unknown and deactivated alike.
       return errorResponse("Your Drive247 sign-in is no longer valid. Sign in again.", 401);
     }
-    if (!actor.tenantId) {
-      /* A super admin has tenant_id NULL by design (see CLAUDE.md: "Super
-         admins must have tenant_id = NULL in app_users"). There is therefore
-         no single account a scraped reservation could belong to, and guessing
-         one is precisely the cross-tenant write this function exists to make
-         impossible. Refused, with a message that says what to do instead. */
+    /* A super admin has tenant_id NULL by design (see CLAUDE.md: "Super admins
+       must have tenant_id = NULL in app_users"). There is therefore no single
+       account a scraped reservation could belong to, and GUESSING one is
+       precisely the cross-tenant write this function exists to make impossible.
+
+       So a super admin may NAME the account instead -- and that naming is
+       honoured only because is_super_admin was proved from the JWT one step
+       earlier, never because the body said so. This is the same rule
+       turo-bridge-promote:266 and turo-bridge-confirm-vehicle-map:165 already
+       enforce; it is extended here rather than reinvented, so there is one
+       story about who may name a tenant instead of three.
+
+       FOR EVERYONE ELSE THE BODY STILL CANNOT NAME A TENANT. That is the
+       invariant this whole function is built on and it is untouched: an
+       ordinary staff account that names a different tenant is refused, not
+       quietly overridden. */
+    let actorTenantId = actor.tenantId;
+    const claimedTenantId = asText(body.tenant_id, 64);
+    if (!actorTenantId) {
+      if (!actor.isSuperAdmin) {
+        return errorResponse(
+          "This Drive247 account is not linked to a single rental account, so there is nothing to sync into. " +
+            "Sign in with the account that owns the vehicles.",
+          403,
+        );
+      }
+      if (!claimedTenantId) {
+        return errorResponse(
+          "This is a super admin sign-in, which is not tied to one rental account. " +
+            "Open the Drive247 portal for the account you want to sync into, then try again.",
+          403,
+        );
+      }
+      const { data: named } = await supabase
+        .from("tenants").select("id").eq("id", claimedTenantId).maybeSingle();
+      // Not "no such tenant": a 404 that distinguishes real ids from invented
+      // ones is an enumeration oracle, even for a super admin's client bug.
+      if (!named) return errorResponse("That Drive247 account could not be found.", 404);
+      actorTenantId = claimedTenantId;
+    } else if (claimedTenantId && claimedTenantId !== actorTenantId) {
       return errorResponse(
-        "This Drive247 account is not linked to a single rental account, so there is nothing to sync into. " +
-          "Sign in with the account that owns the vehicles.",
+        "You are signed in to a different Drive247 account than the one this sync names.",
         403,
       );
     }
-    if (tenantId && actor.tenantId !== tenantId) {
+    if (tenantId && actorTenantId !== tenantId) {
       // The worst outcome in this system, refused rather than warned about.
       // Same sentence as turo-bridge-reconcile:282.
       return errorResponse(
@@ -770,7 +803,7 @@ Deno.serve(async (req) => {
       );
     }
     credentialKind = tenantId ? "session+pairing_token" : "session";
-    tenantId = actor.tenantId;
+    tenantId = actorTenantId;
   }
 
   if (!tenantId) {

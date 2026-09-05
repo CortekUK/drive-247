@@ -46,7 +46,8 @@ const $ = (id) => document.getElementById(id);
 const els = {
   // auth
   authForm: $("authForm"), email: $("email"), password: $("password"),
-  authError: $("authError"), signIn: $("signIn"), signInLabel: $("signInLabel"),
+  authError: $("authError"), authHint: $("authHint"),
+  signIn: $("signIn"), signInLabel: $("signInLabel"),
   spinnerAuth: $("spinnerAuth"), reveal: $("reveal"),
   acct: $("acct"), acctTenant: $("acctTenant"), acctEmail: $("acctEmail"),
   signOut: $("signOut"), work: $("work"), lastSync: $("lastSync"),
@@ -428,6 +429,18 @@ function paintAuth(state) {
   if (!inAccount && view === "settings") show("auth");
   if (inAccount && view === "auth") show("main");
 
+  /* TWO WAYS TO BE SIGNED IN, AND THEY END DIFFERENTLY.
+       An explicit sign-in has a session of its own to revoke. An ADOPTED one is
+       the portal tab's session, borrowed — there is nothing here to sign out
+       of, and a button that claimed otherwise would either lie or, worse, sign
+       the person out of the portal they are working in. So it offers the thing
+       they might actually want instead: a different account. */
+  const viaPortal = !!(state && state.via === "portal");
+  els.signOut.textContent = viaPortal ? "Use a different account" : "Sign out";
+  els.signOut2.textContent = viaPortal ? "Use a different account" : "Sign out";
+  els.signOut2.classList.toggle("danger", !viaPortal);
+  els.signOut2.classList.toggle("secondary", viaPortal);
+
   if (!inAccount) {
     els.acctTenant.textContent = "";
     els.acctEmail.textContent = "";
@@ -438,13 +451,45 @@ function paintAuth(state) {
     if (state && state.expired) {
       showAuthError("Your Drive247 sign-in has expired. Sign in again to continue.");
     }
+    /* THE SHORTER WAY IN, OFFERED BEFORE THE FORM. Only for the one cause a
+       person can fix in two seconds; every other portal problem already has a
+       precise sentence of its own and belongs in the error slot, not here. */
+    const portalCode = state && state.portal && state.portal.code;
+    if (portalCode === "no_portal_tab") {
+      showAuthHint("Already signed in to Drive247 in this browser? Open your portal in a tab " +
+        "and this extension will use that sign-in — no password needed here.");
+    } else if (portalCode && state.portal.reason) {
+      showAuthHint(state.portal.reason);
+    } else {
+      hideAuthHint();
+    }
     return;
   }
 
+  hideAuthHint();
   const id = state.identity;
   els.acctTenant.textContent = id.tenantName || "Drive247";
-  els.acctEmail.textContent = id.name || id.email || "";
+  /* WHICH ACCOUNT, AND HOW WE KNOW. A super admin can be looking at any tenant,
+     so the name alone is not enough — the sentence has to say that this came
+     from the portal tab, because that tab is the thing they would change. */
+  const who = id.name || id.email || "";
+  if (state.via === "portal") {
+    els.acctEmail.textContent = who
+      ? who + " · signed in through your Drive247 portal tab"
+      : "Signed in through your Drive247 portal tab";
+  } else {
+    els.acctEmail.textContent = who;
+  }
   hideAuthError();
+}
+
+function showAuthHint(message) {
+  els.authHint.textContent = message;
+  els.authHint.hidden = false;
+}
+function hideAuthHint() {
+  els.authHint.textContent = "";
+  els.authHint.hidden = true;
 }
 
 function showAuthError(message) {
@@ -520,6 +565,17 @@ els.authForm.addEventListener("submit", async (e) => {
 });
 
 els.signOut.addEventListener("click", async () => {
+  /* AN ADOPTED SESSION IS NOT OURS TO END. Nothing was stored, so there is
+     nothing to clear, and revoking the token would sign the person out of the
+     portal tab they are working in — from a button in a different window. What
+     they can usefully do is sign in as somebody else, which takes precedence
+     over the adopted session from that moment on. */
+  if (conn.d247 && conn.d247.via === "portal") {
+    els.password.value = "";
+    show("auth");
+    els.email.focus();
+    return;
+  }
   try { await chrome.runtime.sendMessage({ type: "AUTH_SIGN_OUT" }); } catch (_) {}
   /* The worker clears the session AND every run artefact that belonged to it.
      Repaint from nothing so the next person at this machine sees no trace of

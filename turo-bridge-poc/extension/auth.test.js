@@ -34,7 +34,13 @@ function eq(name, actual, expected) {
 
 // ====================================================== the fake browser =====
 
-function makeChrome(store) {
+/**
+ * @param portal  Optional. `{ tabs: [...], read: {...} }` — what tabs.query()
+ *   finds for the portal match patterns, and what a content read returns from
+ *   the first of them. Absent means "no Drive247 portal tab is open", which is
+ *   what every pre-existing test in this file assumes.
+ */
+function makeChrome(store, portal) {
   const alarms = new Map();
   return {
     runtime: {
@@ -64,12 +70,30 @@ function makeChrome(store) {
       onAlarm: { addListener() {} }
     },
     tabs: {
-      async query() { return [{ id: 1, status: "complete" }]; },
+      async query(q) {
+        /* A query BY URL is the portal lookup; anything else is the Turo tab
+           lookup, which every earlier test depends on answering. */
+        if (q && q.url) return (portal && portal.tabs) || [];
+        return [{ id: 1, status: "complete" }];
+      },
       async create() { return { id: 1 }; },
       async get() { return { id: 1, status: "complete" }; },
       onUpdated: { addListener() {}, removeListener() {} }
     },
-    scripting: { async executeScript() { return [{ result: null }]; } }
+    scripting: {
+      async executeScript(opts) {
+        /* The portal read is identified by its ARGUMENT — the supabase-js
+           storage key. Matching on "has args" instead swallowed the Turo read,
+           which passes args of its own, and a sync then silently never
+           happened. The stub has to tell the two injections apart for the same
+           reason the worker does: they read different origins. */
+        const arg = opts && Array.isArray(opts.args) ? opts.args[0] : null;
+        if (typeof arg === "string" && arg.indexOf("sb-") === 0) {
+          return [{ result: (portal && portal.read) || null }];
+        }
+        return [{ result: null }];
+      }
+    }
   };
 }
 
@@ -114,7 +138,7 @@ function makeFetch(plan, calls) {
       return r;
     }
     if (u.includes("/rest/v1/tenants")) {
-      return plan.tenants || jsonRes(200, [{ slug: "acme", company_name: "Acme Rentals" }]);
+      return plan.tenants || jsonRes(200, [{ id: "tenant-A", slug: "acme", company_name: "Acme Rentals" }]);
     }
     if (u.includes("turo-bridge-reconcile")) return jsonRes(200, { ok: true });
     if (u.includes("turo-bridge-ingest")) {
@@ -149,11 +173,11 @@ const STAFF = (over) => Object.assign({
 /** No staff row at all — the account exists in auth but not in the portal. */
 const STAFF_ABSENT = [];
 
-function boot(store, plan, calls) {
+function boot(store, plan, calls, portal) {
   for (const f of ["fixture.js", "turo-read-contract.js", "content-turo.js", "background.js"]) {
     delete require.cache[path.join(DIR, f)];
   }
-  globalThis.chrome = makeChrome(store);
+  globalThis.chrome = makeChrome(store, portal);
   globalThis.importScripts = (...files) => files.forEach((f) => require(path.join(DIR, f)));
   globalThis.fetch = makeFetch(plan, calls);
   require(path.join(DIR, "background.js"));
@@ -769,6 +793,215 @@ async function main() {
     const carrying = calls2.filter((c) => JSON.stringify(c.body || {}).includes("correct-horse-battery"));
     eq("it travels in exactly one request", carrying.length, 1);
     ok("...the password grant", carrying[0].url.includes("grant_type=password"));
+  }
+
+
+  // -----------------------------------------------------------------------
+  /* ── ADOPTING THE PORTAL'S OWN SESSION ──────────────────────────────────
+     Asking somebody to type their Drive247 password into an extension while
+     they are signed in to Drive247 in the next tab is asking them to prove
+     something the browser can already see — and it trains the exact habit that
+     makes phishing work. These tests are about the two things that make
+     borrowing that session safe rather than merely convenient: what is NOT
+     copied, and what is NOT trusted. */
+  const PORTAL_TAB = [{ id: 42, active: true, lastAccessed: 2, url: "https://acme.portal.drive-247.com/dashboard" }];
+  const PORTAL_READ = (over) => Object.assign({
+    accessToken: "portal-access-1",
+    expiresAtMs: Date.now() + 30 * 60 * 1000,
+    slug: "acme",
+    origin: "https://acme.portal.drive-247.com"
+  }, over || {});
+
+  console.log("A portal tab is already signed in, so nobody is asked for a password");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, { appUsers: jsonRes(200, [STAFF()]) }, calls,
+      { tabs: PORTAL_TAB, read: PORTAL_READ() });
+
+    const state = await send(listen, { type: "AUTH_STATE" });
+    eq("the extension is signed in", state.signedIn, true);
+    eq("...through the portal, and it says so", state.via, "portal");
+    eq("...to the tenant app_users resolved", state.identity.tenantId, "tenant-A");
+    ok("no password was ever asked for",
+      !calls.some((c) => c.url.includes("grant_type=password")));
+
+    /* THE WHOLE SAFETY ARGUMENT IN ONE ASSERTION. Nothing durable is copied out
+       of the portal, so there is no second session to leak or to outlive a
+       sign-out: the extension's access ends exactly when the portal's does. */
+    ok("nothing was written to extension storage", Object.keys(store).length === 0,
+      JSON.stringify(Object.keys(store)));
+  }
+
+  console.log("The refresh token is never taken, and could not be even by accident");
+  {
+    const store = {}, calls = [];
+    /* The page hands over a whole session blob, refresh token and all — which
+       is what a real localStorage entry contains. */
+    const listen = boot(store, { appUsers: jsonRes(200, [STAFF()]) }, calls,
+      { tabs: PORTAL_TAB, read: PORTAL_READ({ refresh_token: "REFRESH-SECRET", refreshToken: "REFRESH-SECRET" }) });
+
+    await send(listen, { type: "AUTH_STATE" });
+    const everything = JSON.stringify(store) + JSON.stringify(calls);
+    ok("it is not in storage, and not on any wire", !everything.includes("REFRESH-SECRET"));
+    ok("...and no refresh was ever attempted with it",
+      !calls.some((c) => c.url.includes("grant_type=refresh_token")));
+  }
+
+  console.log("Who the user is comes from the server, never from the page");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      /* GoTrue's answer. The page never gets a vote. */
+      userCheck: jsonRes(200, { id: "auth-user-1" }),
+      appUsers: jsonRes(200, [STAFF()])
+    }, calls, { tabs: PORTAL_TAB, read: PORTAL_READ({ user: { id: "SOMEBODY-ELSE" } }) });
+
+    await send(listen, { type: "AUTH_STATE" });
+    const lookup = calls.find((c) => c.url.includes("/rest/v1/app_users"));
+    ok("app_users was read for the id GoTrue verified", !!lookup && lookup.url.includes("auth-user-1"));
+    ok("...and never for the one the page claimed",
+      !calls.some((c) => c.url.includes("SOMEBODY-ELSE")));
+  }
+
+  console.log("An explicit sign-in outranks whatever tab happens to be open");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      password: jsonRes(200, TOKENS("1")),
+      appUsers: jsonRes(200, [STAFF()])
+    }, calls, { tabs: PORTAL_TAB, read: PORTAL_READ() });
+
+    await send(listen, { type: "AUTH_SIGN_IN", email: "dana@acme.test", password: "hunter2" });
+    const state = await send(listen, { type: "AUTH_STATE" });
+    /* Somebody who deliberately signed this extension in to one account must
+       not have it silently switched because another tab is showing a different
+       one. Ambient convenience never overrides an explicit choice. */
+    eq("the deliberate session is the one in force", state.via, "extension");
+  }
+
+  console.log("No portal tab open is a hint, not a wrong password");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, { appUsers: jsonRes(200, [STAFF()]) }, calls, null);
+
+    const state = await send(listen, { type: "AUTH_STATE" });
+    eq("not signed in", state.signedIn, false);
+    eq("...and nothing has EXPIRED, because nothing had begun", state.expired, false);
+    eq("...the reason is specific and fixable", state.portal.code, "no_portal_tab");
+    ok("...and it is not about a password",
+      !/password/i.test(state.portal.reason), state.portal.reason);
+  }
+
+  // -----------------------------------------------------------------------
+  /* ── SUPER ADMINS ───────────────────────────────────────────────────────
+     A super admin carries tenant_id NULL by design, so there is no account for
+     the server to resolve them to and a sync could not previously run at all.
+     The portal already answers "which account" — it is the subdomain the
+     person is looking at — so that is where the answer comes from. */
+  console.log("A super admin syncs into the account whose portal they have open");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      appUsers: jsonRes(200, [STAFF({ tenant_id: null, is_super_admin: true, email: "root@drive247.test" })]),
+      tenants: jsonRes(200, [{ id: "tenant-A", slug: "acme", company_name: "Acme Rentals" }])
+    }, calls, { tabs: PORTAL_TAB, read: PORTAL_READ({ slug: "acme" }) });
+
+    const state = await send(listen, { type: "AUTH_STATE" });
+    eq("signed in", state.signedIn, true);
+    eq("...into the tenant the open portal names", state.identity.tenantId, "tenant-A");
+    eq("...and the screen can say which one", state.identity.tenantName, "Acme Rentals");
+    ok("the slug was resolved the way the portal resolves it",
+      calls.some((c) => c.url.includes("/rest/v1/tenants") && c.url.includes("slug=eq.acme")));
+  }
+
+  console.log("...and that is the ONE case where a client may name a tenant");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      appUsers: jsonRes(200, [STAFF({ tenant_id: null, is_super_admin: true })]),
+      tenants: jsonRes(200, [{ id: "tenant-A", slug: "acme", company_name: "Acme Rentals" }])
+    }, calls, { tabs: PORTAL_TAB, read: PORTAL_READ() });
+
+    await send(listen, { type: "SYNC_ONE" });
+    const ingest = calls.filter((c) => c.url.includes("turo-bridge-ingest"));
+    ok("the sync reached Drive247", ingest.length > 0);
+    /* Named because the request cannot otherwise succeed — there is nothing to
+       resolve. The SERVER still re-proves is_super_admin from the JWT before
+       honouring it, so naming a tenant remains something that never, by itself,
+       grants access to one. */
+    ok("the super admin's request names the tenant",
+      ingest.some((c) => c.body && c.body.tenant_id === "tenant-A"),
+      JSON.stringify(ingest[0] && ingest[0].body && ingest[0].body.tenant_id));
+  }
+
+  console.log("An ordinary account still names no tenant, adopted session or not");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, { appUsers: jsonRes(200, [STAFF()]) }, calls,
+      { tabs: PORTAL_TAB, read: PORTAL_READ() });
+
+    await send(listen, { type: "SYNC_ONE" });
+    const posted = calls.filter((c) => c.url.includes("turo-bridge-ingest"));
+    ok("the sync reached Drive247", posted.length > 0);
+    const wire = JSON.stringify(posted.map((c) => c.body));
+    /* THE INVARIANT THIS WHOLE FEATURE IS BUILT ON, re-checked on the new path:
+       for everybody who has a tenant of their own, the server resolves it from
+       the credential and the body cannot say a word about it. */
+    ok("no tenant id is on the wire", !/tenant_id|tenantId/.test(wire), wire.slice(0, 200));
+  }
+
+  console.log("A super admin on a tab that names no account is told exactly that");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      appUsers: jsonRes(200, [STAFF({ tenant_id: null, is_super_admin: true })])
+    }, calls, {
+      /* portal.drive-247.com itself is a deployment, not a tenant. */
+      tabs: [{ id: 7, active: true, url: "https://portal.drive-247.com/" }],
+      read: PORTAL_READ({ slug: "portal", origin: "https://portal.drive-247.com" })
+    });
+
+    const state = await send(listen, { type: "AUTH_STATE" });
+    eq("not signed in", state.signedIn, false);
+    eq("...and the reason names the real problem", state.portal.code, "super_admin_slug");
+    ok("...which is about WHICH account, not about credentials",
+      /account/i.test(state.portal.reason) && !/password/i.test(state.portal.reason),
+      state.portal.reason);
+  }
+
+  console.log("A deactivated account is refused even with a live portal tab");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      appUsers: jsonRes(200, [STAFF({ is_active: false })])
+    }, calls, { tabs: PORTAL_TAB, read: PORTAL_READ() });
+
+    const state = await send(listen, { type: "AUTH_STATE" });
+    eq("not signed in", state.signedIn, false);
+    /* The portal tab proves a session, never an entitlement. Every app_users
+       check that guards a password sign-in guards this one identically. */
+    eq("...for the reason that actually applies", state.portal.code, "inactive");
+  }
+
+  console.log("Signing out of the extension does not sign anyone out of the portal");
+  {
+    const store = {}, calls = [];
+    const listen = boot(store, {
+      password: jsonRes(200, TOKENS("1")),
+      appUsers: jsonRes(200, [STAFF()])
+    }, calls, { tabs: PORTAL_TAB, read: PORTAL_READ() });
+
+    await send(listen, { type: "AUTH_SIGN_IN", email: "dana@acme.test", password: "hunter2" });
+    const before = calls.length;
+    await send(listen, { type: "AUTH_SIGN_OUT" });
+    const after = calls.slice(before);
+    /* Exactly one logout, and it spends the EXTENSION'S token. The adopted one
+       was never stored, so there is nothing here that could revoke it — which
+       is the point: a button in this window must not end a session in another. */
+    const logouts = after.filter((c) => c.url.includes("/auth/v1/logout"));
+    eq("one logout, for our own session", logouts.length, 1);
+    ok("...spending our own token", JSON.stringify(logouts[0].headers).includes("access-1"));
+    ok("...and never the portal's", !JSON.stringify(after).includes("portal-access-1"));
   }
 
   console.log("\n" + passed + " passed, " + failed + " failed\n");

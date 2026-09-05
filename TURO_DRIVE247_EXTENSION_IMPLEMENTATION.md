@@ -21,6 +21,8 @@ extension's perspective.**
 | Reconcile / promote / vehicle-map functions | **Already complete** | `supabase/functions/turo-bridge-{reconcile,promote,confirm-vehicle-map}` |
 | Portal review surface | **Already complete** | `apps/portal/src/app/(dashboard)/turo-bridge/` |
 | **Drive247 sign-in inside the extension** | **Added by this change** | `background.js` (auth module), `popup.{html,js,css}` |
+| **Reusing the portal's existing browser session (no password prompt)** | **Added by this change** | `background.js` (portal adoption), `manifest.json`, `popup.{html,js,css}` — see §3b |
+| **Super admin resolves the tenant from the portal tab** | **Added by this change** | `background.js`, `turo-bridge-ingest`, `turo-bridge-reconcile` — see §3b |
 | **Session-based tenant resolution on the backend** | **Added by this change** | `turo-bridge-ingest/index.ts` |
 | **Session restore, refresh, expiry and sign-out cleanup** | **Added by this change** | `background.js` |
 | **Unchanged-record suppression** | **Added by this change** | `background.js` + `turo-bridge-ingest/index.ts` |
@@ -205,6 +207,109 @@ Two traps this had to be written around, both now covered by tests:
 A `authConfigProblem()` guard also runs **before** the first request, so a build
 with a missing or truncated URL/key fails with `misconfigured` rather than
 producing a network failure that could be mistaken for a rejection.
+
+---
+
+## 3b. Reusing the portal's own sign-in
+
+The sign-in form is now the **fallback**, not the front door.
+
+If a Drive247 portal tab in this browser holds a live session, the extension
+uses it and never shows the form. Asking somebody to type their Drive247
+password into an extension while they are signed in to Drive247 in the next tab
+asks them to prove something the browser can already see — and it trains exactly
+the habit that makes phishing work.
+
+### What is copied, and what is not
+
+| | |
+|---|---|
+| Access token | Read from the portal tab, held **in memory**, used, forgotten |
+| Refresh token | **Never read.** Not from the page, not into storage, not onto any wire |
+| Anything in `chrome.storage` | **Nothing.** An adopted session writes no key at all |
+
+That single restraint is what makes borrowing the session safe rather than
+merely convenient:
+
+- nothing durable leaves the portal's storage, so there is **no new secret at
+  rest**;
+- the extension's access lives exactly as long as the portal's. Sign out of the
+  portal, or close the browser, and the extension loses access too — which is
+  what a person signing out actually expects;
+- a copied refresh token would have **outlived the portal session by weeks** and
+  kept working after a sign-out. That is a silent second session, and nobody
+  asked for one.
+
+The cost is that a sync needs a portal tab open. That is honest rather than
+inconvenient: the extension is borrowing that tab's session, so requiring it to
+exist is an accurate description of what is happening.
+
+### What is trusted
+
+Nothing from the page, except as a lead.
+
+- The blob in `localStorage` is an **unverified claim**.
+- The **user id comes from GoTrue's own `/auth/v1/user`**, never from the blob.
+  Taking it from the page would let anything that can write that origin's
+  storage name any user it liked, and `app_users` would then be read for them.
+- Role, tenant and `is_active` come from `app_users` under RLS, through exactly
+  the gates a password sign-in passes.
+
+A tampered `localStorage` entry can therefore make adoption **fail**. It cannot
+make it **lie**.
+
+### Precedence
+
+```
+explicit extension sign-in   ──▶  wins, always
+        │  (none)
+        ▼
+adopted portal session       ──▶  used when a portal tab has one
+        │  (none)
+        ▼
+legacy pairing token         ──▶  installs that already hold one
+```
+
+Ambient convenience never overrides an explicit choice: somebody who
+deliberately signed the extension in to one account does not get silently
+switched because another tab is showing a different one.
+
+**Sign out** ends only the extension's own session. An adopted token was never
+stored, so there is nothing here to revoke — and a button in the popup must not
+end a session in another window. When the session is adopted, that button reads
+**"Use a different account"** and opens the form instead.
+
+### Super admins
+
+A super admin carries `tenant_id = NULL` by design, so there is no account for
+the server to resolve them to and a sync previously could not run at all.
+
+The portal already answers *which account*: it is the subdomain being viewed,
+which is what the portal's own middleware and `TenantContext` use. So the
+adopted tab's slug resolves the tenant, through `tenants.slug` — read with the
+caller's own token, never a privileged one. Reserved subdomains (`portal`,
+`www`, `admin`, `api`, `app`) name no tenant and are refused with a sentence
+that says so.
+
+**This is the one case where a client may name a tenant**, and it changes
+nothing about who may reach one:
+
+- the request carries `tenant_id` **only** for an account that has none of its
+  own;
+- the server re-derives `is_super_admin` **from the JWT** before honouring it;
+- an ordinary account that names a different tenant is **refused, not
+  overridden**;
+- for everybody else the body still cannot say a word about the tenant.
+
+`turo-bridge-promote` and `turo-bridge-confirm-vehicle-map` already worked this
+way. `turo-bridge-ingest` and `turo-bridge-reconcile` were extended to match, so
+there is one story about who may name a tenant instead of three.
+
+### Turo is unaffected
+
+Turo authentication is not touched by any of this and does not become linked to
+Drive247. Two accounts, two sessions, two failure modes, as before — and the
+sync stays one-way: **Turo → extension → Drive247**.
 
 ---
 
@@ -765,9 +870,16 @@ reads some of them anonymously. This is a genuine open finding, not a closed one
 | `alarms` | Revive a killed worker to continue a multi-page sync. Without it an interrupted sync needs a manual Continue. |
 | `https://turo.com/*`, `https://*.turo.com/*` | Read the tenant's own host calendar. Read-only. |
 | `https://hviqoaokxvlancmftwuo.supabase.co/*` | Sign in, refresh, and send data to Drive247. |
+| `https://*.portal.drive-247.com/*`, `https://portal.drive-247.com/*` | **Added for portal session reuse (§3b).** Read the Drive247 sign-in this browser already holds, so no password is asked for. The access token only — never the refresh token — and nothing is written back. |
 
-No permission was added for the sign-in. `tabs`, `cookies`, `webRequest`,
-`<all_urls>` and `externally_connectable` are all deliberately absent.
+**The portal host permission is the one addition**, and Chrome will re-prompt
+for it on the next load. It is what lets `tabs.query()` see a portal tab and
+`scripting` read that origin's session; there is no way to reuse a session
+without being allowed to look at the origin that holds it.
+
+`tabs`, `cookies`, `webRequest`, `<all_urls>` and `externally_connectable`
+remain deliberately absent — a tab's URL is already visible through the host
+permission, so the broad `tabs` permission buys nothing here.
 
 ---
 

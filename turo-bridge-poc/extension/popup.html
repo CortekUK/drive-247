@@ -283,6 +283,13 @@
       <h2 class="view-title">Sign in to Drive247</h2>
       <p class="view-sub">Use your Drive247 account to sync your Turo calendar.</p>
 
+      <!-- THE FORM IS THE FALLBACK, NOT THE FRONT DOOR. If a Drive247 portal
+           tab in this browser already holds a session, the extension uses it
+           and this whole screen is skipped. This line appears only when there
+           is no such tab, and it offers the easier of the two routes first:
+           open the portal you are probably already signed in to. -->
+      <p class="view-hint" id="authHint" hidden></p>
+
       <!-- A real <form>, so Enter submits and a password manager can fill it.
            The submit handler calls preventDefault(): a navigation inside an
            extension popup would replace this document and lose the state. -->

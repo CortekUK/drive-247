@@ -286,6 +286,27 @@ Deno.serve(async (req) => {
     tenantId = tenantId ?? actor.tenantId;
   }
 
+  /* A super admin carries no tenant of their own, so they name one -- honoured
+     only because is_super_admin came from the JWT, exactly as in
+     turo-bridge-promote:266 and turo-bridge-ingest. A reconcile decides which
+     bookings are ABSENT and therefore which blocks may be released, so landing
+     it on the wrong account is unrecoverable; naming it explicitly is the only
+     safe way for an account that belongs to none. */
+  if (actor && actor.isSuperAdmin && !tenantId) {
+    const claimed = asText(body.tenant_id, 64);
+    if (!claimed) {
+      return errorResponse(
+        "This is a super admin sign-in, which is not tied to one rental account. " +
+          "Open the Drive247 portal for the account you want to reconcile, then try again.",
+        403,
+      );
+    }
+    const { data: named } = await supabase
+      .from("tenants").select("id").eq("id", claimed).maybeSingle();
+    if (!named) return errorResponse("That Drive247 account could not be found.", 404);
+    tenantId = claimed;
+  }
+
   if (!tenantId) {
     return errorResponse(
       "Provide a pairing token in the body, or call this as a signed-in portal user.",

@@ -275,6 +275,17 @@ const AUTH_ERRORS = {
   no_tenant:      "This Drive247 account is not linked to a rental account, so there is nothing to sync into.",
   super_admin:    "Super admin accounts are not tied to a single rental account. Sign in with the account that owns the vehicles.",
   profile_lookup: "Signed in, but Drive247 would not return your account details. Try again, or contact Drive247 support.",
+
+  /* ── THE PORTAL DOOR ──────────────────────────────────────────────────────
+     Not failures of a password, and they must never render as one. Each names
+     the ONE thing that would fix it. */
+  no_portal_tab:  "No Drive247 portal tab is open in this browser. Open your Drive247 portal, sign in there, then try again.",
+  portal_unreadable:
+                  "Found a Drive247 portal tab, but could not read a sign-in from it. Reload that tab, or sign in below.",
+  portal_expired: "Your Drive247 portal sign-in has expired. Reload the portal tab and sign in again.",
+  super_admin_slug:
+                  "That portal tab is not a rental account's portal, so there is nothing to sync into. " +
+                  "Open the portal for the account that owns the vehicles.",
 };
 
 const fail = (code, extra) => ({ ok: false, code, reason: AUTH_ERRORS[code] + (extra ? " " + extra : "") });
@@ -357,7 +368,11 @@ async function authFetch(url, init) {
  * purpose. Two places that decide "may this person act for this tenant" must
  * not drift, and the portal's answer is the canonical one.
  */
-async function loadProfile(accessToken, userId) {
+async function loadProfile(accessToken, userId, opts) {
+  /* The slug of the portal tab this session was adopted from, when it was
+     adopted from one. Only ever consulted for a SUPER ADMIN, who has no tenant
+     of their own -- see the block below. */
+  const portalSlug = (opts && opts.portalSlug) || null;
   const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` };
 
   let res;
@@ -390,34 +405,56 @@ async function loadProfile(accessToken, userId) {
      bypass the tenant check below, and that is the point. */
   if (!user.is_super_admin && user.is_active === false) return fail("inactive");
   if (user.must_change_password && !user.is_super_admin) return fail("must_change_password");
-  if (!user.tenant_id) {
-    /* Super admins carry tenant_id NULL by design. There is no single account
-       a scraped Turo trip could belong to, so there is nothing this extension
-       could safely do for them. turo-bridge-ingest refuses the same case with
-       the same reasoning; refusing here too means the tenant finds out at
-       sign-in rather than at the end of their first sync. */
-    /* Two different accounts land here and they need different sentences: a
-       super admin has no tenant BY DESIGN and should use a different login,
-       while an ordinary staff row with a null tenant is a data problem their
-       administrator has to fix. */
-    return fail(user.is_super_admin ? "super_admin" : "no_tenant");
+  /* ── WHICH ACCOUNT DOES THIS PERSON SYNC INTO? ─────────────────────────────
+     For nearly everybody the answer is app_users.tenant_id and there is nothing
+     to decide. A SUPER ADMIN is the exception: they carry tenant_id NULL by
+     design (CLAUDE.md: "Super admins must have tenant_id = NULL"), so there is
+     no single account a scraped Turo trip belongs to, and inventing one is
+     precisely the cross-tenant write this feature exists to prevent.
+
+     The portal already solved this. A super admin working on an account is
+     looking at {slug}.portal.drive-247.com, and the subdomain IS the answer to
+     "which account" -- it is what the portal's own middleware and TenantContext
+     use. So when the session was adopted from a portal tab, that tab's slug
+     names the tenant, and we resolve it the same way the portal does.
+
+     THIS RESOLUTION IS A CONVENIENCE, NOT AN AUTHORITY. The server re-derives
+     is_super_admin from the JWT and honours a named tenant only for an account
+     that genuinely is one; for everybody else the body still cannot name a
+     tenant at all. If this client resolved the wrong slug, the server would
+     refuse it -- see turo-bridge-ingest and turo-bridge-reconcile. */
+  let tenantId = user.tenant_id || null;
+  let tenantName = null;
+  let viaSuperAdmin = false;
+
+  if (!tenantId) {
+    if (!user.is_super_admin) return fail("no_tenant");
+    /* A super admin who typed a password into the extension has no tab to take
+       a slug from, and there is nothing to guess. Same sentence as before. */
+    if (!portalSlug) return fail("super_admin");
+    const named = await tenantBySlug(headers, portalSlug);
+    if (!named) return fail("super_admin_slug");
+    tenantId = named.id;
+    tenantName = named.name;
+    viaSuperAdmin = true;
   }
 
-  /* `tenants` has no `name` column — company_name is the display name
-     (turo-bridge-ingest/index.ts reads the same two columns). Failure here is
-     cosmetic: a missing display name must never block a valid sign-in. */
-  let tenantName = null;
-  try {
-    const tRes = await authFetch(
-      `${REST_URL}/tenants?select=slug,company_name&id=eq.${encodeURIComponent(user.tenant_id)}&limit=1`,
-      { headers },
-    );
-    if (tRes.ok) {
-      const tRows = await tRes.json().catch(() => []);
-      const t = Array.isArray(tRows) && tRows.length ? tRows[0] : null;
-      tenantName = (t && (t.company_name || t.slug)) || null;
-    }
-  } catch (_) { /* cosmetic only */ }
+  if (!tenantName) {
+    /* `tenants` has no `name` column — company_name is the display name
+       (turo-bridge-ingest/index.ts reads the same two columns). Failure here is
+       cosmetic: a missing display name must never block a valid sign-in. */
+    try {
+      const tRes = await authFetch(
+        `${REST_URL}/tenants?select=slug,company_name&id=eq.${encodeURIComponent(tenantId)}&limit=1`,
+        { headers },
+      );
+      if (tRes.ok) {
+        const tRows = await tRes.json().catch(() => []);
+        const t = Array.isArray(tRows) && tRows.length ? tRows[0] : null;
+        tenantName = (t && (t.company_name || t.slug)) || null;
+      }
+    } catch (_) { /* cosmetic only */ }
+  }
 
   return {
     ok: true,
@@ -427,11 +464,37 @@ async function loadProfile(accessToken, userId) {
       email: user.email || null,
       name: user.name || null,
       role: user.role || null,
-      tenantId: user.tenant_id,
+      tenantId: tenantId,
       tenantName: tenantName || "your Drive247 account",
+      /* Carried so the server call can name the tenant when -- and only when --
+         naming it is the only way the request can succeed. */
+      isSuperAdmin: user.is_super_admin === true,
+      viaSuperAdmin: viaSuperAdmin,
+      portalSlug: portalSlug,
       signedInAt: new Date().toISOString(),
     },
   };
+}
+
+/**
+ * A tenant, by the slug in a portal tab's hostname.
+ *
+ * Read with the CALLER'S OWN token, never a privileged one, so this can never
+ * see more than the person already could in the portal itself.
+ */
+async function tenantBySlug(headers, slug) {
+  const clean = String(slug || "").trim().toLowerCase();
+  if (!clean || RESERVED_SUBDOMAINS.has(clean)) return null;
+  try {
+    const res = await authFetch(
+      `${REST_URL}/tenants?select=id,slug,company_name&slug=eq.${encodeURIComponent(clean)}&limit=1`,
+      { headers },
+    );
+    if (!res.ok) return null;
+    const rows = await res.json().catch(() => []);
+    const t = Array.isArray(rows) && rows.length ? rows[0] : null;
+    return t && t.id ? { id: t.id, name: t.company_name || t.slug || null } : null;
+  } catch (_) { return null; }
 }
 
 /** Persist a GoTrue token response plus the resolved identity. */
@@ -659,18 +722,45 @@ async function sessionStillValid(accessToken) {
 
 async function authSignOut() {
   const s = await get(K.session);
+  /* Revokes THE EXTENSION'S OWN session and only that. An adopted portal token
+     is never stored, never revoked here, and signing out of the extension does
+     not sign anybody out of their portal — which would be a startling thing for
+     this button to do. */
   await revokeRemote(s && s.access_token);
   await clearSession();
+  /* The memo may be holding "no need, we have an explicit session". Drop it so
+     the next question genuinely re-asks the browser. */
+  forgetPortalSession();
   return { ok: true };
 }
 
 /** What the popup is allowed to know. Contains no credential. */
 async function authState() {
   const identity = await get(K.identity);
-  if (!identity) return { signedIn: false, expired: false, identity: null };
-  const { token, expired } = await currentAccessToken();
-  if (!token) return { signedIn: false, expired, identity: expired ? null : identity };
-  return { signedIn: true, expired: false, identity };
+  if (identity) {
+    const { token, expired } = await currentAccessToken();
+    if (token) return { signedIn: true, expired: false, via: "extension", identity };
+    /* An expired EXPLICIT session still falls through to the portal below. The
+       person is very likely still signed in to Drive247 in another tab, and
+       making them re-type a password we do not need is the exact friction this
+       whole section removes. */
+    if (!expired) return { signedIn: false, expired: false, via: null, identity };
+  }
+
+  const adopted = await adoptPortalSession();
+  if (adopted.ok) {
+    return { signedIn: true, expired: false, via: "portal", identity: adopted.identity };
+  }
+  return {
+    signedIn: false,
+    /* `expired` drives a specific sentence on the sign-in screen, and it means
+       one thing: a session that WAS good has ended. A portal tab that was never
+       open is not an expiry. */
+    expired: !!(identity),
+    via: null,
+    identity: null,
+    portal: { code: adopted.code, reason: adopted.reason },
+  };
 }
 
 /**
@@ -694,6 +784,32 @@ async function credential() {
       pairingToken: null,
       identity: "tenant:" + identity.tenantId,
       tenantName: identity.tenantName || null,
+      /* An explicit sign-in always resolves to its own tenant server-side, so
+         the request never names one. The invariant is untouched here. */
+      tenantHint: null,
+      reason: null,
+    };
+  }
+
+  /* THE PORTAL DOOR, tried only after an explicit sign-in has been ruled out.
+     Order matters: somebody who deliberately signed this extension in to
+     account A must not have it silently switched to account B because that is
+     what their other tab happens to be showing. Explicit beats ambient. */
+  const adopted = await adoptPortalSession();
+  if (adopted.ok) {
+    return {
+      ok: true,
+      kind: "portal",
+      accessToken: adopted.accessToken,
+      pairingToken: null,
+      identity: "tenant:" + adopted.identity.tenantId,
+      tenantName: adopted.identity.tenantName || null,
+      /* NAMED ONLY WHEN NAMING IT IS THE ONLY WAY THE REQUEST CAN SUCCEED — a
+         super admin, who belongs to no tenant. For everyone else this stays
+         null and the server resolves the tenant from the credential alone,
+         exactly as it always has. The server re-proves is_super_admin from the
+         JWT before honouring it, so this is a convenience and never a claim. */
+      tenantHint: adopted.identity.viaSuperAdmin ? adopted.identity.tenantId : null,
       reason: null,
     };
   }
@@ -703,7 +819,7 @@ async function credential() {
      one any more; this only ever fires for an install that already had one. */
   const pairingToken = (await get(K.token) || "").trim();
   if (pairingToken) {
-    return { ok: true, kind: "token", accessToken: null, pairingToken, identity: pairingToken, tenantName: null, reason: null };
+    return { ok: true, kind: "token", accessToken: null, pairingToken, identity: pairingToken, tenantName: null, tenantHint: null, reason: null };
   }
 
   return {
@@ -713,10 +829,250 @@ async function credential() {
     pairingToken: null,
     identity: null,
     tenantName: null,
-    reason: expired
-      ? "Your Drive247 sign-in has expired. Sign in again to continue."
-      : "Sign in with your Drive247 account to start a sync.",
+    tenantHint: null,
+    /* THE PORTAL'S REASON WINS WHEN IT HAS ONE. "No portal tab is open" and
+       "that account has no portal access" are both actionable; "sign in with
+       your Drive247 account" is what we say when we know nothing at all. */
+    reason: adopted && adopted.reason
+      ? adopted.reason
+      : (expired
+        ? "Your Drive247 sign-in has expired. Sign in again to continue."
+        : "Sign in with your Drive247 account to start a sync."),
   };
+}
+
+// ====================================== DRIVE247 PORTAL SESSION ADOPTION ==
+//
+// WHY THIS EXISTS. Asking somebody to type their Drive247 password into an
+// extension while they are already signed in to Drive247 in the next tab is
+// asking them to prove something the browser can already see. It also trains
+// exactly the habit that makes phishing work -- typing your password into a
+// window that is not the site.
+//
+// So: if a Drive247 portal tab in this browser holds a live session, the
+// extension uses it, and the sign-in form is never shown.
+//
+// ── WHAT IS AND IS NOT COPIED ────────────────────────────────────────────────
+// The ACCESS TOKEN is read, held in memory, used, and forgotten. THE REFRESH
+// TOKEN IS NEVER READ. That single restraint is what makes this safe to do:
+//
+//   - nothing durable is copied out of the portal's storage, so there is no new
+//     secret at rest and nothing to leak from chrome.storage;
+//   - the extension's access lives exactly as long as the portal's. Sign out of
+//     the portal, or close the browser, and the extension loses access too --
+//     which is the behaviour a person signing out actually expects;
+//   - a copied refresh token would have outlived the portal session by weeks
+//     and kept working after a sign-out. That is a silent second session, and
+//     nobody asked for one.
+//
+// The cost is that a sync needs a portal tab open. That is a fair price, and it
+// is also honest: the extension is borrowing that tab's session, so requiring
+// it to exist is not an inconvenience so much as an accurate description.
+//
+// ── WHAT IS TRUSTED ─────────────────────────────────────────────────────────
+// Nothing from the page, except as a lead. The blob in localStorage is treated
+// as an unverified claim: the USER ID is taken from GoTrue's own /user
+// endpoint, never from the blob, and the profile, role and tenant come from
+// app_users under RLS exactly as they do after a password sign-in. A tampered
+// localStorage entry can therefore make this fail, but it cannot make it lie.
+//
+// ── TURO IS UNAFFECTED ──────────────────────────────────────────────────────
+// Turo authentication is not touched here and does not become linked to
+// Drive247 by any of this. Two accounts, two sessions, two failure modes, as
+// before. The sync remains one-way: Turo -> extension -> Drive247.
+
+/* Match patterns for the portal. Chrome grants tabs.query() visibility of a
+   tab's URL through host permissions, so this list and manifest.json's
+   host_permissions must stay in step. */
+const PORTAL_MATCHES = [
+  "https://*.portal.drive-247.com/*",
+  "https://portal.drive-247.com/*",
+];
+
+/* Subdomains that are deployments, not tenants (CLAUDE.md: "Reserved
+   Subdomains"). A super admin sitting on one of these has not yet told us which
+   account they mean, and guessing is the one thing we will not do. */
+const RESERVED_SUBDOMAINS = new Set(["www", "admin", "portal", "api", "app"]);
+
+/* supabase-js stores its session under `sb-<project ref>-auth-token`. Derived
+   from the URL rather than hard-coded so the two can never drift apart. */
+const PORTAL_STORAGE_KEY =
+  "sb-" + ((SUPABASE_URL.match(/\/\/([a-z0-9-]+)\.supabase\.co/) || [])[1] || "") + "-auth-token";
+
+/* A successful adoption is re-checked at most this often. credential() is
+   called once per flushed batch, and three network calls per batch to re-prove
+   something that was true four seconds ago is waste. A FAILURE is cached far
+   more briefly: somebody who has just opened their portal tab because we told
+   them to should not wait a minute to be believed. */
+const PORTAL_OK_CACHE_MS = 60 * 1000;
+const PORTAL_FAIL_CACHE_MS = 3 * 1000;
+
+/* MEMORY ONLY, and deliberately so — see the header. A worker death drops the
+   adopted token, and the next wake-up re-reads it from the tab. That is not a
+   bug to be engineered around; it is the guarantee. */
+let portalCache = null;
+
+/**
+ * Runs INSIDE the portal tab. Must be self-contained: it is serialised across
+ * the process boundary, so it closes over nothing.
+ *
+ * Returns the access token and NOT the refresh token. If you are tempted to add
+ * it, read the header of this section first.
+ */
+function readPortalSessionInPage(storageKey) {
+  try {
+    var raw = null;
+    try {
+      raw = window.localStorage.getItem(storageKey);
+      if (raw === null) {
+        /* Larger sessions are split across `key.0`, `key.1`, ... by some
+           supabase-js builds. Joining them is the whole handling needed. */
+        var parts = [];
+        for (var i = 0; i < 24; i++) {
+          var part = window.localStorage.getItem(storageKey + "." + i);
+          if (part === null) break;
+          parts.push(part);
+        }
+        if (parts.length) raw = parts.join("");
+      }
+    } catch (e) {
+      // Site data blocked, or a partitioned context. Not a sign-in problem.
+      return { error: "storage_blocked" };
+    }
+    if (!raw) return { error: "no_session" };
+    if (raw.indexOf("base64-") === 0) {
+      try { raw = atob(raw.slice(7)); } catch (e) { return { error: "unreadable" }; }
+    }
+    var parsed = JSON.parse(raw);
+    // Some builds nest the session; both shapes are in the wild.
+    if (parsed && parsed.currentSession) parsed = parsed.currentSession;
+    if (!parsed || typeof parsed.access_token !== "string" || !parsed.access_token) {
+      return { error: "no_session" };
+    }
+    return {
+      accessToken: parsed.access_token,
+      /* A HINT ONLY. The caller re-derives the real expiry and the real user
+         from the server; this just avoids a pointless round trip for a token
+         the page itself already knows is stale. */
+      expiresAtMs: typeof parsed.expires_at === "number" ? parsed.expires_at * 1000 : null,
+      slug: String(location.hostname || "").split(".")[0] || null,
+      origin: location.origin,
+    };
+  } catch (e) {
+    return { error: "unreadable" };
+  }
+}
+
+/**
+ * Open portal tabs, best candidate first.
+ *
+ * "Best" is the one the person is actually looking at. That matters for a super
+ * admin with several accounts open, because the focused tab is the account they
+ * mean, and it is also the one whose name the popup will show back to them --
+ * so a wrong guess is visible rather than silent.
+ */
+async function findPortalTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ url: PORTAL_MATCHES });
+    if (!Array.isArray(tabs) || !tabs.length) return [];
+    return tabs.slice().sort((a, b) =>
+      (b.active ? 1 : 0) - (a.active ? 1 : 0) ||
+      (b.lastAccessed || 0) - (a.lastAccessed || 0));
+  } catch (_) {
+    // No permission yet, or no tabs API. Indistinguishable from "none open".
+    return [];
+  }
+}
+
+/** Read one portal tab's session blob. Never throws. */
+async function readPortalTab(tabId) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      /* ISOLATED is enough: localStorage is keyed by ORIGIN, not by world, and
+         staying out of MAIN means never touching the page's own JavaScript. */
+      world: "ISOLATED",
+      func: readPortalSessionInPage,
+      args: [PORTAL_STORAGE_KEY],
+    });
+    const first = Array.isArray(results) && results.length ? results[0] : null;
+    return (first && first.result) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * GoTrue's own answer to "whose token is this?".
+ *
+ * THE USER ID COMES FROM HERE AND NOWHERE ELSE. Taking it from the blob would
+ * mean a page that can write its own localStorage could name any user it liked,
+ * and app_users would then be read for that user. One extra request buys the
+ * difference between a hint and a fact.
+ */
+async function verifiedUserId(accessToken) {
+  try {
+    const res = await authFetch(`${AUTH_URL}/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const user = await res.json().catch(() => null);
+    return user && user.id ? String(user.id) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Adoption, memoised. See PORTAL_OK_CACHE_MS for why the two TTLs differ. */
+async function adoptPortalSession() {
+  if (portalCache && Date.now() < portalCache.until) return portalCache.value;
+  const value = await adoptPortalSessionNow();
+  portalCache = {
+    value,
+    until: Date.now() + (value.ok ? PORTAL_OK_CACHE_MS : PORTAL_FAIL_CACHE_MS),
+  };
+  return value;
+}
+
+/** Drop the memo so the next question is answered afresh. */
+function forgetPortalSession() { portalCache = null; }
+
+async function adoptPortalSessionNow() {
+  const tabs = await findPortalTabs();
+  if (!tabs.length) return { ok: false, code: "no_portal_tab", reason: AUTH_ERRORS.no_portal_tab };
+
+  /* Three at most. Somebody with fifteen portal tabs open does not want fifteen
+     token verifications every time the popup paints. */
+  let lastCode = "portal_unreadable";
+  for (const tab of tabs.slice(0, 3)) {
+    const read = await readPortalTab(tab.id);
+    if (!read || read.error || !read.accessToken) continue;
+
+    /* The page's own expiry claim, used only to skip a token it already knows
+       is dead. A live portal tab refreshes itself, so this is usually stale for
+       a second at most. */
+    if (read.expiresAtMs && read.expiresAtMs <= Date.now() + 5000) { lastCode = "portal_expired"; continue; }
+
+    const userId = await verifiedUserId(read.accessToken);
+    if (!userId) { lastCode = "portal_expired"; continue; }
+
+    const profile = await loadProfile(read.accessToken, userId, { portalSlug: read.slug });
+    if (!profile.ok) {
+      /* A REAL ANSWER ABOUT A REAL ACCOUNT — deactivated, no portal access, a
+         super admin on a tab that names no tenant. Returned rather than skipped
+         past: trying the next tab would replace a true and fixable sentence
+         with a vague one. */
+      return { ok: false, code: profile.code, reason: profile.reason };
+    }
+    return {
+      ok: true,
+      code: null,
+      reason: null,
+      accessToken: read.accessToken,
+      identity: { ...profile.identity, via: "portal", portalOrigin: read.origin },
+    };
+  }
+  return { ok: false, code: lastCode, reason: AUTH_ERRORS[lastCode] };
 }
 
 // ======================================================== TURO CONNECTION ==
@@ -2385,10 +2741,17 @@ async function postReservation(cred, reservation, meta) {
       headers,
       signal: controller.signal,
       body: JSON.stringify({
-        // The legacy credential, sent only when that is what we hold. Never a
-        // tenant id — the server resolves the tenant from the credential, which
-        // is the whole security model.
+        // The legacy credential, sent only when that is what we hold.
         token: (cred && cred.pairingToken) || undefined,
+        /* THE ONE CASE WHERE A CLIENT MAY NAME A TENANT, and it is undefined
+           for every ordinary account. A super admin belongs to no tenant, so
+           there is nothing for the server to resolve them to and the request
+           cannot otherwise succeed at all. The server still re-proves
+           is_super_admin from the JWT before honouring this, and refuses it
+           outright from anybody else — so the security model is unchanged:
+           naming a tenant has never been, and still is not, what grants access
+           to it. */
+        tenant_id: (cred && cred.tenantHint) || undefined,
         // "turo" | "fixture". Stays on the wire, is persisted, and is never
         // merely inferable. It is the single thing preventing sample data from
         // being mistaken downstream for a real reservation.
@@ -2685,6 +3048,8 @@ async function reconcileRun(cred, jobId, mode) {
          reachable with either. */
       body: JSON.stringify({
         token: cred.pairingToken || undefined,
+        // Super admins only; see postReservation for the full reasoning.
+        tenant_id: cred.tenantHint || undefined,
         action: "reconcile", job_id: jobId, dry_run: mode === "fixture"
       })
     });
@@ -2765,7 +3130,7 @@ async function autoImport(cred, mode) {
     } finally { clearTimeout(timer); }
   };
 
-  const plan = await call({ action: "plan" });
+  const plan = await call({ action: "plan", tenant_id: cred.tenantHint || undefined });
   if (plan.status !== 200 || !plan.body || !plan.body.ok) {
     return { ok: false, imported: 0, detail: (plan.body && plan.body.error) || `HTTP ${plan.status}` };
   }
@@ -2806,6 +3171,7 @@ async function autoImport(cred, mode) {
 
   const applied = await call({
     action: "apply",
+    tenant_id: cred.tenantHint || undefined,
     plan_hash: plan.body.plan_hash,
     acknowledgements: acks,
   });
