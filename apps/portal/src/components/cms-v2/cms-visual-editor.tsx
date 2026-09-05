@@ -32,6 +32,7 @@ import { useCMSPage } from "@/hooks/use-cms-pages";
 import { useCmsDraftWrite } from "@/hooks/use-cms-draft-write";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
+import { useCmsOutline } from "@/stores/cms-outline-store";
 
 /** Where each CMS page renders on the v2 site. `reviews` is /reviews here (v1 served it at /testimonials). */
 export const SITE_V2_PATHS: Record<string, string> = {
@@ -62,8 +63,10 @@ export function CmsVisualEditor({
 
   const frame = useRef<HTMLIFrameElement | null>(null);
   const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [sections, setSections] = useState<SectionInfo[]>([]);
-  const [active, setActive] = useState<string | null>(null);
+  // The page's outline is drawn by the SIDEBAR, nested under the page you are
+  // editing, so it lives in a store rather than in this component's state —
+  // see stores/cms-outline-store.ts.
+  const { setSections, setActiveId, setDirtyIds, setPick, clear } = useCmsOutline();
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(0);
   /**
@@ -128,11 +131,16 @@ export function CmsVisualEditor({
           setReady(true);
           break;
         case "cms:sections":
-          setSections(Array.isArray(msg.items) ? msg.items : []);
+          setSections(
+            (Array.isArray(msg.items) ? msg.items : []).map((i: SectionInfo) => ({
+              id: i.id,
+              label: i.label,
+            }))
+          );
           break;
         case "cms:focused": {
           const [p, s] = String(msg.path ?? "").split(".");
-          if (p && s) setActive(`${p}.${s}`);
+          if (p && s) setActiveId(`${p}.${s}`);
           break;
         }
         case "cms:edit": {
@@ -150,7 +158,25 @@ export function CmsVisualEditor({
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [siteOrigin, hello, writeDraft, scheduleRefresh]);
+  }, [siteOrigin, hello, writeDraft, scheduleRefresh, setSections, setActiveId]);
+
+  /**
+   * Hand the sidebar the ability to jump to a section, and take the outline
+   * down when this editor goes away — a stale list under a page nobody is
+   * editing would scroll an iframe that no longer exists.
+   */
+  useEffect(() => {
+    setPick((id: string) => {
+      setActiveId(id);
+      post({ type: "cms:scroll", id });
+    });
+    return () => clear();
+  }, [setPick, setActiveId, post, clear]);
+
+  /** Which sections carry an unpublished edit, for the sidebar's dots. */
+  useEffect(() => {
+    setDirtyIds(pendingSections.map((p: any) => `${p.page?.slug}.${p.section_key}`));
+  }, [pendingSections, setDirtyIds]);
 
   const live = page?.status === "published";
   const pending = pendingSections.length;
@@ -235,43 +261,8 @@ export function CmsVisualEditor({
         )}
       </div>
 
-      {/* ── rail + page ─────────────────────────────────────────────────── */}
+      {/* ── the page ───────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1">
-        <nav className="w-[200px] shrink-0 overflow-y-auto border-r border-foreground/[0.07] py-2 pl-3 pr-2">
-          <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-            On this page
-          </p>
-          {sections.length === 0 && (
-            <p className="px-2.5 py-1 text-[12px] text-muted-foreground/70">
-              {ready ? "Nothing editable here." : "Loading…"}
-            </p>
-          )}
-          {sections.map((s) => {
-            const dirty = pendingSections.some(
-              (p) => `${p.page?.slug}.${p.section_key}` === s.id
-            );
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  setActive(s.id);
-                  post({ type: "cms:scroll", id: s.id });
-                }}
-                className={cn(
-                  "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] leading-tight transition-colors",
-                  active === s.id
-                    ? "bg-primary/10 font-medium text-primary"
-                    : "text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary"
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{s.label}</span>
-                {dirty && <span className="size-1.5 shrink-0 rounded-full bg-warning" />}
-              </button>
-            );
-          })}
-        </nav>
-
         <div className="relative min-w-0 flex-1 bg-muted/30">
           {!ready && !stalled && (
             <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">

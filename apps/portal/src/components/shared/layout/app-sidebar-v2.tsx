@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 // The source worktree draws this sidebar in `@phosphor-icons/react`, which is
@@ -99,6 +99,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
+import { useCmsOutline } from "@/stores/cms-outline-store";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
 import { GlobalSearch } from "@/components/shared/layout/global-search";
 import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
@@ -351,6 +352,14 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const typedHint = useTypedHint(!collapsed && !searchScene && !searchSeed);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const { preferences: navPreferences } = useNavPreferences();
+  // The open page's sections, published by the CMS visual editor. Empty
+  // whenever that editor is not mounted, so this costs the rest of the portal
+  // nothing — see stores/cms-outline-store.ts.
+  const outlineSections = useCmsOutline((s) => s.sections);
+  const outlineActiveId = useCmsOutline((s) => s.activeId);
+  const outlineDirtyIds = useCmsOutline((s) => s.dirtyIds);
+  const outlinePick = useCmsOutline((s) => s.pick);
+
   const [activeView, setActiveView] = useState<"admin" | "cms">(
     pathname?.startsWith("/cms") ? "cms" : "admin"
   );
@@ -1026,8 +1035,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
                 {!collapsed && <div className="mx-2 my-1.5 h-px bg-sidebar-border/60" />}
 
-                {cmsPageNav.map((item) => (
-                  <SidebarMenuItem key={item.id} className="flex items-center gap-1">
+                {cmsPageNav.map((item) => {
+                  const editing = isCmsActive(item.href);
+                  return (
+                  <Fragment key={item.id}>
+                  <SidebarMenuItem className="flex items-center gap-1">
                     <SidebarMenuButton
                       asChild
                       isActive={isCmsActive(item.href)}
@@ -1073,7 +1085,39 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                       </Tooltip>
                     )}
                   </SidebarMenuItem>
-                ))}
+
+                  {/* The page's own sections, dropped under it while you are
+                      editing it. They are reported by the embedded website
+                      rather than guessed from a spec, so the list is always
+                      exactly what is on the screen — and it replaces a second
+                      rail that used to sit inside the editor, repeating this
+                      nav a few pixels to its right. */}
+                  {editing && !collapsed && outlineSections.length > 0 && (
+                    <SidebarMenuItem className="block">
+                      <div className="mb-1 ml-[19px] border-l border-sidebar-border pl-2">
+                        {outlineSections.map((section) => (
+                          <button
+                            key={section.id}
+                            type="button"
+                            onClick={() => outlinePick?.(section.id)}
+                            className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1 text-left text-[12px] leading-tight transition-colors ${
+                              outlineActiveId === section.id
+                                ? "font-medium text-primary"
+                                : "text-sidebar-foreground/55 hover:text-foreground"
+                            }`}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                            {outlineDirtyIds.includes(section.id) && (
+                              <span className="size-1 shrink-0 rounded-full bg-amber-500" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </SidebarMenuItem>
+                  )}
+                  </Fragment>
+                  );
+                })}
 
                 {/* Site Settings, kept from v1's Website list. The source
                     worktree filters it out of the page rail because it has no
