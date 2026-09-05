@@ -2,15 +2,26 @@
    Drive247 Turo Bridge — popup
    ===========================================================================
 
-   DARK-FIRST, and that is a change. This file used to be light-first with a
-   dark override, which meant the design everybody actually saw was the one
-   nobody had drawn. The agreed design is dark, so dark is the base and light is
-   the override — the theme people see is the theme that was designed.
+   DESIGN SYSTEM: Northwind v2 (NORTHWIND_UI_GUIDE.md) — the same one the
+   Drive247 Turo Sync page uses. The popup and that page are one product seen
+   through two runtimes, and they are meant to be indistinguishable in
+   typography, colour, radius and state language.
 
-   The palette is the portal's, from CLAUDE.md: indigo #6366f1 as the single
-   accent, green/amber/red for state, and NO SHADOWS anywhere. Depth comes from
-   1px borders and one step of surface tint, never from elevation. DM Sans for
-   everything, Inter for button text and badge pills.
+   Manrope throughout. Cards and buttons at 26px, inputs and pills at 22px, so a
+   standard-height button reads as very nearly a lozenge. Surfaces are separated
+   by a translucent ring and a soft shadow rather than a grey line. One
+   saturated colour, a deep violet-indigo (#442DD7), and it is spent only on
+   primary actions and active state — status keeps its own green / amber / red.
+
+   LIGHT-FIRST, and that is a change. This file was dark-first. The portal is
+   white, and a popup that opens dark beside a white page reads as a different
+   product, which is the one thing this redesign exists to stop. Dark is still
+   here and still follows the guide's rule that primary gets DARKER rather than
+   lighter.
+
+   TWO COPIES OF ONE DESIGN. apps/portal/src/global.css holds the other set of
+   tokens; a Chrome popup cannot import a Next.js stylesheet. Change one, change
+   both.
    =========================================================================== */
 
 /* ── THE TYPEFACES, ACTUALLY PRESENT ────────────────────────────────────────
@@ -20,67 +31,100 @@
    Bundling the woff2 is the only way to load them, which is why the portal
    ships its own copies too. font-display: swap so a cold profile paints text
    immediately rather than showing an empty popup. */
+/* MANROPE, BUNDLED — not fetched. A Chrome extension popup runs under a CSP
+   that blocks remote stylesheets and font files outright, so the portal's
+   next/font trick is not available here and the file ships in the crx. One
+   variable face covers 200-800, which is why there is a single 24KB file where
+   the two it replaces needed 85KB between them. */
 @font-face {
-  font-family: "DM Sans";
-  src: url("assets/fonts/dm-sans.woff2") format("woff2");
-  font-weight: 100 1000;
+  font-family: "Manrope";
+  src: url("assets/fonts/manrope.woff2") format("woff2");
+  font-weight: 200 800;
   font-style: normal;
   font-display: swap;
 }
 
-@font-face {
-  font-family: "Inter";
-  src: url("assets/fonts/inter.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   NORTHWIND v2 — the same design as the Turo Sync page, in a second runtime.
 
+   A Chrome popup cannot share a stylesheet with a Next.js app, so these values
+   are the portal's tokens transcribed by hand. THEY ARE ONE DESIGN IN TWO
+   FILES: apps/portal/src/global.css holds the other copy, and a change to
+   either belongs in both.
+
+   The variable NAMES are the extension's own and deliberately unchanged —
+   --ink, --raised, --line and the rest are referenced by ~700 lines of rules
+   below, and renaming them to match the portal's --foreground/--card would have
+   been a diff nobody could review. Only the VALUES moved.
+
+   LIGHT IS NOW THE DEFAULT. It was dark-first; the portal is white, and a popup
+   that opens dark next to a white page reads as a different product. Dark is
+   kept, and follows the guide's rule that primary gets DARKER rather than
+   lighter — a detail an inverted palette would have got backwards.
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --indigo: #6366f1;
-  --indigo-soft: #1e1b4b;
-  --indigo-bright: #818cf8;
+  --indigo: #442dd7;       /* hsl(248 68% 51%) — the one saturated colour */
+  --indigo-soft: #f0edfd;  /* primary-light, for tinted fills */
+  --indigo-bright: #3520ac; /* primary-hover */
 
-  --ink: #f8fafc;          /* headings */
-  --body: #cbd5e1;         /* body copy */
-  --muted: #8b97a8;        /* captions, helper text */
+  --ink: #0a0a0a;          /* headings */
+  --body: #262626;         /* body copy */
+  --muted: #737373;        /* captions, helper text */
 
-  --surface: #0b1120;      /* the popup ground */
-  --raised: #121a2c;       /* cards */
-  --sunken: #0e1626;       /* inputs, quiet fills */
-  --line: #1e2a41;
-  --line-strong: #2b3a55;
+  --surface: #ffffff;      /* the popup ground */
+  --raised: #ffffff;       /* cards */
+  --sunken: #f5f5f5;       /* inputs, quiet fills */
 
-  --green: #4ade80;
-  --amber: #fbbf24;
-  --red: #f87171;
-  --blue: #60a5fa;
+  /* SURFACES ARE RINGED, NOT BORDERED. These are the ring colours; where a rule
+     below still says "border", it is drawing a hairline at 5% rather than the
+     grey line this design does not have. */
+  --line: rgba(10, 10, 10, 0.05);
+  --line-strong: rgba(10, 10, 10, 0.1);
 
-  --radius: 12px;
-  --radius-sm: 9px;
+  --green: #16a249;
+  --amber: #eba40a;
+  --red: #e6000b;
+  --blue: #442dd7;         /* no second accent: blue resolves to primary */
+
+  /* §3 — the signature. 26px on cards and buttons, 22px on inputs and pills. */
+  --radius: 26px;
+  --radius-sm: 22px;
+  --radius-xs: 14px;       /* small panels and notes */
+
+  /* §5 — soft shadows, and the hover one is indigo-tinted on purpose. */
+  --shadow-sm: 0 1px 2px 0 rgba(41, 53, 48, 0.08);
+  --shadow-card: 0 4px 6px -1px rgba(41, 53, 48, 0.1), 0 2px 4px -1px rgba(41, 53, 48, 0.06);
+  --shadow-hover: 0 10px 15px -3px rgba(68, 45, 215, 0.15), 0 4px 6px -2px rgba(68, 45, 215, 0.1);
 }
 
-/* Light is the override now. Same tokens, same rules — only the values move. */
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    --indigo: #6366f1;
-    --indigo-soft: #eef2ff;
-    --indigo-bright: #4f46e5;
+    /* Primary gets DARKER here, per §2.2. Do not "fix" this to a lighter
+       indigo: the guide is explicit that dark is not an inversion. */
+    --indigo: #2b21a8;     /* hsl(246 61% 42%) */
+    --indigo-soft: #241c5c;
+    --indigo-bright: #3a2ecf;
 
-    --ink: #080812;
-    --body: #404040;
-    --muted: #737373;
+    --ink: #fafafa;
+    --body: #e5e5e5;
+    --muted: #a1a1a1;
 
-    --surface: #ffffff;
-    --raised: #ffffff;
-    --sunken: #f8fafc;
-    --line: #f1f5f9;
-    --line-strong: #e2e8f0;
+    --surface: #0a0a0a;
+    --raised: #171717;
+    --sunken: #262626;
 
-    --green: #16a34a;
-    --amber: #d97706;
-    --red: #dc2626;
-    --blue: #2563eb;
+    /* Translucent white rather than a grey token — also §2.2. */
+    --line: rgba(255, 255, 255, 0.1);
+    --line-strong: rgba(255, 255, 255, 0.15);
+
+    --green: #4ade80;
+    --amber: #f5c451;
+    --red: #ff6670;
+    --blue: #6b5ce7;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+    --shadow-hover: 0 10px 15px -3px rgba(43, 33, 168, 0.4), 0 4px 6px -2px rgba(43, 33, 168, 0.3);
   }
 }
 
@@ -93,7 +137,7 @@ body {
   width: 396px;
   background: var(--surface);
   color: var(--body);
-  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
   font-size: 14px;
   line-height: 1.45;
@@ -113,7 +157,7 @@ body {
 
 .mark {
   width: 34px; height: 34px; flex: none;
-  border-radius: 10px;
+  border-radius: var(--radius-xs);
   background: var(--indigo);
   color: #fff;
   display: flex; align-items: center; justify-content: center;
@@ -139,7 +183,7 @@ body {
 .icon-btn {
   width: 30px; height: 30px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  padding: 0; border: 0; border-radius: 8px;
+  padding: 0; border: 0; border-radius: var(--radius-xs);
   background: transparent; color: var(--muted);
   cursor: pointer;
   transition: color .12s ease, background .12s ease;
@@ -155,6 +199,7 @@ body {
   margin-left: auto;
   display: flex; flex-direction: column; align-items: flex-end;
   gap: 0; min-width: 0;
+  box-shadow: var(--shadow-card);
 }
 .acct-name {
   margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
@@ -183,7 +228,7 @@ body {
   margin: 0 0 14px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-xs);
   background: var(--sunken);
   color: var(--muted);
   font-size: 12px;
@@ -194,7 +239,7 @@ body {
 
 .section-label {
   margin: 2px 0 -4px;
-  font-family: Inter, -apple-system, sans-serif;
+  font-family: "Manrope", -apple-system, sans-serif;
   font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
   text-transform: uppercase; color: var(--muted);
 }
@@ -278,14 +323,15 @@ body {
   border-radius: var(--radius);
   background: var(--raised);
   transition: border-color .14s ease;
+  box-shadow: var(--shadow-card);
 }
 .conn[data-state="on"] { border-color: color-mix(in srgb, var(--green) 32%, var(--line)); }
 
 .brand {
   width: 40px; height: 40px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 10px;
-  font-family: Inter, -apple-system, sans-serif;
+  border-radius: var(--radius-xs);
+  font-family: "Manrope", -apple-system, sans-serif;
   font-weight: 700; letter-spacing: -0.02em;
 }
 .brand.turo {
@@ -331,9 +377,9 @@ body {
 
 .chip {
   flex: none; padding: 7px 13px;
-  border: 1px solid var(--line-strong); border-radius: 8px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-xs);
   background: var(--sunken); color: var(--ink);
-  font-family: Inter, -apple-system, sans-serif; font-size: 12px; font-weight: 500;
+  font-family: "Manrope", -apple-system, sans-serif; font-size: 12px; font-weight: 500;
   cursor: pointer;
   transition: background .12s ease, border-color .12s ease;
 }
@@ -365,12 +411,12 @@ body {
 .quick-icon {
   width: 32px; height: 32px; margin-bottom: 4px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 9px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--indigo) 18%, transparent);
   color: var(--indigo-bright);
 }
 .quick-title {
-  font-family: Inter, -apple-system, sans-serif;
+  font-family: "Manrope", -apple-system, sans-serif;
   font-size: 12.5px; font-weight: 600; color: var(--ink);
 }
 .quick-sub { font-size: 11px; color: var(--muted); line-height: 1.3; }
@@ -435,7 +481,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
   position: absolute; right: 5px;
   width: 30px; height: 30px;
   display: flex; align-items: center; justify-content: center;
-  padding: 0; border: 0; border-radius: 7px;
+  padding: 0; border: 0; border-radius: var(--radius-xs);
   background: transparent; color: var(--muted); cursor: pointer;
   transition: color .12s ease, background .12s ease;
 }
@@ -476,7 +522,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
   width: 21px; height: 21px; flex: none;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%; border: 1px solid var(--line-strong);
-  font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;
+  font-family: "Manrope", sans-serif; font-size: 11px; font-weight: 600;
 }
 .step.current { color: var(--indigo-bright); }
 .step.current .step-n { background: var(--indigo); border-color: var(--indigo); color: #fff; }
@@ -486,7 +532,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .primary, .secondary, .danger {
   width: 100%; padding: 11px 14px;
   border-radius: var(--radius-sm);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 13px; font-weight: 600;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -543,6 +589,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .setting-group {
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--raised); overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 .setting {
   display: flex; align-items: center; gap: 11px;
@@ -552,7 +599,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .setting-icon {
   width: 32px; height: 32px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 9px;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--indigo) 16%, transparent);
   color: var(--indigo-bright);
 }
@@ -576,6 +623,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 /* ------------------------------------------------------------ run panel -- */
 
 .run, .status {
+  box-shadow: var(--shadow-card);
   border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--raised);
   padding: 12px;
@@ -607,7 +655,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 }
 .tile strong {
   display: block;
-  font-family: Inter, sans-serif; font-size: 16px; font-weight: 600; color: var(--ink);
+  font-family: "Manrope", sans-serif; font-size: 16px; font-weight: 600; color: var(--ink);
 }
 .tile span { display: block; font-size: 9.5px; color: var(--muted); line-height: 1.25; margin-top: 1px; }
 .tile.good strong { color: var(--green); }
@@ -631,7 +679,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .gates dt { font-size: 12px; color: var(--body); }
 .gates dd {
   margin: 0;
-  font-family: Inter, sans-serif; font-size: 12px; font-weight: 600;
+  font-family: "Manrope", sans-serif; font-size: 12px; font-weight: 600;
   text-align: right;
 }
 .gates dd.good { color: var(--green); }
@@ -686,7 +734,7 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 
 .badge {
   align-self: flex-start;
-  font-family: Inter, -apple-system, sans-serif;
+  font-family: "Manrope", -apple-system, sans-serif;
   font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
   padding: 3px 8px; border-radius: 999px;
 }
@@ -714,4 +762,51 @@ input:disabled { opacity: .6; cursor: not-allowed; }
   padding: 11px 15px;
   border-top: 1px solid var(--line);
   background: var(--sunken);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NORTHWIND INTERACTION — appended so it wins over the rules above without
+   editing each of them, and so the whole behaviour reads in one place.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* §6.1 — a button physically presses down 1px. It is a small thing and it is
+   most of why this design feels responsive rather than flat. */
+button:active:not(:disabled):not([aria-haspopup]) {
+  transform: translateY(1px);
+}
+
+button, .quick-card, input, select {
+  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* §5 — focus is loud ON PURPOSE: 3px, not the 2px most component kits ship.
+   A popup is keyboard-driven more often than a page is, and the ring is the
+   only thing telling somebody where they are. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 30%, transparent);
+}
+
+/* §6.3 — inputs are FILLED, not outlined: the border only appears on focus. */
+input:not([type="checkbox"]):not([type="radio"]) {
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--sunken);
+}
+input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+  border-color: var(--indigo);
+}
+
+/* An interactive card lifts and warms rather than changing a border colour —
+   this system has no border to change. */
+.quick-card:hover:not(:disabled) {
+  box-shadow: var(--shadow-hover);
+}
+.quick-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
