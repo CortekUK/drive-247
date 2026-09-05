@@ -853,6 +853,52 @@ async function main() {
   }
 
 
+  // ------------------------------------------------------------------
+  /* ── A STRUCTURAL ABSENCE IS ONE FACT, NOT FORTY-ONE FAULTS ──────────────
+     A real account read 41 trips and every row said "missing turo_status".
+     Nothing was wrong with any of them: Turo's upcoming-trips feed carries no
+     booking status, because everything in it is a booking that is happening.
+     Printed per row, that buried the rows with a genuinely individual problem
+     -- which is the only reason this list exists. */
+  console.log("\nA field missing from every trip is stated once, not per row");
+  {
+    const state = await runOrchestrator(null);
+    for (const r of state.rows) r.unknowns = ["turo_status"];
+    state.rows[0].unknowns = ["turo_status", "total_amount"];
+    const { doc } = renderInPopup(state);
+    await tick(30);
+
+    const shared = text(doc, "tripShared");
+    const list = text(doc, "tripList");
+    ok("the shared gap is said once, above the rows", /turo_status/.test(shared), shared);
+    ok("...and says Turo did not send it, not that we failed",
+      /Turo did not send/i.test(shared), shared);
+    ok("...and reassures that the load-bearing fields were read",
+      /Dates, guest and vehicle were all read/i.test(shared), shared);
+
+    const perRow = (list.match(/turo_status/g) || []).length;
+    eq("no row repeats it", perRow, 0);
+    /* The row that is genuinely different keeps its own line. Hoisting THAT
+       too would be the same mistake in reverse: hiding real news. */
+    ok("a gap unique to one row still shows on that row",
+      /missing total_amount/.test(list), list.slice(0, 300));
+  }
+
+  // ------------------------------------------------------------------
+  console.log("\nOne trip on its own keeps its gaps on the row");
+  {
+    const state = await runOrchestrator(null);
+    state.rows = [{ ...state.rows[0], unknowns: ["turo_status"] }];
+    const { doc } = renderInPopup(state);
+    await tick(30);
+    /* With a single row there is no "every row" to generalise from, and
+       "Turo did not send this for any of these trips" would be a grand claim
+       drawn from one observation. */
+    ok("nothing is hoisted", !shown(doc, "tripShared"));
+    ok("...the row says it itself", /missing turo_status/.test(text(doc, "tripList")),
+      text(doc, "tripList").slice(0, 200));
+  }
+
   console.log("\n" + passed + " passed, " + failed + " failed\n");
   process.exit(failed ? 1 : 0);
 }

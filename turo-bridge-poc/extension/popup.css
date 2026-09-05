@@ -672,6 +672,14 @@ input:disabled { opacity: .6; cursor: not-allowed; }
 .drawer[open] summary::before { content: "▾ "; }
 .drawer .hint { margin: 8px 0 0; }
 
+/* One fact about the feed, said once, above the rows it applies to. */
+.trip-shared {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
 .kv, .trips { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
 .kv li, .trips li { font-size: 11.5px; line-height: 1.4; color: var(--body); }
 .kv strong, .trips strong { display: block; color: var(--ink); font-weight: 600; }

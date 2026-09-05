@@ -73,6 +73,7 @@ const els = {
   unknownDrawer: $("unknownDrawer"), unknownCount: $("unknownCount"), unknownList: $("unknownList"),
   rejectDrawer: $("rejectDrawer"), rejectCount: $("rejectCount"), rejectList: $("rejectList"),
   tripDrawer: $("tripDrawer"), tripCount: $("tripCount"), tripList: $("tripList"),
+  tripShared: $("tripShared"),
   absenceDrawer: $("absenceDrawer"), absenceCount: $("absenceCount"), absenceList: $("absenceList"),
 
   // the original one-click demo
@@ -960,6 +961,25 @@ function renderTrips(s) {
   if (!rows.length) return;
   els.tripCount.textContent = rows.length === 1 ? "1 trip saved" : `${rows.length} trips saved`;
   els.tripList.innerHTML = "";
+
+  /* ── A FIELD MISSING FROM EVERY ROW IS A PROPERTY OF THE FEED ─────────────
+     "missing turo_status" printed against all 41 trips reads as 41 damaged
+     bookings. It is one fact about Turo: its upcoming-trips feed carries no
+     booking status, because everything in it is a booking that is happening.
+     Repeating a structural absence per row buries the rows that have a
+     genuinely individual problem -- which is the entire job of this list.
+
+     So a field absent from EVERY row is hoisted into one line, and a field
+     absent from only some stays on the rows it belongs to, where it is real
+     news. */
+  const shared = rows.length > 1
+    ? (rows[0].unknowns || []).filter((f) => rows.every((r) => (r.unknowns || []).includes(f)))
+    : [];
+  els.tripShared.hidden = shared.length === 0;
+  if (shared.length) {
+    els.tripShared.textContent = "Turo did not send " + shared.join(" or ") +
+      " for any of these trips, so none of them show one. Dates, guest and vehicle were all read.";
+  }
   for (const r of rows.slice().reverse()) {
     const li = document.createElement("li");
     li.className = r.review ? "trip needs-review" : "trip";
@@ -981,7 +1001,8 @@ function renderTrips(s) {
     bits.push(LIFECYCLE_LABEL[r.lifecycle] || r.lifecycle);
     bits.push(VEHICLE_LABEL[r.vehicleEvidence] || r.vehicleEvidence);
     if (r.supersedes) bits.push("replaces " + r.supersedes);
-    if (r.unknowns && r.unknowns.length) bits.push("missing " + r.unknowns.join(", "));
+    const own = (r.unknowns || []).filter((f) => !shared.includes(f));
+    if (own.length) bits.push("missing " + own.join(", "));
     bot.textContent = bits.join(" · ");
 
     li.appendChild(top);

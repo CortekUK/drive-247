@@ -431,7 +431,18 @@ const KEYS = {
   turo_guest_id: ["turo_guest_id", "turoGuestId", "guestId", "guest_id", "renterId", "driverId"],
   starts_at: ["starts_at", "startsAt", "start", "startTime", "pickupTime", "tripStart", "startDateTime"],
   ends_at: ["ends_at", "endsAt", "end", "endTime", "returnTime", "tripEnd", "endDateTime"],
-  turo_status: ["turo_status", "turoStatus", "tripStatus", "trip_status", "state", "reservationStatus"],
+  /* `tripItemStatus` is the live host feed's own name for this, and it was the
+     only status key present on a real account: values like "ENDED_TODAY".
+     Measured, it is null on most rows -- the upcoming-trips feed lists trips
+     that are HAPPENING, so a status is usually redundant there and a cancelled
+     trip is simply absent rather than marked. Reading it still matters for the
+     rows that do carry one.
+
+     `upcomingTripFeedItemType` ("OWNER_TRIP_END", "CO_HOST_TRIP_END") is
+     DELIBERATELY NOT HERE. It says what kind of feed entry this is, not what
+     state the booking is in, and mapping it would fill turo_status with a
+     confident value that answers a different question. */
+  turo_status: ["turo_status", "turoStatus", "tripStatus", "trip_status", "tripItemStatus", "state", "reservationStatus"],
   total_amount: ["total_amount", "totalAmount", "total", "earnings", "tripTotal", "amount"],
   currency: ["currency", "currencyCode", "currency_code"],
   timezone: ["timezone", "timeZone", "tz", "locationTimezone"],
