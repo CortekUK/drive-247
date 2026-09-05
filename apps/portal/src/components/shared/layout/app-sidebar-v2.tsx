@@ -1241,7 +1241,18 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {topLevel.map((item) => (
-                        <SidebarMenuItem key={item.href} className="relative">
+                        // `data-tour` is the first-rental tour's anchor (see
+                        // `lib/first-rental-tour.ts`). An attribute rather than a
+                        // wrapper element, so it changes nothing about layout,
+                        // and derived from the href so it cannot drift from the
+                        // route: /vehicles → nav-vehicles. The tour also carries
+                        // an href-based fallback selector, so losing this line
+                        // degrades it rather than breaking it.
+                        <SidebarMenuItem
+                          key={item.href}
+                          className="relative"
+                          data-tour={`nav-${item.href.replace(/^\//, "")}`}
+                        >
                           <SidebarMenuButton
                             asChild
                             isActive={isActive(item.href)}
@@ -1288,7 +1299,21 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                           const hasActive = group.items.some((i) => isActive(i.href));
                           const totalBadge = group.items.reduce((s, i) => s + (i.badge || 0), 0);
                           return (
-                            <SidebarMenuItem key={group.label} className="relative">
+                            // See the `data-tour` note on the top-level items
+                            // above; same idea, derived from the group label —
+                            // "Records" → nav-group-records. Nothing in the
+                            // first-rental tour points here TODAY (its three
+                            // stops are Vehicles, Customers and Rentals), but
+                            // any future coach mark that wants to name a section
+                            // needs a handle on it, and `resolveStops` drops a
+                            // step or a note whose anchor is absent — so a
+                            // manager whose permissions hide a group is never
+                            // told to look somewhere they cannot go.
+                            <SidebarMenuItem
+                              key={group.label}
+                              className="relative"
+                              data-tour={`nav-group-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                            >
                               <SidebarMenuButton
                                 onClick={() => setDrillGroup(group)}
                                 isActive={hasActive}
