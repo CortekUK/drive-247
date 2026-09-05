@@ -593,15 +593,15 @@ function buildCmsContent(t: ContentVars): Record<string, Record<string, unknown>
         title: "Send Us a Message",
         subtitle: "We'll get back to you as soon as possible.",
         success_message: `Thanks for contacting ${t.name} — we'll respond shortly.`,
-        gdpr_text: "I consent to being contacted regarding my enquiry.",
+        gdpr_text: "I consent to being contacted regarding my inquiry.",
         submit_button_text: "Send Message",
-        subject_options: ["General Enquiry", "Booking Question", "Vehicle Availability", "Pricing", "Feedback"],
+        subject_options: ["General Inquiry", "Booking Question", "Vehicle Availability", "Pricing", "Feedback"],
       },
       // No star-rating or "trusted by" badge — we have no reviews to back it up.
       trust_badges: {
         badges: [
           { icon: "lock", label: "Secure Booking", tooltip: "Your details and payment are handled securely" },
-          { icon: "clock", label: "Quick Response", tooltip: "We reply to enquiries as quickly as we can" },
+          { icon: "clock", label: "Quick Response", tooltip: "We reply to inquiries as quickly as we can" },
           { icon: "shield", label: "Local Team", tooltip: `Managed by the ${t.name} team` },
         ],
       },

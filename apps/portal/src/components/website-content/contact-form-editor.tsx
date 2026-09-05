@@ -116,7 +116,7 @@ export function ContactFormEditor({ content, onSave, isSaving }: ContactFormEdit
                     <Textarea
                       {...field}
                       rows={2}
-                      placeholder="I consent to being contacted regarding my enquiry."
+                      placeholder="I consent to being contacted regarding my inquiry."
                     />
                   </FormControl>
                   <FormDescription>Text for the consent checkbox</FormDescription>

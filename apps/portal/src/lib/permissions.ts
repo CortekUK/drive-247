@@ -86,7 +86,7 @@ export const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { key: 'customers', label: 'Customers', group: 'Customers' },
       { key: 'blocked_customers', label: 'Blocked Customers', group: 'Customers' },
-      { key: 'enquiries', label: 'Enquiries', group: 'Customers' },
+      { key: 'enquiries', label: 'Inquiries', group: 'Customers' },
       { key: 'messages', label: 'Messages', group: 'Customers' },
     ],
   },

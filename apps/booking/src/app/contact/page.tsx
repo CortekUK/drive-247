@@ -45,7 +45,7 @@ const Contact = () => {
     name: "",
     email: "",
     phone: "",
-    subject: "General Enquiry",
+    subject: "General Inquiry",
     message: "",
     gdprConsent: false,
   });
@@ -72,7 +72,7 @@ const Contact = () => {
     office_address: content.contact_info?.office?.address || siteSettings.office_address,
     availability: content.contact_info?.phone?.availability || siteSettings.availability,
     whatsapp_number: content.contact_info?.whatsapp?.number || siteSettings.whatsapp_number || siteSettings.phone,
-    whatsapp_description: content.contact_info?.whatsapp?.description || "Quick response for urgent enquiries",
+    whatsapp_description: content.contact_info?.whatsapp?.description || "Quick response for urgent inquiries",
     email_response_time: content.contact_info?.email?.response_time || "Response within 2 hours during business hours (PST)",
   }), [content, siteSettings]);
 
@@ -152,7 +152,7 @@ const Contact = () => {
         name: "",
         email: "",
         phone: "",
-        subject: "General Enquiry",
+        subject: "General Inquiry",
         message: "",
         gdprConsent: false,
       });
@@ -447,7 +447,7 @@ const Contact = () => {
                       <SelectValue placeholder="Select a subject" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(content.contact_form?.subject_options || ["General Enquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"]).map((option) => (
+                      {(content.contact_form?.subject_options || ["General Inquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"]).map((option) => (
                         <SelectItem key={option} value={option}>{option}</SelectItem>
                       ))}
                     </SelectContent>
@@ -504,7 +504,7 @@ const Contact = () => {
                       htmlFor="gdprConsent"
                       className="text-sm cursor-pointer leading-relaxed font-normal block"
                     >
-                      {content.contact_form?.gdpr_text || "I consent to being contacted regarding my enquiry."} *
+                      {content.contact_form?.gdpr_text || "I consent to being contacted regarding my inquiry."} *
                     </Label>
                     {errors.gdprConsent && (
                       <p id="gdpr-error" className="text-sm text-destructive flex items-center gap-1" role="alert">

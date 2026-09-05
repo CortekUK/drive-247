@@ -163,7 +163,7 @@ export function QuickDock({ onAskAI }: { onAskAI?: () => void } = {}) {
               <EnquiriesSheet
                 trigger={
                   <DockButton
-                    label="Enquiries"
+                    label="Inquiries"
                     count={enquiryPending}
                     countLabel="pending"
                     icon={<Inbox className={ICON} />}

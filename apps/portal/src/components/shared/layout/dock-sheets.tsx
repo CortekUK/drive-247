@@ -141,7 +141,7 @@ function EnquiriesList({ onClose }: { onClose: () => void }) {
     return <div className="px-5 py-20 text-center text-sm text-muted-foreground/70">Loading…</div>;
   }
   if (enquiries.length === 0) {
-    return <EmptyState icon={Inbox} text="No enquiries" />;
+    return <EmptyState icon={Inbox} text="No inquiries" />;
   }
   return (
     <div className="divide-y divide-border/40">
@@ -177,7 +177,7 @@ function EnquiriesList({ onClose }: { onClose: () => void }) {
 export function EnquiriesSheet({ trigger }: { trigger: ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <SheetShell open={open} setOpen={setOpen} trigger={trigger} title="Enquiries" viewAllHref="/enquiries">
+    <SheetShell open={open} setOpen={setOpen} trigger={trigger} title="Inquiries" viewAllHref="/enquiries">
       <EnquiriesList onClose={() => setOpen(false)} />
     </SheetShell>
   );

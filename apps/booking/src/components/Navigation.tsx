@@ -190,7 +190,7 @@ const Navigation = () => {
                 className="text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
               >
                 <MessageSquarePlus className="w-4 h-4 mr-2" />
-                Enquiry
+                Inquiry
               </Button>
             )}
             <a href={`tel:${phoneLink}`}>
@@ -264,7 +264,7 @@ const Navigation = () => {
                 className="w-full text-sm font-medium border-accent/50 hover:bg-accent hover:text-accent-foreground text-foreground"
               >
                 <MessageSquarePlus className="w-4 h-4 mr-2" />
-                Enquiry
+                Inquiry
               </Button>
             )}
             {/* Authenticated-only: keep account access in mobile menu. */}

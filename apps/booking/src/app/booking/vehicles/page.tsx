@@ -407,7 +407,7 @@ const BookingVehiclesContent = () => {
               </p>
               {enquiriesEnabled ? (
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Use the <strong>Submit enquiry</strong> button in the top navigation
+                  Use the <strong>Submit inquiry</strong> button in the top navigation
                   and our team will reach out about availability for the car and dates
                   you'd like.
                 </p>

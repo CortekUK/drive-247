@@ -312,7 +312,7 @@ export function AppSidebar() {
         { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
         ...(leadManagementEnabled
           ? []
-          : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
+          : [{ name: "Inquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
         { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
       ],
     },
