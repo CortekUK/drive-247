@@ -1408,10 +1408,30 @@ Deno.serve(async (req) => {
   // On a NEW run the insert already stamped this page's numbers, so only a
   // CONTINUATION adds to them. Getting this wrong double-counts page 1 and
   // makes a 3-trip fleet look like 6.
-  const cumulativeSeen =
-    (asInt(jobRow?.records_seen) ?? 0) +
-    (isContinuation ? incoming.length + stillPresent.length : stillPresent.length);
   const cumulativeIngested = (asInt(jobRow?.records_ingested) ?? 0) + rows.length;
+
+  /* ── records_seen IS A RUNNING TOTAL, NOT A DELTA ──────────────────────────
+     The client sends cursor.recordsAccepted (background.js:2510), which is the
+     count for the WHOLE run so far and grows with every batch. This used to ADD
+     incoming.length to it on each continuation, so a 71-trip walk that posts one
+     record at a time finished with records_seen = 141: the running total, plus
+     every record counted a second time on its way past.
+
+     The damage was not cosmetic. completeness and is_authoritative are GENERATED
+     from ingested against seen, so 42 of 141 read as a half-failed sync -- the
+     panel said "99 of 141 could not be read", the release gate stayed shut, and
+     no absence could ever be concluded. A real run looked broken because of
+     arithmetic.
+
+     Taking the maximum is what the degraded branch above already does, and it is
+     the right shape for a running total: monotonic, idempotent under a replayed
+     POST, and never below what we have actually written. */
+  const cumulativeSeen = Math.max(
+    asInt(jobRow?.records_seen) ?? 0,
+    asInt(job.records_seen) ?? 0,
+    cumulativeIngested,
+    stillPresent.length,
+  );
   const cumulativeParsed = (asInt(jobRow?.parsed_count) ?? 0) + rows.length;
   const priorVehicles = asStringArray(jobRow?.observed_turo_vehicle_ids);
   const observedVehicles = [...new Set([
