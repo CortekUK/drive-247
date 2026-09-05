@@ -104,6 +104,7 @@ import { GlobalSearch } from "@/components/shared/layout/global-search";
 import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
+import { DevSection } from "@/components/shared/layout/dev-section";
 import { SidebarSearchScene, useTypedHint } from "@/components/shared/layout/sidebar-search-scene";
 import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-customizer-dialog";
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
@@ -1368,6 +1369,11 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             <SidebarPromo />
           </div>
         )}
+
+        {/* Local-only dev affordance. Self-gating: NODE_ENV, then localhost,
+            then the northwind slug — see dev-section.tsx. Renders null in
+            every other case, and is dropped from a production build entirely. */}
+        {!collapsed && <DevSection />}
 
         <SidebarMenu>
           {/* Profile row — whole row opens the user menu, and carries the
