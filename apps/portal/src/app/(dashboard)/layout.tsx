@@ -46,6 +46,7 @@ import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
+import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
 
 function LoadingSkeleton() {
   return (
@@ -509,6 +510,24 @@ export default function DashboardLayout({
             screen, and two non-dismissible full-screen surfaces stacked on each
             other leave them unable to act on either. */}
         <FirstRunWizard suppressed={showGate} />
+
+        {/* First-rental tour — step 7, immediately after the wizard above.
+            Three stops (add a vehicle, add a customer, new rental) and roughly
+            a minute; its whole job is getting a brand-new operator to their
+            first rental, which is why it names no chrome.
+
+            Gated to the northwind canary INSIDE the hook, on the resolved
+            tenant's SLUG and never its id, and additionally on the v2 chrome —
+            every anchor it points at lives in `app-sidebar-v2.tsx`, so under v1
+            chrome there is nothing to point at and it stays dark.
+
+            `suppressed` carries the same paywall signal the four prompts above
+            take. Unlike them this one is a coach mark rather than a blocking
+            surface — its dimming layer takes no clicks — but a tour spotlighting
+            the sidebar behind a non-dismissible paywall is still nonsense the
+            operator cannot act on. It also self-gates on the first-run wizard
+            having settled, so the two can never share the screen. */}
+        <FirstRentalTour suppressed={showGate} />
       </Provider>
     </DynamicThemeProvider>
   );

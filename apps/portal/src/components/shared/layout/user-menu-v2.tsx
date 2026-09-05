@@ -17,11 +17,15 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui-v2/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui-v2/dialog';
 import { Input } from '@/components/ui-v2/input';
 import { Label } from '@/components/ui-v2/label';
-import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send, SlidersHorizontal } from 'lucide-react';
+import { User, LogOut, Key, Camera, Loader2, Moon, Sun, ChevronsUpDown, LifeBuoy, Send, SlidersHorizontal, Compass } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui-v2/switch';
 import { useFeedbackStore } from '@/stores/feedback-store';
 import { useFeedbackSettings } from '@/hooks/use-feedback-settings';
+import {
+  replayFirstRentalTour,
+  useFirstRentalTourEligible,
+} from '@/hooks/use-first-rental-tour';
 import { toast } from '@/hooks/use-toast';
 import { AvatarCropDialog } from './avatar-crop-dialog';
 
@@ -42,6 +46,10 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
   // moved into this menu; the switch that turns it off must move with it, or a
   // tenant who disabled the form gets it back through the side door.
   const { formEnabled: feedbackEnabled } = useFeedbackSettings();
+  // The first-rental tour is replayable from here. Effect-free gate — the hook
+  // that owns the tour's autostart and its replay listener is mounted once, in
+  // the dashboard layout, and must not be instantiated a second time.
+  const tourEligible = useFirstRentalTourEligible();
 
   // Controlled so the row CONTAINER can carry the open state. The pill now
   // wraps the customise and caret buttons as well as the trigger, and a
@@ -421,6 +429,21 @@ export const UserMenuV2 = ({ variant = 'icon' }: { variant?: 'icon' | 'row' } = 
               >
                 <Send className="mr-2.5 h-4 w-4 text-muted-foreground" />
                 <span>Feedback</span>
+              </DropdownMenuItem>
+            )}
+            {/* Replay the three-stop first-rental tour. Canary only — the gate
+                is the same slug-keyed one the tour itself uses, so this row and
+                the tour can never disagree about who is eligible. Dispatches a
+                window event rather than holding state, matching what the v2
+                chrome already does for `open-sidebar-customizer`: the menu and
+                the tour sit in different subtrees with no shared ancestor. */}
+            {tourEligible && (
+              <DropdownMenuItem
+                onSelect={() => replayFirstRentalTour()}
+                className="cursor-pointer rounded-lg px-2.5 py-1.5 text-[13px]"
+              >
+                <Compass className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                <span>Replay tour</span>
               </DropdownMenuItem>
             )}
           </div>
