@@ -44,7 +44,9 @@ import { usePaymentVerificationActions, getVerificationStatusInfo, VerificationS
 import { useVoidPaymentLink } from "@/hooks/use-void-payment-link";
 import { useOrgSettings } from "@/hooks/use-org-settings";
 import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { isLeanTenant } from "@/lib/lean-areas";
+import { PaymentsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -67,7 +69,7 @@ const PaymentsList = () => {
   const router = useRouter();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const { canEdit } = useManagerPermissions();
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -322,6 +324,33 @@ const PaymentsList = () => {
   const payments = paymentsData?.payments || [];
   const totalCount = paymentsData?.totalCount || 0;
   const totalPages = paymentsData?.totalPages || 1;
+
+  // `totalCount` above is the count for the CURRENT filters, and the page opens
+  // with a date range already applied — so it reads zero for an operator whose
+  // last payment was last month. That is not someone who needs teaching, so the
+  // teaching state needs its own unfiltered count.
+  //
+  // `enabled` pins it to the canary: the other 56 tenants never issue this
+  // query at all, so the shared page costs them nothing. `head: true` fetches
+  // no rows, and `.eq('tenant_id')` is applied before anything else because RLS
+  // is off on `payments` (V2_PLAN §5).
+  const teachEligible = isLeanTenant(tenantSlug);
+  const { data: lifetimePayments } = useQuery({
+    queryKey: ["payments-lifetime-count", tenant?.id],
+    queryFn: async () => {
+      const { count, error } = await (supabase as any)
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenant!.id);
+      if (error) throw error;
+      return (count as number | null) ?? 0;
+    },
+    enabled: teachEligible && !!tenant?.id,
+    staleTime: 60_000,
+  });
+
+  // Undefined while the count is still in flight — never teach on a guess.
+  const teachEmptyPayments = teachEligible && lifetimePayments === 0;
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
@@ -657,6 +686,12 @@ const PaymentsList = () => {
             </div>
           </div>
         </>
+      ) : teachEmptyPayments ? (
+        <PaymentsTeachingEmptyState
+          onRecordPayment={
+            canEdit('payments') ? () => setShowAddDialog(true) : undefined
+          }
+        />
       ) : (
         <div className="text-center py-12">
           <CreditCard className="mx-auto h-12 w-12 text-muted-foreground mb-4" />

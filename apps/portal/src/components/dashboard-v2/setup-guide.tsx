@@ -10,6 +10,11 @@ import {
   type SetupGuideGroup,
   type SetupGuideItem,
 } from "@/hooks/use-setup-guide";
+import {
+  ExplainerChip,
+  ExplainerShelfButton,
+} from "@/components/explainers/explainer";
+import { listReadyExplainers } from "@/lib/explainers";
 
 type PanelState = "expanded" | "minimized" | "closed";
 
@@ -133,11 +138,15 @@ function Group({
       {isOpen && (
         <ul className="space-y-0.5 px-2 pb-2.5">
           {group.items.map((item) => (
-            <li key={item.id}>
+            // The row is a flex CONTAINER, not a button, so the video slot can
+            // sit beside the navigation target. A <button> inside a <button> is
+            // invalid HTML and React hydrates it wrong, so the label keeps the
+            // button and the chip is its sibling.
+            <li key={item.id} className="flex items-start gap-1">
               <button
                 type="button"
                 onClick={() => onNavigate(item.href)}
-                className="flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-background"
+                className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-background"
               >
                 {item.isComplete ? (
                   <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-primary">
@@ -159,6 +168,17 @@ function Group({
                   {item.label}
                 </span>
               </button>
+
+              {/* The highest-value slot in the product: the operator is stuck
+                  on this exact task right now. Renders nothing until the video
+                  exists, so the row is unchanged today. */}
+              {item.explainerId && (
+                <ExplainerChip
+                  id={item.explainerId}
+                  variant="link"
+                  className="mt-2"
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -227,6 +247,10 @@ export function SetupGuide() {
   }, [groups]);
 
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+
+  // Read once per render rather than inside the footer, so the footer's border
+  // is dropped along with the button it would otherwise wrap around nothing.
+  const hasGuides = listReadyExplainers().length > 0;
 
   // Land the operator on the group they are actually working on, the way
   // Stripe opens "Test Connect" for you. Only ever seeds the initial value —
@@ -354,6 +378,18 @@ export function SetupGuide() {
             />
           ))}
         </div>
+
+        {/* The browse-and-re-find shelf, for the operator who watched something
+            once and wants it again. Hung off the guide rather than given its
+            own route: an unmapped route in lib/permissions.ts is treated as
+            ALLOWED, so a /guides page would silently widen what a manager with
+            no grants can reach. The whole strip is dropped — not just the
+            button — while no video exists, so there is no empty footer. */}
+        {hasGuides && (
+          <div className="border-t border-border px-4 py-2.5">
+            <ExplainerShelfButton />
+          </div>
+        )}
       </div>
     ) : null;
 

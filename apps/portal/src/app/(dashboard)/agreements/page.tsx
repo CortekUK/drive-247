@@ -24,6 +24,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { GenerateAgreementDialog } from "@/components/agreements/generate-agreement-dialog";
+import { useRouter } from "next/navigation";
+import { isLeanTenant } from "@/lib/lean-areas";
+import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 
 interface AgreementDoc {
   id: string;
@@ -46,7 +49,8 @@ export default function AgreementsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(25);
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  const router = useRouter();
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -184,6 +188,11 @@ export default function AgreementsList() {
       agreementType: "signed" as const,
     })),
   ];
+
+  // `allAgreements`, not the filtered or paginated slice: teach only when there
+  // is genuinely nothing to show, never when a search matched none. Lean canary
+  // only — every other tenant keeps the existing EmptyState.
+  const teachEmptyAgreements = isLeanTenant(tenantSlug) && allAgreements.length === 0;
 
   const filteredAgreements = allAgreements.filter((doc) => {
     const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -731,6 +740,9 @@ export default function AgreementsList() {
 
       {/* Agreements Table */}
       {paginatedDocuments.length === 0 ? (
+        teachEmptyAgreements ? (
+          <AgreementsTeachingEmptyState onGoToRentals={() => router.push("/rentals")} />
+        ) : (
         <EmptyState
           icon={FileSignature}
           title="No agreements found"
@@ -738,6 +750,7 @@ export default function AgreementsList() {
             ? "No agreements match your search criteria"
             : "There are no agreements in the system yet."}
         />
+        )
       ) : (
         <>
           <Card>

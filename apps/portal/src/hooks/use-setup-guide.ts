@@ -4,6 +4,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
 import { useBonzahBalance } from "@/hooks/use-bonzah-balance";
+import type { ExplainerId } from "@/lib/explainers";
 
 export interface SetupGuideItem {
   id: string;
@@ -11,6 +12,17 @@ export interface SetupGuideItem {
   isComplete: boolean;
   /** Where clicking the item sends the operator to finish it. */
   href: string;
+  /**
+   * The explainer for THIS task, rendered as a `Watch (m:ss)` control on the
+   * row itself. This is the highest-value place a video can sit: the operator
+   * is stuck on exactly this step at exactly this moment.
+   *
+   * Naming an id costs nothing before the video exists — `getExplainer()`
+   * returns null for an unproduced entry and the slot renders nothing at all,
+   * so every row below can point at its video today and light up the moment a
+   * file lands in `lib/explainers.ts`.
+   */
+  explainerId?: ExplainerId;
 }
 
 export interface SetupGuideGroup {
@@ -90,6 +102,7 @@ export function useSetupGuide(): SetupGuideState {
         locationsRes,
         pagesRes,
         rentalsRes,
+        agreementsSentRes,
       ] = await Promise.all([
         (supabase as any)
           .from("tenants")
@@ -107,6 +120,11 @@ export function useSetupGuide(): SetupGuideState {
         head("pickup_locations").eq("is_active", true),
         head("cms_pages").eq("status", "published"),
         head("rentals"),
+        // "Sent an agreement" = an e-sign envelope exists on a rental. That is
+        // the moment the customer is actually asked to sign, which is what the
+        // step is teaching — not `document_status`, which a rental can carry
+        // before anything leaves the building.
+        head("rentals").not("docusign_envelope_id", "is", null),
       ]);
 
       if (tenantRes.error) throw tenantRes.error;
@@ -132,6 +150,7 @@ export function useSetupGuide(): SetupGuideState {
         locationCount: (locationsRes.count as number | null) ?? 0,
         publishedPages: (pagesRes.count as number | null) ?? 0,
         rentalCount: (rentalsRes.count as number | null) ?? 0,
+        agreementsSent: (agreementsSentRes.count as number | null) ?? 0,
       };
     },
     enabled: !!tenant?.id,
@@ -165,24 +184,28 @@ export function useSetupGuide(): SetupGuideState {
             label: "Add your logo",
             isComplete: !!t?.logo_url,
             href: "/settings?tab=branding",
+            explainerId: "business.logo",
           },
           {
             id: "details",
             label: "Business name, contact and address",
             isComplete: hasBusinessDetails,
             href: "/settings?tab=general",
+            explainerId: "business.details",
           },
           {
             id: "location",
             label: "Add a pickup location",
             isComplete: (data?.locationCount ?? 0) > 0,
             href: "/settings?tab=locations",
+            explainerId: "business.location",
           },
           {
             id: "site",
             label: "Publish your booking site",
             isComplete: (data?.publishedPages ?? 0) > 0,
             href: "/cms",
+            explainerId: "business.site",
           },
         ],
       },
@@ -195,18 +218,21 @@ export function useSetupGuide(): SetupGuideState {
             label: "Add your first vehicle",
             isComplete: (data?.vehicleCount ?? 0) > 0,
             href: "/vehicles",
+            explainerId: "fleet.vehicle-add",
           },
           {
             id: "photos",
             label: "Add photos",
             isComplete: (data?.vehiclesWithPhoto ?? 0) > 0,
             href: "/vehicles",
+            explainerId: "fleet.vehicle-photos",
           },
           {
             id: "rates",
             label: "Set your daily rates",
             isComplete: (data?.vehiclesPriced ?? 0) > 0,
             href: "/vehicles",
+            explainerId: "fleet.vehicle-rates",
           },
         ],
       },
@@ -219,6 +245,24 @@ export function useSetupGuide(): SetupGuideState {
             label: "Create your first rental",
             isComplete: (data?.rentalCount ?? 0) > 0,
             href: "/rentals/new",
+            explainerId: "rentals.first-rental",
+          },
+          // The guide carries the feature discovery the 3-stop tour
+          // deliberately drops. E-signing is the step that most often surprises
+          // a new operator — it exists, it is built in, and they never find it
+          // because nothing on the rental screen insists. An unfinished item
+          // here is a standing invitation, which is the whole design intent.
+          //
+          // Sits under "Take a test booking" rather than "Protect your
+          // rentals" because it is the second half of one action: you cannot
+          // send an agreement without a rental to send it against, and the
+          // guide should read in the order the operator actually walks it.
+          {
+            id: "first-agreement",
+            label: "Send your first agreement",
+            isComplete: (data?.agreementsSent ?? 0) > 0,
+            href: "/rentals",
+            explainerId: "agreements.first-agreement",
           },
         ],
       },
@@ -231,12 +275,14 @@ export function useSetupGuide(): SetupGuideState {
             label: "Connect your Stripe account",
             isComplete: stripeComplete,
             href: "/settings?tab=payments",
+            explainerId: "payments.stripe-connect",
           },
           {
             id: "deposit",
             label: "Set your security deposit",
             isComplete: hasDepositPolicy,
             href: "/settings?tab=payments",
+            explainerId: "payments.deposit",
           },
         ],
       },
@@ -246,21 +292,24 @@ export function useSetupGuide(): SetupGuideState {
         items: [
           {
             id: "bonzah",
-            label: "Set up Bonzah insurance",
+            label: "Turn on Bonzah insurance",
             isComplete: hasOwnCredentials,
             href: "/settings?tab=insurance",
+            explainerId: "insurance.bonzah",
           },
           {
             id: "esign",
             label: "Brand your e-sign agreements",
             isComplete: hasEsignBrand,
             href: "/settings?tab=esign",
+            explainerId: "agreements.esign-brand",
           },
           {
             id: "verification",
             label: "Turn on driver verification",
             isComplete: !!t?.integration_veriff,
             href: "/settings?tab=requirements",
+            explainerId: "verification.driver",
           },
         ],
       },
@@ -273,12 +322,14 @@ export function useSetupGuide(): SetupGuideState {
             label: "Activate your subscription",
             isComplete: !!isSubscribed,
             href: "/settings?tab=subscription",
+            explainerId: "billing.subscription",
           },
           {
             id: "live-mode",
             label: "Switch to live payments",
             isComplete: t?.stripe_mode === "live",
             href: "/settings?tab=payments",
+            explainerId: "payments.go-live",
           },
         ],
       },

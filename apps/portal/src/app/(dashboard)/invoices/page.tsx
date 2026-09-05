@@ -31,6 +31,9 @@ import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { DeleteInvoiceDialog } from "@/components/invoices/delete-invoice-dialog";
 import { SendInvoiceEmailDialog } from "@/components/invoices/send-invoice-email-dialog";
 import { useTenant } from "@/contexts/TenantContext";
+import { useRouter } from "next/navigation";
+import { isLeanTenant } from "@/lib/lean-areas";
+import { InvoicesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { cn } from "@/lib/utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -76,7 +79,8 @@ interface InvoiceFilters {
 }
 
 const InvoicesList = () => {
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
+  const router = useRouter();
   const { canEdit } = useManagerPermissions();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sendEmailDialogOpen, setSendEmailDialogOpen] = useState(false);
@@ -135,6 +139,11 @@ const InvoicesList = () => {
     },
     enabled: !!tenant?.id,
   });
+
+  // `invoices`, the raw query result — not `filteredInvoices`, which a search
+  // or a status chip can empty for an operator with a full book. Lean canary
+  // only; everyone else keeps the existing EmptyState.
+  const teachEmptyInvoices = isLeanTenant(tenantSlug) && !invoices?.length;
 
   // Filtered invoices
   const filteredInvoices = useMemo(() => {
@@ -362,11 +371,15 @@ const InvoicesList = () => {
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
       ) : !filteredInvoices || filteredInvoices.length === 0 ? (
+        teachEmptyInvoices ? (
+          <InvoicesTeachingEmptyState onCreateRental={() => router.push("/rentals/new")} />
+        ) : (
         <EmptyState
           icon={FileText}
           title="No invoices found"
           description={hasActiveFilters ? "Try adjusting your filters" : "Invoices will appear here when rentals are created"}
         />
+        )
       ) : (
         <>
           <Card>

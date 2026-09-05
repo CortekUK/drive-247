@@ -35,6 +35,8 @@ import { toast } from "sonner";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuditLog } from "@/hooks/use-audit-log";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { isLeanTenant } from "@/lib/lean-areas";
+import { CustomersTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 
 interface Customer {
   id: string;
@@ -117,7 +119,7 @@ const CustomersList = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const { logAction } = useAuditLog();
   const { canEdit } = useManagerPermissions();
 
@@ -625,6 +627,12 @@ const CustomersList = () => {
 
   const hasActiveFilters = debouncedSearchTerm || statusFilter !== 'all' || userTypeFilter !== 'all';
 
+  // Genuinely no customers at all, rather than "the filters matched none" —
+  // hence the raw query result, not `filteredAndSortedCustomers`, which also
+  // drops blocked customers. A tenant whose only customers are blocked is not
+  // a beginner and keeps the existing state. Lean canary only.
+  const teachEmptyCustomers = isLeanTenant(tenantSlug) && !customers?.length;
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
     return sortOrder === 'asc' ? <ArrowUp className="h-4 w-4 text-primary" /> : <ArrowDown className="h-4 w-4 text-primary" />;
@@ -1017,6 +1025,10 @@ const CustomersList = () => {
           </div>
         </div>
         </>
+      ) : teachEmptyCustomers ? (
+        <CustomersTeachingEmptyState
+          onAddCustomer={canEdit('customers') ? handleAddCustomer : undefined}
+        />
       ) : (
         <div className="text-center py-12">
           <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />

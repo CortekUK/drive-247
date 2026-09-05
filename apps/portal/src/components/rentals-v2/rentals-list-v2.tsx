@@ -88,6 +88,38 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui-v2/pagination";
+import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+
+/**
+ * Is any FILTER set on the rentals list?
+ *
+ * `useEnhancedRentals` filters in memory and returns only the filtered rows —
+ * there is no unfiltered count to compare against — so "this tenant has no
+ * rentals" has to be inferred as "nothing came back AND nothing was asked for".
+ *
+ * Written as a sweep over the keys rather than a hand-written list of
+ * comparisons on purpose. `RentalFilters` has grown twice already (bonzahStatus,
+ * depositHold), and a hand-written check silently goes stale when the next one
+ * lands: the new filter would exclude every row while this still reported "no
+ * filters", and an operator with a full book would be told they have no rentals
+ * and shown a beginner's tutorial. Sweeping means an unrecognised key counts as
+ * a filter, so the failure direction is a missed teaching moment, never a
+ * wrong one.
+ *
+ * Only these four keys are not filters. Everything else narrows the list.
+ */
+const NON_FILTER_KEYS = new Set(["sortBy", "sortOrder", "page", "pageSize"]);
+
+function hasAnyRentalFilter(filters: RentalFilters): boolean {
+  return Object.entries(filters).some(([key, value]) => {
+    if (NON_FILTER_KEYS.has(key)) return false;
+    if (value === undefined || value === null) return false;
+    // The list's own "everything" sentinels, set on first paint.
+    if (value === "" || value === "all") return false;
+    if (value === false) return false;
+    return true;
+  });
+}
 
 export function RentalsListV2() {
   const router = useRouter();
@@ -602,6 +634,18 @@ export function RentalsListV2() {
             </div>
           </div>
         </>
+      ) : !hasAnyRentalFilter(filters) ? (
+        // Nothing came back and nothing was asked for: this tenant has not
+        // taken a booking yet. Teach instead of offering a Clear Filters button
+        // that would clear nothing. This component is the northwind-only v2
+        // list (see V2_AREAS.rentals), so no other tenant reaches this branch.
+        <RentalsTeachingEmptyState
+          onCreateRental={() =>
+            rentalCreationBlocked
+              ? setShowConnectStripeDialog(true)
+              : router.push("/rentals/new")
+          }
+        />
       ) : (
         <div className="text-center py-8">
           <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />

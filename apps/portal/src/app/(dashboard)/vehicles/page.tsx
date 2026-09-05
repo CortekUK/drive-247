@@ -32,7 +32,8 @@ import {
 import { VehicleStatus, VehiclePLData } from "@/lib/vehicle-utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
+import { VehiclesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
@@ -507,6 +508,12 @@ export default function VehiclesListEnhanced() {
     router.push(`/vehicles/${vehicleId}`);
   };
 
+  // Teach only when the fleet is genuinely empty, never when a filter simply
+  // matched nothing — hence `vehicles`, the raw query result, and not
+  // `filteredVehicles`. Lean canary only; every other tenant keeps the
+  // "no vehicles match your filters" state unchanged.
+  const teachEmptyFleet = isLeanTenant(tenantSlug) && vehicles.length === 0;
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -720,6 +727,16 @@ export default function VehiclesListEnhanced() {
 
       {/* Table */}
       {filteredVehicles.length === 0 ? (
+        teachEmptyFleet ? (
+          <VehiclesTeachingEmptyState
+            onAddVehicle={() => {
+              // Same programmatic open as the button below — the dialog's
+              // trigger owns its own state, so there is nothing to lift.
+              const addButton = document.querySelector('[data-add-vehicle-trigger] button') as HTMLButtonElement;
+              addButton?.click();
+            }}
+          />
+        ) : (
         <EmptyState
           icon={Plus}
           title="No vehicles found"
@@ -731,6 +748,7 @@ export default function VehiclesListEnhanced() {
             addButton?.click();
           }}
         />
+        )
       ) : (
         <Card>
           <CardContent className="p-0">
