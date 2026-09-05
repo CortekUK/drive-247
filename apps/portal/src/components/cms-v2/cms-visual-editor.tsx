@@ -61,6 +61,7 @@ export function CmsVisualEditor({
     useCmsDraftWrite(slug);
 
   const frame = useRef<HTMLIFrameElement | null>(null);
+  const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sections, setSections] = useState<SectionInfo[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -97,11 +98,19 @@ export function CmsVisualEditor({
     if (!readOnly) post({ type: "cms:hello" });
   }, [post, readOnly]);
 
-  useEffect(() => {
-    if (ready) return;
-    const t = setTimeout(() => setStalled(true), 8000);
-    return () => clearTimeout(t);
-  }, [ready]);
+  /**
+   * Start counting only once the iframe has actually LOADED.
+   *
+   * Timing from mount instead counts the site's own load — which on a cold
+   * Next dev server is a first compile of ten seconds or more — and declares a
+   * perfectly healthy page un-editable before it has had a chance to say
+   * hello. What this state is for is the OLD site, which loads promptly and
+   * then never answers, so the clock belongs after the load event.
+   */
+  const startStallTimer = useCallback(() => {
+    if (stallTimer.current) clearTimeout(stallTimer.current);
+    stallTimer.current = setTimeout(() => setStalled(true), 6000);
+  }, []);
 
   useEffect(() => {
     const onMessage = async (event: MessageEvent) => {
@@ -114,6 +123,8 @@ export function CmsVisualEditor({
           hello();
           break;
         case "cms:ready":
+          if (stallTimer.current) clearTimeout(stallTimer.current);
+          setStalled(false);
           setReady(true);
           break;
         case "cms:sections":
@@ -284,7 +295,10 @@ export function CmsVisualEditor({
             ref={frame}
             src={src}
             title={`${page?.name ?? slug} — live preview`}
-            onLoad={hello}
+            onLoad={() => {
+              hello();
+              startStallTimer();
+            }}
             className={cn("size-full border-0 bg-white transition-opacity", !ready && "opacity-0")}
           />
         </div>
