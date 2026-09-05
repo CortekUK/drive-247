@@ -788,13 +788,22 @@
     "tripEnd", "tripEndDate", "tripEndsAt", "return", "dropoff", "dropoffAt", "dropoffDate",
     "dropoffDateTime", "returnAt", "checkOutAt", "to", "toDate", "untilAt"];
   var TZ_KEYS = ["timeZone", "timezone", "tz", "ianaTimeZone", "zoneId", "timeZoneId"];
-  var VEHICLE_KEYS = ["vehicle", "car", "listing", "vehicleDetails", "vehicleSummary"];
+  var VEHICLE_KEYS = ["vehicle", "car", "listing", "vehicleDetails", "vehicleSummary",
+    "vehicleInfo", "carDetails", "listingSummary", "listingDetails", "vehicleSnapshot"];
   var GUEST_KEYS = ["renter", "guest", "driver", "customer", "traveler", "traveller",
-    "renterProfile", "guestProfile", "bookedBy", "user"];
+    "renterProfile", "guestProfile", "bookedBy", "user",
+    "renterInfo", "guestInfo", "primaryDriver", "driverProfile", "renterSummary"];
   var MONEY_KEYS = ["total", "totalCost", "totalPrice", "cost", "price", "tripPrice",
-    "earnings", "totalEarnings", "amount"];
-  var STATUS_KEYS = ["status", "tripStatus", "reservationStatus", "state"];
-  var PLATE_KEYS = ["licensePlate", "plate", "registration", "licensePlateNumber", "reg", "tag"];
+    "earnings", "totalEarnings", "amount", "totalAmount", "grandTotal", "hostEarnings",
+    "payout", "tripTotal"];
+  var STATUS_KEYS = ["status", "tripStatus", "reservationStatus", "state",
+    "tripState", "bookingStatus", "reservationState"];
+  /* `vrm` and `numberPlate` are the British spellings of the same thing, and
+     Drive247 is a UK product whose only safe vehicle join key is vehicles.reg
+     -- so a UK-shaped plate field being missed costs the strongest match we
+     have. */
+  var PLATE_KEYS = ["licensePlate", "plate", "registration", "licensePlateNumber", "reg", "tag",
+    "numberPlate", "vrm", "regNumber", "registrationNumber", "plateNumber"];
   var VIN_KEYS = ["vin", "vehicleIdentificationNumber", "chassisNumber"];
 
   /**
