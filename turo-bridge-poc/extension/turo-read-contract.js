@@ -412,7 +412,17 @@
      means the trips feed -- the whole point of the sync -- would have been
      reported as an unrecognised envelope on every real account. Everything else
      in this list remains a guess; these three are measured. */
-  var CONTAINER_KEYS = ["upcomingTripItems", "hostedAndCoHostedVehicles",
+  /* ⚠ `hostedAndCoHostedVehicles` IS DELIBERATELY NOT IN THIS LIST, and adding
+     it was a bug caught before it shipped. The trips feed carries BOTH arrays:
+
+       upcomingTripItems          71   <- the trips
+       hostedAndCoHostedVehicles  18   <- the fleet, riding along
+
+     extractItems takes the FIRST name it matches, so listing the fleet key here
+     made a trips read return vehicles -- 18 cars that would then each fail to
+     normalise as a booking. The vehicles endpoint has its own container
+     (`vehicles`, further down) and needs no help from this one. */
+  var CONTAINER_KEYS = ["upcomingTripItems",
     "trips", "reservations", "results", "items", "data", "content",
     "feed", "elements", "records", "list", "bookings", "upcomingTrips", "hostTrips",
     "entries", "edges", "nodes", "vehicles", "listings"];
@@ -803,14 +813,35 @@
   var TZ_KEYS = ["timeZone", "timezone", "tz", "ianaTimeZone", "zoneId", "timeZoneId"];
   var VEHICLE_KEYS = ["vehicle", "car", "listing", "vehicleDetails", "vehicleSummary",
     "vehicleInfo", "carDetails", "listingSummary", "listingDetails", "vehicleSnapshot"];
+  /* ⚠ `owner` IS THE HOST, NOT THE GUEST, and it must never appear in this list.
+     Measured on a real host feed: a trip item carries BOTH
+
+       actor  { firstName, lastName, name, id, image, ... }        <- the guest
+       owner  { firstName, lastName, name, id, email, mobilePhone,
+                driversLicenseName, ... }                          <- the host
+
+     `owner` is the richer object, so a careless alias list would pick it and
+     stamp the OPERATOR'S OWN name, email and phone onto every booking as the
+     renter. That is worse than a missing field: it is confidently wrong, and it
+     would copy the host's contact details into a customer record.
+
+     `actor` is last because it is a generic word. A feed that names the guest
+     properly -- `renter`, `guest` -- should win over one that does not. */
   var GUEST_KEYS = ["renter", "guest", "driver", "customer", "traveler", "traveller",
     "renterProfile", "guestProfile", "bookedBy", "user",
-    "renterInfo", "guestInfo", "primaryDriver", "driverProfile", "renterSummary"];
+    "renterInfo", "guestInfo", "primaryDriver", "driverProfile", "renterSummary",
+    "actor"];
   var MONEY_KEYS = ["total", "totalCost", "totalPrice", "cost", "price", "tripPrice",
     "earnings", "totalEarnings", "amount", "totalAmount", "grandTotal", "hostEarnings",
     "payout", "tripTotal"];
+  /* `tripItemStatus` came off the real feed. It was null on the item sampled, so
+     turo_status will often be absent -- which is correct and harmless: it is an
+     optional column, and inventing a status is how a cancelled trip gets treated
+     as live. `upcomingTripFeedItemType` ("OWNER_TRIP_END") is deliberately NOT
+     here: it describes the FEED ROW, not the booking, and mapping it would put
+     a feed artefact where an operator expects Turo's own word. */
   var STATUS_KEYS = ["status", "tripStatus", "reservationStatus", "state",
-    "tripState", "bookingStatus", "reservationState"];
+    "tripState", "bookingStatus", "reservationState", "tripItemStatus"];
   /* `vrm` and `numberPlate` are the British spellings of the same thing, and
      Drive247 is a UK product whose only safe vehicle join key is vehicles.reg
      -- so a UK-shaped plate field being missed costs the strongest match we
