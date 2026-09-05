@@ -576,7 +576,7 @@ Deno.serve(async (req) => {
       /* Said out loud because it changes rows the operator made themselves. A
          block with any other reason, or none, is never touched. */
       { key: "turo_blocks_replaced",
-        text: 'Any date block you marked "Turo" that sits inside one of these trips will be replaced by the imported booking, which then holds those dates. Blocks with any other reason, or no reason, are left alone.' },
+        text: "Where one of your own date blocks covers one of these trips, the imported booking takes over exactly those days — the car stays unavailable for the same dates, now with the guest and trip recorded against them. Days outside the trip stay blocked. Maintenance holds are never touched, and every block that is replaced can be restored by undoing this import." },
     ],
     notes: [
       "Turo collected the money for these trips. Drive247 will not invoice for them, and none of them will appear as money you are owed.",
@@ -685,6 +685,7 @@ Deno.serve(async (req) => {
      was. Written onto the batch so revert can put them back: freeing a day is
      not a thing to do without an undo. */
   const supersededBlocks: Record<string, unknown>[] = [];
+  let unlabelledSuperseded = 0;
 
   for (const v of ready) {
     const row = staged.find((s) => s.id === v.row_id)!;
@@ -762,6 +763,7 @@ Deno.serve(async (req) => {
         if (retry.ok) {
           for (const a of stand.archived) {
             supersededBlocks.push({ ...a, turo_reservation_id: row.reservation_id });
+            if (!a.named_turo) unlabelledSuperseded++;
           }
         } else if (stand.archived.length > 0) {
           /* PUT IT BACK. The block was stood down to make room for a booking
@@ -879,7 +881,11 @@ Deno.serve(async (req) => {
 
   await supabase.from("turo_promotion_batches")
     .update({
-      counts: { ...counts, imported, conflicts: conflicts.length, blocks_superseded: supersededBlocks.length },
+      counts: {
+        ...counts, imported, conflicts: conflicts.length,
+        blocks_superseded: supersededBlocks.length,
+        blocks_superseded_unlabelled: unlabelledSuperseded,
+      },
       // Written at APPLY time, not at revert time: the undo needs the rows as
       // they were, and by the time somebody asks to revert they are gone.
       revert_report: supersededBlocks.length > 0 ? { superseded_blocks: supersededBlocks } : null,
@@ -892,14 +898,21 @@ Deno.serve(async (req) => {
     ok: true,
     action: "apply",
     batch_id: batchId,
-    counts: { ...counts, imported, conflicts: conflicts.length, blocks_superseded: supersededBlocks.length },
+    counts: {
+      ...counts, imported, conflicts: conflicts.length,
+      blocks_superseded: supersededBlocks.length,
+      blocks_superseded_unlabelled: unlabelledSuperseded,
+    },
     results,
     message:
       `${imported} booking${imported === 1 ? "" : "s"} imported. ` +
       "No invoices were raised and no guests were contacted." +
       (supersededBlocks.length > 0
-        ? ` ${supersededBlocks.length} block${supersededBlocks.length === 1 ? "" : "s"} you had marked "Turo" ` +
-          "were replaced by the imported bookings, which now hold those dates."
+        ? ` ${supersededBlocks.length} date block${supersededBlocks.length === 1 ? "" : "s"} ` +
+          "were replaced by the imported bookings, which now hold exactly those dates" +
+          (unlabelledSuperseded > 0
+            ? ` (${unlabelledSuperseded} of them had no reason written on them — worth a look).`
+            : ".")
         : "") +
       (conflicts.length > 0 ? ` ${conflicts.length} could not be imported because the car is already booked — check the conflicts list.` : ""),
   });
@@ -1047,18 +1060,37 @@ async function ensureVehicleMap(
  *   1. source_type = 'manual'. A maintenance hold means the car is physically
  *      off the road; no booking of any origin may sit on top of that. A 'turo'
  *      block belongs to the importer already.
- *   2. The reason must SAY Turo. The operator wrote that word; it is their own
- *      statement that this block stands for a Turo booking. NULL-SAFE, and that
- *      matters more than it looks: NULL ~* 'turo' is NULL, NOT NULL is NULL,
- *      and a FILTER treats NULL as false -- so an unguarded version of this
- *      rule counted a block with NO REASON as explainable and would have
- *      deleted 23 of them. The block we know least about is the last one to
- *      touch. A blank reason means a person decides, every time.
- *   3. ALL overlapping blocks must pass. One unexplained block anywhere in the
+ *   2. Only the days the trip actually covers are freed. Anything outside is
+ *      preserved, whatever the operator blocked it for.
+ *   3. ALL overlapping blocks must pass. One maintenance hold anywhere in the
  *      trip's span and nothing is touched at all.
- *   4. Only the days the trip actually covers are freed. Anything outside is
- *      preserved, because the operator blocked those days for a reason we were
- *      never told.
+ *
+ * WHY THE REASON TEXT IS NOT PART OF THE RULE -- this took a wrong turn first.
+ * The original version required the reason to SAY Turo, which read as prudent
+ * and left 22 of 42 trips stuck behind blocks with a blank reason. Then the
+ * data settled it. The 16 blocks labelled "Turo" matched their trip's dates
+ * EXACTLY 14 times; the 22 blank ones matched once and overhung the trip 21
+ * times. They are not the same object, and no amount of reading free text was
+ * going to make them one.
+ *
+ * What makes this safe is not the label. IT IS THAT SUPERSESSION CANNOT CHANGE
+ * WHETHER THE CAR IS FREE. Only days inside the trip are released, and the
+ * booking that replaces them holds exactly those days -- blocked_dates and
+ * rentals are both inclusive ranges and the guard reads both. Before: those
+ * days are unavailable. After: the same days are unavailable. The car's
+ * availability is identical, to the day, in every case.
+ *
+ * What changes is provenance, and it changes for the better: days that were
+ * anonymously "blocked" now carry a guest, a trip id and a date range that
+ * came from the operator's own Turo account. The trip is real -- it was read
+ * from their host feed -- so recording it is MORE accurate than the block it
+ * replaces, not less. And a real Drive247 booking underneath is still 23P01
+ * and still refused, which is the case that would actually cost somebody a car.
+ *
+ * The original row is archived either way, and revert puts it back byte for
+ * byte. A blank reason is now reported rather than refused: the operator is
+ * told how many unlabelled blocks were replaced, which is the honest way to
+ * tell somebody their data moved.
  *
  * GEOMETRY, uniformly: archive the original row, delete it, and re-insert the
  * parts that fall OUTSIDE the trip. That single shape covers all five cases --
@@ -1068,16 +1100,29 @@ async function ensureVehicleMap(
 type ArchivedBlock = {
   original: Record<string, unknown>;
   created_ids: string[];
+  /* Reporting only. The operator is told separately how many UNLABELLED blocks
+     were replaced, because "we moved something you did not annotate" is the
+     part they would want to check. */
+  named_turo?: boolean;
 };
 
 const BLOCK_COLUMNS =
   "id, tenant_id, vehicle_id, start_date, end_date, reason, reason_code, source_type, created_by, created_at";
 
-/** Is every block standing in this trip's way one the operator called Turo? */
-function blockIsExplainable(b: Record<string, unknown>): boolean {
-  if (b.source_type !== "manual") return false;
+/**
+ * May this block be stood down for a Turo trip?
+ *
+ * ONLY an operator's own manual hold. A 'maintenance' hold means the car is
+ * physically off the road and no booking of any origin may sit on top of it; a
+ * 'turo' hold belongs to this importer already and is not a hand-made block.
+ */
+function blockIsSupersedable(b: Record<string, unknown>): boolean {
+  return b.source_type === "manual";
+}
+
+/** Did the operator label it Turo? Reporting only — never a permission. */
+function blockNamesTuro(b: Record<string, unknown>): boolean {
   const reason = typeof b.reason === "string" ? b.reason : "";
-  // COALESCE-equivalent, deliberately: a missing reason is never a match.
   return /turo/i.test(reason);
 }
 
@@ -1096,19 +1141,15 @@ async function supersedeManualTuroBlocks(
   const blocks = (rows ?? []) as Record<string, unknown>[];
   if (blocks.length === 0) return { ok: true, archived: [] };
 
-  const unexplained = blocks.filter((b) => !blockIsExplainable(b));
-  if (unexplained.length > 0) {
-    const first = unexplained[0];
-    const why = first.source_type !== "manual"
-      ? `it is a ${String(first.source_type)} hold`
-      : (typeof first.reason === "string" && first.reason.trim())
-        ? `its reason is "${String(first.reason).slice(0, 60)}"`
-        : "it has no reason written on it";
+  const refused = blocks.filter((b) => !blockIsSupersedable(b));
+  if (refused.length > 0) {
+    const first = refused[0];
     return {
       ok: false,
       reason:
-        `This car is blocked from ${String(first.start_date)} to ${String(first.end_date)} and ${why}, ` +
-        "so the block was left alone. Remove it yourself if this Turo trip should take those dates.",
+        `This car is off the road from ${String(first.start_date)} to ${String(first.end_date)} ` +
+        `(a ${String(first.source_type)} hold), so the block was left alone and the trip was not imported. ` +
+        "A car that is off the road cannot be let to anybody, whoever booked it.",
     };
   }
 
@@ -1144,7 +1185,7 @@ async function supersedeManualTuroBlocks(
     if (deleteError) {
       return { ok: false, reason: `could not stand down the block: ${deleteError.message}` };
     }
-    archived.push({ original: b, created_ids: created });
+    archived.push({ original: b, created_ids: created, named_turo: blockNamesTuro(b) });
   }
   return { ok: true, archived };
 }
