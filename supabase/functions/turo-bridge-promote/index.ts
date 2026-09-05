@@ -620,33 +620,63 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, action: "apply", nothing_to_do: true, counts });
   }
 
-  // ---- idempotency layer 3: replaying an approved hash returns the ORIGINAL
-  //      batch rather than creating a second one.
+  /* ---- idempotency layer 3: one batch per plan, RESUMED not refused -------
+     This used to return the original batch for any replay of the same hash,
+     with "These bookings were already imported. Nothing was imported twice."
+
+     THAT SENTENCE WAS FALSE THE ONE TIME IT MATTERED. A batch that had
+     imported ZERO -- every insert failed against a column that did not exist
+     -- was still on record, so every retry afterwards was answered with
+     "already imported" and the account stayed permanently stuck. A failed
+     import was indistinguishable from a completed one, and the guard defended
+     the failure.
+
+     The work has genuinely finished when there is nothing READY, and that is
+     already answered above: a promoted row carries promoted_rental_id, the
+     planner blocks it as "Already imported", and it never reaches `ready`. So
+     arriving here with rows ready means there IS work outstanding, whatever a
+     previous attempt recorded.
+
+     Nothing is imported twice regardless, and not because of this check:
+     rentals_turo_reservation_uniq is a UNIQUE index, and insertRental turns
+     its violation into "already imported" per row. A row-level guarantee from
+     the database outranks a hash comparison in an edge function.
+
+     The batch is REUSED rather than re-created because
+     turo_promotion_batches_plan_uniq is UNIQUE (tenant_id, plan_hash) -- a
+     second row for the same plan cannot exist, so a resumed attempt must write
+     into the first one. */
   const { data: existingBatch } = await supabase
     .from("turo_promotion_batches")
     .select("id, created_at, counts, reverted_at")
     .eq("tenant_id", tenantId).eq("plan_hash", planHash).maybeSingle();
 
-  if (existingBatch && !existingBatch.reverted_at) {
-    return jsonResponse({
-      ok: true, action: "apply", replayed: true,
-      batch_id: existingBatch.id, counts: existingBatch.counts,
-      message: "These bookings were already imported by this exact plan. Nothing was imported twice.",
-    });
+  const resumedBatchId = existingBatch && !existingBatch.reverted_at ? (existingBatch.id as string) : null;
+  if (resumedBatchId) {
+    const prior = (existingBatch!.counts ?? {}) as Record<string, unknown>;
+    console.log(
+      `[TURO-PROMOTE] resuming batch ${resumedBatchId} for tenant ${tenantId}: ` +
+      `${ready.length} still ready, ${typeof prior.imported === "number" ? prior.imported : 0} imported previously`,
+    );
   }
 
-  const { data: batch, error: batchError } = await supabase
-    .from("turo_promotion_batches")
-    .insert({
-      tenant_id: tenantId, actor_app_user_id: actorId, plan_hash: planHash,
-      counts, acknowledgements: acks,
-    })
-    .select("id").single();
-  if (batchError || !batch) {
-    console.error("[TURO-PROMOTE] could not open a batch:", batchError?.message);
-    return errorResponse("Could not start the import.", 500);
+  let batchId: string;
+  if (resumedBatchId) {
+    batchId = resumedBatchId;
+  } else {
+    const { data: batch, error: batchError } = await supabase
+      .from("turo_promotion_batches")
+      .insert({
+        tenant_id: tenantId, actor_app_user_id: actorId, plan_hash: planHash,
+        counts, acknowledgements: acks,
+      })
+      .select("id").single();
+    if (batchError || !batch) {
+      console.error("[TURO-PROMOTE] could not open a batch:", batchError?.message);
+      return errorResponse("Could not start the import.", 500);
+    }
+    batchId = batch.id as string;
   }
-  const batchId = batch.id as string;
 
   const results: Record<string, unknown>[] = [];
   let imported = 0;
