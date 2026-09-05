@@ -548,6 +548,24 @@ async function main() {
 
     eq("paused", store.syncState.phase, "parked");
     ok("and blames the right side", /Drive247/.test(store.syncState.lastError || ""), store.syncState.lastError);
+
+    /* ── THE SENTENCE ON THE SCREEN, NOT JUST THE ONE IN THE LOG ────────────
+       `lastError` is the small grey line; `advice` is the one people read.
+       It used to be re-derived from the READER's policy table, which only
+       knows about Turo and answers an unrecognised reason with UNREACHABLE. So
+       a run that Drive247 itself refused displayed "Could not reach Turo.
+       Check the connection and sync again." -- on a live account whose real
+       problem was a switch in its own Settings page. Every minute spent
+       checking a working Turo connection was caused by this line. */
+    ok("the advice does not send them to Turo",
+      !/reach Turo/i.test(store.syncState.advice || ""), store.syncState.advice);
+    ok("...and carries what the server actually said",
+      /boom/.test(store.syncState.advice || ""), store.syncState.advice);
+    ok("...while still naming the side that refused",
+      /Drive247/.test(store.syncState.advice || ""), store.syncState.advice);
+    ok("...and promises nothing was lost, because nothing was",
+      /Nothing was lost/.test(store.syncState.advice || ""), store.syncState.advice);
+
     ok("the refused record is still queued", store.syncPending.records.length > 0);
     const refusedId = store.syncPending.records[0].reservation_id;
 
@@ -559,6 +577,31 @@ async function main() {
     eq("the run completed", store.syncState.phase, "done");
     eq("all 9 records landed", new Set(posts.filter((p) => p.body).map((p) => p.id)).size, 9);
     ok("including the one that was refused", posts.filter((p) => p.id === refusedId).length >= 2, refusedId);
+  }
+
+  // ---------------------------------------------------------------------
+  /* THE CASE THAT ACTUALLY HAPPENED, on a live account. The server's 403 names
+     the exact switch that fixes it, and that sentence has to survive to the
+     screen intact rather than being replaced by a guess about Turo. */
+  console.log("\nA refusal that explains itself is quoted, not paraphrased");
+  {
+    const store = { pairingToken: "d247_turo_" + "x".repeat(40) };
+    const posts = [];
+    const OFF = "Turo Sync is switched off for this Drive247 account. Turn it on in Settings, then sync again.";
+    const listen = boot(store, posts, (_b, n) => (n === 2 ? { ok: false, status: 403, error: OFF } : { ok: true }));
+    await send(listen, { type: "SYNC_ALL", mode: "fixture" });
+    await settle(store, 3000);
+
+    eq("paused", store.syncState.phase, "parked");
+    ok("the fix is the first thing said",
+      (store.syncState.advice || "").indexOf(OFF) === 0, store.syncState.advice);
+    /* No "Drive247 would not accept a reservation:" bolted on the front — the
+       server already named itself, and saying it twice is only longer. */
+    ok("...with no second helping of blame",
+      (store.syncState.advice || "").indexOf("would not accept a reservation") === -1,
+      store.syncState.advice);
+    ok("...and it still ends with the reassurance",
+      /Nothing was lost/.test(store.syncState.advice || ""), store.syncState.advice);
   }
 
   // ---------------------------------------------------------------------

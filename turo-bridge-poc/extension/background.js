@@ -2116,9 +2116,26 @@ async function stepFlush(cursor) {
          and say plainly that this is a Drive247 problem so the operator does
          not go hunting on turo.com. */
       cursor = R.advanceCursor(cursor, { ingestFailures: cursor.ingestFailures + 1 });
+      /* DRIVE247 ALREADY SAID WHY, so lead with that. "Turo Sync is switched
+         off for this Drive247 account. Turn it on in Settings" IS the fix, and
+         it was being buried in a parenthesis underneath a sentence about Turo
+         being unreachable -- sending the operator to inspect the one system
+         that was working perfectly.
+
+         The sentence must still name WHICH SIDE refused, which is the whole
+         reason the generic wording exists. So it is added only when the
+         server's own reason does not already say it; most do, and repeating
+         "Drive247" twice in one line buys nothing but length. */
+      const why = String((res && res.detail) || "").trim();
+      const blamed = !why
+        ? "Drive247 would not accept a reservation, so the sync paused."
+        : (/Drive247/.test(why) ? why : "Drive247 would not accept a reservation: " + why);
+      // Two sentences need a full stop between them; server messages usually
+      // carry their own, and a doubled one reads worse than a missing one.
+      const punctuated = /[.!?]$/.test(blamed) ? blamed : blamed + ".";
       await parkRun(cursor, "INGEST_FAILED",
-        "Drive247 would not accept a reservation, so the sync paused. Nothing was lost — continuing will resend it.",
-        res.detail);
+        punctuated + " Nothing was lost — continuing will resend it.",
+        why ? null : res.detail);
       return { stop: true, waitMs: 0 };
     }
 
@@ -2412,6 +2429,15 @@ async function parkRun(cursor, outcome, advice, detail, label) {
   const R = reader();
   let parked = R.advanceCursor(cursor, {
     phase: "parked", parkedReason: outcome, parkedLabel: label || null,
+    /* THE SENTENCE THE CALLER MEANT, kept rather than re-derived.
+       Every park site already knows why it parked and passes the words for it.
+       projectState used to throw that away and look the advice up again from
+       the READER's policy table -- which only knows about Turo. So a park
+       caused by Drive247 refusing a write printed "Could not reach Turo. Check
+       the connection and sync again.", sending the operator to look at the one
+       system that was working perfectly. Deriving an answer we were already
+       handed is how a screen ends up confidently wrong. */
+    parkedAdvice: advice || null,
     lastError: detail ? advice + " (" + detail + ")" : advice,
     outcomes: cursor.outcomes.concat([outcome === "INGEST_FAILED" ? "UNREACHABLE" : outcome])
   });
@@ -3412,9 +3438,12 @@ function projectState(cursor, summary, note) {
     /* The park's own headline, when it set one. Null everywhere else, so the
        popup falls back to the reader's vocabulary. */
     label: cursor.parkedLabel || null,
-    /* A labelled park has already said the useful thing in `lastError`; the
-       reader's policy advice would be about Turo, which is not what went wrong. */
-    advice: cursor.parkedLabel ? (cursor.lastError || null) : (policy ? policy.advice : null),
+    /* THE PARK'S OWN WORDS FIRST. policyFor() speaks only about Turo, and its
+       fallback for a reason it does not recognise -- INGEST_FAILED, which is
+       ours and not the reader's -- is an UNREACHABLE sentence about a network
+       that was never the problem. */
+    advice: cursor.parkedAdvice ||
+      (cursor.parkedLabel ? (cursor.lastError || null) : (policy ? policy.advice : null)),
     lastError: cursor.lastError || null,
     /* Said out loud rather than swallowed: the trips landed but Drive247 has not
        yet compared them against the previous sync, so nothing has been released
