@@ -19,19 +19,42 @@
 --   carries both the to_regclass guard and the step-4 backfill that switches
 --   on the tenants which already hold synced trips. This is now the only 04.
 --
--- ORDER OF OPERATIONS -- NON-NEGOTIABLE
---   1. Apply this file.
---   2. Verify with the anon smoke test at the bottom. A green typecheck proves
---      nothing here; only an actual anon-key read does.
---   3. Apply this file to EVERY database the portal is pointed at -- production,
---      staging, and any Supabase branch/preview DB. A grant is per-database.
---      A preview deploy against an ungranted branch DB fails exactly the same
---      way, it just fails somewhere nobody is watching.
---   4. THEN ship the portal change that adds `turo_bridge_enabled` to
---      TENANT_CORE_COLUMNS (apps/portal/src/contexts/TenantContext.tsx).
---   Reversing this order breaks branding AND login for all 63 tenants at once.
---   The TENANT_CORE_COLUMNS edit is already in the working tree, so the only
---   thing standing between here and that outage is that it has not merged yet.
+-- ORDER OF OPERATIONS
+--   An earlier draft of this header said the order was non-negotiable and that
+--   getting it wrong took all 63 tenants down. That WAS true of the frontend as
+--   first written. It is not true of the frontend as merged, and pretending
+--   otherwise makes the next person distrust the rest of this file.
+--
+--   `turo_bridge_enabled` is in TENANT_OPTIONAL_COLUMNS, not TENANT_CORE_COLUMNS
+--   (apps/portal/src/contexts/TenantContext.tsx:174, committed at 8632311d), and
+--   the retry ladder there sheds it. So the ungranted case degrades instead of
+--   failing: the flag reads undefined, undefined reads as OFF, the feature hides
+--   itself. Fail-closed, no outage, either order.
+--
+--   ⚠ DO NOT "TIDY" THIS COLUMN INTO TENANT_CORE_COLUMNS. That single edit is
+--   the one that genuinely breaks branding AND login for all 63 tenants at once,
+--   because every rung of the ladder keeps the core list and there is no rung
+--   below it. If it ever must move there, this grant has to be applied and
+--   PROVEN with a real anon-key read first.
+--
+--   RUN IT AS THREE SEPARATE REQUESTS, not one paste. The Management API
+--   endpoint returns only the LAST NON-EMPTY result set, and RAISE NOTICE is
+--   swallowed entirely -- so a whole-file paste hides the VERIFY numbers behind
+--   the DEPLOY GATE exactly when the gate has something to say.
+--     1. The transaction (BEGIN ... COMMIT).
+--     2. VERIFY.
+--     3. DEPLOY GATE.
+--   Then the anon smoke test over HTTP. A green typecheck gates nothing here;
+--   only the anon-key read does.
+--
+--   PRODUCTION IS THE ONLY DATABASE THAT NEEDS THIS. Measured on the staging
+--   branch database (ksmreaadhbirzakkxqrq) 2026-09-05: `anon` there holds
+--   TABLE-level SELECT on public.tenants, so the GRANT is a no-op; the column
+--   and public.turo_bridge_reservations do not exist; and `integration_veriff`
+--   -- a CORE column -- is missing, so no tenant resolves on staging at all,
+--   grant or no grant. Staging is also a non-persistent branch, so anything
+--   hand-applied there is discarded on the next reset. Do not treat a green
+--   smoke test against staging as evidence of anything.
 --
 -- VERIFIED AGAINST LIVE PRODUCTION (hviqoaokxvlancmftwuo) 2026-09-05:
 --   public.tenants ......................... 270 columns
@@ -48,6 +71,24 @@
 
 
 BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- 0. Do not queue an ACCESS EXCLUSIVE lock on `tenants` behind a slow reader.
+--
+-- ALTER TABLE picks its lock level from the parsed subcommand BEFORE the
+-- IF NOT EXISTS check runs, so statement 1 takes ACCESS EXCLUSIVE on
+-- public.tenants even though it is a metadata no-op on production -- and
+-- BEGIN..COMMIT holds it until the end. Every booking site and every portal
+-- login reads this table, so a wait here is a platform-wide stall.
+--
+-- Measured on the applying session 2026-09-05: lock_timeout = '0' (wait
+-- forever) and statement_timeout = '2min'. Without this line a contended apply
+-- stalls every reader for up to two minutes -- the same outage this file exists
+-- to prevent, caused by the fix. With it, a contended apply fails clean in 3s
+-- with 55P03, rolls the whole transaction back, and you re-run when it is quiet.
+-- Costs nothing when the table is idle, which is the normal case.
+-- ---------------------------------------------------------------------------
+SET LOCAL lock_timeout = '3s';
 
 -- ---------------------------------------------------------------------------
 -- 1. The column.
@@ -145,6 +186,20 @@ GRANT SELECT (turo_bridge_enabled) ON public.tenants TO authenticated;
 -- ---------------------------------------------------------------------------
 -- 3. Document the trap on the column itself, so the next person adding a
 --    column to TENANT_CORE_COLUMNS finds it without reading this file.
+--
+-- ⚠ THIS OVERWRITES A COMMENT THAT RECORDED THE OPPOSITE DECISION, and
+-- COMMENT ON keeps no history. The text being replaced, read off the live
+-- column 2026-09-05 and preserved here so the reversal is not silent:
+--
+--   'Gates turo-bridge-promote. Deliberately NOT granted to anon: anon has
+--    column-level grants on tenants and an ungranted column 403s the entire
+--    booking-side query.'
+--
+-- That decision was right about the mechanism and wrong about the conclusion:
+-- withholding the grant does not avoid the 403, it just moves the column out of
+-- the query -- and the portal then cannot see its own flag. The new text says
+-- so, and keeps the half the old comment got right: the flag DOES gate
+-- turo-bridge-promote at the application layer.
 -- ---------------------------------------------------------------------------
 COMMENT ON COLUMN public.tenants.turo_bridge_enabled IS
   'Feature flag: when true this tenant''s portal shows the Turo Sync screen and '
@@ -158,8 +213,13 @@ COMMENT ON COLUMN public.tenants.turo_bridge_enabled IS
   'until a hard refresh. Promoting this column into TENANT_CORE_COLUMNS without '
   'the grant is the version that DOES break every tenant at once: Postgres '
   'refuses the WHOLE ROW (42501), not just the column. This is a visibility '
-  'preference, NOT an authorization boundary -- the Turo rows are fenced by RLS '
-  'on turo_bridge_reservations, and this flag appears in no policy.';
+  'preference at the DATABASE layer -- verified 2026-09-05: it appears in no RLS '
+  'policy, no view and no function, and the Turo rows are fenced by RLS on '
+  'turo_bridge_reservations. It IS an application-level gate: '
+  'supabase/functions/turo-bridge-promote/index.ts returns 403 when it is false. '
+  'Supersedes an earlier comment reading "Deliberately NOT granted to anon"; '
+  'that decision was reconsidered 2026-09-05 because withholding the grant does '
+  'not avoid the 42501, it only hides the flag from the portal that owns it.';
 
 
 -- ---------------------------------------------------------------------------
@@ -254,11 +314,23 @@ SELECT
   (SELECT count(*) FROM public.tenants)                  AS tenants_total,
   (SELECT count(*) FROM public.tenants
     WHERE turo_bridge_enabled)                           AS tenants_enabled,
+  -- Which tenants ended up switched on. A bare count is not attributable; if a
+  -- slug other than the ones you expected appears here, STOP.
+  (SELECT string_agg(slug, ', ' ORDER BY slug)
+     FROM public.tenants WHERE turo_bridge_enabled)      AS enabled_slugs,
   -- Any tenant holding Turo rows while the flag is off. MUST be 0.
+  --
+  -- ⚠ NO to_regclass GUARD HERE, because it does not work in this position and
+  -- pretending it does is worse than omitting it. The planner resolves
+  -- public.turo_bridge_reservations before the runtime condition is ever
+  -- evaluated, so on a database lacking the table this errors 42P01 rather than
+  -- short-circuiting -- reproduced on staging 2026-09-05. (The identical-looking
+  -- guard inside the DO block above IS effective: PL/pgSQL plans lazily and
+  -- RETURNs first. The two are not equivalent despite reading the same.)
+  -- On a database without the table, delete this subquery instead.
   (SELECT count(*)
      FROM public.tenants t
     WHERE t.turo_bridge_enabled IS DISTINCT FROM true
-      AND to_regclass('public.turo_bridge_reservations') IS NOT NULL
       AND EXISTS (SELECT 1 FROM public.turo_bridge_reservations r
                    WHERE r.tenant_id = t.id))            AS stranded_tenants;
 
@@ -298,11 +370,17 @@ SELECT
 -- When TENANT_CORE_COLUMNS changes, paste the new value in below -- it is a
 -- snapshot, not a live read, and a stale snapshot silently under-reports.
 -- (INSHUR columns are deliberately NOT in this list: they are shed by the
--- 42501 retry by design, and anon holds no grant on any of them today.)
+-- 42501 retry by design, and anon holds no grant on any of them today. Neither
+-- is `turo_bridge_enabled` -- it lives in TENANT_OPTIONAL_COLUMNS and is shed
+-- the same way. Listing it here made this gate cry wolf: it reported a
+-- "tenant-wide outage" for a column whose whole design is to be sheddable.
+-- Only genuine TENANT_CORE_COLUMNS entries belong in the snapshot; verified
+-- 2026-09-05 that all 57 of them are granted, i.e. there is no second
+-- customer_theme_mode lurking today.)
 -- ============================================================================
 WITH core(col) AS (
   SELECT btrim(unnest(string_to_array(
-    'id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled, turo_bridge_enabled',
+    'id, slug, company_name, status, contact_email, phone, admin_name, integration_veriff, integration_bonzah, integration_xero, integration_zoho_books, bonzah_brochure_url, bonzah_username, bonzah_mode, bonzah_sandbox_override, boldsign_mode, stripe_mode, payment_provider, subscription_stripe_mode, timezone, currency_code, distance_unit, privacy_policy_version, terms_version, policies_accepted_at, auth_logo_url, integration_twilio_sms, twilio_phone_number, integration_twilio_whatsapp, twilio_whatsapp_number, twilio_whatsapp_lockbox_template_sid, integration_whatsapp, meta_whatsapp_phone_number, maintenance_banner_enabled, maintenance_banner_message, monthly_tier_days, integration_tesla_fleet, security_deposit_enabled, global_deposit_amount, deposit_mode, deposit_charge_enabled, lead_management_enabled, automations_enabled, vehicle_owners_enabled, lead_stale_threshold_hours, lead_auto_lost_threshold_hours, communication_tone, subscription_gate_disabled, subscription_billing_anchor, setup_completed_at, customer_theme_mode, gig_driver_enabled, show_effective_daily_rate, hide_checkout_price_breakdown, allow_rental_without_id_verification, hide_vehicle_registration, push_notifications_enabled',
     ',')))
 )
 SELECT
