@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui-v2/card';
+import { EmptyStatePreview } from '@/components/dev/empty-state-preview';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { isLeanTenant } from '@/lib/lean-areas';
@@ -270,6 +271,8 @@ export function DevPageBody() {
           </div>
         </section>
       ))}
+
+      <EmptyStatePreview />
 
       {status && (
         <p

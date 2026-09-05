@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
 import { VehiclesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
@@ -512,7 +513,11 @@ export default function VehiclesListEnhanced() {
   // matched nothing — hence `vehicles`, the raw query result, and not
   // `filteredVehicles`. Lean canary only; every other tenant keeps the
   // "no vehicles match your filters" state unchanged.
-  const teachEmptyFleet = isLeanTenant(tenantSlug) && vehicles.length === 0;
+  //
+  // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
+  // outside development, and INSIDE the slug gate so it reaches nobody else.
+  const devForceEmpty = useForcedEmptyState("vehicles");
+  const teachEmptyFleet = isLeanTenant(tenantSlug) && (vehicles.length === 0 || devForceEmpty);
 
   if (isLoading) {
     return (
@@ -563,7 +568,7 @@ export default function VehiclesListEnhanced() {
             </Link>
           )}
           {canEdit('vehicles') && (
-            <div data-add-vehicle-trigger className="flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
+            <div data-add-vehicle-trigger data-tour="add-vehicle" className="flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
               <AddVehicleDialog />
             </div>
           )}
@@ -726,7 +731,7 @@ export default function VehiclesListEnhanced() {
       )}
 
       {/* Table */}
-      {filteredVehicles.length === 0 ? (
+      {filteredVehicles.length === 0 || teachEmptyFleet ? (
         teachEmptyFleet ? (
           <VehiclesTeachingEmptyState
             onAddVehicle={() => {

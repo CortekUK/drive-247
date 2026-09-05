@@ -89,6 +89,8 @@ import {
   PaginationPrevious,
 } from "@/components/ui-v2/pagination";
 import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { isLeanTenant } from "@/lib/lean-areas";
 
 /**
  * Is any FILTER set on the rentals list?
@@ -129,6 +131,11 @@ export function RentalsListV2() {
   const [reviewRental, setReviewRental] = useState<EnhancedRental | null>(null);
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
+  // The /dev preview switch for the teaching state (lib/dev-overrides.ts).
+  // Inert outside development, and — although only northwind reaches this
+  // list — kept INSIDE the slug gate like every other consumer.
+  const devForceEmpty = useForcedEmptyState("rentals");
+  const devForceEmptyRentals = isLeanTenant(tenant?.slug) && devForceEmpty;
   // Lean tenants only; a constant false for everyone else.
   const { blocked: rentalCreationBlocked } = useRentalCreationGate();
   const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);
@@ -358,6 +365,7 @@ export function RentalsListV2() {
                   ? setShowConnectStripeDialog(true)
                   : router.push("/rentals/new")
               }
+              data-tour="new-rental"
               className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-200 shadow-md hover:shadow-lg flex-1 sm:flex-none"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -396,7 +404,7 @@ export function RentalsListV2() {
       {currentView === "calendar" ? (
         <CalendarView filters={filters} />
       ) : /* Rentals Table */
-      rentals.length > 0 ? (
+      rentals.length > 0 && !devForceEmptyRentals ? (
         <>
           <Card>
             <CardContent className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative">
@@ -634,7 +642,7 @@ export function RentalsListV2() {
             </div>
           </div>
         </>
-      ) : !hasAnyRentalFilter(filters) ? (
+      ) : devForceEmptyRentals || !hasAnyRentalFilter(filters) ? (
         // Nothing came back and nothing was asked for: this tenant has not
         // taken a booking yet. Teach instead of offering a Clear Filters button
         // that would clear nothing. This component is the northwind-only v2

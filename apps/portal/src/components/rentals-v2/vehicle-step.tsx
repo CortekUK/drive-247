@@ -191,7 +191,7 @@ function VehicleInfo({ vehicle, currency }: { vehicle: VehicleLite; currency: st
             {vehicle.daily_mileage != null ? `${vehicle.daily_mileage} mi` : "—"}
           </p>
         </div>
-        <div className="rounded-xl border p-3">
+        <div className="rounded-xl border p-3" data-tour="rental-insurance">
           <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Insurance</p>
           <p className="mt-1 flex items-center gap-2 text-sm font-medium text-emerald-600">
             <ShieldCheck className="h-4 w-4 shrink-0" />

@@ -276,6 +276,7 @@ export function SetupGuide() {
   const pill = (
     <button
       type="button"
+      data-tour="setup-guide"
       onClick={() =>
         setState(panelState === "expanded" ? "closed" : "expanded")
       }
@@ -294,7 +295,7 @@ export function SetupGuide() {
 
   const card =
     panelState === "minimized" ? (
-      <div className={dockClasses}>
+      <div className={dockClasses} data-tour="setup-guide-panel">
         <div className="px-4 pb-3.5 pt-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Setup guide</h3>
@@ -333,7 +334,7 @@ export function SetupGuide() {
         </div>
       </div>
     ) : panelState === "expanded" ? (
-      <div className={dockClasses}>
+      <div className={dockClasses} data-tour="setup-guide-panel">
         <div className="px-4 pb-3 pt-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-baseline gap-2">

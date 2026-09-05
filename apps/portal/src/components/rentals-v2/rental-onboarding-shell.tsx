@@ -14,6 +14,13 @@ import { cn } from "@/lib/utils";
  */
 export const ONBOARDING_STEPS = ["Booking Mode", "Customer", "Vehicle", "Rental Details"];
 
+/**
+ * `data-tour` handle for a breadcrumb: "Rental Details" → rental-step-rental-details.
+ * The first-rental walkthrough points at these (see lib/first-rental-tour.ts);
+ * derived from the label so it cannot drift from what the operator reads.
+ */
+const stepTourId = (step: string) => `rental-step-${step.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
 interface RentalOnboardingShellProps {
   /** 0-based index of the current step within ONBOARDING_STEPS. */
   currentStep: number;
@@ -68,7 +75,7 @@ export function RentalOnboardingShell({
 
         {/* Fixed footer: breadcrumbs (navigation) + Continue */}
         <div className="shrink-0 mt-5 flex items-center justify-between gap-4">
-          <nav aria-label="Progress" className="flex items-center gap-1.5 text-xs leading-none">
+          <nav aria-label="Progress" data-tour="rental-steps" className="flex items-center gap-1.5 text-xs leading-none">
             {ONBOARDING_STEPS.map((step, i) => {
               const isCurrent = i === currentStep;
               const isDone = i < currentStep;
@@ -78,6 +85,7 @@ export function RentalOnboardingShell({
                   {isDone ? (
                     <button
                       type="button"
+                      data-tour={stepTourId(step)}
                       onClick={() => onStepClick?.(i)}
                       className="leading-none font-medium text-foreground/80 hover:text-primary hover:underline underline-offset-2 cursor-pointer transition-colors"
                     >
@@ -85,6 +93,7 @@ export function RentalOnboardingShell({
                     </button>
                   ) : (
                     <span
+                      data-tour={stepTourId(step)}
                       className={cn(
                         "leading-none",
                         isCurrent ? "font-semibold text-primary" : "text-muted-foreground/60"

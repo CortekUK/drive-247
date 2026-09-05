@@ -511,10 +511,14 @@ export default function DashboardLayout({
             other leave them unable to act on either. */}
         <FirstRunWizard suppressed={showGate} />
 
-        {/* First-rental tour — step 7, immediately after the wizard above.
-            Three stops (add a vehicle, add a customer, new rental) and roughly
-            a minute; its whole job is getting a brand-new operator to their
-            first rental, which is why it names no chrome.
+        {/* First-rental walkthrough — step 7, immediately after the wizard
+            above. Eleven steps across six pages (dashboard, Vehicles,
+            Customers, New Rental, Payments, Settings) and roughly a minute;
+            it shows a brand-new operator the house on the way to the one
+            thing it is for — their first rental. Cross-route: it persists
+            its step, navigates itself, waits for each page's anchor and
+            skips a step whose anchor never mounts; wandering off pauses it
+            and the dashboard offers to resume.
 
             Gated to the northwind canary INSIDE the hook, on the resolved
             tenant's SLUG and never its id, and additionally on the v2 chrome —

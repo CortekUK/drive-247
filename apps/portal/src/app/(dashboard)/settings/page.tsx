@@ -2291,7 +2291,7 @@ const Settings = () => {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-tour="booking-site-branding">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Palette className="h-5 w-5 text-primary" />

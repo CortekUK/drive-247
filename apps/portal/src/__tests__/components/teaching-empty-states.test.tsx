@@ -124,12 +124,26 @@ interface CallSite {
   component: string;
   /** The named const holding the gate, lifted and EXECUTED below. */
   gateName: string;
-  /** Inputs the lifted expression needs, in order. */
+  /**
+   * Inputs the lifted expression needs, in order. The LAST is always
+   * `devForceEmpty` — the /dev preview override (`lib/dev-overrides.ts`),
+   * which every page reads through `useForcedEmptyState(id)` and composes
+   * INSIDE the slug gate. Cases 1–3 below pass `false` for it; cases 4–6 pass
+   * `true` and prove it teaches the canary with rows and nobody else.
+   */
   params: string[];
   /** `[args…]` for "this tenant has nothing yet". */
   empty: unknown[];
   /** `[args…]` for "this tenant has rows". */
   populated: unknown[];
+  /** The `EmptyStatePageId` this page reads from the override. */
+  id: string;
+  /**
+   * The JSX condition that has to YIELD to the gate when rows are present,
+   * verbatim. A true gate that never wins the screen would make the /dev
+   * switch toggle a state nobody can see.
+   */
+  branch: string;
 }
 
 const CALL_SITES: CallSite[] = [
@@ -140,7 +154,9 @@ const CALL_SITES: CallSite[] = [
     // The RAW query result, never `filteredVehicles` — a filter that matched
     // nothing must keep the existing "no vehicles found" state.
     gateName: "teachEmptyFleet",
-    params: ["isLeanTenant", "tenantSlug", "vehicles"],
+    params: ["isLeanTenant", "tenantSlug", "vehicles", "devForceEmpty"],
+    id: "vehicles",
+    branch: "{filteredVehicles.length === 0 || teachEmptyFleet ? (",
     empty: [[]],
     populated: [[{ id: "v1" }]],
   },
@@ -149,7 +165,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/customers/page.tsx",
     component: "CustomersTeachingEmptyState",
     gateName: "teachEmptyCustomers",
-    params: ["isLeanTenant", "tenantSlug", "customers"],
+    params: ["isLeanTenant", "tenantSlug", "customers", "devForceEmpty"],
+    id: "customers",
+    branch: "{paginatedCustomers.length > 0 && !teachEmptyCustomers ? (",
     empty: [[]],
     populated: [[{ id: "c1" }]],
   },
@@ -158,7 +176,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/agreements/page.tsx",
     component: "AgreementsTeachingEmptyState",
     gateName: "teachEmptyAgreements",
-    params: ["isLeanTenant", "tenantSlug", "allAgreements"],
+    params: ["isLeanTenant", "tenantSlug", "allAgreements", "devForceEmpty"],
+    id: "agreements",
+    branch: "{paginatedDocuments.length === 0 || teachEmptyAgreements ? (",
     empty: [[]],
     populated: [[{ id: "a1" }]],
   },
@@ -167,7 +187,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/insurances/page.tsx",
     component: "InsurancesTeachingEmptyState",
     gateName: "teachEmptyInsurances",
-    params: ["isLeanTenant", "tenantSlug", "allInsurances"],
+    params: ["isLeanTenant", "tenantSlug", "allInsurances", "devForceEmpty"],
+    id: "insurances",
+    branch: "{paginatedDocuments.length === 0 || teachEmptyInsurances ? (",
     empty: [[]],
     populated: [[{ id: "i1" }]],
   },
@@ -176,7 +198,9 @@ const CALL_SITES: CallSite[] = [
     file: "app/(dashboard)/invoices/page.tsx",
     component: "InvoicesTeachingEmptyState",
     gateName: "teachEmptyInvoices",
-    params: ["isLeanTenant", "tenantSlug", "invoices"],
+    params: ["isLeanTenant", "tenantSlug", "invoices", "devForceEmpty"],
+    id: "invoices",
+    branch: ") : !filteredInvoices || filteredInvoices.length === 0 || teachEmptyInvoices ? (",
     empty: [[]],
     populated: [[{ id: "inv1" }]],
   },
@@ -187,7 +211,9 @@ const CALL_SITES: CallSite[] = [
     // Payments opens with a date range already applied, so the page's own
     // `totalCount` is a filtered number. It gets its own lifetime count.
     gateName: "teachEmptyPayments",
-    params: ["teachEligible", "lifetimePayments"],
+    params: ["teachEligible", "lifetimePayments", "devForceEmpty"],
+    id: "payments",
+    branch: ") : payments && payments.length > 0 && !teachEmptyPayments ? (",
     empty: [0],
     populated: [3],
   },
@@ -242,7 +268,7 @@ describe("shared pages gate the teaching state", () => {
 
     it(`${site.page}: CASE 1 — teaches the northwind canary when empty`, () => {
       const gate = liftGate(site);
-      const args = [...eligibility(site, "northwind"), ...site.empty];
+      const args = [...eligibility(site, "northwind"), ...site.empty, false];
       expect(gate(...(args as never[]))).toBe(true);
     });
 
@@ -251,7 +277,7 @@ describe("shared pages gate the teaching state", () => {
       // goniko, revtek and jangram are taking bookings right now. Even with an
       // empty list — a brand-new filter, a wiped page — they keep their screen.
       for (const slug of ["goniko", "revtek", "jangram"]) {
-        const args = [...eligibility(site, slug), ...site.empty];
+        const args = [...eligibility(site, slug), ...site.empty, false];
         expect(gate(...(args as never[])), `${site.page} / ${slug}`).toBe(false);
       }
     });
@@ -259,7 +285,7 @@ describe("shared pages gate the teaching state", () => {
     it(`${site.page}: CASE 3 — fails safe on an unresolved or bogus slug`, () => {
       const gate = liftGate(site);
       for (const slug of [null, undefined, "", "not-a-real-tenant"]) {
-        const args = [...eligibility(site, slug), ...site.empty];
+        const args = [...eligibility(site, slug), ...site.empty, false];
         expect(gate(...(args as never[])), `${site.page} / ${String(slug)}`).toBe(
           false
         );
@@ -268,8 +294,51 @@ describe("shared pages gate the teaching state", () => {
 
     it(`${site.page}: does not teach the canary once it has rows`, () => {
       const gate = liftGate(site);
-      const args = [...eligibility(site, "northwind"), ...site.populated];
+      const args = [...eligibility(site, "northwind"), ...site.populated, false];
       expect(gate(...(args as never[]))).toBe(false);
+    });
+
+    it(`${site.page}: CASE 4 — the /dev override teaches the canary WITH rows`, () => {
+      // The whole point of the override: look at the teaching state on a
+      // tenant that has data, without deleting anything.
+      const gate = liftGate(site);
+      const args = [...eligibility(site, "northwind"), ...site.populated, true];
+      expect(gate(...(args as never[]))).toBe(true);
+    });
+
+    it(`${site.page}: CASE 5 — the override does NOTHING for a live operator, rows or not`, () => {
+      // The override sits INSIDE the slug gate. A planted key in a dev build
+      // on goniko's own tenant must leave goniko's page exactly as it was.
+      const gate = liftGate(site);
+      for (const slug of ["goniko", "revtek", "jangram"]) {
+        for (const data of [site.empty, site.populated]) {
+          const args = [...eligibility(site, slug), ...data, true];
+          expect(gate(...(args as never[])), `${site.page} / ${slug}`).toBe(false);
+        }
+      }
+    });
+
+    it(`${site.page}: CASE 6 — nor on an unresolved or bogus slug`, () => {
+      const gate = liftGate(site);
+      for (const slug of [null, undefined, "", "not-a-real-tenant"]) {
+        const args = [...eligibility(site, slug), ...site.populated, true];
+        expect(gate(...(args as never[])), `${site.page} / ${String(slug)}`).toBe(
+          false
+        );
+      }
+    });
+
+    it(`${site.page}: reads the override through the hook and hands it the screen`, () => {
+      const src = readPortalSource(site.file);
+      // The hook result is the ONLY way `devForceEmpty` enters the gate, and
+      // the id it reads is this page's own — a page reading another page's id
+      // would be toggled by the wrong switch on /dev.
+      expect(src).toContain(`const devForceEmpty = useForcedEmptyState("${site.id}")`);
+      const decl = liftDeclaration(src, site.gateName, { tsx: true });
+      expect(decl, `${site.page} gate reads devForceEmpty`).toContain("devForceEmpty");
+      // A true gate must also WIN the JSX: with rows present, the table branch
+      // has to yield, or the switch toggles a state that never renders.
+      expect(src).toContain(site.branch);
     });
 
     it(`${site.page}: does not key the gate on a tenant UUID`, () => {
@@ -317,7 +386,7 @@ describe("the rentals list", () => {
   });
 
   it("teaches only when no filter is set, not when a filter matched nothing", () => {
-    expect(src).toMatch(/\) : !hasAnyRentalFilter\(filters\) \? \(/);
+    expect(src).toMatch(/\) : devForceEmptyRentals \|\| !hasAnyRentalFilter\(filters\) \? \(/);
 
     // The real function, lifted and run — the list has no unfiltered count to
     // compare against, so this predicate is the entire difference between
@@ -371,6 +440,16 @@ describe("the rentals list", () => {
 
   it("still offers Clear Filters when a filter IS set", () => {
     expect(src).toContain("Clear Filters");
+  });
+
+  it("honours the /dev override inside the slug gate, and lets it win over rows", () => {
+    // Only northwind reaches this list, but the override is still composed
+    // with the slug — the same shape as every other consumer, so no future
+    // routing change can widen it. And with rows present the table has to
+    // yield, or the switch toggles a state that never renders.
+    expect(src).toContain('const devForceEmpty = useForcedEmptyState("rentals")');
+    expect(src).toContain("const devForceEmptyRentals = isLeanTenant(tenant?.slug) && devForceEmpty;");
+    expect(src).toContain("rentals.length > 0 && !devForceEmptyRentals ? (");
   });
 });
 

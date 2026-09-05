@@ -37,6 +37,7 @@ import { useAuditLog } from "@/hooks/use-audit-log";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { CustomersTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 
 interface Customer {
   id: string;
@@ -631,7 +632,11 @@ const CustomersList = () => {
   // hence the raw query result, not `filteredAndSortedCustomers`, which also
   // drops blocked customers. A tenant whose only customers are blocked is not
   // a beginner and keeps the existing state. Lean canary only.
-  const teachEmptyCustomers = isLeanTenant(tenantSlug) && !customers?.length;
+  //
+  // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
+  // outside development, and INSIDE the slug gate so it reaches nobody else.
+  const devForceEmpty = useForcedEmptyState("customers");
+  const teachEmptyCustomers = isLeanTenant(tenantSlug) && (!customers?.length || devForceEmpty);
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
@@ -705,7 +710,7 @@ const CustomersList = () => {
             </Button>
           )}
           {canEdit('customers') && (
-            <Button className="bg-gradient-primary flex-1 sm:flex-none" onClick={handleAddCustomer}>
+            <Button className="bg-gradient-primary flex-1 sm:flex-none" data-tour="add-customer" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
               Add Customer
             </Button>
@@ -768,7 +773,7 @@ const CustomersList = () => {
       </div>
 
       {/* Table */}
-      {paginatedCustomers.length > 0 ? (
+      {paginatedCustomers.length > 0 && !teachEmptyCustomers ? (
         <>
         <Card>
           <CardContent className="p-0">

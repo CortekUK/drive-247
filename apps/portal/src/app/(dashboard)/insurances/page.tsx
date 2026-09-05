@@ -15,6 +15,7 @@ import { useState, useCallback } from "react";
 import { useTenant } from "@/contexts/TenantContext";
 import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
 import { InsurancesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -273,7 +274,11 @@ export default function InsurancesList() {
   // `allInsurances`, not the filtered or paginated slice: a search or a provider
   // chip that matched nothing keeps the existing EmptyState, which is the one
   // that can clear the filter. Lean canary only.
-  const teachEmptyInsurances = isLeanTenant(tenantSlug) && allInsurances.length === 0;
+  //
+  // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
+  // outside development, and INSIDE the slug gate so it reaches nobody else.
+  const devForceEmpty = useForcedEmptyState("insurances");
+  const teachEmptyInsurances = isLeanTenant(tenantSlug) && (allInsurances.length === 0 || devForceEmpty);
 
   const filteredInsurances = allInsurances.filter((doc) => {
     const needle = searchQuery.toLowerCase();
@@ -821,7 +826,7 @@ export default function InsurancesList() {
       </div>
 
       {/* Insurance Table */}
-      {paginatedDocuments.length === 0 ? (
+      {paginatedDocuments.length === 0 || teachEmptyInsurances ? (
         teachEmptyInsurances ? (
           <InsurancesTeachingEmptyState
             onSetUpInsurance={() => router.push("/settings?tab=insurance")}

@@ -1,44 +1,79 @@
 /**
- * The first-rental tour — its three stops, its gate, and its "seen" storage.
+ * The first-rental walkthrough — its steps, its gate, its anchor resolver, and
+ * the two things it remembers: that a user has seen it, and where they got to.
  *
  * THE PRODUCT DECISION, restated here because the shape of this file follows
- * from it: the tour has exactly three stops and one job, which is to get a
- * brand-new operator to their FIRST RENTAL. It is deliberately NOT a tour of
- * the chrome — no "here is the sidebar, here is search". A new operator does
- * not need the furniture named; they need to know that a rental needs a car and
- * a person, and that the button which makes one is right there.
+ * from it. The tour shipped as three coach marks on the sidebar; Ghulam then
+ * asked for "a bit more like a walkthrough — a good amount of steps in it", the
+ * standard of a big application's onboarding. So it is now eleven steps that
+ * CROSS PAGES — dashboard, Vehicles, Customers, the New Rental flow, Payments,
+ * Settings — and shows the operator the house on the way to the one thing it
+ * has always been for: their first rental.
  *
- *   1. Add a vehicle   — "You need one car to rent."
- *   2. Add a customer  — "And one person to rent it to."
- *   3. New Rental      — "That's it. Pick your dates and location, and you're
- *                         done."
+ *   1.  Welcome        (dashboard)   what this is, a minute, skip any time
+ *   2.  Your sidebar   (dashboard)   ONE stop for the nav, not one per item
+ *   3.  Setup guide    (dashboard)   tracks progress; each row has a video
+ *   4.  Vehicles       → /vehicles   add your first vehicle — real, not demo
+ *   5.  Customers      → /customers  add your first customer
+ *   6.  New Rental     → /rentals/new  mode, customer, vehicle, dates, place
+ *   7.  Insurance      (same flow)   Bonzah, offered where the car is picked
+ *   8.  Agreement      (same flow)   drawn up and sent for signature from here
+ *   9.  Payments       → /payments   where the money shows up
+ *   10. Booking site   → /settings   "your customers book here"
+ *   11. Done           (anywhere)    a finale, and a pointer to the checklist
  *
- * Stop 3 also carries two QUIET lines pointing at where agreements and
- * insurance already sit on screen. They are one line each and teach nothing:
- * depth for those two belongs to the persistent setup checklist and to the
- * in-place empty states, which are a different surface entirely. A tour that
- * starts explaining e-signature modes is a tour nobody finishes.
+ * Insurance sits before Agreement, the reverse of the brief's numbering, on
+ * purpose: in the flow the car (and its cover) is chosen first and the
+ * agreement is the thing that goes out at the end, and the spotlight walks the
+ * breadcrumb left to right instead of doubling back.
  *
- * NO VIDEOS. Videos live in the checklist and the empty states. A video stops a
- * tour dead — the whole thing is budgeted at about 60 seconds.
+ * Still skippable at every step, still replayable from the user menu, still NO
+ * VIDEOS inside it — videos live in the setup checklist and the empty states.
  *
  * ---------------------------------------------------------------------------
  * WHY THE LOGIC IS IN A .ts FILE AND NOT IN THE COMPONENT
  *
- * Everything here is pure and injectable, so the two things that can actually
- * break — the gate and the anchor filter — are unit-testable without a DOM,
- * without a tenant, and without React. Portal builds with
- * `ignoreBuildErrors: true`, so a type error in a .tsx file ships; a test is
- * the only thing that catches a wrong answer.
+ * Everything here is pure and injectable, so the things that can actually
+ * break — the gate, the step filter, the anchor resolver and the progress
+ * store — are unit-testable without a DOM, without a tenant, and without
+ * React. Portal builds with `ignoreBuildErrors: true`, so a type error in a
+ * .tsx file ships; a test is the only thing that catches a wrong answer.
+ *
+ * THE TWO FAILURE MODES THIS FILE EXISTS TO PREVENT
+ *
+ *  - A step pointing at NOTHING. Anchors appear late (every page fetches its
+ *    data), are permission-gated, and are hidden per tenant. A card anchored
+ *    to nowhere is what killed the previous attempt at a tour. So a step is
+ *    dropped BEFORE the tour starts when its destination is gated for this
+ *    user (`buildTour`), and skipped cleanly at runtime when its anchor never
+ *    mounts (the hook's wait-then-skip). A step whose anchor is absent never
+ *    renders.
+ *  - A tour that re-fires. "Seen" is written UP FRONT at launch; progress is
+ *    written on every step change and cleared on finish, skip or dismiss.
  */
 
 /**
- * Bump when the STOPS change in a way that makes re-showing the tour the right
+ * Bump when the STEPS change in a way that makes re-showing the tour the right
  * call. The version is part of the storage key, so bumping it re-arms the tour
  * for everyone; leaving it alone keeps every operator who has already seen it
  * from meeting it twice.
+ *
+ * v1 → v2: the three-stop tour became the eleven-step walkthrough. Different
+ * shape, worth one more run. The v1 keys are not cleaned up here — the reset
+ * path in `lib/dev-actions.ts` matches on the `d247.tour.` namespace, so it
+ * clears every version at once.
  */
-export const FIRST_RENTAL_TOUR_VERSION = 1;
+export const FIRST_RENTAL_TOUR_VERSION = 2;
+
+/** Every key this module writes starts with this. */
+const KEY_PREFIX = 'd247.tour.first-rental';
+
+function keyFor(appUserId: string | null | undefined, kind: 'seen' | 'progress'): string {
+  const who = appUserId && appUserId.length > 0 ? appUserId : 'anon';
+  return kind === 'seen'
+    ? `${KEY_PREFIX}.v${FIRST_RENTAL_TOUR_VERSION}.${who}`
+    : `${KEY_PREFIX}.v${FIRST_RENTAL_TOUR_VERSION}.progress.${who}`;
+}
 
 /**
  * Where "seen" is remembered, per USER rather than per browser profile.
@@ -54,108 +89,351 @@ export const FIRST_RENTAL_TOUR_VERSION = 1;
  * the single worst failure mode available to a first-run surface.
  */
 export function tourSeenKey(appUserId: string | null | undefined): string {
-  const who = appUserId && appUserId.length > 0 ? appUserId : 'anon';
-  return `d247.tour.first-rental.v${FIRST_RENTAL_TOUR_VERSION}.${who}`;
+  return keyFor(appUserId, 'seen');
 }
 
-/** A quiet supporting line on a stop. Rendered only if its anchor is present. */
+/** Where "how far did this user get" is remembered. Same per-user rule. */
+export function tourProgressKey(appUserId: string | null | undefined): string {
+  return keyFor(appUserId, 'progress');
+}
+
+/** A quiet supporting line on a step. Rendered only if its anchor is present. */
 export interface TourNote {
   text: string;
   /**
    * Ordered candidate selectors for the thing this line points at. A note whose
-   * anchor is nowhere on screen is DROPPED rather than shown — "agreements live
-   * under More → Records" is a lie to a manager whose permissions hide Records.
+   * anchor is nowhere on screen is DROPPED rather than shown — "invoices sit
+   * under More → Finance" is a lie to a manager whose permissions hide Finance.
    * Omit entirely for a line that points at nothing in particular.
    */
   anchors?: readonly string[];
 }
 
-export interface TourStop {
-  /** Stable key. Used for React keys and for test assertions. */
+/** Which side of the anchor the card prefers. `center` is for anchorless steps. */
+export type TourSide = 'right' | 'left' | 'bottom' | 'top' | 'center';
+
+/**
+ * What has to be true for a step to be OFFERED to this user.
+ *
+ * Route access is implied by `route` itself (`canAccessRoute`); these are the
+ * extra conditions. Evaluated once, at launch, by `buildTour` — a step that
+ * fails is dropped before the tour starts, so the operator is never sent to a
+ * page that bounces them or shown a button they do not have.
+ */
+export interface TourRequirement {
+  /** Manager tab key the step's action needs an EDITOR grant on. */
+  tab?: string;
+  /** The step points at a mutation control (Add Vehicle…); needs `canEdit(tab)`. */
+  edit?: boolean;
+  /** Settings sub-tab the step lands on; needs `canViewSettings(value)`. */
+  settingsTab?: string;
+  /** Not on a phone — the sidebar is an off-canvas Sheet there. */
+  desktop?: boolean;
+}
+
+/** What `buildTour` and the `detail` lines are given. All injectable. */
+export interface TourBuildContext {
+  canAccessRoute: (pathname: string) => boolean;
+  canEdit: (tabKey: string) => boolean;
+  canViewSettings: (tabValue: string) => boolean;
+  isMobile: boolean;
+  /**
+   * The lean product's New Rental gate: a canary without a usable Stripe
+   * Connect account gets a "connect Stripe first" dialog INSTEAD of the rental
+   * form. The three in-flow steps have nothing to point at in that state, so
+   * the walkthrough reroutes them — see `buildTour`.
+   */
+  rentalCreationBlocked: boolean;
+  /** The tenant's public booking site, for the step that names it. */
+  bookingUrl?: string | null;
+}
+
+export interface TourStep {
+  /** Stable key. Used for React keys, persisted progress, and test assertions. */
   id: string;
+  /** Short name — the transit pill ("Heading to Vehicles…") and the outline. */
+  label: string;
   title: string;
   body: string;
   /**
-   * Ordered candidate selectors, most specific first.
+   * The route this step lives on, as a pathname with an optional query string
+   * (`/settings?tab=branding`). `null` means "wherever you already are" — the
+   * finale does not drag anyone back to the dashboard.
+   */
+  route: string | null;
+  /**
+   * Ordered candidate selectors, most specific first. EMPTY means an
+   * anchorless step: a centred card with no spotlight, which is how Welcome
+   * and Done are drawn.
    *
-   * More than one on purpose. The explicit `data-tour` attributes are the
-   * intended anchor, but they live in `app-sidebar-v2.tsx` — a large file under
-   * concurrent edit — and an anchor that goes missing does not fail loudly, it
-   * just stalls the tour on a step pointing at nothing. The href-based fallback
-   * resolves against markup the sidebar cannot render without, so losing the
-   * attribute costs the tour nothing.
+   * More than one on purpose wherever a fallback makes sense. The explicit
+   * `data-tour` attributes are the intended anchor, but they live in files
+   * under concurrent edit, and an anchor that goes missing does not fail
+   * loudly. The fallbacks resolve against markup the page cannot render
+   * without, so losing the attribute costs the tour nothing.
    */
   anchors: readonly string[];
-  /** Preferred side to place the card on. The renderer may flip it to fit. */
-  side: 'right' | 'bottom';
+  side: TourSide;
   notes?: readonly TourNote[];
+  requires?: TourRequirement;
+  /**
+   * Clicking the anchor is the operator DOING the thing (opening Add Vehicle),
+   * not acknowledging it. The tour steps aside — pauses — rather than sitting
+   * on top of the dialog that just opened, and offers to resume from the
+   * dashboard.
+   */
+  pauseOnAnchorClick?: boolean;
+  /** The Welcome card lists what the walkthrough will cover. */
+  showOutline?: boolean;
+  /** An optional extra line computed from context — the booking URL, say. */
+  detail?: (ctx: TourBuildContext) => string | null;
 }
 
 /**
- * Below this many surviving stops the tour does not run at all.
+ * Below this many ANCHORED steps the tour does not run at all.
  *
- * Anchors go missing for real reasons: sidebar items are permission-gated
- * (`ROUTE_TO_TAB` → `canView`), areas are hidden per-tenant by `isAreaHidden`,
- * and on a phone the whole sidebar is an off-canvas Sheet that is not in the
- * DOM until it is opened. A one-stop "tour" is not a tour; showing one to a
- * viewer-role manager who can see neither Vehicles nor Customers would be worse
- * than showing nothing.
+ * Welcome and Done point at nothing and do not count. A "walkthrough" that
+ * shows a manager an intro, one card, and a finale is not a walkthrough;
+ * showing one to a viewer-role user who can see neither Vehicles nor
+ * Customers would be worse than showing nothing.
  */
 export const MIN_TOUR_STOPS = 2;
 
 const SIDEBAR = '[data-sidebar="sidebar"]';
 
-export const FIRST_RENTAL_TOUR: readonly TourStop[] = [
+/** One line each. These ride the rerouted rental step when the flow is gated. */
+const INSURANCE_NOTE = 'Insurance is offered in the same flow, priced per rental.';
+const AGREEMENT_NOTE = 'The rental agreement is drawn up and sent for signature as part of this.';
+
+/**
+ * The canonical step list. `buildTour` filters and reroutes it per user; this
+ * is what a head admin on a desktop with Stripe connected walks through.
+ */
+export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
   {
-    id: 'vehicle',
-    title: 'Add a vehicle',
-    body: 'You need one car to rent. Add the real one you plan to put on the road — this is your live business, not a demo.',
-    anchors: [`[data-tour="nav-vehicles"]`, `${SIDEBAR} a[href="/vehicles"]`],
-    side: 'right',
+    id: 'welcome',
+    label: 'Welcome',
+    title: 'Welcome to your portal',
+    body: 'A quick walk through the house — about a minute. Skip any time; you can replay it from your profile menu.',
+    route: '/',
+    anchors: [],
+    side: 'center',
+    showOutline: true,
   },
   {
-    id: 'customer',
-    title: 'Add a customer',
-    body: 'And one person to rent it to. A real customer — name, email, licence — so the first agreement you send is a real one.',
-    anchors: [`[data-tour="nav-customers"]`, `${SIDEBAR} a[href="/customers"]`],
+    id: 'sidebar',
+    label: 'Navigation',
+    title: 'Everything lives here',
+    body: 'Rentals, Vehicles and Customers up top. Money, records and settings under More.',
+    route: '/',
+    anchors: [`${SIDEBAR} [data-sidebar="content"]`, SIDEBAR],
     side: 'right',
+    requires: { desktop: true },
+  },
+  {
+    id: 'setup-guide',
+    label: 'Setup guide',
+    title: 'Your setup guide',
+    body: 'It tracks what is left to set up. Each row has a short video when you want the detail.',
+    route: '/',
+    anchors: ['[data-tour="setup-guide-panel"]', '[data-tour="setup-guide"]'],
+    side: 'left',
+  },
+  {
+    id: 'vehicles',
+    label: 'Vehicles',
+    title: 'Add your first vehicle',
+    body: 'You need one car to rent. Add the real one you plan to put on the road — this is your live business, not a demo.',
+    route: '/vehicles',
+    anchors: ['[data-tour="add-vehicle"]', '[data-add-vehicle-trigger]'],
+    side: 'bottom',
+    requires: { tab: 'vehicles', edit: true },
+    pauseOnAnchorClick: true,
+  },
+  {
+    id: 'customers',
+    label: 'Customers',
+    title: 'Add your first customer',
+    body: 'And one person to rent it to. A real customer — name, email, licence — so the first agreement you send is a real one.',
+    route: '/customers',
+    anchors: ['[data-tour="add-customer"]'],
+    side: 'bottom',
+    requires: { tab: 'customers', edit: true },
+    pauseOnAnchorClick: true,
   },
   {
     id: 'rental',
-    title: 'New Rental',
-    body: "That's it. Pick your dates and location, and you're done.",
+    label: 'New rental',
+    title: 'Making a rental',
+    body: "Booking mode, customer, vehicle — then dates and a location. That's all a rental needs.",
+    route: '/rentals/new',
+    anchors: ['[data-tour="rental-steps"]', 'nav[aria-label="Progress"]'],
+    side: 'top',
+    requires: { tab: 'rentals', edit: true },
+  },
+  {
+    id: 'insurance',
+    label: 'Insurance',
+    title: 'Insurance, in the same place',
+    body: 'When you pick the vehicle, Bonzah cover is offered right there — priced per rental, no separate errand.',
+    route: '/rentals/new',
     anchors: [
-      // If the dashboard's primary-action slot is showing New Rental rather
-      // than the setup guide, point at the button itself.
-      `[data-tour="new-rental"]`,
-      `[data-tour="nav-rentals"]`,
-      `${SIDEBAR} a[href="/rentals"]`,
+      '[data-tour="rental-insurance"]',
+      '[data-tour="rental-step-vehicle"]',
+      '[data-tour="rental-steps"]',
     ],
-    side: 'right',
-    // The two quiet lines. They point at THIS flow — agreements and insurance
-    // are steps inside creating a rental, not separate errands to run first —
-    // so they carry no anchor of their own and ride the stop's. Deliberately
-    // one line each and no depth: teaching e-signature modes or coverage tiers
-    // is the job of the persistent setup checklist and of the in-place empty
-    // states, and a tour that starts explaining them is a tour nobody finishes.
+    side: 'top',
+    requires: { tab: 'rentals', edit: true },
+  },
+  {
+    id: 'agreement',
+    label: 'Agreement',
+    title: 'The agreement sends itself',
+    body: 'Finish the last step and the rental agreement is drawn up and sent to the customer for signature.',
+    route: '/rentals/new',
+    anchors: ['[data-tour="rental-step-rental-details"]', '[data-tour="rental-steps"]'],
+    side: 'top',
+    requires: { tab: 'rentals', edit: true },
+  },
+  {
+    id: 'money',
+    label: 'Payments',
+    title: 'Where the money shows up',
+    body: 'Every payment a customer makes lands here, with its rental beside it.',
+    route: '/payments',
+    anchors: ['[data-tour="payments-overview"]'],
+    side: 'bottom',
+    requires: { tab: 'payments' },
     notes: [
       {
-        text: 'The rental agreement is drawn up and sent for signature as part of this.',
-      },
-      {
-        text: 'Insurance is offered in the same flow, priced per rental.',
+        text: 'Invoices sit next door, under More → Finance.',
+        anchors: ['[data-tour="nav-group-finance"]'],
       },
     ],
   },
+  {
+    id: 'booking-site',
+    label: 'Booking site',
+    title: 'Your customers book here',
+    body: 'Your name, logo and colours go on a public booking site that is already live for you.',
+    route: '/settings?tab=branding',
+    anchors: ['[data-tour="booking-site-branding"]', '[id$="-trigger-branding"]'],
+    side: 'top',
+    requires: { settingsTab: 'branding' },
+    detail: (ctx) => (ctx.bookingUrl ? ctx.bookingUrl.replace(/^https?:\/\//, '') : null),
+  },
+  {
+    id: 'done',
+    label: 'Done',
+    title: "That's the house",
+    body: 'Your setup guide on the dashboard tracks what is left. Add a car, add a customer, and your first rental is a few clicks away.',
+    route: null,
+    anchors: [],
+    side: 'center',
+  },
 ];
 
-/** A stop whose anchor was actually found on screen. */
-export interface ResolvedStop {
-  stop: TourStop;
-  element: Element;
+/**
+ * The rental step as it reads when the New Rental flow is GATED — a lean
+ * tenant without a usable Stripe Connect account gets a "connect Stripe"
+ * dialog instead of the form, so there is no breadcrumb, no vehicle step and
+ * no insurance box to point at. Point at the button instead, say what it
+ * needs, and carry the two in-flow lessons as quiet one-liners — exactly what
+ * the three-stop tour did before the walkthrough. Insurance and Agreement are
+ * dropped as steps; nothing is lost, only depth that had nowhere to sit.
+ */
+export const BLOCKED_RENTAL_STEP: TourStep = {
+  id: 'rental',
+  label: 'New rental',
+  title: 'Making a rental',
+  body: "Dates, location, vehicle, customer — that's all a rental needs. This button makes one once payments are connected; the setup guide gets you there.",
+  route: '/rentals',
+  anchors: ['[data-tour="new-rental"]', '[data-tour="nav-rentals"]', `${SIDEBAR} a[href="/rentals"]`],
+  side: 'bottom',
+  requires: { tab: 'rentals', edit: true },
+  pauseOnAnchorClick: true,
+  notes: [{ text: INSURANCE_NOTE }, { text: AGREEMENT_NOTE }],
+};
+
+/** Step ids that only exist inside the (ungated) rental form. */
+const IN_FLOW_ONLY = new Set(['insurance', 'agreement']);
+
+/** `/settings?tab=branding` → `/settings`. */
+export function routePathname(route: string): string {
+  const q = route.indexOf('?');
+  return q === -1 ? route : route.slice(0, q);
+}
+
+/** `/settings?tab=branding` → `?tab=branding`; `/vehicles` → ``. */
+export function routeSearch(route: string): string {
+  const q = route.indexOf('?');
+  return q === -1 ? '' : route.slice(q);
+}
+
+/** Is this step at home on `pathname`? A `null` route is at home anywhere. */
+export function stepIsOnRoute(step: Pick<TourStep, 'route'>, pathname: string | null | undefined): boolean {
+  if (step.route === null) return true;
+  return routePathname(step.route) === pathname;
+}
+
+/**
+ * May this step be OFFERED to this user? Every rule fails CLOSED: a step whose
+ * requirement cannot be confirmed is dropped, because the alternative is
+ * sending an operator to a page that bounces them, or spotlighting a button
+ * they do not have.
+ */
+export function stepAllowed(step: TourStep, ctx: TourBuildContext): boolean {
+  if (step.route !== null && !ctx.canAccessRoute(routePathname(step.route))) return false;
+  const req = step.requires;
+  if (!req) return true;
+  if (req.desktop && ctx.isMobile) return false;
+  if (req.edit && req.tab && !ctx.canEdit(req.tab)) return false;
+  if (req.settingsTab && !ctx.canViewSettings(req.settingsTab)) return false;
+  return true;
+}
+
+/**
+ * The walkthrough THIS user will actually get — filtered and rerouted.
+ *
+ * Runs once, at launch. The gates it reads (`permissions.ts` via
+ * `canAccessRoute`/`canEdit`/`canViewSettings`, the lean-areas gate through
+ * the sidebar's own filtering, the phone breakpoint, the Stripe gate) are all
+ * settled by then, so the tour that starts is the tour that can finish.
+ */
+export function buildTour(ctx: TourBuildContext, steps: readonly TourStep[] = FIRST_RENTAL_TOUR): TourStep[] {
+  const out: TourStep[] = [];
+  for (const raw of steps) {
+    let step = raw;
+    if (ctx.rentalCreationBlocked) {
+      if (IN_FLOW_ONLY.has(step.id)) continue;
+      if (step.id === 'rental') step = BLOCKED_RENTAL_STEP;
+    }
+    if (!stepAllowed(step, ctx)) continue;
+    out.push(step);
+  }
+  return out;
+}
+
+/** Steps that point at something on screen. Welcome and Done do not count. */
+export function countAnchoredSteps(steps: readonly TourStep[]): number {
+  return steps.filter((s) => s.anchors.length > 0).length;
+}
+
+/** Enough of a walkthrough to be worth starting? */
+export function isTourWorthRunning(steps: readonly TourStep[]): boolean {
+  return countAnchoredSteps(steps) >= MIN_TOUR_STOPS;
+}
+
+/** A step resolved against the live DOM. `element` is null for anchorless steps. */
+export interface ResolvedStep {
+  step: TourStep;
+  element: Element | null;
   /** Only the notes whose own anchors resolved. */
   notes: readonly string[];
 }
+
+/** @deprecated name kept for the three-stop tour's callers; same shape. */
+export type ResolvedStop = ResolvedStep;
 
 /**
  * Is this element genuinely on screen?
@@ -198,28 +476,47 @@ export function findAnchor(
   return null;
 }
 
+function resolveNotes(step: TourStep, root: ParentNode, visible: (el: Element) => boolean): string[] {
+  return (step.notes ?? [])
+    .filter((n) => !n.anchors || findAnchor(n.anchors, root, visible) !== null)
+    .map((n) => n.text);
+}
+
 /**
- * Resolve every stop against the live DOM and DROP the ones pointing at
- * nothing.
+ * Resolve ONE step against the live DOM.
  *
- * This is the failure mode that killed the previous attempt: a step whose
- * target is absent renders a card anchored to nowhere and the operator has no
- * idea what they are being shown, so the tour stalls dead. Resolving up front —
- * once, at launch — means the tour that starts is the tour that can finish.
+ * Returns null when the step points at something and that something is not on
+ * screen — the hook keeps asking for a short while (anchors mount late, after
+ * the page's data lands) and then SKIPS the step. An anchorless step resolves
+ * immediately with `element: null`.
  */
-export function resolveStops(
-  stops: readonly TourStop[],
+export function resolveStep(
+  step: TourStep,
   root: ParentNode,
   visible: (el: Element) => boolean = isVisible,
-): ResolvedStop[] {
-  const resolved: ResolvedStop[] = [];
-  for (const stop of stops) {
-    const element = findAnchor(stop.anchors, root, visible);
-    if (!element) continue;
-    const notes = (stop.notes ?? [])
-      .filter((n) => !n.anchors || findAnchor(n.anchors, root, visible) !== null)
-      .map((n) => n.text);
-    resolved.push({ stop, element, notes });
+): ResolvedStep | null {
+  if (step.anchors.length === 0) {
+    return { step, element: null, notes: resolveNotes(step, root, visible) };
+  }
+  const element = findAnchor(step.anchors, root, visible);
+  if (!element) return null;
+  return { step, element, notes: resolveNotes(step, root, visible) };
+}
+
+/**
+ * Resolve every step against the live DOM and DROP the ones pointing at
+ * nothing. The three-stop tour's launch-time filter; kept because it is the
+ * cheapest way to ask "which of these are on THIS screen right now".
+ */
+export function resolveStops(
+  steps: readonly TourStep[],
+  root: ParentNode,
+  visible: (el: Element) => boolean = isVisible,
+): ResolvedStep[] {
+  const resolved: ResolvedStep[] = [];
+  for (const step of steps) {
+    const r = resolveStep(step, root, visible);
+    if (r) resolved.push(r);
   }
   return resolved;
 }
@@ -229,10 +526,10 @@ export interface TourGateInput {
   /** `isLeanTenant(tenant.slug)` — the canary, keyed on SLUG and never on id. */
   isCanary: boolean;
   /**
-   * Is this tenant on the v2 chrome? Every anchor lives in
-   * `app-sidebar-v2.tsx`; under v1 chrome they are all absent and the tour
-   * would filter itself down to nothing anyway. Checking explicitly makes that
-   * intent legible rather than accidental.
+   * Is this tenant on the v2 chrome? Every sidebar anchor lives in
+   * `app-sidebar-v2.tsx`; under v1 chrome the walkthrough would be pointing at
+   * a different building. Checking explicitly makes that intent legible
+   * rather than accidental.
    */
   hasV2Chrome: boolean;
   /** Dashboard route only. */
@@ -270,6 +567,8 @@ export interface TourGateInput {
  * Replay is deliberately NOT routed through here. Asking for the tour from the
  * user menu is an explicit act; it bypasses `alreadySeen` and `onDashboard`
  * (the menu item only exists on the canary's v2 chrome in the first place).
+ * Resuming an interrupted run is not routed through here either — that is
+ * `decideResume`, below.
  */
 export function shouldAutostartTour(input: TourGateInput): boolean {
   return (
@@ -327,13 +626,155 @@ export function markTourSeen(
   }
 }
 
-/** `localStorage`, or null wherever touching it throws. */
+// ── Progress: where the operator got to ────────────────────────────────────
+
+export type TourProgressStatus = 'active' | 'paused';
+
+/**
+ * Where an interrupted walkthrough was.
+ *
+ *  - `active`  the tour was running when the page went away — a reload, a
+ *              closed tab, the tour's OWN navigation between steps. Landing
+ *              back on that step's route resumes it silently.
+ *  - `paused`  the operator stepped out on purpose — clicked the thing being
+ *              pointed at, wandered to another page, or the paywall came up.
+ *              The dashboard offers Resume / Start over / Dismiss.
+ *
+ * `prompts` counts how many times the dashboard has offered to resume. Past
+ * `MAX_RESUME_PROMPTS` the record is dropped: an operator who keeps ignoring
+ * the offer has answered it.
+ */
+export interface TourProgress {
+  version: number;
+  stepId: string;
+  status: TourProgressStatus;
+  updatedAt: string;
+  prompts: number;
+}
+
+export const MAX_RESUME_PROMPTS = 3;
+
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+function isProgress(value: unknown): value is TourProgress {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v.version === FIRST_RENTAL_TOUR_VERSION &&
+    typeof v.stepId === 'string' &&
+    v.stepId.length > 0 &&
+    (v.status === 'active' || v.status === 'paused') &&
+    typeof v.updatedAt === 'string' &&
+    typeof v.prompts === 'number'
+  );
+}
+
+/**
+ * The saved progress, or null. Null for anything unreadable — a different
+ * version, a hand-edited value, a throwing store — because the only thing a
+ * bad record could do is resume the wrong tour.
+ */
+export function readTourProgress(
+  appUserId: string | null | undefined,
+  storage: Pick<Storage, 'getItem'> | null = safeStorage(),
+): TourProgress | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(tourProgressKey(appUserId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isProgress(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Save progress. Never throws; a failed write just means no resume offer. */
+export function writeTourProgress(
+  appUserId: string | null | undefined,
+  progress: { stepId: string; status: TourProgressStatus; prompts?: number },
+  storage: Pick<Storage, 'setItem'> | null = safeStorage(),
+): void {
+  if (!storage) return;
+  const record: TourProgress = {
+    version: FIRST_RENTAL_TOUR_VERSION,
+    stepId: progress.stepId,
+    status: progress.status,
+    updatedAt: new Date().toISOString(),
+    prompts: progress.prompts ?? 0,
+  };
+  try {
+    storage.setItem(tourProgressKey(appUserId), JSON.stringify(record));
+  } catch {
+    // Storage full or blocked. The tour keeps running in memory.
+  }
+}
+
+export function clearTourProgress(
+  appUserId: string | null | undefined,
+  storage: Pick<Storage, 'removeItem'> | null = safeStorage(),
+): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(tourProgressKey(appUserId));
+  } catch {
+    // Nothing to do; the record simply survives until the next clear.
+  }
+}
+
+/** Never throws. Storage is a real `Storage`, never a partial, when present. */
 export function safeStorage(): Storage | null {
   try {
     return typeof window === 'undefined' ? null : window.localStorage;
   } catch {
     return null;
   }
+}
+
+// ── Resume ─────────────────────────────────────────────────────────────────
+
+export type ResumeDecision =
+  /** Pick up silently, right here, at `index`. */
+  | { kind: 'resume'; index: number }
+  /** Offer Resume / Start over / Dismiss (dashboard only). */
+  | { kind: 'prompt'; index: number }
+  /** Nothing to do on this page. */
+  | { kind: 'none' };
+
+/**
+ * Given saved progress and where the operator is now, what should happen?
+ *
+ *  - `active` progress whose step lives on THIS route: the page reloaded (or
+ *    the tour itself navigated here). Resume without asking.
+ *  - anything else, on the DASHBOARD: ask. Never anywhere else — a resume
+ *    offer popping up on the invoice they came back to pay is a nag.
+ *  - anything else, elsewhere: nothing.
+ *
+ * A step id the eligible list no longer contains (a grant was revoked between
+ * visits) resumes from the first step at or after where it would have been,
+ * which is the next thing they had not yet seen.
+ */
+export function decideResume(
+  progress: TourProgress | null,
+  pathname: string | null | undefined,
+  steps: readonly TourStep[],
+): ResumeDecision {
+  if (!progress || steps.length === 0) return { kind: 'none' };
+  let index = steps.findIndex((s) => s.id === progress.stepId);
+  if (index === -1) {
+    // The saved step was dropped from this user's walkthrough. Land on the
+    // nearest surviving step AFTER its canonical position — never before it.
+    const canonical = FIRST_RENTAL_TOUR.findIndex((s) => s.id === progress.stepId);
+    if (canonical === -1) return { kind: 'none' };
+    const after = FIRST_RENTAL_TOUR.slice(canonical + 1).map((s) => s.id);
+    index = steps.findIndex((s) => after.includes(s.id));
+    if (index === -1) return { kind: 'none' };
+  }
+  if (progress.status === 'active' && stepIsOnRoute(steps[index], pathname)) {
+    return { kind: 'resume', index };
+  }
+  if (pathname === '/') return { kind: 'prompt', index };
+  return { kind: 'none' };
 }
 
 /**

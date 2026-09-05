@@ -27,6 +27,7 @@ import { GenerateAgreementDialog } from "@/components/agreements/generate-agreem
 import { useRouter } from "next/navigation";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 
 interface AgreementDoc {
   id: string;
@@ -192,7 +193,11 @@ export default function AgreementsList() {
   // `allAgreements`, not the filtered or paginated slice: teach only when there
   // is genuinely nothing to show, never when a search matched none. Lean canary
   // only — every other tenant keeps the existing EmptyState.
-  const teachEmptyAgreements = isLeanTenant(tenantSlug) && allAgreements.length === 0;
+  //
+  // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
+  // outside development, and INSIDE the slug gate so it reaches nobody else.
+  const devForceEmpty = useForcedEmptyState("agreements");
+  const teachEmptyAgreements = isLeanTenant(tenantSlug) && (allAgreements.length === 0 || devForceEmpty);
 
   const filteredAgreements = allAgreements.filter((doc) => {
     const matchesSearch = doc.document_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -739,7 +744,7 @@ export default function AgreementsList() {
       </div>
 
       {/* Agreements Table */}
-      {paginatedDocuments.length === 0 ? (
+      {paginatedDocuments.length === 0 || teachEmptyAgreements ? (
         teachEmptyAgreements ? (
           <AgreementsTeachingEmptyState onGoToRentals={() => router.push("/rentals")} />
         ) : (

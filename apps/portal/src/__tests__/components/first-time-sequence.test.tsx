@@ -54,7 +54,15 @@ vi.mock('@/stores/auth-store', () => ({
 
 // The canary is on the v2 chrome, and the tour only autostarts on `/`.
 vi.mock('@/lib/v2-context', () => ({ useV2: () => true }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+// The walkthrough navigates itself between its eleven steps, so the hook now
+// pulls `useRouter` as well as `usePathname`. This sequence never leaves the
+// dashboard — it is only ever asserting that the tour STARTS after the wizard —
+// so the router is a sink: recording the pushes would test the walkthrough's
+// routing, which `use-first-rental-tour.test.tsx` already owns.
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/',
+  useRouter: () => ({ push: () => {}, replace: () => {}, prefetch: () => {} }),
+}));
 vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn() }));
 
 /**
@@ -95,10 +103,36 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: fakeSupabase }));
 
 // ── The tour probe ─────────────────────────────────────────────────────────
 
-/** Renders the tour hook's decision, and nothing visual. */
+/**
+ * Renders the tour hook's decision, and nothing visual.
+ *
+ * `steps` since the walkthrough landed — the three-stop tour called them
+ * `stops`, and resolved them all up front. The count is printed only so a
+ * started tour is distinguishable from a started-but-empty one; what this file
+ * asserts is the START, never the shape.
+ *
+ * The step id and the Advance button exist so the second test can strand a run
+ * PART WAY THROUGH, which is the only way to tell "resumed where it left off"
+ * apart from "started again from Welcome". Driving `next()` directly rather
+ * than clicking the real card keeps this file independent of the card's markup.
+ */
 function TourProbe() {
   const tour = useFirstRentalTour(false);
-  return tour.active ? <div data-tour-active="">{tour.stops.length}</div> : null;
+  if (!tour.active) return null;
+  return (
+    <div
+      data-tour-active=""
+      data-tour-count={tour.steps.length}
+      data-tour-step={tour.current?.step.id ?? ''}
+    >
+      <button type="button" onClick={() => tour.next()}>
+        Advance
+      </button>
+      <button type="button" onClick={() => tour.end()}>
+        EndRun
+      </button>
+    </div>
+  );
 }
 
 // ── Harness ────────────────────────────────────────────────────────────────
@@ -148,6 +182,9 @@ async function hardReload() {
 
 const wizardIsUp = () => !!container.querySelector('[data-first-run-wizard]');
 const tourIsActive = () => !!container.querySelector('[data-tour-active]');
+/** Which step is on screen, or null when the tour is not running. */
+const currentStepId = () =>
+  container.querySelector('[data-tour-active]')?.getAttribute('data-tour-step') ?? null;
 
 function button(label: string): HTMLButtonElement {
   const found = Array.from(container.querySelectorAll('button')).find((b) =>
@@ -222,10 +259,25 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     // and fires after its anchor poll.
     await wait(TOUR_WINDOW_MS);
     expect(tourIsActive(), 'the tour fired after the wizard').toBe(true);
-    expect(container.querySelector('[data-tour-active]')!.textContent).toBe('3');
+    // Non-empty rather than a literal: the walkthrough resolves its eleven
+    // steps against the anchors actually on the page, and this harness mounts
+    // a probe rather than the real dashboard. What matters here is that it
+    // started with something to show, not how much of the house exists in a
+    // jsdom container — `use-first-rental-tour.test.tsx` owns step resolution.
+    expect(
+      Number(container.querySelector('[data-tour-active]')!.getAttribute('data-tour-count')),
+    ).toBeGreaterThan(0);
     expect(hasSeenTour(APP_USER_ID), 'and recorded itself as seen, up front').toBe(true);
 
     // ── 2. The control: a reload with NO reset ───────────────────────────
+    // Finish the run first. Since the walkthrough landed, an INTERRUPTED run
+    // is remembered and a reload picks it up where it stopped — deliberate, and
+    // covered in `use-first-rental-tour.test.tsx`. What this file is checking
+    // is the other thing: once a run is over, nothing brings it back but a
+    // reset. So end it the way an operator does, then reload.
+    await click(button('EndRun'));
+    expect(tourIsActive(), 'the run is over').toBe(false);
+
     await hardReload();
     expect(wizardIsUp(), 'the wizard does not return on its own').toBe(false);
     await wait(TOUR_WINDOW_MS);
@@ -251,13 +303,25 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     expect(tourIsActive(), 'then fires again, in the same order as the first time').toBe(true);
   }, 20_000);
 
-  it('the wizard alone being re-armed is not enough — the tour needs its own flag cleared', async () => {
-    // Half a reset is the failure mode the page exists to avoid: a cleared
-    // row with the tour still marked seen gives wizard → nothing.
+  it('the wizard alone being re-armed is not enough — the tour keys have to go too', async () => {
+    // Half a reset is the failure mode the page exists to avoid: clear the row
+    // and leave the tour's own storage behind, and the operator does NOT get a
+    // first run. Since the walkthrough landed, the specific wrongness changed
+    // shape — an interrupted run is now remembered, so a half reset RESUMES
+    // mid-walkthrough instead of starting at Welcome — but the invariant is
+    // the same one, and it is why the button clears the whole `d247.tour.`
+    // namespace rather than the seen flag alone.
     await render();
     await click(button('Skip for now'));
     await wait(TOUR_WINDOW_MS);
     expect(tourIsActive()).toBe(true);
+
+    // Walk one step in, so there is real progress to strand.
+    const before = currentStepId();
+    expect(before).toBe('welcome');
+    await click(button('Advance'));
+    expect(currentStepId(), 'moved off the first step').not.toBe('welcome');
+    const stranded = currentStepId();
 
     await resetFirstRunRow(fakeSupabase as unknown as FirstRunClient, TENANT.id);
     // …but NOT clearTourSeenFlags().
@@ -265,6 +329,17 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     expect(wizardIsUp()).toBe(true);
     await click(button('Skip for now'));
     await wait(TOUR_WINDOW_MS);
-    expect(tourIsActive(), 'tour stays dark: its seen flag was never cleared').toBe(false);
+    expect(
+      currentStepId(),
+      'not a first run: it picked up where the last one was abandoned',
+    ).toBe(stranded);
+
+    // And the full reset — what the button actually does — puts it right.
+    await resetFirstRunRow(fakeSupabase as unknown as FirstRunClient, TENANT.id);
+    expect(clearTourSeenFlags(), 'seen AND progress, one prefix').toBeGreaterThan(1);
+    await hardReload();
+    await click(button('Skip for now'));
+    await wait(TOUR_WINDOW_MS);
+    expect(currentStepId(), 'back to the top').toBe('welcome');
   }, 20_000);
 });

@@ -248,9 +248,12 @@ describe('Developer page — shows', () => {
 
     expect(button(FIRST_TIME)).toBeDefined();
     expect(button(QUICK_TOUR)).toBeDefined();
-    // Two abilities and nothing else, by request.
+    // Two abilities, by request. The count is scoped to the action cards
+    // because the page also carries the empty-state preview switches (a later,
+    // explicit request — `components/dev/empty-state-preview.tsx`), which are
+    // buttons too and have their own suite.
     expect(container.querySelectorAll('[data-dev-action]')).toHaveLength(2);
-    expect(container.querySelectorAll('button')).toHaveLength(2);
+    expect(container.querySelectorAll('[data-dev-action] button')).toHaveLength(2);
   });
 
   it('renders on a tenant subdomain of localhost, which is how the portal is actually served in dev', async () => {

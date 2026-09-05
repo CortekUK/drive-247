@@ -34,6 +34,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useRouter } from "next/navigation";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { InvoicesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { cn } from "@/lib/utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -143,7 +144,11 @@ const InvoicesList = () => {
   // `invoices`, the raw query result — not `filteredInvoices`, which a search
   // or a status chip can empty for an operator with a full book. Lean canary
   // only; everyone else keeps the existing EmptyState.
-  const teachEmptyInvoices = isLeanTenant(tenantSlug) && !invoices?.length;
+  //
+  // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
+  // outside development, and INSIDE the slug gate so it reaches nobody else.
+  const devForceEmpty = useForcedEmptyState("invoices");
+  const teachEmptyInvoices = isLeanTenant(tenantSlug) && (!invoices?.length || devForceEmpty);
 
   // Filtered invoices
   const filteredInvoices = useMemo(() => {
@@ -370,7 +375,7 @@ const InvoicesList = () => {
       {/* Invoices Table */}
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
-      ) : !filteredInvoices || filteredInvoices.length === 0 ? (
+      ) : !filteredInvoices || filteredInvoices.length === 0 || teachEmptyInvoices ? (
         teachEmptyInvoices ? (
           <InvoicesTeachingEmptyState onCreateRental={() => router.push("/rentals/new")} />
         ) : (

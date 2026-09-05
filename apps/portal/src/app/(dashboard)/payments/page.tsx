@@ -47,6 +47,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { PaymentsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
+import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -350,13 +351,18 @@ const PaymentsList = () => {
   });
 
   // Undefined while the count is still in flight — never teach on a guess.
-  const teachEmptyPayments = teachEligible && lifetimePayments === 0;
+  //
+  // `devForceEmpty` is the /dev preview switch (lib/dev-overrides.ts): inert
+  // outside development, and INSIDE the slug gate (`teachEligible`) so it
+  // reaches nobody else.
+  const devForceEmpty = useForcedEmptyState("payments");
+  const teachEmptyPayments = teachEligible && (lifetimePayments === 0 || devForceEmpty);
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0" data-tour="payments-overview">
           <h1 className="text-2xl sm:text-3xl font-bold">Payments</h1>
           <p className="text-muted-foreground text-sm sm:text-base">
             Record and manage customer payments
@@ -405,7 +411,7 @@ const PaymentsList = () => {
             </div>
           ))}
         </div>
-      ) : payments && payments.length > 0 ? (
+      ) : payments && payments.length > 0 && !teachEmptyPayments ? (
         <>
           <Card>
             <CardContent className="p-0">
