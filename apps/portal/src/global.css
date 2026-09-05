@@ -184,6 +184,219 @@ All colors MUST be HSL.
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   NORTHWIND (v2) — SCOPED, NOT GLOBAL
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The portal at large is the gold-on-cream system above: Playfair Display,
+   --primary 41 49% 56%, --radius 0.5rem. Northwind is a different system
+   entirely — Manrope, deep violet-indigo, 26px surfaces, rings instead of
+   borders — and the brief was to bring the Turo Sync page onto it WITHOUT
+   redesigning the portal around it.
+
+   So every Northwind token lives inside `.northwind` and cascades only to the
+   subtree that opts in. One element carries that class: the Turo Sync page
+   wrapper. Nothing above it or beside it changes, which is why this could not
+   be done by editing :root.
+
+   The extension's popup.css mirrors these values by hand, because a Chrome
+   popup cannot share a stylesheet with a Next.js app. The two files are the
+   same design in two runtimes; change one and change the other.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  .northwind {
+    /* Radius. --radius drives sm/md/lg as it always has; the four larger keys
+       read their own variables (see tailwind.config.ts) so that redefining them
+       here cannot reach the 51 files elsewhere that use rounded-xl. */
+    --radius: 0.625rem;              /* 10px */
+    --radius-xl: 0.875rem;           /* 14px — small panels, notes */
+    --radius-2xl: 1.125rem;          /* 18px */
+    --radius-3xl: 1.375rem;          /* 22px — inputs, badges, pills */
+    --radius-4xl: 1.625rem;          /* 26px — cards, buttons, dialogs */
+
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+
+    /* The single saturated colour. Primary actions and active state only. */
+    --primary: 248 68% 51%;          /* #442DD7 */
+    --primary-foreground: 226 100% 97%;
+    --primary-hover: 248 68% 45%;
+    --primary-light: 248 68% 95%;
+
+    --secondary: 240 4% 96%;
+    --secondary-foreground: 240 6% 10%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 142 76% 94%;
+    --warning: 41 92% 48%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 41 92% 94%;
+    --destructive: 357 100% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-light: 0 84% 94%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 63%;
+
+    /* Note the hover shadow is indigo-tinted rather than neutral. */
+    --shadow-sm: 0 1px 2px 0 hsl(159 21% 20% / 0.08);
+    --shadow-card: 0 4px 6px -1px hsl(159 21% 20% / 0.1), 0 2px 4px -1px hsl(159 21% 20% / 0.06);
+    --shadow-hover: 0 10px 15px -3px hsl(248 68% 51% / 0.15), 0 4px 6px -2px hsl(248 68% 51% / 0.1);
+
+    --gradient-primary: linear-gradient(135deg, hsl(248 68% 51%), hsl(248 68% 61%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 44%));
+    --gradient-warning: linear-gradient(135deg, hsl(41 92% 48%), hsl(41 92% 58%));
+
+    font-family: var(--font-manrope, "Manrope"), -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: hsl(var(--foreground));
+  }
+
+  /* Dark is NOT an inversion: primary gets DARKER, and borders become
+     translucent white rather than a grey token. */
+  .dark .northwind {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 9.1%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 9.1%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 246 61% 42%;
+    --primary-foreground: 226 100% 97%;
+    --primary-hover: 246 61% 50%;
+    --primary-light: 246 61% 22%;
+
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 63%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 98%;
+
+    --success: 142 76% 52%;
+    --success-foreground: 159 21% 8%;
+    --success-light: 142 76% 18%;
+    --warning: 41 92% 65%;
+    --warning-foreground: 159 21% 8%;
+    --warning-light: 41 92% 18%;
+    --destructive: 359 100% 70%;
+    --destructive-foreground: 159 21% 8%;
+    --destructive-light: 0 84% 18%;
+
+    --border: 0 0% 100% / 10%;
+    --input: 0 0% 100% / 15%;
+    --ring: 0 0% 45%;
+
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.5), 0 2px 4px -1px hsl(0 0% 0% / 0.4);
+    --shadow-hover: 0 10px 15px -3px hsl(246 61% 42% / 0.4), 0 4px 6px -2px hsl(246 61% 42% / 0.3);
+  }
+
+  /* The page sits on --background, not on the portal's cream, or the white
+     cards would float on ivory and read as a paste-in. */
+  .northwind {
+    background-color: hsl(var(--background));
+  }
+
+  /* Body copy is 14px on desktop, 16px on mobile — dense operator screens stay
+     legible without shrinking the touch target on a phone. */
+  .northwind { font-size: 1rem; }
+  @media (min-width: 769px) {
+    .northwind { font-size: 0.875rem; }
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   NORTHWIND DEFAULTS FOR THE SHARED PRIMITIVES
+
+   The Turo Sync page still uses the portal's Button, Input, Table and Dialog.
+   Rewriting those components would restyle ~50 screens that are not part of
+   this work, so instead the SHAPE is corrected inside the scope only.
+
+   ELEMENT SELECTORS ON PURPOSE. `.northwind button` has specificity (0,0,2);
+   any Tailwind radius utility is (0,1,0) and wins. So these are defaults that a
+   component can still override in place — which is exactly what the tab
+   triggers and the status pills do.
+   ─────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  /* §6.1 — 26px, and it presses 1px on click. */
+  .northwind button,
+  .northwind [role="button"] {
+    border-radius: var(--radius-4xl);
+    transition: var(--transition-all, all 200ms cubic-bezier(0.4, 0, 0.2, 1));
+  }
+  .northwind button:active:not([aria-haspopup]) {
+    transform: translateY(1px);
+  }
+
+  /* §6.3 — inputs are FILLED, not outlined: transparent border, tinted fill,
+     and the border only appears on focus. */
+  .northwind input:not([type="checkbox"]):not([type="radio"]),
+  .northwind textarea,
+  .northwind select {
+    border-radius: var(--radius-3xl);
+    border-color: transparent;
+    background-color: hsl(var(--input) / 0.5);
+  }
+
+  /* §5 — focus is loud on purpose: 3px, not the shadcn default 2px. */
+  .northwind :is(button, a, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+    outline: none;
+    border-color: hsl(var(--ring));
+    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.3);
+  }
+
+  /* Tables: the header is a soft tint rather than a slab, and rows are parted
+     by a translucent hairline instead of a grey rule. A dense operator table is
+     the one place this design allows a line at all. */
+  .northwind thead {
+    background-color: hsl(var(--muted) / 0.6);
+  }
+  .northwind thead th {
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.02em;
+  }
+  .northwind tbody tr {
+    border-color: hsl(var(--foreground) / 0.05);
+  }
+  .northwind tbody tr:hover {
+    background-color: hsl(var(--muted) / 0.5);
+  }
+
+  /* The table is a surface in its own right, so it gets the card treatment
+     rather than sitting flush against the page. */
+  .northwind .rounded-4xl > table:first-child {
+    border-collapse: separate;
+  }
+
+  /* §6.5 — dialogs are 26px and ringed. The class is applied on DialogContent
+     itself because Radix portals it to <body>, outside this subtree; these
+     rules then apply because that node carries ".northwind" too. */
+  .northwind[role="dialog"],
+  .northwind [role="dialog"] {
+    border-radius: var(--radius-4xl);
+    border-color: transparent;
+    box-shadow: var(--shadow-card);
+    --tw-ring-color: hsl(var(--foreground) / 0.05);
+  }
+}
+
+
 @layer base {
   * {
     @apply border-border;

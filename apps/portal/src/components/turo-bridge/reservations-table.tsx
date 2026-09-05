@@ -25,7 +25,6 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -59,6 +58,8 @@ import {
   type TuroSyncState,
 } from "@/hooks/use-turo-bridge";
 import {
+  NwCard,
+  NwCardBody,
   MonoId,
   Notice,
   SectionTitle,
@@ -158,7 +159,7 @@ export function ReservationsScreen({
           ))}
           {counts.unknownState > 0 && (
             <span
-              className="rounded-md border border-dashed border-[#e0e7ff] px-2.5 py-1 text-xs text-muted-foreground dark:border-border"
+              className="rounded-md border border-dashed border-primary/20 px-2.5 py-1 text-xs text-muted-foreground dark:border-border"
               title="Drive247 has not classified these trips, so they cannot be filtered by status."
             >
               Not classified
@@ -176,11 +177,11 @@ export function ReservationsScreen({
       */}
       {filterUnavailable && <Notice tone="warn">{filterUnavailableReason}</Notice>}
 
-      <Card>
-        <CardContent className="p-0">
+      <NwCard>
+        <NwCardBody className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+              <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                 <TableHead>Trip</TableHead>
                 <TableHead>Vehicle</TableHead>
                 <TableHead>Guest</TableHead>
@@ -236,8 +237,8 @@ export function ReservationsScreen({
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </NwCardBody>
+      </NwCard>
 
       <ReservationDetailDialog row={detail} currency={currency} onClose={() => setDetail(null)} />
     </div>
@@ -269,8 +270,8 @@ function FilterChip({
       }
       className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
         active
-          ? "border-[#6366f1] bg-[#eef2ff] text-[#4338ca] dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-300"
-          : "border-[#f1f5f9] text-muted-foreground hover:border-[#e0e7ff] dark:border-border"
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-foreground/5 text-muted-foreground hover:border-primary/20 dark:border-border"
       }`}
     >
       {label}
@@ -307,7 +308,7 @@ function ReservationRow({
           <span>{row.reservation_id}</span>
           {unmapped.keys.length > 0 && (
             <FileWarning
-              className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400"
+              className="h-3.5 w-3.5 text-warning"
               aria-label={`${unmapped.keys.length} unrecognised fields`}
             />
           )}
@@ -344,7 +345,7 @@ function ReservationRow({
           and Turo auto-accepts, so a finished trip stays held for 48h.
         */}
         {hold.active && hold.holdUntil && (
-          <div className="text-xs text-[#2563eb] dark:text-blue-400 mt-0.5">
+          <div className="text-xs text-primary mt-0.5">
             held until {fmtDateTime(hold.holdUntil)}
           </div>
         )}
@@ -410,7 +411,7 @@ function ReservationRow({
         {stateReading.state === "pending_match" && (
           <button
             type="button"
-            className="mt-1 text-xs font-medium text-[#6366f1] hover:underline"
+            className="mt-1 text-xs font-medium text-primary hover:underline"
             onClick={(e) => {
               e.stopPropagation();
               onGoToMapping();
@@ -429,7 +430,7 @@ function ReservationRow({
       <TableCell className="align-top text-sm">
         {row.promoted_rental_id ? (
           <div>
-            <span className="text-[#16a34a] dark:text-green-400 font-medium">
+            <span className="text-success font-medium">
               Booking created
             </span>
             <div className="text-xs text-muted-foreground mt-0.5">
@@ -449,7 +450,7 @@ function ReservationRow({
           <SourceBadge source={row.source} />
         </div>
         {row.status === "failed" && (
-          <div className="text-xs text-[#dc2626] dark:text-red-400 mt-0.5">sync failed</div>
+          <div className="text-xs text-destructive mt-0.5">sync failed</div>
         )}
       </TableCell>
     </TableRow>
@@ -486,7 +487,7 @@ function ReservationDetailDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="northwind rounded-4xl max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Turo trip {row.reservation_id}
@@ -580,7 +581,7 @@ function ReservationDetailDialog({
           {/* THE "never guess silently" panel. */}
           <div>
             <h4 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertTriangle className="h-4 w-4 text-warning" />
               Fields we did not recognise
             </h4>
             {unmapped.source === "absent" ? (
@@ -593,13 +594,13 @@ function ReservationDetailDialog({
                 None — every key Turo sent was one we know.
               </p>
             ) : (
-              <div className="rounded-md border border-[#f1f5f9] dark:border-border overflow-hidden">
+              <div className="rounded-md border border-foreground/5 dark:border-border overflow-hidden">
                 <table className="w-full text-sm">
                   <tbody>
                     {unmapped.keys.map((k) => (
                       <tr
                         key={k}
-                        className="border-b border-[#f1f5f9] dark:border-border last:border-0"
+                        className="border-b border-foreground/5 dark:border-border last:border-0"
                       >
                         <td className="px-3 py-2 font-mono text-xs text-foreground align-top w-1/3">
                           {k}
@@ -620,13 +621,13 @@ function ReservationDetailDialog({
               <h4 className="text-sm font-medium text-foreground mb-2">
                 Where each value came from
               </h4>
-              <div className="rounded-md border border-[#f1f5f9] dark:border-border overflow-hidden">
+              <div className="rounded-md border border-foreground/5 dark:border-border overflow-hidden">
                 <table className="w-full text-sm">
                   <tbody>
                     {confidenceKeys.map((k) => (
                       <tr
                         key={k}
-                        className="border-b border-[#f1f5f9] dark:border-border last:border-0"
+                        className="border-b border-foreground/5 dark:border-border last:border-0"
                       >
                         <td className="px-3 py-2 text-xs text-foreground align-top w-1/3">{k}</td>
                         <td className="px-3 py-2 text-xs text-muted-foreground font-mono break-all">
@@ -640,7 +641,7 @@ function ReservationDetailDialog({
             </div>
           )}
 
-          <details className="rounded-md border border-[#f1f5f9] dark:border-border">
+          <details className="rounded-md border border-foreground/5 dark:border-border">
             <summary className="cursor-pointer px-3 py-2 text-sm text-muted-foreground select-none">
               Raw Turo record
             </summary>
@@ -654,7 +655,7 @@ function ReservationDetailDialog({
             {row.promoted_rental_id && (
               <a
                 href={`/rentals/${row.promoted_rental_id}`}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#6366f1] hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
               >
                 Open the Drive247 booking
                 <ExternalLink className="h-3.5 w-3.5" />

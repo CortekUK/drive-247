@@ -29,7 +29,6 @@ import {
   Hash,
   RefreshCw,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -54,7 +53,9 @@ import {
   type TuroPromotionPlan,
   type TuroPromotionPlanRow,
 } from "@/hooks/use-turo-bridge";
-import { EmptyState, Notice, SectionTitle, TripWindow, Unknown, fmtDateTime } from "./shared";
+import {
+  NwCard,
+  NwCardBody, EmptyState, Notice, SectionTitle, TripWindow, Unknown, fmtDateTime } from "./shared";
 
 export function PromotionReviewScreen({
   stagedCount,
@@ -211,7 +212,7 @@ export function PromotionReviewScreen({
 
       {!currentPlan ? (
         <EmptyState
-          icon={<CalendarCheck className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />}
+          icon={<CalendarCheck className="h-6 w-6 text-primary" />}
           title={
             stagedCount > 0
               ? `${stagedCount} ${stagedCount === 1 ? "trip is" : "trips are"} ready to review`
@@ -271,11 +272,11 @@ export function PromotionReviewScreen({
               <h3 className="text-sm font-medium text-foreground">
                 Will be created ({readyRows.length})
               </h3>
-              <Card>
-                <CardContent className="p-0">
+              <NwCard>
+                <NwCardBody className="p-0">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                      <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                         <TableHead className="w-24">Right car?</TableHead>
                         <TableHead>Turo trip</TableHead>
                         <TableHead>Turo vehicle</TableHead>
@@ -299,8 +300,8 @@ export function PromotionReviewScreen({
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
+                </NwCardBody>
+              </NwCard>
             </div>
           )}
 
@@ -309,11 +310,11 @@ export function PromotionReviewScreen({
               <h3 className="text-sm font-medium text-foreground">
                 Not being imported ({blockedRows.length})
               </h3>
-              <Card>
-                <CardContent className="p-0">
+              <NwCard>
+                <NwCardBody className="p-0">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                      <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                         <TableHead>Turo trip</TableHead>
                         <TableHead>Turo vehicle</TableHead>
                         <TableHead>Dates</TableHead>
@@ -337,7 +338,7 @@ export function PromotionReviewScreen({
                               {r.blockers.map((b, i) => (
                                 <li
                                   key={i}
-                                  className="text-sm text-[#d97706] dark:text-orange-400 flex items-start gap-1.5"
+                                  className="text-sm text-warning dark:text-orange-400 flex items-start gap-1.5"
                                 >
                                   <CircleAlert className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                                   {b}
@@ -349,14 +350,14 @@ export function PromotionReviewScreen({
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
+                </NwCardBody>
+              </NwCard>
             </div>
           )}
 
           {readyRows.length > 0 && (
-            <Card>
-              <CardContent className="p-5 space-y-4">
+            <NwCard>
+              <NwCardBody className="p-5 space-y-4">
                 <h3 className="text-sm font-medium text-foreground">
                   Before you import, confirm you understand
                 </h3>
@@ -365,8 +366,8 @@ export function PromotionReviewScreen({
                   <div
                     className={`text-sm ${
                       allRowsChecked
-                        ? "text-[#16a34a] dark:text-green-400"
-                        : "text-[#d97706] dark:text-orange-400"
+                        ? "text-success"
+                        : "text-warning dark:text-orange-400"
                     }`}
                   >
                     {allRowsChecked
@@ -383,7 +384,7 @@ export function PromotionReviewScreen({
                     onCheckedChange={(c) => setAckPlaceholders(c === true)}
                     className="mt-0.5"
                   />
-                  <span className="text-sm text-[#404040] dark:text-muted-foreground">
+                  <span className="text-sm text-foreground dark:text-muted-foreground">
                     <span className="font-medium text-foreground">
                       Placeholder guests will be created
                     </span>{" "}
@@ -399,7 +400,7 @@ export function PromotionReviewScreen({
                     onCheckedChange={(c) => setAckNoInvoices(c === true)}
                     className="mt-0.5"
                   />
-                  <span className="text-sm text-[#404040] dark:text-muted-foreground">
+                  <span className="text-sm text-foreground dark:text-muted-foreground">
                     <span className="font-medium text-foreground">
                       No invoice, charge or receivable will be raised
                     </span>{" "}
@@ -422,8 +423,8 @@ export function PromotionReviewScreen({
                     {readyRows.length === 1 ? "booking" : "bookings"}
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </NwCardBody>
+            </NwCard>
           )}
         </>
       )}
@@ -485,30 +486,41 @@ function CountTile({
 }) {
   const toneClass =
     tone === "good"
-      ? "text-[#16a34a] dark:text-green-400"
+      ? "text-success"
       : tone === "warn"
-        ? "text-[#d97706] dark:text-orange-400"
+        ? "text-warning dark:text-orange-400"
         : tone === "danger"
-          ? "text-[#dc2626] dark:text-red-400"
+          ? "text-destructive"
           : "text-foreground";
 
   const inner = (
-    <CardContent className="p-4">
+    <NwCardBody className="p-4">
       <p className="text-sm text-muted-foreground">{label}</p>
       {/* A bare integer. No denominator exists that we would trust. */}
       <p className={`text-2xl font-medium mt-1 tabular-nums ${toneClass}`}>{value}</p>
-      {onClick && <p className="text-xs text-[#6366f1] mt-1">Go to the mapping queue →</p>}
-    </CardContent>
+      {onClick && <p className="text-xs text-primary mt-1">Go to the mapping queue →</p>}
+    </NwCardBody>
   );
 
   if (onClick) {
+    /* §7 interactive-card hover: an indigo-tinted gradient wash and a lifted
+       shadow, rather than a border colour change — this system has no borders
+       to change. The click target became a focusable div so the whole card is
+       reachable by keyboard, which it was not before. */
     return (
-      <Card className="cursor-pointer transition-colors hover:border-[#e0e7ff]" onClick={onClick}>
+      <NwCard
+        size="sm"
+        className="cursor-pointer transition-all hover:bg-gradient-to-br hover:from-primary/10 hover:via-primary/5 hover:to-transparent hover:shadow-[var(--shadow-hover)]"
+      >
+        <div onClick={onClick} role="button" tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } }}
+          className="outline-none focus-visible:ring-3 focus-visible:ring-ring/30 rounded-4xl">
         {inner}
-      </Card>
+        </div>
+      </NwCard>
     );
   }
-  return <Card>{inner}</Card>;
+  return <NwCard>{inner}</NwCard>;
 }
 
 function PlanRow({
@@ -534,10 +546,10 @@ function PlanRow({
               onCheckedChange={(c) => onToggle(c === true)}
               aria-label={`Confirm the vehicle for trip ${row.reservation_id}`}
             />
-            <span className="text-xs text-[#d97706] dark:text-orange-400">confirm</span>
+            <span className="text-xs text-warning dark:text-orange-400">confirm</span>
           </label>
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs text-[#16a34a] dark:text-green-400">
+          <span className="inline-flex items-center gap-1.5 text-xs text-success">
             <CheckCircle2 className="h-4 w-4" />
             plate
           </span>
@@ -560,8 +572,8 @@ function PlanRow({
             <div
               className={`text-xs mt-0.5 ${
                 row.requires_review
-                  ? "text-[#d97706] dark:text-orange-400"
-                  : "text-[#16a34a] dark:text-green-400"
+                  ? "text-warning dark:text-orange-400"
+                  : "text-success"
               }`}
             >
               matched by {row.match_basis}
@@ -618,7 +630,7 @@ function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="northwind rounded-4xl">
         <DialogHeader>
           <DialogTitle>
             Create {rows.length} {rows.length === 1 ? "booking" : "bookings"}?
@@ -628,24 +640,24 @@ function ConfirmDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="space-y-2 text-sm text-[#404040] dark:text-muted-foreground">
+        <ul className="space-y-2 text-sm text-foreground dark:text-muted-foreground">
           <li className="flex items-start gap-2">
-            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-[#6366f1]" />
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
             {rows.length} {rows.length === 1 ? "booking" : "bookings"} across {vehicleCount}{" "}
             {vehicleCount === 1 ? "vehicle" : "vehicles"} will be created, and those cars come
             off sale for those dates.
           </li>
           <li className="flex items-start gap-2">
-            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-[#6366f1]" />
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
             Placeholder contacts will be created for the guests. Nobody will be emailed or
             texted.
           </li>
           <li className="flex items-start gap-2">
-            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-[#6366f1]" />
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
             No invoices, charges or payment requests are raised.
           </li>
           <li className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-[#d97706]" />
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
             If anything has changed since this plan was built, the import will be refused rather
             than guessing — you will be told what moved.
           </li>

@@ -27,7 +27,6 @@ import {
   ShieldQuestion,
   XCircle,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +50,8 @@ import {
 } from "@/hooks/use-turo-bridge";
 import { useTuroSyncJobs, type TuroSyncJob } from "@/hooks/use-turo-sync-jobs";
 import {
+  NwCard,
+  NwCardBody,
   EmptyState,
   Notice,
   SchemaMissing,
@@ -237,7 +238,7 @@ export function CancellationScreen() {
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={<CheckCircle2 className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />}
+          icon={<CheckCircle2 className="h-6 w-6 text-primary" />}
           title="No trips are in question"
           body="Every trip we have seen is still showing up in your Turo feed. If one stops appearing, it will wait here for your decision rather than quietly releasing the car."
         />
@@ -248,7 +249,7 @@ export function CancellationScreen() {
             <span
               className={
                 releasableCount > 0
-                  ? "text-[#16a34a] dark:text-green-400 font-medium"
+                  ? "text-success font-medium"
                   : "text-muted-foreground"
               }
             >
@@ -297,8 +298,8 @@ function CandidateCard({
   const streak = row.missing_streak ?? row.missing_run_count ?? 0;
 
   return (
-    <Card>
-      <CardContent className="p-5">
+    <NwCard>
+      <NwCardBody className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -315,7 +316,7 @@ function CandidateCard({
           </div>
 
           <div className="text-right shrink-0">
-            <div className="flex items-center justify-end gap-1.5 text-sm text-[#d97706] dark:text-orange-400">
+            <div className="flex items-center justify-end gap-1.5 text-sm text-warning dark:text-orange-400">
               <Lock className="h-3.5 w-3.5" />
               Car still blocked
             </div>
@@ -340,7 +341,7 @@ function CandidateCard({
           </p>
         )}
 
-        <div className="mt-4 rounded-md border border-[#f1f5f9] dark:border-border divide-y divide-[#f1f5f9] dark:divide-border">
+        <div className="mt-4 rounded-md border border-foreground/5 dark:border-border divide-y divide-foreground/5 dark:divide-border">
           {gates.map((g) => (
             <GateRow key={g.key} gate={g} />
           ))}
@@ -349,7 +350,7 @@ function CandidateCard({
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm">
             {releasable ? (
-              <span className="text-[#16a34a] dark:text-green-400 font-medium">
+              <span className="text-success font-medium">
                 All checks pass — a release can be requested.
               </span>
             ) : (
@@ -363,8 +364,8 @@ function CandidateCard({
             Decide
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </NwCardBody>
+    </NwCard>
   );
 }
 
@@ -372,14 +373,14 @@ function GateRow({ gate }: { gate: Gate }) {
   return (
     <div className="flex items-start gap-3 px-3 py-2.5">
       {gate.passed ? (
-        <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-[#16a34a] dark:text-green-400" />
+        <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-success" />
       ) : (
-        <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-[#d97706] dark:text-orange-400" />
+        <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-warning dark:text-orange-400" />
       )}
       <div className="min-w-0">
         <div
           className={`text-sm ${
-            gate.passed ? "text-foreground" : "text-[#d97706] dark:text-orange-400 font-medium"
+            gate.passed ? "text-foreground" : "text-warning dark:text-orange-400 font-medium"
           }`}
         >
           {gate.label}
@@ -472,7 +473,7 @@ function DecisionDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="northwind rounded-4xl max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Is Turo trip {row.reservation_id} really cancelled?</DialogTitle>
           <DialogDescription>
@@ -484,7 +485,7 @@ function DecisionDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="rounded-md border border-[#f1f5f9] dark:border-border divide-y divide-[#f1f5f9] dark:divide-border">
+          <div className="rounded-md border border-foreground/5 dark:border-border divide-y divide-foreground/5 dark:divide-border">
             {gates.map((g) => (
               <GateRow key={g.key} gate={g} />
             ))}
@@ -513,8 +514,8 @@ function DecisionDialog({
           </div>
 
           {releasable ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 px-4 py-3 space-y-2">
-              <p className="text-sm text-[#404040] dark:text-muted-foreground">
+            <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 space-y-2">
+              <p className="text-sm text-foreground dark:text-muted-foreground">
                 To put this car back on sale, type the trip id{" "}
                 <span className="font-mono font-medium text-foreground">
                   {row.reservation_id}

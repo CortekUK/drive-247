@@ -135,14 +135,14 @@ export default function TuroBridgePage() {
 /** Decides nothing while the tenant row is still in flight. */
 function TuroSyncResolving() {
   return (
-    <div className="container mx-auto space-y-6 p-6">
-      <div className="h-9 w-48 animate-pulse rounded bg-[#f1f5f9] dark:bg-muted" />
-      <div className="h-4 w-full max-w-xl animate-pulse rounded bg-[#f1f5f9] dark:bg-muted" />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+    <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
+      <div className="h-9 w-48 animate-pulse rounded-3xl bg-muted" />
+      <div className="h-4 w-full max-w-xl animate-pulse rounded-3xl bg-muted" />
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
         {[0, 1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="h-[92px] animate-pulse rounded-lg border border-[#f1f5f9] bg-white dark:border-border dark:bg-card"
+            className="h-[104px] animate-pulse rounded-4xl bg-card shadow-[var(--shadow-card)] ring-1 ring-foreground/5 dark:ring-foreground/10"
           />
         ))}
       </div>
@@ -166,15 +166,15 @@ function TuroSyncResolving() {
 function TuroSyncOff() {
   const router = useRouter();
   return (
-    <div className="container mx-auto space-y-6 p-6">
+    <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
       <div>
-        <h1 className="text-3xl font-medium text-foreground">Turo Sync</h1>
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground">Turo Sync</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Hidden for this account.
         </p>
       </div>
       <EmptyState
-        icon={<Puzzle className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />}
+        icon={<Puzzle className="h-6 w-6 text-primary" />}
         title="Turo Sync is turned off"
         body={
           <>
@@ -277,7 +277,7 @@ function TuroSyncScreen() {
 
   if (reservations.isError) {
     return (
-      <div className="container mx-auto space-y-6 p-6">
+      <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
         <PageHeader onRefresh={refreshAll} isFetching={reservations.isFetching} />
         <LoadFailed what="Turo Sync" error={reservations.error} onRetry={refreshAll} />
       </div>
@@ -287,13 +287,13 @@ function TuroSyncScreen() {
   const nothingSyncedYet = !reservations.isLoading && counts.total === 0;
 
   return (
-    <div className="container mx-auto space-y-6 p-6">
+    <div className="northwind mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 pt-6">
       <PageHeader onRefresh={refreshAll} isFetching={reservations.isFetching} />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
-          icon={<DownloadCloud className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+          icon={<DownloadCloud className="h-5 w-5 text-primary" />}
           label="Trips synced"
           value={String(counts.total)}
           hint={
@@ -303,7 +303,7 @@ function TuroSyncScreen() {
           }
         />
         <StatCard
-          icon={<CalendarDays className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+          icon={<CalendarDays className="h-5 w-5 text-primary" />}
           label="Upcoming trips"
           value={String(windows.upcoming)}
           hint={`${windows.onTripNow} on trip now · ${windows.finished} finished`}
@@ -316,7 +316,7 @@ function TuroSyncScreen() {
           is nothing to answer.
         */}
         <StatCard
-          icon={<CarFront className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+          icon={<CarFront className="h-5 w-5 text-primary" />}
           label="Vehicles to match"
           value={foundationApplied ? String(mapQueue.counts.awaiting) : "—"}
           tone={foundationApplied && mapQueue.counts.awaiting > 0 ? "warn" : "default"}
@@ -329,7 +329,7 @@ function TuroSyncScreen() {
           }
         />
         <StatCard
-          icon={<ShieldQuestion className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+          icon={<ShieldQuestion className="h-5 w-5 text-primary" />}
           label="Needs your decision"
           value={foundationApplied ? String(counts.byState.cancellation_candidate) : "—"}
           tone={
@@ -351,7 +351,7 @@ function TuroSyncScreen() {
         */}
         <div title={freshness.caveat}>
           <StatCard
-            icon={<Timer className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+            icon={<Timer className="h-5 w-5 text-primary" />}
             label="Last sync"
             value={
               freshness.lastSyncedAt
@@ -448,21 +448,21 @@ function TuroSyncScreen() {
         />
       ) : (
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-          <TabsList>
-            <TabsTrigger value="reservations">Reservations</TabsTrigger>
-            <TabsTrigger value="vehicles">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-3xl bg-muted/60 p-1.5">
+            <TabsTrigger value="reservations" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">Reservations</TabsTrigger>
+            <TabsTrigger value="vehicles" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
               Vehicles
               {mapQueue.counts.awaiting > 0 && (
                 <TabBadge count={mapQueue.counts.awaiting} tone="warn" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="review">
+            <TabsTrigger value="review" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
               Import
               {counts.byState.staged > 0 && (
                 <TabBadge count={counts.byState.staged} tone="accent" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="cancellations">
+            <TabsTrigger value="cancellations" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
               Possibly cancelled
               {counts.byState.cancellation_candidate > 0 && (
                 <TabBadge count={counts.byState.cancellation_candidate} tone="warn" />
@@ -475,7 +475,7 @@ function TuroSyncScreen() {
               as "no syncs have run" — which is precisely the thing we cannot
               currently know. SyncHistoryScreen says so itself when opened.
             */}
-            <TabsTrigger value="history">
+            <TabsTrigger value="history" className="gap-1.5 rounded-3xl px-3.5 py-1.5 text-sm data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-[var(--shadow-sm)]">
               Sync history
               {health.schemaMissing && (
                 <span
@@ -534,7 +534,7 @@ function PageHeader({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-3xl font-medium text-foreground">Turo Sync</h1>
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight text-foreground">Turo Sync</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Trips read from your Turo host account by the Drive247 Turo Bridge extension in Chrome,
           and the steps to turn them into real bookings here.
@@ -608,7 +608,7 @@ function StalenessBanner({ freshness }: { freshness: TuroFreshness }) {
   const days = freshness.ageDays ?? 0;
   return (
     <Notice tone="warn">
-      <span className="font-medium text-[#dc2626] dark:text-red-400">
+      <span className="font-medium text-destructive">
         No Turo sync for {days} {days === 1 ? "day" : "days"}.{" "}
       </span>
       This is a stale copy of your Turo calendar, not your Turo calendar. Do not use it to decide
@@ -623,8 +623,8 @@ function TabBadge({ count, tone }: { count: number; tone: "warn" | "accent" }) {
     <span
       className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
         tone === "warn"
-          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
-          : "bg-[#e0e7ff] text-[#4338ca] dark:bg-indigo-950/50 dark:text-indigo-300"
+          ? "bg-warning/10 text-warning"
+          : "bg-primary/15 text-primary/50"
       }`}
     >
       {count}
@@ -645,7 +645,7 @@ function GettingStarted({
 }) {
   return (
     <EmptyState
-      icon={<Puzzle className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />}
+      icon={<Puzzle className="h-6 w-6 text-primary" />}
       title="No Turo trips yet"
       body={
         <>
@@ -715,7 +715,7 @@ function GettingStarted({
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[11px] font-medium text-[#4338ca] dark:bg-muted dark:text-indigo-300">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-medium text-primary dark:bg-muted">
         {n}
       </span>
       <span className="text-muted-foreground">{children}</span>

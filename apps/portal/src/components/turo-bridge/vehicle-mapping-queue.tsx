@@ -36,7 +36,6 @@ import {
   Search,
   ShieldAlert,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -70,6 +69,8 @@ import {
   type TuroVehicleSuggestion,
 } from "@/hooks/use-turo-vehicle-map";
 import {
+  NwCard,
+  NwCardBody,
   EmptyState,
   LoadFailed,
   Notice,
@@ -132,7 +133,7 @@ export function VehicleMappingScreen() {
 
       {queue.entries.length === 0 ? (
         <EmptyState
-          icon={<CheckCircle2 className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />}
+          icon={<CheckCircle2 className="h-6 w-6 text-primary" />}
           title="Every Turo vehicle is mapped"
           body={
             <>
@@ -180,11 +181,11 @@ export function VehicleMappingScreen() {
             cannot be imported until you say which car they are.
           </Notice>
 
-          <Card>
-            <CardContent className="p-0">
+          <NwCard>
+            <NwCardBody className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                  <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                     <TableHead>Turo vehicle</TableHead>
                     <TableHead>Identifiers</TableHead>
                     <TableHead>Trips waiting</TableHead>
@@ -292,8 +293,8 @@ export function VehicleMappingScreen() {
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </NwCardBody>
+          </NwCard>
         </>
       )}
 
@@ -302,11 +303,11 @@ export function VehicleMappingScreen() {
           <h3 className="text-sm font-medium text-foreground">
             Confirmed mappings ({queue.confirmedMappings.length})
           </h3>
-          <Card>
-            <CardContent className="p-0">
+          <NwCard>
+            <NwCardBody className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                  <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                     <TableHead>Turo vehicle</TableHead>
                     <TableHead>Drive247 vehicle</TableHead>
                     <TableHead>Confirmed</TableHead>
@@ -341,7 +342,7 @@ export function VehicleMappingScreen() {
                         <TableCell className="align-top text-sm text-muted-foreground">
                           {fmtDate(m.confirmed_at)}
                           {!m.is_active && (
-                            <div className="text-xs text-[#dc2626] dark:text-red-400">
+                            <div className="text-xs text-destructive">
                               retired
                             </div>
                           )}
@@ -354,8 +355,8 @@ export function VehicleMappingScreen() {
                   })}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </NwCardBody>
+          </NwCard>
         </div>
       )}
 
@@ -375,17 +376,17 @@ function MiniCount({
 }) {
   const toneClass =
     tone === "good"
-      ? "text-[#16a34a] dark:text-green-400"
+      ? "text-success"
       : tone === "warn"
-        ? "text-[#d97706] dark:text-orange-400"
+        ? "text-warning dark:text-orange-400"
         : "text-foreground";
   return (
-    <Card>
-      <CardContent className="p-4">
+    <NwCard>
+      <NwCardBody className="p-4">
         <p className="text-sm text-muted-foreground">{label}</p>
         <p className={`text-2xl font-medium mt-1 tabular-nums ${toneClass}`}>{value}</p>
-      </CardContent>
-    </Card>
+      </NwCardBody>
+    </NwCard>
   );
 }
 
@@ -425,8 +426,8 @@ function GuessCell({ entry }: { entry: TuroVehicleMapQueueEntry }) {
       <div
         className={`flex items-center gap-1.5 text-sm font-medium ${
           best.strength === "exact"
-            ? "text-[#16a34a] dark:text-green-400"
-            : "text-[#d97706] dark:text-orange-400"
+            ? "text-success"
+            : "text-warning dark:text-orange-400"
         }`}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -553,7 +554,7 @@ function MappingDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="northwind rounded-4xl max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Which car is this?</DialogTitle>
           <DialogDescription>
@@ -613,7 +614,7 @@ function MappingDialog({
               />
             </div>
 
-            <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-[#f1f5f9] dark:border-border divide-y divide-[#f1f5f9] dark:divide-border">
+            <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-foreground/5 dark:border-border divide-y divide-foreground/5 dark:divide-border">
               {filteredVehicles.length === 0 ? (
                 <div className="px-3 py-6 text-center text-sm text-muted-foreground">
                   {vehicles.length === 0
@@ -637,15 +638,15 @@ function MappingDialog({
                       }}
                       className={`w-full text-left px-3 py-2 flex items-center justify-between gap-3 transition-colors ${
                         isSelected
-                          ? "bg-[#eef2ff] dark:bg-indigo-950/40"
-                          : "hover:bg-[#f8fafc] dark:hover:bg-muted/50"
+                          ? "bg-primary/10"
+                          : "hover:bg-muted/50 dark:hover:bg-muted/50"
                       }`}
                     >
                       <div className="min-w-0">
                         <div className="font-mono text-sm font-medium text-foreground">
                           {v.reg}
                           {plateMatches && (
-                            <span className="ml-2 text-xs font-sans font-medium text-[#16a34a] dark:text-green-400">
+                            <span className="ml-2 text-xs font-sans font-medium text-success">
                               plate matches
                             </span>
                           )}
@@ -656,7 +657,7 @@ function MappingDialog({
                           {v.is_paused ? " · paused" : ""}
                         </div>
                       </div>
-                      {isSelected && <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6366f1]" />}
+                      {isSelected && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
                     </button>
                   );
                 })
@@ -690,14 +691,14 @@ function MappingDialog({
             people tick; naming the registration makes it a decision they have
             to actually read.
           */}
-          <label className="flex items-start gap-3 rounded-md border border-[#f1f5f9] dark:border-border px-3 py-3 cursor-pointer">
+          <label className="flex items-start gap-3 rounded-md border border-foreground/5 dark:border-border px-3 py-3 cursor-pointer">
             <Checkbox
               checked={acknowledged}
               onCheckedChange={(c) => setAcknowledged(c === true)}
               disabled={!selected}
               className="mt-0.5"
             />
-            <span className="text-sm text-[#404040] dark:text-muted-foreground">
+            <span className="text-sm text-foreground dark:text-muted-foreground">
               {selected ? (
                 <>
                   I have checked this: Turo&apos;s{" "}
@@ -744,8 +745,8 @@ function SuggestionRow({
       onClick={onPick}
       className={`w-full text-left rounded-md border px-3 py-2.5 transition-colors ${
         selected
-          ? "border-[#6366f1] bg-[#eef2ff] dark:border-indigo-500 dark:bg-indigo-950/40"
-          : "border-[#f1f5f9] hover:border-[#e0e7ff] dark:border-border"
+          ? "border-primary bg-primary/10"
+          : "border-foreground/5 hover:border-primary/20 dark:border-border"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -757,8 +758,8 @@ function SuggestionRow({
             <span
               className={`text-xs font-medium ${
                 exact
-                  ? "text-[#16a34a] dark:text-green-400"
-                  : "text-[#d97706] dark:text-orange-400"
+                  ? "text-success"
+                  : "text-warning dark:text-orange-400"
               }`}
             >
               {exact ? "exact plate match" : "suggestion — check before confirming"}
@@ -771,7 +772,7 @@ function SuggestionRow({
           </div>
           <p className="text-xs text-muted-foreground mt-1">{suggestion.explanation}</p>
         </div>
-        {selected && <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6366f1] mt-0.5" />}
+        {selected && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary mt-0.5" />}
       </div>
     </button>
   );

@@ -9,15 +9,30 @@
  * GENERATED ALWAYS columns, and a component that recomputed "looks complete to
  * me" would be manufacturing exactly the authority the schema withholds.
  *
- * House design system (CLAUDE.md → Portal Design System):
- *   flat cards, 1px #f1f5f9 borders, no shadows, indigo #6366f1 accent,
- *   indigo table headers (#eef2ff), colored TEXT for status rather than pills.
+ * ── DESIGN SYSTEM: Northwind v2 (NORTHWIND_UI_GUIDE.md), SCOPED ─────────────
+ *
+ * Cards, buttons and dialogs sit at 26px (`rounded-4xl`); inputs and badges at
+ * 22px (`rounded-3xl`). Surfaces are separated by a translucent RING plus a
+ * soft shadow — never a 1px grey line. One saturated colour, a deep
+ * violet-indigo, reserved for primary actions and active state. Focus is 3px.
+ *
+ * NOTHING HERE HARD-CODES A COLOUR. Every value is a token consumed through
+ * Tailwind as `hsl(var(--token))`, and `.dark .northwind` redefines all of them
+ * — where, per the guide, primary gets DARKER rather than lighter. That is why
+ * the hand-picked `dark:text-indigo-400` companions that used to sit beside
+ * these classes are gone: they inverted the one rule the palette is most
+ * particular about.
+ *
+ * The scope is a single class, `.northwind`, on the page wrapper. The portal
+ * around this screen is a different system entirely (gold on cream, Playfair
+ * Display) and is deliberately untouched — which is why the card and pill
+ * recipes are built here rather than by restyling `@/components/ui/*`, shared
+ * with ~50 screens this brief does not cover.
  */
 "use client";
 
 import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, Database, Info, XCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   TURO_FOUNDATION_MISSING_DETAIL,
@@ -32,14 +47,96 @@ import {
 } from "@/hooks/use-turo-sync-jobs";
 
 /* ---------------------------------------------------------------------------
- * Layout
+ * The recipes (§6)
  * ------------------------------------------------------------------------ */
 
 /**
- * The house stat card. Copied from (dashboard)/vehicle-owners/page.tsx:197-211,
- * which is itself duplicated byte-for-byte in owner-payouts/page.tsx:184-197 —
- * so this really is the shared shape rather than one page's invention.
+ * §6.2. 26px, ringed, softly shadowed, and padded from a LOCAL variable so a
+ * caller changes one number rather than three paddings.
  */
+export function NwCard({
+  className = "",
+  size = "default",
+  children,
+}: {
+  className?: string;
+  size?: "default" | "sm";
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-size={size}
+      className={
+        "flex flex-col overflow-hidden rounded-4xl bg-card text-card-foreground " +
+        "shadow-[var(--shadow-card)] ring-1 ring-foreground/5 dark:ring-foreground/10 " +
+        "[--card-spacing:1.5rem] data-[size=sm]:[--card-spacing:1rem] " +
+        className
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Card body. Reads `--card-spacing`, so padding stays in one place. */
+export function NwCardBody({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return <div className={`p-[var(--card-spacing)] ${className}`}>{children}</div>;
+}
+
+/**
+ * §6.6 status pill — the one badge shape this design uses for health and
+ * integration state. Tinted background, matching border and text, and a dot
+ * unless the caller supplies a more specific icon.
+ */
+export function StatusPill({
+  tone,
+  icon,
+  title,
+  children,
+}: {
+  tone: "connected" | "attention" | "danger" | "neutral";
+  icon?: ReactNode;
+  title?: string;
+  children: ReactNode;
+}) {
+  const tones = {
+    connected: "border-success/30 bg-success/10 text-success",
+    attention: "border-warning/30 bg-warning/10 text-warning",
+    danger: "border-destructive/30 bg-destructive/10 text-destructive",
+    neutral: "border-transparent text-muted-foreground",
+  } as const;
+  const dot = {
+    connected: "bg-success",
+    attention: "bg-warning",
+    danger: "bg-destructive",
+    neutral: "bg-muted-foreground/40",
+  } as const;
+  return (
+    <span
+      title={title}
+      className={
+        "inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1.5 " +
+        "overflow-hidden rounded-3xl border px-2 py-0.5 text-xs font-medium " +
+        `whitespace-nowrap [&>svg]:!size-3 ${tones[tone]}`
+      }
+    >
+      {icon ?? <span className={`size-1.5 rounded-full ${dot[tone]}`} />}
+      {children}
+    </span>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * Layout
+ * ------------------------------------------------------------------------ */
+
+/** The house stat card, on the Northwind card recipe. */
 export function StatCard({
   icon,
   label,
@@ -54,31 +151,34 @@ export function StatCard({
   tone?: "default" | "warn" | "danger";
 }) {
   const valueTone =
-    tone === "danger"
-      ? "text-red-600 dark:text-red-400"
-      : tone === "warn"
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-foreground";
+    tone === "danger" ? "text-destructive" : tone === "warn" ? "text-warning" : "text-foreground";
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-3">
+    <NwCard size="sm" className="transition-all hover:shadow-[var(--shadow-hover)]">
+      <NwCardBody>
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className={`text-2xl font-medium mt-1 ${valueTone}`}>{value}</p>
-            {hint && <p className="text-xs text-muted-foreground mt-1 truncate">{hint}</p>}
+            {/* §7 section-label convention: the caption is the quiet part. */}
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {label}
+            </p>
+            <p className={`mt-2 text-2xl font-semibold leading-none tracking-tight ${valueTone}`}>
+              {value}
+            </p>
+            {hint && <p className="mt-2 truncate text-xs text-muted-foreground">{hint}</p>}
           </div>
-          <div className="h-10 w-10 shrink-0 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center">
+          {/* The only tinted surface on the card, so the number stays the thing
+              you read first. */}
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-3xl bg-primary/10 text-primary">
             {icon}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </NwCardBody>
+    </NwCard>
   );
 }
 
-/** Section heading + optional right-hand action. 24px medium per the system. */
+/** Section heading + optional right-hand action. */
 export function SectionTitle({
   title,
   description,
@@ -89,11 +189,15 @@ export function SectionTitle({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex items-end justify-between gap-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
       <div className="min-w-0">
-        <h2 className="text-2xl font-medium text-foreground">{title}</h2>
+        <h2 className="text-xl font-semibold leading-tight tracking-tight text-foreground">
+          {title}
+        </h2>
         {description && (
-          <p className="text-sm text-muted-foreground mt-1 max-w-3xl">{description}</p>
+          <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            {description}
+          </p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}
@@ -101,7 +205,7 @@ export function SectionTitle({
   );
 }
 
-/** Generic empty state inside a flat card. */
+/** Generic empty state. */
 export function EmptyState({
   icon,
   title,
@@ -114,16 +218,18 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-12">
-        <div className="h-12 w-12 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center mb-4">
+    <NwCard>
+      <NwCardBody className="flex flex-col items-center justify-center py-14">
+        <div className="mb-5 flex size-14 items-center justify-center rounded-4xl bg-primary/10 text-primary">
           {icon}
         </div>
-        <h3 className="text-lg font-semibold mb-2 text-center">{title}</h3>
-        <div className="text-muted-foreground text-center max-w-md text-sm">{body}</div>
+        <h3 className="mb-2 text-center text-base font-semibold tracking-tight">{title}</h3>
+        <div className="max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+          {body}
+        </div>
         {action && <div className="mt-6">{action}</div>}
-      </CardContent>
-    </Card>
+      </NwCardBody>
+    </NwCard>
   );
 }
 
@@ -141,20 +247,16 @@ export function EmptyState({
  * direction that costs a double-booking, so this component exists to make that
  * impossible by having somewhere else to go.
  */
-export function SchemaMissing({
-  what,
-  message,
-}: {
-  what: string;
-  message: string | null;
-}) {
+export function SchemaMissing({ what, message }: { what: string; message: string | null }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-12">
-        <div className="h-12 w-12 rounded-md bg-[#eef2ff] dark:bg-muted flex items-center justify-center mb-4">
-          <Database className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+    <NwCard>
+      <NwCardBody className="flex flex-col items-center justify-center py-14">
+        <div className="mb-5 flex size-14 items-center justify-center rounded-4xl bg-primary/10 text-primary">
+          <Database className="size-6" />
         </div>
-        <h3 className="text-lg font-semibold mb-2 text-center">{what} is not set up yet</h3>
+        <h3 className="mb-2 text-center text-base font-semibold tracking-tight">
+          {what} is not set up yet
+        </h3>
         {/*
           `message` is operator copy and stays free of file paths. The engineering
           detail rides along as hover text so a support call can still get the
@@ -162,18 +264,20 @@ export function SchemaMissing({
           somebody who cannot act on it.
         */}
         <p
-          className="text-muted-foreground text-center max-w-lg text-sm"
+          className="max-w-lg text-center text-sm leading-relaxed text-muted-foreground"
           title={TURO_FOUNDATION_MISSING_DETAIL}
         >
           {message}
         </p>
-        <p className="text-xs text-muted-foreground text-center max-w-lg mt-3">
+        {/* §7 callout: a toned panel, so the caveat reads as a deliberate
+            statement rather than a footnote in grey. */}
+        <p className="mt-5 max-w-lg rounded-xl border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-center text-xs leading-relaxed text-warning">
           This is not the same as having nothing to do. Until setup is finished, this screen
           cannot tell you whether there is work waiting here — so it will not pretend there is
           none.
         </p>
-      </CardContent>
-    </Card>
+      </NwCardBody>
+    </NwCard>
   );
 }
 
@@ -190,20 +294,25 @@ export function LoadFailed({
   const message =
     (error as { message?: string } | null)?.message || "The request to the database failed.";
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center py-12">
-        <div className="h-12 w-12 rounded-md bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-4">
-          <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+    <NwCard>
+      <NwCardBody className="flex flex-col items-center justify-center py-14">
+        {/* Destructive surfaces are TINTED, never filled solid (§8). */}
+        <div className="mb-5 flex size-14 items-center justify-center rounded-4xl bg-destructive/10 text-destructive">
+          <XCircle className="size-6" />
         </div>
-        <h3 className="text-lg font-semibold mb-2 text-center">{what} could not be loaded</h3>
-        <p className="text-muted-foreground text-center max-w-lg text-sm">{message}</p>
+        <h3 className="mb-2 text-center text-base font-semibold tracking-tight">
+          {what} could not be loaded
+        </h3>
+        <p className="max-w-lg text-center text-sm leading-relaxed text-muted-foreground">
+          {message}
+        </p>
         {onRetry && (
-          <Button variant="outline" size="sm" className="mt-6" onClick={onRetry}>
+          <Button variant="outline" size="sm" className="mt-6 rounded-4xl" onClick={onRetry}>
             Try again
           </Button>
         )}
-      </CardContent>
-    </Card>
+      </NwCardBody>
+    </NwCard>
   );
 }
 
@@ -217,40 +326,42 @@ export function Notice({
   icon?: ReactNode;
   children: ReactNode;
 }) {
+  /* §7 callout tones: tinted, never solid, with a matching tinted border rather
+     than a grey line. */
   const styles =
     tone === "danger"
-      ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+      ? "border-destructive/30 bg-destructive/10"
       : tone === "warn"
-        ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
-        : "border-[#e0e7ff] bg-[#eef2ff] dark:border-indigo-900 dark:bg-indigo-950/30";
+        ? "border-warning/30 bg-warning/10"
+        : "border-primary/20 bg-primary/10";
 
   const defaultIcon =
     tone === "danger" ? (
-      <XCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600 dark:text-red-400" />
+      <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
     ) : tone === "warn" ? (
-      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
     ) : (
-      <Info className="h-4 w-4 mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+      <Info className="mt-0.5 size-4 shrink-0 text-primary" />
     );
 
   return (
-    <div className={`flex items-start gap-3 rounded-md border px-4 py-3 ${styles}`}>
+    <div className={`flex items-start gap-3 rounded-3xl border px-4 py-3 ${styles}`}>
       {icon ?? defaultIcon}
-      <div className="text-sm text-[#404040] dark:text-muted-foreground">{children}</div>
+      <div className="text-sm leading-relaxed text-foreground">{children}</div>
     </div>
   );
 }
 
 /* ---------------------------------------------------------------------------
- * Badges — colored text, per the design system, not background pills
+ * State as colour — text, not pills, so a dense table stays scannable
  * ------------------------------------------------------------------------ */
 
 const SYNC_STATE_TONE: Record<TuroSyncState, string> = {
-  pending_match: "text-amber-600 dark:text-amber-400",
-  staged: "text-[#2563eb] dark:text-blue-400",
-  promoted: "text-[#16a34a] dark:text-green-400",
-  cancellation_candidate: "text-[#d97706] dark:text-orange-400",
-  conflict: "text-[#dc2626] dark:text-red-400",
+  pending_match: "text-warning",
+  staged: "text-primary",
+  promoted: "text-success",
+  cancellation_candidate: "text-warning",
+  conflict: "text-destructive",
   ignored: "text-muted-foreground",
 };
 
@@ -272,7 +383,7 @@ export function SyncStateText({ reading }: { reading: SyncStateReading }) {
   if (reading.source === "unrecognised") {
     return (
       <span
-        className="text-sm font-medium text-[#dc2626] dark:text-red-400"
+        className="text-sm font-medium text-destructive"
         title="This build does not recognise this state. It is shown exactly as the database holds it."
       >
         {reading.rawValue}
@@ -282,7 +393,7 @@ export function SyncStateText({ reading }: { reading: SyncStateReading }) {
   if (!reading.state) {
     return (
       <span
-        className="text-sm text-muted-foreground italic"
+        className="text-sm italic text-muted-foreground"
         title="Drive247 has not classified this trip yet — that part of Turo Sync is not set up on this account."
       >
         Not classified
@@ -309,7 +420,7 @@ export function SourceBadge({ source }: { source: string }) {
     return (
       <span
         title="Bundled sample data — the extension could not reach a live Turo session. This row can never create a booking or a block."
-        className="inline-flex items-center rounded border border-[#e0e7ff] bg-[#eef2ff] px-1.5 py-0.5 text-[10px] font-medium text-[#4338ca] dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300"
+        className="inline-flex h-5 items-center rounded-3xl border border-primary/25 bg-primary/10 px-2 text-[10px] font-semibold tracking-wide text-primary"
       >
         DEMO
       </span>
@@ -318,7 +429,7 @@ export function SourceBadge({ source }: { source: string }) {
   return (
     <span
       title="Read from your live, signed-in Turo session"
-      className="inline-flex items-center rounded border border-green-300 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:border-green-800 dark:text-green-400"
+      className="inline-flex h-5 items-center rounded-3xl border border-success/30 bg-success/10 px-2 text-[10px] font-semibold tracking-wide text-success"
     >
       LIVE
     </span>
@@ -337,7 +448,7 @@ export function Unknown({ why }: { why?: string }) {
 /** Monospace short id, full value on hover. */
 export function MonoId({ value, chars = 8 }: { value: string; chars?: number }) {
   return (
-    <span className="font-mono text-xs text-muted-foreground" title={value}>
+    <span className="font-mono text-[13px] text-muted-foreground" title={value}>
       {value.length > chars ? `${value.slice(0, chars)}…` : value}
     </span>
   );
@@ -358,17 +469,11 @@ export function MonoId({ value, chars = 8 }: { value: string; chars?: number }) 
  * "total: 8" with three trips would otherwise render a confident 8/8 on a read
  * that saw almost nothing.
  *
- * The visual rule that follows: a filled green bar exists only when
- * `coverageProven` is true. Everything else is an amber bar that is
+ * The visual rule that follows: a filled success bar exists only when
+ * `coverageProven` is true. Everything else is a warning bar that is
  * deliberately not full, next to the words "there may be more".
  */
-export function CoverageReadout({
-  job,
-  compact = false,
-}: {
-  job: TuroSyncJob;
-  compact?: boolean;
-}) {
+export function CoverageReadout({ job, compact = false }: { job: TuroSyncJob; compact?: boolean }) {
   const progress = describeJobProgress(job);
   const heartbeat = describeHeartbeat(job);
   const running = job.state === "running";
@@ -377,15 +482,15 @@ export function CoverageReadout({
     return (
       <div className={compact ? "" : "space-y-1.5"}>
         <div className="flex items-center gap-2">
-          <CircleDashed className="h-3.5 w-3.5 shrink-0 animate-spin text-[#2563eb] dark:text-blue-400" />
-          <span className="text-sm text-[#2563eb] dark:text-blue-400">{progress.display}</span>
+          <CircleDashed className="size-3.5 shrink-0 animate-spin text-primary" />
+          <span className="text-sm font-medium text-primary">{progress.display}</span>
         </div>
         {!compact && (
           <>
             {/* No bar while running: there is no honest denominator yet. */}
-            <p className="text-xs text-muted-foreground">{progress.caveat}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">{progress.caveat}</p>
             {heartbeat.note && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">{heartbeat.note}</p>
+              <p className="text-xs leading-relaxed text-warning">{heartbeat.note}</p>
             )}
           </>
         )}
@@ -397,13 +502,13 @@ export function CoverageReadout({
     return (
       <div className={compact ? "" : "space-y-1.5"}>
         <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#16a34a] dark:text-green-400" />
-          <span className="text-sm text-[#16a34a] dark:text-green-400">{progress.display}</span>
+          <CheckCircle2 className="size-3.5 shrink-0 text-success" />
+          <span className="text-sm font-medium text-success">{progress.display}</span>
         </div>
         {!compact && (
-          <div className="h-1.5 w-full rounded-full bg-[#f1f5f9] dark:bg-muted overflow-hidden">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-[#16a34a]"
+              className="h-full rounded-full bg-success transition-all duration-300"
               style={{ width: `${progress.percent ?? 100}%` }}
             />
           </div>
@@ -416,8 +521,8 @@ export function CoverageReadout({
   return (
     <div className={compact ? "" : "space-y-1.5"}>
       <div className="flex items-center gap-2">
-        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="text-sm text-amber-700 dark:text-amber-400">{progress.display}</span>
+        <AlertTriangle className="size-3.5 shrink-0 text-warning" />
+        <span className="text-sm font-medium text-warning">{progress.display}</span>
       </div>
       {!compact && (
         <>
@@ -426,14 +531,14 @@ export function CoverageReadout({
             thirds, always, because the true fraction is unknowable. It signals
             "unfinished" without inventing a figure.
           */}
-          <div className="h-1.5 w-full rounded-full bg-[#f1f5f9] dark:bg-muted overflow-hidden">
-            <div className="h-full w-2/3 rounded-full bg-amber-500" />
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-2/3 rounded-full bg-warning" />
           </div>
           {progress.caveat && (
-            <p className="text-xs text-amber-700 dark:text-amber-400">{progress.caveat}</p>
+            <p className="text-xs leading-relaxed text-warning">{progress.caveat}</p>
           )}
           {job.feed_reported_total !== null && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               Turo claimed {job.feed_reported_total} in total. That figure came from the same
               response as the trips, so it is not treated as a target.
             </p>

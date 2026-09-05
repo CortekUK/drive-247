@@ -24,7 +24,6 @@ import {
   Layers,
   ShieldCheck,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,6 +49,8 @@ import {
   type TuroSyncJob,
 } from "@/hooks/use-turo-sync-jobs";
 import {
+  NwCard,
+  NwCardBody,
   CoverageReadout,
   EmptyState,
   LoadFailed,
@@ -138,16 +139,16 @@ export function SyncHistoryScreen() {
 
       {jobs.length === 0 ? (
         <EmptyState
-          icon={<Activity className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />}
+          icon={<Activity className="h-6 w-6 text-primary" />}
           title="No sync runs recorded"
           body="Open the Drive247 Turo Bridge extension while signed in to turo.com as a host and start a sync. Each attempt is recorded here, whether it succeeds or not."
         />
       ) : (
-        <Card>
-          <CardContent className="p-0">
+        <NwCard>
+          <NwCardBody className="p-0">
             <Table>
               <TableHeader>
-                <TableRow className="bg-[#eef2ff] dark:bg-muted hover:bg-[#eef2ff] dark:hover:bg-muted">
+                <TableRow className="bg-primary/10 dark:bg-muted hover:bg-primary/10 dark:hover:bg-muted">
                   <TableHead>Started</TableHead>
                   <TableHead>What it read</TableHead>
                   <TableHead className="min-w-[280px]">How much it got</TableHead>
@@ -196,7 +197,7 @@ export function SyncHistoryScreen() {
                     */}
                     <TableCell className="align-top">
                       {j.is_authoritative ? (
-                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#16a34a] dark:text-green-400">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
                           <ShieldCheck className="h-3.5 w-3.5" />
                           Yes
                         </span>
@@ -211,7 +212,7 @@ export function SyncHistoryScreen() {
                     <TableCell className="align-top text-right tabular-nums text-sm">
                       {j.pages_fetched}
                       {(j.http_error_count > 0 || j.parse_failure_count > 0) && (
-                        <div className="text-xs text-[#d97706] dark:text-orange-400">
+                        <div className="text-xs text-warning dark:text-orange-400">
                           {j.http_error_count > 0 && `${j.http_error_count} failed`}
                           {j.http_error_count > 0 && j.parse_failure_count > 0 && " · "}
                           {j.parse_failure_count > 0 && `${j.parse_failure_count} unreadable`}
@@ -222,8 +223,8 @@ export function SyncHistoryScreen() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+          </NwCardBody>
+        </NwCard>
       )}
 
       <JobDetailDialog job={detail} onClose={() => setDetail(null)} />
@@ -238,8 +239,8 @@ function StateText({ job }: { job: TuroSyncJob }) {
       <span
         className={`text-xs ${
           heartbeat.suspectedStale
-            ? "text-[#d97706] dark:text-orange-400"
-            : "text-[#2563eb] dark:text-blue-400"
+            ? "text-warning dark:text-orange-400"
+            : "text-primary"
         }`}
         title={heartbeat.note ?? undefined}
       >
@@ -256,12 +257,12 @@ function StateText({ job }: { job: TuroSyncJob }) {
   }
   if (job.state === "abandoned") {
     return (
-      <span className="text-xs text-[#d97706] dark:text-orange-400">
+      <span className="text-xs text-warning dark:text-orange-400">
         abandoned — stopped reporting
       </span>
     );
   }
-  return <span className="text-xs text-[#dc2626] dark:text-red-400">failed</span>;
+  return <span className="text-xs text-destructive">failed</span>;
 }
 
 /**
@@ -285,7 +286,7 @@ function JobDetailDialog({ job, onClose }: { job: TuroSyncJob | null; onClose: (
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="northwind rounded-4xl max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Sync run · {String(job.job_kind).replace(/_/g, " ")}
@@ -298,7 +299,7 @@ function JobDetailDialog({ job, onClose }: { job: TuroSyncJob | null; onClose: (
         </DialogHeader>
 
         <div className="space-y-5">
-          <div className="rounded-md border border-[#f1f5f9] dark:border-border p-4">
+          <div className="rounded-md border border-foreground/5 dark:border-border p-4">
             <CoverageReadout job={job} />
           </div>
 
@@ -346,7 +347,7 @@ function JobDetailDialog({ job, onClose }: { job: TuroSyncJob | null; onClose: (
                 {job.observed_turo_vehicle_ids.map((id) => (
                   <span
                     key={id}
-                    className="rounded border border-[#f1f5f9] dark:border-border px-2 py-0.5 font-mono text-xs text-muted-foreground"
+                    className="rounded border border-foreground/5 dark:border-border px-2 py-0.5 font-mono text-xs text-muted-foreground"
                   >
                     {id}
                   </span>
@@ -371,10 +372,10 @@ function JobDetailDialog({ job, onClose }: { job: TuroSyncJob | null; onClose: (
             ) : pages.rows.length === 0 ? (
               <p className="text-sm text-muted-foreground">No page records for this run.</p>
             ) : (
-              <div className="rounded-md border border-[#f1f5f9] dark:border-border overflow-x-auto">
+              <div className="rounded-md border border-foreground/5 dark:border-border overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-[#eef2ff] dark:bg-muted text-left">
+                    <tr className="bg-primary/10 dark:bg-muted text-left">
                       <th className="px-3 py-2 font-medium">#</th>
                       <th className="px-3 py-2 font-medium">Path</th>
                       <th className="px-3 py-2 font-medium text-right">HTTP</th>
@@ -391,7 +392,7 @@ function JobDetailDialog({ job, onClose }: { job: TuroSyncJob | null; onClose: (
                       const suspiciousEmpty =
                         p.http_status === 200 && (p.record_count ?? 0) === 0;
                       return (
-                        <tr key={p.id} className="border-t border-[#f1f5f9] dark:border-border">
+                        <tr key={p.id} className="border-t border-foreground/5 dark:border-border">
                           <td className="px-3 py-2 tabular-nums">{p.seq}</td>
                           <td className="px-3 py-2 font-mono text-xs text-muted-foreground break-all">
                             {p.url_path ?? "—"}
@@ -404,19 +405,19 @@ function JobDetailDialog({ job, onClose }: { job: TuroSyncJob | null; onClose: (
                           </td>
                           <td
                             className={`px-3 py-2 text-right tabular-nums ${
-                              suspiciousEmpty ? "text-[#d97706] dark:text-orange-400" : ""
+                              suspiciousEmpty ? "text-warning dark:text-orange-400" : ""
                             }`}
                           >
                             {p.record_count ?? "—"}
                           </td>
                           <td className="px-3 py-2 text-xs">
                             {p.degraded_reason ? (
-                              <span className="text-[#d97706] dark:text-orange-400 inline-flex items-center gap-1">
+                              <span className="text-warning dark:text-orange-400 inline-flex items-center gap-1">
                                 <AlertTriangle className="h-3 w-3" />
                                 {describeDegradedReason(p.degraded_reason)}
                               </span>
                             ) : suspiciousEmpty ? (
-                              <span className="text-[#d97706] dark:text-orange-400 inline-flex items-center gap-1">
+                              <span className="text-warning dark:text-orange-400 inline-flex items-center gap-1">
                                 <FileWarning className="h-3 w-3" />
                                 answered OK with nothing in it
                               </span>
@@ -466,7 +467,7 @@ function Metric({
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         className={`text-lg font-medium tabular-nums mt-0.5 ${
-          tone === "warn" ? "text-[#d97706] dark:text-orange-400" : "text-foreground"
+          tone === "warn" ? "text-warning dark:text-orange-400" : "text-foreground"
         }`}
       >
         {value}

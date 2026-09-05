@@ -96,6 +96,25 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)", 
         sm: "calc(var(--radius) - 4px)",
+        /* THE NORTHWIND RAMP, added without moving anything that already ships.
+           Each key reads its own variable and FALLS BACK TO THE STOCK TAILWIND
+           VALUE, so `rounded-xl` stays 12px across the 51 files outside the
+           Turo Sync page that already use it. Only a subtree that opts in --
+           `.northwind` in global.css -- redefines these, and there they resolve
+           to the guide's 14 / 18 / 22 / 26px.
+
+           Deriving them straight from `--radius` would have been shorter and
+           wrong: --radius is 0.5rem portal-wide, so rounded-3xl would have gone
+           from 24px to 17.6px on every page that was never part of this work. */
+        xl: "var(--radius-xl, 0.75rem)",
+        "2xl": "var(--radius-2xl, 1rem)",
+        "3xl": "var(--radius-3xl, 1.5rem)",
+        "4xl": "var(--radius-4xl, 2rem)",
+      },
+      /* Stock v3's ring scale is 0/1/2/4/8, so `ring-3` compiles to nothing
+         without this. Purely additive. */
+      ringWidth: {
+        3: "3px",
       },
       transitionProperty: {
         'all': 'var(--transition-all)',

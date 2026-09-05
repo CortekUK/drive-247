@@ -142,8 +142,12 @@ export default function RootLayout({
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
+        {/* Manrope is loaded here but APPLIED NOWHERE GLOBALLY: only `.northwind`
+            points at it (see global.css). Loading it in the shared head is the
+            one global change this redesign makes, and it changes no pixel on a
+            page that does not opt in. */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
         <script dangerouslySetInnerHTML={{ __html: brandingScript }} />
