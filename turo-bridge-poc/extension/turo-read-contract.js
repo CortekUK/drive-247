@@ -400,7 +400,20 @@
   // could say, because it is indistinguishable from the truth.
   // =========================================================================
 
-  var CONTAINER_KEYS = ["trips", "reservations", "results", "items", "data", "content",
+  /* The first three names came off a REAL host account on 2026-09-05, read from
+     the two endpoints that actually answer:
+
+       GET /api/vehicles/me
+         -> { isHostAllowedMultiplePendingListings, vehicles }
+       GET /api/v2/feeds/upcoming-trips?appMode=HOST
+         -> { hostedAndCoHostedVehicles, upcomingTripItems, vehicleId }
+
+     `vehicles` was already here and worked. `upcomingTripItems` was NOT, which
+     means the trips feed -- the whole point of the sync -- would have been
+     reported as an unrecognised envelope on every real account. Everything else
+     in this list remains a guess; these three are measured. */
+  var CONTAINER_KEYS = ["upcomingTripItems", "hostedAndCoHostedVehicles",
+    "trips", "reservations", "results", "items", "data", "content",
     "feed", "elements", "records", "list", "bookings", "upcomingTrips", "hostTrips",
     "entries", "edges", "nodes", "vehicles", "listings"];
 
