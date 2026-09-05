@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     // Accept if either flag is enabled — lead_management_enabled supersedes enquiries_enabled.
     // Reject only if both are explicitly off.
     if (tenant.lead_management_enabled === false && tenant.enquiries_enabled === false) {
-      return errorResponse("Enquiries are not accepted at this time", 409);
+      return errorResponse("Inquiries are not accepted at this time", 409);
     }
 
     const name = (body.name ?? "").trim();
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         const branding = await getTenantBranding(tenant.id, supabase);
         const inner = `
           <tr><td style="padding:30px;color:#333;line-height:1.6;font-size:15px;">
-            <p>You have received a new enquiry from your booking site.</p>
+            <p>You have received a new inquiry from your booking site.</p>
             <p><strong>Name:</strong> ${escapeHtml(name)}<br/>
             <strong>Email:</strong> ${escapeHtml(email)}<br/>
             <strong>Phone:</strong> ${escapeHtml(phone)}<br/>
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
           </td></tr>`;
         const html = wrapWithBrandedTemplate(inner, branding);
         await sendResendEmail(
-          { to: tenant.admin_email, subject: `New enquiry — ${name}`, html, tenantId: tenant.id },
+          { to: tenant.admin_email, subject: `New inquiry — ${name}`, html, tenantId: tenant.id },
           supabase,
         );
       } catch (emailErr) {
@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
           .eq("ip_address", ipAddress)
           .gte("created_at", since);
         if (count !== null && count >= RATE_LIMIT_PER_HOUR) {
-          return errorResponse("Too many enquiries from this address. Please try again later.", 429);
+          return errorResponse("Too many inquiries from this address. Please try again later.", 429);
         }
       }
 
@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
 
       if (enqErr || !enq) {
         console.error("submit-enquiry enquiries insert error:", enqErr);
-        return errorResponse("Failed to save enquiry. Please try again.", 500);
+        return errorResponse("Failed to save inquiry. Please try again.", 500);
       }
 
       const titleSnippet = name.length > 60 ? name.slice(0, 57) + "..." : name;
@@ -238,7 +238,7 @@ Deno.serve(async (req) => {
       await supabase.from("notifications").insert({
         user_id: null,
         tenant_id: tenant.id,
-        title: `New enquiry from ${titleSnippet}`,
+        title: `New inquiry from ${titleSnippet}`,
         message: messageSnippet,
         type: "enquiry",
         link: `/enquiries`,
@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
         .eq("ip_address", ipAddress)
         .gte("created_at", since);
       if (count !== null && count >= RATE_LIMIT_PER_HOUR) {
-        return errorResponse("Too many enquiries from this address. Please try again later.", 429);
+        return errorResponse("Too many inquiries from this address. Please try again later.", 429);
       }
     }
 
@@ -341,7 +341,7 @@ Deno.serve(async (req) => {
 
     if (insertErr || !inserted) {
       console.error("submit-enquiry leads insert error:", insertErr);
-      return errorResponse("Failed to save enquiry. Please try again.", 500);
+      return errorResponse("Failed to save inquiry. Please try again.", 500);
     }
 
     // Insert conversation
@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
     await supabase.from("notifications").insert({
       user_id: null,
       tenant_id: tenant.id,
-      title: `New enquiry from ${titleSnippet}`,
+      title: `New inquiry from ${titleSnippet}`,
       message: messageSnippet,
       type: "enquiry",
       link: `/leads/${inserted.id}`,

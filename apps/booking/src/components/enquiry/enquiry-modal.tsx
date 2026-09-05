@@ -107,7 +107,7 @@ export function EnquiryModal({ open, onOpenChange, defaultVehicleId }: EnquiryMo
       });
 
       if (error) {
-        const msg = error.message || "Failed to submit enquiry. Please try again.";
+        const msg = error.message || "Failed to submit inquiry. Please try again.";
         toast.error(msg);
         return;
       }
@@ -117,7 +117,7 @@ export function EnquiryModal({ open, onOpenChange, defaultVehicleId }: EnquiryMo
       }
 
       setSuccess(true);
-      toast.success("Enquiry submitted — we'll be in touch shortly.");
+      toast.success("Inquiry submitted — we'll be in touch shortly.");
     } catch (err) {
       console.error("submit-enquiry invoke error", err);
       toast.error("Something went wrong. Please try again.");
@@ -137,7 +137,7 @@ export function EnquiryModal({ open, onOpenChange, defaultVehicleId }: EnquiryMo
               <CheckCircle2 className="w-6 h-6 text-green-600" />
             </div>
             <DialogHeader>
-              <DialogTitle className="text-center">Enquiry submitted</DialogTitle>
+              <DialogTitle className="text-center">Inquiry submitted</DialogTitle>
               <DialogDescription className="text-center">
                 Thank you. The team will reach out to you by email or phone shortly to discuss
                 availability for your dates.
@@ -150,7 +150,7 @@ export function EnquiryModal({ open, onOpenChange, defaultVehicleId }: EnquiryMo
         ) : (
           <form onSubmit={handleSubmit} noValidate>
             <DialogHeader>
-              <DialogTitle>Submit an enquiry</DialogTitle>
+              <DialogTitle>Submit an inquiry</DialogTitle>
               <DialogDescription>
                 Tell us which car and dates you're interested in. We'll get back to you about
                 availability — even if your dates aren't bookable online.
@@ -284,7 +284,7 @@ export function EnquiryModal({ open, onOpenChange, defaultVehicleId }: EnquiryMo
                     Submitting…
                   </>
                 ) : (
-                  "Submit enquiry"
+                  "Submit inquiry"
                 )}
               </Button>
             </DialogFooter>

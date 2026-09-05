@@ -55,7 +55,7 @@ const getStatusConfig = (status: string) => {
         variant: 'secondary' as const,
         icon: AlertTriangle,
         className: 'bg-amber-100 text-amber-800 hover:bg-amber-200',
-        tooltip: 'Off sale — no hire durations enabled, so it cannot be quoted. It can still be picked in enquiries and by staff; use Pause to remove it everywhere.'
+        tooltip: 'Off sale — no hire durations enabled, so it cannot be quoted. It can still be picked in inquiries and by staff; use Pause to remove it everywhere.'
       };
     case 'rented':
       return {

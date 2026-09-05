@@ -54,15 +54,15 @@ serve(async (req) => {
           <div class="container">
             <div class="header">
               <div class="shield-icon">🛡️</div>
-              <h1>Close Protection Enquiry</h1>
+              <h1>Close Protection Inquiry</h1>
               <p style="margin: 10px 0 0 0; font-size: 16px;">New Security Request</p>
             </div>
 
             <div class="content">
-              <div class="priority-badge">⚠️ HIGH PRIORITY ENQUIRY</div>
+              <div class="priority-badge">⚠️ HIGH PRIORITY INQUIRY</div>
 
               <h2 style="color: #1a1a1a; margin-top: 20px;">New Close Protection Request</h2>
-              <p>A client has submitted a confidential close protection enquiry. Please review and respond within 24 hours.</p>
+              <p>A client has submitted a confidential close protection inquiry. Please review and respond within 24 hours.</p>
 
               <div class="customer-box">
                 <h3 style="margin-top: 0; color: #2e7d32;">👤 Customer Information</h3>
@@ -183,9 +183,9 @@ serve(async (req) => {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: [adminEmail],
-        subject: `Close Protection Enquiry - ${enquiryDetails.riskLevel} Risk Level - ${enquiryDetails.date}`,
+        subject: `Close Protection Inquiry - ${enquiryDetails.riskLevel} Risk Level - ${enquiryDetails.date}`,
         html: emailHtml,
-        text: `Close Protection Enquiry
+        text: `Close Protection Inquiry
 
 Customer Information:
 Name: ${customerName}

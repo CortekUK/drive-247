@@ -9,7 +9,7 @@ import { useLeadActivity, type LeadActivityEvent } from "@/hooks/use-lead-activi
 const EVENT_LABELS: Record<string, string> = {
   application_submitted: "Application submitted",
   application_submitted_blacklisted: "Application submitted (blacklisted)",
-  quick_enquiry_submitted: "Quick enquiry submitted",
+  quick_enquiry_submitted: "Quick inquiry submitted",
   stage_changed: "Stage changed",
   message_sent: "Message sent",
   doc_uploaded: "Document uploaded",

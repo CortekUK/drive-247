@@ -39,13 +39,13 @@ const BAND_OPTIONS: { value: LeadFilters["scoreBand"] | "all"; label: string; Ic
 const SOURCE_OPTIONS = [
   { value: "all", label: "All sources" },
   { value: "application", label: "Application" },
-  { value: "quick_enquiry", label: "Quick enquiry" },
+  { value: "quick_enquiry", label: "Quick inquiry" },
   { value: "phone_in", label: "Phone-in" },
   { value: "walk_in", label: "Walk-in" },
   { value: "admin_manual", label: "Admin-created" },
   { value: "inbound_sms", label: "Inbound SMS" },
   { value: "inbound_email", label: "Inbound email" },
-  { value: "legacy_enquiry", label: "Legacy enquiry" },
+  { value: "legacy_enquiry", label: "Legacy inquiry" },
 ];
 
 export default function LeadsPage() {

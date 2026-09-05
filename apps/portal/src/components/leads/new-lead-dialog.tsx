@@ -130,7 +130,7 @@ export function NewLeadDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle>New lead</DialogTitle>
           <DialogDescription>
-            Create a lead manually — for phone-in enquiries, walk-ins, or anything else
+            Create a lead manually — for phone-in inquiries, walk-ins, or anything else
             you want to track in the pipeline.
           </DialogDescription>
         </DialogHeader>

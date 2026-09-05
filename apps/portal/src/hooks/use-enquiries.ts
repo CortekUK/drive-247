@@ -157,11 +157,11 @@ export function useUpdateEnquiryStatus() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["enquiries", tenant?.id] });
       queryClient.invalidateQueries({ queryKey: ["enquiry-stats", tenant?.id] });
-      toast({ title: "Enquiry updated" });
+      toast({ title: "Inquiry updated" });
     },
     onError: (err) => {
       toast({
-        title: "Failed to update enquiry",
+        title: "Failed to update inquiry",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -184,11 +184,11 @@ export function useDeleteEnquiry() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["enquiries", tenant?.id] });
       queryClient.invalidateQueries({ queryKey: ["enquiry-stats", tenant?.id] });
-      toast({ title: "Enquiry deleted" });
+      toast({ title: "Inquiry deleted" });
     },
     onError: (err) => {
       toast({
-        title: "Failed to delete enquiry",
+        title: "Failed to delete inquiry",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
@@ -239,7 +239,7 @@ export function useResolveEnquiryCustomer() {
         .select("id, tenant_id, customer_id, customer_name, customer_email, customer_phone")
         .eq("id", enquiryId)
         .single();
-      if (fetchError || !enquiry) throw fetchError ?? new Error("Enquiry not found");
+      if (fetchError || !enquiry) throw fetchError ?? new Error("Inquiry not found");
 
       if (enquiry.customer_id) return { customerId: enquiry.customer_id };
 

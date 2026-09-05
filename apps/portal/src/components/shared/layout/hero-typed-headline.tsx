@@ -97,7 +97,7 @@ const FEATURES: Feature[] = [
     before: "",
     key: "Follow-ups",
     after: " send themselves.",
-    sub: "Turn enquiries into quotes, and let automations chase the ones going cold.",
+    sub: "Turn inquiries into quotes, and let automations chase the ones going cold.",
   },
   {
     before: "One ",

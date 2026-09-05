@@ -684,7 +684,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
 
 <ol>
   <li>Check your bank statement for the refund transaction</li>
-  <li>Contact your bank to enquire about pending credits</li>
+  <li>Contact your bank to inquire about pending credits</li>
   <li>Reach out to us with your bank's response</li>
 </ol>
 

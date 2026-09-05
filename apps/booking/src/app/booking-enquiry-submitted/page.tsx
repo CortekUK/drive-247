@@ -122,7 +122,7 @@ const BookingEnquirySubmittedContent = () => {
                 </div>
 
                 <h1 className="text-3xl md:text-4xl font-display font-bold text-gradient-metal mb-2 text-center">
-                  Enquiry Submitted
+                  Inquiry Submitted
                 </h1>
 
                 {bookingDetails?.booking_ref && (
@@ -195,7 +195,7 @@ const BookingEnquirySubmittedContent = () => {
                   <ol className="space-y-3 text-sm text-muted-foreground">
                     <li className="flex items-start gap-3">
                       <span className="bg-accent text-background w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
-                      <span>Our team will review your enquiry within 24 hours</span>
+                      <span>Our team will review your inquiry within 24 hours</span>
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="bg-accent text-background w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
@@ -214,7 +214,7 @@ const BookingEnquirySubmittedContent = () => {
 
                 {/* Contact Information */}
                 <div className="text-center text-muted-foreground mb-8">
-                  <p className="mb-2">Questions about your enquiry?</p>
+                  <p className="mb-2">Questions about your inquiry?</p>
                   <div className="flex items-center justify-center gap-6 text-sm">
                     <a href="mailto:support@drive-247.com" className="flex items-center gap-2 hover:text-accent transition-colors">
                       <Mail className="w-4 h-4" />

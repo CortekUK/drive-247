@@ -502,7 +502,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         // a lean tenant never sees Enquiries at all.
         ...(leadManagementEnabled || isAreaHidden("enquiries", tenantSlug)
           ? []
-          : [{ name: "Enquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
+          : [{ name: "Inquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
         { name: "Messages", href: "/messages", icon: MessageSquare, badge: chatUnreadCount || 0 },
       ],
     },

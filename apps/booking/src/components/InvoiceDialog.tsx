@@ -560,7 +560,7 @@ export const InvoiceDialog = ({
             {isEnquiry && (
               <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                  ENQUIRY BOOKING
+                  INQUIRY BOOKING
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                   Rental charges will be confirmed after your booking is approved.
@@ -600,7 +600,7 @@ export const InvoiceDialog = ({
             >
               {isEnquiry ? (
                 <>
-                  {displayTotal === 0 ? 'Continue to Submit Enquiry' : 'Continue to Payment'}
+                  {displayTotal === 0 ? 'Continue to Submit Inquiry' : 'Continue to Payment'}
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </>
               ) : (

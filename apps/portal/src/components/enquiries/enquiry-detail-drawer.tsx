@@ -140,7 +140,7 @@ export function EnquiryDetailDrawer({ enquiryId, open, onOpenChange }: EnquiryDe
         ) : (
           <>
             <SheetHeader className="px-6 pt-6 pb-4 border-b border-border/60 space-y-1">
-              <SheetTitle className="text-lg">Enquiry from {enquiry.customer_name}</SheetTitle>
+              <SheetTitle className="text-lg">Inquiry from {enquiry.customer_name}</SheetTitle>
               <SheetDescription className="text-xs">
                 Submitted {safeDateTime(enquiry.created_at)} · {enquiry.source.replace("_", " ")}
               </SheetDescription>
@@ -275,9 +275,9 @@ export function EnquiryDetailDrawer({ enquiryId, open, onOpenChange }: EnquiryDe
     <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this enquiry?</AlertDialogTitle>
+          <AlertDialogTitle>Delete this inquiry?</AlertDialogTitle>
           <AlertDialogDescription>
-            This permanently removes the enquiry
+            This permanently removes the inquiry
             {pendingDelete?.name ? ` from ${pendingDelete.name}` : ""}.
             This action cannot be undone.
           </AlertDialogDescription>

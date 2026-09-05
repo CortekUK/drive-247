@@ -99,7 +99,7 @@ function EnquiriesPageContent() {
   if (!canView("enquiries")) {
     return (
       <div className="p-6 text-sm text-muted-foreground">
-        You don't have access to enquiries.
+        You don't have access to inquiries.
       </div>
     );
   }
@@ -123,15 +123,15 @@ function EnquiriesPageContent() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <strong className="font-semibold">Enquiries are moving to Leads.</strong>{" "}
+        <strong className="font-semibold">Inquiries are moving to Leads.</strong>{" "}
         New submissions now appear in the full lead pipeline. This page is read-only and will be
         removed after the next release.{" "}
         <a href="/leads" className="font-medium underline underline-offset-2">Open Leads →</a>
       </div>
       <div>
-        <h1 className="text-2xl md:text-3xl font-medium tracking-tight">Enquiries</h1>
+        <h1 className="text-2xl md:text-3xl font-medium tracking-tight">Inquiries</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Customer enquiries from the booking site, including requests for currently booked vehicles.
+          Customer inquiries from the booking site, including requests for currently booked vehicles.
         </p>
       </div>
 
@@ -173,7 +173,7 @@ function EnquiriesPageContent() {
       {/* Table */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-medium">All enquiries</CardTitle>
+          <CardTitle className="text-base font-medium">All inquiries</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
@@ -183,7 +183,7 @@ function EnquiriesPageContent() {
           ) : enquiries.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-center text-muted-foreground">
               <Inbox className="w-10 h-10 mb-3" />
-              <p className="text-sm">No enquiries match your filters yet.</p>
+              <p className="text-sm">No inquiries match your filters yet.</p>
             </div>
           ) : (
             <Table>

@@ -68,7 +68,7 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>Visitors to this website.</strong> If you contact us or submit
-          the enquiry form, we decide how that information is used, so we are
+          the inquiry form, we decide how that information is used, so we are
           the <strong>controller</strong> of it.
         </li>
         <li>
@@ -107,7 +107,7 @@ export default function PrivacyPage() {
 
       <h2>How we use your data</h2>
       <ul>
-        <li>To respond to enquiries and schedule calls.</li>
+        <li>To respond to inquiries and schedule calls.</li>
         <li>
           To provide, secure, support, and bill for the Drive247 platform.
         </li>

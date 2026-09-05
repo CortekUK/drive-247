@@ -208,7 +208,7 @@ export function ContactInfoEditor({ content, onSave, isSaving }: ContactInfoEdit
                   <FormItem>
                     <FormLabel>WhatsApp Description</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Quick response for urgent enquiries" />
+                      <Input {...field} placeholder="Quick response for urgent inquiries" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

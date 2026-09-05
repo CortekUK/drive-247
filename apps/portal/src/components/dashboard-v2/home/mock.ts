@@ -231,7 +231,7 @@ export const SOURCE_MIX = [
 ];
 
 export const RATIOS = [
-  { label: 'Enquiry → booking', value: '38%', delta: 4 },
+  { label: 'Inquiry → booking', value: '38%', delta: 4 },
   { label: 'Cancellations', value: '6.2%', delta: -1.1 },
   { label: 'Repeat customers', value: '41%', delta: 3 },
   { label: 'Fleet on rent', value: '64%', delta: 5 },

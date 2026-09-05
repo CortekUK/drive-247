@@ -3849,7 +3849,7 @@ const MultiStepBookingWidget = () => {
                 <Car className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-40" />
                 <p className="text-lg font-medium text-foreground mb-2">No vehicles match your filters</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Try adjusting your dates or categories — or send us an enquiry from the top navigation.
+                  Try adjusting your dates or categories — or send us an inquiry from the top navigation.
                 </p>
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                   <Button variant="outline" onClick={clearAllFilters} className="border-primary/30">
