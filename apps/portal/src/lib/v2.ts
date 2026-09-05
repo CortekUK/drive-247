@@ -36,13 +36,26 @@
  */
 export const NORTHWIND = 'northwind';
 
+export type V2Area =
+  | 'appearance'
+  | 'theme'
+  | 'dashboard'
+  | 'chrome'
+  | 'login'
+  | 'rentals'
+  | 'cms';
+
 /**
  * One entry per v2 area. Today every list is just the canary.
  *
  * Widen one step at a time, and only once the previous step has been live long
  * enough to have failed:  northwind → 1–2 friendly tenants → everyone.
+ *
+ * Keyed by `V2Area` rather than by `string`, so adding a member to the union
+ * without adding it here is a compile error rather than a gate that quietly
+ * answers v1.
  */
-const V2_AREAS: Record<string, readonly string[]> = {
+const V2_AREAS: Record<V2Area, readonly string[]> = {
   /** Settings → Appearance. A new route; v1 has no counterpart. */
   appearance: [NORTHWIND],
   /** The v2 design tokens, scoped to `.v2-theme` on <body>. */
@@ -55,15 +68,21 @@ const V2_AREAS: Record<string, readonly string[]> = {
   login: [NORTHWIND],
   /** The v2 rentals list filter panel. */
   rentals: [NORTHWIND],
+  /** Website Content — the CMS overview and the per-page section editor. */
+  cms: [NORTHWIND],
 };
 
-export type V2Area =
-  | 'appearance'
-  | 'theme'
-  | 'dashboard'
-  | 'chrome'
-  | 'login'
-  | 'rentals';
+/**
+ * Every area, for the one place that has to resolve them all: the root layout.
+ *
+ * Derived from `V2_AREAS` rather than written out a second time. `layout.tsx`
+ * used to keep its own hand-maintained copy of this list, which meant adding an
+ * area here and forgetting it there produced a gate that resolved to v1 for
+ * every tenant — no error, no failed build, no failed check. That is exactly
+ * the failure V2_PLAN §2 calls the worst this model can produce, wearing a
+ * different hat.
+ */
+export const V2_AREA_LIST = Object.keys(V2_AREAS) as V2Area[];
 
 /**
  * Is this tenant on v2 for this area?

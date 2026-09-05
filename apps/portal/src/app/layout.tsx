@@ -7,7 +7,7 @@ import "@/global.css";
 // Scoped v2 design tokens. Inert unless <body> carries `v2-theme`, which is
 // decided per-tenant below — so importing it changes nothing for v1 tenants.
 import "@/styles/v2-theme.css";
-import { isV2, type V2Area } from "@/lib/v2";
+import { isV2, V2_AREA_LIST } from "@/lib/v2";
 import { V2Provider, type V2Flags } from "@/lib/v2-context";
 import { tenantSlugFromHeaders } from "@/lib/tenant-server";
 
@@ -161,16 +161,10 @@ export default async function RootLayout({
 
   // Every gate for this request, answered once. Client components read these
   // through useV2() instead of looking the tenant up again — see lib/v2-context.
-  const v2Areas: V2Area[] = [
-    "appearance",
-    "theme",
-    "dashboard",
-    "chrome",
-    "login",
-    "rentals",
-  ];
+  // The list comes FROM `lib/v2`, not a second copy kept in step by hand — a
+  // forgotten entry here is a gate that answers v1 for everyone, silently.
   const v2Flags: V2Flags = Object.fromEntries(
-    v2Areas.map((a) => [a, isV2(a, tenantSlug)])
+    V2_AREA_LIST.map((a) => [a, isV2(a, tenantSlug)])
   );
 
   const themeClass = v2Flags.theme ? "v2-theme" : undefined;

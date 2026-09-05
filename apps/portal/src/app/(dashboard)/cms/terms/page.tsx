@@ -38,6 +38,8 @@ import { VersionHistoryDialog } from "@/components/website-content/version-histo
 import type { TermsOfServiceContent, SEOContent } from "@/types/cms";
 import { CMS_DEFAULTS } from "@/constants/website-content";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useV2 } from "@/lib/v2-context";
+import { CmsPageEditor } from "@/components/cms-v2/cms-page-editor";
 
 export default function CMSTermsEditor() {
   const router = useRouter();
@@ -61,6 +63,13 @@ export default function CMSTermsEditor() {
       setIsResetting(false);
     }
   };
+
+  // The v2 gate for Website Content. One branch, at the route, per
+  // V2_PLAN §3 — everything below it is v1, untouched, and still what the
+  // other 56 tenants render. Placed after every hook so the hook order is
+  // identical on both paths.
+  const v2 = useV2("cms");
+  if (v2) return <CmsPageEditor slug="terms" />;
 
   if (isLoading) {
     return (

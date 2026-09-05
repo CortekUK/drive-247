@@ -1,0 +1,216 @@
+/**
+ * The `?pickup=` / `?dropoff=` contract, in ONE place.
+ *
+ * ── WHY THIS MODULE EXISTS ───────────────────────────────────────────────────
+ * A customer types two addresses into the home-page hero. That intent then has
+ * to survive three hops before anyone can act on it:
+ *
+ *   /                 hero form serialises it        (location-search-form)
+ *   /booking          server redirect forwards it    (app/(booking)/booking)
+ *   /fleet            shows it, threads it onto every vehicle link
+ *   /booking/<id>     seeds the sidebar from it      (vehicle-booking-page)
+ *
+ * Four files, three of them owned by different parts of the page. Before this
+ * module each of them would have had to agree — independently — on the param
+ * names, on what counts as "blank", and on how much of a hostile string to
+ * trust. They would not have stayed in agreement: the hero already wrote
+ * `pickup` with no trimming while /fleet read nothing at all, which is exactly
+ * how the customer's input came to die halfway.
+ *
+ * So: parse, sanitise and serialise live here, and every hop goes through them.
+ *
+ * ── WHY THE SANITISER IS NOT OPTIONAL ────────────────────────────────────────
+ * A query string is attacker-controlled. Anyone can send a customer a link with
+ * a megabyte `?pickup=`, or one carrying control characters. Both ends of this
+ * pipe eventually put the value on screen and into `rentals.pickup_location`,
+ * so the value is bounded and stripped HERE, once, rather than being re-checked
+ * (or forgotten) at each consumer. React escapes the markup; this is about not
+ * carrying junk into the store, the quote and the database in the first place.
+ *
+ * Framework-neutral on purpose — no React, no `next/*`. It is imported by a
+ * Server Component, by client components and by the booking page's seeding
+ * effect, and none of those may pull the others' runtime in.
+ */
+
+/** The query keys. Never spelled as a literal anywhere else. */
+export const TRIP_INTENT_PICKUP_PARAM = "pickup";
+export const TRIP_INTENT_DROPOFF_PARAM = "dropoff";
+
+/** Both keys, for callers that need to strip them from a URL. */
+export const TRIP_INTENT_PARAM_KEYS: readonly string[] = [
+  TRIP_INTENT_PICKUP_PARAM,
+  TRIP_INTENT_DROPOFF_PARAM,
+];
+
+/**
+ * Longest address we will carry.
+ *
+ * Sized against the column it ends up in — `rentals.pickup_location` — and
+ * against reality: the longest genuine postal address in the seed data is under
+ * 80 characters. 120 leaves generous headroom for "Flat 4, Building name,
+ * Street, City, Postcode" while making a link-borne payload pointless.
+ */
+export const TRIP_INTENT_MAX_LENGTH = 120;
+
+/** What the customer said they wanted, once it has been through the door. */
+export interface TripIntent {
+  /** Where they want the car. Null means "not supplied", never "". */
+  pickup: string | null;
+  /** Where they want to leave it. Null means "not supplied", never "". */
+  dropoff: string | null;
+}
+
+/** The "they said nothing" value. Frozen so a consumer cannot mutate a shared default. */
+export const EMPTY_TRIP_INTENT: TripIntent = Object.freeze({
+  pickup: null,
+  dropoff: null,
+});
+
+/**
+ * Anything a hop might hold the query in.
+ *
+ * A Server Component gets Next's `searchParams` record (where a repeated param
+ * arrives as an array); a client component has `window.location.search`; a test
+ * has whichever is convenient.
+ */
+export type TripIntentSource =
+  | URLSearchParams
+  | Readonly<Record<string, string | string[] | undefined>>
+  | string
+  | null
+  | undefined;
+
+/**
+ * C0 and C1 control characters, plus the two Unicode separators that are not
+ * matched by `\s` in every engine. Replaced with a space rather than deleted so
+ * "Baker St\u0000London" cannot collapse into one run-together word.
+ */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
+
+/**
+ * Normalise one address, or reject it.
+ *
+ * Blank — absent, empty, whitespace-only, or whitespace once the control
+ * characters are gone — is `null`, not `""`. Every consumer then has one thing
+ * to test instead of two, and `""` can never reach the booking store where it
+ * would be indistinguishable from a field the customer cleared on purpose.
+ */
+export function sanitizeTripAddress(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+
+  const collapsed = raw.replace(CONTROL_CHARACTERS, " ").replace(/\s+/g, " ").trim();
+  if (collapsed === "") return null;
+  if (collapsed.length <= TRIP_INTENT_MAX_LENGTH) return collapsed;
+
+  // `trimEnd` because the cut may land mid-gap and leave a trailing space.
+  return collapsed.slice(0, TRIP_INTENT_MAX_LENGTH).trimEnd();
+}
+
+/** First value for a key, whichever shape the query arrived in. */
+function firstValue(source: TripIntentSource, key: string): unknown {
+  if (source == null) return null;
+
+  if (typeof source === "string") {
+    // Accept "?a=b", "a=b" and a whole href alike.
+    const start = source.indexOf("?");
+    const query = start === -1 ? source : source.slice(start + 1);
+    return new URLSearchParams(query).get(key);
+  }
+
+  if (source instanceof URLSearchParams) return source.get(key);
+
+  const value = source[key];
+  // A repeated `?pickup=a&pickup=b` is a malformed request, not a two-address
+  // booking. The first wins rather than the last, so the value a customer would
+  // see appended by their own form is not silently overridden by a crafted one.
+  if (Array.isArray(value)) return value.length > 0 ? value[0] : null;
+  return value;
+}
+
+/** Read a trip intent out of any of the query shapes above. */
+export function parseTripIntent(source: TripIntentSource): TripIntent {
+  return {
+    pickup: sanitizeTripAddress(firstValue(source, TRIP_INTENT_PICKUP_PARAM)),
+    dropoff: sanitizeTripAddress(firstValue(source, TRIP_INTENT_DROPOFF_PARAM)),
+  };
+}
+
+/**
+ * Read it from the live URL.
+ *
+ * `window.location` rather than `useSearchParams()` on purpose, and it is the
+ * house convention rather than a shortcut: `useSearchParams` opts the whole
+ * subtree into client-side bailout and forces a `<Suspense>` boundary around
+ * every page that touches it. `vehicle-booking-page.tsx` already reads the
+ * Stripe return params this way for exactly that reason.
+ *
+ * Returns the empty intent during server rendering, so a caller can seed state
+ * with it and keep the server HTML and the first client render identical.
+ */
+export function readTripIntentFromLocation(): TripIntent {
+  if (typeof window === "undefined") return EMPTY_TRIP_INTENT;
+  return parseTripIntent(window.location.search);
+}
+
+/** True when the customer actually told us something. */
+export function hasTripIntent(intent: TripIntent): boolean {
+  return intent.pickup !== null || intent.dropoff !== null;
+}
+
+/** The intent as query params. Empty when there is nothing to say. */
+export function tripIntentSearchParams(intent: TripIntent): URLSearchParams {
+  const params = new URLSearchParams();
+  if (intent.pickup !== null) params.set(TRIP_INTENT_PICKUP_PARAM, intent.pickup);
+  if (intent.dropoff !== null) params.set(TRIP_INTENT_DROPOFF_PARAM, intent.dropoff);
+  return params;
+}
+
+/**
+ * Append the intent to a path.
+ *
+ * Returns `path` untouched when there is no intent, so a fleet grid rendered
+ * before the URL has been read produces exactly the hrefs it produced before
+ * this feature existed — no `?` with nothing after it, and nothing for the
+ * hydration pass to disagree about.
+ */
+export function withTripIntent(path: string, intent: TripIntent | null | undefined): string {
+  if (!intent || !hasTripIntent(intent)) return path;
+
+  const query = tripIntentSearchParams(intent).toString();
+  const [base, existing = ""] = splitQuery(path);
+  const merged = existing === "" ? query : `${existing}&${query}`;
+  return `${base}?${merged}`;
+}
+
+/** "/x?a=b" -> ["/x", "a=b"]; "/x" -> ["/x", ""]. */
+function splitQuery(path: string): [string, string] {
+  const index = path.indexOf("?");
+  if (index === -1) return [path, ""];
+  return [path.slice(0, index), path.slice(index + 1)];
+}
+
+/**
+ * Strip the intent params from a URL's search string, preserving everything
+ * else. Used when the customer dismisses the banner: the context has to leave
+ * the address bar too, or a refresh — or the back button — resurrects it.
+ */
+export function stripTripIntent(search: string): string {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  for (const key of TRIP_INTENT_PARAM_KEYS) params.delete(key);
+  const rest = params.toString();
+  return rest === "" ? "" : `?${rest}`;
+}
+
+/**
+ * Are these two addresses the same place, as far as we can tell from text?
+ *
+ * Deliberately shallow — case- and spacing-insensitive equality, nothing more.
+ * It exists so the booking page does not split a journey into two legs when the
+ * customer typed the same address twice, and getting that wrong costs a
+ * redundant (and pre-filled) return field, not a wrong booking. Real address
+ * matching is a geocoding problem and is not one this decision needs solved.
+ */
+export function sameTripAddress(a: string | null, b: string | null): boolean {
+  if (a === null || b === null) return false;
+  return a.toLowerCase() === b.toLowerCase();
+}

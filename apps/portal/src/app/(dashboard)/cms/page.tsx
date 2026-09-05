@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, FileText, Edit, Eye, Clock, CheckCircle, PenLine } from "lucide-react";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { formatDistanceToNow } from "date-fns";
+import { useV2 } from "@/lib/v2-context";
+import { CmsOverview } from "@/components/cms-v2/cms-overview";
 
 // Order pages to match website navigation
 const PAGE_ORDER = ["home", "about", "fleet", "reviews", "promotions", "contact", "privacy", "terms", "site-settings"];
@@ -35,6 +37,13 @@ export default function CMS() {
         return orderA - orderB;
       });
   }, [pages]);
+
+  // The v2 gate for Website Content. One branch, at the route, per
+  // V2_PLAN §3 — everything below it is v1, untouched, and still what the
+  // other 56 tenants render. Placed after every hook so the hook order is
+  // identical on both paths.
+  const v2 = useV2("cms");
+  if (v2) return <CmsOverview />;
 
   if (isLoading) {
     return (
