@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>graphify - /home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/bonzah/graphify-out/graph.html</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+  #graph { flex: 1; }
+  #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e; display: flex; flex-direction: column; overflow: hidden; }
+  #search-wrap { padding: 12px; border-bottom: 1px solid #2a2a4e; }
+  #search { width: 100%; background: #0f0f1a; border: 1px solid #3a3a5e; color: #e0e0e0; padding: 7px 10px; border-radius: 6px; font-size: 13px; outline: none; }
+  #search:focus { border-color: #4E79A7; }
+  #search-results { max-height: 140px; overflow-y: auto; padding: 4px 12px; border-bottom: 1px solid #2a2a4e; display: none; }
+  .search-item { padding: 4px 6px; cursor: pointer; border-radius: 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-item:hover { background: #2a2a4e; }
+  #info-panel { padding: 14px; border-bottom: 1px solid #2a2a4e; min-height: 140px; }
+  #info-panel h3 { font-size: 13px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #info-content { font-size: 13px; color: #ccc; line-height: 1.6; }
+  #info-content .field { margin-bottom: 5px; }
+  #info-content .field b { color: #e0e0e0; }
+  #info-content .empty { color: #555; font-style: italic; }
+  .neighbor-link { display: block; padding: 2px 6px; margin: 2px 0; border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid #333; }
+  .neighbor-link:hover { background: #2a2a4e; }
+  #neighbors-list { max-height: 160px; overflow-y: auto; margin-top: 4px; }
+  #legend-wrap { flex: 1; overflow-y: auto; padding: 12px; }
+  #legend-wrap h3 { font-size: 13px; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 4px; font-size: 12px; }
+  .legend-item:hover { background: #2a2a4e; padding-left: 4px; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count { color: #666; font-size: 11px; }
+  #stats { padding: 10px 14px; border-top: 1px solid #2a2a4e; font-size: 11px; color: #555; }
+</style>
+</head>
+<body>
+<div id="graph"></div>
+<div id="sidebar">
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="Search nodes..." autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <div id="info-panel">
+    <h3>Node Info</h3>
+    <div id="info-content"><span class="empty">Click a node to inspect it</span></div>
+  </div>
+  <div id="legend-wrap">
+    <h3>Communities</h3>
+    <div id="legend"></div>
+  </div>
+  <div id="stats">43 nodes &middot; 59 edges &middot; 10 communities</div>
+</div>
+<script>
+const RAW_NODES = [{"id": "readme_bonzahpartnerconsole", "label": "Bonzah Partner Console - standalone insurance-partner app at bonzah.drive-247.com", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Bonzah Partner Console - standalone insurance-partner app at bonzah.drive-247.com", "community": 2, "community_name": "Community 2", "source_file": "apps/bonzah/README.md", "file_type": "document", "degree": 3}, {"id": "readme_phaserollout", "label": "Phased rollout: Phase 3 review-only, Phase 4 wires approve/reject (README still says ACTIVATION_ENABLED=false while code now sets it true - doc drift)", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Phased rollout: Phase 3 review-only, Phase 4 wires approve/reject (README still says ACTIVATION_ENABLED=false while code now sets it true - doc drift)", "community": 5, "community_name": "Community 5", "source_file": "apps/bonzah/README.md", "file_type": "document", "degree": 2}, {"id": "readme_manualprovisioning", "label": "Manual provisioning steps: separate Vercel project, DNS, and a hand-created is_bonzah_partner app_users row", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Manual provisioning steps: separate Vercel project, DNS, and a hand-created is_bonzah_partner app_users row", "community": 4, "community_name": "Community 4", "source_file": "apps/bonzah/README.md", "file_type": "document", "degree": 2}, {"id": "readme_reservedsubdomain", "label": "'bonzah' is a reserved subdomain in portal + booking middleware so it is never resolved as a tenant slug", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "&#x27;bonzah&#x27; is a reserved subdomain in portal + booking middleware so it is never resolved as a tenant slug", "community": 2, "community_name": "Community 2", "source_file": "apps/bonzah/README.md", "file_type": "document", "degree": 2}, {"id": "page_dashboardpage", "label": "Onboarding Reviews dashboard - the console's only working surface", "color": {"background": "#FF9DA7", "border": "#FF9DA7", "highlight": {"background": "#ffffff", "border": "#FF9DA7"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Onboarding Reviews dashboard - the console&#x27;s only working surface", "community": 7, "community_name": "Community 7", "source_file": "apps/bonzah/app/(console)/dashboard/page.tsx", "file_type": "code", "degree": 2}, {"id": "layout_consoleauthredirect", "label": "Console route-group auth guard: checkAuth on mount, redirect to /login when no partner user", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "Console route-group auth guard: checkAuth on mount, redirect to /login when no partner user", "community": 3, "community_name": "Community 3", "source_file": "apps/bonzah/app/(console)/layout.tsx", "file_type": "code", "degree": 1}, {"id": "layout_cobrandedpartnerchrome", "label": "Co-branded partner chrome - Bonzah logo header with 'Powered by Drive247' footer attribution", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "Co-branded partner chrome - Bonzah logo header with &#x27;Powered by Drive247&#x27; footer attribution", "community": 1, "community_name": "Community 1", "source_file": "apps/bonzah/app/(console)/layout.tsx", "file_type": "code", "degree": 1}, {"id": "layout_rootbrandshell", "label": "Root shell carrying Bonzah pink (#d6004f) progress bar and toast host", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Root shell carrying Bonzah pink (#d6004f) progress bar and toast host", "community": 1, "community_name": "Community 1", "source_file": "apps/bonzah/app/layout.tsx", "file_type": "code", "degree": 2}, {"id": "page_bonzahloginpage", "label": "Partner console email/password login", "color": {"background": "#FF9DA7", "border": "#FF9DA7", "highlight": {"background": "#ffffff", "border": "#FF9DA7"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Partner console email/password login", "community": 7, "community_name": "Community 7", "source_file": "apps/bonzah/app/login/page.tsx", "file_type": "code", "degree": 3}, {"id": "page_rootpage", "label": "Root entry redirects straight to /login (console has no public landing page)", "color": {"background": "#FF9DA7", "border": "#FF9DA7", "highlight": {"background": "#ffffff", "border": "#FF9DA7"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "Root entry redirects straight to /login (console has no public landing page)", "community": 7, "community_name": "Community 7", "source_file": "apps/bonzah/app/page.tsx", "file_type": "code", "degree": 1}, {"id": "bonzahqueue_onboardingreviewqueue", "label": "Operator onboarding review queue - stat-card filters, search, and status-filtered submission table", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 27.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Operator onboarding review queue - stat-card filters, search, and status-filtered submission table", "community": 2, "community_name": "Community 2", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 7}, {"id": "bonzahqueue_submissionrealtimesync", "label": "Realtime channel 'bonzah-onboarding-admin' refetches the whole queue on any submission change", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Realtime channel &#x27;bonzah-onboarding-admin&#x27; refetches the whole queue on any submission change", "community": 2, "community_name": "Community 2", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_tenantjoinomission", "label": "Rationale: partners are scoped to Bonzah data only, so the tenants table is deliberately never joined - the operator's own business name is shown instead", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Rationale: partners are scoped to Bonzah data only, so the tenants table is deliberately never joined - the operator&#x27;s own business name is shown instead", "community": 2, "community_name": "Community 2", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_submissionshape", "label": "Hand-mirrored Submission / SubmissionEvent DB shapes - this app ships no generated Supabase types", "color": {"background": "#B07AA1", "border": "#B07AA1", "highlight": {"background": "#ffffff", "border": "#B07AA1"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Hand-mirrored Submission / SubmissionEvent DB shapes - this app ships no generated Supabase types", "community": 6, "community_name": "Community 6", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 3}, {"id": "bonzahqueue_underwritingsectionmodel", "label": "Canonical 8-section underwriting application taxonomy (business, operations, contacts, banking, insurance, policies, underwriting, signature) used to render the export", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 20.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Canonical 8-section underwriting application taxonomy (business, operations, contacts, banking, insurance, policies, underwriting, signature) used to render the export", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 4}, {"id": "bonzahqueue_submissiondetailtabs", "label": "Tabbed submission detail view re-declaring the same 8-section field taxonomy for the screen", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Tabbed submission detail view re-declaring the same 8-section field taxonomy for the screen", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_submissionpdfexport", "label": "Client-side structured PDF export - fetches storage files as blobs and embeds images inline via jsPDF", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Client-side structured PDF export - fetches storage files as blobs and embeds images inline via jsPDF", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 3}, {"id": "bonzahqueue_submissionimageszip", "label": "Client-side ZIP export of every submission image plus the preparer signature data URL", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Client-side ZIP export of every submission image plus the preparer signature data URL", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_bankingcredentialfields", "label": "Banking + card-on-file review fields (routing, account, card number, CVC) rendered as plain text to the partner reviewer", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Banking + card-on-file review fields (routing, account, card number, CVC) rendered as plain text to the partner reviewer", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 3}, {"id": "bonzahqueue_aiunderwritingverdict", "label": "Drive247 AI underwriting verdict card - recommendation, confidence, reasons, red flags", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Drive247 AI underwriting verdict card - recommendation, confidence, reasons, red flags", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 3}, {"id": "bonzahqueue_autogenerateverdictonopen", "label": "Rationale: the verdict auto-generates on first open when no stored verdict exists, so the table column reads 'on open' until then", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Rationale: the verdict auto-generates on first open when no stored verdict exists, so the table column reads &#x27;on open&#x27; until then", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_partnerapproveactivate", "label": "Approve & activate - partner hands over the operator's Bonzah username/password plus a welcome message", "color": {"background": "#9C755F", "border": "#9C755F", "highlight": {"background": "#ffffff", "border": "#9C755F"}}, "size": 22.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Approve &amp; activate - partner hands over the operator&#x27;s Bonzah username/password plus a welcome message", "community": 8, "community_name": "Community 8", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 5}, {"id": "bonzahqueue_partnerrejectsendback", "label": "Send-back / reject with a mandatory reason shown to the operator", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Send-back / reject with a mandatory reason shown to the operator", "community": 5, "community_name": "Community 5", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_activationenabledflag", "label": "ACTIVATION_ENABLED kill switch gating every approve/reject control (now true - Phase 4 shipped)", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "ACTIVATION_ENABLED kill switch gating every approve/reject control (now true - Phase 4 shipped)", "community": 5, "community_name": "Community 5", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 3}, {"id": "bonzahqueue_trainingquizresult", "label": "Operator training quiz result badge (score/total/passed) surfaced as a review signal", "color": {"background": "#9C755F", "border": "#9C755F", "highlight": {"background": "#ffffff", "border": "#9C755F"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Operator training quiz result badge (score/total/passed) surfaced as a review signal", "community": 8, "community_name": "Community 8", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_eventtimeline", "label": "Submission activity timeline attributing each event to customer / partner / system actors", "color": {"background": "#B07AA1", "border": "#B07AA1", "highlight": {"background": "#ffffff", "border": "#B07AA1"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Submission activity timeline attributing each event to customer / partner / system actors", "community": 6, "community_name": "Community 6", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzahqueue_staticclassmaprationale", "label": "Rationale: status/stat colour classes are declared as static maps because Tailwind JIT cannot see dynamically built class strings", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Rationale: status/stat colour classes are declared as static maps because Tailwind JIT cannot see dynamically built class strings", "community": 1, "community_name": "Community 1", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "authstore_partnersessionauth", "label": "Bonzah partner session store - a third auth identity alongside portal staff and booking customers", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 22.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Bonzah partner session store - a third auth identity alongside portal staff and booking customers", "community": 3, "community_name": "Community 3", "source_file": "apps/bonzah/store/authStore.ts", "file_type": "code", "degree": 5}, {"id": "authstore_partneraccessgate", "label": "Client access gate: is_bonzah_partner OR is_super_admin, otherwise sign out with 'Access denied'", "color": {"background": "#BAB0AC", "border": "#BAB0AC", "highlight": {"background": "#ffffff", "border": "#BAB0AC"}}, "size": 20.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Client access gate: is_bonzah_partner OR is_super_admin, otherwise sign out with &#x27;Access denied&#x27;", "community": 9, "community_name": "Community 9", "source_file": "apps/bonzah/store/authStore.ts", "file_type": "code", "degree": 4}, {"id": "authstore_serversidegaterationale", "label": "Rationale: super admins get read access for oversight, but partner-only approve/reject is additionally gated server-side by is_bonzah_partner()", "color": {"background": "#BAB0AC", "border": "#BAB0AC", "highlight": {"background": "#ffffff", "border": "#BAB0AC"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Rationale: super admins get read access for oversight, but partner-only approve/reject is additionally gated server-side by is_bonzah_partner()", "community": 9, "community_name": "Community 9", "source_file": "apps/bonzah/store/authStore.ts", "file_type": "code", "degree": 2}, {"id": "authstore_perappauthstoreduplication", "label": "Per-app Zustand auth store re-implemented from scratch (store/authStore.ts mirrors the admin app's shape rather than sharing a package)", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Per-app Zustand auth store re-implemented from scratch (store/authStore.ts mirrors the admin app&#x27;s shape rather than sharing a package)", "community": 3, "community_name": "Community 3", "source_file": "apps/bonzah/store/authStore.ts", "file_type": "code", "degree": 2}, {"id": "supabase_sharedprojectclient", "label": "Shared Supabase project client with hardcoded project ref + anon key fallback, so the console talks to the same database as portal/booking/admin", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Shared Supabase project client with hardcoded project ref + anon key fallback, so the console talks to the same database as portal/booking/admin", "community": 4, "community_name": "Community 4", "source_file": "apps/bonzah/lib/supabase.ts", "file_type": "code", "degree": 3}, {"id": "supabase_ssrsafestorage", "label": "Rationale: SSR-safe storage getter - a storage-less client evaluated during SSR can leak into the browser, leaving auth.uid() null so is_super_admin() is false and every RLS-gated INSERT fails", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Rationale: SSR-safe storage getter - a storage-less client evaluated during SSR can leak into the browser, leaving auth.uid() null so is_super_admin() is false and every RLS-gated INSERT fails", "community": 4, "community_name": "Community 4", "source_file": "apps/bonzah/lib/supabase.ts", "file_type": "code", "degree": 2}, {"id": "utils_formatcurrency", "label": "USD-default currency formatter copied per app instead of shared", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "USD-default currency formatter copied per app instead of shared", "community": 3, "community_name": "Community 3", "source_file": "apps/bonzah/lib/utils.ts", "file_type": "code", "degree": 1}, {"id": "next_config_ignorebuilderrors", "label": "Rationale: TypeScript build errors are ignored because the console reuses loosely typed shared shapes", "color": {"background": "#B07AA1", "border": "#B07AA1", "highlight": {"background": "#ffffff", "border": "#B07AA1"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "Rationale: TypeScript build errors are ignored because the console reuses loosely typed shared shapes", "community": 6, "community_name": "Community 6", "source_file": "apps/bonzah/next.config.mjs", "file_type": "code", "degree": 1}, {"id": "tailwind_config_bonzahtheme", "label": "Bonzah console theme tokens - success/warning/destructive semantic colours the queue's status system depends on", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "Bonzah console theme tokens - success/warning/destructive semantic colours the queue&#x27;s status system depends on", "community": 1, "community_name": "Community 1", "source_file": "apps/bonzah/tailwind.config.ts", "file_type": "code", "degree": 3}, {"id": "tailwind_config_darkthemetokens", "label": "Rationale: dark-* tokens are literal hex because they were previously undefined and only 'looked' dark by rendering transparent over a dark backdrop, hiding broken elements", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "Rationale: dark-* tokens are literal hex because they were previously undefined and only &#x27;looked&#x27; dark by rendering transparent over a dark backdrop, hiding broken elements", "community": 1, "community_name": "Community 1", "source_file": "apps/bonzah/tailwind.config.ts", "file_type": "code", "degree": 1}, {"id": "bonzah_onboarding_submissions", "label": "bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 40.0, "font": {"size": 12, "color": "#ffffff"}, "title": "bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 12}, {"id": "bonzah_submission_events", "label": "bonzah_submission_events table - append-only audit trail of customer/partner/system actions on a submission", "color": {"background": "#B07AA1", "border": "#B07AA1", "highlight": {"background": "#ffffff", "border": "#B07AA1"}}, "size": 17.5, "font": {"size": 12, "color": "#ffffff"}, "title": "bonzah_submission_events table - append-only audit trail of customer/partner/system actions on a submission", "community": 6, "community_name": "Community 6", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 3}, {"id": "app_users", "label": "app_users table - staff identity carrying is_bonzah_partner and is_super_admin flags", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "app_users table - staff identity carrying is_bonzah_partner and is_super_admin flags", "community": 4, "community_name": "Community 4", "source_file": "apps/bonzah/store/authStore.ts", "file_type": "code", "degree": 2}, {"id": "bonzah_partner_review", "label": "bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions", "community": 5, "community_name": "Community 5", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 6}, {"id": "summarize_bonzah_submission", "label": "summarize-bonzah-submission edge function - LLM underwriting assistant producing recommendation, confidence, reasons and red flags", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 15.0, "font": {"size": 12, "color": "#ffffff"}, "title": "summarize-bonzah-submission edge function - LLM underwriting assistant producing recommendation, confidence, reasons and red flags", "community": 0, "community_name": "Community 0", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 2}, {"id": "bonzah_verify_credentials", "label": "bonzah-verify-credentials edge function - validates the Bonzah operator credentials issued at activation", "color": {"background": "#9C755F", "border": "#9C755F", "highlight": {"background": "#ffffff", "border": "#9C755F"}}, "size": 12.5, "font": {"size": 0, "color": "#ffffff"}, "title": "bonzah-verify-credentials edge function - validates the Bonzah operator credentials issued at activation", "community": 8, "community_name": "Community 8", "source_file": "apps/bonzah/components/console/BonzahQueue.tsx", "file_type": "code", "degree": 1}];
+const RAW_EDGES = [{"from": "readme_bonzahpartnerconsole", "to": "authstore_partneraccessgate", "label": "governs", "title": "governs [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_bonzahpartnerconsole", "to": "bonzahqueue_onboardingreviewqueue", "label": "governs", "title": "governs [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_bonzahpartnerconsole", "to": "readme_reservedsubdomain", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_phaserollout", "to": "bonzahqueue_activationenabledflag", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_phaserollout", "to": "bonzah_partner_review", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_manualprovisioning", "to": "app_users", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_manualprovisioning", "to": "supabase_sharedprojectclient", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "readme_reservedsubdomain", "to": "bonzahqueue_tenantjoinomission", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "page_dashboardpage", "to": "bonzahqueue_onboardingreviewqueue", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "page_dashboardpage", "to": "page_bonzahloginpage", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "layout_consoleauthredirect", "to": "authstore_partnersessionauth", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "layout_cobrandedpartnerchrome", "to": "layout_rootbrandshell", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "layout_rootbrandshell", "to": "tailwind_config_bonzahtheme", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "page_bonzahloginpage", "to": "authstore_partnersessionauth", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "page_bonzahloginpage", "to": "page_rootpage", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_onboardingreviewqueue", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_onboardingreviewqueue", "to": "bonzahqueue_submissionrealtimesync", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_onboardingreviewqueue", "to": "bonzahqueue_tenantjoinomission", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_onboardingreviewqueue", "to": "bonzahqueue_autogenerateverdictonopen", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_onboardingreviewqueue", "to": "bonzahqueue_staticclassmaprationale", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_submissionrealtimesync", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_submissionshape", "to": "bonzah_onboarding_submissions", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_submissionshape", "to": "bonzah_submission_events", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_submissionshape", "to": "next_config_ignorebuilderrors", "label": "rationale_for", "title": "rationale_for [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_underwritingsectionmodel", "to": "bonzahqueue_submissiondetailtabs", "label": "semantically_similar_to", "title": "semantically_similar_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_underwritingsectionmodel", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_underwritingsectionmodel", "to": "bonzahqueue_submissionpdfexport", "label": "implements", "title": "implements [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_underwritingsectionmodel", "to": "bonzahqueue_bankingcredentialfields", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_submissiondetailtabs", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_submissionpdfexport", "to": "bonzahqueue_submissionimageszip", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_submissionpdfexport", "to": "bonzahqueue_bankingcredentialfields", "label": "shares_data_with", "title": "shares_data_with [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_submissionimageszip", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_bankingcredentialfields", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_aiunderwritingverdict", "to": "summarize_bonzah_submission", "label": "invokes", "title": "invokes [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_aiunderwritingverdict", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_aiunderwritingverdict", "to": "bonzahqueue_autogenerateverdictonopen", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_partnerapproveactivate", "to": "bonzah_partner_review", "label": "invokes", "title": "invokes [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_partnerapproveactivate", "to": "bonzah_verify_credentials", "label": "conceptually_related_to", "title": "conceptually_related_to [AMBIGUOUS]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "AMBIGUOUS"}, {"from": "bonzahqueue_partnerapproveactivate", "to": "bonzahqueue_activationenabledflag", "label": "governs", "title": "governs [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_partnerapproveactivate", "to": "bonzahqueue_trainingquizresult", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_partnerapproveactivate", "to": "bonzahqueue_eventtimeline", "label": "shares_data_with", "title": "shares_data_with [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzahqueue_partnerrejectsendback", "to": "bonzah_partner_review", "label": "invokes", "title": "invokes [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_partnerrejectsendback", "to": "bonzahqueue_activationenabledflag", "label": "governs", "title": "governs [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_trainingquizresult", "to": "bonzah_onboarding_submissions", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_eventtimeline", "to": "bonzah_submission_events", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzahqueue_staticclassmaprationale", "to": "tailwind_config_bonzahtheme", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "authstore_partnersessionauth", "to": "authstore_partneraccessgate", "label": "implements", "title": "implements [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "authstore_partnersessionauth", "to": "authstore_perappauthstoreduplication", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "authstore_partnersessionauth", "to": "supabase_ssrsafestorage", "label": "governs", "title": "governs [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "authstore_partneraccessgate", "to": "app_users", "label": "reads_table", "title": "reads_table [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "authstore_partneraccessgate", "to": "authstore_serversidegaterationale", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "authstore_serversidegaterationale", "to": "bonzah_partner_review", "label": "governs", "title": "governs [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "authstore_perappauthstoreduplication", "to": "utils_formatcurrency", "label": "semantically_similar_to", "title": "semantically_similar_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "supabase_sharedprojectclient", "to": "supabase_ssrsafestorage", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "supabase_sharedprojectclient", "to": "bonzah_onboarding_submissions", "label": "shares_data_with", "title": "shares_data_with [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "tailwind_config_bonzahtheme", "to": "tailwind_config_darkthemetokens", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "bonzah_onboarding_submissions", "to": "summarize_bonzah_submission", "label": "writes_table", "title": "writes_table [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzah_onboarding_submissions", "to": "bonzah_partner_review", "label": "writes_table", "title": "writes_table [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "bonzah_submission_events", "to": "bonzah_partner_review", "label": "writes_table", "title": "writes_table [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}];
+const LEGEND = [];
+
+// HTML-escape helper — prevents XSS when injecting graph data into innerHTML
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Build vis datasets
+const nodesDS = new vis.DataSet(RAW_NODES.map(n => ({
+  id: n.id, label: n.label, color: n.color, size: n.size,
+  font: n.font, title: n.title,
+  _community: n.community, _community_name: n.community_name,
+  _source_file: n.source_file, _file_type: n.file_type, _degree: n.degree,
+})));
+
+const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({
+  id: i, from: e.from, to: e.to,
+  label: '',
+  title: e.title,
+  dashes: e.dashes,
+  width: e.width,
+  color: e.color,
+  arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+})));
+
+const container = document.getElementById('graph');
+const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+  physics: {
+    enabled: true,
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: {
+      gravitationalConstant: -60,
+      centralGravity: 0.005,
+      springLength: 120,
+      springConstant: 0.08,
+      damping: 0.4,
+      avoidOverlap: 0.8,
+    },
+    stabilization: { iterations: 200, fit: true },
+  },
+  interaction: {
+    hover: true,
+    tooltipDelay: 100,
+    hideEdgesOnDrag: true,
+    navigationButtons: false,
+    keyboard: false,
+  },
+  nodes: { shape: 'dot', borderWidth: 1.5 },
+  edges: { smooth: { type: 'continuous', roundness: 0.2 }, selectionWidth: 3 },
+});
+
+network.once('stabilizationIterationsDone', () => {
+  network.setOptions({ physics: { enabled: false } });
+});
+
+function showInfo(nodeId) {
+  const n = nodesDS.get(nodeId);
+  if (!n) return;
+  const neighborIds = network.getConnectedNodes(nodeId);
+  const neighborItems = neighborIds.map(nid => {
+    const nb = nodesDS.get(nid);
+    const color = nb ? nb.color.background : '#555';
+    return `<span class="neighbor-link" style="border-left-color:${esc(color)}" onclick="focusNode(${JSON.stringify(nid)})">${esc(nb ? nb.label : nid)}</span>`;
+  }).join('');
+  document.getElementById('info-content').innerHTML = `
+    <div class="field"><b>${esc(n.label)}</b></div>
+    <div class="field">Type: ${esc(n._file_type || 'unknown')}</div>
+    <div class="field">Community: ${esc(n._community_name)}</div>
+    <div class="field">Source: ${esc(n._source_file || '-')}</div>
+    <div class="field">Degree: ${n._degree}</div>
+    ${neighborIds.length ? `<div class="field" style="margin-top:8px;color:#aaa;font-size:11px">Neighbors (${neighborIds.length})</div><div id="neighbors-list">${neighborItems}</div>` : ''}
+  `;
+}
+
+function focusNode(nodeId) {
+  network.focus(nodeId, { scale: 1.4, animation: true });
+  network.selectNodes([nodeId]);
+  showInfo(nodeId);
+}
+
+// Track hovered node — hover detection is more reliable than click params
+let hoveredNodeId = null;
+network.on('hoverNode', params => {
+  hoveredNodeId = params.node;
+  container.style.cursor = 'pointer';
+});
+network.on('blurNode', () => {
+  hoveredNodeId = null;
+  container.style.cursor = 'default';
+});
+container.addEventListener('click', () => {
+  if (hoveredNodeId !== null) {
+    showInfo(hoveredNodeId);
+    network.selectNodes([hoveredNodeId]);
+  }
+});
+network.on('click', params => {
+  if (params.nodes.length > 0) {
+    showInfo(params.nodes[0]);
+  } else if (hoveredNodeId === null) {
+    document.getElementById('info-content').innerHTML = '<span class="empty">Click a node to inspect it</span>';
+  }
+});
+
+const searchInput = document.getElementById('search');
+const searchResults = document.getElementById('search-results');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  searchResults.innerHTML = '';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = RAW_NODES.filter(n => n.label.toLowerCase().includes(q)).slice(0, 20);
+  if (!matches.length) { searchResults.style.display = 'none'; return; }
+  searchResults.style.display = 'block';
+  matches.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'search-item';
+    el.textContent = n.label;
+    el.style.borderLeft = `3px solid ${n.color.background}`;
+    el.style.paddingLeft = '8px';
+    el.onclick = () => {
+      network.focus(n.id, { scale: 1.5, animation: true });
+      network.selectNodes([n.id]);
+      showInfo(n.id);
+      searchResults.style.display = 'none';
+      searchInput.value = '';
+    };
+    searchResults.appendChild(el);
+  });
+});
+document.addEventListener('click', e => {
+  if (!searchResults.contains(e.target) && e.target !== searchInput)
+    searchResults.style.display = 'none';
+});
+
+const hiddenCommunities = new Set();
+const legendEl = document.getElementById('legend');
+LEGEND.forEach(c => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  item.innerHTML = `<div class="legend-dot" style="background:${c.color}"></div>
+    <span class="legend-label">${c.label}</span>
+    <span class="legend-count">${c.count}</span>`;
+  item.onclick = () => {
+    if (hiddenCommunities.has(c.cid)) {
+      hiddenCommunities.delete(c.cid);
+      item.classList.remove('dimmed');
+    } else {
+      hiddenCommunities.add(c.cid);
+      item.classList.add('dimmed');
+    }
+    const updates = RAW_NODES
+      .filter(n => n.community === c.cid)
+      .map(n => ({ id: n.id, hidden: hiddenCommunities.has(c.cid) }));
+    nodesDS.update(updates);
+  };
+  legendEl.appendChild(item);
+});
+</script>
+<script>
+// Render hyperedges as shaded regions
+const hyperedges = [];
+// afterDrawing passes ctx already transformed to network coordinate space.
+// Draw node positions raw — no manual pan/zoom/DPR math needed.
+network.on('afterDrawing', function(ctx) {
+    hyperedges.forEach(h => {
+        const positions = h.nodes
+            .map(nid => network.getPositions([nid])[nid])
+            .filter(p => p !== undefined);
+        if (positions.length < 2) return;
+        ctx.save();
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#6366f1';
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Centroid and expanded hull in network coordinates
+        const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+        const cy = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+        const expanded = positions.map(p => ({
+            x: cx + (p.x - cx) * 1.15,
+            y: cy + (p.y - cy) * 1.15
+        }));
+        ctx.moveTo(expanded[0].x, expanded[0].y);
+        expanded.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.4;
+        ctx.stroke();
+        // Label
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#4f46e5';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(h.label, cx, cy - 5);
+        ctx.restore();
+    });
+});
+</script>
+</body>
+</html>

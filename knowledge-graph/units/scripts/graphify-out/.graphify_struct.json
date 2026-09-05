@@ -1,0 +1,4559 @@
+{
+  "nodes": [
+    {
+      "id": "test_notification_emails_ts",
+      "label": "test-notification-emails.ts",
+      "file_type": "code",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "test_notification_emails_generatebookingref",
+      "label": "generateBookingRef()",
+      "file_type": "code",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L36",
+      "unit": "scripts"
+    },
+    {
+      "id": "test_notification_emails_formatdate",
+      "label": "formatDate()",
+      "file_type": "code",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L45",
+      "unit": "scripts"
+    },
+    {
+      "id": "test_notification_emails_invokefunction",
+      "label": "invokeFunction()",
+      "file_type": "code",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L183",
+      "unit": "scripts"
+    },
+    {
+      "id": "test_notification_emails_testfunction",
+      "label": "testFunction()",
+      "file_type": "code",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L209",
+      "unit": "scripts"
+    },
+    {
+      "id": "test_notification_emails_runtests",
+      "label": "runTests()",
+      "file_type": "code",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L256",
+      "unit": "scripts"
+    },
+    {
+      "id": "wipe_all_data_mjs",
+      "label": "wipe-all-data.mjs",
+      "file_type": "code",
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "wipe_all_data_deleteallfromtable",
+      "label": "deleteAllFromTable()",
+      "file_type": "code",
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L113",
+      "unit": "scripts"
+    },
+    {
+      "id": "wipe_all_data_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L142",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_vehicles_mjs",
+      "label": "seed-vehicles.mjs",
+      "file_type": "code",
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_vehicles_generateregnumber",
+      "label": "generateRegNumber()",
+      "file_type": "code",
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": "L16",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_vehicles_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": "L24",
+      "unit": "scripts"
+    },
+    {
+      "id": "guard_db_env_mjs",
+      "label": "guard-db-env.mjs",
+      "file_type": "code",
+      "source_file": "scripts/guard-db-env.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_mjs",
+      "label": "tenant-onboarding.mjs",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_loadenvfile",
+      "label": "loadEnvFile()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L43",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_resolvecreds",
+      "label": "resolveCreds()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L52",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_hextohsl",
+      "label": "hexToHsl()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L116",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_hsltohex",
+      "label": "hslToHex()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L124",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_lightenfordark",
+      "label": "lightenForDark()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L131",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_buildpalette",
+      "label": "buildPalette()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L137",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_parsetime",
+      "label": "parseTime()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L171",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_parsehours",
+      "label": "parseHours()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L179",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_titlecase",
+      "label": "titleCase()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L201",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_shortnameof",
+      "label": "shortNameOf()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L202",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_fmtphonedisplay",
+      "label": "fmtPhoneDisplay()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L205",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_generatecontent",
+      "label": "generateContent()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L213",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_starterfaqs",
+      "label": "starterFaqs()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L312",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_startertestimonials",
+      "label": "starterTestimonials()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L324",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_starterextras",
+      "label": "starterExtras()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L333",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_onboard",
+      "label": "onboard()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L344",
+      "unit": "scripts"
+    },
+    {
+      "id": "tenant_onboarding_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L462",
+      "unit": "scripts"
+    },
+    {
+      "id": "sync_fleet_quote_mjs",
+      "label": "sync-fleet-quote.mjs",
+      "file_type": "code",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "sync_fleet_quote_p",
+      "label": "p()",
+      "file_type": "code",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L30",
+      "unit": "scripts"
+    },
+    {
+      "id": "sync_fleet_quote_fail",
+      "label": "fail()",
+      "file_type": "code",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L87",
+      "unit": "scripts"
+    },
+    {
+      "id": "sync_fleet_quote_build",
+      "label": "build()",
+      "file_type": "code",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L92",
+      "unit": "scripts"
+    },
+    {
+      "id": "kill_dev_ports_mjs",
+      "label": "kill-dev-ports.mjs",
+      "file_type": "code",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "kill_dev_ports_readappports",
+      "label": "readAppPorts()",
+      "file_type": "code",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L65",
+      "unit": "scripts"
+    },
+    {
+      "id": "kill_dev_ports_findlisteners",
+      "label": "findListeners()",
+      "file_type": "code",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L129",
+      "unit": "scripts"
+    },
+    {
+      "id": "kill_dev_ports_killtree",
+      "label": "killTree()",
+      "file_type": "code",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L171",
+      "unit": "scripts"
+    },
+    {
+      "id": "bulk_update_branding_js",
+      "label": "bulk-update-branding.js",
+      "file_type": "code",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "bulk_update_branding_uploadfile",
+      "label": "uploadFile()",
+      "file_type": "code",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L50",
+      "unit": "scripts"
+    },
+    {
+      "id": "bulk_update_branding_getcontenttype",
+      "label": "getContentType()",
+      "file_type": "code",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L84",
+      "unit": "scripts"
+    },
+    {
+      "id": "bulk_update_branding_updatetenantbranding",
+      "label": "updateTenantBranding()",
+      "file_type": "code",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L100",
+      "unit": "scripts"
+    },
+    {
+      "id": "bulk_update_branding_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L176",
+      "unit": "scripts"
+    },
+    {
+      "id": "db_switch_mjs",
+      "label": "db-switch.mjs",
+      "file_type": "code",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "db_switch_envpath",
+      "label": "envPath()",
+      "file_type": "code",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L38",
+      "unit": "scripts"
+    },
+    {
+      "id": "db_switch_bakpath",
+      "label": "bakPath()",
+      "file_type": "code",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L41",
+      "unit": "scripts"
+    },
+    {
+      "id": "db_switch_setvar",
+      "label": "setVar()",
+      "file_type": "code",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L46",
+      "unit": "scripts"
+    },
+    {
+      "id": "db_switch_currenthost",
+      "label": "currentHost()",
+      "file_type": "code",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L53",
+      "unit": "scripts"
+    },
+    {
+      "id": "create_site_settings_page_js",
+      "label": "create-site-settings-page.js",
+      "file_type": "code",
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "create_site_settings_page_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": "L30",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_mjs",
+      "label": "staging-seed.mjs",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_api",
+      "label": "api()",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L28",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_sql",
+      "label": "sql()",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L35",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_authadmin",
+      "label": "authAdmin()",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L48",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_pw",
+      "label": "pw()",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L55",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_ensureauthuser",
+      "label": "ensureAuthUser()",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L58",
+      "unit": "scripts"
+    },
+    {
+      "id": "staging_seed_esc",
+      "label": "esc()",
+      "file_type": "code",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L72",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_vehicles_ts",
+      "label": "seed-vehicles.ts",
+      "file_type": "code",
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_vehicles_generateregplate",
+      "label": "generateRegPlate()",
+      "file_type": "code",
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": "L79",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_vehicles_seedvehicles",
+      "label": "seedVehicles()",
+      "file_type": "code",
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": "L89",
+      "unit": "scripts"
+    },
+    {
+      "id": "fix_env_target_mjs",
+      "label": "fix-env-target.mjs",
+      "file_type": "code",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "fix_env_target_envpath",
+      "label": "envPath()",
+      "file_type": "code",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L32",
+      "unit": "scripts"
+    },
+    {
+      "id": "fix_env_target_bakpath",
+      "label": "bakPath()",
+      "file_type": "code",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L33",
+      "unit": "scripts"
+    },
+    {
+      "id": "fix_env_target_readvar",
+      "label": "readVar()",
+      "file_type": "code",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L35",
+      "unit": "scripts"
+    },
+    {
+      "id": "fix_env_target_setvar",
+      "label": "setVar()",
+      "file_type": "code",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L40",
+      "unit": "scripts"
+    },
+    {
+      "id": "update_cms_content_js",
+      "label": "update-cms-content.js",
+      "file_type": "code",
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "update_cms_content_generatecontent",
+      "label": "generateContent()",
+      "file_type": "code",
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L223",
+      "unit": "scripts"
+    },
+    {
+      "id": "update_cms_content_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L570",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_mjs",
+      "label": "stripe-uk-export.mjs",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_argval",
+      "label": "argVal()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L56",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_has",
+      "label": "has()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L60",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_sleep",
+      "label": "sleep()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L124",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_get",
+      "label": "get()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L127",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_getall",
+      "label": "getAll()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L174",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_save",
+      "label": "save()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L194",
+      "unit": "scripts"
+    },
+    {
+      "id": "stripe_uk_export_fetchset",
+      "label": "fetchSet()",
+      "file_type": "code",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L200",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_mock_receipts_mjs",
+      "label": "seed-mock-receipts.mjs",
+      "file_type": "code",
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_mock_receipts_makereceiptpdf",
+      "label": "makeReceiptPdf()",
+      "file_type": "code",
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": "L25",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_100_bonzah_vehicles_mjs",
+      "label": "seed-100-bonzah-vehicles.mjs",
+      "file_type": "code",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_100_bonzah_vehicles_getcarimageurl",
+      "label": "getCarImageUrl()",
+      "file_type": "code",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L143",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_100_bonzah_vehicles_generateregnumber",
+      "label": "generateRegNumber()",
+      "file_type": "code",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L148",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_100_bonzah_vehicles_generatevin",
+      "label": "generateVIN()",
+      "file_type": "code",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L160",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_100_bonzah_vehicles_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L169",
+      "unit": "scripts"
+    },
+    {
+      "id": "update_vehicle_images_mjs",
+      "label": "update-vehicle-images.mjs",
+      "file_type": "code",
+      "source_file": "scripts/update-vehicle-images.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "update_vehicle_images_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/update-vehicle-images.mjs",
+      "source_location": "L17",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_mjs",
+      "label": "seed-bonzah-demo.mjs",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_daysago",
+      "label": "daysAgo()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L51",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_daysfromnow",
+      "label": "daysFromNow()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L55",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_rand",
+      "label": "rand()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L59",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_pick",
+      "label": "pick()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L60",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_vin",
+      "label": "vin()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L61",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_cleanup",
+      "label": "cleanup()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L87",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_updatetenantbranding",
+      "label": "updateTenantBranding()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L119",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedorgsettings",
+      "label": "seedOrgSettings()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L153",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedlocations",
+      "label": "seedLocations()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L175",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedvehicles",
+      "label": "seedVehicles()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L190",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedcustomers",
+      "label": "seedCustomers()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L244",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedrentals",
+      "label": "seedRentals()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L303",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedpayments",
+      "label": "seedPayments()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L387",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedledgerentries",
+      "label": "seedLedgerEntries()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L455",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedfines",
+      "label": "seedFines()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L497",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedvehicleexpenses",
+      "label": "seedVehicleExpenses()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L530",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedservicerecords",
+      "label": "seedServiceRecords()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L559",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_seedpnlentries",
+      "label": "seedPnlEntries()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L591",
+      "unit": "scripts"
+    },
+    {
+      "id": "seed_bonzah_demo_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L637",
+      "unit": "scripts"
+    },
+    {
+      "id": "add_vehicle_photos_mjs",
+      "label": "add-vehicle-photos.mjs",
+      "file_type": "code",
+      "source_file": "scripts/add-vehicle-photos.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "add_vehicle_photos_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/add-vehicle-photos.mjs",
+      "source_location": "L27",
+      "unit": "scripts"
+    },
+    {
+      "id": "add_vehicle_dates_mjs",
+      "label": "add-vehicle-dates.mjs",
+      "file_type": "code",
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "add_vehicle_dates_randomdate",
+      "label": "randomDate()",
+      "file_type": "code",
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L10",
+      "unit": "scripts"
+    },
+    {
+      "id": "add_vehicle_dates_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L17",
+      "unit": "scripts"
+    },
+    {
+      "id": "sim_helpers_mjs",
+      "label": "helpers.mjs",
+      "file_type": "code",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "helpers_call",
+      "label": "call()",
+      "file_type": "code",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L31",
+      "unit": "scripts"
+    },
+    {
+      "id": "helpers_list",
+      "label": "list()",
+      "file_type": "code",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L45",
+      "unit": "scripts"
+    },
+    {
+      "id": "helpers_shift",
+      "label": "shift()",
+      "file_type": "code",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L46",
+      "unit": "scripts"
+    },
+    {
+      "id": "helpers_fire",
+      "label": "fire()",
+      "file_type": "code",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L47",
+      "unit": "scripts"
+    },
+    {
+      "id": "helpers_log",
+      "label": "log()",
+      "file_type": "code",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L48",
+      "unit": "scripts"
+    },
+    {
+      "id": "sim_scenario_payg_30_days_mjs",
+      "label": "scenario-payg-30-days.mjs",
+      "file_type": "code",
+      "source_file": "scripts/sim/scenario-payg-30-days.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "square_guardrails_prove_meta_bites_mjs",
+      "label": "prove-meta-bites.mjs",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "prove_meta_bites_put",
+      "label": "put()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L39",
+      "unit": "scripts"
+    },
+    {
+      "id": "prove_meta_bites_restore",
+      "label": "restore()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L67",
+      "unit": "scripts"
+    },
+    {
+      "id": "prove_meta_bites_edit",
+      "label": "edit()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L69",
+      "unit": "scripts"
+    },
+    {
+      "id": "prove_meta_bites_metastatus",
+      "label": "metaStatus()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L76",
+      "unit": "scripts"
+    },
+    {
+      "id": "square_guardrails_check_meta_mjs",
+      "label": "check-meta.mjs",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_assert",
+      "label": "assert()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L92",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_write",
+      "label": "write()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L99",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_status",
+      "label": "status()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L107",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_runfreeze",
+      "label": "runFreeze()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L249",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_stub",
+      "label": "stub()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L333",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_childenv",
+      "label": "childEnv()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L358",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_meta_runverify",
+      "label": "runVerify()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L359",
+      "unit": "scripts"
+    },
+    {
+      "id": "square_guardrails_check_predicates_mjs",
+      "label": "check-predicates.mjs",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_predicates_grep",
+      "label": "grep()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L170",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_predicates_codebody",
+      "label": "codeBody()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L187",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_predicates_violationsfor",
+      "label": "violationsFor()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L194",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_predicates_main",
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L207",
+      "unit": "scripts"
+    },
+    {
+      "id": "square_guardrails_check_frozen_mjs",
+      "label": "check-frozen.mjs",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-frozen.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_frozen_sha256",
+      "label": "sha256()",
+      "file_type": "code",
+      "source_file": "scripts/square-guardrails/check-frozen.mjs",
+      "source_location": "L23",
+      "unit": "scripts"
+    },
+    {
+      "id": "v1_check_shared_mjs",
+      "label": "shared.mjs",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_token",
+      "label": "token()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L40",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_sql",
+      "label": "sql()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L61",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_sha",
+      "label": "sha()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L86",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_trackedfiles",
+      "label": "trackedFiles()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L93",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_hashfile",
+      "label": "hashFile()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L101",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_readschema",
+      "label": "readSchema()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L203",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_edgefunctionhashes",
+      "label": "edgeFunctionHashes()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L250",
+      "unit": "scripts"
+    },
+    {
+      "id": "shared_v1filehashes",
+      "label": "v1FileHashes()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L283",
+      "unit": "scripts"
+    },
+    {
+      "id": "v1_check_check_mjs",
+      "label": "check.mjs",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_break",
+      "label": "BREAK()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L60",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_add",
+      "label": "ADD()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L61",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_warn",
+      "label": "WARN()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L62",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_line",
+      "label": "line()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L65",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_header",
+      "label": "header()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L77",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_emit",
+      "label": "emit()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L85",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_push",
+      "label": "push()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L114",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_byname",
+      "label": "byName()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L207",
+      "unit": "scripts"
+    },
+    {
+      "id": "check_tpush",
+      "label": "tpush()",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L250",
+      "unit": "scripts"
+    },
+    {
+      "id": "v1_check_snapshot_mjs",
+      "label": "snapshot.mjs",
+      "file_type": "code",
+      "source_file": "scripts/v1-check/snapshot.mjs",
+      "source_location": "L1",
+      "unit": "scripts"
+    },
+    {
+      "id": "ext__supabase_supabase_js",
+      "label": "@supabase/supabase-js",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__child_process",
+      "label": "child_process",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__fs",
+      "label": "fs",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__path",
+      "label": "path",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__url",
+      "label": "url",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__date_fns_tz",
+      "label": "date-fns-tz",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__",
+      "label": ".",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__process",
+      "label": "process",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__dotenv",
+      "label": "dotenv",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__crypto",
+      "label": "crypto",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__jspdf",
+      "label": "jspdf",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    },
+    {
+      "id": "ext__os",
+      "label": "os",
+      "file_type": "code",
+      "kind": "external_package",
+      "source_file": null,
+      "source_location": null,
+      "unit": "external",
+      "external": true
+    }
+  ],
+  "edges": [
+    {
+      "source": "test_notification_emails_ts",
+      "target": "test_notification_emails_generatebookingref",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L36",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_ts",
+      "target": "test_notification_emails_formatdate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_ts",
+      "target": "test_notification_emails_invokefunction",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L183",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_ts",
+      "target": "test_notification_emails_testfunction",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L209",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_ts",
+      "target": "test_notification_emails_runtests",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L256",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_testfunction",
+      "target": "test_notification_emails_invokefunction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L226",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_runtests",
+      "target": "test_notification_emails_testfunction",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L288",
+      "weight": 1.0
+    },
+    {
+      "source": "wipe_all_data_mjs",
+      "target": "wipe_all_data_deleteallfromtable",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L113",
+      "weight": 1.0
+    },
+    {
+      "source": "wipe_all_data_mjs",
+      "target": "wipe_all_data_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L142",
+      "weight": 1.0
+    },
+    {
+      "source": "wipe_all_data_main",
+      "target": "wipe_all_data_deleteallfromtable",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L149",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_mjs",
+      "target": "seed_vehicles_generateregnumber",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": "L16",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_mjs",
+      "target": "seed_vehicles_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": "L24",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_loadenvfile",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L43",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_resolvecreds",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L52",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_hextohsl",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L116",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_hsltohex",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L124",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_lightenfordark",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L131",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_buildpalette",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L137",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_parsetime",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L171",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_parsehours",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L179",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_titlecase",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L201",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_shortnameof",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L202",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_fmtphonedisplay",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L205",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_generatecontent",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L213",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_starterfaqs",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L312",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_startertestimonials",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L324",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_starterextras",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L333",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_onboard",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L344",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "tenant_onboarding_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L462",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_resolvecreds",
+      "target": "tenant_onboarding_loadenvfile",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L55",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_lightenfordark",
+      "target": "tenant_onboarding_hextohsl",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L132",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_lightenfordark",
+      "target": "tenant_onboarding_hsltohex",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L134",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_buildpalette",
+      "target": "tenant_onboarding_lightenfordark",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L166",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_parsehours",
+      "target": "tenant_onboarding_parsetime",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L194",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_fmtphonedisplay",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L360",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_buildpalette",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L361",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_parsehours",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L362",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_shortnameof",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L397",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_generatecontent",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L403",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_starterfaqs",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L441",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_startertestimonials",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L448",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "tenant_onboarding_starterextras",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L455",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_main",
+      "target": "tenant_onboarding_onboard",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L473",
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "sync_fleet_quote_p",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "sync_fleet_quote_fail",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L87",
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "sync_fleet_quote_build",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L92",
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_build",
+      "target": "sync_fleet_quote_fail",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": "L94",
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "kill_dev_ports_readappports",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L65",
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "kill_dev_ports_findlisteners",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L129",
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "kill_dev_ports_killtree",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L171",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "bulk_update_branding_uploadfile",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L50",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "bulk_update_branding_getcontenttype",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L84",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "bulk_update_branding_updatetenantbranding",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L100",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "bulk_update_branding_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L176",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_uploadfile",
+      "target": "bulk_update_branding_getcontenttype",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L59",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_updatetenantbranding",
+      "target": "bulk_update_branding_uploadfile",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L133",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_main",
+      "target": "bulk_update_branding_updatetenantbranding",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L204",
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "db_switch_envpath",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L38",
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "db_switch_bakpath",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L41",
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "db_switch_setvar",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L46",
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "db_switch_currenthost",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L53",
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_currenthost",
+      "target": "db_switch_envpath",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": "L54",
+      "weight": 1.0
+    },
+    {
+      "source": "create_site_settings_page_js",
+      "target": "create_site_settings_page_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "staging_seed_api",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L28",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "staging_seed_sql",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L35",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "staging_seed_authadmin",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L48",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "staging_seed_pw",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L55",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "staging_seed_ensureauthuser",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L58",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "staging_seed_esc",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L72",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_sql",
+      "target": "staging_seed_api",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L36",
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_ensureauthuser",
+      "target": "staging_seed_authadmin",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": "L59",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_ts",
+      "target": "seed_vehicles_generateregplate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": "L79",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_ts",
+      "target": "seed_vehicles_seedvehicles",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": "L89",
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "fix_env_target_envpath",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L32",
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "fix_env_target_bakpath",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L33",
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "fix_env_target_readvar",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L35",
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "fix_env_target_setvar",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": "L40",
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_js",
+      "target": "update_cms_content_generatecontent",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L223",
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_js",
+      "target": "update_cms_content_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L570",
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_main",
+      "target": "update_cms_content_generatecontent",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L590",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_argval",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L56",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_has",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L60",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_sleep",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L124",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_get",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L127",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_getall",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L174",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_save",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L194",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "stripe_uk_export_fetchset",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L200",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_get",
+      "target": "stripe_uk_export_sleep",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L149",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_getall",
+      "target": "stripe_uk_export_get",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L175",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_fetchset",
+      "target": "stripe_uk_export_getall",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L214",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_fetchset",
+      "target": "stripe_uk_export_save",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L215",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_mock_receipts_mjs",
+      "target": "seed_mock_receipts_makereceiptpdf",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_100_bonzah_vehicles_mjs",
+      "target": "seed_100_bonzah_vehicles_getcarimageurl",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L143",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_100_bonzah_vehicles_mjs",
+      "target": "seed_100_bonzah_vehicles_generateregnumber",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L148",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_100_bonzah_vehicles_mjs",
+      "target": "seed_100_bonzah_vehicles_generatevin",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L160",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_100_bonzah_vehicles_mjs",
+      "target": "seed_100_bonzah_vehicles_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L169",
+      "weight": 1.0
+    },
+    {
+      "source": "update_vehicle_images_mjs",
+      "target": "update_vehicle_images_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/update-vehicle-images.mjs",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_daysago",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L51",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_daysfromnow",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L55",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_rand",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L59",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_pick",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L60",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_vin",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L61",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_cleanup",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L87",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_updatetenantbranding",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L119",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedorgsettings",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L153",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedlocations",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L175",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedvehicles",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L190",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedcustomers",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L244",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedrentals",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L303",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedpayments",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L387",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedledgerentries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L455",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedfines",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L497",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedvehicleexpenses",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L530",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedservicerecords",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L559",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_seedpnlentries",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L591",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "seed_bonzah_demo_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L637",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedrentals",
+      "target": "seed_bonzah_demo_rand",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L312",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedrentals",
+      "target": "seed_bonzah_demo_daysago",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L317",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedrentals",
+      "target": "seed_bonzah_demo_daysfromnow",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L317",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpayments",
+      "target": "seed_bonzah_demo_pick",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L402",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpayments",
+      "target": "seed_bonzah_demo_daysago",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L439",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpayments",
+      "target": "seed_bonzah_demo_rand",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L439",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedvehicleexpenses",
+      "target": "seed_bonzah_demo_daysago",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L549",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedvehicleexpenses",
+      "target": "seed_bonzah_demo_rand",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L549",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpnlentries",
+      "target": "seed_bonzah_demo_daysago",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L612",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpnlentries",
+      "target": "seed_bonzah_demo_rand",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L612",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_cleanup",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L644",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_updatetenantbranding",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L645",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedorgsettings",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L646",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedlocations",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L648",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedvehicles",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L649",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedcustomers",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L650",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedrentals",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L651",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedpayments",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L652",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedfines",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L654",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedvehicleexpenses",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L655",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedservicerecords",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L656",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "seed_bonzah_demo_seedpnlentries",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L657",
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_photos_mjs",
+      "target": "add_vehicle_photos_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/add-vehicle-photos.mjs",
+      "source_location": "L27",
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_dates_mjs",
+      "target": "add_vehicle_dates_randomdate",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L10",
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_dates_mjs",
+      "target": "add_vehicle_dates_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_dates_main",
+      "target": "add_vehicle_dates_randomdate",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "sim_helpers_mjs",
+      "target": "helpers_call",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "sim_helpers_mjs",
+      "target": "helpers_list",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "sim_helpers_mjs",
+      "target": "helpers_shift",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L46",
+      "weight": 1.0
+    },
+    {
+      "source": "sim_helpers_mjs",
+      "target": "helpers_fire",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L47",
+      "weight": 1.0
+    },
+    {
+      "source": "sim_helpers_mjs",
+      "target": "helpers_log",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L48",
+      "weight": 1.0
+    },
+    {
+      "source": "helpers_list",
+      "target": "helpers_call",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L45",
+      "weight": 1.0
+    },
+    {
+      "source": "helpers_shift",
+      "target": "helpers_call",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L46",
+      "weight": 1.0
+    },
+    {
+      "source": "helpers_fire",
+      "target": "helpers_call",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": "L47",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "prove_meta_bites_put",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L39",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "prove_meta_bites_restore",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L67",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "prove_meta_bites_edit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L69",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "prove_meta_bites_metastatus",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": "L76",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_assert",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L92",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_write",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L99",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_status",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L107",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_runfreeze",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L249",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_stub",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L333",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_childenv",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L358",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "check_meta_runverify",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L359",
+      "weight": 1.0
+    },
+    {
+      "source": "check_meta_runfreeze",
+      "target": "check_meta_status",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L249",
+      "weight": 1.0
+    },
+    {
+      "source": "check_meta_stub",
+      "target": "check_meta_write",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L334",
+      "weight": 1.0
+    },
+    {
+      "source": "check_meta_runverify",
+      "target": "check_meta_status",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L359",
+      "weight": 1.0
+    },
+    {
+      "source": "check_meta_runverify",
+      "target": "check_meta_childenv",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": "L359",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "check_predicates_grep",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L170",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "check_predicates_codebody",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L187",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "check_predicates_violationsfor",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L194",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "check_predicates_main",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L207",
+      "weight": 1.0
+    },
+    {
+      "source": "check_predicates_violationsfor",
+      "target": "check_predicates_grep",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L195",
+      "weight": 1.0
+    },
+    {
+      "source": "check_predicates_main",
+      "target": "check_predicates_violationsfor",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L220",
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_frozen_mjs",
+      "target": "check_frozen_sha256",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/square-guardrails/check-frozen.mjs",
+      "source_location": "L23",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_token",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L40",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_sql",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L61",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_sha",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L86",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_trackedfiles",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L93",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_hashfile",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L101",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_readschema",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L203",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_edgefunctionhashes",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L250",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "shared_v1filehashes",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L283",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_sql",
+      "target": "shared_token",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L70",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_hashfile",
+      "target": "shared_sha",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L104",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_readschema",
+      "target": "shared_sql",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L206",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_edgefunctionhashes",
+      "target": "shared_trackedfiles",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L251",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_v1filehashes",
+      "target": "shared_trackedfiles",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L284",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_v1filehashes",
+      "target": "shared_hashfile",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L294",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_break",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L60",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_add",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L61",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_warn",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L62",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_line",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L65",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_header",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L77",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_emit",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L85",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_push",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L114",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_byname",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L207",
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "check_tpush",
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L250",
+      "weight": 1.0
+    },
+    {
+      "source": "check_break",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L60",
+      "weight": 1.0
+    },
+    {
+      "source": "check_add",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L61",
+      "weight": 1.0
+    },
+    {
+      "source": "check_warn",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L62",
+      "weight": 1.0
+    },
+    {
+      "source": "check_emit",
+      "target": "check_line",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L86",
+      "weight": 1.0
+    },
+    {
+      "source": "check_byname",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L209",
+      "weight": 1.0
+    },
+    {
+      "source": "check_tpush",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L251",
+      "weight": 1.0
+    },
+    {
+      "source": "check_tpush",
+      "target": "check_break",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L252",
+      "weight": 1.0
+    },
+    {
+      "source": "check_tpush",
+      "target": "check_add",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L253",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_testfunction",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L217",
+      "weight": 1.0
+    },
+    {
+      "source": "test_notification_emails_runtests",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/test-notification-emails.ts",
+      "source_location": "L257",
+      "weight": 1.0
+    },
+    {
+      "source": "wipe_all_data_deleteallfromtable",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L129",
+      "weight": 1.0
+    },
+    {
+      "source": "wipe_all_data_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": "L143",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": "L25",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_onboard",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L345",
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": "L475",
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_findlisteners",
+      "target": "stripe_uk_export_has",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L158",
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_findlisteners",
+      "target": "check_add",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L160",
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_findlisteners",
+      "target": "stripe_uk_export_get",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": "L160",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_uploadfile",
+      "target": "check_warn",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L54",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_updatetenantbranding",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L103",
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": "L177",
+      "weight": 1.0
+    },
+    {
+      "source": "create_site_settings_page_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": "L31",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_seedvehicles",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": "L90",
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": "L571",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_get",
+      "target": "check_meta_write",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L148",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_getall",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L186",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_getall",
+      "target": "check_meta_write",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L187",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_fetchset",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L209",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_fetchset",
+      "target": "check_meta_write",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L217",
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_fetchset",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": "L222",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_mock_receipts_makereceiptpdf",
+      "target": "check_line",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": "L30",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_100_bonzah_vehicles_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": "L170",
+      "weight": 1.0
+    },
+    {
+      "source": "update_vehicle_images_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/update-vehicle-images.mjs",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_cleanup",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L88",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_cleanup",
+      "target": "check_warn",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L112",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_updatetenantbranding",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L120",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedorgsettings",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L154",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedlocations",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L176",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedvehicles",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L191",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedvehicles",
+      "target": "check_warn",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L239",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedcustomers",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L245",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedrentals",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L304",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedrentals",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L315",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpayments",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L388",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpayments",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L397",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedledgerentries",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L456",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedledgerentries",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L465",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedfines",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L498",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedvehicleexpenses",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L531",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedvehicleexpenses",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L546",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedservicerecords",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L560",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpnlentries",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L592",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_seedpnlentries",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L598",
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": "L638",
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_photos_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/add-vehicle-photos.mjs",
+      "source_location": "L28",
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_dates_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": "L18",
+      "weight": 1.0
+    },
+    {
+      "source": "check_predicates_main",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": "L233",
+      "weight": 1.0
+    },
+    {
+      "source": "shared_edgefunctionhashes",
+      "target": "check_push",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": "L262",
+      "weight": 1.0
+    },
+    {
+      "source": "check_line",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L74",
+      "weight": 1.0
+    },
+    {
+      "source": "check_header",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L78",
+      "weight": 1.0
+    },
+    {
+      "source": "check_emit",
+      "target": "helpers_log",
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": "L87",
+      "weight": 1.0
+    },
+    {
+      "source": "wipe_all_data_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/wipe-all-data.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-vehicles.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "guard_db_env_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/guard-db-env.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "guard_db_env_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/guard-db-env.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "guard_db_env_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/guard-db-env.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "guard_db_env_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/guard-db-env.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "tenant_onboarding_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/tenant-onboarding.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__date_fns_tz",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__date_fns_tz",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sync_fleet_quote_mjs",
+      "target": "ext__",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sync-fleet-quote.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "kill_dev_ports_mjs",
+      "target": "ext__process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/kill-dev-ports.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "bulk_update_branding_js",
+      "target": "ext__dotenv",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/bulk-update-branding.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "db_switch_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/db-switch.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "create_site_settings_page_js",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "create_site_settings_page_js",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "create_site_settings_page_js",
+      "target": "ext__dotenv",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/create-site-settings-page.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "staging_seed_mjs",
+      "target": "ext__crypto",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/staging-seed.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_vehicles_ts",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-vehicles.ts",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "fix_env_target_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/fix-env-target.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_js",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_js",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "update_cms_content_js",
+      "target": "ext__dotenv",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/update-cms-content.js",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "stripe_uk_export_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/stripe-uk-export.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_mock_receipts_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_mock_receipts_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_mock_receipts_mjs",
+      "target": "ext__jspdf",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-mock-receipts.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_100_bonzah_vehicles_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-100-bonzah-vehicles.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "update_vehicle_images_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/update-vehicle-images.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "seed_bonzah_demo_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/seed-bonzah-demo.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_photos_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/add-vehicle-photos.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "add_vehicle_dates_mjs",
+      "target": "ext__supabase_supabase_js",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/add-vehicle-dates.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sim_helpers_mjs",
+      "target": "ext__process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sim/helpers.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "sim_scenario_payg_30_days_mjs",
+      "target": "sim_helpers_mjs",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/sim/scenario-payg-30-days.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "ext__os",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_prove_meta_bites_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/prove-meta-bites.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "ext__crypto",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "ext__os",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_meta_mjs",
+      "target": "square_guardrails_check_predicates_mjs",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-meta.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_predicates_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-predicates.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_frozen_mjs",
+      "target": "ext__crypto",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-frozen.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_frozen_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-frozen.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "square_guardrails_check_frozen_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/square-guardrails/check-frozen.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "ext__crypto",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "ext__path",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_shared_mjs",
+      "target": "ext__url",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/shared.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_check_mjs",
+      "target": "v1_check_shared_mjs",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/check.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_snapshot_mjs",
+      "target": "ext__fs",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/snapshot.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_snapshot_mjs",
+      "target": "ext__child_process",
+      "relation": "depends_on",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/snapshot.mjs",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "v1_check_snapshot_mjs",
+      "target": "v1_check_shared_mjs",
+      "relation": "imports",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "scripts/v1-check/snapshot.mjs",
+      "source_location": null,
+      "weight": 1.0
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

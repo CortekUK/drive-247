@@ -1,0 +1,12 @@
+{
+  "unit": "edge-functions",
+  "unit_label": "Edge Functions - Supabase Deno backend",
+  "unit_kind": "deno-functions",
+  "chunk": 1,
+  "incremental": true,
+  "out": "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/units/edge-functions/graphify-out/.graphify_chunk_edge-functions_inc_001.json",
+  "repo_root": "/home/haseeb-raza/Desktop/drive-247",
+  "files": [
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/fleet-quote-api/index.ts"
+  ]
+}

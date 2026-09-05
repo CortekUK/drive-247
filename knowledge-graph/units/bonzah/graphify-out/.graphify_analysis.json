@@ -1,0 +1,225 @@
+{
+  "communities": {
+    "0": [
+      "bonzah_onboarding_submissions",
+      "bonzahqueue_aiunderwritingverdict",
+      "bonzahqueue_autogenerateverdictonopen",
+      "bonzahqueue_bankingcredentialfields",
+      "bonzahqueue_submissiondetailtabs",
+      "bonzahqueue_submissionimageszip",
+      "bonzahqueue_submissionpdfexport",
+      "bonzahqueue_underwritingsectionmodel",
+      "summarize_bonzah_submission"
+    ],
+    "1": [
+      "bonzahqueue_staticclassmaprationale",
+      "layout_cobrandedpartnerchrome",
+      "layout_rootbrandshell",
+      "tailwind_config_bonzahtheme",
+      "tailwind_config_darkthemetokens"
+    ],
+    "2": [
+      "bonzahqueue_onboardingreviewqueue",
+      "bonzahqueue_submissionrealtimesync",
+      "bonzahqueue_tenantjoinomission",
+      "readme_bonzahpartnerconsole",
+      "readme_reservedsubdomain"
+    ],
+    "3": [
+      "authstore_partnersessionauth",
+      "authstore_perappauthstoreduplication",
+      "layout_consoleauthredirect",
+      "utils_formatcurrency"
+    ],
+    "4": [
+      "app_users",
+      "readme_manualprovisioning",
+      "supabase_sharedprojectclient",
+      "supabase_ssrsafestorage"
+    ],
+    "5": [
+      "bonzah_partner_review",
+      "bonzahqueue_activationenabledflag",
+      "bonzahqueue_partnerrejectsendback",
+      "readme_phaserollout"
+    ],
+    "6": [
+      "bonzah_submission_events",
+      "bonzahqueue_eventtimeline",
+      "bonzahqueue_submissionshape",
+      "next_config_ignorebuilderrors"
+    ],
+    "7": [
+      "page_bonzahloginpage",
+      "page_dashboardpage",
+      "page_rootpage"
+    ],
+    "8": [
+      "bonzah_verify_credentials",
+      "bonzahqueue_partnerapproveactivate",
+      "bonzahqueue_trainingquizresult"
+    ],
+    "9": [
+      "authstore_partneraccessgate",
+      "authstore_serversidegaterationale"
+    ]
+  },
+  "cohesion": {
+    "0": 0.36,
+    "1": 0.4,
+    "2": 0.5,
+    "3": 0.5,
+    "4": 0.5,
+    "5": 0.67,
+    "6": 0.5,
+    "7": 0.67,
+    "8": 0.67,
+    "9": 1.0
+  },
+  "gods": [
+    {
+      "id": "bonzah_onboarding_submissions",
+      "label": "bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row",
+      "degree": 12
+    },
+    {
+      "id": "bonzahqueue_onboardingreviewqueue",
+      "label": "Operator onboarding review queue - stat-card filters, search, and status-filtered submission table",
+      "degree": 7
+    },
+    {
+      "id": "bonzah_partner_review",
+      "label": "bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions",
+      "degree": 6
+    },
+    {
+      "id": "bonzahqueue_partnerapproveactivate",
+      "label": "Approve & activate - partner hands over the operator's Bonzah username/password plus a welcome message",
+      "degree": 5
+    },
+    {
+      "id": "authstore_partnersessionauth",
+      "label": "Bonzah partner session store - a third auth identity alongside portal staff and booking customers",
+      "degree": 5
+    },
+    {
+      "id": "bonzahqueue_underwritingsectionmodel",
+      "label": "Canonical 8-section underwriting application taxonomy (business, operations, contacts, banking, insurance, policies, underwriting, signature) used to render the export",
+      "degree": 4
+    },
+    {
+      "id": "authstore_partneraccessgate",
+      "label": "Client access gate: is_bonzah_partner OR is_super_admin, otherwise sign out with 'Access denied'",
+      "degree": 4
+    },
+    {
+      "id": "readme_bonzahpartnerconsole",
+      "label": "Bonzah Partner Console - standalone insurance-partner app at bonzah.drive-247.com",
+      "degree": 3
+    },
+    {
+      "id": "page_bonzahloginpage",
+      "label": "Partner console email/password login",
+      "degree": 3
+    },
+    {
+      "id": "bonzahqueue_submissionshape",
+      "label": "Hand-mirrored Submission / SubmissionEvent DB shapes - this app ships no generated Supabase types",
+      "degree": 3
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Bonzah Partner Console - standalone insurance-partner app at bonzah.drive-247.com",
+      "target": "Client access gate: is_bonzah_partner OR is_super_admin, otherwise sign out with 'Access denied'",
+      "source_files": [
+        "apps/bonzah/README.md",
+        "apps/bonzah/store/authStore.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "governs",
+      "why": "crosses file types (doc \u2194 code); bridges separate communities"
+    },
+    {
+      "source": "Phased rollout: Phase 3 review-only, Phase 4 wires approve/reject (README still says ACTIVATION_ENABLED=false while code now sets it true - doc drift)",
+      "target": "bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions",
+      "source_files": [
+        "apps/bonzah/README.md",
+        "apps/bonzah/components/console/BonzahQueue.tsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "crosses file types (doc \u2194 code); peripheral node `Phased rollout: Phase 3 review-only, Phase 4 wires approve/reject (README still says ACTIVATION_ENABLED=false while code now sets it true - doc drift)` unexpectedly reaches hub `bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions`"
+    },
+    {
+      "source": "Rationale: partners are scoped to Bonzah data only, so the tenants table is deliberately never joined - the operator's own business name is shown instead",
+      "target": "'bonzah' is a reserved subdomain in portal + booking middleware so it is never resolved as a tenant slug",
+      "source_files": [
+        "apps/bonzah/components/console/BonzahQueue.tsx",
+        "apps/bonzah/README.md"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code)"
+    },
+    {
+      "source": "Rationale: SSR-safe storage getter - a storage-less client evaluated during SSR can leak into the browser, leaving auth.uid() null so is_super_admin() is false and every RLS-gated INSERT fails",
+      "target": "Bonzah partner session store - a third auth identity alongside portal staff and booking customers",
+      "source_files": [
+        "apps/bonzah/lib/supabase.ts",
+        "apps/bonzah/store/authStore.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "governs",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `Rationale: SSR-safe storage getter - a storage-less client evaluated during SSR can leak into the browser, leaving auth.uid() null so is_super_admin() is false and every RLS-gated INSERT fails` unexpectedly reaches hub `Bonzah partner session store - a third auth identity alongside portal staff and booking customers`"
+    },
+    {
+      "source": "Bonzah Partner Console - standalone insurance-partner app at bonzah.drive-247.com",
+      "target": "Operator onboarding review queue - stat-card filters, search, and status-filtered submission table",
+      "source_files": [
+        "apps/bonzah/README.md",
+        "apps/bonzah/components/console/BonzahQueue.tsx"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "governs",
+      "why": "crosses file types (doc \u2194 code)"
+    }
+  ],
+  "questions": [
+    {
+      "type": "ambiguous_edge",
+      "question": "What is the exact relationship between `Approve & activate - partner hands over the operator's Bonzah username/password plus a welcome message` and `bonzah-verify-credentials edge function - validates the Bonzah operator credentials issued at activation`?",
+      "why": "Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row` connect `Community 0` to `Community 2`, `Community 4`, `Community 5`, `Community 6`, `Community 8`?",
+      "why": "High betweenness centrality (0.571) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Operator onboarding review queue - stat-card filters, search, and status-filtered submission table` connect `Community 2` to `Community 0`, `Community 1`, `Community 7`?",
+      "why": "High betweenness centrality (0.403) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions` connect `Community 5` to `Community 8`, `Community 0`, `Community 6`, `Community 9`?",
+      "why": "High betweenness centrality (0.245) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 4 inferred relationships involving `bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row` (e.g. with `Banking + card-on-file review fields (routing, account, card number, CVC) rendered as plain text to the partner reviewer` and `summarize-bonzah-submission edge function - LLM underwriting assistant producing recommendation, confidence, reasons and red flags`) actually correct?",
+      "why": "`bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row` has 4 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 2 inferred relationships involving `bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions` (e.g. with `bonzah_onboarding_submissions table - operator insurance application, AI verdict, quiz result and review outcome in one row` and `bonzah_submission_events table - append-only audit trail of customer/partner/system actions on a submission`) actually correct?",
+      "why": "`bonzah-partner-review edge function - server-authoritative approve/activate and reject for onboarding submissions` has 2 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 2 inferred relationships involving `Approve & activate - partner hands over the operator's Bonzah username/password plus a welcome message` (e.g. with `Operator training quiz result badge (score/total/passed) surfaced as a review signal` and `Submission activity timeline attributing each event to customer / partner / system actors`) actually correct?",
+      "why": "`Approve & activate - partner hands over the operator's Bonzah username/password plus a welcome message` has 2 INFERRED edges - model-reasoned connections that need verification."
+    }
+  ]
+}

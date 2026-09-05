@@ -1,0 +1,450 @@
+{
+  "communities": {
+    "0": [
+      "check_frozen_sha256",
+      "check_meta_assert",
+      "check_meta_childenv",
+      "check_meta_runfreeze",
+      "check_meta_runverify",
+      "check_meta_status",
+      "check_meta_stub",
+      "check_predicates_codebody",
+      "check_predicates_grep",
+      "check_predicates_main",
+      "check_predicates_violationsfor",
+      "create_site_settings_page_js",
+      "create_site_settings_page_main",
+      "db_switch_bakpath",
+      "db_switch_currenthost",
+      "db_switch_envpath",
+      "db_switch_mjs",
+      "db_switch_setvar",
+      "ext__child_process",
+      "ext__crypto",
+      "ext__fs",
+      "ext__os",
+      "ext__path",
+      "ext__url",
+      "fix_env_target_bakpath",
+      "fix_env_target_envpath",
+      "fix_env_target_mjs",
+      "fix_env_target_readvar",
+      "fix_env_target_setvar",
+      "guard_db_env_mjs",
+      "kill_dev_ports_killtree",
+      "kill_dev_ports_mjs",
+      "kill_dev_ports_readappports",
+      "prove_meta_bites_edit",
+      "prove_meta_bites_metastatus",
+      "prove_meta_bites_put",
+      "prove_meta_bites_restore",
+      "shared_edgefunctionhashes",
+      "shared_hashfile",
+      "shared_readschema",
+      "shared_sha",
+      "shared_sql",
+      "shared_token",
+      "shared_trackedfiles",
+      "shared_v1filehashes",
+      "square_guardrails_check_frozen_mjs",
+      "square_guardrails_check_meta_mjs",
+      "square_guardrails_check_predicates_mjs",
+      "square_guardrails_prove_meta_bites_mjs",
+      "v1_check_shared_mjs",
+      "v1_check_snapshot_mjs"
+    ],
+    "1": [
+      "bulk_update_branding_logostorageupload",
+      "bulk_update_branding_multitenantbrandingrollout",
+      "bulk_update_branding_servicerolerlsbypass",
+      "bulk_update_branding_tenantbrandingcolumnfamily",
+      "create_site_settings_page_sitesettingsbootstrap",
+      "notify_booking_approved_index_ts",
+      "notify_booking_cancelled_index_ts",
+      "notify_booking_pending_index_ts",
+      "notify_booking_rejected_index_ts",
+      "notify_payment_failed_index_ts",
+      "notify_refund_processed_index_ts",
+      "notify_rental_completed_index_ts",
+      "notify_rental_started_index_ts",
+      "readme_brandingconfigcontract",
+      "readme_bulkbrandingoperatorguide",
+      "readme_servicerolekeynevercommitted",
+      "seed_bonzah_demo_brandingprofile",
+      "seed_mock_receipts_portalenvborrowing",
+      "table_cms_page_sections",
+      "table_cms_pages",
+      "table_faqs",
+      "table_org_settings",
+      "table_pickup_locations",
+      "table_rental_extras",
+      "table_tenants",
+      "table_testimonials",
+      "tenant_onboarding_cmscontentgenerator",
+      "tenant_onboarding_credentialautodiscovery",
+      "tenant_onboarding_darkmodereadability",
+      "tenant_onboarding_hoursparser",
+      "tenant_onboarding_idempotentreruns",
+      "tenant_onboarding_neverguessoperatorrules",
+      "tenant_onboarding_palettederivation",
+      "tenant_onboarding_serviceareaoverride",
+      "tenant_onboarding_statetimezonemap",
+      "tenant_onboarding_strictmodedefault",
+      "tenant_onboarding_tenantprovisioning",
+      "test_notification_emails_brandingregressionharness",
+      "test_notification_emails_simulatedchannelreporting",
+      "test_notification_emails_tenantidoptionalcontrast",
+      "update_cms_content_bookingsitesectionkeys",
+      "update_cms_content_cmssectionupsert",
+      "update_cms_content_nashvilleeconomycopyleak",
+      "update_cms_content_tenantcontentregistry"
+    ],
+    "2": [
+      "accrue_payg_charges_index_ts",
+      "add_vehicle_dates_motandtaxbackfill",
+      "add_vehicle_photos_gallerybackfill",
+      "db_switch_prodbackuponfirstswitch",
+      "db_switch_prodstagingswitcher",
+      "db_switch_stagingprojectref",
+      "helpers_doubleprodguard",
+      "helpers_simcontrolclient",
+      "scenario_payg_30_days_dispatchcapisnotastall",
+      "scenario_payg_30_days_paygaccrualsimulation",
+      "seed_100_bonzah_vehicles_chunkedinsert",
+      "seed_100_bonzah_vehicles_eligiblefleetseeding",
+      "seed_100_bonzah_vehicles_luxuryexclusionlist",
+      "seed_100_bonzah_vehicles_regoffsetting",
+      "seed_bonzah_demo_checkconstraintcatalogue",
+      "seed_bonzah_demo_demotenantdataset",
+      "seed_bonzah_demo_ledgermirrorsrpayments",
+      "seed_bonzah_demo_ledgerstepskipped",
+      "seed_bonzah_demo_orderedcascadecleanup",
+      "seed_bonzah_demo_pnltriggernulltenant",
+      "seed_bonzah_demo_serviceonlyexpensecategory",
+      "seed_mock_receipts_expensereceiptattachment",
+      "seed_mock_receipts_receiptpathconvention",
+      "seed_vehicles_alltenantfleetseeding",
+      "seed_vehicles_committedprodcredentials",
+      "seed_vehicles_singletenantfleetphotoseeding",
+      "sim_control_index_ts",
+      "table_customers",
+      "table_fines",
+      "table_ledger_entries",
+      "table_payments",
+      "table_pnl_entries",
+      "table_rentals",
+      "table_service_records",
+      "table_vehicle_expenses",
+      "table_vehicle_photos",
+      "table_vehicles",
+      "update_vehicle_images_crosstenantwrite",
+      "update_vehicle_images_photourlbackfill",
+      "wipe_all_data_authusersmanual",
+      "wipe_all_data_deletepredicatefallback",
+      "wipe_all_data_destructivefullreset",
+      "wipe_all_data_fkorderedteardown"
+    ],
+    "3": [
+      "check_add",
+      "check_break",
+      "check_byname",
+      "check_emit",
+      "check_header",
+      "check_line",
+      "check_push",
+      "check_tpush",
+      "check_warn",
+      "helpers_log",
+      "seed_bonzah_demo_cleanup",
+      "seed_bonzah_demo_daysago",
+      "seed_bonzah_demo_daysfromnow",
+      "seed_bonzah_demo_main",
+      "seed_bonzah_demo_mjs",
+      "seed_bonzah_demo_pick",
+      "seed_bonzah_demo_rand",
+      "seed_bonzah_demo_seedcustomers",
+      "seed_bonzah_demo_seedfines",
+      "seed_bonzah_demo_seedledgerentries",
+      "seed_bonzah_demo_seedlocations",
+      "seed_bonzah_demo_seedorgsettings",
+      "seed_bonzah_demo_seedpayments",
+      "seed_bonzah_demo_seedpnlentries",
+      "seed_bonzah_demo_seedrentals",
+      "seed_bonzah_demo_seedservicerecords",
+      "seed_bonzah_demo_seedvehicleexpenses",
+      "seed_bonzah_demo_seedvehicles",
+      "seed_bonzah_demo_updatetenantbranding",
+      "seed_bonzah_demo_vin",
+      "v1_check_check_mjs"
+    ],
+    "4": [
+      "add_vehicle_dates_main",
+      "add_vehicle_dates_mjs",
+      "add_vehicle_dates_randomdate",
+      "add_vehicle_photos_main",
+      "add_vehicle_photos_mjs",
+      "ext__jspdf",
+      "ext__supabase_supabase_js",
+      "seed_100_bonzah_vehicles_generateregnumber",
+      "seed_100_bonzah_vehicles_generatevin",
+      "seed_100_bonzah_vehicles_getcarimageurl",
+      "seed_100_bonzah_vehicles_main",
+      "seed_100_bonzah_vehicles_mjs",
+      "seed_mock_receipts_makereceiptpdf",
+      "seed_mock_receipts_mjs",
+      "seed_vehicles_generateregnumber",
+      "seed_vehicles_generateregplate",
+      "seed_vehicles_main",
+      "seed_vehicles_mjs",
+      "seed_vehicles_seedvehicles",
+      "seed_vehicles_ts",
+      "update_vehicle_images_main",
+      "update_vehicle_images_mjs",
+      "wipe_all_data_deleteallfromtable",
+      "wipe_all_data_main",
+      "wipe_all_data_mjs"
+    ],
+    "5": [
+      "tenant_onboarding_buildpalette",
+      "tenant_onboarding_fmtphonedisplay",
+      "tenant_onboarding_generatecontent",
+      "tenant_onboarding_hextohsl",
+      "tenant_onboarding_hsltohex",
+      "tenant_onboarding_lightenfordark",
+      "tenant_onboarding_loadenvfile",
+      "tenant_onboarding_main",
+      "tenant_onboarding_mjs",
+      "tenant_onboarding_onboard",
+      "tenant_onboarding_parsehours",
+      "tenant_onboarding_parsetime",
+      "tenant_onboarding_resolvecreds",
+      "tenant_onboarding_shortnameof",
+      "tenant_onboarding_starterextras",
+      "tenant_onboarding_starterfaqs",
+      "tenant_onboarding_startertestimonials",
+      "tenant_onboarding_titlecase"
+    ],
+    "6": [
+      "check_meta_write",
+      "kill_dev_ports_findlisteners",
+      "stripe_uk_export_argval",
+      "stripe_uk_export_fetchset",
+      "stripe_uk_export_get",
+      "stripe_uk_export_getall",
+      "stripe_uk_export_has",
+      "stripe_uk_export_mjs",
+      "stripe_uk_export_save",
+      "stripe_uk_export_sleep"
+    ],
+    "7": [
+      "bulk_update_branding_getcontenttype",
+      "bulk_update_branding_js",
+      "bulk_update_branding_main",
+      "bulk_update_branding_updatetenantbranding",
+      "bulk_update_branding_uploadfile",
+      "ext__dotenv",
+      "update_cms_content_generatecontent",
+      "update_cms_content_js",
+      "update_cms_content_main"
+    ],
+    "8": [
+      "staging_seed_api",
+      "staging_seed_authadmin",
+      "staging_seed_ensureauthuser",
+      "staging_seed_esc",
+      "staging_seed_mjs",
+      "staging_seed_pw",
+      "staging_seed_sql"
+    ],
+    "9": [
+      "ext__process",
+      "helpers_call",
+      "helpers_fire",
+      "helpers_list",
+      "helpers_shift",
+      "sim_helpers_mjs",
+      "sim_scenario_payg_30_days_mjs"
+    ],
+    "10": [
+      "test_notification_emails_formatdate",
+      "test_notification_emails_generatebookingref",
+      "test_notification_emails_invokefunction",
+      "test_notification_emails_runtests",
+      "test_notification_emails_testfunction",
+      "test_notification_emails_ts"
+    ],
+    "11": [
+      "ext__",
+      "ext__date_fns_tz",
+      "sync_fleet_quote_build",
+      "sync_fleet_quote_fail",
+      "sync_fleet_quote_mjs",
+      "sync_fleet_quote_p"
+    ],
+    "12": [
+      "kill_dev_ports_devportreclamation",
+      "kill_dev_ports_lsofexitcodetolerance"
+    ]
+  },
+  "cohesion": {
+    "0": 0.07,
+    "1": 0.06,
+    "2": 0.08,
+    "3": 0.18,
+    "4": 0.09,
+    "5": 0.2,
+    "6": 0.36,
+    "7": 0.33,
+    "8": 0.38,
+    "9": 0.43,
+    "10": 0.47,
+    "11": 0.4,
+    "12": 1.0
+  },
+  "gods": [
+    {
+      "id": "helpers_log",
+      "label": "log()",
+      "degree": 36
+    },
+    {
+      "id": "seed_bonzah_demo_demotenantdataset",
+      "label": "Full demo dataset for the Bonzah tenant \u2014 branding, locations, fleet, customers, rentals, payments, fines, expenses, P&L",
+      "degree": 18
+    },
+    {
+      "id": "seed_bonzah_demo_main",
+      "label": "main()",
+      "degree": 14
+    },
+    {
+      "id": "check_push",
+      "label": "push()",
+      "degree": 14
+    },
+    {
+      "id": "tenant_onboarding_tenantprovisioning",
+      "label": "One-shot tenant provisioning from the onboarding sheet \u2014 fills the tenants row and (optionally) CMS copy, locations, FAQs, testimonials and extras for both portal and booking site",
+      "degree": 13
+    },
+    {
+      "id": "table_tenants",
+      "label": "tenants table",
+      "degree": 12
+    },
+    {
+      "id": "tenant_onboarding_onboard",
+      "label": "onboard()",
+      "degree": 11
+    },
+    {
+      "id": "test_notification_emails_brandingregressionharness",
+      "label": "Notification branding regression harness \u2014 invokes eight notify-* edge functions with synthetic payloads to prove they use tenant branding instead of hardcoded values",
+      "degree": 11
+    },
+    {
+      "id": "wipe_all_data_destructivefullreset",
+      "label": "Nuclear reset \u2014 deletes every row from ~50 tables including tenants and app_users",
+      "degree": 10
+    },
+    {
+      "id": "seed_100_bonzah_vehicles_eligiblefleetseeding",
+      "label": "Seeds 100 vehicles chosen to be insurable under Bonzah, with generated UK-style plates, VINs and full mileage/deposit config",
+      "degree": 8
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Service-role key must come from .env and never be committed \u2014 the runbook's only security instruction",
+      "target": "Production Supabase URL and keys (anon in five scripts, service_role in two) are literal constants in committed source rather than env vars",
+      "source_files": [
+        "scripts/README.md",
+        "scripts/seed-vehicles.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "conceptually_related_to",
+      "why": "inferred connection - not explicitly stated in source; crosses file types (doc \u2194 code); bridges separate communities; peripheral node `Service-role key must come from .env and never be committed \u2014 the runbook's only security instruction` unexpectedly reaches hub `Production Supabase URL and keys (anon in five scripts, service_role in two) are literal constants in committed source rather than env vars`"
+    },
+    {
+      "source": "main()",
+      "target": "log()",
+      "source_files": [
+        "scripts/seed-vehicles.mjs",
+        "scripts/sim/helpers.mjs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `main()` unexpectedly reaches hub `log()`"
+    },
+    {
+      "source": "main()",
+      "target": "log()",
+      "source_files": [
+        "scripts/create-site-settings-page.js",
+        "scripts/sim/helpers.mjs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `main()` unexpectedly reaches hub `log()`"
+    },
+    {
+      "source": "seedVehicles()",
+      "target": "log()",
+      "source_files": [
+        "scripts/seed-vehicles.ts",
+        "scripts/sim/helpers.mjs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `seedVehicles()` unexpectedly reaches hub `log()`"
+    },
+    {
+      "source": "main()",
+      "target": "log()",
+      "source_files": [
+        "scripts/seed-100-bonzah-vehicles.mjs",
+        "scripts/sim/helpers.mjs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `main()` unexpectedly reaches hub `log()`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `log()` connect `Community 3` to `Community 0`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 9`, `Community 10`?",
+      "why": "High betweenness centrality (0.137) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `tenants table` connect `Community 1` to `Community 2`?",
+      "why": "High betweenness centrality (0.052) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `Full demo dataset for the Bonzah tenant \u2014 branding, locations, fleet, customers, rentals, payments, fines, expenses, P&L` connect `Community 2` to `Community 1`?",
+      "why": "High betweenness centrality (0.042) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 35 inferred relationships involving `log()` (e.g. with `testFunction()` and `runTests()`) actually correct?",
+      "why": "`log()` has 35 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 3 inferred relationships involving `Full demo dataset for the Bonzah tenant \u2014 branding, locations, fleet, customers, rentals, payments, fines, expenses, P&L` (e.g. with `Seeds 100 vehicles chosen to be insurable under Bonzah, with generated UK-style plates, VINs and full mileage/deposit config` and `Inserts in chunks of 25 to stay under PostgREST payload limits, reporting per-chunk instead of failing the whole batch`) actually correct?",
+      "why": "`Full demo dataset for the Bonzah tenant \u2014 branding, locations, fleet, customers, rentals, payments, fines, expenses, P&L` has 3 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 8 inferred relationships involving `push()` (e.g. with `getAll()` and `fetchSet()`) actually correct?",
+      "why": "`push()` has 8 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `Operator runbook for the bulk tenant branding rollout (config shape, logo folder, colour/SEO field reference)`, `Logo/favicon upload to the company-logos storage bucket with timestamped filenames as cache-busting`, `Frees dev ports 3000-3005 before every dev server start, so no app ever falls through to an alternate port` to the rest of the system?",
+      "why": "31 weakly-connected nodes found - possible documentation gaps or missing edges."
+    }
+  ]
+}
