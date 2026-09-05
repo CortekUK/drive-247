@@ -233,5 +233,55 @@ ok('last write wins', into[0].v===2);
   ok('no plate stays null rather than guessed', none.plateRaw === null && none.plateNormalised === null, none);
 })();
 
+
+// --- the import must always SAY something ----------------------------------
+// The first version of this note had a branch for "imported" and a branch for
+// "waiting for you", and none for "refused". On the first real sync all 41
+// bookings were refused -- every plate belonged to a different operator, i.e.
+// the extension was signed in to the wrong Drive247 account -- and the panel
+// printed an empty string. A refusal is a result; silence reads as a broken
+// feature and hides the one sentence that explains the whole run.
+(function () {
+  var blocked = R.importOutcomeNote({
+    ok: true, imported: 0,
+    counts: { ready: 0, need_a_vehicle: 0, need_your_confirmation: 0, already_imported: 0, cannot_import: 41 },
+    topBlocker: 'That number plate is registered to another operator on this platform.'
+  });
+  ok('a fully-refused run is never silent', !!blocked, blocked);
+  ok('...it counts the refusals', blocked.indexOf('41 bookings could not be imported') === 0, blocked);
+  ok('...and gives the planner reason verbatim',
+    blocked.indexOf('registered to another operator') > -1, blocked);
+
+  var mixed = R.importOutcomeNote({
+    ok: true, imported: 3,
+    counts: { ready: 3, need_a_vehicle: 1, need_your_confirmation: 1, already_imported: 0, cannot_import: 2 },
+    topBlocker: 'Turo did not give us usable start and end times for this trip.'
+  });
+  ok('the happy half leads', mixed.indexOf('3 bookings were imported') === 0, mixed);
+  ok('...the waiting half is counted across both buckets', mixed.indexOf('2 bookings are waiting') > -1, mixed);
+  ok('...and the refused half still appears', mixed.indexOf('2 bookings could not be imported') > -1, mixed);
+
+  var one = R.importOutcomeNote({ ok: true, imported: 1, counts: { ready: 1 } });
+  ok('singular reads as English', one === '1 booking was imported and its car is now booked out in Drive247.', one);
+
+  var already = R.importOutcomeNote({
+    ok: true, imported: 0, counts: { ready: 0, already_imported: 12 } });
+  ok('"nothing new" is a sentence too', already.indexOf('already in your Drive247 calendar') > -1, already);
+
+  var busy = R.importOutcomeNote({
+    ok: true, imported: 2, counts: { ready: 2, already_imported: 12 } });
+  ok('...but is dropped once there is real news', busy.indexOf('already in your') === -1, busy);
+
+  ok('a fixture run says nothing', R.importOutcomeNote({ ok: true, imported: 0, skipped: 'fixture' }) === null);
+  ok('a token-only install says nothing', R.importOutcomeNote({ ok: true, imported: 0, skipped: 'no_session' }) === null);
+
+  var failed = R.importOutcomeNote({ ok: false, imported: 0, detail: 'HTTP 503' });
+  ok('a failed import never claims the sync failed', failed.indexOf('The bookings were saved') === 0, failed);
+  ok('...and carries the detail for whoever reports it', failed.indexOf('HTTP 503') > -1, failed);
+
+  ok('nothing at all stays null', R.importOutcomeNote({ ok: true, imported: 0, counts: {} }) === null);
+  ok('a missing result stays null', R.importOutcomeNote(null) === null);
+})();
+
 console.log(fails? ('\n'+fails+' FAILURES') : '\nALL PASS');
 process.exit(fails?1:0);

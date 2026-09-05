@@ -1956,21 +1956,9 @@ async function finishRun(cursor) {
        bookings into a queue; without it, Drive247 still shows the car as free
        and the operator can still double-book it. */
     const imp = await autoImport(cred, cursor.mode);
-    if (imp.ok && imp.imported > 0) {
-      importNote = imp.imported === 1
-        ? "1 booking was imported and its car is now booked out in Drive247."
-        : imp.imported + " bookings were imported and their cars are now booked out in Drive247.";
-      const waiting = (imp.counts && (imp.counts.need_a_vehicle + imp.counts.need_your_confirmation)) || 0;
-      if (waiting > 0) importNote += " " + waiting + " need you to confirm which car they belong to.";
-    } else if (imp.ok && imp.counts && (imp.counts.need_a_vehicle || imp.counts.need_your_confirmation)) {
-      importNote = (imp.counts.need_a_vehicle + imp.counts.need_your_confirmation) +
-        " bookings are waiting for you to confirm which car they belong to.";
-    } else if (!imp.ok) {
-      /* Deliberately soft. The bookings ARE saved; only the last, optional step
-         did not run, and saying "sync failed" about that would be a lie. */
-      importNote = "The bookings were saved, but Drive247 could not import them into your calendar yet. " +
-        "Open Turo Sync in the portal to finish. (" + imp.detail + ")";
-    }
+    /* Every bucket the planner can produce gets a sentence -- INCLUDING the
+       refusals. See R.importOutcomeNote for why that is not optional. */
+    importNote = R.importOutcomeNote(imp);
   }
 
   /* ── WHOSE AUTHORITY IS IT? ────────────────────────────────────────────────
@@ -2783,8 +2771,23 @@ async function autoImport(cred, mode) {
   }
 
   const counts = plan.body.counts || {};
+
+  /* THE MOST COMMON REASON A ROW WAS REFUSED, verbatim from the planner.
+     A count of zero is not an explanation. On the first real run every one of
+     41 bookings was refused because its number plate belongs to a different
+     operator on this platform -- which means the extension is signed in to the
+     wrong Drive247 account, a thing no counter could ever have said and no
+     retry would ever have surfaced. */
+  const tally = new Map();
+  for (const row of (plan.body.rows || [])) {
+    if (!row || !row.blocker) continue;
+    tally.set(row.blocker, (tally.get(row.blocker) || 0) + 1);
+  }
+  let topBlocker = null, topN = 0;
+  for (const [reason, n] of tally) if (n > topN) { topBlocker = reason; topN = n; }
+
   if (!counts.ready) {
-    return { ok: true, imported: 0, counts };
+    return { ok: true, imported: 0, counts, topBlocker };
   }
 
   /* THE ACKNOWLEDGEMENTS ARE ANSWERED, NOT BYPASSED. Each is a statement of
@@ -2807,10 +2810,10 @@ async function autoImport(cred, mode) {
     acknowledgements: acks,
   });
   if (applied.status !== 200 || !applied.body || !applied.body.ok) {
-    return { ok: false, imported: 0, counts, detail: (applied.body && applied.body.error) || `HTTP ${applied.status}` };
+    return { ok: false, imported: 0, counts, topBlocker, detail: (applied.body && applied.body.error) || `HTTP ${applied.status}` };
   }
   const done = (applied.body.counts && applied.body.counts.imported) ?? counts.ready;
-  return { ok: true, imported: done, counts };
+  return { ok: true, imported: done, counts, topBlocker };
 }
 
 /**

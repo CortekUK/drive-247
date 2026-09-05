@@ -1483,6 +1483,68 @@
    * describes — the whole point is that the intent is durable before the thing
    * it intends can be interrupted.
    */
+  /**
+   * WHAT THE AUTO-IMPORT DID, IN THE OPERATOR'S WORDS.
+   *
+   * THIS FUNCTION EXISTS BECAUSE ITS FIRST VERSION SAID NOTHING. It had a line
+   * for "imported", a line for "waiting for you", and no line at all for
+   * "blocked" -- so on the first real run, where every single booking was
+   * refused, the panel printed an empty string. The import had run, formed a
+   * verdict on 41 bookings, refused all 41 for a specific and important reason,
+   * and told the operator nothing. Silence read as "this feature does not
+   * work"; the truth was "this feature stopped you making a mess".
+   *
+   * A refusal is a RESULT, not an absence of one, and the reason is the most
+   * useful sentence on the screen -- the live case was 41 plates registered to
+   * a different operator, which means the extension is signed in to the wrong
+   * Drive247 account, and no amount of retrying would ever have revealed that.
+   *
+   * So every bucket the planner can produce gets a sentence, and the blocker
+   * text comes back verbatim from the server rather than being re-worded here:
+   * the planner knows why it refused, and a paraphrase would drift the first
+   * time that reason changes.
+   */
+  function importOutcomeNote(imp) {
+    if (!imp) return null;
+    /* Nothing ran, and that is not news: a fixture run or a token-only install
+       is a state the panel already shows elsewhere. */
+    if (imp.skipped) return null;
+    if (!imp.ok) {
+      return "The bookings were saved, but Drive247 could not import them into your calendar yet. " +
+        "Open Turo Sync in the portal to finish. (" + (imp.detail || "no detail given") + ")";
+    }
+    var c = imp.counts || {};
+    var n = function (v) { return typeof v === "number" && v > 0 ? v : 0; };
+    var parts = [];
+
+    var done = n(imp.imported);
+    if (done) {
+      parts.push(done === 1
+        ? "1 booking was imported and its car is now booked out in Drive247."
+        : done + " bookings were imported and their cars are now booked out in Drive247.");
+    }
+
+    var waiting = n(c.need_a_vehicle) + n(c.need_your_confirmation);
+    if (waiting) {
+      parts.push(waiting === 1
+        ? "1 booking is waiting for you to say which car it is."
+        : waiting + " bookings are waiting for you to say which car they are.");
+    }
+
+    var stopped = n(c.cannot_import);
+    if (stopped) {
+      parts.push((stopped === 1 ? "1 booking could not be imported" : stopped + " bookings could not be imported") +
+        (imp.topBlocker ? ": " + imp.topBlocker : "."));
+    }
+
+    /* Only worth saying when it is the WHOLE story. Appending "and 12 were
+       already imported" to a useful sentence is noise on every later sync. */
+    if (!parts.length && n(c.already_imported)) {
+      parts.push("Every booking in this sync was already in your Drive247 calendar.");
+    }
+    return parts.length ? parts.join(" ") : null;
+  }
+
   function advanceCursor(cursor, patch) {
     var next = {};
     var ks = Object.keys(cursor);
@@ -1749,6 +1811,7 @@
     pacingDelayMs: pacingDelayMs,
     newCursor: newCursor,
     advanceCursor: advanceCursor,
+    importOutcomeNote: importOutcomeNote,
     commitReceipt: commitReceipt,
     resumeDecision: resumeDecision,
     fingerprint: fingerprint,
