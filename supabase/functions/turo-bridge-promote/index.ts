@@ -573,6 +573,10 @@ Deno.serve(async (req) => {
       { key: "vehicles_confirmed", text: "I have checked that each booking is matched to the right car." },
       { key: "placeholder_guests", text: `${ready.filter((v) => v.will_create.includes("placeholder guest")).length} placeholder guests will be created with no email or phone. They will not be contacted.` },
       { key: "no_invoices", text: "No invoice, charge or receivable will be raised for these bookings." },
+      /* Said out loud because it changes rows the operator made themselves. A
+         block with any other reason, or none, is never touched. */
+      { key: "turo_blocks_replaced",
+        text: 'Any date block you marked "Turo" that sits inside one of these trips will be replaced by the imported booking, which then holds those dates. Blocks with any other reason, or no reason, are left alone.' },
     ],
     notes: [
       "Turo collected the money for these trips. Drive247 will not invoice for them, and none of them will appear as money you are owed.",
@@ -647,6 +651,10 @@ Deno.serve(async (req) => {
   const results: Record<string, unknown>[] = [];
   let imported = 0;
   const conflicts: Record<string, unknown>[] = [];
+  /* Every hand-made block this import stood down, with the row exactly as it
+     was. Written onto the batch so revert can put them back: freeing a day is
+     not a thing to do without an undo. */
+  const supersededBlocks: Record<string, unknown>[] = [];
 
   for (const v of ready) {
     const row = staged.find((s) => s.id === v.row_id)!;
@@ -693,9 +701,52 @@ Deno.serve(async (req) => {
     }
 
     // ---- 4. the rental ---------------------------------------------------
-    const outcome = await insertRental(supabase, {
+    let outcome = await insertRental(supabase, {
       tenantId, row, verdict: v, customerId, batchId, nowIso,
     });
+
+    /* ---- 4b. the block the operator made BY HAND for this very trip -------
+       23P05 means the only thing in the way is an operator block -- not a real
+       booking (23P01) and not a maintenance hold (23P02), which are refused
+       here as they always were. Measured on a live account, 38 of 41 trips
+       landed exactly here, every one of them behind a block the operator had
+       written "Turo" on. Asking somebody to go and delete their own workaround
+       one row at a time, in order to use the feature that replaces it, is not
+       an import.
+
+       Attempted ONLY after the plain insert has already failed, so a trip that
+       would have imported anyway never causes a block to be touched. */
+    if (!outcome.ok && outcome.code === "23P05" && v.vehicle_id) {
+      const startDate = (row.starts_at ?? "").slice(0, 10);
+      const endDate = (row.ends_at ?? "").slice(0, 10);
+      const stand = await supersedeManualTuroBlocks(supabase, {
+        tenantId, vehicleId: v.vehicle_id, startDate, endDate,
+      });
+      if (!stand.ok) {
+        // Left alone, and the operator is told which block and why.
+        outcome = { ok: false, reason: stand.reason, conflict: true, code: "23P05" };
+      } else {
+        const retry = await insertRental(supabase, {
+          tenantId, row, verdict: v, customerId, batchId, nowIso,
+        });
+        if (retry.ok) {
+          for (const a of stand.archived) {
+            supersededBlocks.push({ ...a, turo_reservation_id: row.reservation_id });
+          }
+        } else if (stand.archived.length > 0) {
+          /* PUT IT BACK. The block was stood down to make room for a booking
+             that then did not happen -- most likely a real rental underneath
+             it. Leaving it down would free a car's dates for nobody, which is
+             the one outcome worse than refusing the import. */
+          await restoreBlocks(supabase, tenantId, stand.archived);
+          console.error(
+            `[TURO-PROMOTE] stood a block down for ${row.reservation_id} and the booking still failed; ` +
+            `restored ${stand.archived.length} block(s): ${retry.reason}`,
+          );
+        }
+        outcome = retry;
+      }
+    }
 
     if (!outcome.ok) {
       if (outcome.conflict) {
@@ -797,7 +848,12 @@ Deno.serve(async (req) => {
   }).then(() => {}, (e: unknown) => console.error("[TURO-PROMOTE] summary notification failed:", e));
 
   await supabase.from("turo_promotion_batches")
-    .update({ counts: { ...counts, imported, conflicts: conflicts.length } })
+    .update({
+      counts: { ...counts, imported, conflicts: conflicts.length, blocks_superseded: supersededBlocks.length },
+      // Written at APPLY time, not at revert time: the undo needs the rows as
+      // they were, and by the time somebody asks to revert they are gone.
+      revert_report: supersededBlocks.length > 0 ? { superseded_blocks: supersededBlocks } : null,
+    })
     .eq("id", batchId).eq("tenant_id", tenantId);
 
   console.log(`[TURO-PROMOTE] batch ${batchId} tenant ${tenantId}: ${imported} imported, ${conflicts.length} conflicts, actor ${actorId}`);
@@ -806,11 +862,15 @@ Deno.serve(async (req) => {
     ok: true,
     action: "apply",
     batch_id: batchId,
-    counts: { ...counts, imported, conflicts: conflicts.length },
+    counts: { ...counts, imported, conflicts: conflicts.length, blocks_superseded: supersededBlocks.length },
     results,
     message:
       `${imported} booking${imported === 1 ? "" : "s"} imported. ` +
       "No invoices were raised and no guests were contacted." +
+      (supersededBlocks.length > 0
+        ? ` ${supersededBlocks.length} block${supersededBlocks.length === 1 ? "" : "s"} you had marked "Turo" ` +
+          "were replaced by the imported bookings, which now hold those dates."
+        : "") +
       (conflicts.length > 0 ? ` ${conflicts.length} could not be imported because the car is already booked — check the conflicts list.` : ""),
   });
 });
@@ -941,15 +1001,163 @@ async function ensureVehicleMap(
  * Over a bulk import the birthday risk is small but a collision would hard-abort
  * the whole batch, so we supply the id ourselves and retry with a fresh one.
  */
+/* ===================== SUPERSEDING A HAND-MADE TURO BLOCK ==================
+ *
+ * THE PROBLEM THIS SOLVES, measured on a live account: 99 of 136 blocked-date
+ * rows carried a reason of "Turo", "turo", "Turo booking" or "turo rental". The
+ * operator had been doing this feature's job BY HAND -- blocking dates in
+ * Drive247 so nobody double-books a car that Turo has already let. Then the
+ * importer arrived, and check_rental_overlap refused 38 of 41 trips because
+ * those very blocks were in the way. The safety guard was colliding with the
+ * manual process it exists to replace, and the operator would have been told
+ * to go and delete their own work by hand -- one row at a time.
+ *
+ * SO A BLOCK MAY BE STOOD DOWN, AND ONLY UNDER RULES THAT CANNOT SURPRISE:
+ *
+ *   1. source_type = 'manual'. A maintenance hold means the car is physically
+ *      off the road; no booking of any origin may sit on top of that. A 'turo'
+ *      block belongs to the importer already.
+ *   2. The reason must SAY Turo. The operator wrote that word; it is their own
+ *      statement that this block stands for a Turo booking. NULL-SAFE, and that
+ *      matters more than it looks: NULL ~* 'turo' is NULL, NOT NULL is NULL,
+ *      and a FILTER treats NULL as false -- so an unguarded version of this
+ *      rule counted a block with NO REASON as explainable and would have
+ *      deleted 23 of them. The block we know least about is the last one to
+ *      touch. A blank reason means a person decides, every time.
+ *   3. ALL overlapping blocks must pass. One unexplained block anywhere in the
+ *      trip's span and nothing is touched at all.
+ *   4. Only the days the trip actually covers are freed. Anything outside is
+ *      preserved, because the operator blocked those days for a reason we were
+ *      never told.
+ *
+ * GEOMETRY, uniformly: archive the original row, delete it, and re-insert the
+ * parts that fall OUTSIDE the trip. That single shape covers all five cases --
+ * identical, inside, overhanging the start, overhanging the end, and spanning
+ * both -- and makes the undo exact: drop the pieces, restore the originals.
+ */
+type ArchivedBlock = {
+  original: Record<string, unknown>;
+  created_ids: string[];
+};
+
+const BLOCK_COLUMNS =
+  "id, tenant_id, vehicle_id, start_date, end_date, reason, reason_code, source_type, created_by, created_at";
+
+/** Is every block standing in this trip's way one the operator called Turo? */
+function blockIsExplainable(b: Record<string, unknown>): boolean {
+  if (b.source_type !== "manual") return false;
+  const reason = typeof b.reason === "string" ? b.reason : "";
+  // COALESCE-equivalent, deliberately: a missing reason is never a match.
+  return /turo/i.test(reason);
+}
+
+async function supersedeManualTuroBlocks(
+  supabase: SupabaseClient,
+  args: { tenantId: string; vehicleId: string; startDate: string; endDate: string },
+): Promise<{ ok: true; archived: ArchivedBlock[] } | { ok: false; reason: string }> {
+  const { tenantId, vehicleId, startDate, endDate } = args;
+
+  const { data: rows, error } = await supabase
+    .from("blocked_dates").select(BLOCK_COLUMNS)
+    .eq("tenant_id", tenantId).eq("vehicle_id", vehicleId)
+    .lte("start_date", endDate).gte("end_date", startDate);
+  if (error) return { ok: false, reason: `could not read the blocks on this car: ${error.message}` };
+
+  const blocks = (rows ?? []) as Record<string, unknown>[];
+  if (blocks.length === 0) return { ok: true, archived: [] };
+
+  const unexplained = blocks.filter((b) => !blockIsExplainable(b));
+  if (unexplained.length > 0) {
+    const first = unexplained[0];
+    const why = first.source_type !== "manual"
+      ? `it is a ${String(first.source_type)} hold`
+      : (typeof first.reason === "string" && first.reason.trim())
+        ? `its reason is "${String(first.reason).slice(0, 60)}"`
+        : "it has no reason written on it";
+    return {
+      ok: false,
+      reason:
+        `This car is blocked from ${String(first.start_date)} to ${String(first.end_date)} and ${why}, ` +
+        "so the block was left alone. Remove it yourself if this Turo trip should take those dates.",
+    };
+  }
+
+  const archived: ArchivedBlock[] = [];
+  for (const b of blocks) {
+    const id = String(b.id);
+    const bStart = String(b.start_date);
+    const bEnd = String(b.end_date);
+    const created: string[] = [];
+
+    /* The remainder FIRST. If the delete succeeded and an insert then failed we
+       would have silently freed days nobody asked us to free; doing it in this
+       order means the worst case is a duplicate block, which is safe and
+       visible rather than silent and dangerous. */
+    const pieces: Record<string, unknown>[] = [];
+    if (bStart < startDate) pieces.push({ ...b, id: undefined, start_date: bStart, end_date: dayBefore(startDate) });
+    if (bEnd > endDate) pieces.push({ ...b, id: undefined, start_date: dayAfter(endDate), end_date: bEnd });
+
+    for (const piece of pieces) {
+      const insert = { ...piece };
+      delete insert.id;
+      delete insert.created_at;
+      const { data: made, error: pieceError } = await supabase
+        .from("blocked_dates").insert(insert).select("id").single();
+      if (pieceError || !made) {
+        return { ok: false, reason: `could not preserve the rest of a block: ${pieceError?.message ?? "unknown"}` };
+      }
+      created.push(String(made.id));
+    }
+
+    const { error: deleteError } = await supabase
+      .from("blocked_dates").delete().eq("id", id).eq("tenant_id", tenantId);
+    if (deleteError) {
+      return { ok: false, reason: `could not stand down the block: ${deleteError.message}` };
+    }
+    archived.push({ original: b, created_ids: created });
+  }
+  return { ok: true, archived };
+}
+
+/** Put back exactly what supersession took, ids included. */
+async function restoreBlocks(
+  supabase: SupabaseClient, tenantId: string, archived: ArchivedBlock[],
+): Promise<void> {
+  for (const entry of archived) {
+    if (entry.created_ids.length > 0) {
+      const { error } = await supabase
+        .from("blocked_dates").delete().eq("tenant_id", tenantId).in("id", entry.created_ids);
+      if (error) console.error("[TURO-PROMOTE] could not drop a split block piece:", error.message);
+    }
+    // The ORIGINAL id, so anything that referenced it still does.
+    const { error } = await supabase.from("blocked_dates").insert(entry.original);
+    if (error && error.code !== "23505") {
+      console.error("[TURO-PROMOTE] could not restore a block:", error.message);
+    }
+  }
+}
+
+function dayBefore(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+function dayAfter(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 async function insertRental(
   supabase: SupabaseClient,
   args: { tenantId: string; row: Staged; verdict: Verdict; customerId: string | null; batchId: string; nowIso: string },
-): Promise<{ ok: true; rentalId: string; rentalNumber: string | null } | { ok: false; reason: string; conflict: boolean }> {
+): Promise<
+  { ok: true; rentalId: string; rentalNumber: string | null }
+  | { ok: false; reason: string; conflict: boolean; code: string | null }
+> {
   const { tenantId, row, verdict, customerId, batchId, nowIso } = args;
 
   const startDate = (row.starts_at ?? "").slice(0, 10);
   const endDate = (row.ends_at ?? "").slice(0, 10);
-  if (!startDate || !endDate) return { ok: false, reason: "no usable dates", conflict: false };
+  if (!startDate || !endDate) return { ok: false, reason: "no usable dates", conflict: false, code: null };
 
   for (let attempt = 0; attempt < MAX_RENTAL_NUMBER_RETRIES; attempt++) {
     const id = crypto.randomUUID();
@@ -1024,16 +1232,16 @@ async function insertRental(
        as an overlap. */
     if (error.code === "23P01" || error.code === "23P02" || error.code === "23P05" ||
         /overlap/i.test(error.message)) {
-      return { ok: false, reason: error.message, conflict: true };
+      return { ok: false, reason: error.message, conflict: true, code: error.code ?? null };
     }
     // Only a rental_number collision is worth another spin of the wheel.
     if (error.code === "23505" && /rental_number/.test(error.message)) continue;
     if (error.code === "23505" && /turo_reservation/.test(error.message)) {
-      return { ok: false, reason: "already imported", conflict: false };
+      return { ok: false, reason: "already imported", conflict: false, code: error.code ?? null };
     }
-    return { ok: false, reason: error.message, conflict: false };
+    return { ok: false, reason: error.message, conflict: false, code: error.code ?? null };
   }
-  return { ok: false, reason: "could not allocate a unique booking reference", conflict: false };
+  return { ok: false, reason: "could not allocate a unique booking reference", conflict: false, code: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -1055,7 +1263,7 @@ async function revertBatch(
   if (!batchId) return errorResponse("`batch_id` is required.", 400);
 
   const { data: batch } = await supabase
-    .from("turo_promotion_batches").select("id, reverted_at")
+    .from("turo_promotion_batches").select("id, reverted_at, revert_report")
     .eq("id", batchId).eq("tenant_id", tenantId).maybeSingle();
   if (!batch) return errorResponse("Unknown import.", 404);
   if (batch.reverted_at) return jsonResponse({ ok: true, already_reverted: true, batch_id: batchId });
@@ -1120,6 +1328,18 @@ async function revertBatch(
     deleted = count ?? rentalIds.length;
   }
 
+  /* THE BLOCKS GO BACK BEFORE ANYTHING ELSE IS CLAIMED UNDONE. The rentals
+     that were holding those dates have just been deleted, so between these two
+     statements the car is free; restoring immediately is what makes "undo"
+     mean undo rather than "undo the half you can see". */
+  let blocksRestored = 0;
+  const archivedBlocks = ((batch.revert_report as { superseded_blocks?: unknown } | null)?.superseded_blocks ?? []) as
+    { original: Record<string, unknown>; created_ids: string[] }[];
+  if (Array.isArray(archivedBlocks) && archivedBlocks.length > 0) {
+    await restoreBlocks(supabase, tenantId, archivedBlocks);
+    blocksRestored = archivedBlocks.length;
+  }
+
   // Placeholder guests, ONLY when nothing else references them.
   const { data: guests } = await supabase
     .from("customers").select("id")
@@ -1152,11 +1372,23 @@ async function revertBatch(
   await supabase.from("turo_promotion_batches")
     .update({
       reverted_at: nowIso, reverted_by: actorId,
-      revert_report: { rentals_deleted: deleted, placeholder_guests_deleted: guestsDeleted },
+      /* MERGED, not replaced. The archive of superseded blocks lives in this
+         same column and is what made the undo possible; overwriting it with a
+         summary would destroy the evidence of what was changed the moment it
+         was changed back. */
+      revert_report: {
+        ...((batch.revert_report as Record<string, unknown> | null) ?? {}),
+        rentals_deleted: deleted,
+        placeholder_guests_deleted: guestsDeleted,
+        blocks_restored: blocksRestored,
+      },
     })
     .eq("id", batchId).eq("tenant_id", tenantId);
 
-  console.log(`[TURO-PROMOTE] batch ${batchId} reverted by ${actorId}: ${deleted} rentals, ${guestsDeleted} guests`);
+  console.log(
+    `[TURO-PROMOTE] batch ${batchId} reverted by ${actorId}: ${deleted} rentals, ` +
+    `${guestsDeleted} guests, ${blocksRestored} blocks restored`,
+  );
 
   return jsonResponse({
     ok: true,
@@ -1164,7 +1396,17 @@ async function revertBatch(
     batch_id: batchId,
     rentals_deleted: deleted,
     placeholder_guests_deleted: guestsDeleted,
+    blocks_restored: blocksRestored,
     staged_rows_reset: (stagedBack ?? []).length,
-    message: `Undone. ${deleted} imported booking${deleted === 1 ? "" : "s"} removed and the cars are free again. The record of the import itself is kept.`,
+    /* "The cars are free again" was true until this import could stand a block
+       down. When blocks come back the cars are deliberately NOT free, and
+       saying otherwise would send somebody to sell a car that is still held. */
+    message:
+      `Undone. ${deleted} imported booking${deleted === 1 ? "" : "s"} removed. ` +
+      (blocksRestored > 0
+        ? `The ${blocksRestored} date block${blocksRestored === 1 ? "" : "s"} this import had replaced ` +
+          "are back, so those cars are held exactly as they were before. "
+        : "Those cars are free again. ") +
+      "The record of the import itself is kept.",
   });
 }
