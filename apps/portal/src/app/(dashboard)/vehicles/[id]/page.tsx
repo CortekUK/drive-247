@@ -50,7 +50,7 @@ import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-p
 import { InshurEligibilityCard, useInshurEligibilityConfig } from "@/components/vehicles/inshur-eligibility-badge";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { isAreaHidden } from "@/lib/lean-areas";
-import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange } from "lucide-react";
+import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange, CalendarClock } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -530,6 +530,24 @@ export default function VehicleDetail() {
   // an operator can find & close a forgotten rental that's silently locking the car.
   const activeRentals = (rentals ?? []).filter((r: any) => r.status === 'Active');
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Pending rentals whose dates still touch today or the future. These are the
+  // ones that hold the car while NOBODY is driving it: Pending is the
+  // pre-key-handover state, so the car is on the forecourt but its dates are
+  // claimed and check_rental_overlap will refuse a clashing booking.
+  //
+  // The banner above only fires on ACTIVE rentals, so a car held solely by a
+  // Pending booking showed "Rented" with no explanation anywhere on the page --
+  // which is exactly the report: "there is no booking on this car". There was a
+  // booking; nothing surfaced it.
+  //
+  // Deliberately NOT auto-released. 31 of 32 live Pending rentals are
+  // source='portal', i.e. staff-created real bookings (the single customer-origin
+  // one carries a payment), so a sweep that freed them would double-book real
+  // customers. The operator decides; this only makes the claim visible.
+  const pendingHolds = (rentals ?? []).filter(
+    (r: any) => r.status === 'Pending' && (!r.end_date || r.end_date >= todayStr)
+  );
 
   // Fetch fines
   const { data: fines } = useQuery({
@@ -1324,6 +1342,38 @@ export default function VehicleDetail() {
                             );
                           })}
                         </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {pendingHolds.length > 0 && (
+                  <div className="mb-5 rounded-lg border border-indigo-300 bg-indigo-50 p-3 dark:border-indigo-500/40 dark:bg-indigo-500/10">
+                    <div className="flex items-start gap-2">
+                      <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" />
+                      <div className="text-sm">
+                        <p className="font-medium text-indigo-800 dark:text-indigo-300">
+                          {pendingHolds.length > 1
+                            ? `${pendingHolds.length} bookings hold this vehicle but have not been collected yet.`
+                            : 'A booking holds this vehicle but has not been collected yet.'}{' '}
+                          Nobody is driving it — but {pendingHolds.length > 1 ? 'these dates are' : 'those dates are'} claimed,
+                          so a clashing booking will be refused.
+                        </p>
+                        <ul className="mt-2 space-y-1">
+                          {pendingHolds.map((r: any) => (
+                            <li key={r.id} className="flex flex-wrap items-center gap-2 text-indigo-800 dark:text-indigo-200">
+                              <button
+                                type="button"
+                                onClick={() => router.push(`/rentals/${r.id}`)}
+                                className="font-medium underline underline-offset-2 hover:text-indigo-900 dark:hover:text-indigo-100"
+                              >
+                                {r.rental_number || r.customers?.name || 'Booking'} · {r.start_date} → {r.end_date || 'open-ended'}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 text-xs text-indigo-700 dark:text-indigo-300">
+                          Open one to change its dates, or cancel it if it is not a real booking.
+                        </p>
                       </div>
                     </div>
                   </div>
