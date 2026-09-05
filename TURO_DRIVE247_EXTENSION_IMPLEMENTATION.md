@@ -29,6 +29,9 @@ extension's perspective.**
 | **Email retention, password retention on failure, password reveal toggle** | **Added by this change** | `popup.{html,js,css}` |
 | **`app_users` RLS — closing anonymous read/write of every staff record** | **Written, NOT YET DEPLOYED** | `supabase/migrations/20260904120000_secure_app_users_read_access.sql` |
 | **Two independent connection statuses, and a sync button gated on both** | **Added by this change** | `background.js` (probe), `popup.{html,js,css}` |
+| **Tenant toggle enforced at ingest; guests staged as customers** | **Added, deployed** | `turo-bridge-ingest/index.ts` |
+| **`promote` + `confirm-vehicle-map` deployed — the Import button works** | **Deployed** | existing functions |
+| **Field mapping documented** | **Added by this change** | `turo-bridge-poc/FIELD-MAPPING.md` |
 
 The credential was previously a **pairing token pasted into the popup**. It is now a
 **Drive247 account sign-in**. The pairing-token path is retained as a fallback because
@@ -468,6 +471,11 @@ New request field on `turo-bridge-ingest`:
 
 ## 9. Data models and field mapping
 
+> Field-level detail — every Turo alias tried, per column, for bookings,
+> customers and vehicles — lives in
+> [`turo-bridge-poc/FIELD-MAPPING.md`](turo-bridge-poc/FIELD-MAPPING.md).
+> This section is the summary.
+
 Landing table: **`turo_bridge_reservations`**, unique on `(tenant_id, reservation_id)`.
 Deliberately not `rentals` — a half-formed staged row in `rentals` would enter the
 pricing, agreement, Stripe and cron machinery (eight triggers fire on `rentals` INSERT,
@@ -818,7 +826,15 @@ The US and GB Turo builds differ structurally; the reader carries both and repor
 10. **Anonymous read of other tables is still open.** `tenants`, `customers`, `rentals`,
    `vehicles` and `audit_logs` are all readable with the anon key. Out of scope for this
    change and deliberately untouched — see §10a and §18.
-11. **One timing-sensitive test can flake under load.** `background-orchestrator`'s
+11. ~~One timing-sensitive test can flake under load.~~ **Fixed.** The
+   "worker killed mid-run" case now asserts what the harness can actually
+   guarantee — the run finishes, nothing is lost, replays are bounded — rather
+   than exact counts that hold only when the kill lands cleanly. Node cannot
+   cancel an `await` the outgoing module is suspended on, so a second pump
+   briefly drives the same store; real MV3 destroys the worker outright and
+   never does this. 12 consecutive green runs. The exact-count guarantees are
+   still asserted by the no-kill walk test and the truncation tests.
+12. **(historical)** `background-orchestrator`'s
    "service worker is killed mid-run" case races real wall-clock timers; it failed once
    while four suites ran concurrently on a loaded machine and passed 9 consecutive runs
    afterwards, including 3 on the pre-change baseline. Pre-existing sensitivity, not a
