@@ -88,6 +88,16 @@ const TURO_TAB_URL = "https://turo.com/us/en/trips/booked";
 const TAB_LOAD_TIMEOUT_MS = 20000;
 const POST_TIMEOUT_MS = 15000;
 const INJECT_TIMEOUT_MS = 25000;
+/* A STATUS LINE IS NOT A SYNC. 25s is a reasonable budget for one page of a
+   multi-page walk somebody started deliberately and is not watching. It is a
+   terrible budget for the two words under "Turo" that a person is staring at
+   with the popup open — at that length the card just says "Checking…" and
+   looks broken.
+
+   8s is past the 95th percentile of a healthy /api/vehicles/me, so a good
+   connection is never cut short; a bad one gets an answer while the popup is
+   still open, which is the whole point. */
+const PROBE_TIMEOUT_MS = 8000;
 
 /* THE INGEST TAKES ONE RESERVATION PER CALL.
    supabase/functions/turo-bridge-ingest/index.ts reads `body.reservation` — a
@@ -1135,7 +1145,9 @@ async function probeTuroStatus() {
 
   let read;
   try {
-    read = await callInTab(tab.id, "ISOLATED", "collectVehicles", [], null);
+    /* The short budget. A sync gets INJECT_TIMEOUT_MS; this is a card in a
+       popup and has to resolve while somebody is looking at it. */
+    read = await callInTab(tab.id, "ISOLATED", "collectVehicles", [], null, PROBE_TIMEOUT_MS);
   } catch (e) {
     return await writeTuroStatus({ connected: false, reason: "unreachable" });
   }
@@ -2609,14 +2621,25 @@ async function fixtureCall(cursor, fn) {
  * option. Anyone "fixing" this by adding chrome.runtime.sendMessage inside the
  * page will silently break the MAIN retry.
  */
-async function callInTab(tabId, world, method, args, shim) {
+async function callInTab(tabId, world, method, args, shim, timeoutMs) {
   if (shim) return await shim[method].apply(null, args);
+  const budget = timeoutMs || INJECT_TIMEOUT_MS;
 
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    world,
-    files: ["fixture.js", "turo-read-contract.js", "content-turo.js"]
-  });
+  /* ⚠ THIS INJECTION HAD NO TIMEOUT, and that was the hang. Loading three
+     files into a tab is usually instant, but a DISCARDED tab — Chrome unloads
+     background tabs under memory pressure, and a Turo tab left open overnight
+     is a prime candidate — takes as long as it takes, and a suspended one may
+     never resolve at all. The await below it was bounded; this one was not, so
+     the popup sat on "Checking…" with nothing left to time out. */
+  await withTimeout(
+    chrome.scripting.executeScript({
+      target: { tabId },
+      world,
+      files: ["fixture.js", "turo-read-contract.js", "content-turo.js"]
+    }),
+    budget,
+    "the Turo tab did not load the reader in time"
+  );
 
   const frames = await withTimeout(
     chrome.scripting.executeScript({
@@ -2625,7 +2648,7 @@ async function callInTab(tabId, world, method, args, shim) {
       args: [method, args],
       func: (m, a) => globalThis.__d247TuroBridge[m].apply(null, a)
     }),
-    INJECT_TIMEOUT_MS,
+    budget,
     "the Turo tab did not answer in time"
   );
 

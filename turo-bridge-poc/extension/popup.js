@@ -390,10 +390,26 @@ function paintSyncGate() {
 /** Ask the worker for the Turo half. `cached` paints instantly on open. */
 async function refreshTuro(cached) {
   try {
-    conn.turo = await chrome.runtime.sendMessage({ type: "TURO_STATUS", cached: !!cached });
+    /* A DEADLINE OF OUR OWN, because the worker's reply is not guaranteed to
+       arrive at all. An MV3 service worker can be killed mid-probe, and when it
+       is, the sendMessage promise never settles and never rejects — the card
+       stays on "Checking…" for as long as the popup is open, with nothing to
+       press and nothing to read.
+
+       10s sits just past the worker's own 8s probe budget, so in the normal
+       slow case the worker answers first and gives the specific reason; this
+       only fires when there is no answer coming. */
+    conn.turo = await Promise.race([
+      chrome.runtime.sendMessage({ type: "TURO_STATUS", cached: !!cached }),
+      new Promise((resolve) =>
+        setTimeout(() => resolve({ connected: false, reason: "unreachable" }), 10000)),
+    ]);
   } catch (_) {
     conn.turo = { connected: false, reason: "unreachable" };
   }
+  /* Never leave the card mid-check: an undefined reply is still an answer, and
+     "Could not reach Turo" with a Check button beats a spinner forever. */
+  if (!conn.turo) conn.turo = { connected: false, reason: "unreachable" };
   paintConnections();
 }
 
