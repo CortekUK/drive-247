@@ -199,7 +199,9 @@ body {
   margin-left: auto;
   display: flex; flex-direction: column; align-items: flex-end;
   gap: 0; min-width: 0;
-  box-shadow: var(--shadow-card);
+  /* NOT A CARD. An earlier pass gave this a card shadow along with the real
+     surfaces; it is three lines of text in the header and a shadow under it
+     read as a floating panel jammed against the settings button. */
 }
 .acct-name {
   margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
@@ -208,6 +210,15 @@ body {
 .acct-sub {
   margin: 0; font-size: 10px; color: var(--muted);
   max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* The account block sits between the title and the settings button, so every
+   line in it is capped. Without this the longest label -- "Use a different
+   account", which only appears on an adopted portal session -- pushed past both
+   neighbours and overlapped them. */
+.acct .linkish {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: right;
 }
 
 /* ------------------------------------------------------------------ body -- */

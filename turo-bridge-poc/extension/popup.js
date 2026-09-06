@@ -475,9 +475,11 @@ function paintAuth(state) {
      from the portal tab, because that tab is the thing they would change. */
   const who = id.name || id.email || "";
   if (state.via === "portal") {
-    els.acctEmail.textContent = who
-      ? who + " · signed in through your Drive247 portal tab"
-      : "Signed in through your Drive247 portal tab";
+    /* Short, because this line is 10px and capped at 150px in a header that
+       also holds a title and a settings button. The full sentence lives in the
+       tooltip, where length costs nothing. */
+    els.acctEmail.textContent = who ? who + " · via portal tab" : "Via your portal tab";
+    els.acctEmail.title = "Signed in through the Drive247 portal tab open in this browser.";
   } else {
     els.acctEmail.textContent = who;
   }

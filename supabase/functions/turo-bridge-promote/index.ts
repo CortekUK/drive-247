@@ -845,6 +845,26 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    /* ── CLOSE THE CONFLICT THIS ROW USED TO HAVE ─────────────────────────
+       A conflict row records "this car was not free for these dates". Once the
+       booking exists, that statement is no longer true, and leaving it open
+       means the operator is shown work that has already been done.
+
+       Measured on a live account: 22 open conflicts, of which 21 described
+       trips that had since imported -- every failed attempt raised a fresh one
+       and nothing ever retracted them. A queue that is 95% stale is a queue
+       people stop opening, which is the whole value of the real one lost. */
+    const { error: closeError } = await supabase
+      .from("turo_bridge_conflicts")
+      .update({ resolved_at: nowIso, resolution: "imported" })
+      .eq("tenant_id", tenantId)
+      .eq("reservation_row_id", row.id)
+      .is("resolved_at", null);
+    if (closeError) {
+      // Never fatal: the booking is real whether or not the note was retracted.
+      console.error("[TURO-PROMOTE] could not close conflicts for " + row.reservation_id + ": " + closeError.message);
+    }
+
     imported++;
     results.push({
       reservation_id: row.reservation_id, imported: true,
