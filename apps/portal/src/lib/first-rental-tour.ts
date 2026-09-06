@@ -199,6 +199,18 @@ export interface TourStep {
  */
 export const MIN_TOUR_STOPS = 2;
 
+/**
+ * A beat after the dashboard paints before the Welcome card comes up.
+ *
+ * Lives here, in the pure module, rather than in `use-first-rental-tour`
+ * because it is not only the tour's business: the first-run ARRIVAL — the
+ * confetti in `lib/first-run-arrival.ts` — has to be finished inside this
+ * window, and a constant two modules must agree on should be importable
+ * by both without dragging a React hook into the second one's tests. The
+ * relationship is asserted in `__tests__/lib/first-run-arrival.test.ts`.
+ */
+export const AUTOSTART_DELAY_MS = 700;
+
 const SIDEBAR = '[data-sidebar="sidebar"]';
 
 /** One line each. These ride the rerouted rental step when the flow is gated. */

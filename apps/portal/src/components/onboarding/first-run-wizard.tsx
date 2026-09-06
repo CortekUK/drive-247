@@ -12,6 +12,7 @@ import {
   type FirstRunAnswers,
   type FirstRunQuestion,
 } from '@/lib/first-run-questions';
+import { celebrateArrival } from '@/lib/first-run-arrival';
 import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
 
 /**
@@ -238,6 +239,12 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
       // `shouldShow` goes false and this unmounts. One source of truth. The
       // veil below outlives that unmount and carries the arrival.
       dissolveIntoDashboard(reduced);
+      // …and the celebration rides on top of it: a scatter of confetti,
+      // detached from React for the same reason the veil is, latched to fire
+      // exactly once, nothing at all under `prefers-reduced-motion`, and over
+      // before the walkthrough's first card comes up. No sound — see the note
+      // at the top of `lib/first-run-arrival.ts`.
+      celebrateArrival(reduced);
     } catch {
       // Never trap the operator behind a wizard whose write failed. Say so,
       // bring the question back, and leave both buttons live so they can retry

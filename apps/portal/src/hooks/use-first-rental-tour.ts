@@ -11,8 +11,10 @@ import { getBookingBaseUrl } from '@/lib/booking-url';
 import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useRentalCreationGate } from '@/hooks/use-rental-creation-gate';
+import { arrivalHoldMs } from '@/lib/first-run-arrival';
 import { toast } from '@/hooks/use-toast';
 import {
+  AUTOSTART_DELAY_MS,
   REPLAY_TOUR_EVENT,
   buildTour,
   clearTourProgress,
@@ -99,8 +101,14 @@ export const ANCHOR_WAIT_SHORT_MS = 1_500;
 export const ANCHOR_POLL_MS = 250;
 /** How long a `router.push` may take before we assume it did not happen. */
 export const NAV_TIMEOUT_MS = 10_000;
-/** A beat after the dashboard paints before the Welcome card comes up. */
-const AUTOSTART_DELAY_MS = 700;
+/**
+ * `AUTOSTART_DELAY_MS` — a beat after the dashboard paints before the Welcome
+ * card comes up — is imported from `lib/first-rental-tour` rather than declared
+ * here, because `lib/first-run-arrival` reasons about it too.
+ *
+ * It is a FLOOR, not the whole wait: see the autostart effect, which adds
+ * whatever is left of the first-run confetti.
+ */
 
 export type TourPhase = 'idle' | 'prompt' | 'transit' | 'navigating' | 'waiting' | 'showing';
 
@@ -448,10 +456,19 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
 
     // A beat, so the Welcome card comes up over a painted dashboard rather
     // than a skeleton. Every step after it waits for its own anchor.
+    //
+    // Plus the rest of the first-run confetti, if a burst is in the air. That
+    // is 0ms on every ordinary dashboard load — `arrivalHoldMs()` only returns
+    // anything when this user has just come through the wizard AND the burst
+    // actually drew (not under reduced motion, not on a browser without the
+    // Web Animations API). Without it the Welcome card lands two seconds into
+    // a 2.6s celebration and asks the operator to read it through falling
+    // confetti.
+    const wait = AUTOSTART_DELAY_MS + arrivalHoldMs();
     const timer = setTimeout(() => {
       if (autostartDone.current || phaseRef.current !== 'idle') return;
       if (launch({ markSeen: true })) autostartDone.current = true;
-    }, AUTOSTART_DELAY_MS);
+    }, wait);
     return () => clearTimeout(timer);
   }, [
     phase,
