@@ -856,7 +856,13 @@ Deno.serve(async (req) => {
        people stop opening, which is the whole value of the real one lost. */
     const { error: closeError } = await supabase
       .from("turo_bridge_conflicts")
-      .update({ resolved_at: nowIso, resolution: "imported" })
+      /* resolved_by IS NOT OPTIONAL. turo_bridge_conflicts_resolved_together
+         is a CHECK that (resolved_at IS NULL) = (resolved_by IS NULL): a
+         resolution has to have an author, which is a good rule and one the
+         first version of this update broke. It failed the constraint on every
+         row and, because the failure is deliberately non-fatal, said so only
+         in the log while the queue stayed exactly as stale as before. */
+      .update({ resolved_at: nowIso, resolved_by: actorId, resolution: "imported" })
       .eq("tenant_id", tenantId)
       .eq("reservation_row_id", row.id)
       .is("resolved_at", null);
