@@ -21,7 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, BellRing, Zap, Save, Loader2, Database, AlertTriangle, Trash2, CreditCard, Palette, Link2, CheckCircle2, AlertCircle, ExternalLink, MapPin, FileText, Car, Mail, ShieldX, ShieldCheck, FilePenLine, PenLine, Receipt, Banknote, Shield, Copy, Check, Clock, Crown, Package, Lock, RefreshCw, Eye, TrendingUp, MessageSquare, ArrowRight, ArrowLeft, Info, Sun, Undo2, Landmark, Globe } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -62,6 +62,47 @@ import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useAuditLog } from '@/hooks/use-audit-log';
+import { useV2 } from '@/lib/v2-context';
+
+/**
+ * The pointer left behind by a control that now lives in the Website section.
+ *
+ * Rendered ONLY for a tenant on the v2 `cms` area. For the other 56 tenants
+ * every one of these branches keeps rendering the original card, byte for byte
+ * — removing a control unconditionally would take it away from all of them
+ * (V2_PLAN §3). The row exists so nobody hunts for a setting that moved; a
+ * silently missing card is indistinguishable from a bug.
+ */
+const MovedToWebsite = ({
+  title,
+  what,
+  href,
+  where,
+}: {
+  title: string;
+  what: string;
+  href: string;
+  where: string;
+}) => {
+  const router = useRouter();
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Globe className="h-5 w-5 text-primary" />
+          {title}
+        </CardTitle>
+        <CardDescription>{what}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={() => router.push(href)} className="flex items-center gap-2 w-full sm:w-auto">
+          {where}
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
 
 /**
  * Light → dark colour sync.
@@ -168,6 +209,42 @@ const Settings = () => {
   const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
   const { appUser } = useAuth();
   const { logAction } = useAuditLog();
+
+  /**
+   * Has this tenant's website configuration moved to the Website section?
+   *
+   * Keyed on the `cms` v2 area, because that is what puts the Website view in
+   * the sidebar in the first place — gating the pointers on anything else could
+   * strand a control behind a section the tenant cannot reach. False for every
+   * non-v2 tenant, so this whole page renders exactly as it does today for the
+   * other 56.
+   */
+  const websiteMoved = useV2('cms');
+
+  /**
+   * The four SEO columns, included in a branding save ONLY while this page
+   * still owns them.
+   *
+   * Once they render in Website → Site settings, this form no longer shows
+   * them — so everything it could send is a value it merely happens to be
+   * holding. That is harmless while the two stay in step and destructive the
+   * moment they do not: a stale form saved from here would quietly roll a live
+   * site's page title and Google tag back. Not sending a field cannot do that.
+   */
+  const seoSaveFields = (form: {
+    meta_title: string;
+    meta_description: string;
+    og_image_url: string;
+    ga_measurement_id: string;
+  }) =>
+    websiteMoved
+      ? {}
+      : {
+          meta_title: form.meta_title,
+          meta_description: form.meta_description,
+          og_image_url: form.og_image_url,
+          ga_measurement_id: form.ga_measurement_id.trim().toUpperCase() || null,
+        };
 
   // All settings tab values
   const allSettingsTabs = [
@@ -1108,10 +1185,7 @@ const Settings = () => {
               dark_background_color: form.dark_background_color || null,
               light_header_footer_color: form.light_header_footer_color || null,
               dark_header_footer_color: form.dark_header_footer_color || null,
-              meta_title: form.meta_title,
-              meta_description: form.meta_description,
-              og_image_url: form.og_image_url,
-              ga_measurement_id: form.ga_measurement_id.trim().toUpperCase() || null,
+              ...seoSaveFields(form),
               favicon_url: form.favicon_url || null,
               // logo_url deliberately NOT sent. The logo persists the instant it
               // is uploaded (see the LogoUploadWithResize onLogoChange handler),
@@ -1629,10 +1703,7 @@ const Settings = () => {
         dark_background_color: form.dark_background_color || null,
         light_header_footer_color: form.light_header_footer_color || null,
         dark_header_footer_color: form.dark_header_footer_color || null,
-        meta_title: form.meta_title,
-        meta_description: form.meta_description,
-        og_image_url: form.og_image_url,
-        ga_measurement_id: form.ga_measurement_id.trim().toUpperCase() || null,
+        ...seoSaveFields(form),
         favicon_url: form.favicon_url || null,
         // logo_url deliberately NOT sent — see the matching note on the
         // unsaved-changes save above. The logo saves itself on upload; echoing
@@ -2234,6 +2305,14 @@ const Settings = () => {
           </Alert>
 
           {/* Booking Site Theme — per-tenant light/dark for the CUSTOMER site (not this portal) */}
+          {websiteMoved ? (
+            <MovedToWebsite
+              title="Booking Site Theme"
+              what="Light or dark on your customer-facing website now lives with the rest of your site settings."
+              href="/cms/site-settings"
+              where="Open Website → Site settings"
+            />
+          ) : (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2290,6 +2369,7 @@ const Settings = () => {
               </p>
             </CardContent>
           </Card>
+          )}
 
           <Card data-tour="booking-site-branding">
             <CardHeader>
@@ -2761,6 +2841,14 @@ const Settings = () => {
           </Card>
 
           {/* SEO Settings */}
+          {websiteMoved ? (
+            <MovedToWebsite
+              title="SEO & Meta Tags"
+              what="Your page title, description, share image and Google tag now live with the rest of your site settings — along with the hero image, which this page never offered."
+              href="/cms/site-settings"
+              where="Open Website → Site settings"
+            />
+          ) : (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2853,6 +2941,7 @@ const Settings = () => {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Save Button */}
           {canEditSettings('branding') && (
@@ -2875,7 +2964,12 @@ const Settings = () => {
                         <li>Light &amp; Dark theme colors: Cleared</li>
                         <li>Background Colors: Theme defaults</li>
                         <li>Header &amp; Footer Colors: Theme defaults</li>
-                        <li>SEO settings: Default values</li>
+                        {/* Only listed when this button still owns them. For a
+                            tenant whose SEO moved to Website → Site settings,
+                            resetting BRANDING must not silently rewrite the
+                            website's page title and Google tag from a screen
+                            that no longer shows either. */}
+                        {!websiteMoved && <li>SEO settings: Default values</li>}
                       </ul>
                     </div>
                   </AlertDialogHeader>
@@ -2903,10 +2997,20 @@ const Settings = () => {
                             // survived a "Reset All to Defaults".
                             light_header_footer_color: null,
                             dark_header_footer_color: null,
-                            meta_title: `${resetAppName} - Portal`,
-                            meta_description: 'Fleet management portal',
-                            og_image_url: '',
-                            ga_measurement_id: null,
+                            // SEO is reset here ONLY while this page still owns
+                            // it. Once it has moved to Website → Site settings
+                            // these four columns are somebody else's screen, and
+                            // a "reset branding" that reached across and blanked
+                            // a live site's page title and Google tag would be a
+                            // silent, unattributable regression.
+                            ...(websiteMoved
+                              ? {}
+                              : {
+                                  meta_title: `${resetAppName} - Portal`,
+                                  meta_description: 'Fleet management portal',
+                                  og_image_url: '',
+                                  ga_measurement_id: null,
+                                }),
                             favicon_url: null,
                           };
                           // Update tenant branding (for useDynamicTheme)
@@ -5095,6 +5199,14 @@ const Settings = () => {
           </Card>
 
           {/* Blog Settings */}
+          {websiteMoved ? (
+            <MovedToWebsite
+              title="Blog"
+              what="Whether the blog appears on your website is now decided where the posts are, in the Website section."
+              href="/cms/site-settings"
+              where="Open Website → Site settings"
+            />
+          ) : (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -5145,6 +5257,7 @@ const Settings = () => {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Reset All Booking Settings to Defaults */}
           {canEditSettings('rental') && (
@@ -5263,7 +5376,11 @@ const Settings = () => {
                             payg_max_reminders: 10,
                             payg_preauth_days: 2,
                             payg_max_duration_days: 90,
-                            blog_enabled: false,
+                            // Same reasoning as the SEO columns on the Branding
+                            // tab: once the blog switch lives in the Website
+                            // section, "reset booking settings" must not reach
+                            // across and take a live blog off the website.
+                            ...(websiteMoved ? {} : { blog_enabled: false }),
                           }));
                           toast({ title: "Settings Reset", description: "All booking settings have been restored to defaults." });
                         } catch (error: any) {

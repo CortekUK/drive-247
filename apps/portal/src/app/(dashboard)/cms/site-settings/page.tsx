@@ -41,6 +41,7 @@ import { CMS_DEFAULTS } from "@/constants/website-content";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useV2 } from "@/lib/v2-context";
 import { CmsPageEditor } from "@/components/cms-v2/cms-page-editor";
+import { WebsiteSettings } from "@/components/cms-v2/website-settings";
 
 export default function CMSSiteSettingsEditor() {
   const router = useRouter();
@@ -106,7 +107,13 @@ export default function CMSSiteSettingsEditor() {
   // other 56 tenants render. Placed after every hook so the hook order is
   // identical on both paths.
   const v2 = useV2("cms");
-  if (v2) return <CmsPageEditor slug="site-settings" />;
+  // The CMS sections (logo, business details, footer, social) plus the
+  // website-facing settings that are `tenants` columns rather than CMS content —
+  // page title, description, share image, Google tag, theme, hero image, blog
+  // on/off and the visitor notice. They were in Portal → Settings; nothing about
+  // them affects the portal, so they belong on the screen where the rest of the
+  // site is configured. v1 keeps its own controls for the other 56 tenants.
+  if (v2) return <CmsPageEditor slug="site-settings" after={<WebsiteSettings />} />;
 
   if (isLoading) {
     return (

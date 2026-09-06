@@ -1152,6 +1152,39 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+
+                {/* Apply form — the public "apply to rent" form on the website.
+                    Its editor is a settings route (`/settings/apply-form`) and
+                    STAYS one; only the way in moves here, because what it
+                    configures is a page on the site, not a portal preference.
+                    Until now it had no entry point anywhere in either sidebar:
+                    the route answered a typed URL and nothing linked to it.
+
+                    Gated on the same predicate the page itself uses. The apply
+                    form feeds Leads, `/settings/apply-form` calls notFound()
+                    when `leads` is hidden, and the form is only rendered by the
+                    v1 booking site — so a row here for a lean tenant would be a
+                    link to a 404. That makes it dark for `northwind` today,
+                    which is the only tenant on this rail; it lights up on its
+                    own for the next tenant that has Leads. A row that 404s
+                    would be worse than a row that waits. */}
+                {!isAreaHidden("leads", tenantSlug) && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === "/settings/apply-form"}
+                      tooltip={collapsed ? "Apply form" : undefined}
+                      className="h-8 transition-colors"
+                    >
+                      <Link href="/settings/apply-form" onClick={closeMobileOnNav}>
+                        <UserPlus className="h-4 w-4 shrink-0" />
+                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                          Apply form
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

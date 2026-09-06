@@ -176,17 +176,41 @@ function summarise(content: any, spec: SectionSpec): string {
  */
 const VISUAL_PAGES = new Set(Object.keys(SITE_V2_PATHS));
 
-export function CmsPageEditor({ slug }: { slug: string }) {
+/**
+ * `after` appends a caller's own block beneath the sections, inside the same
+ * column. Used by `/cms/site-settings` to carry the website-facing settings
+ * that are `tenants` columns rather than CMS sections — see
+ * `components/cms-v2/website-settings.tsx`. Rendering it as a sibling of this
+ * component instead would put it a full viewport down the page, because the
+ * container below is `min-h-full` with `pb-40`.
+ *
+ * Ignored on a visual page: those hand the whole viewport to the embedded site.
+ */
+export function CmsPageEditor({ slug, after }: { slug: string; after?: React.ReactNode }) {
   const [mode, setMode] = useState<"visual" | "fields">(
     VISUAL_PAGES.has(slug) ? "visual" : "fields"
   );
   if (mode === "visual") {
     return <CmsVisualEditor slug={slug} onShowFields={() => setMode("fields")} />;
   }
-  return <CmsFieldEditor slug={slug} onShowVisual={VISUAL_PAGES.has(slug) ? () => setMode("visual") : undefined} />;
+  return (
+    <CmsFieldEditor
+      slug={slug}
+      after={after}
+      onShowVisual={VISUAL_PAGES.has(slug) ? () => setMode("visual") : undefined}
+    />
+  );
 }
 
-function CmsFieldEditor({ slug, onShowVisual }: { slug: string; onShowVisual?: () => void }) {
+function CmsFieldEditor({
+  slug,
+  after,
+  onShowVisual,
+}: {
+  slug: string;
+  after?: React.ReactNode;
+  onShowVisual?: () => void;
+}) {
   const spec = pageSpec(slug);
   const { tenant } = useTenant();
   const { data: page, isLoading } = useCMSPage(slug);
@@ -334,6 +358,8 @@ function CmsFieldEditor({ slug, onShowVisual }: { slug: string; onShowVisual?: (
             );
           })}
         </div>
+
+        {after}
       </div>
 
       {!live && (
