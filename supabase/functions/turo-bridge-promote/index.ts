@@ -695,6 +695,12 @@ Deno.serve(async (req) => {
     try {
       customerId = await ensurePlaceholderGuest(supabase, tenantId, row, batchId, nowIso);
     } catch (e) {
+      /* LOGGED, like every other refusal. Three paths in this loop used to
+         push a reason into the HTTP response and continue in silence, and one
+         of them swallowed a booking for days: a row counted as "ready", left
+         no log line, created nothing, and appeared in no total. A step that
+         can drop a booking has to say so where somebody will find it. */
+      console.error(`[TURO-PROMOTE] not imported (guest) reservation ${row.reservation_id}: ${(e as Error).message}`);
       results.push({ reservation_id: row.reservation_id, imported: false, because: `guest: ${(e as Error).message}` });
       continue;
     }
@@ -706,6 +712,7 @@ Deno.serve(async (req) => {
     try {
       mapId = await ensureVehicleMap(supabase, tenantId, row, v, actorId, nowIso);
     } catch (e) {
+      console.error(`[TURO-PROMOTE] not imported (vehicle mapping) reservation ${row.reservation_id}: ${(e as Error).message}`);
       results.push({ reservation_id: row.reservation_id, imported: false, because: `vehicle mapping: ${(e as Error).message}` });
       continue;
     }
@@ -727,6 +734,7 @@ Deno.serve(async (req) => {
       })
       .eq("id", row.id).eq("tenant_id", tenantId);
     if (stageError) {
+      console.error(`[TURO-PROMOTE] not imported (staging) reservation ${row.reservation_id}: ${stageError.message}`);
       results.push({ reservation_id: row.reservation_id, imported: false, because: `staging: ${stageError.message}` });
       continue;
     }
@@ -918,7 +926,15 @@ Deno.serve(async (req) => {
     })
     .eq("id", batchId).eq("tenant_id", tenantId);
 
-  console.log(`[TURO-PROMOTE] batch ${batchId} tenant ${tenantId}: ${imported} imported, ${conflicts.length} conflicts, actor ${actorId}`);
+  /* `ready` minus what was imported or conflicted is the set that fell through
+     a continue. It was 1 on a run that reported "0 imported, 1 conflicts" and
+     looked, from the outside, entirely accounted for. */
+  const unaccounted = ready.length - imported - conflicts.length;
+  console.log(
+    `[TURO-PROMOTE] batch ${batchId} tenant ${tenantId}: ${imported} imported, ` +
+    `${conflicts.length} conflicts, ${supersededBlocks.length} blocks superseded, actor ${actorId}` +
+    (unaccounted > 0 ? `  ⚠ ${unaccounted} of ${ready.length} ready rows produced neither` : ""),
+  );
 
   return jsonResponse({
     ok: true,
@@ -1054,8 +1070,49 @@ async function ensureVehicleMap(
 
   if (error) {
     if (error.code === "23505") {
+      /* Two different collisions arrive with the same code, and they need
+         opposite responses.
+
+         A RACE: another request mapped this same Turo vehicle a moment ago.
+         Re-reading finds it and we adopt it. */
       const { data: raced } = await q.limit(1).maybeSingle();
       if (raced) return raced.id as string;
+
+      /* A LABEL CLASH, which is a different thing entirely and used to be
+         fatal-and-silent. turo_vehicle_map_active_label_unique is UNIQUE on
+         (tenant_id, display_label_norm), and Turo labels are not unique: this
+         operator has TWO cars called "2023 Tesla Model 3" -- DJKE82 and
+         FCEC13. The first mapped, the second could never map, and because the
+         failure landed on a `continue` with no log line its trip simply
+         vanished from every count for days.
+
+         The identity here is the TURO VEHICLE ID, not the label; the label is
+         a display string that happens to be indexed. So the label is made
+         distinct with something that already distinguishes the cars -- the
+         plate, falling back to the Turo id -- and the row goes in. It reads
+         "2023 Tesla Model 3 · FCEC13", which is both true and more useful on a
+         screen than two identical entries would have been. */
+      const distinguisher = row.vehicle_plate || row.turo_vehicle_id;
+      if (distinguisher && matchKeySource.display_label) {
+        const disambiguated = `${matchKeySource.display_label} · ${distinguisher}`;
+        const { data: second, error: secondError } = await supabase
+          .from("turo_vehicle_map")
+          .insert({
+            tenant_id: tenantId,
+            turo_vehicle_id: matchKeySource.turo_vehicle_id,
+            display_label: disambiguated,
+            vehicle_id: v.vehicle_id,
+            plate_hint: row.vehicle_plate,
+            confirmed_by: actorId,
+            confirmed_at: nowIso,
+            confirmation_note:
+              `confirmed during Turo import (${v.vehicle_match} match); label made unique — ` +
+              `another car in this account is also called "${matchKeySource.display_label}"`,
+          })
+          .select("id").single();
+        if (!secondError && second) return second.id as string;
+        if (secondError) throw new Error(secondError.message);
+      }
     }
     throw new Error(error.message);
   }
