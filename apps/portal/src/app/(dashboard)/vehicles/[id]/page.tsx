@@ -50,6 +50,8 @@ import { VehicleOwnershipPanel } from "@/components/vehicles/vehicle-ownership-p
 import { InshurEligibilityCard, useInshurEligibilityConfig } from "@/components/vehicles/inshur-eligibility-badge";
 import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { isAreaHidden } from "@/lib/lean-areas";
+import { useV2 } from "@/lib/v2-context";
+import { VehicleDetailV2 } from "@/components/vehicles-v2/vehicle-detail-v2";
 import { Package, Loader2 as SpinnerIcon, Zap, CalendarRange, CalendarClock } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
@@ -313,7 +315,25 @@ function CompleteJobDialog({
   );
 }
 
-export default function VehicleDetail() {
+/**
+ * The vehicle detail route.
+ *
+ * The ONLY edit v2 makes to this file: one branch, resolved from the gate the
+ * root layout already worked out on the server, above a v1 component that is
+ * otherwise untouched (V2_PLAN §3). `northwind` gets the new screen; the other
+ * 56 tenants render exactly the code they rendered yesterday.
+ *
+ * Retiring this is three deletions: the entry in `V2_AREAS`, this wrapper, and
+ * `VehicleDetail` below it.
+ */
+export default function VehicleDetailRoute() {
+  const v2 = useV2("vehicles");
+  const params = useParams();
+  const id = params.id as string;
+  return v2 ? <VehicleDetailV2 vehicleId={id} /> : <VehicleDetail />;
+}
+
+function VehicleDetail() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();

@@ -44,7 +44,8 @@ export type V2Area =
   | 'login'
   | 'rentals'
   | 'customers'
-  | 'cms';
+  | 'cms'
+  | 'vehicles';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -73,6 +74,8 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
   customers: [NORTHWIND],
   /** Website Content — the CMS overview and the per-page section editor. */
   cms: [NORTHWIND],
+  /** The vehicle detail screen — nine tabs in two rails. The LIST is still v1. */
+  vehicles: [NORTHWIND],
 };
 
 /**
