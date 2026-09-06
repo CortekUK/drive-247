@@ -43,6 +43,7 @@ export type V2Area =
   | 'chrome'
   | 'login'
   | 'rentals'
+  | 'customers'
   | 'cms';
 
 /**
@@ -68,6 +69,8 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
   login: [NORTHWIND],
   /** The v2 rentals list filter panel. */
   rentals: [NORTHWIND],
+  /** The customer record — three columns, no Save, no tabs across the top. */
+  customers: [NORTHWIND],
   /** Website Content — the CMS overview and the per-page section editor. */
   cms: [NORTHWIND],
 };

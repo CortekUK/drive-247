@@ -70,6 +70,8 @@ import { StartCmdVerificationDialog } from "@/components/customers/start-cmd-ver
 import { useCmdVerification, useCmdResults, useResendCmdLink, type CmdLicenseStatus } from "@/hooks/use-cmd-verification";
 import { useToast } from "@/hooks/use-toast";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useV2 } from "@/lib/v2-context";
+import { CustomerDetailV2 } from "@/components/customers-v2/customer-detail-v2";
 
 interface Customer {
   id: string;
@@ -458,6 +460,15 @@ const CustomerDetail = () => {
     enabled: !!id,
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show updated status
   });
+
+  // The v2 gate for the customer record. One branch, at the route, per
+  // V2_PLAN §3 — everything below it is v1, untouched, and still what the
+  // other 56 tenants render. Placed after every hook above so the hook order
+  // is identical on both paths, and before v1's own loading return so the v2
+  // screen owns its own skeleton rather than flashing "Loading customer
+  // details..." first.
+  const v2Customers = useV2("customers");
+  if (v2Customers) return <CustomerDetailV2 customerId={id} />;
 
   if (isLoading) {
     return <div>Loading customer details...</div>;
