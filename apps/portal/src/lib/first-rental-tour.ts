@@ -206,8 +206,9 @@ export const MIN_TOUR_STOPS = 2;
  * because it is not only the tour's business: the first-run ARRIVAL — the
  * confetti in `lib/first-run-arrival.ts` — has to be finished inside this
  * window, and a constant two modules must agree on should be importable
- * by both without dragging a React hook into the second one's tests. The
- * relationship is asserted in `__tests__/lib/first-run-arrival.test.ts`.
+ * by both without dragging a React hook into the second one's tests. Both
+ * modules must keep importing this same exported constant, never a locally
+ * redefined duplicate, or the confetti and the tour drift out of step.
  */
 export const AUTOSTART_DELAY_MS = 700;
 

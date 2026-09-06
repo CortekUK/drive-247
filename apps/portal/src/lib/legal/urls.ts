@@ -13,9 +13,8 @@
  * marketing site, which is where the canonical documents live.
  *
  * Mirrored (not imported) in apps/portal/next.config.js, which cannot import
- * from src/. Keep the two in step — the test in
- * src/__tests__/lib/platform-tos.test.ts asserts they agree, and also that this
- * origin matches PLATFORM_TOS_URL in supabase/functions/_shared/platform-tos.ts,
+ * from src/. Keep all three in step — this origin must match next.config.js's
+ * mirror and PLATFORM_TOS_URL in supabase/functions/_shared/platform-tos.ts,
  * which is the URL Stripe shows when consent_collection is enabled.
  */
 export const MARKETING_URL =

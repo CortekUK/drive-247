@@ -13,36 +13,40 @@
  *
  * IT IS SILENT. There is no chime and no audio of any kind here, by request —
  * an earlier draft synthesised one and it was cut. If sound ever comes back it
- * is a new decision, not a restoration, and `__tests__/lib/first-run-arrival`
- * has a tripwire that will say so.
+ * is a new decision, not a restoration — it must be added deliberately, never
+ * slipped back in silently.
  *
- * TWO CANNONS, SLOW, AND PLENTY.
- * ------------------------------
- * Two hundred and twenty pieces, none larger than 8px, launched from just
- * beyond the bottom-left and bottom-right corners so the muzzles are never on
- * screen. They fire up and inward, decelerate to an apex, then fall out of
- * frame over ~2.6s.
+ * TWO CANNONS, SLOW, BIG, AND PLENTY.
+ * ------------------------------------
+ * Three hundred pieces, up to 18px, launched from just beyond the bottom-left
+ * and bottom-right corners so the muzzles are never on screen. They fire up
+ * and inward, decelerate to an apex, then fall out of frame over ~2.6s.
  *
  * The slowness is the feature. The first cut ran in 700ms from a single point
  * near the top and read as a flicker — something you half-see and then doubt.
- * This one is meant to be watched. All three of "more", "from the corners" and
- * "slower" pull the same way: pieces that stay in frame long enough to be
- * individually legible.
+ * This one is meant to be watched. All of "more", "from the corners",
+ * "slower", "bigger" and "colourful" pull the same way: pieces that stay in
+ * frame long enough, and are large and distinct enough, to be individually
+ * legible.
  *
- * What has NOT moved is the piece size. Every raise of the count has kept the
- * 8px ceiling, and that is what stops a generous burst turning into debris.
+ * Every constraint in the first draft has now been deliberately lifted, and
+ * the comments below say so rather than pretending they were never there:
+ *   - 26 pieces  → 300      ("a bit more confetti", three times over)
+ *   - max 8px    → max 18px (small specks read as static at this duration)
+ *   - one origin → two corner cannons
+ *   - 700ms      → 2.6s
+ *   - theme indigo only → eight colours (see PIECE_COLORS)
  *
- * Colours are read from the live theme (`--primary`, `--chart-1/2/3`) rather
- * than written down here, exactly as `LiquidWash` in the wizard does, so this
- * is the product's own indigo and never a birthday.
+ * The one thing that did NOT change is that it stays out of the way: the
+ * layer takes no pointer events, cleans itself up completely, and fires once.
  *
  * WHY WAAPI AND NOT A CONFETTI LIBRARY, OR `motion`.
  * -------------------------------------------------
  * No dependency was added. `motion` is the portal's animation library but it
  * animates a React tree, and there is no tree here to animate — the wizard is
- * already gone. Mounting a second React root to throw 220 pieces would cost
+ * already gone. Mounting a second React root to throw 300 pieces would cost
  * more than it buys. The Web Animations API composites off the main thread,
- * which is what makes 220 concurrent animations cheap, and every animation it
+ * which is what makes 300 concurrent animations cheap, and every animation it
  * starts is a handle we can `cancel()`, which is what makes the cleanup total.
  *
  * TIMING — the walkthrough waits for this, not the other way round.
@@ -78,10 +82,9 @@ export const ARRIVAL_CONFETTI_MS = 2_600;
 /**
  * Pieces per cannon. Two cannons, so twice this in the air.
  *
- * Raised twice now, and both times the answer to "it looks thin" was more
- * pieces and never bigger ones.
+ * Raised three times now: 26 → 90 → 220 → 300.
  */
-const PIECES_PER_CANNON = 110;
+const PIECES_PER_CANNON = 150;
 
 /**
  * The two cannons, as a fraction of the viewport, with the direction each one
@@ -96,23 +99,52 @@ const CANNONS: readonly { x: number; y: number; aim: 1 | -1 }[] = [
 export const ARRIVAL_LAYER_ATTR = 'data-first-run-confetti';
 
 /**
- * Theme-derived, not literal. These are the same custom properties the
- * wizard's wash spends, so a tenant is never handed a second palette.
+ * Party colours, on purpose.
+ *
+ * These used to be theme custom properties only — `--primary` and the chart
+ * ramp — on the reasoning that a tenant should never be handed a second
+ * palette. That was overruled: real confetti is many-coloured, and an
+ * all-indigo burst reads as a loading state rather than a celebration.
+ *
+ * The brand indigo is still first and still the most likely draw, so the
+ * moment stays recognisably ours; the rest is a proper spread of hue. Literal
+ * values rather than tokens because these deliberately do NOT track the
+ * tenant's theme — a tenant whose primary is, say, dark green should still get
+ * a colourful burst, not a green one.
+ *
+ * All eight are mid-tone and saturated, so every piece holds its colour
+ * against both the light dashboard and a dark one.
  */
 const PIECE_COLORS: readonly string[] = [
-  'hsl(var(--primary))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-1))',
-  'hsl(var(--primary) / 0.55)',
+  'hsl(var(--primary))', // the tenant's own accent, kept in the mix
+  '#f472b6', // pink
+  '#fbbf24', // amber
+  '#34d399', // emerald
+  '#38bdf8', // sky
+  '#a78bfa', // violet
+  '#fb7185', // rose
+  '#4ade80', // green
 ];
 
-/** Four small shapes: two squarish, one round, one sliver. Max 8px. */
+/**
+ * Six shapes, now up to 18px — squares, discs, streamers and slivers.
+ *
+ * The 8px ceiling that used to be here was load-bearing in the old design:
+ * a single-origin burst of small dots. It was lifted deliberately. At this
+ * size the pieces are individually legible as they tumble, which is the whole
+ * point of a 2.6s burst you are meant to watch — 8px specks read as static.
+ *
+ * The mix of aspect ratios matters more than any single size: identical
+ * rectangles tumbling together look like a mechanism, and a spread of squares,
+ * discs and long streamers looks like paper.
+ */
 const PIECE_SHAPES: readonly { w: number; h: number; radius: string }[] = [
-  { w: 6, h: 6, radius: '1.5px' },
-  { w: 5, h: 5, radius: '50%' },
-  { w: 3, h: 8, radius: '1.5px' },
-  { w: 7, h: 4, radius: '2px' },
+  { w: 12, h: 12, radius: '2px' }, // square
+  { w: 10, h: 10, radius: '50%' }, // disc
+  { w: 7, h: 18, radius: '2px' }, // streamer
+  { w: 16, h: 8, radius: '3px' }, // slab
+  { w: 5, h: 14, radius: '2.5px' }, // sliver
+  { w: 14, h: 14, radius: '4px' }, // rounded square
 ];
 
 /** Has the celebration already run in this page's life? See the header note. */
