@@ -27,9 +27,11 @@ import { ExternalLink, Loader2, SlidersHorizontal, Undo2, UploadCloud } from "lu
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
+import { CmsImagePicker, type ImageTarget } from "@/components/cms-v2/cms-image-picker";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCMSPage } from "@/hooks/use-cms-pages";
 import { useCmsDraftWrite } from "@/hooks/use-cms-draft-write";
+import { useCmsRowWrite } from "@/hooks/use-cms-row-write";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
 import { useCmsOutline } from "@/stores/cms-outline-store";
@@ -60,6 +62,12 @@ export function CmsVisualEditor({
   const readOnly = !canEdit("cms");
   const { pendingSections, writeDraft, publish, isPublishing, discard, isDiscarding } =
     useCmsDraftWrite(slug);
+  /**
+   * The FAQ questions and the customer quotes are rows in their own tables and
+   * have no draft column, so they take a different write — see
+   * `use-cms-row-write.ts`. Same preview, same click, different destination.
+   */
+  const { writeRow } = useCmsRowWrite();
 
   const frame = useRef<HTMLIFrameElement | null>(null);
   const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,6 +84,14 @@ export function CmsVisualEditor({
    * would sit in. Say so, and offer the field editor, rather than spinning.
    */
   const [stalled, setStalled] = useState(false);
+  /**
+   * Which image the operator pressed "Change image" on, or null.
+   *
+   * An image cannot be typed into, so the site posts its CMS address here and
+   * the picker below writes the chosen URL to it as a draft — the same
+   * `draft_content` a headline edit goes to, so one Publish releases both.
+   */
+  const [imageTarget, setImageTarget] = useState<ImageTarget | null>(null);
 
   const siteBase = getSiteV2BaseUrl(tenant?.slug);
   const src = siteBase ? `${siteBase}${SITE_V2_PATHS[slug] ?? "/"}?cms-edit=1` : "";
@@ -139,7 +155,11 @@ export function CmsVisualEditor({
           );
           break;
         case "cms:focused": {
-          const [p, s] = String(msg.path ?? "").split(".");
+          const path = String(msg.path ?? "");
+          // A table row belongs to no section, so it must not move the rail's
+          // highlight to a section named "table:faqs".
+          if (path.startsWith("table:")) break;
+          const [p, s] = path.split(".");
           if (p && s) setActiveId(`${p}.${s}`);
           break;
         }
@@ -147,18 +167,40 @@ export function CmsVisualEditor({
           if (typeof msg.path !== "string") return;
           setSaving((n) => n + 1);
           try {
-            await writeDraft({ path: msg.path, value: String(msg.value ?? "") });
+            if (msg.path.startsWith("table:")) {
+              await writeRow({ path: msg.path, value: String(msg.value ?? "") });
+            } else {
+              await writeDraft({ path: msg.path, value: String(msg.value ?? "") });
+            }
             scheduleRefresh();
           } finally {
             setSaving((n) => n - 1);
           }
           break;
         }
+        case "cms:image-click": {
+          if (readOnly || typeof msg.path !== "string") return;
+          setImageTarget({
+            path: msg.path,
+            src: String(msg.src ?? ""),
+            alt: typeof msg.alt === "string" ? msg.alt : undefined,
+          });
+          break;
+        }
       }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [siteOrigin, hello, writeDraft, scheduleRefresh, setSections, setActiveId]);
+  }, [
+    siteOrigin,
+    hello,
+    writeDraft,
+    writeRow,
+    readOnly,
+    scheduleRefresh,
+    setSections,
+    setActiveId,
+  ]);
 
   /**
    * Hand the sidebar the ability to jump to a section, and take the outline
@@ -310,6 +352,27 @@ export function CmsVisualEditor({
           />
         </div>
       </div>
+
+      {/*
+        Outside the iframe, because it is the PORTAL that has the media library
+        and the session. The site only ever said which picture was pressed.
+      */}
+      <CmsImagePicker
+        target={imageTarget}
+        onClose={() => setImageTarget(null)}
+        onPick={async (url) => {
+          if (!imageTarget) return;
+          setSaving((n) => n + 1);
+          try {
+            await writeDraft({ path: imageTarget.path, value: url });
+            // Immediately, not on the debounce: the operator has just watched a
+            // dialog close and is looking at the picture they expect to change.
+            post({ type: "cms:refresh" });
+          } finally {
+            setSaving((n) => n - 1);
+          }
+        }}
+      />
     </div>
   );
 }

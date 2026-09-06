@@ -73,3 +73,68 @@ export function getSection<T>(
   if (!sections) return fallback;
   return mergeContent(fallback, sections[key]);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Partial lists
+ *
+ * `mergeValue` replaces a non-empty array WHOLESALE, and it has to: merging
+ * element-wise would resurrect a row the operator deleted. That is correct for
+ * a list saved through a form, which always writes every row and every field.
+ *
+ * The visual editor does not write whole lists. It writes ONE field of ONE row
+ * — `home.safety_verification.cards.2.label` — and the write path builds the
+ * path it was given and nothing else. So the first in-place edit to a section
+ * that has no stored row yet produces:
+ *
+ *     { cards: [ <hole>, <hole>, { label: "Brake wear" } ] }
+ *
+ * which, replacing the default wholesale, is a three-item list whose first two
+ * items are null and whose third has no `value` and no `footnote`. The section
+ * then reads `item.footnote.trim()` and the page 500s — on the operator's own
+ * home page, one keystroke after they first touched it.
+ *
+ * These two put the shipped values back under the holes: index for index,
+ * because index for index is exactly what the operator was looking at when
+ * they typed. Rows past the end of the defaults are filled from the SHAPE of
+ * the first default rather than its content, so adding a fourth reason does not
+ * inherit the third one's words.
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+/** Every key of `shape`, blanked — "" for text, 0 for numbers, [] for lists. */
+function blankLike<T extends object>(shape: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(shape)) {
+    out[key] =
+      typeof value === "number" ? 0 : typeof value === "boolean" ? false : Array.isArray(value) ? [] : "";
+  }
+  return out as T;
+}
+
+/**
+ * A stored list of objects, laid over its defaults row by row.
+ *
+ * A blank field falls through to the default for the same reason a blank
+ * string does in `mergeValue`: the portal writes "" for anything untouched.
+ */
+export function completeRows<T extends object>(rows: unknown, defaults: readonly T[]): T[] {
+  if (!Array.isArray(rows)) return [...defaults];
+  return rows.map((row, index) => {
+    const base = defaults[index] ?? (defaults[0] ? blankLike(defaults[0]) : ({} as T));
+    if (!isRecord(row)) return { ...base };
+    const merged: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+    for (const [key, value] of Object.entries(row)) {
+      if (value === null || value === undefined) continue;
+      if (typeof value === "string" && value.trim() === "") continue;
+      merged[key] = value;
+    }
+    return merged as T;
+  });
+}
+
+/** The same, for a plain `string[]` — the marquee, the trust points. */
+export function completeLines(lines: unknown, defaults: readonly string[]): string[] {
+  if (!Array.isArray(lines)) return [...defaults];
+  return lines.map((line, index) =>
+    typeof line === "string" && line.trim() !== "" ? line : (defaults[index] ?? ""),
+  );
+}

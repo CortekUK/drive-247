@@ -2,6 +2,7 @@ import { StepCard } from "@/components/cards/step-card";
 import { DEFAULT_HOW_IT_WORKS, STEP_ICONS } from "@/lib/cms/defaults";
 import { evenGridCols } from "@/lib/cms/format";
 import { resolveIcon } from "@/lib/cms/icons";
+import { completeRows } from "@/lib/cms/merge";
 import { loadSection } from "@/lib/cms/server";
 import { Editable, cmsSection } from "@/lib/cms/editable";
 
@@ -16,7 +17,7 @@ import { Editable, cmsSection } from "@/lib/cms/editable";
  */
 export async function HowItWorksSection() {
   const content = await loadSection("promotions", "how_it_works", DEFAULT_HOW_IT_WORKS);
-  const steps = content.steps.slice(0, 6);
+  const steps = completeRows(content.steps, DEFAULT_HOW_IT_WORKS.steps).slice(0, 6);
 
   if (steps.length === 0) return null;
 

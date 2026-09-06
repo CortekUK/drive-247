@@ -9,6 +9,8 @@ import { FleetCardSkeleton } from "@/components/fleet/fleet-skeletons";
 import { toFleetVehicle } from "@/components/fleet/fleet-vehicle";
 import { useTenant } from "@/contexts/TenantContext";
 import { useVehicles } from "@/hooks/use-vehicles";
+import { DEFAULT_BOOKING_HEADER } from "@/lib/cms/defaults";
+import { Editable } from "@/lib/cms/editable";
 import { cn } from "@/lib/utils";
 
 /** How many cars the home-page strip previews before sending people to /fleet. */
@@ -80,7 +82,23 @@ const UNMEASURED: ScrollState = { overflows: false, atStart: true, atEnd: true }
  *     cars while parked at the right-hand end of eight left the strip looking
  *     empty. Every filter change jumps back to the first card.
  */
-export function FleetStrip() {
+/**
+ * The strip's own copy, from `home / booking_header`. Passed down by
+ * `fleet-section.tsx`, which is the Server Component that already read the key.
+ */
+type FleetStripProps = {
+  allMakesLabel?: string;
+  viewAllText?: string;
+  emptyText?: string;
+  errorText?: string;
+};
+
+export function FleetStrip({
+  allMakesLabel,
+  viewAllText,
+  emptyText,
+  errorText,
+}: FleetStripProps = {}) {
   const { tenant } = useTenant();
   const { vehicles, isLoading, isError } = useVehicles();
   const [activeMake, setActiveMake] = useState<string>(ALL_MAKES);
@@ -182,6 +200,11 @@ export function FleetStrip() {
   // Hidden while the skeletons are up: there is nothing there worth driving to.
   const showControls = scroll.overflows && !showSkeleton;
 
+  const allLabel = allMakesLabel?.trim() ? allMakesLabel.trim() : DEFAULT_BOOKING_HEADER.all_makes_label;
+  const viewAll = viewAllText?.trim() ? viewAllText.trim() : DEFAULT_BOOKING_HEADER.view_all_text;
+  const empty = emptyText?.trim() ? emptyText.trim() : DEFAULT_BOOKING_HEADER.empty_text;
+  const error = errorText?.trim() ? errorText.trim() : DEFAULT_BOOKING_HEADER.error_text;
+
   return (
     <>
       {makes.length > 1 && (
@@ -191,7 +214,8 @@ export function FleetStrip() {
           className="mt-10 flex flex-wrap items-center justify-center gap-1"
         >
           <MakePill
-            label="All"
+            label={allLabel}
+            cmsPath="home.booking_header.all_makes_label"
             count={fleet.length}
             active={activeMake === ALL_MAKES}
             onClick={() => setActiveMake(ALL_MAKES)}
@@ -267,9 +291,11 @@ export function FleetStrip() {
 
       {showEmpty && (
         <p className="mt-6 text-center text-sm text-brand-text-soft">
-          {isError
-            ? "We could not load the fleet just now — please try again shortly."
-            : "New vehicles are being added to this fleet."}
+          {isError ? (
+            <Editable path="home.booking_header.error_text">{error}</Editable>
+          ) : (
+            <Editable path="home.booking_header.empty_text">{empty}</Editable>
+          )}
         </p>
       )}
 
@@ -278,7 +304,7 @@ export function FleetStrip() {
           href="/fleet"
           className="inline-flex items-center gap-2 rounded-full border border-brand-border bg-white px-5 py-2.5 text-sm font-medium text-brand-text transition-colors hover:bg-brand-stone focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-forest/25"
         >
-          View all vehicles
+          <Editable path="home.booking_header.view_all_text">{viewAll}</Editable>
           <ArrowRight aria-hidden className="size-4" />
         </Link>
       </div>
@@ -324,11 +350,14 @@ function ScrollButton({
  */
 function MakePill({
   label,
+  cmsPath,
   count,
   active,
   onClick,
 }: {
   label: string;
+  /** Only the "All" pill is CMS copy — the rest are the makes in the fleet. */
+  cmsPath?: string;
   count: number;
   active: boolean;
   onClick: () => void;
@@ -346,7 +375,7 @@ function MakePill({
       )}
     >
       <BrandIcon make={label} active={active} />
-      {label}
+      {cmsPath ? <Editable path={cmsPath}>{label}</Editable> : label}
       <span className="text-xs tabular-nums text-brand-text-subtle">{count}</span>
     </button>
   );

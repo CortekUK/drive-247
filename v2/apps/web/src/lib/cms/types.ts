@@ -54,6 +54,12 @@ export interface SEOContent {
 
 /* -------------------------------------------------------------------- home */
 
+export interface ReadinessMetricItem {
+  label: string;
+  /** 0-100. Drives the bar's width, so it is a number and not a string. */
+  value: number;
+}
+
 export interface HomeHeroContent {
   headline: string;
   subheading: string;
@@ -62,6 +68,21 @@ export interface HomeHeroContent {
   phone_cta_text: string;
   book_cta_text: string;
   trust_line: string;
+  /* ── v2-only additions ──────────────────────────────────────────────────
+     Keys v1's editor never writes. They are additive: `mergeContent` supplies
+     the shipped value for any key the stored JSON does not carry, so a tenant
+     configured only through v1 renders exactly the page they render today. */
+  /** The car photographed beside the headline. */
+  hero_image: string;
+  hero_image_alt: string;
+  /** The two labels on the search form under the headline. */
+  pickup_label: string;
+  dropoff_label: string;
+  address_placeholder: string;
+  /** The readiness card floating over the car. */
+  readiness_status: string;
+  readiness_cta: string;
+  readiness_metrics: ReadinessMetricItem[];
 }
 
 export interface PromoBadgeContent {
@@ -88,6 +109,15 @@ export interface BookingHeaderContent {
   title: string;
   subtitle: string;
   trust_points: string[];
+  /* ── v2-only additions ─────────────────────────────────────────────────── */
+  /** The scrolling band of claims under the fleet strip. */
+  marquee_items: string[];
+  /** The "All" pill and the link out to /fleet. */
+  all_makes_label: string;
+  view_all_text: string;
+  /** What the strip says when there is nothing in it. */
+  empty_text: string;
+  error_text: string;
 }
 
 export interface TestimonialsHeaderContent {
@@ -100,6 +130,50 @@ export interface HomeCTAContent {
   primary_cta_text: string;
   secondary_cta_text: string;
   trust_points: string[];
+  /** v2-only: the photograph behind the banner. */
+  background_image: string;
+}
+
+/**
+ * The diagnostics band ("Safety Verification is Easier than Ever").
+ *
+ * A v2-only section: it has no key anywhere in v1's editor, so the copy below
+ * was hardcoded in the component until now. `DEFAULT_SAFETY_VERIFICATION`
+ * carries that exact copy, which is why an operator who never touches it sees
+ * no change at all.
+ *
+ * The three cards' TONES — which bar is red, which footnote is green, which
+ * card shows a big number — stay keyed on position, the same way
+ * `how_it_works` picks its icon by position. They are the design, not content.
+ */
+export interface SafetyCardItem {
+  label: string;
+  value: string;
+  footnote: string;
+  footnote_right: string;
+  /** 0-100, for the cards that draw a bar. */
+  bar_value: number;
+}
+
+export interface SafetyVerificationContent {
+  title: string;
+  description: string;
+  cta_text: string;
+  image: string;
+  image_alt: string;
+  cards: SafetyCardItem[];
+}
+
+/**
+ * The heading above the FAQ accordion.
+ *
+ * Also v2-only. The QUESTIONS themselves are rows in the `faqs` table — the
+ * portal has always edited those on their own screen — so only the heading and
+ * standfirst live here.
+ */
+export interface FaqSectionContent {
+  title: string;
+  subtitle: string;
 }
 
 export interface ContactCardContent {
@@ -124,10 +198,19 @@ export interface WhyChooseUsItem {
   icon: string;
   title: string;
   description: string;
+  /**
+   * v2-only. Only the FIRST item renders as the tall image card, so this is
+   * the one slot on the home page that shows it — but it lives on the item
+   * rather than the section so reordering the list carries it along.
+   */
+  image?: string;
+  image_alt?: string;
 }
 
 export interface WhyChooseUsContent {
   title: string;
+  /** v2-only: the standfirst under the heading. */
+  subtitle: string;
   items: WhyChooseUsItem[];
 }
 

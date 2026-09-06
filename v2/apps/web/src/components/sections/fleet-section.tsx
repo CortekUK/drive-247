@@ -29,7 +29,16 @@ export async function FleetSection() {
           </p>
         </header>
 
-        <FleetStrip />
+        {/* The strip's own words — the "All" pill, the link out, and what it
+            says when the fleet is empty or unreachable — travel down as props.
+            It is a Client Component, so reading them there would mean a second
+            round-trip and a label that changes after hydration. */}
+        <FleetStrip
+          allMakesLabel={header.all_makes_label}
+          viewAllText={header.view_all_text}
+          emptyText={header.empty_text}
+          errorText={header.error_text}
+        />
       </div>
 
       <MarqueeStrip />

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { sanitizeTripAddress, withTripIntent } from "@/lib/booking/trip-intent";
+import { Editable } from "@/lib/cms/editable";
 import { cn } from "@/lib/utils";
 
 /** Shipped copy, used only when the operator has written nothing. */
@@ -24,17 +25,37 @@ type LocationSearchFormProps = {
    * primary CTA after hydration.
    */
   submitLabel?: string | null;
+  /**
+   * The two field labels and the input placeholder, from the same section.
+   *
+   * They were string literals here. The form is used on the home hero and
+   * nowhere else, so binding them to `home_hero` rather than inventing a
+   * section of their own keeps one address per visible string.
+   *
+   * `cmsBound` is what stops the /booking-side copies of this form (if any
+   * appear later) from claiming the hero's paths: only a caller that IS the
+   * hero passes it.
+   */
+  pickupLabel?: string | null;
+  dropoffLabel?: string | null;
+  addressPlaceholder?: string | null;
 };
 
 export function LocationSearchForm({
   className,
   submitLabel,
+  pickupLabel,
+  dropoffLabel,
+  addressPlaceholder,
 }: LocationSearchFormProps) {
   const router = useRouter();
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
 
   const label = submitLabel?.trim() ? submitLabel.trim() : DEFAULT_SUBMIT_LABEL;
+  const pickupText = pickupLabel?.trim() ? pickupLabel.trim() : "Pick-up Location";
+  const dropoffText = dropoffLabel?.trim() ? dropoffLabel.trim() : "Drop-off Location";
+  const placeholder = addressPlaceholder?.trim() ? addressPlaceholder.trim() : "Enter Address";
 
   /**
    * ── WHAT HAPPENS WITH TWO EMPTY FIELDS ───────────────────────────────────
@@ -67,7 +88,9 @@ export function LocationSearchForm({
     >
       <Field
         id="pickup"
-        label="Pick-up Location"
+        label={pickupText}
+        cmsPath="home.home_hero.pickup_label"
+        placeholder={placeholder}
         value={pickup}
         onChange={setPickup}
         dotColor="#181a17"
@@ -75,7 +98,9 @@ export function LocationSearchForm({
       />
       <Field
         id="dropoff"
-        label="Drop-off Location"
+        label={dropoffText}
+        cmsPath="home.home_hero.dropoff_label"
+        placeholder={placeholder}
         value={dropoff}
         onChange={setDropoff}
         dotColor="#df232a"
@@ -85,7 +110,7 @@ export function LocationSearchForm({
           type="submit"
           className="inline-flex min-h-11 items-center justify-center rounded-full bg-brand-forest px-7 py-[11.5px] text-[13.5px] leading-[20.25px] text-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)] transition-opacity hover:opacity-90"
         >
-          {label}
+          <Editable path="home.home_hero.book_cta_text">{label}</Editable>
         </button>
       </div>
     </form>
@@ -95,20 +120,32 @@ export function LocationSearchForm({
 type FieldProps = {
   id: string;
   label: string;
+  /** CMS address of the label, when this form is the CMS-bound hero one. */
+  cmsPath?: string;
+  placeholder: string;
   value: string;
   onChange: (next: string) => void;
   trailing?: React.ReactNode;
   dotColor: string;
 };
 
-function Field({ id, label, value, onChange, trailing, dotColor }: FieldProps) {
+function Field({
+  id,
+  label,
+  cmsPath,
+  placeholder,
+  value,
+  onChange,
+  trailing,
+  dotColor,
+}: FieldProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={id}
         className="text-[11px] leading-[16.5px] text-brand-text-soft"
       >
-        {label}
+        {cmsPath ? <Editable path={cmsPath}>{label}</Editable> : label}
       </label>
       <div className="relative flex items-center rounded-[8px] border border-white bg-white px-[17px] py-[13px] shadow-[0px_2px_4px_rgba(0,0,0,0.04)]">
         <span
@@ -120,7 +157,7 @@ function Field({ id, label, value, onChange, trailing, dotColor }: FieldProps) {
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Enter Address"
+          placeholder={placeholder}
           className="flex-1 bg-transparent pl-3 text-[13.5px] text-brand-text placeholder:text-brand-placeholder focus:outline-none"
         />
         {trailing && <span className="ml-2 shrink-0">{trailing}</span>}

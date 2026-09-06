@@ -2,9 +2,10 @@ import { Car } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
-import { DEFAULT_HOME_CTA } from "@/lib/cms/defaults";
+import { DEFAULT_HOME_CTA, HOME_CTA_FOOTNOTE_FALLBACK } from "@/lib/cms/defaults";
+import { completeLines } from "@/lib/cms/merge";
 import { loadSection } from "@/lib/cms/server";
-import { Editable, cmsSection } from "@/lib/cms/editable";
+import { Editable, cmsImage, cmsSection } from "@/lib/cms/editable";
 
 /**
  * The closing call-to-action, shown at the foot of five pages.
@@ -23,14 +24,20 @@ export async function CtaBanner() {
   const cta = await loadSection("home", "home_cta", DEFAULT_HOME_CTA);
   // Kept with their STORED index: the editor writes back by position, and a
   // filtered list would point an edit at the wrong entry once a blank exists.
-  const footnote = cta.trust_points
+  const footnote = completeLines(cta.trust_points, DEFAULT_HOME_CTA.trust_points)
     .map((point, index) => ({ point, index }))
     .filter(({ point }) => point.trim() !== "");
 
   return (
     <section {...cmsSection("home.home_cta", "Call to action")} className="relative isolate overflow-hidden text-white">
+      {/*
+        A `fill` image at -z-20 behind a black scrim: unreachable by a click
+        where it sits, which is why the overlay draws its handle in a layer of
+        its own rather than relying on the image taking pointer events.
+      */}
       <Image
-        src="/booking_landingpage/tesla-bg.png"
+        {...cmsImage("home.home_cta.background_image", cta.background_image)}
+        src={cta.background_image}
         alt=""
         fill
         priority={false}
@@ -58,14 +65,25 @@ export async function CtaBanner() {
         <p className="inline-flex max-w-full items-center gap-2 px-2 text-xs text-white/85">
           <Car className="size-3.5 shrink-0" strokeWidth={1.75} />
           <span className="min-w-0">
-            {footnote.length > 0
-              ? footnote.map(({ point, index }, i) => (
-                  <span key={index}>
-                    {i > 0 && " • "}
-                    <Editable path={`home.home_cta.trust_points.${index}`}>{point}</Editable>
-                  </span>
-                ))
-              : "14 cars available for pickup today in Los Angeles."}
+            {footnote.length > 0 ? (
+              footnote.map(({ point, index }, i) => (
+                <span key={index}>
+                  {i > 0 && " • "}
+                  <Editable path={`home.home_cta.trust_points.${index}`}>{point}</Editable>
+                </span>
+              ))
+            ) : (
+              /*
+                The shipped claim, and it is editable: writing over it CREATES
+                `trust_points[0]`, which is what the operator means when they
+                change the line in front of them. Left as a fallback rather
+                than seeded into the default array because an empty array is
+                what tells `mergeContent` the operator has written nothing.
+              */
+              <Editable path="home.home_cta.trust_points.0">
+                {HOME_CTA_FOOTNOTE_FALLBACK}
+              </Editable>
+            )}
           </span>
         </p>
       </div>

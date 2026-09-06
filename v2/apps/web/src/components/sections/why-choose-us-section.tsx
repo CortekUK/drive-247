@@ -1,7 +1,8 @@
 import { FeatureCard } from "@/components/cards/feature-card";
 import { DEFAULT_WHY_CHOOSE_US } from "@/lib/cms/defaults";
 import { resolveIcon } from "@/lib/cms/icons";
-import { loadSection } from "@/lib/cms/server";
+import { completeRows } from "@/lib/cms/merge";
+import { isEditMode, loadSection } from "@/lib/cms/server";
 import { Editable, cmsSection } from "@/lib/cms/editable";
 
 /**
@@ -15,18 +16,40 @@ import { Editable, cmsSection } from "@/lib/cms/editable";
  * the first two shapes and no holes; anything past the fourth is dropped rather
  * than breaking the grid.
  *
- * The section subtitle is a design constant: the portal has no field for it.
+ * The standfirst under the heading used to be a constant in this file, on the
+ * grounds that "the portal has no field for it". It has one now
+ * (`why_choose_us.subtitle`), seeded with that exact sentence.
+ *
+ * The tall card's photograph is `items.0.image`. It lives on the ITEM rather
+ * than on the section so that reordering the list carries the picture with the
+ * words it belongs to — the alternative, a section-level `feature_image`, would
+ * strand the photo on whatever reason happened to be first.
  */
-const SUBTITLE =
-  "Experience a new standard of mobility where luxury meets absolute convenience.";
-
 export async function WhyChooseUsSection() {
-  const content = await loadSection("about", "why_choose_us", DEFAULT_WHY_CHOOSE_US);
-  const items = content.items.slice(0, 4);
+  const [content, editing] = await Promise.all([
+    loadSection("about", "why_choose_us", DEFAULT_WHY_CHOOSE_US),
+    isEditMode(),
+  ]);
+  const items = completeRows(content.items, DEFAULT_WHY_CHOOSE_US.items).slice(0, 4);
+  const subtitle = content.subtitle.trim();
 
   const featureCard = items[0];
   const smallCards = items.slice(1, 3);
   const mutedCard = items[3];
+
+  /*
+    `mergeContent` swaps a non-empty array wholesale rather than merging it
+    element by element (deleting a reason must not resurrect it), so an operator
+    whose stored `items` predate the `image` key has no image on item 0. The
+    shipped photo is the floor for that case — without it, configuring the list
+    in v1 would silently blank the card's picture.
+  */
+  const featureImage = featureCard?.image?.trim()
+    ? featureCard.image
+    : DEFAULT_WHY_CHOOSE_US.items[0].image;
+  const featureImageAlt = featureCard?.image_alt?.trim()
+    ? featureCard.image_alt
+    : DEFAULT_WHY_CHOOSE_US.items[0].image_alt;
 
   return (
     <section {...cmsSection("about.why_choose_us", "Why choose us")} className="bg-white">
@@ -35,9 +58,16 @@ export async function WhyChooseUsSection() {
           <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl lg:text-5xl lg:leading-none">
             <Editable path="about.why_choose_us.title">{content.title}</Editable>
           </h2>
-          <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
-            {SUBTITLE}
-          </p>
+          {(subtitle !== "" || editing) && (
+            <p className="mx-auto mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
+              <Editable
+                path="about.why_choose_us.subtitle"
+                placeholder="Add a line under the heading"
+              >
+                {subtitle}
+              </Editable>
+            </p>
+          )}
         </header>
 
         <div className="mt-12 grid grid-cols-1 gap-5 lg:grid-cols-[5fr_7fr]">
@@ -47,8 +77,9 @@ export async function WhyChooseUsSection() {
               description={featureCard.description}
               cmsPath="about.why_choose_us.items.0"
               variant="feature"
-              imageSrc="/booking_landingpage/feature-car.webp"
-              imageAlt="White executive saloon, three-quarter front view"
+              imageSrc={featureImage}
+              imageAlt={featureImageAlt ?? ""}
+              imageCmsPath="about.why_choose_us.items.0.image"
             />
           )}
 

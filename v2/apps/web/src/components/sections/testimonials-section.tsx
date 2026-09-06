@@ -1,5 +1,5 @@
 import { DEFAULT_TESTIMONIALS_HEADER } from "@/lib/cms/defaults";
-import { loadSection, loadTestimonials } from "@/lib/cms/server";
+import { isEditMode, loadSection, loadTestimonials } from "@/lib/cms/server";
 
 import { TestimonialQuotes } from "@/components/sections/testimonial-quotes";
 import { Editable, cmsSection } from "@/lib/cms/editable";
@@ -16,9 +16,10 @@ import { Editable, cmsSection } from "@/lib/cms/editable";
  * then keeps them live. See `hooks/use-testimonials.ts`.
  */
 export async function TestimonialsSection() {
-  const [header, seed] = await Promise.all([
+  const [header, seed, editing] = await Promise.all([
     loadSection("home", "testimonials_header", DEFAULT_TESTIMONIALS_HEADER),
     loadTestimonials(),
+    isEditMode(),
   ]);
 
   const title = header.title.trim();
@@ -26,10 +27,18 @@ export async function TestimonialsSection() {
   return (
     <section {...cmsSection("home.testimonials_header", "Reviews")} className="bg-brand-cream">
       <div className="container-page py-12 lg:py-20">
-        {title !== "" && (
+        {/* Blank by design — the Figma band has no heading — so on the public
+            site nothing renders. In the editor the empty slot IS the control:
+            without it there is no way to give this band a heading at all. */}
+        {(title !== "" || editing) && (
           <header className="mx-auto mb-10 max-w-2xl text-center">
             <h2 className="text-3xl font-semibold leading-tight tracking-tight text-brand-text sm:text-4xl">
-              <Editable path="home.testimonials_header.title">{title}</Editable>
+              <Editable
+                path="home.testimonials_header.title"
+                placeholder="Add a heading for this band"
+              >
+                {title}
+              </Editable>
             </h2>
           </header>
         )}

@@ -8,8 +8,8 @@ import {
 import { loadFleetSeed } from "@/components/fleet/fleet-seed";
 import { LocationSearchForm } from "@/components/forms/location-search-form";
 import { DEFAULT_HOME_HERO } from "@/lib/cms/defaults";
-import { getTenantSlug, loadSection } from "@/lib/cms/server";
-import { Editable, cmsSection } from "@/lib/cms/editable";
+import { getTenantSlug, isEditMode, loadSection } from "@/lib/cms/server";
+import { Editable, cmsImage, cmsSection } from "@/lib/cms/editable";
 
 /**
  * The home hero. Copy comes from the portal's `home / home_hero` section.
@@ -21,8 +21,10 @@ import { Editable, cmsSection } from "@/lib/cms/editable";
  * exactly the page they get today.
  *
  * `subheading` has no slot in the Figma hero — the search form sits directly
- * under the headline — so it renders only when an operator writes one, and the
- * layout is untouched when they have not.
+ * under the headline — so on the public site it renders only when an operator
+ * writes one. In the portal's editor it renders as an empty placeholder, because
+ * a field that is invisible until it has content is a field nobody can ever
+ * give content to.
  */
 export async function HeroSection() {
   const tenantSlug = await getTenantSlug();
@@ -41,9 +43,10 @@ export async function HeroSection() {
     shipped copy and a /fleet link — so an operator with no cars published, or
     a momentary query failure, still gets exactly the hero they get today.
   */
-  const [hero, seed] = await Promise.all([
+  const [hero, seed, editing] = await Promise.all([
     loadSection("home", "home_hero", DEFAULT_HOME_HERO),
     loadFleetSeed(tenantSlug),
+    isEditMode(),
   ]);
 
   const subheading = hero.subheading.trim();
@@ -67,26 +70,37 @@ export async function HeroSection() {
             <Editable path="home.home_hero.headline">{hero.headline}</Editable>
           </h1>
 
-          {subheading !== "" && (
+          {(subheading !== "" || editing) && (
             <p className="mt-4 max-w-[480px] text-sm leading-relaxed text-brand-text-soft sm:text-base">
-              <Editable path="home.home_hero.subheading">{subheading}</Editable>
+              <Editable
+                path="home.home_hero.subheading"
+                placeholder="Add a line under the headline"
+              >
+                {subheading}
+              </Editable>
             </p>
           )}
 
           <div className="pb-6 pt-6 sm:pb-8 sm:pt-10">
-            <LocationSearchForm submitLabel={hero.book_cta_text} />
+            <LocationSearchForm
+              submitLabel={hero.book_cta_text}
+              pickupLabel={hero.pickup_label}
+              dropoffLabel={hero.dropoff_label}
+              addressPlaceholder={hero.address_placeholder}
+            />
           </div>
 
           <div className="hidden pt-12 lg:block lg:pt-20">
-            <TrustNote text={hero.trust_line} className="max-w-[320px]" />
+            <TrustNote text={hero.trust_line} editing={editing} className="max-w-[320px]" />
           </div>
         </div>
 
         <div className="relative min-h-[280px] sm:min-h-[360px] lg:min-h-[640px]">
           <div className="absolute inset-x-[-4%] inset-y-0 flex items-center lg:inset-x-[-15%]">
             <Image
-              src="/booking_landingpage/hero-car.webp"
-              alt="Black luxury SUV, three-quarter front view"
+              {...cmsImage("home.home_hero.hero_image", hero.hero_image)}
+              src={hero.hero_image}
+              alt={hero.hero_image_alt}
               width={2600}
               height={1207}
               priority
@@ -97,12 +111,15 @@ export async function HeroSection() {
 
           <ReadinessCard
             vehicle={readinessVehicle}
+            status={hero.readiness_status}
+            ctaText={hero.readiness_cta}
+            metrics={hero.readiness_metrics}
             className="absolute -bottom-2 -right-2 z-10 origin-bottom-right scale-75 sm:scale-90 lg:-bottom-3 lg:-right-5 lg:scale-100"
           />
         </div>
 
         <div className="lg:hidden">
-          <TrustNote text={hero.trust_line} className="max-w-[420px]" />
+          <TrustNote text={hero.trust_line} editing={editing} className="max-w-[420px]" />
         </div>
       </div>
     </section>
@@ -113,9 +130,21 @@ export async function HeroSection() {
  * The shielded reassurance line. Rendered twice — once inside the text column
  * for desktop, once below the car for mobile — so it lives in one place rather
  * than being copied with its CMS field.
+ *
+ * BOTH copies carry the same `data-cms` path, which is intentional and safe:
+ * only one is visible at any breakpoint, an edit to either writes the same
+ * field, and the next server render puts the new text in both.
  */
-function TrustNote({ text, className }: { text: string; className: string }) {
-  if (text.trim() === "") return null;
+function TrustNote({
+  text,
+  editing,
+  className,
+}: {
+  text: string;
+  editing: boolean;
+  className: string;
+}) {
+  if (text.trim() === "" && !editing) return null;
 
   return (
     <div className={`flex items-start gap-3 ${className}`}>
@@ -123,7 +152,9 @@ function TrustNote({ text, className }: { text: string; className: string }) {
         <ShieldCheck className="size-[14px] text-brand-text" strokeWidth={1.6} />
       </span>
       <p className="text-xs leading-[17px] text-brand-text-muted">
-        <Editable path="home.home_hero.trust_line">{text}</Editable>
+        <Editable path="home.home_hero.trust_line" placeholder="Add a reassurance line">
+          {text}
+        </Editable>
       </p>
     </div>
   );

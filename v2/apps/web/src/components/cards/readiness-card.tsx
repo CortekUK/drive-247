@@ -1,32 +1,23 @@
 import { ArrowRight, Check, Droplets, Sparkles, Wrench } from "lucide-react";
 import Link from "next/link";
 
-type Metric = {
-  id: string;
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-};
+import { DEFAULT_HOME_HERO } from "@/lib/cms/defaults";
+import { Editable } from "@/lib/cms/editable";
+import { completeRows } from "@/lib/cms/merge";
+import type { ReadinessMetricItem } from "@/lib/cms/types";
 
-const METRICS: Metric[] = [
-  {
-    id: "pristine",
-    label: "Pristine",
-    value: 90,
-    icon: <Sparkles className="size-2.5" strokeWidth={2} />,
-  },
-  {
-    id: "mechanical",
-    label: "Mechanical Health",
-    value: 97,
-    icon: <Wrench className="size-2.5" strokeWidth={2} />,
-  },
-  {
-    id: "hygiene",
-    label: "Hygiene & Sanitization Score",
-    value: 99,
-    icon: <Droplets className="size-2.5" strokeWidth={2} />,
-  },
+/**
+ * The metric ICONS, by position.
+ *
+ * The labels and the numbers are the operator's (`home_hero.readiness_metrics`);
+ * which pictogram sits beside row two is the design's. Same split as
+ * `how_it_works`, and for the same reason: an icon is not a thing anyone can
+ * type into the page.
+ */
+const METRIC_ICONS = [
+  <Sparkles key="0" className="size-2.5" strokeWidth={2} />,
+  <Wrench key="1" className="size-2.5" strokeWidth={2} />,
+  <Droplets key="2" className="size-2.5" strokeWidth={2} />,
 ];
 
 /** The car this card is about, when the hero could resolve a real one. */
@@ -42,6 +33,12 @@ const PLACEHOLDER_CATEGORY = "SUV";
 
 type ReadinessCardProps = {
   className?: string;
+  /** `home_hero.readiness_status` — the pill beside the mark. */
+  status?: string;
+  /** `home_hero.readiness_cta` — the link at the foot of the card. */
+  ctaText?: string;
+  /** `home_hero.readiness_metrics` — the three labelled bars. */
+  metrics?: ReadinessMetricItem[];
   /**
    * A real vehicle from the tenant's fleet, threaded down from `HeroSection`.
    *
@@ -59,11 +56,31 @@ type ReadinessCardProps = {
   vehicle?: ReadinessVehicle | null;
 };
 
-export function ReadinessCard({ className, vehicle = null }: ReadinessCardProps) {
+export function ReadinessCard({
+  className,
+  vehicle = null,
+  status,
+  ctaText,
+  metrics,
+}: ReadinessCardProps) {
   // "View Details" on a card describing a specific car must open THAT car.
   const href = vehicle === null ? "/fleet" : `/booking/${vehicle.id}`;
   const name = vehicle?.name ?? PLACEHOLDER_NAME;
   const category = vehicle?.categoryLabel ?? PLACEHOLDER_CATEGORY;
+
+  /*
+    The card is rendered in exactly one place — the home hero — but it is
+    written to stand on its own, so every CMS value arrives as a prop with the
+    shipped copy behind it. A caller that passes nothing gets the card that
+    shipped, unmarked and unchanged.
+  */
+  const statusText = status?.trim() ? status.trim() : DEFAULT_HOME_HERO.readiness_status;
+  const cta = ctaText?.trim() ? ctaText.trim() : DEFAULT_HOME_HERO.readiness_cta;
+  const rows = completeRows(
+    metrics && metrics.length > 0 ? metrics : DEFAULT_HOME_HERO.readiness_metrics,
+    DEFAULT_HOME_HERO.readiness_metrics,
+  ).slice(0, 3);
+  const bound = metrics !== undefined;
 
   return (
     <article
@@ -89,7 +106,11 @@ export function ReadinessCard({ className, vehicle = null }: ReadinessCardProps)
         </svg>
         <span className="inline-flex items-center gap-[2px] text-[9px] leading-[13.5px] text-brand-text-soft">
           <Check className="size-2.5" strokeWidth={2.5} />
-          Ready for Pickup
+          {bound ? (
+            <Editable path="home.home_hero.readiness_status">{statusText}</Editable>
+          ) : (
+            statusText
+          )}
         </span>
       </header>
 
@@ -98,12 +119,20 @@ export function ReadinessCard({ className, vehicle = null }: ReadinessCardProps)
       </p>
 
       <ul className="mt-4 flex flex-col gap-[14px] pb-1">
-        {METRICS.map((metric) => (
-          <li key={metric.id} className="flex flex-col gap-1.5">
+        {rows.map((metric, index) => (
+          <li key={`${metric.label}-${index}`} className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 text-[10px] leading-[15px] text-brand-text-soft">
-                {metric.icon}
-                {metric.label}
+                {METRIC_ICONS[Math.min(index, METRIC_ICONS.length - 1)]}
+                {/* The label is its own node, so the icon beside it is never
+                    swept into the text that gets written back. */}
+                {bound ? (
+                  <Editable path={`home.home_hero.readiness_metrics.${index}.label`}>
+                    {metric.label}
+                  </Editable>
+                ) : (
+                  metric.label
+                )}
               </span>
               <span className="text-[10px] leading-[15px] text-black">
                 {metric.value}
@@ -112,7 +141,7 @@ export function ReadinessCard({ className, vehicle = null }: ReadinessCardProps)
             <div className="h-[2.5px] w-full overflow-hidden rounded-full bg-[#e1e3df]">
               <div
                 className="h-full rounded-full bg-brand-progress-fill"
-                style={{ width: `${metric.value}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, Number(metric.value) || 0))}%` }}
               />
             </div>
           </li>
@@ -131,7 +160,7 @@ export function ReadinessCard({ className, vehicle = null }: ReadinessCardProps)
           href={href}
           className="inline-flex min-h-11 flex-1 items-center gap-1 text-[10.5px] leading-[15.75px] text-brand-text-soft hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/45"
         >
-          View Details
+          {bound ? <Editable path="home.home_hero.readiness_cta">{cta}</Editable> : cta}
           <ArrowRight aria-hidden className="size-3" strokeWidth={2} />
           <span className="sr-only"> for {name}</span>
         </Link>

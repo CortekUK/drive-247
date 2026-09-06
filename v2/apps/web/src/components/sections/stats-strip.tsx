@@ -1,5 +1,6 @@
 import { evenGridCols } from "@/lib/cms/format";
 import { DEFAULT_STATS } from "@/lib/cms/defaults";
+import { completeRows } from "@/lib/cms/merge";
 import { loadSection } from "@/lib/cms/server";
 import { Editable, cmsSection } from "@/lib/cms/editable";
 
@@ -20,7 +21,7 @@ import { Editable, cmsSection } from "@/lib/cms/editable";
  */
 export async function StatsStrip() {
   const stats = await loadSection("about", "stats", DEFAULT_STATS);
-  const items = stats.items.slice(0, 6);
+  const items = completeRows(stats.items, DEFAULT_STATS.items).slice(0, 6);
 
   if (items.length === 0) return null;
 
@@ -43,7 +44,12 @@ export async function StatsStrip() {
                   separate stored fields, and the editor writes back exactly
                   the node that was edited. */}
               <Editable path={`about.stats.items.${index}.value`}>{stat.value}</Editable>
-              <Editable path={`about.stats.items.${index}.suffix`}>{stat.suffix ?? ""}</Editable>
+              <Editable
+                path={`about.stats.items.${index}.suffix`}
+                placeholder="+"
+              >
+                {stat.suffix ?? ""}
+              </Editable>
             </p>
             <p className="text-sm leading-snug text-white/70">
               <Editable path={`about.stats.items.${index}.label`}>{stat.label}</Editable>

@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 
 import { cn } from "@/lib/utils";
-import { Editable, cmsSection } from "@/lib/cms/editable";
+import { Editable, cmsImage } from "@/lib/cms/editable";
 
 type FeatureCardProps = {
   title: string;
@@ -17,6 +17,12 @@ type FeatureCardProps = {
   variant?: "feature" | "small" | "muted";
   imageSrc?: string;
   imageAlt?: string;
+  /**
+   * CMS address of `imageSrc`, when the photo is the operator's rather than a
+   * design asset. Set on the home page's tall card; absent on
+   * `fleet-pricing-section.tsx`, whose cards carry no image at all.
+   */
+  imageCmsPath?: string;
   className?: string;
 };
 
@@ -28,6 +34,7 @@ export function FeatureCard({
   variant = "small",
   imageSrc,
   imageAlt = "",
+  imageCmsPath,
   className,
 }: FeatureCardProps) {
   const t = cmsPath ? <Editable path={`${cmsPath}.title`}>{title}</Editable> : title;
@@ -52,6 +59,7 @@ export function FeatureCard({
 
         {imageSrc && (
           <Image
+            {...(imageCmsPath ? cmsImage(imageCmsPath, imageSrc) : {})}
             src={imageSrc}
             alt={imageAlt}
             width={2000}

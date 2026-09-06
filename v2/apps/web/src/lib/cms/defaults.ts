@@ -3,6 +3,7 @@ import type {
   BookingHeaderContent,
   ContactInfoContent,
   FaqItem,
+  FaqSectionContent,
   HeroContent,
   HomeCTAContent,
   HomeHeroContent,
@@ -11,6 +12,7 @@ import type {
   LogoContent,
   PromoItem,
   RentalRatesContent,
+  SafetyVerificationContent,
   SiteContactContent,
   SocialLinksContent,
   StatsContent,
@@ -41,7 +43,8 @@ import type {
 export const DEFAULT_HOME_HERO: HomeHeroContent = {
   headline: "Rent the Exact Car You See with Absolute Certainty Every Time",
   // No subheading in the Figma hero — the search form sits directly under the
-  // headline. Rendered only when an operator writes one.
+  // headline. Rendered only when an operator writes one (or when the portal's
+  // editor is open, where an empty slot is the only way to fill one in).
   subheading: "",
   background_image: "",
   phone_number: "",
@@ -49,6 +52,22 @@ export const DEFAULT_HOME_HERO: HomeHeroContent = {
   book_cta_text: "",
   trust_line:
     "Every car in our fleet is digitally inspected and safety-certified in real-time to ensure a flawless driving experience.",
+  /* The car, the form's labels and the readiness card — every one of these was
+     a string literal inside `hero-section.tsx` / `location-search-form.tsx` /
+     `readiness-card.tsx` until they were bound here. The values are those
+     literals verbatim, so binding them changed nothing on screen. */
+  hero_image: "/booking_landingpage/hero-car.webp",
+  hero_image_alt: "Black luxury SUV, three-quarter front view",
+  pickup_label: "Pick-up Location",
+  dropoff_label: "Drop-off Location",
+  address_placeholder: "Enter Address",
+  readiness_status: "Ready for Pickup",
+  readiness_cta: "View Details",
+  readiness_metrics: [
+    { label: "Pristine", value: 90 },
+    { label: "Mechanical Health", value: 97 },
+    { label: "Hygiene & Sanitization Score", value: 99 },
+  ],
 };
 
 export const DEFAULT_BOOKING_HEADER: BookingHeaderContent = {
@@ -56,6 +75,18 @@ export const DEFAULT_BOOKING_HEADER: BookingHeaderContent = {
   subtitle:
     "Browse our curated selection of premium vehicles, each maintained to perfection and ready for immediate pickup",
   trust_points: [],
+  // Formerly the `ITEMS` constant in `marquee-strip.tsx`.
+  marquee_items: [
+    "PICK UP ANYTIME",
+    "NO COUNTER LINES",
+    "NO HIDDEN FEES",
+    "100% TRANSPARENCY",
+    "DRIVING THE MOVE",
+  ],
+  all_makes_label: "All",
+  view_all_text: "View all vehicles",
+  empty_text: "New vehicles are being added to this fleet.",
+  error_text: "We could not load the fleet just now — please try again shortly.",
 };
 
 export const DEFAULT_TESTIMONIALS_HEADER: TestimonialsHeaderContent = {
@@ -70,6 +101,62 @@ export const DEFAULT_HOME_CTA: HomeCTAContent = {
   primary_cta_text: "Get Started",
   secondary_cta_text: "",
   trust_points: [],
+  background_image: "/booking_landingpage/tesla-bg.png",
+};
+
+/**
+ * The banner's footnote when the operator has written no trust points.
+ *
+ * Left as a fallback rather than seeded into `trust_points` above: an empty
+ * array there is what tells `mergeContent` "the operator has not filled this
+ * in", and seeding it would make the claim below indistinguishable from one
+ * they typed. It is still editable — the section marks it as
+ * `home_cta.trust_points.0`, so writing over it CREATES the first point.
+ */
+export const HOME_CTA_FOOTNOTE_FALLBACK =
+  "14 cars available for pickup today in Los Angeles.";
+
+/**
+ * The diagnostics band, formerly hardcoded in `safety-verification-section.tsx`.
+ * Word for word what that component rendered before it was bound to the CMS.
+ */
+export const DEFAULT_SAFETY_VERIFICATION: SafetyVerificationContent = {
+  title: "Safety Verification is Easier than Ever",
+  description:
+    "With real-time diagnostic sync, we ensure every car is safety-certified and sanitized before you even arrive. Experience the certainty of a perfectly maintained fleet.",
+  cta_text: "Book a Car now",
+  image: "/booking_landingpage/safety-car.webp",
+  image_alt: "Black sports coupe, three-quarter front view",
+  cards: [
+    {
+      label: "Engine Oil",
+      value: "25% Remaining",
+      footnote: "2,500 km / 10,000 km",
+      footnote_right: "Critical",
+      bar_value: 25,
+    },
+    {
+      label: "Tire Pressure (TPMS)",
+      value: "32",
+      footnote: "Normal",
+      footnote_right: "",
+      bar_value: 0,
+    },
+    {
+      label: "Brake Life",
+      value: "85% Remaining",
+      footnote: "12,790 km / 19,000 km",
+      footnote_right: "Healthy",
+      bar_value: 85,
+    },
+  ],
+};
+
+/** The FAQ band's heading, formerly hardcoded in `faq-section.tsx`. */
+export const DEFAULT_FAQ_SECTION: FaqSectionContent = {
+  title: "Frequently asked questions",
+  subtitle:
+    "Don’t Let Final Doubts Stop You. Get the Complete Information You Need for a Confident and Stress-Free Booking Experience.",
 };
 
 /* ------------------------------------------------------------------- about */
@@ -89,12 +176,19 @@ export const DEFAULT_ABOUT_STORY: AboutStoryContent = {
 
 export const DEFAULT_WHY_CHOOSE_US: WhyChooseUsContent = {
   title: "Why Choose Us?",
+  // Formerly the `SUBTITLE` constant in `why-choose-us-section.tsx`, which was
+  // commented "a design constant: the portal has no field for it". It has one now.
+  subtitle:
+    "Experience a new standard of mobility where luxury meets absolute convenience.",
   items: [
     {
       icon: "star",
       title: "Premium Fleet",
       description:
         "From the Rolls-Royce Phantom to the Range Rover Autobiography, every vehicle represents automotive excellence and comfort.",
+      // Only the first item renders as the tall image card — see the section.
+      image: "/booking_landingpage/feature-car.webp",
+      image_alt: "White executive saloon, three-quarter front view",
     },
     {
       icon: "clipboard-check",

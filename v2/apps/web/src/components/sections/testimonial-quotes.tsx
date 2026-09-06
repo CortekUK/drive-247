@@ -40,7 +40,8 @@ export function TestimonialQuotes({ seed }: { seed: TestimonialItem[] | null }) 
 
   // The designed copy is the floor, not a placeholder: a tenant nobody has
   // written testimonials for still gets a finished-looking page.
-  const source = testimonials.length > 0 ? testimonials : DEFAULT_TESTIMONIALS;
+  const real = testimonials.length > 0;
+  const source = real ? testimonials : DEFAULT_TESTIMONIALS;
   const items = source.slice(0, VISIBLE);
 
   return (
@@ -50,6 +51,8 @@ export function TestimonialQuotes({ seed }: { seed: TestimonialItem[] | null }) 
           key={testimonial.id}
           quote={testimonial.quote}
           author={testimonial.author}
+          // Only a real row is editable — see TestimonialCard.
+          rowId={real ? testimonial.id : undefined}
         />
       ))}
     </div>

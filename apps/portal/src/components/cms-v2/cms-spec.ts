@@ -72,7 +72,7 @@ export type FieldType =
 export type SubFieldSpec = {
   key: string;
   label: string;
-  type: "text" | "textarea" | "icon" | "number" | "toggle" | "choice";
+  type: "text" | "textarea" | "icon" | "number" | "toggle" | "choice" | "image";
   /** `icon` only — which vocabulary this field draws from. */
   icons?: readonly string[];
   /** `choice` only. */
@@ -230,6 +230,33 @@ export const PAGES: PageSpec[] = [
             type: "gallery",
             hint: "Rotates if you add more than one. Images and videos.",
           },
+          /* ── v2 site only ────────────────────────────────────────────────
+             Keys the v1 booking site knows nothing about. They are additive:
+             the v2 site falls back to its shipped value for anything not
+             stored, so leaving them alone keeps the page exactly as it is. */
+          {
+            key: "hero_image",
+            label: "Photo",
+            type: "image",
+            hint: "The car beside your headline. Leave empty for the one we ship.",
+          },
+          { key: "hero_image_alt", label: "Photo description", type: "text", hint: "Read aloud by screen readers." },
+          { key: "pickup_label", label: "Pick-up field label", type: "text", fallback: "Pick-up Location" },
+          { key: "dropoff_label", label: "Drop-off field label", type: "text", fallback: "Drop-off Location" },
+          { key: "address_placeholder", label: "Address placeholder", type: "text", fallback: "Enter Address" },
+          { key: "readiness_status", label: "Readiness card — status", type: "text", fallback: "Ready for Pickup" },
+          { key: "readiness_cta", label: "Readiness card — link", type: "text", fallback: "View Details" },
+          {
+            key: "readiness_metrics",
+            label: "Readiness card — scores",
+            type: "list",
+            noun: "score",
+            hint: "Three rows fit the card.",
+            item: [
+              { key: "label", label: "Label", type: "text" },
+              { key: "value", label: "Score (0-100)", type: "number" },
+            ],
+          },
         ],
       },
       {
@@ -259,6 +286,28 @@ export const PAGES: PageSpec[] = [
           { key: "title", label: "Heading", type: "text", fallback: "Book your car" },
           { key: "subtitle", label: "Subheading", type: "textarea" },
           { key: "trust_points", label: "Reassurances", type: "lines", noun: "line", hint: "Shown joined with ·" },
+          /* ── v2 site only ─────────────────────────────────────────────── */
+          {
+            key: "marquee_items",
+            label: "Scrolling band",
+            type: "lines",
+            noun: "phrase",
+            hint: "The band that scrolls under your cars. Shown in capitals.",
+          },
+          { key: "all_makes_label", label: "\"All makes\" pill", type: "text", fallback: "All" },
+          { key: "view_all_text", label: "Link under the cars", type: "text", fallback: "View all vehicles" },
+          {
+            key: "empty_text",
+            label: "When you have no cars",
+            type: "textarea",
+            fallback: "New vehicles are being added to this fleet.",
+          },
+          {
+            key: "error_text",
+            label: "When the fleet cannot load",
+            type: "textarea",
+            fallback: "We could not load the fleet just now — please try again shortly.",
+          },
         ],
       },
       {
@@ -275,6 +324,61 @@ export const PAGES: PageSpec[] = [
           { key: "primary_cta_text", label: "Main button", type: "text", fallback: "Book now" },
           { key: "secondary_cta_text", label: "Second button", type: "text" },
           { key: "trust_points", label: "Reassurances", type: "lines", noun: "line" },
+          {
+            key: "background_image",
+            label: "Background photo",
+            type: "image",
+            hint: "v2 website only. Leave empty for the one we ship.",
+          },
+        ],
+      },
+      /* ── two sections the v2 site added ──────────────────────────────────
+         Neither exists in v1's editor, and neither existed here until the home
+         page was walked line by line: both were hardcoded strings in the site's
+         components, which meant an operator could edit seven of the nine bands
+         on their own home page and not these two.
+
+         There is no row for either until the operator changes something — the
+         write path upserts on (page_id, section_key) — and until then the site
+         renders the copy it always shipped. */
+      {
+        key: "safety_verification",
+        title: "Safety checks",
+        blurb: "The diagnostics band with the three status cards. v2 website only.",
+        fields: [
+          {
+            key: "title",
+            label: "Heading",
+            type: "text",
+            fallback: "Safety Verification is Easier than Ever",
+          },
+          { key: "description", label: "Description", type: "textarea" },
+          { key: "cta_text", label: "Button", type: "text", fallback: "Book a Car now" },
+          { key: "image", label: "Photo", type: "image" },
+          { key: "image_alt", label: "Photo description", type: "text" },
+          {
+            key: "cards",
+            label: "Status cards",
+            type: "list",
+            noun: "card",
+            hint: "Three fit the band. The colours follow the position, not the words.",
+            item: [
+              { key: "label", label: "Label", type: "text" },
+              { key: "value", label: "Reading", type: "text" },
+              { key: "footnote", label: "Note", type: "text" },
+              { key: "footnote_right", label: "Note (right)", type: "text" },
+              { key: "bar_value", label: "Bar (0-100)", type: "number" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "faq_header",
+        title: "FAQ heading",
+        blurb: "The words above the questions. The questions themselves live under FAQs.",
+        fields: [
+          { key: "title", label: "Heading", type: "text", fallback: "Frequently asked questions" },
+          { key: "subtitle", label: "Subheading", type: "textarea" },
         ],
       },
       {
@@ -325,14 +429,26 @@ export const PAGES: PageSpec[] = [
         fields: [
           { key: "title", label: "Heading", type: "text", fallback: "Why choose us" },
           {
+            key: "subtitle",
+            label: "Subheading",
+            type: "textarea",
+            hint: "v2 website only.",
+            fallback: "Experience a new standard of mobility where luxury meets absolute convenience.",
+          },
+          {
             key: "items",
             label: "Reasons",
             type: "list",
             noun: "reason",
+            // `image` is on the ITEM, not the section: the first reason is the
+            // one drawn as the tall photo card, so reordering the list has to
+            // carry the picture with the words it belongs to.
+            hint: "The first one is drawn as a large card with a photo.",
             item: [
               { key: "icon", label: "Icon", type: "icon", icons: ICONS_ABOUT },
               { key: "title", label: "Title", type: "text" },
               { key: "description", label: "Description", type: "textarea" },
+              { key: "image", label: "Photo (first reason only)", type: "image" },
             ],
           },
         ],

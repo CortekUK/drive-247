@@ -386,3 +386,65 @@
   outline: 2px solid var(--brand-progress-bar);
   background-color: color-mix(in srgb, var(--brand-progress-bar) 8%, transparent);
 }
+
+/* Empty fields still need a target. A field an operator has never filled in
+   renders as nothing at all, which in edit mode means there is nowhere to
+   click — so in edit mode only, an empty marked node shows its placeholder. */
+.cms-edit-mode [data-cms][data-cms-placeholder]:empty::before {
+  content: attr(data-cms-placeholder);
+  opacity: 0.45;
+  font-style: italic;
+}
+.cms-edit-mode [data-cms][data-cms-placeholder]:empty {
+  display: inline-block;
+  min-width: 4ch;
+}
+
+/* ── the image handles ──────────────────────────────────────────────────────
+   One layer on <body>, positioned in DOCUMENT coordinates, holding one frame
+   per `[data-cms-image]`. The frame does not take clicks — only its pill does
+   — so an image the size of a section (the CTA banner's background) never
+   covers the editable headline sitting on top of it. */
+.cms-image-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 2147483000;
+}
+.cms-image-frame {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 6px;
+  outline: 1.5px dashed color-mix(in srgb, var(--brand-progress-bar) 55%, transparent);
+  outline-offset: 2px;
+  transition: outline-color 120ms ease;
+}
+.cms-image-btn {
+  pointer-events: auto;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brand-progress-bar, #4f46e5);
+  color: #fff;
+  font: 500 11px/1 var(--font-dm-sans), system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  opacity: 0.82;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.cms-image-btn:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+.cms-image-frame:has(.cms-image-btn:hover) {
+  outline-color: var(--brand-progress-bar);
+}

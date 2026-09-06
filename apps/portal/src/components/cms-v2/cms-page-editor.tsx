@@ -1125,6 +1125,12 @@ function SubField({
   if (spec.type === "number") {
     return <NumberInput value={value} readOnly={readOnly} onChange={onChange} />;
   }
+  if (spec.type === "image") {
+    // A row can carry a picture — the "why choose us" list's first reason is
+    // drawn as a photo card on the v2 site. Same control as a top-level image
+    // field, so there is one uploader and one set of limits.
+    return <ImageField value={value ?? ""} readOnly={readOnly} onChange={onChange} />;
+  }
   if (spec.type === "textarea") {
     return (
       <textarea

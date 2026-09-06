@@ -42,8 +42,17 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${dmSans.variable} font-sans`}>
-        <Providers tenantSlug={tenantSlug}>{children}</Providers>
-        {editMode && <CmsEditOverlay />}
+        {/*
+          The overlay sits INSIDE Providers, not beside it. It needs the React
+          Query client: the FAQ questions and the customer quotes are table rows
+          held in the client cache, and a `cms:refresh` has to invalidate them or
+          an operator's edit to a question never appears. It renders null and
+          mounts only in edit mode, so this costs a visitor nothing.
+        */}
+        <Providers tenantSlug={tenantSlug}>
+          {children}
+          {editMode && <CmsEditOverlay />}
+        </Providers>
       </body>
     </html>
   );
