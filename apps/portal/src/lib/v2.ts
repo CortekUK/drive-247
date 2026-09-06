@@ -45,7 +45,8 @@ export type V2Area =
   | 'rentals'
   | 'customers'
   | 'cms'
-  | 'vehicles';
+  | 'vehicles'
+  | 'insights';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -76,6 +77,12 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
   cms: [NORTHWIND],
   /** The vehicle detail screen — nine tabs in two rails. The LIST is still v1. */
   vehicles: [NORTHWIND],
+  /**
+   * `/insights` — one screen of honest money, intended to replace `/reports`
+   * and `/pl-dashboard`. Neither of those is touched; both keep serving every
+   * tenant until this has been proved on the canary and widened.
+   */
+  insights: [NORTHWIND],
 };
 
 /**

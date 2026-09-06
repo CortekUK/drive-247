@@ -56,6 +56,7 @@ import {
   Ban,
   BadgeAlert,
   BarChart3,
+  LineChart,
   Settings,
   Globe,
   Home,
@@ -111,6 +112,7 @@ import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-cust
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
 import { TraxIcon } from "@/components/chat/TraxIcon";
+import { useV2 } from "@/lib/v2-context";
 
 /**
  * The search field's specular sweep.
@@ -317,6 +319,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     graceSeverity,
   } = useTenantSubscription();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
+  // `/insights` 404s for any tenant not on the v2 area, so the nav entry has to
+  // ask the same gate the route does. This sidebar is northwind-only today,
+  // which makes the check look redundant — it stops being redundant the moment
+  // the `chrome` area widens ahead of `insights`, and a nav item that leads to
+  // a 404 is exactly the quiet breakage that ordering produces.
+  const insightsV2 = useV2("insights");
 
   // A failed payment outranks everything else in the footer badge: it is the
   // one state that needs the operator to DO something, and it escalates
@@ -563,6 +571,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         { name: "Insurances", href: "/insurances", icon: ShieldCheck },
         { name: "Agreements", href: "/agreements", icon: FileSignature },
         { name: "Reminders", href: "/reminders", icon: Bell, badge: reminderStats?.due || 0 },
+        // Listed ABOVE the two screens it is meant to replace, so the canary
+        // reaches for it first while both originals stay exactly where they
+        // were for everyone else.
+        ...(insightsV2
+          ? [{ name: "Insights", href: "/insights", icon: LineChart }]
+          : []),
         { name: "Reports", href: "/reports", icon: BarChart3 },
         { name: "P&L Dashboard", href: "/pl-dashboard", icon: TrendingUp },
       ],

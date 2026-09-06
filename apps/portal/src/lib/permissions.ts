@@ -174,6 +174,16 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   '/agreements': 'agreements',
   '/reminders': 'reminders',
   '/reports': 'reports',
+  // Insights (v2, northwind-only) deliberately INHERITS the 'reports' tab key.
+  // Same reasoning as /fleet-health above: getTabKeyForRoute() returns null for
+  // an unlisted route and canAccessRoute() treats null as ALLOWED, so omitting
+  // this entry would expose the operator's entire P&L to every manager
+  // regardless of their grants — the omission, not the entry, is the risk. A
+  // dedicated key would also have to be mirrored into the hardcoded
+  // ALLOWED_TAB_KEYS arrays in the update-manager-permissions and
+  // admin-create-user edge functions and backfilled for every existing manager.
+  // Anyone who may read the reports may read this; nobody new gains access.
+  '/insights': 'reports',
   '/pl-dashboard': 'pl_dashboard',
   '/cms': 'cms',
   '/audit-logs': 'audit_logs',
