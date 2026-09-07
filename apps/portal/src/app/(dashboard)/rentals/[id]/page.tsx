@@ -93,6 +93,8 @@ import { TeslaLogo } from "@/components/icons/tesla-logo";
 import { useTeslaSuperchargerCharges } from "@/hooks/use-tesla-supercharger-charges";
 import { SuperchargerChargesDialog } from "@/components/rentals/supercharger-charges-dialog";
 import { isAreaHidden } from "@/lib/lean-areas";
+import { useV2 } from "@/lib/v2-context";
+import { RentalDetailV2 } from "@/components/rentals-v2/rental-detail/rental-detail-v2";
 
 // Parse a Postgres DATE string ("YYYY-MM-DD") as local midnight. `new Date("2026-05-20")`
 // is parsed as UTC midnight, which renders as the previous day in any timezone
@@ -8096,4 +8098,22 @@ const RentalDetail = () => {
   );
 };
 
-export default RentalDetail;
+/**
+ * The v2 gate, wrapped AROUND `RentalDetail` rather than placed inside it.
+ *
+ * An early `return` at the top of `RentalDetail` would have been shorter and
+ * would have been wrong: everything above it — several dozen `useQuery`s,
+ * `useState`s and `useEffect`s — would become conditional hooks, which React
+ * forbids and which breaks the moment a tenant navigates between a v1 and a v2
+ * rental in one session.
+ *
+ * Wrapping instead means v1's hooks never run at all for the canary, and v1 is
+ * byte-identical for the other tenants: this file's only change is two imports
+ * and this component. Retiring the area is deleting the `if` and this block.
+ */
+const RentalDetailPage = () => {
+  const v2 = useV2("rentals");
+  return v2 ? <RentalDetailV2 /> : <RentalDetail />;
+};
+
+export default RentalDetailPage;

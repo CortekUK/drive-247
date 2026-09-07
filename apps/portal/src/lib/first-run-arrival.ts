@@ -151,6 +151,24 @@ const PIECE_SHAPES: readonly { w: number; h: number; radius: string }[] = [
 let celebrated = false;
 
 /**
+ * A burst has been promised but has not been drawn yet.
+ *
+ * This exists for one specific race. The wizard writes its row with
+ * `await save.mutateAsync(...)`, and that mutation invalidates the query
+ * feeding `shouldShow` — so `wizardPending` can flip false, and the
+ * walkthrough's autostart effect can run, WHILE the write is still in flight
+ * and before `celebrateArrival` has been called. That effect asks
+ * `arrivalHoldMs()` how long to wait; without this flag the honest answer is
+ * "nothing is running, go now", and the Welcome card lands ~700ms later with
+ * confetti still in the air around it.
+ *
+ * So the wizard arms first and celebrates after. Armed means "assume a full
+ * burst is still to come" — the pessimistic answer, and the one that keeps the
+ * card off the celebration.
+ */
+let armed = false;
+
+/**
  * `Date.now()` at which the burst finishes, or 0 if none is running.
  *
  * Read by `arrivalHoldMs()` so the walkthrough can wait the remainder out. It
@@ -188,6 +206,7 @@ function teardown(): void {
   }
   animations = [];
   finishesAt = 0;
+  armed = false;
   layer?.remove();
   layer = null;
 }
@@ -328,6 +347,7 @@ function scatterConfetti(): void {
   }
 
   animations = started;
+  armed = false;
   finishesAt = Date.now() + ARRIVAL_CONFETTI_MS;
   // The one guarantee. Whatever the animations do or fail to do, the layer is
   // off the page at the cap.
@@ -345,8 +365,18 @@ export function celebrateArrival(reduced: boolean): void {
   // happened" and not "the arrival has been drawn".
   if (celebrated) return;
   celebrated = true;
-  if (reduced) return;
+  if (reduced) {
+    // Nothing will be drawn, so nothing should be waited for. Clearing the
+    // promise here is what stops a reduced-motion user sitting through 2.6s of
+    // held-back walkthrough for a burst that never comes.
+    armed = false;
+    return;
+  }
   scatterConfetti();
+  // `scatterConfetti` clears `armed` when it draws, and its own teardown
+  // clears it when it cannot — so a browser with no Web Animations API also
+  // stops holding the tour.
+  armed = false;
 }
 
 /**
@@ -365,8 +395,40 @@ export function celebrateArrival(reduced: boolean): void {
  * is the one where there is visibly something to wait for.
  */
 export function arrivalHoldMs(): number {
-  if (finishesAt === 0) return 0;
+  // Promised but not yet drawn: quote the whole run. See `armed` above — this
+  // is the branch that keeps the Welcome card off the confetti when the tour
+  // asks during the wizard's write.
+  if (finishesAt === 0) return armed ? ARRIVAL_CONFETTI_MS : 0;
   return Math.max(0, finishesAt - Date.now());
+}
+
+/**
+ * Promise a burst that has not been drawn yet, so anything asking
+ * `arrivalHoldMs()` in the meantime waits for it.
+ *
+ * Draws nothing and makes no sound. Call it synchronously at the START of the
+ * submit handler; `celebrateArrival` still does the drawing, and still only
+ * once the row is safely written — a failed write gets the error state and no
+ * celebration, and the promise is cleared by the teardown that follows.
+ *
+ * Ignored once the celebration has already happened, so a retry cannot re-arm
+ * a burst that is over.
+ */
+export function armArrival(): void {
+  if (celebrated) return;
+  armed = true;
+}
+
+/**
+ * Take back a promise that will not be kept.
+ *
+ * The wizard arms before its write and celebrates after it. If the write
+ * FAILS there is no celebration — and without this the promise would stand for
+ * the life of the page, making the walkthrough wait 2.6s for a burst that is
+ * never coming. Call it from the failure path.
+ */
+export function disarmArrival(): void {
+  armed = false;
 }
 
 /**
@@ -378,5 +440,6 @@ export function arrivalHoldMs(): number {
  */
 export function resetArrivalCelebration(): void {
   celebrated = false;
+  armed = false;
   teardown();
 }

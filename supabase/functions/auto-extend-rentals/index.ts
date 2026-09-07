@@ -848,13 +848,24 @@ Deno.serve(async (req) => {
             stripe_checkout_session_id: session.id, checkout_url: session.url,
           }).eq("id", ext.id);
 
-          // booking_source MUST be 'website': payments_booking_source_check permits
-          // only admin|website, so the previous value 'auto_extend' meant this
-          // insert failed EVERY time and the error was thrown away. Without this
-          // row, stripe-webhook-live's lookup by session id finds nothing, so a
-          // customer could pay the link and nothing settled, allocated, rolled the
-          // end date, or un-paused the rental. 'website' is also the value the
-          // webhook already settles under.
+          // Two things, both learned the hard way, and both load-bearing.
+          //
+          // booking_source MUST be 'website'. `payments_booking_source_check`
+          // permits only admin|website, so the previous value 'auto_extend'
+          // meant this insert failed EVERY time — and the error was thrown
+          // away. Without this row, stripe-webhook-live's lookup by session id
+          // finds nothing, so a customer could pay the link and nothing
+          // settled, allocated, rolled the end date, or un-paused the rental.
+          // 'website' is also the value the webhook already settles under.
+          //
+          // And CHECK the error. This insert was historically unchecked: a
+          // silent failure left a payable session — already stamped on
+          // rental_extensions above — with NO payments row, so when the
+          // customer paid, both the webhook and the poller looked it up by
+          // session id, found nothing, and no-op'd. Money stranded, extension
+          // stuck "approved" (RevTek/Sabrina $294.25, post UK->UAE). The
+          // reconcilers now self-heal by reconstructing the row from the
+          // extension, but the failure still has to be surfaced here.
           const { error: payErr } = await supabase.from("payments").insert({
             rental_id: r.id, customer_id: r.customer_id, vehicle_id: r.vehicle_id, tenant_id: r.tenant_id,
             extension_id: ext.id, amount: dueNow, remaining_amount: dueNow,
@@ -866,9 +877,11 @@ Deno.serve(async (req) => {
           });
           if (payErr) {
             // Never silent again: a missing row means the customer cannot be
-            // credited for a payment they are about to be asked to make.
-            console.error(`[auto-extend] payments insert FAILED for ${r.id} ext#${seq}: ${payErr.message}`);
-            errors.push(`${String(r.id).slice(0, 8)}: payments row not created — ${payErr.message}`);
+            // credited for a payment they are about to be asked to make. The
+            // session id is in the log line on purpose — it is the only handle
+            // that ties this failure to the link the customer will click.
+            console.error(`[auto-extend] pay-link payments insert FAILED ${r.id} ext#${seq} session=${session.id}: ${payErr.message} — reconcilers will self-heal on payment`);
+            errors.push(`${String(r.id).slice(0, 8)}: pay-link payments-row insert failed (session ${session.id}) — self-heal on pay`);
           }
 
           const total = fmtCurrency(dueNow, ctx.currencyCode);

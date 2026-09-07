@@ -218,3 +218,90 @@ export function netMargin(t: Totals): number | null {
   if (t.operatingRevenue <= 0) return null;
   return (t.netProfit / t.operatingRevenue) * 100;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * The receipt
+ * ────────────────────────────────────────────────────────────────────────────
+ *
+ * The same model, said out loud. `Totals` is the accountant's view — revenue,
+ * cost, profit. `Receipt` is the operator's: money in, money back out, money
+ * that was never theirs, money spent, and what is left.
+ *
+ * It is derived from `Totals` rather than re-summed from the ledger, which is
+ * deliberate. Two functions each walking `pnl_entries` with their own idea of
+ * what counts is exactly how /reports and /pl-dashboard came to disagree with
+ * each other. Deriving makes the reconciliation structural instead of a thing
+ * someone has to remember to check:
+ *
+ *     tookIn      = operatingRevenue + passThrough    (the whole Revenue side)
+ *     neverYours  = passThrough
+ *     spent       = operatingCost
+ *     ⇒ tookIn − neverYours ≡ operatingRevenue        by construction
+ *     ⇒ kept     ≡ netProfit − gaveBack               by construction
+ *
+ * `classify()` puts every Revenue row in exactly one of operating_revenue and
+ * non_revenue, so the first identity cannot drift unless `classify` itself is
+ * broken — and then every figure on the page is wrong together, visibly, rather
+ * than two of them being wrong quietly relative to each other.
+ *
+ * ── Why refunds are a line of their own ─────────────────────────────────────
+ *
+ * Refunds live in `payments.refund_amount` and are NEVER written back into
+ * `pnl_entries`: the ledger holds no negative amounts at all (0 of 12,799 rows
+ * on production, 2026-09-06) and `pnl_entries.payment_id` is populated on
+ * exactly none of them. So the ledger's Revenue side does not know a refund
+ * happened, and money given back has to be subtracted here or it is not
+ * subtracted anywhere.
+ *
+ * The counterpart caveat, stated because it is real: whether the refunded
+ * booking's revenue was ever booked to the ledger in the first place varies by
+ * how the rental ended — a cancelled booking often has no ledger rows at all.
+ * Where that happens this line subtracts money the top line never contained,
+ * which understates `kept`. Understating what you kept is the safe direction to
+ * be wrong in, and the honest fix is upstream in whatever writes the ledger,
+ * not a correction fudged into a reporting screen.
+ */
+export type Receipt = {
+  /** Everything on the Revenue side of the ledger, gross. */
+  tookIn: number;
+  /** Refunds paid back to customers inside the period. */
+  gaveBack: number;
+  /** Sales tax and refundable deposits — collected, never earned. */
+  neverYours: number;
+  /** What it cost to run the operation. Vehicle purchases/sales excluded. */
+  spent: number;
+  /** tookIn − gaveBack − neverYours − spent. The one figure they came for. */
+  kept: number;
+  /** Vehicle purchases and disposals. Outside the sum, never inside it. */
+  carPurchases: number;
+};
+
+/** Build the receipt from the ledger totals and the period's refunds. */
+export function receiptFor(totals: Totals, gaveBack: number): Receipt {
+  const tookIn = totals.operatingRevenue + totals.passThrough;
+  const neverYours = totals.passThrough;
+  const spent = totals.operatingCost;
+
+  return {
+    tookIn,
+    gaveBack,
+    neverYours,
+    spent,
+    // Written out the long way on purpose: this is the arithmetic the screen
+    // shows the operator, line for line, and it should be the arithmetic the
+    // code does. It is identically `totals.netProfit - gaveBack`.
+    kept: tookIn - gaveBack - neverYours - spent,
+    carPurchases: totals.fleetInvestment,
+  };
+}
+
+/**
+ * What share of the money that came in the operator actually kept.
+ *
+ * Null rather than 0 when nothing came in — same rule as `netMargin`, for the
+ * same reason. "Kept 0% of nothing" is not a fact about a business.
+ */
+export function keptShare(r: Receipt): number | null {
+  if (r.tookIn <= 0) return null;
+  return (r.kept / r.tookIn) * 100;
+}

@@ -122,7 +122,7 @@ const CustomersList = () => {
   const searchParams = useSearchParams();
   const { tenant, tenantSlug } = useTenant();
   const { logAction } = useAuditLog();
-  const { canEdit } = useManagerPermissions();
+  const { canEdit, canView } = useManagerPermissions();
 
   // State from URL params
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -687,6 +687,31 @@ const CustomersList = () => {
           <p className="text-muted-foreground text-sm sm:text-base">Manage customers and account balances</p>
         </div>
         <div className="flex items-center gap-2">
+          {/*
+            Blocked customers used to be its own sidebar entry, under a second
+            "Customers" group. It belongs here instead: it is a view OF this
+            list — the rows this page deliberately excludes — not a separate
+            place in the product.
+
+            CANARY ONLY. This button is the northwind sidebar's replacement for
+            an entry the other 36 tenants still have in their own rail, so
+            showing it to them would be a second door to a page they can already
+            reach — a visible change on a shared screen for tenants who are not
+            part of this work.
+
+            Gated on canView, not canEdit: seeing who is blocked is a read.
+            `blocked_customers` is a real tab key in permissions.ts, so a
+            manager without it loses the button here exactly as they lost the
+            sidebar link before.
+          */}
+          {isLeanTenant(tenantSlug) && canView('blocked_customers') && (
+            <Link href="/blocked-customers" className="shrink-0">
+              <Button variant="outline" className="flex-1 sm:flex-none">
+                <Ban className="h-4 w-4 mr-2" />
+                Blocked
+              </Button>
+            </Link>
+          )}
           {customers && customers.length > 0 && (
             <Link href="/customers/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, Check, Compass, LayoutDashboard, Loader2, Sparkles } from 'lucide-react';
+import { ArrowRight, Check, Compass, LayoutDashboard, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui-v2/button';
+import { cn } from '@/lib/utils';
 import { useFirstRentalTour } from '@/hooks/use-first-rental-tour';
 import { routePathname, type ResolvedStep, type TourSide, type TourStep } from '@/lib/first-rental-tour';
 
@@ -101,6 +102,13 @@ interface Rect {
 
 const CARD_WIDTH = 352;
 const CENTERED_WIDTH = 408;
+/**
+ * The Welcome card only. It is the one card that is an introduction rather
+ * than a label on something — Trax says who it is and what the next minute is
+ * for — and at 408px that landed as a notification. Wide enough to carry a
+ * two-line headline at a size worth reading.
+ */
+const WELCOME_WIDTH = 560;
 const GAP = 16;
 const PAD = 8;
 
@@ -280,7 +288,10 @@ function TourLayer({
   const onDashboard = typeof window !== 'undefined' && window.location.pathname === '/';
   const viewportW = typeof window === 'undefined' ? 1280 : window.innerWidth;
   const viewportH = typeof window === 'undefined' ? 800 : window.innerHeight;
-  const cardW = centered ? Math.min(CENTERED_WIDTH, viewportW - GAP * 2) : Math.min(CARD_WIDTH, viewportW - GAP * 2);
+  const isWelcome = step.id === 'welcome';
+  const cardW = centered
+    ? Math.min(isWelcome ? WELCOME_WIDTH : CENTERED_WIDTH, viewportW - GAP * 2)
+    : Math.min(CARD_WIDTH, viewportW - GAP * 2);
 
   // Place to the preferred side, falling through the alternatives until one
   // fits, then clamp into the viewport whatever happens. Narrow screens end up
@@ -289,6 +300,8 @@ function TourLayer({
   let top: number;
   if (centered || !rect) {
     left = (viewportW - cardW) / 2;
+    // Trax sits to the LEFT of the Welcome card now, not under it, so there is
+    // no vertical overhang to make room for and the card centres normally.
     top = Math.max(GAP, viewportH * 0.4 - cardH / 2);
   } else {
     const fits = (p: { left: number; top: number }) =>
@@ -317,6 +330,7 @@ function TourLayer({
     >
       {centered ? (
         // No anchor: a plain wash, so the card reads as the one thing on screen.
+        //
         <motion.div
           aria-hidden
           initial={reduceMotion ? false : { opacity: 0 }}
@@ -364,16 +378,18 @@ function TourLayer({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={reduceMotion ? undefined : { opacity: 0, y: -6, scale: 0.98 }}
           transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: 'easeOut' }}
-          className="absolute flex flex-col gap-4 rounded-3xl bg-card p-5 text-card-foreground shadow-md outline-none ring-1 ring-foreground/10 dark:ring-foreground/15"
+          className={cn(
+            'absolute flex flex-col rounded-3xl bg-card text-card-foreground shadow-md outline-none ring-1 ring-foreground/10 dark:ring-foreground/15',
+            isWelcome ? 'gap-5 p-7 sm:p-8' : 'gap-4 p-5',
+          )}
           style={{ top, left, width: cardW, pointerEvents: 'auto' }}
         >
-          {/* Header — mark, step counter */}
+          {/* Header — who is talking, and where you are. No mark: a mascot was
+              tried here and dropped, and a generic AI glyph in its place would
+              say less than the name does. */}
           <div className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
-                <Sparkles className="size-4" />
-              </span>
-              <span className="text-xs font-medium text-muted-foreground">Walkthrough</span>
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-foreground/55">
+              Trax
             </span>
             <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
               {index + 1} of {steps.length}
@@ -397,10 +413,24 @@ function TourLayer({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <h2 className="font-heading text-lg font-medium leading-snug text-foreground">
+            <h2
+              className={cn(
+                'font-heading font-medium text-foreground',
+                isWelcome
+                  ? 'text-[28px] leading-[1.15] tracking-[-0.02em] sm:text-[32px]'
+                  : 'text-lg leading-snug',
+              )}
+            >
               {step.title}
             </h2>
-            <p className="text-[13px] leading-relaxed text-muted-foreground">{step.body}</p>
+            <p
+              className={cn(
+                'leading-relaxed text-muted-foreground',
+                isWelcome ? 'mt-1 text-[15px]' : 'text-[13px]',
+              )}
+            >
+              {step.body}
+            </p>
             {detail && (
               <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full bg-primary/[0.07] px-2.5 py-1 text-[12px] font-medium text-primary ring-1 ring-primary/10">
                 <Compass className="size-3" />
@@ -489,6 +519,7 @@ function TourLayer({
               )}
             </div>
           </div>
+
         </motion.div>
       </AnimatePresence>
     </div>
@@ -550,9 +581,6 @@ function ResumePrompt({
         transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: 'easeOut' }}
         className="pointer-events-auto flex w-full max-w-md flex-col gap-3 rounded-3xl bg-card p-4 text-card-foreground shadow-md ring-1 ring-foreground/10 dark:ring-foreground/15 sm:flex-row sm:items-center"
       >
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
-          <Sparkles className="size-4" />
-        </span>
         <p className="flex-1 text-[13px] leading-snug text-foreground">
           Pick up the walkthrough where you left off?
         </p>

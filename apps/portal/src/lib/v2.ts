@@ -46,7 +46,8 @@ export type V2Area =
   | 'customers'
   | 'cms'
   | 'vehicles'
-  | 'insights';
+  | 'insights'
+  | 'availability';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -71,11 +72,11 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
   login: [NORTHWIND],
   /** The v2 rentals list filter panel. */
   rentals: [NORTHWIND],
-  /** The customer record — three columns, no Save, no tabs across the top. */
+  /** The customer record — a scoped rail in place of the sidebar, no Save. */
   customers: [NORTHWIND],
   /** Website Content — the CMS overview and the per-page section editor. */
   cms: [NORTHWIND],
-  /** The vehicle detail screen — nine tabs in two rails. The LIST is still v1. */
+  /** The vehicle record — a scoped rail in place of the sidebar. LIST is still v1. */
   vehicles: [NORTHWIND],
   /**
    * `/insights` — one screen of honest money, intended to replace `/reports`
@@ -83,6 +84,16 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * tenant until this has been proved on the canary and widened.
    */
   insights: [NORTHWIND],
+  /**
+   * `/blocked-dates` — the Availability screen as a week calendar, in place of
+   * a table of blocked ranges plus a form of seven weekday rows.
+   *
+   * Currently a READ-ONLY preview: it reads the tenant's real working hours and
+   * blocked dates and writes nothing, so widening this entry cannot change any
+   * tenant's actual availability — only what they are shown. The v1 cards are
+   * untouched and still serve everyone else.
+   */
+  availability: [NORTHWIND],
 };
 
 /**

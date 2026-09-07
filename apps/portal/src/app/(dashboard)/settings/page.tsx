@@ -43,7 +43,14 @@ import { ExtrasSettings } from '@/components/settings/extras-settings';
 import { BonzahSettings } from '@/components/settings/bonzah-settings';
 import { InshurSettings } from '@/components/settings/inshur-settings';
 import { ESignSettings } from '@/components/settings/esign-settings';
-import { isAreaHidden, isLeanTenant } from '@/lib/lean-areas';
+import {
+  SETTINGS_TAB_BOARD_ROUTE,
+  isAreaHidden,
+  isLeanTenant,
+  isSettingsTabHidden,
+  settingsTabBoardCard,
+} from '@/lib/lean-areas';
+import { BonzahOnboardingForm } from '@/components/settings/bonzah-onboarding';
 import { TwilioSmsSettings } from '@/components/settings/twilio-sms-settings';
 import { WhatsAppMetaSettings } from '@/components/settings/whatsapp-meta-settings';
 import { CommunicationSettings } from '@/components/settings/communication-settings';
@@ -328,11 +335,43 @@ const Settings = () => {
   // Removing the key widens access; it does not narrow it.
   const hideInshurTab = isAreaHidden('inshur', tenantSlug);
 
+  // ── Tabs the Integrations board now owns ──────────────────────────────────
+  //
+  // Stripe Connect, Square, Twilio Messages, Twilio Calling, Bonzah and
+  // BoldSign each have a card on `/integrations` that fully manages them, so
+  // for a lean tenant these tabs were a SECOND place to configure the same
+  // thing. Presentation only, and lean-only: `/integrations` is `notFound()`
+  // for the other 56 tenants (`isV2('appearance', …)`), so every one of them
+  // keeps reaching Stripe onboarding, Twilio setup, Bonzah credentials and the
+  // BoldSign mode switch exactly where they always have. See lib/lean-areas.
+  const hidePaymentsTab = isAreaHidden('settings-payments', tenantSlug);
+  const hideMessagingTab = isAreaHidden('settings-messaging', tenantSlug);
+  const hideESignTab = isAreaHidden('settings-esign', tenantSlug);
+
+  // Insurance is the one that does NOT stop rendering. Bonzah's 10-step
+  // application wizard lives only in components/settings/bonzah-onboarding/,
+  // and the board's Bonzah panel deep-links back into it — "Start the Bonzah
+  // application" and "Update and resubmit" both point at ?tab=insurance. So the
+  // tab leaves the navigation and the BODY narrows to the wizard alone: the one
+  // part of this tab the panel does not carry. Everything else that was here
+  // (credentials, verify, disconnect, balance, top-up, retry-all, low-balance
+  // alert, brochure URL) is on the card, and only on the card.
+  const hideInsuranceNav = isAreaHidden('settings-insurance', tenantSlug);
+
   // The tabs the lean gate hides, as one set so the fallback below can never
   // land on another hidden tab.
+  //
+  // `insurance` is deliberately ABSENT — it is hidden from navigation but still
+  // renders, per the note above. `tesla` is newly present: its body was already
+  // blanked for lean tenants, so `?tab=tesla` typed by hand was selecting a tab
+  // that drew nothing at all.
   const hiddenSettingsTabs = new Set<string>([
     ...(hideAccountingTab ? ['accounting'] : []),
     ...(hideInshurTab ? ['inshur'] : []),
+    ...(hidePaymentsTab ? ['payments'] : []),
+    ...(hideMessagingTab ? ['messaging'] : []),
+    ...(hideESignTab ? ['esign'] : []),
+    ...(hideTeslaTab ? ['tesla'] : []),
   ]);
 
   // The tab actually rendered. Identical to `activeTab` for every tenant with
@@ -849,12 +888,43 @@ const Settings = () => {
       // This runs on mount, when `tenantSlug` can still be null for a tick, so
       // it is the first of two guards — `effectiveTab` below is the one that
       // holds once the slug actually resolves.
-      !(tabParam === 'accounting' && hideAccountingTab) &&
-      !(tabParam === 'inshur' && hideInshurTab)
+      !hiddenSettingsTabs.has(tabParam)
     ) {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
+
+  // A hidden tab that the board now owns is a HAND-OFF, not a dead end.
+  //
+  // Roughly twenty places already deep-link these tabs — the dashboard setup
+  // guide, the platform-status checklist, the Bonzah balance widget and banner,
+  // the reminders and insurances pages, `stripe-connect-status.ts` — and two
+  // Supabase edge functions HARDCODE `/settings?tab=payments` as their OAuth
+  // landing (`stripe-oauth-callback` appends `&oauth=ok|incomplete|error`,
+  // `square-oauth-callback` appends `&square=…&reason=…`). Edge functions are
+  // not this change's to edit (V2_PLAN §7), and without this an operator coming
+  // back from Stripe or Square would be bounced to General and never see the
+  // outcome of what they just did.
+  //
+  // So the search params are carried across intact: the board's Square chip
+  // reads `?square=` on mount (`useSquareOAuthReturn`) and the board reads
+  // `?open=` to reopen the right card. `router.replace` rather than `push` so
+  // Back does not bounce the operator between the two screens.
+  //
+  // Fails OPEN twice over — no slug means no hidden tab means no redirect, and
+  // a tab with no board card (`insurance`) is never redirected at all.
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (!tabParam || !isSettingsTabHidden(tabParam, tenantSlug)) return;
+    const card = settingsTabBoardCard(tabParam);
+    if (card === null) return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('tab');
+    if (card) params.set('open', card);
+    const qs = params.toString();
+    router.replace(`${SETTINGS_TAB_BOARD_ROUTE}${qs ? `?${qs}` : ''}`);
+  }, [searchParams, tenantSlug, router]);
 
   // Sync general form with loaded settings and tenant context
   useEffect(() => {
@@ -1923,10 +1993,9 @@ const Settings = () => {
                 // item that does not describe what they would find there.
                 { value: 'payments', icon: CreditCard, label: 'Payments' },
                 { value: 'accounting', icon: Landmark, label: 'Accounting' },
-                // NOTE: this list is the trigger row only. The gate for
-                // Accounting is applied in the .filter() chain below, next to
-                // E-Sign and Tesla, and again on the TabsContent — see
-                // hideAccountingTab.
+                // NOTE: this list is the trigger row only. Every lean gate is
+                // applied in the single isSettingsTabHidden() filter below, and
+                // again on the matching TabsContent.
                 { value: 'reminders', icon: Bell, label: 'Notifications' },
                 { value: 'push', icon: BellRing, label: 'Push' },
                 { value: 'templates', icon: FileText, label: 'Templates' },
@@ -1939,19 +2008,20 @@ const Settings = () => {
                 { value: 'subscription', icon: Crown, label: 'Subscription' },
               ] as const)
                 .filter(item => canViewSettings(item.value))
-                // Lean tenants: no E-Sign tab — its only content is the
-                // test/live mode toggle, and lean tenants are always live.
-                .filter(item => !(item.value === 'esign' && hideESignModeToggle))
-                // Lean tenants: no Tesla Fleet tab.
-                .filter(item => !(item.value === 'tesla' && hideTeslaTab))
-                // Lean tenants: no Accounting tab. Presentation only — the
-                // Xero/Zoho connections, mappings and sync log all stay put
-                // for every other tenant.
-                .filter(item => !(item.value === 'accounting' && hideAccountingTab))
-                // Lean tenants: no INSHUR tab. Presentation only — the ABI
-                // credentials, eligibility cache and coverage rows all stay put
-                // for every other tenant.
-                .filter(item => !(item.value === 'inshur' && hideInshurTab))
+                // Lean tenants: every tab the Integrations board owns leaves
+                // this row — Payments (Stripe Connect + Square), Messaging
+                // (Twilio Messages + Twilio Calling), Insurance (Bonzah),
+                // E-Signatures (BoldSign), Accounting (Xero + Zoho), Tesla and
+                // INSHUR. Presentation only, and lean-only: `/integrations` is
+                // notFound() for the other 56 tenants, so this row is the only
+                // way any of THEM reaches those panels and must never change.
+                //
+                // ONE predicate rather than the five chained ones this replaced,
+                // and the same predicate the desktop sidebar uses. The two lists
+                // disagreeing is not hypothetical: E-Signatures was filtered out
+                // here and left in the sidebar, so a lean tenant could still
+                // click it and land on an empty page.
+                .filter(item => !isSettingsTabHidden(item.value, tenantSlug))
                 .map(item => (
                 <TabsTrigger key={item.value} value={item.value} className="flex items-center gap-1.5 whitespace-nowrap text-xs px-3">
                   <item.icon className="h-3.5 w-3.5" />{item.label}
@@ -3177,11 +3247,21 @@ const Settings = () => {
 
         </TabsContent>
 
-        {/* Payments Tab */}
-        <TabsContent value="payments" className="space-y-6">
-          {/* Stripe Connect */}
-          <StripeConnectSettings />
-        </TabsContent>
+        {/* Payments Tab — Stripe Connect / Square / own-Stripe / the provider
+            choice screen, all dispatched by StripeConnectSettings.
+
+            Gated alongside its trigger, not just the trigger: `?tab=payments`
+            is read straight out of the URL above and drives `activeTab`, and it
+            is also the hardcoded landing of two OAuth callbacks, so a lean
+            tenant would still open the v1 panel here after connecting. The
+            effect above forwards those hits to /integrations with their query
+            string intact. */}
+        {!hidePaymentsTab && (
+          <TabsContent value="payments" className="space-y-6">
+            {/* Stripe Connect */}
+            <StripeConnectSettings />
+          </TabsContent>
+        )}
 
         {/* Accounting Tab — Xero + Zoho Books connections (Growth+ tier).
             Gated alongside its trigger, not just the trigger: `?tab=accounting`
@@ -5471,14 +5551,30 @@ const Settings = () => {
         </TabsContent>
 
         {/* Integrations Tab (Communication + E-Sign + Bonzah + Blacklist) */}
-        {/* Messaging Tab */}
-        <TabsContent value="messaging" className="space-y-6">
-          <CommunicationSettings />
-        </TabsContent>
+        {/* Messaging Tab — Twilio SMS + Twilio Voice + call forwarding and
+            voicemail, all of which the Twilio Messages and Twilio Calling cards
+            now manage (and manage better: the board adds a greeting upload, an
+            E.164 self-dial guard and carrier-delivery diagnostics). */}
+        {!hideMessagingTab && (
+          <TabsContent value="messaging" className="space-y-6">
+            <CommunicationSettings />
+          </TabsContent>
+        )}
 
-        {/* Insurance Tab */}
+        {/* Insurance Tab.
+
+            The ONE tab that stays renderable after leaving the navigation. The
+            Bonzah card covers credentials, verify, disconnect, balance, top-up,
+            retry-all, the low-balance alert and the brochure URL — but NOT the
+            10-step application wizard (uploads, signature pad, graded quiz,
+            draft autosave), which lives only in components/settings/
+            bonzah-onboarding/ and which the card itself deep-links back to.
+            So a lean tenant gets the wizard alone: the panel's own sub-screen,
+            not a second configuration surface. BonzahSettings renders it under
+            the same `!isConnected` condition, and the form handles its own
+            submitted/approved/rejected states. */}
         <TabsContent value="insurance" className="space-y-6">
-          <BonzahSettings />
+          {hideInsuranceNav ? <BonzahOnboardingForm /> : <BonzahSettings />}
         </TabsContent>
 
         {/* INSHUR Period Z Tab. Guarded here as well as on the tab trigger so
@@ -5490,20 +5586,29 @@ const Settings = () => {
           </TabsContent>
         )}
 
-        {/* E-Signatures Tab */}
-        <TabsContent value="esign" className="space-y-6">
-          {/* Hidden for lean tenants — always live, so there is nothing to toggle.
-              Guarded here as well as on the tab trigger so ?tab=esign typed
-              directly cannot surface the switch. */}
-          {!hideESignModeToggle && <ESignSettings />}
-        </TabsContent>
+        {/* E-Signatures Tab. Whole tab now goes for lean tenants — its only
+            content was the test/live toggle, which was ALREADY blanked for them
+            (they are always live), so the sidebar was offering a link to an
+            empty page. BoldSign's card carries everything else: effective mode,
+            credit balance, low-credit alert, brand IDs, recent agreements. */}
+        {!hideESignTab && (
+          <TabsContent value="esign" className="space-y-6">
+            {/* Hidden for lean tenants — always live, so there is nothing to toggle.
+                Guarded here as well as on the tab trigger so ?tab=esign typed
+                directly cannot surface the switch. */}
+            {!hideESignModeToggle && <ESignSettings />}
+          </TabsContent>
+        )}
 
-        {/* Tesla Fleet Tab */}
-        <TabsContent value="tesla" className="space-y-6">
-          {/* Guarded here as well as on the trigger so ?tab=tesla typed
-              directly cannot surface the connect flow for a lean tenant. */}
-          {!hideTeslaTab && <TeslaFleetSettings />}
-        </TabsContent>
+        {/* Tesla Fleet Tab. The gate moved OUT to the TabsContent itself: it
+            used to blank the body while leaving the tab, so `?tab=tesla` typed
+            by hand selected a tab that drew nothing. `tesla` is now in
+            hiddenSettingsTabs too, so effectiveTab bounces instead. */}
+        {!hideTeslaTab && (
+          <TabsContent value="tesla" className="space-y-6">
+            <TeslaFleetSettings />
+          </TabsContent>
+        )}
 
         {/* Blacklist Tab */}
         <TabsContent value="blacklist" className="space-y-6">

@@ -15,11 +15,18 @@
  *      is a form that does not trust its own record.
  *
  *   2. TWO RAILS THAT DO DIFFERENT JOBS. The left is navigation and nothing
- *      else — a plain grouped sidebar in `app-sidebar-v2`'s own measurements,
- *      which looks the same every time you glance at it. The right is the
- *      readout: status, what needs attention, and the numbers worth knowing.
- *      Navigation is learned once; state is read constantly. They are not the
- *      same surface.
+ *      else, and it is not drawn here: the APP SIDEBAR becomes it while a
+ *      vehicle is open (`shared/layout/app-sidebar-v2.tsx`), exactly as it
+ *      becomes the Settings rail on `/settings` and the stage rail on a
+ *      rental. It reads no record state on purpose — a rail you find things in
+ *      by position has to look the same every time you glance at it. The right
+ *      rail, which this file does draw, is the opposite: status, what needs
+ *      attention, the numbers worth knowing. Navigation is learned once; state
+ *      is read constantly. They are not the same surface.
+ *
+ *      The two share the section through `?section=` and `sections.ts`, and
+ *      nothing else — they are siblings under `(dashboard)/layout.tsx` with no
+ *      provider between them, so the URL is the only channel they both have.
  *
  *   3. NINE TABS, NOT FIFTEEN. A tab for every QUESTION an operator asks,
  *      not one for every concern in the schema. Three groups of inputs, then
@@ -38,19 +45,8 @@
  * the routes, hooks and edge functions behind them still serve everyone else.
  */
 
-import { useCallback, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import {
-  Banknote,
-  CalendarDays,
-  Car,
-  Globe,
-  KeyRound,
-  MapPin,
-  Package,
-  ShieldCheck,
-  TrendingUp,
-} from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -70,15 +66,8 @@ import { useWeekendPricing } from "@/hooks/use-weekend-pricing";
 import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
 import type { DistanceUnit } from "@/lib/format-utils";
 
-import {
-  FormatProvider,
-  NavItem,
-  RailGroup,
-  RailHeader,
-  daysBetween,
-  daysUntil,
-  todayISO,
-} from "./kit";
+import { FormatProvider, daysBetween, daysUntil, todayISO } from "./kit";
+import { readSection, sectionHref, type SectionId } from "./sections";
 import { OverviewRail, type Attention, type Vital } from "./overview-rail";
 import { VehicleTab } from "./tab-vehicle";
 import { RatesTab } from "./tab-rates";
@@ -120,69 +109,11 @@ const EXPIRY_WARNING_DAYS = 30;
 const OPEN_RENTAL_STATUSES = ["Active", "Pending", "Confirmed"];
 
 /* ══════════════════════════════════════════════════════════════════════════
- * The rail
- * ═════════════════════════════════════════════════════════════════════════ */
-
-type TabKey =
-  | "vehicle"
-  | "rates"
-  | "addons"
-  | "availability"
-  | "pickup"
-  | "upkeep"
-  | "keys"
-  | "listing"
-  | "money";
-
-const TAB_KEYS: TabKey[] = [
-  "vehicle",
-  "rates",
-  "addons",
-  "availability",
-  "pickup",
-  "upkeep",
-  "keys",
-  "listing",
-  "money",
-];
-
-/**
- * The left rail, in full. Static — it reads no record state.
- *
- * `Record` is last because both of its tabs are produced from the seven above.
- */
-const GROUPS: { label: string; items: { key: TabKey; icon: typeof Car; label: string }[] }[] = [
-  { label: "The car", items: [{ key: "vehicle", icon: Car, label: "Vehicle" }] },
-  {
-    label: "Pricing",
-    items: [
-      { key: "rates", icon: Banknote, label: "Rates & mileage" },
-      { key: "addons", icon: Package, label: "Extras & surcharges" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { key: "availability", icon: CalendarDays, label: "Availability" },
-      { key: "pickup", icon: MapPin, label: "Pickup & handover" },
-      { key: "upkeep", icon: ShieldCheck, label: "Compliance & servicing" },
-      { key: "keys", icon: KeyRound, label: "Keys & documents" },
-    ],
-  },
-  {
-    label: "Record",
-    items: [
-      { key: "listing", icon: Globe, label: "Listing" },
-      { key: "money", icon: TrendingUp, label: "Money" },
-    ],
-  },
-];
-
-/* ══════════════════════════════════════════════════════════════════════════
  * Screen
  * ═════════════════════════════════════════════════════════════════════════ */
 
 export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { tenant, tenantSlug } = useTenant();
   const { canEdit } = useManagerPermissions();
@@ -193,27 +124,37 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
   const serviceInterval = SERVICE_INTERVAL[distanceUnit];
 
   /**
-   * The open tab is local state, MIRRORED into the URL.
+   * The open section lives in the URL and NOWHERE else.
    *
-   * The URL half is what makes "this car's compliance" a real link and a
-   * refresh land where the operator was. The local half is what makes the
-   * click instant: `router.replace` re-runs the route, which in the App Router
-   * means an RSC round trip for every tab press — visibly laggy in dev, and a
-   * request for nothing in production, since none of this page is server
-   * rendered. `history.replaceState` writes the address bar and stops there.
+   * There used to be local state here, mirrored into the address bar with
+   * `history.replaceState` — cheaper per click, because `router.replace`
+   * re-runs the route. It stopped being viable the moment the nav rail moved
+   * out of this file and into `app-sidebar-v2`: `replaceState` writes the URL
+   * without notifying anything subscribed to `useSearchParams`, so the rail
+   * would have kept highlighting the section the operator had just left.
+   *
+   * The rail and this panel are siblings under `(dashboard)/layout.tsx` with no
+   * provider between them, so the URL is the only channel they both already
+   * have. `readSection` makes a typo'd or stale `?section=` land on Vehicle
+   * rather than on a blank screen.
    */
-  const [tab, setTabState] = useState<TabKey>(() => {
-    const p = searchParams.get("tab") as TabKey | null;
-    return p && TAB_KEYS.includes(p) ? p : "vehicle";
-  });
+  const section = readSection(searchParams.get("section"));
 
-  const setTab = useCallback((next: TabKey) => {
-    setTabState(next);
-    if (typeof window === "undefined") return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("tab", next);
-    window.history.replaceState(null, "", url);
-  }, []);
+  /**
+   * Move to another section.
+   *
+   * `replace`, not `push`: nine sections behind one car would mean an operator
+   * who looked at all of them has to press Back nine times to leave the car.
+   * `scroll: false` because the frame does not scroll — each column scrolls its
+   * own content, so there is no page scroll position for Next to restore, and
+   * its default would fight the panel's own scroll container.
+   */
+  const goToSection = useCallback(
+    (next: SectionId) => {
+      router.replace(sectionHref(vehicleId, next), { scroll: false });
+    },
+    [router, vehicleId],
+  );
 
   /* ── data ───────────────────────────────────────────────────────────── */
 
@@ -447,7 +388,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
   const isListed = hardBlockers.length === 0;
 
   /** Which tab fixes a given blocker — so the Listing tab's rows can be clicked. */
-  const jumpFor = useCallback((key: string): TabKey | null => {
+  const jumpFor = useCallback((key: string): SectionId | null => {
     if (key === "retired") return "money";
     if (key === "paused") return "availability";
     if (key === "no-durations" || key === "no-rate") return "rates";
@@ -470,25 +411,60 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
 
   /* ── derived: the right rail ────────────────────────────────────────── */
 
+  /**
+   * The daily mileage term, as the Listing preview states it.
+   *
+   * Deliberately NOT routed through `resolveAgreementMileage`: that resolver
+   * answers "what does THIS rental's agreement say", and picks daily, weekly or
+   * monthly from the rental's own duration. A car sitting in the fleet has no
+   * rental and therefore no tier, so there is no single agreement term to
+   * resolve — the honest thing to show is the daily default the booking site
+   * quotes, labelled as such.
+   *
+   * What it DOES borrow is that module's rule, because the screen and the
+   * signed agreement must not describe the same car differently:
+   *
+   *   "Unlimited" is reachable ONLY from an explicit unlimited flag.
+   *
+   * This used to read `if (!daily) return "Unlimited"`, which meant a car whose
+   * allowance nobody had filled in was advertised here as having no limit —
+   * while its agreement would print "Not specified" and its excess-mileage rate
+   * would still be chargeable. `agreement-mileage.ts` calls that case out in so
+   * many words ("Nothing configured. Say so — do NOT imply unlimited"), and it
+   * is the one wording on this screen an operator could be held to.
+   */
   const allowanceText = useMemo(() => {
     if (!vehicle) return "";
     const unit = distanceUnit === "miles" ? "mi" : "km";
+    // The paid upgrade is the only route to "Unlimited" — matching the
+    // resolver, which reads the rental's `is_unlimited_mileage` and nothing
+    // else. On the car, the equivalent is that the upgrade is offered at all.
+    if (vehicle.unlimited_mileage_available) {
+      const daily = Number(vehicle.daily_mileage) || 0;
+      const base = daily ? `${daily.toLocaleString("en-US")} ${unit}/day` : "Not specified";
+      return `${base} · unlimited available`;
+    }
     const daily = Number(vehicle.daily_mileage) || 0;
-    if (!daily) return "Unlimited";
+    if (!daily) return "Not specified";
     const excess = Number(vehicle.excess_mileage_rate) || 0;
     return `${daily.toLocaleString("en-US")} ${unit}/day${
       excess ? ` · ${excess} per extra ${unit}` : ""
     }`;
-  }, [vehicle?.daily_mileage, vehicle?.excess_mileage_rate, distanceUnit]);
+  }, [
+    vehicle?.daily_mileage,
+    vehicle?.excess_mileage_rate,
+    vehicle?.unlimited_mileage_available,
+    distanceUnit,
+  ]);
 
   const offeredExtras = useMemo(
     () => vehicleExtras.map((v) => v.extra_name).filter(Boolean).join(", "),
     [vehicleExtras],
   );
 
-  const attention = useMemo<Attention<TabKey>[]>(() => {
+  const attention = useMemo<Attention<SectionId>[]>(() => {
     if (!vehicle) return [];
-    const list: Attention<TabKey>[] = [];
+    const list: Attention<SectionId>[] = [];
 
     for (const r of complianceBlocking) {
       list.push({
@@ -695,47 +671,32 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
     <FormatProvider currencyCode={currencyCode} distanceUnit={distanceUnit}>
       {/* The dashboard `<main>` is `p-4`, so the frame is the viewport less
           that 1rem — the same sum `cms-v2/cms-visual-editor` does. `-m-4` is
-          deliberately NOT used: it would let the rails bleed under the app
-          sidebar's rounded inset. */}
+          deliberately NOT used: it would let the rail bleed under the app
+          sidebar's rounded inset.
+
+          TWO columns, not three. The nav rail that used to sit here moved into
+          `shared/layout/app-sidebar-v2.tsx`, which BECOMES it while a vehicle is
+          open — the same way it becomes the Settings rail on `/settings` and the
+          stage rail on a rental. Drawing it here as well would stack two
+          sidebars side by side inside `(dashboard)/layout.tsx`. The two agree
+          on which section is showing through `?section=` and `sections.ts`, and
+          share nothing else. */}
       <div className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
-        {/* ── left rail — NAVIGATION ONLY ─────────────────────────────────
-            It reads no state on purpose: a sidebar you can find things in by
-            position has to look the same every time you look at it. How the
-            record is DOING is the right rail's job. */}
-        <aside className="flex w-[232px] shrink-0 flex-col">
-          <RailHeader
-            backHref="/vehicles"
-            backLabel="Vehicles"
-            title={vehicleName || vehicle.reg || "Untitled vehicle"}
-            subtitle={
-              saving
-                ? "Saving…"
-                : hidePlate
-                  ? "Changes apply as you type"
-                  : vehicle.reg || "No registration yet"
-            }
-          />
-
-          <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-            {GROUPS.map((group, i) => (
-              <RailGroup key={group.label} label={group.label} first={i === 0}>
-                {group.items.map((item) => (
-                  <NavItem
-                    key={item.key}
-                    icon={item.icon}
-                    label={item.label}
-                    active={tab === item.key}
-                    onClick={() => setTab(item.key)}
-                  />
-                ))}
-              </RailGroup>
-            ))}
-          </div>
-        </aside>
-
         {/* ── panel ─────────────────────────────────────────────────────── */}
-        <main className="min-w-0 flex-1 overflow-hidden px-8 py-6">
-          {tab === "vehicle" && (
+        <main className="relative min-w-0 flex-1 overflow-hidden px-8 py-6">
+          {/* The only trace of the write path on screen, and it earns its place:
+              there is no Save button, so an operator who types into a field has
+              nothing else telling them the keystroke was committed. It cannot
+              live in the rail any more — the sidebar holds its own
+              `useVehicleRecord` instance, whose `saving` is always false because
+              it never writes. Absent unless a write is genuinely in flight. */}
+          {saving && (
+            <span className="pointer-events-none absolute right-8 top-7 z-10 text-[11px] text-muted-foreground">
+              Saving…
+            </span>
+          )}
+
+          {section === "vehicle" && (
             <VehicleTab
               vehicle={vehicle}
               patch={patch}
@@ -748,7 +709,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "rates" && (
+          {section === "rates" && (
             <RatesTab
               vehicle={vehicle}
               patch={patch}
@@ -760,7 +721,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "addons" && (
+          {section === "addons" && (
             <AddonsTab
               vehicleId={vehicleId}
               dailyRate={Number(vehicle.daily_rent) || 0}
@@ -796,7 +757,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "availability" && (
+          {section === "availability" && (
             <AvailabilityTab
               blockers={blockers}
               paused={vehicle.is_paused}
@@ -826,7 +787,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "pickup" && (
+          {section === "pickup" && (
             <PickupTab
               vehicle={vehicle}
               patch={patch}
@@ -838,7 +799,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "upkeep" && (
+          {section === "upkeep" && (
             <UpkeepTab
               vehicle={vehicle}
               patch={patch}
@@ -855,7 +816,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "keys" && (
+          {section === "keys" && (
             <KeysDocsTab
               vehicle={vehicle}
               patch={patch}
@@ -869,12 +830,12 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "listing" && (
-            <ListingTab<TabKey>
+          {section === "listing" && (
+            <ListingTab<SectionId>
               live={isListed}
               blockers={blockers}
               jumpFor={jumpFor}
-              onJump={setTab}
+              onJump={goToSection}
               siteUrl={getSiteV2BaseUrl(tenantSlug)}
               name={vehicleName}
               plate={vehicle.reg}
@@ -896,7 +857,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             />
           )}
 
-          {tab === "money" && (
+          {section === "money" && (
             <MoneyTab
               vehicle={vehicle}
               patch={patch}
@@ -923,7 +884,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             A matched pair with the left rail: same h-11 header row, the border
             flipped to `border-l` so the two frame the content between them. */}
         <aside className="hidden w-[336px] shrink-0 flex-col border-l border-foreground/10 xl:flex">
-          <OverviewRail<TabKey>
+          <OverviewRail<SectionId>
             name={vehicleName}
             plate={hidePlate ? "" : vehicle.reg}
             coverSrc={photos[0]?.photo_url ?? vehicle.photo_url ?? null}
@@ -934,7 +895,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             vitals={vitals}
             events={events}
             eventsLoading={eventsLoading}
-            onJump={setTab}
+            onJump={goToSection}
           />
         </aside>
       </div>
@@ -947,21 +908,15 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
 /**
  * The frame, drawn before the record lands.
  *
- * Deliberately the real three-column shape rather than a centred spinner: the
+ * Deliberately the real two-column shape rather than a centred spinner: the
  * layout does not jump when the data arrives, so the operator's eye is already
- * in the right place.
+ * in the right place. The nav rail is not skeletoned here because it is not
+ * this page's to draw — the sidebar renders it immediately from the URL, which
+ * needs no fetch.
  */
 function LoadingFrame() {
   return (
     <div className="flex h-[calc(100dvh-1rem)] min-h-[600px]">
-      <aside className="flex w-[232px] shrink-0 flex-col gap-2 p-3">
-        <div className="h-8 w-24 animate-pulse rounded-md bg-muted/60" />
-        <div className="mt-3 space-y-1.5">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="h-8 animate-pulse rounded-lg bg-muted/40" />
-          ))}
-        </div>
-      </aside>
       <main className="min-w-0 flex-1 space-y-6 px-8 py-6">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-muted/60" />
         <div className="h-56 animate-pulse rounded-4xl bg-muted/40" />

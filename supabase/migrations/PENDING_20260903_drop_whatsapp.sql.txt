@@ -1,0 +1,160 @@
+-- =====================================================================
+-- PENDING / UNAPPLIED DRAFT — WhatsApp column + table teardown
+-- =====================================================================
+-- Drafted 2026-09-03 alongside the code-side WhatsApp removal.
+-- NOT APPLIED. Nothing in this file has been run against any database.
+--
+-- The code removal is additive-safe on its own: every column below is now
+-- unread by application code, so leaving them in place costs nothing but
+-- schema noise. Apply this only as a deliberate, separate cleanup, and only
+-- after the removal commit has been live long enough that a revert is off
+-- the table — a revert of the code would need these columns back.
+--
+-- ORDER MATTERS: data rows first (reversible), then the table, then the
+-- columns (not reversible without a restore).
+-- =====================================================================
+
+
+-- ---------------------------------------------------------------------
+-- 0. PRE-FLIGHT — read-only, run these first and read the output
+-- ---------------------------------------------------------------------
+-- Confirms nothing new started depending on WhatsApp since this was drafted.
+
+-- Expect 0 rows. Any row here is a tenant that would lose its lockbox
+-- channel; the app now falls back to email, but fix the data anyway.
+SELECT id, company_name, slug, lockbox_notification_methods
+FROM tenants
+WHERE lockbox_notification_methods::text ILIKE '%whatsapp%';
+
+-- Expect 0. Meta WhatsApp was never configured by any tenant.
+SELECT count(*) AS meta_configured
+FROM tenants
+WHERE integration_whatsapp
+   OR meta_whatsapp_access_token IS NOT NULL
+   OR meta_whatsapp_phone_number IS NOT NULL
+   OR meta_whatsapp_phone_number_id IS NOT NULL
+   OR meta_whatsapp_waba_id IS NOT NULL;
+
+-- Snapshot before you drop anything. At drafting: 2 tenants
+-- (East Peak Rentals LLC on the Twilio sandbox number, and the internal
+-- "test" tenant).
+SELECT company_name, slug, integration_twilio_whatsapp, twilio_whatsapp_number
+FROM tenants
+WHERE integration_twilio_whatsapp OR twilio_whatsapp_number IS NOT NULL;
+
+
+-- ---------------------------------------------------------------------
+-- 1. DATA — orphaned template rows on a channel nothing dispatches
+-- ---------------------------------------------------------------------
+-- 36 rows at drafting. These are unreachable from the portal composer now
+-- (the channel tab is gone), and send-lead-message fails them loudly rather
+-- than silently dropping them. Deleting is tidy-up, not a fix.
+DELETE FROM lead_message_templates WHERE channel = 'whatsapp';
+
+-- 1 row at drafting, belonging to the internal "test" tenant.
+DELETE FROM lockbox_templates WHERE channel = 'whatsapp';
+
+-- Normalise any tenant still saved as WhatsApp-only for lockbox delivery.
+-- 1 tenant at drafting ("test"). The app already falls back to email, so
+-- this only makes the stored value match the behaviour.
+UPDATE tenants
+SET lockbox_notification_methods = '["email"]'::jsonb
+WHERE lockbox_notification_methods::text ILIKE '%whatsapp%';
+
+-- NOT DELETED ON PURPOSE:
+--   chat_channel_messages WHERE channel = 'whatsapp'  (26 rows, "test"
+--   tenant) — this is delivered message history. The portal renders such a
+--   row with default styling and no channel badge (channelMap lookup returns
+--   undefined and the component returns null), so it degrades cleanly.
+--   Deleting a customer's conversation history to tidy an enum is not worth it.
+
+
+-- ---------------------------------------------------------------------
+-- 2. TABLE — Twilio Content Template registry
+-- ---------------------------------------------------------------------
+-- 1 row at drafting: East Peak Rentals LLC's "conversation_opener", which
+-- never left approval_status = 'pending'.
+DROP TABLE IF EXISTS public.whatsapp_content_templates;
+
+
+-- ---------------------------------------------------------------------
+-- 3. COLUMNS — tenants
+-- ---------------------------------------------------------------------
+-- Meta / Cloud API side. NULL for all 57 tenants; integration_whatsapp
+-- true for zero. This path never carried a message in production.
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS meta_whatsapp_access_token;
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS meta_whatsapp_phone_number;
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS meta_whatsapp_phone_number_id;
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS meta_whatsapp_waba_id;
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS integration_whatsapp;
+
+-- Twilio side — this was the live one.
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS integration_twilio_whatsapp;
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS twilio_whatsapp_number;
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS twilio_whatsapp_lockbox_template_sid;
+
+
+-- ---------------------------------------------------------------------
+-- 4. COLUMNS — customers
+-- ---------------------------------------------------------------------
+-- Consent flag for a channel that no longer exists. 1 of 520 customers
+-- opted in. Read by nothing after the removal.
+ALTER TABLE public.customers DROP COLUMN IF EXISTS whatsapp_opt_in;
+
+
+-- ---------------------------------------------------------------------
+-- 5. AFTERWARDS
+-- ---------------------------------------------------------------------
+-- The column-level GRANT SELECT (...) ON public.tenants TO anon in
+-- 20260723090000_lock_down_tenants_rls.sql names four of the columns above.
+-- Postgres drops a column's grants with the column, so nothing extra is
+-- needed — but that migration file will no longer replay cleanly against a
+-- schema where these columns are gone. Do not re-run it as-is.
+--
+-- No RLS policy and no view references any WhatsApp column (verified against
+-- pg_policies and information_schema.views at drafting time — both empty).
+--
+-- Regenerate types afterwards and copy to every app:
+--   npx supabase gen types typescript --project-id hviqoaokxvlancmftwuo \
+--     > apps/portal/src/integrations/supabase/types.ts
+--   cp apps/portal/src/integrations/supabase/types.ts apps/booking/src/integrations/supabase/types.ts
+--   cp apps/portal/src/integrations/supabase/types.ts apps/admin/src/integrations/supabase/types.ts
+--   cp apps/portal/src/integrations/supabase/types.ts apps/bonzah/src/integrations/supabase/types.ts
+
+
+-- =====================================================================
+-- 6. SEPARATE, MORE URGENT FOLLOW-UP — in-portal help content
+-- =====================================================================
+-- This is NOT schema. It is live tenant-facing documentation that every
+-- operator can read in the portal right now, and it still describes a
+-- feature that no longer exists. It is worth fixing BEFORE the schema
+-- teardown above, and it is independent of it.
+--
+-- Seeded by 20260815150100_seed_welcome_pack_content.sql (applied — do not
+-- edit that file; change the rows).
+--
+-- Affected rows, verified 2026-09-03:
+--   welcome_pack_groups   : key='comms'   — "Email, SMS, WhatsApp and automatic reminders"
+--   welcome_pack_sections : slug='channels'         — title "Email, SMS and WhatsApp"
+--   welcome_pack_sections : slug='lockbox'          — says the code goes out "by email, SMS or WhatsApp"
+--   welcome_pack_sections : slug='credits'          — lists "WhatsApp messages" as a charged event
+--   welcome_pack_sections : slug='agreements-esign' — says signing links go out by WhatsApp
+--   welcome_pack_faqs     : 1 row
+--
+-- Left as prose to review rather than blind regex, because these are
+-- sentences a customer reads, and "email, SMS or WhatsApp" -> "email or SMS"
+-- needs the conjunction fixed, not just the word deleted. Read each body_md
+-- before rewriting:
+--
+--   SELECT slug, title, summary, body_md
+--   FROM welcome_pack_sections
+--   WHERE body_md ILIKE '%whatsapp%' OR summary ILIKE '%whatsapp%';
+--
+--   SELECT id, question, answer_md
+--   FROM welcome_pack_faqs
+--   WHERE answer_md ILIKE '%whatsapp%' OR question ILIKE '%whatsapp%';
+--
+-- The one safe mechanical edit:
+-- UPDATE welcome_pack_groups
+-- SET description = 'Email, SMS and automatic reminders'
+-- WHERE key = 'comms';

@@ -18,10 +18,16 @@ export function useGigDriverImages(customerId: string | undefined) {
   return useQuery({
     queryKey: ["gig-driver-images", tenant?.id, customerId],
     queryFn: async () => {
+      // The tenant filter is in the QUERY, not just in the cache key above.
+      // Without it the key promised a per-tenant result the request never
+      // asked for, so the only thing standing between two operators' gig
+      // proofs was RLS — and a super admin, who bypasses RLS by design, would
+      // have seen every tenant's images on one customer id.
       const { data, error } = await (supabase as any)
         .from("gig_driver_images")
         .select("*")
         .eq("customer_id", customerId)
+        .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;

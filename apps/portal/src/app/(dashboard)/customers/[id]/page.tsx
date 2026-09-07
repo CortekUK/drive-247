@@ -71,7 +71,7 @@ import { useCmdVerification, useCmdResults, useResendCmdLink, type CmdLicenseSta
 import { useToast } from "@/hooks/use-toast";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useV2 } from "@/lib/v2-context";
-import { CustomerDetailV2 } from "@/components/customers-v2/customer-detail-v2";
+import { CustomerDetailV2 } from "@/components/customers-v2/customer-detail/customer-detail-v2";
 
 interface Customer {
   id: string;
@@ -460,15 +460,6 @@ const CustomerDetail = () => {
     enabled: !!id,
     refetchInterval: 5000, // Auto-refresh every 5 seconds to show updated status
   });
-
-  // The v2 gate for the customer record. One branch, at the route, per
-  // V2_PLAN §3 — everything below it is v1, untouched, and still what the
-  // other 56 tenants render. Placed after every hook above so the hook order
-  // is identical on both paths, and before v1's own loading return so the v2
-  // screen owns its own skeleton rather than flashing "Loading customer
-  // details..." first.
-  const v2Customers = useV2("customers");
-  if (v2Customers) return <CustomerDetailV2 customerId={id} />;
 
   if (isLoading) {
     return <div>Loading customer details...</div>;
@@ -1952,4 +1943,25 @@ function AiVerificationGrid({
   );
 }
 
-export default CustomerDetail;
+/**
+ * The v2 gate for the customer record. ONE branch, at the route, per V2_PLAN §3
+ * — everything above it is v1, untouched, and still what the other 56 tenants
+ * render.
+ *
+ * It is a wrapper rather than an early return inside `CustomerDetail`, because
+ * `CustomerDetail` opens ~30 hooks before the point the branch used to sit at.
+ * Returning early from there ran every one of them on the v2 path too — a page
+ * of queries whose results nothing read — and made the branch itself the only
+ * thing standing between the two paths and a conditional-hook violation the
+ * moment anyone added a hook below it. Here the two screens are siblings and
+ * neither can see the other's hooks at all.
+ *
+ * Same shape as `/rentals/[id]`, deliberately: the two scoped screens are read
+ * together, so they should not need to be understood twice.
+ */
+const CustomerDetailPage = () => {
+  const v2 = useV2("customers");
+  return v2 ? <CustomerDetailV2 /> : <CustomerDetail />;
+};
+
+export default CustomerDetailPage;

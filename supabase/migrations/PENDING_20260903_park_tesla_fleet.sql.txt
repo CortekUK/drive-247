@@ -1,0 +1,102 @@
+-- PENDING — NOT APPLIED. Draft only. Do not run without Ghulam's explicit go-ahead.
+--
+-- Companion to the two code-side park commits on main:
+--   70f7691e  chore(main): park the Tesla Fleet API integration
+--   a15c384c  chore(main): finish parking the Tesla Fleet API integration
+-- (restore branch: park/tesla, tip 69c401b1 — reverts both.)
+-- Those commits removed the Tesla code from main; they deliberately changed
+-- NOTHING in the database. This file is the database half, drafted and left
+-- unapplied.
+--
+-- Rollback for every section is in:
+--   supabase/migrations/PENDING_20260903_park_tesla_fleet.rollback.sql.txt
+--
+-- ============================================================================
+-- SECTION 1 — the cron job.  THE ONLY URGENT ITEM.
+-- ============================================================================
+-- Job 36 'sync-tesla-charges-hourly' is ACTIVE and has run ~2,539 times.
+-- It fires at :17 past every hour at
+--   https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/sync-tesla-charges-cron
+-- whose SOURCE was deleted from main by the park commit.
+--
+-- The deployed edge function is NOT removed by deleting its source, so the job
+-- keeps succeeding until someone deletes the deployed function. From the moment
+-- it is deleted, this job 404s every hour, forever, silently (net.http_post is
+-- asynchronous — nothing surfaces the failure).
+--
+-- Order matters:
+--   1. run this unschedule
+--   2. THEN delete the deployed functions (see SECTION 2)
+-- Doing it the other way round leaves an hour or more of hourly 404s.
+
+SELECT cron.unschedule('sync-tesla-charges-hourly');
+
+-- ============================================================================
+-- SECTION 2 — deployed edge functions (NOT SQL; listed here so the teardown is
+-- in one place). Run from the repo root, with SUPABASE_ACCESS_TOKEN set:
+-- ============================================================================
+--   supabase functions delete sync-tesla-charges-cron --project-ref hviqoaokxvlancmftwuo
+--   supabase functions delete sync-tesla-charges      --project-ref hviqoaokxvlancmftwuo
+--   supabase functions delete tesla-fleet-api         --project-ref hviqoaokxvlancmftwuo
+--
+-- BLOCKER: tesla-fleet-api is still called by the portal Settings > Tesla tab,
+-- which the park commit could NOT remove (apps/portal/src/app/(dashboard)/
+-- settings/page.tsx is owned by another concurrent session). Delete
+-- tesla-fleet-api only AFTER that tab is removed, or Jangram and Open Bay get a
+-- hard error when they open it.
+
+-- ============================================================================
+-- SECTION 3 — vaulted Tesla OAuth tokens.
+-- ============================================================================
+-- 3 tenants hold live, actively-refreshing Tesla OAuth tokens in Supabase Vault
+-- (access + refresh secret ids on tenants). As of 2026-09-03 the expiry columns
+-- were being rewritten hourly, i.e. these are LIVE third-party credentials, not
+-- dormant ones. Revoking them is what actually severs the Tesla connection.
+--
+-- Affected: jangramrentals, openbayrental, test.
+--
+-- SELECT public.tesla_clear_tokens(id) FROM public.tenants
+--  WHERE integration_tesla_fleet IS TRUE;
+--
+-- NOTE: tesla_clear_tokens also flips integration_tesla_fleet to false and
+-- NULLs the secret ids, but it does NOT delete the underlying vault.secrets
+-- rows. Those must be removed separately if the intent is full revocation.
+-- Tesla-side tokens should also be revoked in the Tesla developer account.
+
+-- ============================================================================
+-- SECTION 4 — schema. DELIBERATELY NOT DROPPED (additive-only rule).
+-- ============================================================================
+-- Everything below is listed for completeness and is intentionally left in
+-- place. Do not run any of it without a separate decision.
+--
+--   table   public.tesla_supercharger_charges        (6 rows, newest 2026-04-01,
+--                                                     all belong to the 'test'
+--                                                     tenant; 1 charged $18.63,
+--                                                     5 pending $65.94)
+--   cols    tenants.integration_tesla_fleet
+--           tenants.tesla_fleet_token_expires_at
+--           tenants.tesla_fleet_api_token_secret_id
+--           tenants.tesla_fleet_refresh_token_secret_id
+--           vehicles.tesla_fleet_enabled            (5 rows jangramrentals,
+--                                                    9 rows test)
+--           vehicles.tesla_fleet_vehicle_id
+--   fns     public.tesla_store_tokens(uuid,text,text,timestamptz)
+--           public.tesla_get_tokens(uuid)
+--           public.tesla_clear_tokens(uuid)
+--
+-- HARD DEPENDENCY — do not drop the four tenants columns above without first
+-- editing supabase/migrations/20260723090000_lock_down_tenants_rls.sql, which
+-- GRANTs SELECT on integration_tesla_fleet, tesla_fleet_token_expires_at,
+-- tesla_fleet_api_token_secret_id and tesla_fleet_refresh_token_secret_id.
+-- A from-scratch replay of the migration chain fails at that migration if the
+-- columns are gone. This is also why the Tesla migration files were kept in the
+-- park commit rather than deleted.
+--
+-- NO MONEY COUPLING. Verified read-only against production:
+--   * the sync engine WROTE ledger_entries rows with category 'Supercharger' —
+--     there are ZERO such rows in production, so no historical billing data
+--     depends on it.
+--   * it also called enqueue_financial_event('charging_cost', ...), whose
+--     consumer (the Xero/Zoho accounting layer) was itself parked earlier today
+--     in commit 5934384c.
+--   * pnl_entries is NEVER written by any Tesla code path. It is untouched.

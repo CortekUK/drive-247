@@ -10,6 +10,8 @@
  *      booked value, and the calendar-view card (`rentals-overview.tsx`)
  *   2. the request chips beneath it (`rentals-request-chips.tsx`)
  *   3. the v2 filter surface, which was previously swapped inline in the page
+ *   4. infinite scroll in place of the numbered pager — see `ROWS_PER_FILL` and
+ *      the sentinel below. `?page=` is ignored here from now on.
  *
  * Copied rather than shared, per V2_PLAN §3: the v1 page keeps working byte for
  * byte for the tenants still on it, this file is free to move, and retiring the
@@ -21,13 +23,12 @@
  * count that filters by `tenant_id` itself (§5).
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 // CardHeader / CardTitle / CardDescription came across with the copy but the
 // only Card left on this screen is the table's shell — the four tiles they
 // titled are now `rentals-overview.tsx`, which imports its own.
 import { Card, CardContent } from "@/components/ui-v2/card";
-import { Badge } from "@/components/ui-v2/badge";
 import { Button } from "@/components/ui-v2/button";
 import {
   Table,
@@ -40,57 +41,97 @@ import {
 import {
   FileText,
   Plus,
-  Download,
-  CalendarPlus,
   XCircle,
-  List,
-  CalendarDays,
   ShieldAlert,
-  BarChart3,
-  Clock,
 } from "lucide-react";
-
-// Format a Postgres TIME value ("HH:MM" or "HH:MM:SS") into 12-hour clock
-// notation ("10:30 AM"). Returns null when the value is missing so callers
-// can skip rendering the line entirely.
-const formatTimeOfDay = (value: string | null | undefined): string | null => {
-  if (!value) return null;
-  const match = /^(\d{1,2}):(\d{2})/.exec(value);
-  if (!match) return null;
-  const hour24 = Number(match[1]);
-  const minutes = match[2];
-  if (Number.isNaN(hour24) || hour24 < 0 || hour24 > 23) return null;
-  const period = hour24 >= 12 ? 'PM' : 'AM';
-  const hour12 = ((hour24 + 11) % 12) + 1;
-  return `${hour12}:${minutes} ${period}`;
-};
-import Link from "next/link";
-import { formatLocalDate } from "@/lib/date-utils";
+import { parseLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
 import { RentalsFilterBar } from "@/components/rentals-v2/rentals-filter-bar";
+import { RentalsFilterPanel } from "@/components/rentals-v2/rentals-filter-panel";
 import { RentalsOverview } from "@/components/rentals-v2/rentals-overview";
-import { RentalsRequestChips } from "@/components/rentals-v2/rentals-request-chips";
-import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
-import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
-import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
+import { RentalsOverviewFlip } from "@/components/rentals-v2/rentals-overview-flip";
 import { CalendarView } from "@/components/rentals/calendar/calendar-view";
-import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui-v2/pagination";
 import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { isLeanTenant } from "@/lib/lean-areas";
+
+/**
+ * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
+ *
+ * Slash-form dates (`9/30/2026`) are ambiguous to half the world and hard to
+ * scan in a dense column; the year is dropped when it is this year because in a
+ * rentals list it is nearly always redundant and repeating it four times a row
+ * is noise. Rendered in `tabular-nums` at the call site so the days line up
+ * down the page.
+ *
+ * `parseLocalDate`, never `new Date(value)`: these are date-only strings, and
+ * `new Date("2026-09-30")` is parsed as UTC midnight, which renders as the 29th
+ * for every user west of Greenwich.
+ */
+const RENTAL_DATE = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+const RENTAL_DATE_WITH_YEAR = new Intl.DateTimeFormat(undefined, {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const formatRentalDate = (value: string | null | undefined): string => {
+  if (!value) return "—";
+  const d = parseLocalDate(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.getFullYear() === new Date().getFullYear()
+    ? RENTAL_DATE.format(d)
+    : RENTAL_DATE_WITH_YEAR.format(d);
+};
+
+/**
+ * The status column: coloured TEXT, no pill.
+ *
+ * A pill draws a filled, ringed shape around every row of a 45-row column, so
+ * the eye counts shapes before it reads words and the column shouts louder than
+ * anything else on the screen. The word in its own colour carries exactly the
+ * same meaning at a fraction of the weight — and it is what the portal's design
+ * system already specifies for table status columns.
+ *
+ * Each tone is a text colour plus a dark-mode step, so the word stays legible
+ * in both themes without one hardcoded light value. Completed is deliberately
+ * muted rather than coloured: it is the most common value and the least
+ * actionable, so it should recede.
+ */
+const STATUS_TONE: Record<string, string> = {
+  Active: "text-emerald-600 dark:text-emerald-400",
+  Upcoming: "text-blue-600 dark:text-blue-400",
+  Pending: "text-amber-600 dark:text-amber-400",
+  Completed: "text-muted-foreground",
+  Cancelled: "text-red-500 dark:text-red-400",
+  Rejected: "text-red-500 dark:text-red-400",
+};
+
+function RentalStatusText({ status }: { status: string }) {
+  return (
+    <span className={`text-sm font-medium ${STATUS_TONE[status] ?? "text-muted-foreground"}`}>
+      {status}
+    </span>
+  );
+}
+
+/**
+ * Everything in the status column that is NOT the status. One quiet, uncoloured
+ * treatment for all of them on purpose: PAYG and auto-extend are facts about
+ * how the rental bills, not states competing with it, and giving each its own
+ * colour is what turned this column into four badges of equal loudness.
+ */
+function MetaChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      {children}
+    </span>
+  );
+}
 
 /**
  * Is any FILTER set on the rentals list?
@@ -123,12 +164,30 @@ function hasAnyRentalFilter(filters: RentalFilters): boolean {
   });
 }
 
+/**
+ * How many rows the list starts with, and how many each fill adds.
+ *
+ * Matches `ITEMS_PER_PAGE` in `use-enhanced-rentals` (25) on purpose: that is
+ * the slice the hook has always handed the v1 page, so the first paint of the
+ * v2 list is the same amount of table it has always been — only the way you get
+ * to row 26 has changed. The constant is duplicated rather than imported
+ * because the hook does not export it, and this file must not be edited into
+ * the shared hook (V2_PLAN §3).
+ */
+const ROWS_PER_FILL = 25;
+
+/**
+ * Keys that must NOT reset the fill.
+ *
+ * `page`/`pageSize` are the only two: everything else in `RentalFilters`
+ * changes which rows come back, or the order they come back in, and either one
+ * invalidates how far the operator had scrolled.
+ */
+const RESULT_KEY_IGNORED = new Set(["page", "pageSize"]);
+
 export function RentalsListV2() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
-  const [selectedRental, setSelectedRental] = useState<EnhancedRental | null>(null);
-  const [reviewRental, setReviewRental] = useState<EnhancedRental | null>(null);
   const { tenant } = useTenant();
   const { canEdit } = useManagerPermissions();
   // The /dev preview switch for the teaching state (lib/dev-overrides.ts).
@@ -141,6 +200,19 @@ export function RentalsListV2() {
   const [showConnectStripeDialog, setShowConnectStripeDialog] = useState(false);
 
   const currentView = searchParams.get("view") || "list";
+
+  /**
+   * The filter panel is not a drop-down any more: it is the BACK of the
+   * overview card, and the button inside the search field turns the card over.
+   * The state therefore lives up here, where both the bar and the slot can see
+   * it, rather than inside the bar as it did when the bar owned the panel too.
+   *
+   * Gated on the view, because the overview — and so the slot the panel lives
+   * in — is list-only. Without the guard, `?view=calendar` with filters open
+   * would leave a flipped card with nothing to flip.
+   */
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersFlipped = filtersOpen && currentView !== "calendar";
 
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
@@ -164,7 +236,11 @@ export function RentalsListV2() {
         : undefined,
       sortBy: searchParams.get("sortBy") || "created_at",
       sortOrder: (searchParams.get("sortOrder") as "asc" | "desc") || "desc",
-      page: parseInt(searchParams.get("page") || "1"),
+      // No `page`. The v2 list scrolls, so a `?page=` in the URL means nothing
+      // here — and parsing it back would put it in the hook's query key, giving
+      // the same rows a second cache entry for no reason. The hook still slices
+      // its own `rentals` page internally for v1's benefit; this file reads
+      // `allRentals` and ignores it.
       bonzahStatus: searchParams.get("bonzahStatus") || undefined,
       // Set by the app-wide deposit-hold banner CTAs. Without this the banner
       // counts N rentals and then hands the operator an unfiltered list.
@@ -185,17 +261,113 @@ export function RentalsListV2() {
 
   const { data, isLoading } = useEnhancedRentals(filters);
 
-  const { rentals, allRentals, stats, totalCount, totalPages } = data || {
-    rentals: [],
+  // `rentals` (the hook's own page slice) and `totalPages` are deliberately not
+  // destructured — this list has no pages, and leaving them named would invite
+  // someone to render the slice again.
+  const { allRentals, stats, totalCount } = data || {
     allRentals: [],
     stats: null,
     totalCount: 0,
-    totalPages: 0,
   };
+
+  /**
+   * Infinite scroll — with no new query.
+   *
+   * `useEnhancedRentals` already fetches every rental for the tenant in ONE
+   * Supabase call and filters them client-side, so `allRentals` is the entire
+   * filtered set, in sort order, sitting in memory. Growing the list is
+   * therefore a bigger `.slice()` and nothing else: no `.range()`, no
+   * `useInfiniteQuery`, no second round trip. Anything fancier here would be
+   * theatre over data the browser already has.
+   */
+  const [visibleCount, setVisibleCount] = useState(ROWS_PER_FILL);
+
+  /**
+   * A fingerprint of everything that decides WHICH rows come back and in what
+   * order — the hook's own query key, minus `page`/`pageSize`.
+   *
+   * Swept over the keys rather than hand-listed, for exactly the reason
+   * `hasAnyRentalFilter` above is: `RentalFilters` has grown twice already, and
+   * a hand-written list quietly stops resetting when the next filter lands —
+   * which is the failure that leaves 200 rows' worth of scroll position sitting
+   * over a 12-row result. Sorted, so key order in the object literal cannot
+   * matter.
+   */
+  const resultKey = useMemo(() => {
+    const parts = Object.entries(filters)
+      .filter(([key]) => !RESULT_KEY_IGNORED.has(key))
+      .map(
+        ([key, value]) =>
+          `${key}=${value instanceof Date ? value.toISOString() : String(value)}`
+      )
+      .sort();
+    return `${tenant?.id ?? ""}|${parts.join("&")}`;
+  }, [filters, tenant?.id]);
+
+  // Reset the fill whenever the result set changes: a new search, a status
+  // filter, a different sort, a different tenant.
+  //
+  // Keyed off the filter VALUES, not the identity of `allRentals` — that array
+  // is a fresh object on every refetch, so resetting on it would snap an
+  // operator who had scrolled to row 300 back to row 25 every time React Query
+  // revalidated in the background.
+  //
+  // Adjusted during render (React's documented "changing state in response to a
+  // prop change") rather than in an effect, so the narrowed set never paints
+  // once with the old grown count. An effect would leave one frame in which the
+  // container is still tall enough to sit the sentinel inside its own
+  // `rootMargin`, which fires the observer against rows that are about to be
+  // thrown away.
+  const [lastResultKey, setLastResultKey] = useState(resultKey);
+  if (resultKey !== lastResultKey) {
+    setLastResultKey(resultKey);
+    setVisibleCount(ROWS_PER_FILL);
+  }
+
+  const visibleRentals = allRentals.slice(0, visibleCount);
+  const hasMore = visibleCount < allRentals.length;
+
+  const showMore = useCallback(
+    () => setVisibleCount((count) => count + ROWS_PER_FILL),
+    []
+  );
+
+  // The table body scrolls INSIDE the card (`max-h-[520px]`), not with the
+  // page, so the sentinel is clipped by that container long before it would
+  // ever reach the viewport. The observer therefore has to take the container
+  // as its root — with the default (viewport) root it would only fire once the
+  // whole card had scrolled past, which is never, because the card never
+  // scrolls past. `rootMargin` then buys ~300px of lead inside that box so the
+  // next fill lands before the operator hits the true bottom.
+  const scrollRootRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) showMore();
+      },
+      { root: scrollRootRef.current, rootMargin: "300px 0px", threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+    // Re-armed on every fill: the sentinel moves down with the rows that were
+    // just added, and if it is STILL inside the margin the next fill follows
+    // immediately. That chain is what stops a fast flick from outrunning the
+    // list, and it also fills a viewport too tall for 25 rows on first paint.
+  }, [hasMore, visibleCount, showMore]);
 
   const handleFiltersChange = (newFilters: RentalFilters) => {
     const params = new URLSearchParams();
     Object.entries(newFilters).forEach(([key, value]) => {
+      // The filter surfaces (`rentals-filter-bar`, `rentals-filter-panel`,
+      // `rentals-request-chips`) still send `page: 1` with every change, since
+      // they are written against the paginated v1 contract. Drop it here rather
+      // than writing a URL parameter that nothing on this screen reads.
+      if (RESULT_KEY_IGNORED.has(key)) return;
       if (value && value !== "all" && value !== "" && value !== 1) {
         if (value instanceof Date) {
           params.set(key, value.toISOString().split("T")[0]);
@@ -214,6 +386,9 @@ export function RentalsListV2() {
   };
 
   const handleViewChange = (view: string) => {
+    // Leaving the list takes the panel's slot with it, so close it on the way
+    // out rather than coming back to a card already turned over.
+    setFiltersOpen(false);
     const params = new URLSearchParams(searchParams.toString());
     if (view === "list") {
       params.delete("view");
@@ -223,61 +398,6 @@ export function RentalsListV2() {
     router.push(`?${params.toString()}`);
   };
 
-  const handlePageChange = (page: number) => {
-    handleFiltersChange({ ...filters, page });
-  };
-
-  const handleExportCSV = () => {
-    if (!data?.rentals) return;
-
-    const currencyCode = tenant?.currency_code || 'USD';
-    const currencySymbol = getCurrencySymbol(currencyCode);
-
-    const csvContent = [
-      [
-        "Rental #",
-        "Customer",
-        "Vehicle",
-        "Start Date",
-        "End Date",
-        "Duration",
-        "Period Type",
-        "Rental Amount",
-        "Discount",
-        "Protection Cost",
-        "Total Amount",
-        "Initial Payment",
-        "Status",
-      ].join(","),
-      ...data.rentals.map((rental) =>
-        [
-          rental.rental_number,
-          rental.customer.name,
-          `${rental.vehicle.reg} (${rental.vehicle.make} ${rental.vehicle.model})`,
-          rental.start_date,
-          rental.end_date || "",
-          formatRentalDuration(rental.start_date, rental.end_date),
-          rental.rental_period_type || "Monthly",
-          `${currencySymbol}${(Math.max(0, (Number(rental.monthly_amount) || 0) - (Number((rental as any).discount_applied) || 0))).toFixed(2)}`,
-          (Number((rental as any).discount_applied) || 0) > 0
-            ? `${currencySymbol}${Number((rental as any).discount_applied).toFixed(2)}`
-            : "—",
-          rental.protection_cost > 0 ? `${currencySymbol}${rental.protection_cost}` : "—",
-          `${currencySymbol}${rental.total_amount}`,
-          rental.initial_payment ? `${currencySymbol}${rental.initial_payment}` : "—",
-          rental.computed_status,
-        ].join(",")
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "rentals-export.csv";
-    link.click();
-    window.URL.revokeObjectURL(url);
-  };
 
   if (isLoading) {
     return (
@@ -292,69 +412,43 @@ export function RentalsListV2() {
     <div className={currentView === "calendar" ? "p-4 md:p-6 space-y-6" : "container mx-auto p-4 md:p-6 space-y-6"}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
-        <div className="min-w-0 flex items-start justify-between gap-3 sm:block">
+        <div className="min-w-0 shrink-0 flex items-start justify-between gap-3 sm:block">
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               Manage rental agreements and contracts
             </p>
           </div>
-          {/* Mobile-only icon cluster next to title */}
-          <div className="flex items-center gap-2 shrink-0 sm:hidden">
-            <div className="flex rounded-md border overflow-hidden">
-              <Button
-                variant={currentView === "list" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-none h-8 px-2.5"
-                onClick={() => handleViewChange("list")}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={currentView === "calendar" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-none h-8 px-2.5 border-l"
-                onClick={() => handleViewChange("calendar")}
-              >
-                <CalendarDays className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* View Toggle — sm+ only (mobile shows it next to title) */}
-          <div className="hidden sm:flex rounded-md border overflow-hidden">
-            <Button
-              variant={currentView === "list" ? "default" : "ghost"}
-              size="sm"
-              className="rounded-none h-8 px-2.5"
-              onClick={() => handleViewChange("list")}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={currentView === "calendar" ? "default" : "ghost"}
-              size="sm"
-              className="rounded-none h-8 px-2.5 border-l"
-              onClick={() => handleViewChange("calendar")}
-            >
-              <CalendarDays className="h-4 w-4" />
-            </Button>
-          </div>
-          <Link href="/rentals/analytics" className="shrink-0">
-            <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
-              <BarChart3 className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleExportCSV}
-            disabled={!rentals.length}
-            className="border-primary/20 hover:border-primary/40 hover:bg-primary/5 shrink-0"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+        {/* Search and New Rental are ONE cluster, not two ends of a spread row.
+            The two things an operator comes to this page to do — find a rental,
+            or start one — sit side by side, and the pair is pushed right as a
+            unit so the gap falls between the title and the cluster rather than
+            down the middle of it.
+
+            `items-start`, because the filter PANEL expands downward out of the
+            search cell: without it New Rental would drift to the vertical
+            middle of an open panel.
+
+            Search is hidden in calendar view, where it has nothing to filter —
+            New Rental stays. */}
+        <div className="flex w-full min-w-0 items-start gap-2 sm:w-auto sm:flex-1 sm:justify-end">
+          {currentView !== "calendar" && (
+            <div className="min-w-0 flex-1 sm:max-w-md">
+              <RentalsFilterBar
+                filters={filters}
+                onFiltersChange={handleFiltersChange}
+                onClearFilters={handleClearFilters}
+                open={filtersFlipped}
+                onOpenChange={setFiltersOpen}
+              />
+            </div>
+          )}
+          <div className="flex shrink-0 items-center gap-2">
+          {/* The view toggle, the analytics link and the CSV export were all
+              removed from this header at the user's request. Calendar view is
+              still reachable — the overview's calendar card opens it — and
+              /rentals/analytics still resolves if navigated to directly. */}
           {canEdit('rentals') && (
             <Button
               // Lean tenants without a usable Stripe Connect account get told
@@ -370,276 +464,254 @@ export function RentalsListV2() {
             >
               <Plus className="h-4 w-4 mr-2" />
               New Rental
-            </Button>
-          )}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Overview — list view only */}
+      {/* Overview — list view only, and the filter panel is its other face. */}
       {currentView !== "calendar" && (
-        <RentalsOverview
-          stats={stats}
-          rentals={allRentals}
-          currencySymbol={getCurrencySymbol(tenant?.currency_code || "USD")}
-          onOpenCalendar={() => handleViewChange("calendar")}
+        <RentalsOverviewFlip
+          flipped={filtersFlipped}
+          onFlipBack={() => setFiltersOpen(false)}
+          front={
+            <RentalsOverview
+              stats={stats}
+              rentals={allRentals}
+              currencySymbol={getCurrencySymbol(tenant?.currency_code || "USD")}
+              onOpenCalendar={() => handleViewChange("calendar")}
+            />
+          }
+          back={
+            <RentalsFilterPanel
+              filters={filters}
+              onChange={handleFiltersChange}
+              onClear={handleClearFilters}
+              onClose={() => setFiltersOpen(false)}
+            />
+          }
         />
-      )}
-
-      {/* Filters — list view only */}
-      {currentView !== "calendar" && (
-        <div className="space-y-3">
-          <RentalsFilterBar
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            onClearFilters={handleClearFilters}
-          />
-          {/* The two requests an operator has to answer, hoisted out of the
-              filter panel so they are visible without opening it. Same filter
-              keys, so the chip and the panel's Requests section stay in step. */}
-          <RentalsRequestChips filters={filters} onFiltersChange={handleFiltersChange} />
-        </div>
       )}
 
       {/* Calendar View */}
       {currentView === "calendar" ? (
         <CalendarView filters={filters} />
       ) : /* Rentals Table */
-      rentals.length > 0 && !devForceEmptyRentals ? (
+      allRentals.length > 0 && !devForceEmptyRentals ? (
         <>
           <Card>
-            <CardContent className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative">
-              <Table className="min-w-[700px]">
-                  <TableHeader className="sticky top-0 z-10 bg-card">
-                    <TableRow>
-                      <TableHead>Rental #</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Pickup</TableHead>
-                      <TableHead>Return</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Review</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rentals.map((rental) => (
+            {/* The scroll root the observer measures against — see the sentinel
+                at the foot of this container. */}
+            <CardContent
+              ref={scrollRootRef}
+              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative"
+            >
+              {/* `table-fixed` with declared widths, so the five columns keep
+                  their proportions instead of handing every spare pixel to
+                  Customer — which is what auto layout does when only one column
+                  is unsized, and it left a hand's width of nothing between the
+                  name and the dates. */}
+              <Table className="min-w-[720px] table-fixed">
+                {/* Sticky while the body scrolls inside the card. Nearly opaque
+                    rather than fully so, with a blur behind it: rows passing
+                    underneath stay hidden, but the header does not look like a
+                    separate slab sitting on the card. */}
+                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
+                  <TableRow className="border-b hover:bg-transparent">
+                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Rental #
+                    </TableHead>
+                    <TableHead className="h-10 w-[28%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Customer
+                    </TableHead>
+                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Pickup
+                    </TableHead>
+                    <TableHead className="h-10 w-[16%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Return
+                    </TableHead>
+                    <TableHead className="h-10 w-[20%] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Status
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleRentals.map((rental) => {
+                    // The row-level flag, resolved ONCE. It decides both the
+                    // row's tint and the line under the rental number, and
+                    // working it out twice is how those two drift apart.
+                    //
+                    // `is_extended` is deliberately NOT a flag: extensions are
+                    // out of scope for this screen while the rental model is
+                    // being settled, and an extension row was the one case that
+                    // grew taller than every other row for something nobody has
+                    // decided what to do with yet.
+                    const flag = rental.cancellation_requested
+                      ? "cancelling"
+                      : !filters.bonzahStatus && rental.bonzah_status === "insufficient_balance"
+                      ? "balance"
+                      : !filters.bonzahStatus && rental.bonzah_status === "quoted"
+                      ? "quoted"
+                      : null;
+
+                    return (
                       <TableRow
                         key={rental.id}
-                        className={`hover:bg-muted/50 cursor-pointer ${rental.is_extended ? 'bg-amber-500/10 border-l-4 border-l-amber-500' : rental.cancellation_requested ? 'bg-red-500/10 border-l-4 border-l-red-500' : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? 'bg-[#CC004A]/5 border-l-4 border-l-[#CC004A]' : ''}`}
+                        // The tint is halved and the rail thinned from 4px to
+                        // 2px: with three columns gone there is far less on the
+                        // row to compete with, so the flag no longer has to
+                        // shout to be seen — and a wall of amber rows is what
+                        // stops any one of them being noticed.
+                        className={`cursor-pointer ${
+                          flag === "cancelling"
+                            ? "bg-red-500/5 border-l-2 border-l-red-500"
+                            : flag === "balance" || flag === "quoted"
+                            ? "bg-[#CC004A]/5 border-l-2 border-l-[#CC004A]"
+                            : ""
+                        }`}
                         onClick={() => router.push(`/rentals/${rental.id}`)}
                       >
-                        <TableCell className="font-medium">
-                          {rental.is_extended ? (
-                            <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
-                              <button
-                                className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 mt-0.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRental(rental);
-                                  setShowExtensionDialog(true);
-                                }}
-                              >
-                                <CalendarPlus className="h-3 w-3" />
-                                Extension Requested
-                              </button>
-                            </div>
-                          ) : rental.cancellation_requested ? (
-                            <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
-                              <span className="text-xs text-red-600 font-medium flex items-center gap-1 mt-0.5">
-                                <XCircle className="h-3 w-3" />
-                                Cancellation Requested
+                        {/* Rental # — the row's identifier, and weighted as
+                            one: this is the string an operator reads out on
+                            the phone and searches for, so it carries the row
+                            rather than sitting in it. */}
+                        <TableCell className="py-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-semibold tabular-nums tracking-tight text-foreground">
+                              {rental.rental_number}
+                            </span>
+                            {flag === "cancelling" && (
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
+                                <XCircle className="size-3" />
+                                Cancellation requested
                               </span>
-                            </div>
-                          ) : (!filters.bonzahStatus && rental.bonzah_status === 'insufficient_balance') ? (
-                            <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
-                              <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
-                                <ShieldAlert className="h-3 w-3" />
-                                Balance Required
+                            )}
+                            {flag === "balance" && (
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A]">
+                                <ShieldAlert className="size-3" />
+                                Balance required
                               </span>
-                            </div>
-                          ) : (!filters.bonzahStatus && rental.bonzah_status === 'quoted') ? (
-                            <div className="flex flex-col">
-                              <span>{rental.rental_number}</span>
-                              <span className="text-xs text-[#CC004A] font-medium flex items-center gap-1 mt-0.5">
+                            )}
+                            {flag === "quoted" && (
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-[#CC004A]">
                                 <img src="/bonzah-logo.svg" alt="" className="h-3 w-auto dark:hidden" />
-                                <img src="/bonzah-logo-dark.svg" alt="" className="h-3 w-auto hidden dark:block" />
-                                Ins. Quoted
+                                <img src="/bonzah-logo-dark.svg" alt="" className="hidden h-3 w-auto dark:block" />
+                                Insurance quoted
                               </span>
-                            </div>
-                          ) : (
-                            rental.rental_number
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {rental.created_at
-                            ? new Date(rental.created_at).toLocaleString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {rental.customer.name.split(' ')[0]}
-                        </TableCell>
-                        <TableCell>
-                          <div>{formatLocalDate(rental.start_date)}</div>
-                          {formatTimeOfDay(rental.pickup_time) && (
-                            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatTimeOfDay(rental.pickup_time)}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {rental.end_date
-                            ? (
-                              <>
-                                <div>{formatLocalDate(rental.end_date)}</div>
-                                {formatTimeOfDay(rental.return_time) && (
-                                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {formatTimeOfDay(rental.return_time)}
-                                  </div>
-                                )}
-                              </>
-                            )
-                            : rental.is_pay_as_you_go
-                            ? <span className="text-indigo-500 text-xs font-medium">Ongoing</span>
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          {rental.is_pay_as_you_go && !rental.end_date
-                            ? <span className="text-xs text-muted-foreground">PAYG</span>
-                            : formatRentalDuration(rental.start_date, rental.end_date)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge
-                              variant={
-                                rental.computed_status === "Completed"
-                                  ? "secondary"
-                                  : rental.computed_status === "Cancelled" || rental.computed_status === "Rejected"
-                                  ? "destructive"
-                                  : "outline"
-                              }
-                              className={
-                                rental.computed_status === "Active"
-                                  ? "bg-green-600 text-white"
-                                  : rental.computed_status === "Pending"
-                                  ? "bg-amber-500/20 text-amber-600 border-amber-500"
-                                  : ""
-                              }
-                            >
-                              {rental.computed_status}
-                            </Badge>
-                            {rental.is_pay_as_you_go && (
-                              <Badge variant="outline" className="text-indigo-600 border-indigo-300 bg-indigo-100 dark:text-indigo-400 dark:border-indigo-700 dark:bg-indigo-950/30 text-[10px]">
-                                PAYG
-                              </Badge>
-                            )}
-                            {(rental as any).auto_extend_enabled && (
-                              <Badge variant="outline" className="text-violet-600 border-violet-300 bg-violet-100 dark:text-violet-400 dark:border-violet-700 dark:bg-violet-950/30 text-[10px]">
-                                Auto-Extend
-                              </Badge>
-                            )}
-                            {(rental as any).auto_extend_status === 'paused' && (
-                              <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-100 dark:text-amber-400 dark:border-amber-700 dark:bg-amber-950/30 text-[10px]">
-                                Paused
-                              </Badge>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <ReviewStatusBadge
-                            reviewStatus={rental.review_status}
-                            reviewRating={rental.review_rating}
-                            rentalStatus={rental.computed_status}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReviewRental(rental);
-                            }}
-                          />
+
+                        {/* Customer — the FULL name, plain. The old cell
+                            printed `name.split(' ')[0]`, which turned every
+                            Smith and every Haseeb into the same row; the whole
+                            name is already on the record, so nothing is fetched
+                            to fix this. No initials disc: at the user's request
+                            the name carries the cell on its own. */}
+                        <TableCell className="py-3">
+                          <span className="block truncate font-medium text-foreground">
+                            {rental.customer.name}
+                          </span>
+                        </TableCell>
+
+                        {/* Pickup / Return — `tabular-nums` is what makes these
+                            two columns line up down the page: proportional
+                            digits give every row a different width and the
+                            column reads as ragged noise. */}
+                        <TableCell className="py-3 tabular-nums">
+                          <span className="font-medium text-foreground">
+                            {formatRentalDate(rental.start_date)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-3 tabular-nums">
+                          {rental.end_date ? (
+                            <span className="font-medium text-foreground">
+                              {formatRentalDate(rental.end_date)}
+                            </span>
+                          ) : rental.is_pay_as_you_go ? (
+                            <span className="text-sm font-medium text-primary">Ongoing</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Status — ONE treatment for every value, hue being
+                            the only thing that changes. The old column mixed a
+                            solid green fill, an outlined amber pill and a plain
+                            grey outline, which made three visual weights out of
+                            one fact and left "Rejected" shouting louder than
+                            "Active". PAYG and auto-extend are secondary and now
+                            look it, so the coloured pill is the only thing in
+                            the column asking for the eye. */}
+                        <TableCell className="py-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <RentalStatusText status={rental.computed_status} />
+                            {rental.is_pay_as_you_go && <MetaChip>PAYG</MetaChip>}
+                            {(rental as any).auto_extend_enabled && <MetaChip>Auto-extend</MetaChip>}
+                            {(rental as any).auto_extend_status === "paused" && (
+                              <MetaChip>Paused</MetaChip>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              {/* The sentinel, inside the scroll container and after the last
+                  row — it has to live in here for the observer to be able to
+                  root on this container.
+
+                  The bars are the next fill arriving. Those rows are already in
+                  memory, so in practice they land within a frame and this is
+                  barely seen; it exists so the bottom of a partially-filled
+                  list is never a bare cut, and so a slow frame reads as "more
+                  coming" rather than "that's all of them". `aria-hidden`: the
+                  count line below carries the same fact in words, and offers
+                  the button. */}
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  aria-hidden="true"
+                  className="space-y-3 px-4 py-4"
+                >
+                  {[0, 1].map((row) => (
+                    <div key={row} className="flex items-center gap-4">
+                      <div className="h-3 w-20 animate-pulse rounded-full bg-muted" />
+                      <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
+                      <div className="h-3 w-16 animate-pulse rounded-full bg-muted" />
+                      <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Pagination */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="text-sm text-muted-foreground">
-              Showing {rentals.length} of {totalCount} rentals
-            </div>
-            <div className="flex items-center">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() =>
-                        handlePageChange(Math.max(1, filters.page! - 1))
-                      }
-                      className={
-                        filters.page === 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-
-                  {totalPages > 1 ? (
-                    Array.from(
-                      { length: Math.min(5, totalPages) },
-                      (_, i) => {
-                        const pageNum =
-                          Math.max(
-                            1,
-                            Math.min(totalPages - 4, filters.page! - 2)
-                          ) + i;
-                        return (
-                          <PaginationItem key={pageNum}>
-                            <PaginationLink
-                              onClick={() => handlePageChange(pageNum)}
-                              isActive={pageNum === filters.page}
-                              className="cursor-pointer"
-                            >
-                              {pageNum}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      }
-                    )
-                  ) : (
-                    <PaginationItem>
-                      <PaginationLink isActive className="cursor-default">
-                        1
-                      </PaginationLink>
-                    </PaginationItem>
-                  )}
-
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() =>
-                        handlePageChange(
-                          Math.min(totalPages, filters.page! + 1)
-                        )
-                      }
-                      className={
-                        filters.page === totalPages || totalPages <= 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
-                      }
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            </div>
+          {/* No pager — just how much of the set is on screen.
+              "Show more" is the escape hatch: if the observer never fires (an
+              unusual container, a browser without IntersectionObserver, a
+              keyboard user who never scrolls the inner box) this is still a way
+              to reach row 26, and it is the same one-line call the observer
+              makes. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-sm text-muted-foreground">
+            <span>
+              {hasMore
+                ? `Showing ${visibleRentals.length} of ${totalCount} rentals`
+                : `All ${totalCount} ${totalCount === 1 ? "rental" : "rentals"} shown`}
+            </span>
+            {hasMore && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={showMore}
+                className="h-7 px-2 text-xs font-normal text-muted-foreground hover:text-foreground"
+              >
+                Show more
+              </Button>
+            )}
           </div>
         </>
       ) : devForceEmptyRentals || !hasAnyRentalFilter(filters) ? (
@@ -665,50 +737,7 @@ export function RentalsListV2() {
         </div>
       )}
 
-      {/* Rental Review Dialog */}
-      {reviewRental && (
-        <RentalReviewDialog
-          open={!!reviewRental}
-          onOpenChange={(open) => { if (!open) setReviewRental(null); }}
-          rentalId={reviewRental.id}
-          customerId={reviewRental.customer.id}
-          customerName={reviewRental.customer.name}
-          rentalNumber={reviewRental.rental_number}
-        />
-      )}
-
       {/* Extension Request Dialog */}
-      {selectedRental && (
-        <ExtensionRequestDialog
-          open={showExtensionDialog}
-          onOpenChange={(open) => {
-            setShowExtensionDialog(open);
-            if (!open) setSelectedRental(null);
-          }}
-          rental={{
-            id: selectedRental.id,
-            // `ExtensionRequestDialog` declares `start_date` required and
-            // divides by (end_date - start_date) to price an extension. The v1
-            // page has never passed it, so that subtraction runs against
-            // undefined and quotes NaN days. Passing it here is what makes this
-            // file typecheck, and it is the same one-line fix the design branch
-            // carried; the v1 page keeps its behaviour byte for byte.
-            start_date: selectedRental.start_date || '',
-            end_date: selectedRental.end_date || '',
-            previous_end_date: selectedRental.previous_end_date || null,
-            customers: {
-              id: selectedRental.customer.id,
-              name: selectedRental.customer.name,
-            },
-            vehicles: {
-              id: selectedRental.vehicle.id,
-              reg: selectedRental.vehicle.reg,
-              make: selectedRental.vehicle.make,
-              model: selectedRental.vehicle.model,
-            },
-          }}
-        />
-      )}
 
       {/* Lean tenants without usable Stripe Connect — dismissible here, because
           there IS a page behind it to return to. */}

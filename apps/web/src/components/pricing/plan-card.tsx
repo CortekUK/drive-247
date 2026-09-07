@@ -4,12 +4,25 @@ import { ArrowRight, Check, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useOnboarding } from "@/components/onboarding/onboarding-provider";
-import { formatPlanPriceUsd, type SignupPlan } from "@/lib/plans";
+import { useOptionalOnboarding } from "@/components/onboarding/onboarding-provider";
+import {
+  formatPlanPriceUsd,
+  type SignupPlan,
+  type SignupPlanId,
+} from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 interface PlanCardProps {
   plan: SignupPlan;
+  /**
+   * Where a press goes instead of the live signup dialog.
+   *
+   * Omitted everywhere the marketing site renders the grid, which is the whole
+   * point of the card. It exists for a surface that drives its own flow from the
+   * same cards rather than a hand-maintained copy of them — see
+   * `components/signup-journey/`.
+   */
+  onSelect?(planId: SignupPlanId): void;
 }
 
 /**
@@ -17,18 +30,33 @@ interface PlanCardProps {
  *
  * The card is deliberately static markup with a single real <button>: it renders
  * and reads correctly before React hydrates (and with JS off entirely), the
- * Subscribe button is simply inert until `useOnboarding` is live. That is why
+ * Subscribe button is simply inert until the provider is live. That is why
  * there is no loading skeleton and no `disabled` state here — an inert button
  * for ~200 ms beats a layout shift on the highest-intent section of the page.
  *
- * Must be rendered inside <OnboardingProvider> (supplied by PricingSection).
+ * Must be rendered inside <OnboardingProvider> (supplied by PricingSection)
+ * UNLESS `onSelect` is given, in which case the provider is never consulted.
  */
-export function PlanCard({ plan }: PlanCardProps) {
+export function PlanCard({ plan, onSelect }: PlanCardProps) {
   // `open()` never throws and never rejects — every failure mode (missing Stripe
   // config, missing Supabase env, a dead network) surfaces as a banner inside the
   // dialog itself, per the onboarding spec. The card therefore has no error
   // branch of its own: clicking Subscribe always produces visible feedback.
-  const { open } = useOnboarding();
+  const onboarding = useOptionalOnboarding();
+
+  // Kept as loud as the old `useOnboarding()` throw: a card with neither a
+  // handler nor a provider is a Subscribe button that does nothing, and that
+  // must never reach the marketing page silently.
+  if (!onSelect && !onboarding) {
+    throw new Error(
+      "<PlanCard> needs either an onSelect handler or <OnboardingProvider>",
+    );
+  }
+
+  const handlePress = () => {
+    if (onSelect) onSelect(plan.id);
+    else onboarding?.open(plan.id);
+  };
 
   return (
     <div
@@ -79,7 +107,7 @@ export function PlanCard({ plan }: PlanCardProps) {
 
       <Button
         size="lg"
-        onClick={() => open(plan.id)}
+        onClick={handlePress}
         // Three buttons all labelled "Subscribe" are ambiguous when a screen
         // reader lists them out of context, so the accessible name carries the
         // tier and the price.

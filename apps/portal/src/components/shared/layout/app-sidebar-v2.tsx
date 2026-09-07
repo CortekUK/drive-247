@@ -20,7 +20,6 @@ import {
   CircleDollarSign,
   Zap,
   Bolt,
-  ShieldCheck,
   FileSignature,
   ArrowLeft,
   Building2,
@@ -53,10 +52,8 @@ import {
   LayoutGrid,
   CalendarDays,
   Users,
-  Ban,
   BadgeAlert,
   BarChart3,
-  LineChart,
   Settings,
   Globe,
   Home,
@@ -92,9 +89,8 @@ import { useOrgSettings } from "@/hooks/use-org-settings";
 import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
-import { isAreaHidden } from "@/lib/lean-areas";
+import { isAreaHidden, isLeanTenant, isSettingsTabHidden } from "@/lib/lean-areas";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
-import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
@@ -112,7 +108,44 @@ import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-cust
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
 import { TraxIcon } from "@/components/chat/TraxIcon";
+// The rental control centre's stage rail. The sidebar becomes it on a rental
+// detail page, the same way it becomes the Settings rail on /settings — see
+// `isRentalDetailPage` below.
 import { useV2 } from "@/lib/v2-context";
+import { useRentalDetailV2 } from "@/components/rentals-v2/rental-detail/use-rental-detail-v2";
+import {
+  STAGES,
+  readStage,
+  stageHref,
+  stageValues,
+} from "@/components/rentals-v2/rental-detail/stages";
+import { StageItem, HeroChip } from "@/components/rentals-v2/rental-detail/_kit";
+// The vehicle record's section rail — the third scoped rail this sidebar
+// becomes, after Settings and the rental control centre. See
+// `isVehicleDetailPage` below.
+import {
+  SECTION_GROUPS,
+  SECTIONS,
+  readSection,
+  sectionHref,
+  vehicleIdFromPath,
+} from "@/components/vehicles-v2/sections";
+import { useVehicleRecord } from "@/components/vehicles-v2/use-vehicle-record";
+// The customer record's section rail — the fourth scoped rail this sidebar
+// becomes, after Settings, the rental control centre and the vehicle record.
+// Aliased on import because the vehicle rail above already owns the unaliased
+// names, and both records live behind the same `?section=` param with DIFFERENT
+// id sets — so each has to read that param through its own `readSection`, or a
+// vehicle's section name would resolve on a customer and land on the wrong tab.
+// See `isCustomerDetailPage` below.
+import {
+  SECTION_GROUPS as CUSTOMER_SECTION_GROUPS,
+  SECTIONS as CUSTOMER_SECTIONS,
+  customerIdFromPath,
+  readSectionFrom as readCustomerSection,
+  sectionHref as customerSectionHref,
+} from "@/components/customers-v2/customer-detail/sections";
+import { useCustomerRailHeader } from "@/components/customers-v2/customer-detail/use-customer-detail-v2";
 
 /**
  * The search field's specular sweep.
@@ -256,6 +289,43 @@ const settingsTabGroups = [
 ];
 
 /**
+ * The settings groups this tenant sees.
+ *
+ * Returns the module constant BY REFERENCE for every non-lean tenant, so the
+ * other 56 get a byte-identical list and this function cannot cost them a
+ * re-render or a reordering.
+ *
+ * For a lean tenant it moves ONE item. Once Payments, Messaging, Insurance,
+ * E-Signatures, Accounting and Tesla Fleet are filtered out by
+ * `isSettingsTabHidden`, the "Integrations" group holds only Blacklist — and a
+ * settings group called "Integrations" containing one unrelated row, sitting in
+ * the same sidebar as a real Integrations page, reads as a bug. The Global
+ * Blacklist is not an integration in the first place: it is a booking/risk rule
+ * (block a customer that three or more operators have blocked), it connects to
+ * no third party and it has no card on the board. So it joins Booking Rules
+ * next to Requirements, and the emptied group disappears through the
+ * `.filter(group => group.items.length > 0)` that is already there.
+ *
+ * The tab itself is untouched — same `value`, same `?tab=blacklist` URL, same
+ * body, same `permissions.ts` mapping. Only which heading it sits under moves.
+ */
+function settingsGroupsFor(tenantSlug: string | null | undefined) {
+  if (!isLeanTenant(tenantSlug)) return settingsTabGroups;
+  return settingsTabGroups.map(group => {
+    if (group.label === "Booking Rules") {
+      const blacklist = settingsTabGroups
+        .find(g => g.label === "Integrations")
+        ?.items.find(i => i.value === 'blacklist');
+      return blacklist ? { ...group, items: [...group.items, blacklist] } : group;
+    }
+    if (group.label === "Integrations") {
+      return { ...group, items: group.items.filter(i => i.value !== 'blacklist') };
+    }
+    return group;
+  });
+}
+
+/**
  * v2 sidebar. A NEW file beside `app-sidebar.tsx` — the v1 sidebar keeps
  * serving the other 56 tenants byte for byte (V2_PLAN §3). The only edit to v1
  * is the single branch in `(dashboard)/layout.tsx`.
@@ -309,7 +379,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
-  const { unreadCount: chatUnreadCount } = useUnreadCount();
   const { data: enquiryStats } = useEnquiryStats();
   const { appUser } = useAuthStore();
   const {
@@ -319,12 +388,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     graceSeverity,
   } = useTenantSubscription();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
-  // `/insights` 404s for any tenant not on the v2 area, so the nav entry has to
-  // ask the same gate the route does. This sidebar is northwind-only today,
-  // which makes the check look redundant — it stops being redundant the moment
-  // the `chrome` area widens ahead of `insights`, and a nav item that leads to
-  // a 404 is exactly the quiet breakage that ordering produces.
-  const insightsV2 = useV2("insights");
 
   // A failed payment outranks everything else in the footer badge: it is the
   // one state that needs the operator to DO something, and it escalates
@@ -434,6 +497,97 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const activeSettingsTab = searchParams.get('tab') || 'general';
   const [settingsSearch, setSettingsSearch] = useState("");
 
+  /* ── rental control centre mode ────────────────────────────────────────
+   *
+   * The v2 rental detail screen is three columns, and the leftmost of them is
+   * this sidebar. The prototype drew its own rail because it was a full-screen
+   * page with no app chrome; inside `(dashboard)/layout.tsx` that would stack
+   * two sidebars side by side. So the sidebar BECOMES the stage rail while a
+   * rental is open, exactly as it becomes the Settings rail on /settings.
+   *
+   * Matched on a UUID rather than "anything after /rentals/", because
+   * `/rentals`, `/rentals/new` and `/rentals/analytics` are all real routes and
+   * every one of them still wants the ordinary nav. A stricter test is also the
+   * safe one: an unrecognised path falls through to the normal sidebar, which
+   * is a working screen, whereas a false positive is a rail with no rental
+   * behind it.
+   */
+  const rentalDetailId =
+    pathname?.match(
+      /^\/rentals\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/
+    )?.[1] ?? null;
+  // Gated on the SAME area flag the page reads. Without this, a tenant with v2
+  // chrome but v1 rentals would get a stage rail alongside the v1 detail page —
+  // a sidebar navigating stages that screen does not have.
+  const rentalsV2 = useV2("rentals");
+  // `/insights` 404s for any tenant not on the v2 area, so the nav entry has to
+  // ask the same gate the route does. The v2 sidebar is northwind-only today,
+  // which makes this look redundant — it stops being redundant the moment
+  // `chrome` widens ahead of `insights`, and a nav item that leads to a 404 is
+  // exactly the kind of quiet breakage this ordering produces.
+  const isRentalDetailPage = !!rentalDetailId && rentalsV2;
+  const activeStage = readStage(searchParams.get("stage"));
+  // Called unconditionally (hooks may not be conditional) but fetches nothing
+  // off a rental page: `enabled` is false without an id. On a rental page it
+  // shares a query key with the screen itself, so the two read one request.
+  const { detail: rentalDetail } = useRentalDetailV2(isRentalDetailPage ? rentalDetailId : null);
+  const rentalStageValues = stageValues(rentalDetail);
+
+  /* ── vehicle record mode ───────────────────────────────────────────────
+   *
+   * The same move as the rental rail above, for the same reason: the v2 vehicle
+   * screen wants a scoped left rail, and inside `(dashboard)/layout.tsx` drawing
+   * its own would stack two sidebars side by side. So the sidebar BECOMES the
+   * section rail while a car is open.
+   *
+   * The path test lives in `sections.ts` (`vehicleIdFromPath`) rather than here,
+   * because it is a fact about the vehicle route and both this file and anything
+   * else that needs it should read one copy. It matches a UUID only, so
+   * `/vehicles` and `/vehicles/analytics` — both real routes — keep the ordinary
+   * nav.
+   *
+   * Unlike the rental rail, this one shows no per-section values: a vehicle's
+   * sections are PLACES on a record, not decisions with answers, so the rail
+   * stays identical on every car and is learned by position. See `sections.ts`.
+   */
+  const vehicleDetailId = vehicleIdFromPath(pathname);
+  // Gated on the SAME area flag the page reads. Without it a tenant on v2 chrome
+  // but v1 vehicles would get a rail navigating sections their screen does not
+  // have.
+  const vehiclesV2 = useV2("vehicles");
+  const isVehicleDetailPage = !!vehicleDetailId && vehiclesV2;
+  const activeSection = readSection(searchParams.get("section"));
+  // Called unconditionally (hooks may not be conditional) but fetches nothing
+  // off a vehicle page: `enabled` is false without an id. On a vehicle page it
+  // shares a query key with the screen itself, so the two read one request. This
+  // instance never calls `patch`, so its write path is inert.
+  const { vehicle: railVehicle } = useVehicleRecord(isVehicleDetailPage ? vehicleDetailId : "");
+
+  /* ── customer record mode ──────────────────────────────────────────────
+   *
+   * The same move again, for the same reason. Nothing new here except what the
+   * rail is allowed to say: a customer's sections are PLACES on a record that
+   * already exists, so the rail shows a label and an icon and nothing else, and
+   * looks identical on every customer — which is what makes it findable by
+   * position. The verdict an operator actually wants ("can I hand this person
+   * keys, and what is stopping it") is a whole column of its own on the far side
+   * of the screen, and restating a thinner version of it here would give the
+   * screen two summaries that drift apart.
+   */
+  const customerDetailId = customerIdFromPath(pathname);
+  // Gated on the SAME area flag the page reads. Without it a tenant on v2 chrome
+  // but v1 customers would get a rail navigating sections their screen does not
+  // have.
+  const customersV2 = useV2("customers");
+  const isCustomerDetailPage = !!customerDetailId && customersV2;
+  const activeCustomerSection = readCustomerSection(searchParams.get("section"), searchParams.get("tab"));
+  // Called unconditionally (hooks may not be conditional) but fetches nothing off
+  // a customer page: it is handed null and `useCustomerRow` is `enabled` on a
+  // truthy id. On a customer page it shares that query's key with the screen, so
+  // the two read one request — and it reads the ROW, not the assembled record,
+  // because a rail needs a name and a line of contact, not twelve subscriptions.
+  const customerRail = useCustomerRailHeader(isCustomerDetailPage ? customerDetailId : null);
+
   // Clear the search when leaving settings so it doesn't linger on return.
   useEffect(() => {
     if (!isSettingsPage && settingsSearch) setSettingsSearch("");
@@ -463,11 +617,50 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
     return true;
   };
 
-  // --- Top-level "fingertip" items (always visible, no children) ---
+  // --- Section 2: the three things the job is actually made of ---
+  //
+  // Customer, then vehicle, then rental — the order a booking happens in, not
+  // alphabetical and not by how often each is clicked. These three stay alone
+  // up here; everything else lives under "More" below.
   const rawTopLevel: NavItem[] = ([
-    { name: "Rentals", href: "/rentals", icon: FileText },
-    { name: "Vehicles", href: "/vehicles", icon: Car },
     { name: "Customers", href: "/customers", icon: Users },
+    { name: "Vehicles", href: "/vehicles", icon: Car },
+    { name: "Rentals", href: "/rentals", icon: FileText },
+  ] as NavItem[]).filter(filterItem);
+
+  // --- Section 3: "More", flat ---
+  //
+  // These were pulled out of the "Bookings", "Finance" and "Records"
+  // drill-downs. They are daily work — take a payment, chase an invoice, check
+  // whether a car is free this weekend — and a drill-down was costing a click
+  // every time. They are NOT promoted to section 2: that section is deliberately
+  // three items, and diluting it to eleven made it an unscannable column.
+  //
+  // So they render flat inside "More", above the groups that remain. Visible
+  // without a click, without crowding the three that matter most.
+  //
+  const rawMoreItems: NavItem[] = ([
+    // Insights, Insurances and Agreements are OFF the canary's rail, at the
+    // user's request, and this is the SECOND time they have been removed: they
+    // were taken out of the "Records" group, then a later restructure promoted
+    // them to top level and so reinstated them. If you are moving nav entries
+    // around, they do not come with you.
+    //
+    // Each is a decision that now has a home on the rental itself — its
+    // Insurance, Agreement and Payments stages — so a second, rental-agnostic
+    // list of the same records is two places to look for one answer. The three
+    // PAGES are untouched and their routes still resolve.
+    // `/blocked-dates` is the route; "Availability" is what the page is FOR,
+    // which is why the two do not match.
+    { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
+    { name: "Payments", href: "/payments", icon: CreditCard },
+    { name: "Invoices", href: "/invoices", icon: Receipt },
+    { name: "Fines", href: "/fines", icon: BadgeAlert },
+    // NOTE: Credits is deliberately NOT here. `/credits` reads
+    // `tenant_credit_wallets` — platform credit this tenant BUYS FROM US, with
+    // its own packages and checkout. It is not renter money like the four
+    // above, and listing it beside them read as if it were. It sits with
+    // Subscription in the account section at the top of the rail.
   ] as NavItem[]).filter(filterItem);
 
   // --- Second-level groups (drilled into on click) ---
@@ -488,7 +681,10 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         ...(showPendingBookings
           ? [{ name: "Pending Bookings", href: "/pending-bookings", icon: Clock, badge: pendingBookingsCount || 0 }]
           : []),
-        { name: "Availability", href: "/blocked-dates", icon: CalendarDays },
+        // Availability was lifted to top level; see `rawTopLevel`. Both entries
+        // left here are conditional, so this group can empty out entirely — the
+        // `.filter(g => g.items.length > 0)` below then drops the "Bookings"
+        // row rather than leaving a dead one.
       ],
     },
     // Kept from v1: the source worktree dropped Fleet Health entirely. It is
@@ -510,17 +706,27 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         } as NavGroup]
       : []),
     {
+      // Blocked Customers and Messages used to live here. Blocked Customers is
+      // now a button in the header of /customers itself — it is a view OF the
+      // customer list, not a separate place, and a second "Customers" entry in
+      // the sidebar to reach it was one level of nesting too many. Messages was
+      // dropped outright.
+      //
+      // What is left is Inquiries, which is itself conditional, so this group
+      // is frequently empty — and an empty group must not render as a dead
+      // "Customers" row sitting under the real one. It does not: the
+      // `.filter(g => g.items.length > 0)` below removes it. That filter is
+      // load-bearing now rather than defensive, which is why it is called out
+      // here as well as at its own definition.
       label: "Customers",
       icon: Users,
       items: [
-        { name: "Blocked Customers", href: "/blocked-customers", icon: Ban },
         // Enquiries folds into Leads once lead management is on — same as v1.
         // The lean-areas gate is the second half of the condition and must stay:
         // a lean tenant never sees Enquiries at all.
         ...(leadManagementEnabled || isAreaHidden("enquiries", tenantSlug)
           ? []
           : [{ name: "Inquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
-        { name: "Messages", href: "/messages", icon: MessageSquare, badge: chatUnreadCount || 0 },
       ],
     },
     ...(leadManagementEnabled && !isAreaHidden("leads", tenantSlug)
@@ -552,33 +758,40 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         } as NavGroup]
       : []),
     {
+      // Payments, Invoices, Fines and Credits were promoted to top level; see
+      // `rawTopLevel`. Expenses is what is left, and it is lean-gated, so this
+      // group empties on any tenant with expenses hidden — the
+      // `.filter(g => g.items.length > 0)` below then drops the "Finance" row
+      // rather than leaving a dead one.
       label: "Finance",
       icon: CreditCard,
       items: [
-        { name: "Payments", href: "/payments", icon: CreditCard },
-        { name: "Invoices", href: "/invoices", icon: Receipt },
-        { name: "Fines", href: "/fines", icon: BadgeAlert },
         ...(isAreaHidden("expenses", tenantSlug)
           ? []
           : [{ name: "Expenses", href: "/expenses", icon: Wallet }]),
-        { name: "Credits", href: "/credits", icon: CircleDollarSign },
       ],
     },
     {
       label: "Records",
       icon: BarChart3,
       items: [
-        { name: "Insurances", href: "/insurances", icon: ShieldCheck },
-        { name: "Agreements", href: "/agreements", icon: FileSignature },
-        { name: "Reminders", href: "/reminders", icon: Bell, badge: reminderStats?.due || 0 },
-        // Listed ABOVE the two screens it is meant to replace, so the canary
-        // reaches for it first while both originals stay exactly where they
-        // were for everyone else.
-        ...(insightsV2
-          ? [{ name: "Insights", href: "/insights", icon: LineChart }]
-          : []),
-        { name: "Reports", href: "/reports", icon: BarChart3 },
-        { name: "P&L Dashboard", href: "/pl-dashboard", icon: TrendingUp },
+        // Insurances, Agreements and Insights are not missing — they were
+        // promoted to top level; see `rawTopLevel` above. What is left here is
+        // genuine filing.
+        //
+        // On the canary that is Reminders alone, since Reports and P&L are
+        // lean-hidden. If Reminders is hidden too this group empties, and the
+        // `.filter(g => g.items.length > 0)` below drops the whole "Records"
+        // row rather than leaving a dead one.
+        ...(isAreaHidden("reminders", tenantSlug)
+          ? []
+          : [{ name: "Reminders", href: "/reminders", icon: Bell, badge: reminderStats?.due || 0 }]),
+        ...(isAreaHidden("reports", tenantSlug)
+          ? []
+          : [{ name: "Reports", href: "/reports", icon: BarChart3 }]),
+        ...(isAreaHidden("pl-dashboard", tenantSlug)
+          ? []
+          : [{ name: "P&L Dashboard", href: "/pl-dashboard", icon: TrendingUp }]),
       ],
     },
   ] as NavGroup[])
@@ -596,6 +809,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   });
   const topLevel = arrangedNav.topLevel as NavItem[];
   const groups = arrangedNav.groups as NavGroup[];
+  // Not passed through `applyNavPreferences`: that helper understands two
+  // buckets (top level and groups) and reordering a third through it would
+  // need its stored shape to change. These render in declaration order, which
+  // is fine — they are the section a user reaches for less often, and the
+  // customisation UI has never offered to reorder them.
+  const moreItems = rawMoreItems;
 
   // --- Website view: the site's pages, and nothing else ---
   // Driven off the `cms_pages` rows rather than a hardcoded list, so the rail
@@ -625,6 +844,420 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
   const isCmsActive = (href: string) =>
     href === "/cms" ? pathname === "/cms" : (pathname?.startsWith(href) ?? false);
+
+  // --- Rental Control Centre Mode ---
+  //
+  // Deliberately built from the Settings branch below rather than beside it:
+  // the h-11 back-link row, the title block, the footer slot and the collapsed
+  // behaviour are all its markup, so the two scoped rails read as the same
+  // piece of furniture wearing different contents. What differs is the body —
+  // Settings lists tabs, this lists DECISIONS, and each row shows the rental's
+  // answer where it has one and the stage's question where it does not.
+  if (isRentalDetailPage && rentalDetailId) {
+    const heroTitle = rentalDetail
+      ? (rentalDetail.customerName ?? rentalDetail.rentalNumber ?? "Rental")
+      : "Rental";
+    const heroSubtitle = rentalDetail
+      ? [rentalDetail.rentalNumber, rentalDetail.vehicleLabel].filter(Boolean).join(" · ")
+      : "Loading…";
+
+    return (
+      <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
+        <SidebarHeader className="h-16">
+          <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/rentals" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">Back to rentals</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link href="/rentals" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span className="text-[13px]">All rentals</span>
+              </Link>
+            )}
+          </div>
+        </SidebarHeader>
+
+        {/* Who this rental is for, and which car. The identity of the record,
+            in the same slot Settings puts its own title. */}
+        {!collapsed && (
+          <div className="px-4 pt-4 pb-1">
+            <h2 className="truncate text-sm font-semibold text-foreground">{heroTitle}</h2>
+            {heroSubtitle && (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{heroSubtitle}</p>
+            )}
+          </div>
+        )}
+
+        <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
+          {collapsed ? (
+            // Collapsed, a stage has no room for its answer — so it falls back
+            // to its icon with the label in a tooltip, which is what the rest
+            // of this sidebar does at this width.
+            <SidebarGroup className="p-1.5">
+              <SidebarMenu>
+                {STAGES.map((s) => (
+                  <SidebarMenuItem key={s.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={activeStage === s.id}
+                          className="h-8 transition-all duration-200 ease-in-out"
+                        >
+                          <Link
+                            href={stageHref(rentalDetailId, s.id)}
+                            replace
+                            scroll={false}
+                            prefetch={false}
+                            onClick={closeMobileOnNav}
+                          >
+                            <s.icon className="h-4 w-4 shrink-0" />
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        {rentalStageValues[s.id] ? `${s.label} — ${rentalStageValues[s.id]}` : s.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ) : (
+            <div className="space-y-2 p-3">
+              {STAGES.map((s, i) => (
+                <StageItem
+                  key={s.id}
+                  index={i}
+                  label={s.label}
+                  value={rentalStageValues[s.id]}
+                  prompt={s.prompt}
+                  active={activeStage === s.id}
+                  href={stageHref(rentalDetailId, s.id)}
+                  onClick={closeMobileOnNav}
+                />
+              ))}
+            </div>
+          )}
+        </SidebarContent>
+
+        {/* Status lives in the footer — the same slot the ordinary sidebar uses
+            for its billing chip, and the same slot the prototype used. */}
+        <SidebarFooter className="p-3">
+          {!collapsed && rentalDetail && (
+            <div className="flex flex-wrap gap-1.5">
+              <HeroChip tone={rentalDetail.status.tone}>{rentalDetail.status.label}</HeroChip>
+              {rentalDetail.dateRangeShort && (
+                <HeroChip tone="muted" dot={false}>
+                  {rentalDetail.dateRangeShort}
+                </HeroChip>
+              )}
+            </div>
+          )}
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    );
+  }
+
+  // --- Vehicle Record Mode ---
+  //
+  // The third scoped rail, built from the Settings branch below like the rental
+  // one above it — same h-16 back-link header, same title block, same grouped
+  // nav, same collapsed popover behaviour — so all three read as one piece of
+  // furniture wearing different contents.
+  //
+  // It is closer to Settings than to the rental rail on purpose. A rental's rail
+  // lists decisions and shows each one's answer; a vehicle's lists nine PLACES
+  // on a record that already exists, with no answer to show. So this rail reads
+  // no record state beyond the car's own identity, and looks identical on every
+  // vehicle — which is what makes it findable by position.
+  if (isVehicleDetailPage && vehicleDetailId) {
+    // Registration is hidden for operators who have turned it off fleet-wide, so
+    // the subtitle falls back to the make and model rather than leaking a plate
+    // into a rail that is on screen all day.
+    const hidePlate =
+      (tenant as { hide_vehicle_registration?: boolean } | null)?.hide_vehicle_registration === true;
+    const modelLine = railVehicle
+      ? [railVehicle.year, railVehicle.make, railVehicle.model].filter(Boolean).join(" ").trim()
+      : "";
+    // The plate leads when there is one — it is what an operator says out loud —
+    // and the model line leads when there is not. Never a placeholder for a car
+    // that has neither; "Vehicle" is honest, an invented name would not be.
+    const heroTitle = railVehicle
+      ? (hidePlate ? modelLine : railVehicle.reg) || modelLine || railVehicle.reg || "Vehicle"
+      : "Vehicle";
+    const heroSubtitle = railVehicle
+      ? heroTitle === modelLine
+        ? ""
+        : modelLine
+      : "Loading…";
+
+    return (
+      <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
+        <SidebarHeader className="h-16">
+          <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/vehicles" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">Back to vehicles</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link href="/vehicles" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span className="text-[13px]">All vehicles</span>
+              </Link>
+            )}
+          </div>
+        </SidebarHeader>
+
+        {/* Which car this is — the identity of the record, in the same slot
+            Settings puts its own title and the rental rail puts the customer. */}
+        {!collapsed && (
+          <div className="px-4 pt-4 pb-1">
+            <h2 className="truncate text-sm font-semibold text-foreground">{heroTitle}</h2>
+            {heroSubtitle && (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{heroSubtitle}</p>
+            )}
+          </div>
+        )}
+
+        <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
+          {collapsed ? (
+            // Collapsed there is no room for group headings, so the nine
+            // sections flatten into one icon list with labels in tooltips —
+            // what the rest of this sidebar does at this width.
+            <SidebarGroup className="p-1.5">
+              <SidebarMenu>
+                {SECTIONS.map((s) => (
+                  <SidebarMenuItem key={s.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={activeSection === s.id}
+                          className="h-8 transition-all duration-200 ease-in-out"
+                        >
+                          <Link
+                            href={sectionHref(vehicleDetailId, s.id)}
+                            replace
+                            scroll={false}
+                            prefetch={false}
+                            onClick={closeMobileOnNav}
+                          >
+                            <s.icon className="h-4 w-4 shrink-0" />
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{s.label}</TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ) : (
+            SECTION_GROUPS.map((group, groupIndex) => (
+              <SidebarGroup key={group.label} className="p-1.5 pb-0">
+                <SidebarGroupContent>
+                  {groupIndex > 0 && <div className="mx-2.5 mb-1.5 border-t" />}
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-1">
+                    {group.label}
+                  </p>
+                  <SidebarMenu>
+                    {group.items.map((s) => (
+                      <SidebarMenuItem key={s.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={activeSection === s.id}
+                          className="h-8 transition-all duration-200 ease-in-out"
+                        >
+                          <Link
+                            href={sectionHref(vehicleDetailId, s.id)}
+                            replace
+                            scroll={false}
+                            prefetch={false}
+                            onClick={closeMobileOnNav}
+                            className="flex items-center gap-2.5"
+                          >
+                            <s.icon className="h-4 w-4 shrink-0" />
+                            <span className="text-[13px]">{s.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))
+          )}
+        </SidebarContent>
+
+        {/* The footer carries only what stops a car being booked, and only when
+            it is true. Both facts are columns on the vehicle row itself, so
+            neither asserts that some other record exists — everything richer
+            (blockers, compliance, utilisation) is computed on the screen and
+            belongs in its right rail, not in 280px an operator reads at a
+            glance. Nothing shows on a healthy car, which is the point. */}
+        {/* `pb-14`, not `p-3`: the v2 chrome floats its account button over the
+            bottom-left corner of the sidebar, and at `p-3` this chip sits
+            directly underneath it — visible enough to notice, not enough to
+            read. The clearance is on this branch alone so the ordinary nav and
+            the other two rails are untouched. */}
+        <SidebarFooter className="p-3 pb-14">
+          {!collapsed && railVehicle && (railVehicle.is_disposed || railVehicle.is_paused) && (
+            <div className="flex flex-wrap gap-1.5">
+              {railVehicle.is_disposed ? (
+                <HeroChip tone="muted">Disposed</HeroChip>
+              ) : (
+                <HeroChip tone="warning">Paused</HeroChip>
+              )}
+            </div>
+          )}
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    );
+  }
+
+  // --- Customer Record Mode ---
+  //
+  // The fourth scoped rail, and built from the same markup as the three above —
+  // h-16 back-link header, title block, grouped nav, collapsed popover-free icon
+  // list — so all four read as one piece of furniture wearing different
+  // contents.
+  if (isCustomerDetailPage && customerDetailId) {
+    return (
+      <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
+        <SidebarHeader className="h-16">
+          <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/customers" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">Back to customers</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link href="/customers" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span className="text-[13px]">All customers</span>
+              </Link>
+            )}
+          </div>
+        </SidebarHeader>
+
+        {/* Who this record is — the identity of it, in the same slot Settings
+            puts its own title. A name and a line of contact, never a status:
+            the status has a column of its own on the far side of the screen. */}
+        {!collapsed && (
+          <div className="px-4 pt-4 pb-1">
+            <h2 className="truncate text-sm font-semibold text-foreground">{customerRail.title}</h2>
+            {customerRail.subtitle && (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{customerRail.subtitle}</p>
+            )}
+          </div>
+        )}
+
+        <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
+          {collapsed ? (
+            // Collapsed there is no room for group headings, so the eleven
+            // sections flatten into one icon list with labels in tooltips —
+            // what the rest of this sidebar does at this width.
+            <SidebarGroup className="p-1.5">
+              <SidebarMenu>
+                {CUSTOMER_SECTIONS.map((s) => (
+                  <SidebarMenuItem key={s.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={activeCustomerSection === s.id}
+                          className="h-8 transition-all duration-200 ease-in-out"
+                        >
+                          <Link
+                            href={customerSectionHref(customerDetailId, s.id)}
+                            replace
+                            scroll={false}
+                            prefetch={false}
+                            onClick={closeMobileOnNav}
+                          >
+                            <s.icon className="h-4 w-4 shrink-0" />
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{s.label}</TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ) : (
+            CUSTOMER_SECTION_GROUPS.map((group, groupIndex) => (
+              <SidebarGroup key={group.label} className="p-1.5 pb-0">
+                <SidebarGroupContent>
+                  {groupIndex > 0 && <div className="mx-2.5 mb-1.5 border-t" />}
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-1">
+                    {group.label}
+                  </p>
+                  <SidebarMenu>
+                    {group.items.map((s) => (
+                      <SidebarMenuItem key={s.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={activeCustomerSection === s.id}
+                          className="h-8 transition-all duration-200 ease-in-out"
+                        >
+                          <Link
+                            href={customerSectionHref(customerDetailId, s.id)}
+                            replace
+                            scroll={false}
+                            prefetch={false}
+                            onClick={closeMobileOnNav}
+                            className="flex items-center gap-2.5"
+                          >
+                            <s.icon className="h-4 w-4 shrink-0" />
+                            <span className="text-[13px]">{s.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))
+          )}
+        </SidebarContent>
+
+        {/* The footer carries only what stops this person renting, and only when
+            it is true — `customers.is_blocked`, a column on the row itself, so
+            it asserts nothing about any other record. Everything richer (the
+            global blocklist, an expired licence, an unpaid balance) is computed
+            on the screen and belongs in its overview column, not in 280px an
+            operator reads at a glance. Nothing shows on a customer in good
+            standing, which is the point. */}
+        <SidebarFooter className="p-3">
+          {!collapsed && customerRail.blocked && (
+            <div className="flex flex-wrap gap-1.5">
+              <HeroChip tone="destructive">Blocked</HeroChip>
+            </div>
+          )}
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    );
+  }
 
   // --- Settings Sidebar Mode ---
   if (isSettingsPage) {
@@ -688,23 +1321,24 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
           {(() => {
             const query = settingsSearch.trim().toLowerCase();
-            const groupsWithMatches = settingsTabGroups
+            const groupsWithMatches = settingsGroupsFor(tenantSlug)
               .map(group => ({
                 ...group,
                 items: group.items.filter(item =>
                   canViewSettings(item.value) &&
-                  // Tesla Fleet is hidden from the lean canary and that tenant
-                  // alone. Presentation only — the settings tab, the edge
-                  // functions and the hourly Supercharger sync all stay put for
-                  // Jangram and every other operator running Teslas.
-                  !(item.value === 'tesla' && isAreaHidden('tesla', tenantSlug)) &&
-                  // Accounting (Xero + Zoho Books) is hidden from the lean
-                  // canary and that tenant alone. Presentation only — the
-                  // Settings tab, both OAuth pairs, the sync worker and the
-                  // void-on-refund hooks all stay on main. This tab is the only
-                  // route by which any other tenant could connect a ledger, so
-                  // it must never be hidden from them.
-                  !(item.value === 'accounting' && isAreaHidden('accounting', tenantSlug)) &&
+                  // Every settings tab the Integrations board now owns leaves
+                  // this nav for the lean canary and that tenant alone —
+                  // Payments, Messaging, Insurance, E-Signatures, Accounting,
+                  // Tesla Fleet and INSHUR. Presentation only. Each of those
+                  // tabs stays on main and stays the ONLY route by which the
+                  // other 56 tenants can connect the thing behind it, because
+                  // `/integrations` is notFound() for all of them.
+                  //
+                  // One shared predicate with the settings page's own mobile
+                  // trigger row, on purpose: this list and that one drifting
+                  // apart is what left E-Signatures clickable here while its
+                  // body was already blanked.
+                  !isSettingsTabHidden(item.value, tenantSlug) &&
                   (query === "" || item.label.toLowerCase().includes(query))
                 ),
               }))
@@ -1226,6 +1860,37 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
 
+                  {/* Billing — one row for the tenant's whole account with
+                      Drive247: the plan, its invoices, and the credit wallet.
+
+                      These were two rail entries and are now one. They are the
+                      same question asked twice ("what do I owe / what have I
+                      got left"), and `/subscription` already rendered a Tabs
+                      strip, so Credits joins Plan and Invoices as a third tab
+                      rather than living somewhere else entirely.
+
+                      Credits was previously under Finance, beside Payments,
+                      Invoices and Fines. That was wrong in a way worth naming:
+                      those are money between the operator and their RENTERS,
+                      while `/credits` is `tenant_credit_wallets` — credit the
+                      operator buys FROM US. Same word, opposite direction.
+
+                      `/credits` still resolves; it is not orphaned. This row
+                      just stops being the way in. */}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive("/subscription") || isActive("/credits")}
+                      tooltip={collapsed ? "Billing" : undefined}
+                      className="h-8 transition-colors"
+                    >
+                      <Link href="/subscription" onClick={closeMobileOnNav}>
+                        <Crown className="h-4 w-4 shrink-0" />
+                        <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>Billing</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+
                   {/* Welcome pack, kept from v1 — the source worktree dropped
                       it, but `/welcome` is a live route this branch's v1 rail
                       links to, so removing the row would strand it.
@@ -1376,7 +2041,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                 </SidebarGroup>
 
                 {/* Second-level groups — drill into the section on click */}
-                {groups.length > 0 && (
+                {(groups.length > 0 || moreItems.length > 0) && (
                   <SidebarGroup className="p-1.5 pt-1 pb-2">
                     {!collapsed && (
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pb-1">
@@ -1385,6 +2050,33 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                     )}
                     <SidebarGroupContent>
                       <SidebarMenu>
+                        {/* Flat rows first, then the drill-downs. These are
+                            ordinary links, not groups — they were lifted out of
+                            Bookings, Finance and Records so they cost no click,
+                            but they are not important enough to dilute the
+                            three items above. Same `data-tour` scheme as the
+                            top-level items. */}
+                        {moreItems.map((item) => (
+                          <SidebarMenuItem
+                            key={item.href}
+                            className="relative"
+                            data-tour={`nav-${item.href.replace(/^\//, "")}`}
+                          >
+                            <SidebarMenuButton
+                              asChild
+                              isActive={isActive(item.href)}
+                              tooltip={collapsed ? item.name : undefined}
+                              className="h-8 transition-colors"
+                            >
+                              <Link href={item.href} onClick={closeMobileOnNav}>
+                                <item.icon className="h-4 w-4 shrink-0" />
+                                <span className={`text-[13px] ${collapsed ? "sr-only opacity-0 w-0" : "truncate opacity-100"}`}>
+                                  {item.name}
+                                </span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
                         {groups.map((group) => {
                           const GroupIcon = group.icon;
                           const hasActive = group.items.some((i) => isActive(i.href));

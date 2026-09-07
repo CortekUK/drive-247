@@ -151,9 +151,14 @@ export function Panel({
  * to load. A sentence reads as a business that has not done the thing yet,
  * which for a new tenant is the truth and is not an error.
  */
-export function EmptyState({ message }: { message: string }) {
+export function EmptyState({ message, className }: { message: string; className?: string }) {
   return (
-    <div className="flex h-[260px] flex-col items-center justify-center rounded-3xl bg-muted/40 px-6 text-center">
+    <div
+      className={cn(
+        'flex h-[260px] flex-col items-center justify-center rounded-3xl bg-muted/40 px-6 text-center',
+        className,
+      )}
+    >
       <p className="max-w-xs text-sm text-muted-foreground">{message}</p>
     </div>
   );

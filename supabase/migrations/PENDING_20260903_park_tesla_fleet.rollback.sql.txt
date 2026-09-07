@@ -1,0 +1,58 @@
+-- PENDING — NOT APPLIED. Rollback for PENDING_20260903_park_tesla_fleet.sql.txt.
+--
+-- ============================================================================
+-- SECTION 1 rollback — re-schedule the hourly Tesla sync.
+-- ============================================================================
+-- The exact live definition captured 2026-09-03 from cron.job (jobid 36):
+--
+--   jobname : sync-tesla-charges-hourly
+--   schedule: 17 * * * *
+--   database: postgres
+--   username: postgres
+--   active  : true
+--   command : SELECT net.http_post(
+--               url := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/sync-tesla-charges-cron',
+--               headers := '{"Content-Type": "application/json",
+--                            "Authorization": "Bearer <PROD service_role JWT>"}'::jsonb,
+--               body := '{}'::jsonb
+--             );
+--
+-- The bearer token is DELIBERATELY NOT REPRODUCED HERE. It is a plaintext
+-- production service_role JWT. It already sits in the repo — and in git history,
+-- and on origin/main — at
+--   supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql
+-- and that file is the byte-for-byte source of this job. To restore the job,
+-- replay that migration verbatim:
+--
+--   psql "$DATABASE_URL" -f supabase/migrations/20260520170000_schedule_tesla_sync_cron.sql
+--
+-- (cron.schedule upserts by job name, so replaying is idempotent.)
+--
+-- Copying the JWT into a new file would widen an exposure that is already
+-- pending rotation. Do not inline it.
+
+-- ============================================================================
+-- SECTION 2 rollback — redeploy the edge functions.
+-- ============================================================================
+-- The sources live on branch park/tesla (tip 69c401b1). From a checkout of it:
+--   supabase functions deploy tesla-fleet-api         --project-ref hviqoaokxvlancmftwuo
+--   supabase functions deploy sync-tesla-charges      --project-ref hviqoaokxvlancmftwuo
+--   supabase functions deploy sync-tesla-charges-cron --project-ref hviqoaokxvlancmftwuo
+-- Their verify_jwt = false entries are in supabase/config.toml on park/tesla.
+
+-- ============================================================================
+-- SECTION 3 rollback — Tesla OAuth tokens.
+-- ============================================================================
+-- NOT REVERSIBLE BY SQL. tesla_clear_tokens discards the vault secret ids, and
+-- Tesla refresh tokens cannot be reconstructed. Each affected tenant
+-- (jangramrentals, openbayrental, test) must re-run the Tesla OAuth consent
+-- flow from the portal Settings > Tesla tab to reconnect.
+--
+-- This is the one irreversible step in the whole teardown. Do SECTION 3 last,
+-- and only once the decision to park is final.
+
+-- ============================================================================
+-- SECTION 4 rollback — none needed.
+-- ============================================================================
+-- Section 4 drops nothing; the schema, the 6 tesla_supercharger_charges rows,
+-- and the three tesla_*_tokens RPCs are all left in place by design.

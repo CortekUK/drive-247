@@ -1,0 +1,148 @@
+-- =============================================================================
+--  ROLLBACK for PENDING_20260903_drop_dead_columns.sql.txt
+--  PENDING / UNAPPLIED DRAFT — NOT A MIGRATION, NOT EXECUTED ANYWHERE
+-- =============================================================================
+--  Every definition below was read straight off prod `hviqoaokxvlancmftwuo`
+--  on 2026-09-03 (pg_attribute / pg_constraint / pg_indexes / pg_policies /
+--  information_schema.role_table_grants), so the types, defaults, nullability,
+--  check constraints, indexes, RLS and grants are the real ones, not guesses.
+--
+--  WHAT THIS CAN AND CANNOT RESTORE
+--  --------------------------------
+--  Sections 1, 2 and 4 are lossless: the columns were false/NULL everywhere,
+--  so recreating them with their original defaults reproduces the exact prior
+--  state.
+--
+--  Section 3 restores the turo_bridge SCHEMA ONLY. The two rows (one per
+--  table, both on tenant slug `test`) are NOT recoverable from this file. They
+--  are recoverable only if you took the snapshot described in the DATA
+--  PRESERVATION block of the drop file; a restore step for that snapshot is
+--  included at the end of section 3, commented out.
+-- =============================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- 1. tenants.integration_canopy
+-- ---------------------------------------------------------------------------
+--   Original: boolean, NULLABLE, DEFAULT false.
+ALTER TABLE public.tenants
+  ADD COLUMN IF NOT EXISTS integration_canopy BOOLEAN DEFAULT false;
+
+COMMENT ON COLUMN public.tenants.integration_canopy IS
+  'Whether Canopy insurance verification is enabled for this tenant';
+
+-- Restores the column-level privilege from 20260723090000_lock_down_tenants_rls.sql,
+-- which Postgres dropped along with the column.
+GRANT SELECT (integration_canopy) ON public.tenants TO anon;
+
+-- ---------------------------------------------------------------------------
+-- 2. tenants.revenue_optimiser_enabled
+-- ---------------------------------------------------------------------------
+--   Original: boolean, NOT NULL, DEFAULT false.
+--   Added in two steps so the NOT NULL is safe on a populated table.
+ALTER TABLE public.tenants
+  ADD COLUMN IF NOT EXISTS revenue_optimiser_enabled BOOLEAN DEFAULT false;
+
+UPDATE public.tenants SET revenue_optimiser_enabled = false
+  WHERE revenue_optimiser_enabled IS NULL;
+
+ALTER TABLE public.tenants
+  ALTER COLUMN revenue_optimiser_enabled SET NOT NULL;
+
+GRANT SELECT (revenue_optimiser_enabled) ON public.tenants TO anon;
+
+-- ---------------------------------------------------------------------------
+-- 3. turo_bridge_reservations / turo_bridge_tokens
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.turo_bridge_reservations (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  reservation_id  TEXT NOT NULL,
+  source          TEXT NOT NULL DEFAULT 'turo',
+  guest_name      TEXT,
+  vehicle_label   TEXT,
+  starts_at       TIMESTAMPTZ,
+  ends_at         TIMESTAMPTZ,
+  status          TEXT NOT NULL DEFAULT 'synced',
+  total_amount    NUMERIC(12,2),
+  currency        TEXT,
+  raw             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  synced_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT turo_bridge_reservations_source_check
+    CHECK (source = ANY (ARRAY['turo'::text, 'fixture'::text])),
+  CONSTRAINT turo_bridge_reservations_status_check
+    CHECK (status = ANY (ARRAY['synced'::text, 'imported'::text, 'failed'::text])),
+  CONSTRAINT turo_bridge_reservations_tenant_reservation_key
+    UNIQUE (tenant_id, reservation_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_turo_bridge_reservations_tenant_synced
+  ON public.turo_bridge_reservations USING btree (tenant_id, synced_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.turo_bridge_tokens (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  token         TEXT NOT NULL,
+  label         TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at  TIMESTAMPTZ,
+  revoked_at    TIMESTAMPTZ,
+  CONSTRAINT turo_bridge_tokens_token_key UNIQUE (token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_turo_bridge_tokens_tenant
+  ON public.turo_bridge_tokens USING btree (tenant_id);
+
+-- RLS — both tables had it enabled. Note the asymmetry, which is original:
+-- turo_bridge_reservations had exactly one policy (SELECT, own tenant or super
+-- admin); turo_bridge_tokens had RLS ON and NO policies at all, i.e. it was
+-- reachable only by service_role / postgres. That is reproduced faithfully.
+ALTER TABLE public.turo_bridge_reservations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.turo_bridge_tokens       ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS turo_bridge_reservations_select_own_tenant
+  ON public.turo_bridge_reservations;
+CREATE POLICY turo_bridge_reservations_select_own_tenant
+  ON public.turo_bridge_reservations
+  FOR SELECT TO authenticated
+  USING ((tenant_id = get_user_tenant_id()) OR is_super_admin());
+
+-- Grants, as they were.
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON public.turo_bridge_reservations TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON public.turo_bridge_reservations TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON public.turo_bridge_tokens TO service_role;
+-- (`authenticated` deliberately had NO grants on turo_bridge_tokens.)
+
+-- Data restore — only works if you took the snapshot before dropping.
+--   INSERT INTO public.turo_bridge_reservations
+--     SELECT * FROM public.zz_turo_bridge_reservations_bak_20260903;
+--   INSERT INTO public.turo_bridge_tokens
+--     SELECT * FROM public.zz_turo_bridge_tokens_bak_20260903;
+
+-- ---------------------------------------------------------------------------
+-- 4. tenants.turo_ical_*
+-- ---------------------------------------------------------------------------
+--   These did NOT exist on prod before the drop file ran, so on prod this
+--   section is the one part of the rollback you should NOT run — it would
+--   ADD columns that were never there. Run it only in an environment that had
+--   20260520123000_add_tenant_turo_sync.sql applied.
+--
+--   Original (per that migration): all three nullable, no defaults.
+--
+--   ALTER TABLE public.tenants
+--     ADD COLUMN IF NOT EXISTS turo_ical_url              TEXT,
+--     ADD COLUMN IF NOT EXISTS turo_ical_last_synced_at   TIMESTAMPTZ,
+--     ADD COLUMN IF NOT EXISTS turo_ical_last_error       TEXT;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- After rolling back, regenerate types and fan out to all four apps again.
+-- ---------------------------------------------------------------------------

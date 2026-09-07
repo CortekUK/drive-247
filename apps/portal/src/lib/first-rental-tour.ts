@@ -226,8 +226,12 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
   {
     id: 'welcome',
     label: 'Welcome',
-    title: 'Welcome to your portal',
-    body: 'A quick walk through the house — about a minute. Skip any time; you can replay it from your profile menu.',
+    // Trax speaks, in the first person, and this is the one card where that
+    // introduction happens — every step after it is already understood to be
+    // Trax talking, so they stay short and practical rather than re-introducing
+    // anybody. No emoji anywhere in this file: the voice carries the warmth.
+    title: 'I am Trax. Let me show you around.',
+    body: 'I work alongside you in here — pricing, reminders, the small decisions that add up. Give me a minute and you will know where everything lives, so your first rental is a short job rather than a hunt. Skip whenever you like; you can replay this from your profile menu.',
     route: '/',
     anchors: [],
     side: 'center',

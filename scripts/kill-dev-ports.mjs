@@ -94,6 +94,11 @@ if (args.length === 0) {
   // No app named — `npm run dev` starts everything, so clear the worktree's
   // whole range rather than only the ports apps/ currently declares.
   for (const port of PORTS) targets.add(port);
+  // ...but the declared ports are the authority, and they can sit OUTSIDE that
+  // range: the default range is derived from `base` (3000 here), while apps/
+  // now declares 4001-4005. Freeing only the range would certify ports it never
+  // looked at and hand `next dev` an EADDRINUSE on a port this script owns.
+  for (const port of appPorts.values()) targets.add(port);
 } else {
   for (const arg of args) {
     if (/^\d+$/.test(arg)) targets.add(Number(arg));

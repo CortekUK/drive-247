@@ -1,0 +1,148 @@
+-- =============================================================================
+--  PENDING / UNAPPLIED DRAFT  —  THIS IS NOT A MIGRATION YET
+-- =============================================================================
+--  Written 2026-09-03 alongside the dead-feature removal commits on `main`.
+--
+--  NOTHING IN THIS FILE HAS BEEN EXECUTED AGAINST ANY DATABASE.
+--
+--  The `.txt` suffix is deliberate: it keeps `supabase db push`, the migration
+--  runner and every other tool from picking this file up by accident. To apply
+--  it, a human renames it to
+--      supabase/migrations/<YYYYMMDDHHMMSS>_drop_dead_columns.sql
+--  and pushes it as a conscious decision.
+--
+--  WHY THIS IS NOT ALREADY A MIGRATION
+--  -----------------------------------
+--  This repo follows an ADDITIVE-ONLY migration rule, which exists so that
+--  reverting a code deploy is always safe. Dropping a column breaks that
+--  guarantee: once the storage is gone, reverting the code commits restores
+--  references to columns that no longer exist. Apply this only once you are
+--  confident the removal commits are permanent.
+--
+--  ORDER OF OPERATIONS
+--  -------------------
+--   1. Ship the code-removal commits and let them bake.
+--   2. Apply this file.
+--   3. Regenerate the Supabase types and fan them out to all FOUR apps — the
+--      generated types.ts files still name these columns until you do:
+--        npx supabase gen types typescript --project-id hviqoaokxvlancmftwuo \
+--          > apps/portal/src/integrations/supabase/types.ts
+--        cp apps/portal/src/integrations/supabase/types.ts apps/booking/src/integrations/supabase/types.ts
+--        cp apps/portal/src/integrations/supabase/types.ts apps/admin/src/integrations/supabase/types.ts
+--        cp apps/portal/src/integrations/supabase/types.ts apps/bonzah/src/integrations/supabase/types.ts
+--
+--  ROLLBACK
+--  --------
+--  PENDING_20260903_drop_dead_columns.rollback.sql.txt, same directory.
+--  Read the DATA PRESERVATION block in section 3 BEFORE running section 3 —
+--  dropping those two tables destroys rows that the rollback cannot invent.
+--
+--  EVIDENCE
+--  --------
+--  All counts below were read (SELECT only) from prod `hviqoaokxvlancmftwuo`
+--  on 2026-09-03. Total tenants at that time: 57.
+-- =============================================================================
+
+BEGIN;
+
+-- ---------------------------------------------------------------------------
+-- 1. tenants.integration_canopy  — Canopy insurance-verification feature flag
+-- ---------------------------------------------------------------------------
+--   Added by:  20260103130000_add_tenant_integrations.sql
+--   Evidence:  true for 0 of 57 tenants. No table, no UI, no hook, no edge
+--              function, no view, no DB function, no policy, no index ever
+--              referenced it. The only survivors in the repo are the four
+--              generated types.ts files (step 3 above clears those).
+--
+--   NOTE ON THE GRANT: 20260723090000_lock_down_tenants_rls.sql:26 lists
+--   `integration_canopy` in a column-level `GRANT SELECT (...) ON public.tenants
+--   TO anon`. Postgres drops a column's privileges together with the column, so
+--   no separate REVOKE is needed here. That historical migration is left
+--   unedited on purpose: it is already applied, and on a from-scratch replay the
+--   ADD COLUMN migration still runs before it, so the GRANT still resolves.
+--   The rollback file re-issues the grant explicitly.
+
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS integration_canopy;
+
+-- ---------------------------------------------------------------------------
+-- 2. tenants.revenue_optimiser_enabled  — Revenue Optimiser feature flag
+-- ---------------------------------------------------------------------------
+--   The feature's code was deleted in 1e447d08 (June 2026); this column is the
+--   last survivor.
+--   Evidence:  true for 0 of 57 tenants.
+--   Same GRANT note as section 1 applies.
+--
+--   The tombstone comment in apps/portal/src/lib/feature-access.ts is kept and
+--   updated, not deleted — it exists to stop the flag being reintroduced.
+
+ALTER TABLE public.tenants DROP COLUMN IF EXISTS revenue_optimiser_enabled;
+
+-- ---------------------------------------------------------------------------
+-- 3. turo_bridge_reservations / turo_bridge_tokens  — Turo bridge
+-- ---------------------------------------------------------------------------
+--   Evidence:  1 row in each table, both belonging to tenant slug `test`.
+--              ZERO references anywhere in the repo — no app code, no edge
+--              function, no view, no DB function, no cron. Nothing has a
+--              foreign key pointing at either table, and neither is in the
+--              `supabase_realtime` publication, so dropping them cannot strand
+--              a subscriber or an FK.
+--
+--   >>> DATA PRESERVATION — READ BEFORE RUNNING <<<
+--   These are the only two rows that exist. The rollback file recreates the
+--   SCHEMA but cannot recreate the DATA. If you want them back later, take a
+--   snapshot FIRST, in a separate transaction, before running this file:
+--
+--     CREATE TABLE IF NOT EXISTS public.zz_turo_bridge_reservations_bak_20260903
+--       AS TABLE public.turo_bridge_reservations;
+--     CREATE TABLE IF NOT EXISTS public.zz_turo_bridge_tokens_bak_20260903
+--       AS TABLE public.turo_bridge_tokens;
+--
+--   (Both rows are test-tenant fixtures, so discarding them is very likely
+--   fine — but that is the user's call, not this file's.)
+
+DROP TABLE IF EXISTS public.turo_bridge_reservations;
+DROP TABLE IF EXISTS public.turo_bridge_tokens;
+
+-- ---------------------------------------------------------------------------
+-- 4. tenants.turo_ical_url / turo_ical_last_synced_at / turo_ical_last_error
+-- ---------------------------------------------------------------------------
+--   *** THESE COLUMNS DO NOT EXIST ON PROD. ***
+--
+--   They are declared in supabase/migrations/20260520123000_add_tenant_turo_sync.sql,
+--   but that migration is NOT recorded in
+--   `supabase_migrations.schema_migrations` on hviqoaokxvlancmftwuo, and
+--   information_schema confirms no column matching '%turo%' exists on
+--   public.tenants. It was written and never pushed.
+--
+--   The statement below is therefore a NO-OP on prod. It is kept because other
+--   environments (staging branch ksmreaadhbirzakkxqrq, local stacks, any dev's
+--   machine) may have run `supabase db push` and picked the migration up.
+--
+--   >>> SEPARATE FOLLOW-UP, NOT DONE HERE <<<
+--   Because 20260520123000_add_tenant_turo_sync.sql is still in the repo, a
+--   fresh `supabase db push` into ANY new environment will re-create these
+--   three dead columns. Dropping them here does not stop that. Deleting or
+--   neutralising that migration file is the actual fix, and it is deliberately
+--   left to the user: removing a migration file carries the same revert-safety
+--   question as the drops in this file.
+
+ALTER TABLE public.tenants
+  DROP COLUMN IF EXISTS turo_ical_url,
+  DROP COLUMN IF EXISTS turo_ical_last_synced_at,
+  DROP COLUMN IF EXISTS turo_ical_last_error;
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- Post-apply verification (expect every count to be 0)
+-- ---------------------------------------------------------------------------
+--   SELECT count(*) FROM information_schema.columns
+--    WHERE table_schema = 'public' AND table_name = 'tenants'
+--      AND column_name IN ('integration_canopy', 'revenue_optimiser_enabled',
+--                          'turo_ical_url', 'turo_ical_last_synced_at',
+--                          'turo_ical_last_error');
+--
+--   SELECT count(*) FROM information_schema.tables
+--    WHERE table_schema = 'public'
+--      AND table_name IN ('turo_bridge_reservations', 'turo_bridge_tokens');
+-- =============================================================================

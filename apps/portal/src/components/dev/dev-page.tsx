@@ -2,16 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { notFound } from 'next/navigation';
-import { Compass, Loader2, Sparkles, Wrench } from 'lucide-react';
+import { Compass, Loader2, Rocket, Sparkles, Wrench } from 'lucide-react';
 
 import { Button } from '@/components/ui-v2/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui-v2/card';
 import { EmptyStatePreview } from '@/components/dev/empty-state-preview';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,10 +21,10 @@ import {
 /**
  * The developer page — `/dev`, local only, northwind only.
  *
- * Exactly two abilities, by request, and nothing else: no readouts, no seed
+ * Exactly three abilities, by request, and nothing else: no readouts, no seed
  * data, no flag toggles, no environment info. The layout is a list of
- * sections so a third ability has somewhere to go later without this file
- * being restructured; today there is one section holding two actions.
+ * sections so a further ability has somewhere to go later without this file
+ * being restructured; today there is one section holding three actions.
  *
  * ── THE GATES, and where each one lives ───────────────────────────────────
  * Four, guarding four different failures. Only the last three are here.
@@ -70,6 +63,16 @@ import {
  * `canAccessRoute` treats an UNMAPPED route as allowed, so without that entry
  * a manager-role user on the canary would be granted this page silently.
  */
+
+/**
+ * Where the demo signup journey lives — the public landing page through plan
+ * choice, signup, verification and payment — built in apps/web at
+ * `/demo-signup` (dev-only there too, same as this page). The base URL is
+ * configurable so this is never permanently hardcoded to localhost; the
+ * fallback is apps/web's dev port in THIS worktree — booking 4001, portal
+ * 4002, web 4003, admin 4004, bonzah 4005, never 3000–3005.
+ */
+const DEMO_SIGNUP_URL = `${process.env.NEXT_PUBLIC_WEB_BASE_URL || 'http://localhost:4003'}/demo-signup`;
 
 interface DevAction {
   id: string;
@@ -117,27 +120,28 @@ export function DevPageBody() {
   const tenantId = tenant.id;
 
   /**
-   * "Start as a first-time operator" — everything "first time" means, reset in
-   * one go, then a FULL reload of the dashboard. The order is deliberate:
+   * Everything "first time" means, reset in one go: the database row, then
+   * the tour's per-user seen flags, then the checklist's dismissal state.
+   * Shared by both actions below that promise a fresh arrival — "as a
+   * first-time operator" reloading straight into this dashboard, and "from
+   * the landing page" arriving here later via the demo signup journey —
+   * so which local state counts as "already seen" is written down exactly
+   * once. Neither caller navigates until this resolves; each does its own
+   * navigation afterwards, because where they send the operator differs.
    *
+   * The order is deliberate:
    *   1. the database first, because it is the step that can be refused. If
    *      RLS blocks the delete nothing local is touched and the failure is
    *      shown loudly — a reset that clears the tour but leaves the wizard
    *      dark would look like a bug in the wizard;
    *   2. then the tour's per-user seen flags, which re-arms its AUTOSTART;
-   *   3. then the checklist's dismissal state, so it shows as on day one;
-   *   4. then `window.location.assign('/')` rather than a client-side
-   *      navigation. A brand-new operator arrives on a cold page. A soft
-   *      navigation would carry over the wizard's component state (it stays
-   *      mounted in the dashboard layout, so its step and answers survive
-   *      `shouldShow` flipping), the tour's one-shot autostart ref, and every
-   *      cached query — all of which would make the second run subtly unlike
-   *      the first. A hard load makes the sequence the real one: the wizard's
-   *      query settles empty and it mounts fresh; finishing it writes the row,
-   *      `wizardPending` goes false, and the tour's autostart gate — now
-   *      unseen, on `/`, on the canary — fires after its short anchor poll.
+   *   3. then the checklist's dismissal state, so it shows as on day one.
    */
-  const startAsFirstTimeOperator = async (): Promise<string> => {
+  const resetOnboardingState = async (): Promise<{
+    deleted: number;
+    tourFlags: number;
+    checklistKeys: number;
+  }> => {
     const result = await resetFirstRunRow(supabase as unknown as FirstRunClient, tenantId);
     // `=== false`, not `!result.ok`: portal compiles with strictNullChecks off,
     // and under that flag TypeScript narrows a discriminated union only on an
@@ -151,9 +155,27 @@ export function DevPageBody() {
     }
     const tourFlags = clearTourSeenFlags();
     const checklistKeys = clearChecklistState(tenantId);
+    return { deleted: result.deleted, tourFlags, checklistKeys };
+  };
+
+  /**
+   * "Start as a first-time operator" — the reset above, then a FULL reload of
+   * the dashboard. `window.location.assign('/')` rather than a client-side
+   * navigation: a brand-new operator arrives on a cold page. A soft
+   * navigation would carry over the wizard's component state (it stays
+   * mounted in the dashboard layout, so its step and answers survive
+   * `shouldShow` flipping), the tour's one-shot autostart ref, and every
+   * cached query — all of which would make the second run subtly unlike
+   * the first. A hard load makes the sequence the real one: the wizard's
+   * query settles empty and it mounts fresh; finishing it writes the row,
+   * `wizardPending` goes false, and the tour's autostart gate — now
+   * unseen, on `/`, on the canary — fires after its short anchor poll.
+   */
+  const startAsFirstTimeOperator = async (): Promise<string> => {
+    const { deleted, tourFlags, checklistKeys } = await resetOnboardingState();
     window.location.assign('/');
     return (
-      `Reset done — first-run record ${result.deleted > 0 ? 'cleared' : 'was already clear'}, ` +
+      `Reset done — first-run record ${deleted > 0 ? 'cleared' : 'was already clear'}, ` +
       `${tourFlags} tour flag${tourFlags === 1 ? '' : 's'} and ${checklistKeys} checklist ` +
       `key${checklistKeys === 1 ? '' : 's'} cleared. Taking you to the dashboard…`
     );
@@ -165,6 +187,20 @@ export function DevPageBody() {
     return 'Tour started. If nothing appeared, open the navigation sidebar and try again.';
   };
 
+  /**
+   * "Start from the landing page" — the same reset as above, awaited so it
+   * COMPLETES before we ever navigate (racing it would land the operator back
+   * in the portal with the wizard never re-armed), then off to apps/web's
+   * demo signup journey rather than straight to the dashboard. That journey
+   * ends by handing the browser back to the portal, where the now-armed
+   * wizard and tour pick up exactly as they would for any brand-new operator.
+   */
+  const startFromLandingPage = async (): Promise<string> => {
+    await resetOnboardingState();
+    window.location.assign(DEMO_SIGNUP_URL);
+    return 'reset ok — redirecting to landing page';
+  };
+
   const sections: DevSectionSpec[] = [
     {
       id: 'onboarding',
@@ -172,23 +208,27 @@ export function DevPageBody() {
       actions: [
         {
           id: 'first-time',
-          title: 'Start as a first-time operator',
-          description:
-            'Clears the first-run record, the tour’s seen flag and the setup checklist’s ' +
-            'dismissals, then reloads the dashboard the way a brand-new operator meets it: ' +
-            'the wizard first, the three-stop tour after it, the checklist showing.',
-          label: 'Start as a first-time operator',
+          title: 'First-time operator',
+          description: 'Reset first-run + tour + checklist, reload dashboard.',
+          label: 'Run',
           icon: Sparkles,
           run: startAsFirstTimeOperator,
         },
         {
           id: 'quick-tour',
-          title: 'Start the quick tour',
-          description:
-            'Replays the three-stop first-rental tour right here, in this tab. Nothing is reset.',
-          label: 'Start the quick tour',
+          title: 'Quick tour',
+          description: 'Replay the tour in this tab. No reset.',
+          label: 'Run',
           icon: Compass,
           run: startQuickTour,
+        },
+        {
+          id: 'landing-page',
+          title: 'Full signup journey',
+          description: 'Reset, then landing page → plan → signup → OTP → pay.',
+          label: 'Run',
+          icon: Rocket,
+          run: startFromLandingPage,
         },
       ],
     },
@@ -210,7 +250,7 @@ export function DevPageBody() {
   };
 
   return (
-    <div data-testid="dev-page" className="mx-auto flex w-full max-w-3xl flex-col gap-8 py-2">
+    <div data-testid="dev-page" className="mx-auto flex w-full max-w-3xl flex-col gap-6 py-2">
       <header className="flex flex-col gap-1.5">
         <div className="flex items-center gap-2.5">
           <span className="flex size-9 items-center justify-center rounded-2xl bg-muted text-muted-foreground ring-1 ring-foreground/10">
@@ -223,10 +263,6 @@ export function DevPageBody() {
             local only
           </span>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Tools for replaying the first-run experience on this machine. Not part of any
-          production build.
-        </p>
       </header>
 
       {sections.map((section) => (
@@ -241,31 +277,41 @@ export function DevPageBody() {
           >
             {section.title}
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* One row per action, not a card each. This is an internal console:
+              the name, one line of what it does, and the button — dense enough
+              to take in at a glance instead of read. */}
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
             {section.actions.map((action) => {
               const Icon = action.icon;
               const isBusy = busy === action.id;
               return (
-                <Card key={action.id} size="sm" data-dev-action={action.id}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Icon className="size-4 text-primary" />
+                <div
+                  key={action.id}
+                  data-dev-action={action.id}
+                  className="flex items-center gap-3 px-3 py-2.5"
+                >
+                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-[13px] leading-tight text-foreground">
                       {action.title}
-                    </CardTitle>
-                    <CardDescription>{action.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button
-                      type="button"
-                      onClick={() => void run(action)}
-                      disabled={busy !== null}
-                      aria-busy={isBusy}
-                    >
-                      {isBusy ? <Loader2 className="size-4 animate-spin" /> : <Icon />}
-                      {action.label}
-                    </Button>
-                  </CardContent>
-                </Card>
+                    </p>
+                    <p className="truncate text-xs leading-tight text-muted-foreground">
+                      {action.description}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 font-mono text-xs"
+                    onClick={() => void run(action)}
+                    disabled={busy !== null}
+                    aria-busy={isBusy}
+                  >
+                    {isBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {action.label}
+                  </Button>
+                </div>
               );
             })}
           </div>
@@ -280,8 +326,8 @@ export function DevPageBody() {
           data-dev-status={status.tone}
           className={
             status.tone === 'error'
-              ? 'rounded-2xl bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive'
-              : 'text-sm text-muted-foreground'
+              ? 'rounded-lg bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive'
+              : 'px-1 font-mono text-xs text-muted-foreground'
           }
         >
           {status.text}

@@ -12,7 +12,7 @@ import {
   type FirstRunAnswers,
   type FirstRunQuestion,
 } from '@/lib/first-run-questions';
-import { celebrateArrival } from '@/lib/first-run-arrival';
+import { armArrival, celebrateArrival, disarmArrival } from '@/lib/first-run-arrival';
 import { useFirstRunWizard } from '@/hooks/use-first-run-wizard';
 
 /**
@@ -233,6 +233,20 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
     setDeparting(true);
     setFinishing(true);
     setFailed(false);
+    // Arm the celebration BEFORE the write, not after it.
+    //
+    // `save.mutateAsync` invalidates the query that feeds `shouldShow`, so
+    // `wizardPending` can flip false while we are still inside this await —
+    // and the walkthrough's autostart effect fires the moment it does. If the
+    // arrival has not been armed by then, that effect reads a hold of zero and
+    // schedules the Welcome card for ~700ms, which is how the card ended up on
+    // screen with confetti still falling around it.
+    //
+    // Arming is not drawing: nothing appears here. It only tells the tour that
+    // a burst is coming, so it waits the full run out. `celebrateArrival`
+    // below still does the drawing, and still only after the row is safely
+    // written — a failed write gets the error state and no celebration.
+    armArrival();
     try {
       await save.mutateAsync({ answers, skipped });
       // No local "done" state: the row now exists, the query is invalidated,
@@ -246,6 +260,10 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
       // at the top of `lib/first-run-arrival.ts`.
       celebrateArrival(reduced);
     } catch {
+      // The celebration was promised before the write and the write did not
+      // land, so take the promise back — otherwise the walkthrough waits out a
+      // burst that is never drawn. See `armArrival`.
+      disarmArrival();
       // Never trap the operator behind a wizard whose write failed. Say so,
       // bring the question back, and leave both buttons live so they can retry
       // — and note that even a total failure here is recoverable, because the
@@ -425,9 +443,14 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
               disabled={!canAdvance}
               aria-busy={finishing || undefined}
               className={cn(
-                'h-11 rounded-full bg-foreground px-7 text-sm font-medium text-background outline-none transition-all',
-                'hover:bg-foreground/90 focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px',
-                'disabled:pointer-events-none disabled:bg-foreground/[0.08] disabled:text-foreground/40',
+                // The accent, not ink. This is the only forward action on the
+                // screen, and a black pill made it read as a neutral chrome
+                // button sitting next to "Skip for now" rather than as the way
+                // on. `bg-primary` also means it follows the tenant's own
+                // accent instead of hardcoding indigo.
+                'h-11 rounded-full bg-primary px-7 text-sm font-medium text-primary-foreground outline-none transition-all',
+                'hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/30 active:translate-y-px',
+                'disabled:pointer-events-none disabled:bg-primary/25 disabled:text-primary-foreground/70',
               )}
             >
               {isLast ? 'Go to my dashboard' : 'Continue'}
@@ -738,8 +761,15 @@ function QuestionField({
             onClick={() => (multi ? onToggle(option.value) : onSelect(option.value))}
             className={cn(
               OPTION_ROW_CLASS,
-              'group/opt -ml-1 rounded-full outline-none',
+              'group/opt -ml-1 rounded-full outline-none transition-colors',
               'focus-visible:ring-3 focus-visible:ring-ring/30',
+              // Chosen rows carry a light wash of the accent rather than a
+              // neutral outline. The tint has to stay light: the label sits on
+              // top of it, and this is the one place on the screen where colour
+              // means "this is your answer" rather than decoration.
+              isOn
+                ? 'bg-primary/[0.08] ring-1 ring-primary/25'
+                : 'hover:bg-foreground/[0.03]',
             )}
           >
             <span

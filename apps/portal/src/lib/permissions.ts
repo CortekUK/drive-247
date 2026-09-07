@@ -184,6 +184,14 @@ export const ROUTE_TO_TAB: Record<string, string> = {
   // admin-create-user edge functions and backfilled for every existing manager.
   // Anyone who may read the reports may read this; nobody new gains access.
   '/insights': 'reports',
+  // `/integrations` maps to the SAME key as the Settings > Integrations tab it
+  // is a full-page version of. It was missing, and this table FAILS OPEN:
+  // `getTabKeyForRoute` returning null makes `canAccessRoute` treat the route as
+  // allowed, so every manager could reach the board that holds the Stripe,
+  // Square, Twilio, Bonzah and BoldSign credentials regardless of their grant.
+  // Only the canary renders that board today, which is the only reason this was
+  // not already a live problem.
+  '/integrations': 'settings.integrations',
   '/pl-dashboard': 'pl_dashboard',
   '/cms': 'cms',
   '/audit-logs': 'audit_logs',

@@ -45,6 +45,7 @@ import { ThemeToggle } from "@/components/shared/layout/theme-toggle";
 import { brandInk, brandSurface } from "@/components/auth-v2/brand-surface";
 import { useTenantBranding } from "@/hooks/use-tenant-branding";
 import { useTenant } from "@/contexts/TenantContext";
+import { isAreaHidden } from "@/lib/lean-areas";
 import { useTheme } from "next-themes";
 
 import { PLATFORM_PRIVACY_URL, PLATFORM_TERMS_URL } from "@/lib/legal/urls";
@@ -175,7 +176,7 @@ function LoginV2Content() {
   const searchParams = useSearchParams();
   const { user, signIn, loading, appUser } = useAuth();
   const { branding } = useTenantBranding();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [resetEmail, setResetEmail] = useState("");
@@ -292,7 +293,12 @@ function LoginV2Content() {
       return "/vehicles";
     }
     if (appUser?.role === "viewer") {
-      return "/reports";
+      // A viewer lands on the one read-only screen the product gives them. On a
+      // lean tenant that is `/insights`; `/reports` is hidden from the rail
+      // there, so landing on it would drop them somewhere they cannot navigate
+      // back to. The route itself still answers for everyone — this follows the
+      // gate, it does not add a second one.
+      return isAreaHidden("reports", tenantSlug) ? "/insights" : "/reports";
     }
     return "/"; // Default fallback
   };

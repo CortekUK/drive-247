@@ -1,0 +1,148 @@
+-- =====================================================================
+-- DRAFT ONLY — NOT APPLIED, NOT A MIGRATION.
+-- Fleet Health: database teardown, for the day the park becomes permanent.
+--
+-- Written 2026-09-03 alongside the code removal (commit 9a583c98,
+-- restorable from branch park/fleet-health). NOTHING IN HERE HAS BEEN RUN.
+-- The database is currently untouched and must stay that way while the
+-- park is reversible.
+--
+-- Read the three BLOCKERS below before running any of it.
+-- =====================================================================
+
+
+-- ---------------------------------------------------------------------
+-- BLOCKER 1 — vehicle_health_cache is still READ BY A LIVE FEATURE.
+--
+-- apps/portal/src/hooks/use-vehicle-swap.ts (~line 132) selects
+-- (vehicle_id, status) from vehicle_health_cache to badge a swap candidate
+-- "Not road legal" / "Service overdue" in the Swap Vehicle dialog.
+-- Vehicle swap is live for all tenants; Fleet Health is not.
+--
+-- The read is ADVISORY, never a block: swap-vehicle-dialog.tsx computes
+--     const disabled = v.unavailable;      // overlapping booking only
+-- so a health status has never prevented a swap. It only renders a badge
+-- and a warning paragraph.
+--
+-- The select ignores its error (`const { data: health } = ...`), so if the
+-- table were dropped the hook would degrade to "no badges" rather than
+-- throw. That is survivable but it is a silent behaviour change for the
+-- 2 live tenants currently holding a not_road_legal row (jangramrentals,
+-- kedic-services). Remove the read from use-vehicle-swap.ts FIRST, in its
+-- own reviewed commit, and only then drop this table.
+-- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- BLOCKER 2 — two portal modules still reference this feature and are
+-- owned by another session:
+--   apps/portal/src/hooks/use-fleet-health.ts   (kept)
+--   apps/portal/src/types/fleet-health.ts       (kept)
+-- They survive only because app-sidebar.tsx and app-sidebar-v2.tsx import
+-- useFleetHealthStats. Dropping tenants.fleet_health_enabled or
+-- vehicle_health_cache while those stand will break the sidebar for the
+-- `test` tenant (the one tenant with the flag on).
+-- Also: apps/portal/src/app/(dashboard)/settings/page.tsx writes
+-- fleet_health_enabled, and supabase/functions/chat/index.ts calls
+-- get_fleet_health_metrics(). Both must be cleaned before the drops.
+-- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
+-- BLOCKER 3 — DO NOT TOUCH these. They look like Fleet Health and are not:
+--
+--   service_records            (50 rows)  live: LastServiceCard,
+--                                         ServiceHistoryTable, P&L
+--   vehicle_events            (112 rows)  live: vehicle timeline
+--   vehicle_odometer_readings (143 rows)  WRITTEN BY THE LIVE KEY-HANDOVER
+--                                         FLOW via trigger
+--                                         trg_handover_odometer ->
+--                                         handover_to_odometer_reading(),
+--                                         then trg_vor_apply ->
+--                                         vehicle_odometer_apply() keeps
+--                                         vehicles.current_mileage correct.
+--                                         Dropping this breaks mileage on
+--                                         every vehicle page.
+--   blocked_dates                         live: calendar, availability
+--   vehicles.current_mileage              live: displayed everywhere
+--
+--   cron job 64 'evaluate-health-scores'  UNRELATED — tenant churn risk.
+--   maintenance_banner_* / MaintenanceBanner   UNRELATED — platform
+--                                              downtime notice.
+--   maintenance_runs                      UNRELATED — data-ops batches.
+-- ---------------------------------------------------------------------
+
+
+-- =====================================================================
+-- STEP 1 — the nightly refresh.
+--
+-- NOTE: this is currently a NO-OP for every live tenant already.
+-- evaluate_fleet_health() filters `AND t.fleet_health_enabled = true`, and
+-- fleet_health_enabled is false for all 35 live tenants, so the job only
+-- ever refreshes the internal `test` tenant. The 18 cache rows held by the
+-- 7 live tenants were seeded before the 20260822 trigger fix and have been
+-- frozen since (newest computed_at 2026-08-23).
+--
+-- Leave it scheduled while the park is reversible.
+-- =====================================================================
+-- SELECT cron.unschedule('evaluate-fleet-health');   -- jobid 66, '0 2 * * *'
+
+
+-- =====================================================================
+-- STEP 2 — triggers that exist only to keep the cache warm.
+-- All call fleet_health_recompute(), which already early-returns for
+-- flag-off tenants via fleet_health_gate(). Safe to drop once STEP 4 runs.
+-- =====================================================================
+-- DROP TRIGGER IF EXISTS trg_fh_blocks             ON public.blocked_dates;
+-- DROP TRIGGER IF EXISTS trg_fh_service            ON public.service_records;
+-- DROP TRIGGER IF EXISTS trg_fh_jobs               ON public.vehicle_maintenance_jobs;
+-- DROP TRIGGER IF EXISTS trg_fh_rules              ON public.vehicle_maintenance_rules;
+-- DROP TRIGGER IF EXISTS trg_fh_odometer           ON public.vehicle_odometer_readings;
+-- DROP TRIGGER IF EXISTS trg_fh_disposal           ON public.vehicles;
+-- DROP TRIGGER IF EXISTS trg_fh_vehicle_compliance ON public.vehicles;
+--
+-- KEEP: trg_handover_odometer, trg_vor_apply  (live key handover — see BLOCKER 3)
+
+
+-- =====================================================================
+-- STEP 3 — tables exclusive to Fleet Health.
+-- Row counts as at 2026-09-03.
+-- =====================================================================
+-- DROP TABLE IF EXISTS public.vehicle_health_cache;         -- 260 rows (242 of them the `test` tenant); see BLOCKER 1
+-- DROP TABLE IF EXISTS public.vehicle_maintenance_jobs;     --   2 rows
+-- DROP TABLE IF EXISTS public.vehicle_maintenance_rules;    --   4 rows
+-- DROP TABLE IF EXISTS public.fleet_health_trigger_errors;  --   0 rows
+
+
+-- =====================================================================
+-- STEP 4 — functions exclusive to Fleet Health.
+-- =====================================================================
+-- DROP FUNCTION IF EXISTS public.evaluate_fleet_health(uuid);
+-- DROP FUNCTION IF EXISTS public.evaluate_vehicle_health(uuid);
+-- DROP FUNCTION IF EXISTS public.fleet_health_gate(uuid);
+-- DROP FUNCTION IF EXISTS public.fleet_health_recompute();
+-- DROP FUNCTION IF EXISTS public.fleet_health_on_disposal();
+-- DROP FUNCTION IF EXISTS public.get_fleet_health_metrics(uuid);          -- called by supabase/functions/chat/index.ts — clean that first
+-- DROP FUNCTION IF EXISTS public.preview_maintenance_conflicts(uuid, date, date);
+-- DROP FUNCTION IF EXISTS public.schedule_vehicle_maintenance(uuid, text, date, date, text, text, text, text, text, text, uuid, boolean);
+-- DROP FUNCTION IF EXISTS public.complete_vehicle_maintenance_job(uuid, date, integer, numeric, text);
+-- DROP FUNCTION IF EXISTS public.sync_vehicle_maintenance_status();       -- verify no trigger depends on it first
+--
+-- KEEP: handover_to_odometer_reading(), vehicle_odometer_apply(),
+--       update_vehicle_last_service()   — all live.
+--
+-- Verify nothing else calls these before dropping:
+--   SELECT p.proname
+--     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+--    WHERE n.nspname = 'public'
+--      AND pg_get_functiondef(p.oid) ~* '(evaluate_vehicle_health|fleet_health_gate|schedule_vehicle_maintenance)';
+
+
+-- =====================================================================
+-- STEP 5 — the tenant flag. LAST, and only after BLOCKER 2 is cleared.
+-- =====================================================================
+-- ALTER TABLE public.tenants DROP COLUMN IF EXISTS fleet_health_enabled;
+
+
+-- =====================================================================
+-- Regenerate types afterwards and copy to portal/booking/admin/bonzah:
+--   npx supabase gen types typescript --project-id hviqoaokxvlancmftwuo
+-- =====================================================================

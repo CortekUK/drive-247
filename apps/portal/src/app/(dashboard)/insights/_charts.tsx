@@ -75,7 +75,7 @@ const AXIS = {
 const CURSOR = { fill: 'hsl(var(--muted))', opacity: 0.5 } as const;
 
 const exact = (currency: string) => (v: number) =>
-  formatCurrency(v, currency, { maximumFractionDigits: 0 });
+  formatCurrency(v, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 /* ────────────────────────────────────────────────────────────────────────────
  * 1 · Revenue vs costs by month
@@ -330,7 +330,7 @@ export function RevenueMix({
                         y={cy - 4}
                         className="fill-foreground text-sm font-semibold tabular-nums"
                       >
-                        {formatCurrency(total, currency, { maximumFractionDigits: 0 })}
+                        {formatCurrency(total, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </tspan>
                       <tspan x={cx} y={cy + 14} className="fill-muted-foreground text-[10px]">
                         total
@@ -349,7 +349,7 @@ export function RevenueMix({
               key={slice.category}
               color={colorFor(i, slice.category)}
               label={slice.category}
-              value={formatCurrency(slice.amount, currency, { maximumFractionDigits: 0 })}
+              value={formatCurrency(slice.amount, currency, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               meta={`${slice.share.toFixed(0)}%`}
             />
           ))}

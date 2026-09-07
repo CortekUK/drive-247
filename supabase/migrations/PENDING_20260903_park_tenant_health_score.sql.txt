@@ -1,0 +1,136 @@
+-- =============================================================================
+-- PENDING / UNAPPLIED DRAFT — DO NOT RUN
+-- Tenant Health Score — database teardown draft
+-- Drafted: 2026-09-03
+-- Status:  NOT APPLIED. No DDL was executed. Read-only SELECTs only were run
+--          against production while drafting this file.
+-- =============================================================================
+--
+-- SCOPE / NAME COLLISION WARNING
+-- -----------------------------------------------------------------------------
+-- This file covers TENANT Health Score ONLY: per-tenant churn-risk scoring for
+-- the super-admin app (/admin/health-score), computed daily by the
+-- `evaluate-health-scores` edge function.
+--
+-- It is NOT the Fleet Health feature. Fleet Health is a SEPARATE feature being
+-- parked by a different agent and NOTHING in this file may touch it. For
+-- avoidance of doubt, the following objects are FLEET health and are explicitly
+-- OUT OF SCOPE here:
+--     table    public.vehicle_health_cache
+--     table    public.fleet_health_trigger_errors
+--     function public.evaluate_fleet_health(uuid)
+--     function public.evaluate_vehicle_health(uuid)
+--     function public.fleet_health_gate(uuid)
+--     function public.fleet_health_on_disposal()
+--     function public.fleet_health_recompute()
+--     function public.get_fleet_health_metrics(uuid)
+--     column   tenants.fleet_health_enabled
+--     cron job 66 'evaluate-fleet-health'  ('0 2 * * *')  -- LEAVE ACTIVE
+--
+-- Also unrelated: rentals.health_severity, used by /admin/platform-rentals.
+-- That is per-RENTAL health and must not be dropped by this file.
+--
+--
+-- DATA THAT WOULD BE DESTROYED (production counts, read 2026-09-03)
+-- -----------------------------------------------------------------------------
+--     tenant_health_snapshots   1631 rows   (38 live tenants, newest 2026-09-03)
+--     health_alert_deliveries     63 rows   (all status 'sent')
+--     health_alert_outbox         59 rows
+--     health_score_runs           53 rows
+--     tenant_health_incidents     12 rows   (7 open, 1 acknowledged, 4 resolved)
+--     health_score_settings        1 row    (thresholds/config)
+--     health_score_recipients      1 row    (hariszahid432@gmail.com, enabled)
+--
+-- Take a backup of all seven tables before running anything below.
+--
+--
+-- 1. CRON  --------------------------------------------------------------------
+-- !! NOT UNSCHEDULED. Job 64 is STILL ACTIVE and will keep firing at 06:30 UTC
+--    daily against a function path that the removal commit deletes from the
+--    repo. The deployed copy of `evaluate-health-scores` still exists in
+--    Supabase (removing source does not undeploy it), so the job will keep
+--    succeeding until someone also deletes the deployed function — at which
+--    point it starts returning 404 into net._http_response, which does NOT
+--    surface in cron.job_run_details. It will look healthy while doing nothing.
+--
+-- Exact live definition, read from cron.job (jobid 64):
+--     jobname  : evaluate-health-scores
+--     schedule : 30 6 * * *
+--     active   : true
+--     database : postgres
+--     username : postgres
+--     nodename : localhost
+--     command  (309 chars, x-platform-secret REDACTED here on purpose — the
+--               authoritative value lives in cron.job, not in git):
+--
+--     SELECT net.http_post(
+--       url := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/evaluate-health-scores',
+--       headers := jsonb_build_object('Content-Type', 'application/json', 'x-platform-secret', '<PLATFORM_SECRET>'),
+--       body := '{}'::jsonb
+--     );
+--
+-- To read the real command verbatim before touching anything:
+--     SELECT command FROM cron.job WHERE jobid = 64;
+--
+-- When the owner decides to stop it (NOT done here):
+--     SELECT cron.unschedule('evaluate-health-scores');
+--
+--
+-- 2. DROP ORDER (dependency-safe)  ---------------------------------------------
+-- DROP VIEW IF EXISTS public.v_latest_tenant_health;
+--
+-- DROP FUNCTION IF EXISTS public.get_tenant_health_activity(uuid, integer, timestamptz);
+-- DROP FUNCTION IF EXISTS public.get_health_score_dashboard(integer);
+-- DROP FUNCTION IF EXISTS public.preview_tenant_health_settings(integer, integer, integer, integer, boolean, timestamptz);
+-- DROP FUNCTION IF EXISTS public.update_health_score_config(integer, boolean, integer, integer, integer, integer, integer, boolean, boolean, text[]);
+-- DROP FUNCTION IF EXISTS public.evaluate_tenant_health(text, boolean, timestamptz);
+--
+-- DROP TABLE IF EXISTS public.health_alert_deliveries;   -- FK -> health_alert_outbox
+-- DROP TABLE IF EXISTS public.health_alert_outbox;       -- FK -> incidents, snapshots, runs
+-- ALTER TABLE public.tenant_health_snapshots
+--   DROP CONSTRAINT IF EXISTS tenant_health_snapshots_incident_id_fkey;  -- break the cycle
+-- DROP TABLE IF EXISTS public.tenant_health_incidents;   -- FK -> snapshots (ON DELETE RESTRICT)
+-- DROP TABLE IF EXISTS public.tenant_health_snapshots;   -- FK -> health_score_runs, tenants
+-- DROP TABLE IF EXISTS public.health_score_runs;
+--
+-- DROP TRIGGER IF EXISTS bump_health_score_settings_version ON public.health_score_settings;
+-- DROP FUNCTION IF EXISTS public.bump_health_score_settings_version();
+-- DROP TABLE IF EXISTS public.health_score_recipients;
+-- DROP TABLE IF EXISTS public.health_score_settings;
+--
+--
+-- 3. audit_logs COUPLING — recommend NOT dropping  -----------------------------
+-- The feature's first migration also added, ON THE SHARED audit_logs TABLE:
+--     column    audit_logs.activity_source            (text NOT NULL DEFAULT 'unknown')
+--     constraint audit_logs_activity_source_check
+--     trigger   classify_audit_log_activity_source    BEFORE INSERT OR UPDATE
+--     function  public.classify_audit_log_activity_source()
+--     index     idx_audit_logs_health_activity
+--
+-- audit_logs is a high-traffic, shared platform table. Dropping the column
+-- would rewrite it and would also alter what /admin/audit-logs can express.
+-- Nothing outside Tenant Health currently READS activity_source, so leaving it
+-- in place is inert and cheap. RECOMMENDATION: leave all five objects alone.
+-- Listed here only so the surface is documented, deliberately commented out:
+--
+--     -- DROP TRIGGER IF EXISTS classify_audit_log_activity_source ON public.audit_logs;
+--     -- DROP FUNCTION IF EXISTS public.classify_audit_log_activity_source();
+--     -- DROP INDEX IF EXISTS public.idx_audit_logs_health_activity;
+--     -- ALTER TABLE public.audit_logs DROP CONSTRAINT IF EXISTS audit_logs_activity_source_check;
+--     -- ALTER TABLE public.audit_logs DROP COLUMN IF EXISTS activity_source;
+--
+--
+-- 4. ROLLBACK / RESTORE  -------------------------------------------------------
+-- Nothing here has been applied, so no rollback is required today.
+-- If the teardown above is ever run, restore by replaying, in order:
+--     supabase/migrations/20260813120000_add_tenant_health_scores.sql
+--     supabase/migrations/20260813130000_fix_health_score_edge_cases.sql
+--     supabase/migrations/20260813140000_fix_health_score_preview_data_issue_alert.sql
+--     supabase/migrations/20260813150000_fix_health_score_recipient_safe_delete.sql
+--     supabase/migrations/20260813160000_fix_health_score_recipient_insert_alias.sql
+--     supabase/migrations/20260813170000_add_audit_log_health_trend.sql
+-- ...all of which are restorable from branch `park/tenant-health`, then restore
+-- the seven tables' rows from backup. Migration 20260813120000 re-creates the
+-- cron job by CLONING the onboarding-daily-digest command, so the platform
+-- secret never needs to be typed by hand.
+-- =============================================================================

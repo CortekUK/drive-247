@@ -14,6 +14,16 @@ interface Props {
   filters: RentalFilters;
   onFiltersChange: (next: RentalFilters) => void;
   onClearFilters: () => void;
+  /**
+   * Optional CONTROLLED open state. Pass it and the bar stops rendering the
+   * panel itself — it only reports the toggle, and the caller decides where the
+   * panel appears. The rentals list uses this to put the panel on the back of
+   * the overview card (`rentals-overview-flip.tsx`) instead of underneath the
+   * search box. Left off, the bar keeps its own state and its own panel, so any
+   * other caller behaves exactly as before.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -30,8 +40,22 @@ interface Props {
  * the same `onFiltersChange` the page already owns, which serialises them to
  * the same query string the same hook already reads.
  */
-export function RentalsFilterBar({ filters, onFiltersChange, onClearFilters }: Props) {
-  const [showFilters, setShowFilters] = useState(false);
+export function RentalsFilterBar({
+  filters,
+  onFiltersChange,
+  onClearFilters,
+  open,
+  onOpenChange,
+}: Props) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const showFilters = isControlled ? open : uncontrolledOpen;
+  const setShowFilters = (next: boolean) => {
+    // Uncontrolled callers still get their own state; controlled ones get only
+    // the report, so there is one source of truth rather than two that drift.
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const activeFilterCount = countActiveRentalFilters(filters);
 
   const reduceMotion = useReducedMotion();
@@ -70,7 +94,7 @@ export function RentalsFilterBar({ filters, onFiltersChange, onClearFilters }: P
           type="button"
           aria-label={showFilters ? "Hide filters" : "Show filters"}
           aria-pressed={showFilters}
-          onClick={() => setShowFilters((v) => !v)}
+          onClick={() => setShowFilters(!showFilters)}
           className={`absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors ${
             showFilters
               ? "bg-primary text-primary-foreground"
@@ -89,8 +113,10 @@ export function RentalsFilterBar({ filters, onFiltersChange, onClearFilters }: P
         </button>
       </div>
 
+      {/* Controlled: the panel is somewhere else on the page and this renders
+          nothing but the bar. Uncontrolled: the original drop-down, untouched. */}
       <AnimatePresence initial={false}>
-        {showFilters && (
+        {!isControlled && showFilters && (
           <motion.div
             key="filters"
             initial={{ opacity: 0, scale: 0.985 }}

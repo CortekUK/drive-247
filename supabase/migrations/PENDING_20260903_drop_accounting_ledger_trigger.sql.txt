@@ -1,0 +1,90 @@
+-- ============================================================================
+-- DRAFT — NOT APPLIED. NOT A MIGRATION (.sql.txt on purpose).
+--
+-- Drops `enqueue_financial_event_on_ledger_insert`, the AFTER INSERT trigger on
+-- the LIVE, hot `ledger_entries` table that feeds the parked Xero/Zoho
+-- accounting outbox.
+--
+-- This is a live-path change on a money table. It is Ghulam's call, not the
+-- agent's, which is why it is drafted here rather than executed.
+-- Companion rollback: PENDING_20260903_drop_accounting_ledger_trigger.rollback.sql.txt
+-- ============================================================================
+--
+-- WHY — evidence gathered 2026-09-03 against prod (hviqoaokxvlancmftwuo),
+-- read-only:
+--
+--   financial_events                     7,633 rows / 18 tenants
+--     └─ on LIVE tenants                   964 rows / 16 tenants
+--     └─ written in the last 24h            20 rows        <- still filling
+--   financial_event_sync_state           6,616 rows
+--   accounting_connections                   3 rows, ZERO on a live tenant
+--   tenants with integration_xero OR integration_zoho_books true:
+--                                            1 — slug 'test' (internal)
+--   backfill_jobs / rental_sync_locks         0 / 0
+--
+-- WHO READS financial_events — the complete list, checked in code AND in the
+-- database, not assumed:
+--
+--   postgres functions  : enqueue_financial_event (the writer),
+--                         backfill_missing_sync_rows,
+--                         process_accounting_sync_claim_batch
+--                         — the last two are accounting's own sync worker
+--   views / matviews    : NONE  (pg_get_viewdef ILIKE '%financial_events%' = 0)
+--   edge functions      : only the accounting ones, all deleted in 5934384c
+--   portal              : only use-accounting-sync.ts / use-accounting-backfill.ts,
+--                         i.e. the Settings > Accounting tab
+--   admin               : finance-events-tab.tsx, a super-admin debug view,
+--                         deleted in 5934384c
+--   cron                : nothing. SELECT * FROM cron.job WHERE jobname ILIKE
+--                         '%accounting%' OR '%backfill%' returns zero rows.
+--
+-- No P&L object touches it: no function reads both pnl_entries and
+-- financial_events. pnl_entries (1,649 rows / 27 LIVE tenants) is a separate,
+-- live ledger and is NOT affected by anything in this file.
+--
+-- So for every live tenant the chain is: ledger insert -> trigger ->
+-- enqueue_financial_event -> row written -> fanned out to zero active
+-- connections -> read by nobody. Pure write amplification on the hottest money
+-- table in the schema, plus an EXCEPTION sub-block entered on every insert.
+--
+-- ---------------------------------------------------------------------------
+-- BEFORE APPLYING, decide these three things:
+--
+--   1. Is the outbox meant to be resurrected? If accounting comes back, the
+--      trigger is the cheapest way to refill it, and the gap from now until
+--      then would need a backfill from ledger_entries. Keeping the trigger is
+--      the "leave the tap on" option and costs one INSERT per ledger row.
+--
+--   2. `test` (slug 'test') still has integration_zoho_books = true and 3
+--      accounting_connections. Dropping the trigger stops its outbox too. That
+--      tenant is internal, so this is almost certainly fine — but it is the one
+--      place where behaviour visibly changes.
+--
+--   3. The other eight enqueue_financial_event callers are edge functions
+--      (apply-fine, apply-payment, accrue-payg-charges, bonzah-confirm-payment,
+--      calculate-excess-mileage, capture-deposit-hold, process-refund,
+--      process-pending-payment, _shared/tesla-sync-engine). This file does NOT
+--      touch them and they keep working: the RPC and the table both survive.
+--      Dropping the trigger removes the single largest producer, not all of
+--      them.
+-- ---------------------------------------------------------------------------
+
+BEGIN;
+
+-- The trigger only. The function `enqueue_financial_event_for_ledger_entry`
+-- is left in place deliberately: keeping it makes the rollback a one-line
+-- CREATE TRIGGER instead of a function redefinition, and an unattached
+-- function costs nothing.
+DROP TRIGGER IF EXISTS enqueue_financial_event_on_ledger_insert
+  ON public.ledger_entries;
+
+COMMIT;
+
+-- Verify after applying:
+--   SELECT tgname FROM pg_trigger t
+--     JOIN pg_class c ON c.oid = t.tgrelid
+--    WHERE c.relname = 'ledger_entries' AND NOT t.tgisinternal;
+-- Expect the five survivors and no enqueue_financial_event_on_ledger_insert:
+--   auto_allocate_payments_on_new_charge, auto_settle_payg_on_ledger_drain,
+--   ledger_entries_set_updated_at, set_ledger_entry_tenant_trigger,
+--   trg_sync_fine_status_on_settle

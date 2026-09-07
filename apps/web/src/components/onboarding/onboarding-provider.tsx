@@ -301,6 +301,23 @@ export function useOnboarding(): OnboardingContextValue {
   return ctx;
 }
 
+/**
+ * The same context, but `null` outside a provider instead of a throw.
+ *
+ * For the one legitimate caller of a signup component that is NOT driving the
+ * live signup: `<PlanCard>` rendered with its own `onSelect`, where mounting the
+ * provider would be wrong — it owns the dialog, the provisioning overlay and a
+ * passive session probe, none of which belong on a surface that deliberately
+ * creates nothing.
+ *
+ * `useOnboarding` stays the default and stays loud, so a card that genuinely
+ * meant to open the dialog still fails at the first render rather than turning
+ * into a button that silently does nothing.
+ */
+export function useOptionalOnboarding(): OnboardingContextValue | null {
+  return useContext(OnboardingContext);
+}
+
 export function useOnboardingShell(): OnboardingShellValue {
   return useContext(OnboardingShellContext);
 }

@@ -24,8 +24,7 @@
  */
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Check, ChevronDown } from "lucide-react";
-import Link from "next/link";
+import { AlertTriangle, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui-v2/button";
 import { Badge } from "@/components/ui-v2/badge";
@@ -776,103 +775,18 @@ export function HeroChip({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * The left rail
+ * The left rail — REMOVED, and where it went
  *
- * `shared/layout/app-sidebar-v2.tsx` already solves this exact problem for
- * Settings: a sidebar scoped to one area, with a Back link in its header, a
- * title under it, and grouped nav below. Its measurements are copied here
- * rather than approximated, because "sidebar-ish" is what makes a screen read
- * as not-quite-the-app.
+ * `RailHeader`, `RailGroup` and `NavItem` lived here and drew this screen's own
+ * left column. They are gone because the column is: the APP SIDEBAR becomes the
+ * vehicle's section rail while a car is open (`shared/layout/app-sidebar-v2.tsx`,
+ * `isVehicleDetailPage`), the same way it already becomes the Settings rail and
+ * the rental stage rail. Drawing one here as well stacked two sidebars side by
+ * side inside `(dashboard)/layout.tsx`.
+ *
+ * Deleted rather than left exported. This screen's v1 predecessor accumulated
+ * six status chips, a compliance panel and an events hook that nothing rendered;
+ * an unused rail kit is how that pile starts. The section list now lives in
+ * `sections.ts`, which both the sidebar and the screen import.
  * ═════════════════════════════════════════════════════════════════════════ */
 
-export function RailHeader({
-  backHref,
-  backLabel = "Back",
-  title,
-  subtitle,
-}: {
-  backHref: string;
-  backLabel?: string;
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <>
-      <div className="flex h-11 items-center px-2">
-        <Link
-          href={backHref}
-          className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-        >
-          <ArrowLeft className="size-4 shrink-0" />
-          <span className="text-[13px]">{backLabel}</span>
-        </Link>
-      </div>
-      <div className="px-4 pb-1 pt-1">
-        <h2 className="truncate text-sm font-semibold text-foreground">{title}</h2>
-        {subtitle && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{subtitle}</p>}
-      </div>
-    </>
-  );
-}
-
-export function RailGroup({
-  label,
-  first,
-  children,
-}: {
-  label: string;
-  /** The first group skips the divider that separates it from the one above. */
-  first?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="p-1.5 pb-0">
-      {!first && <div className="mx-2.5 mb-1.5 border-t" />}
-      <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-        {label}
-      </p>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  );
-}
-
-/**
- * A plain rail row. Icon, label, active state. Nothing else.
- *
- * It reads no record state on purpose. Hanging a live summary and a colour off
- * every row turns the sidebar into a second readout, and that has two costs:
- * the eye is pulled left every time anything is typed in the middle, and the
- * rail stops being navigable by shape — you can no longer find "Compliance" by
- * where it sits, because everything around it keeps changing height and colour.
- *
- * Navigation is a fixed thing you learn once. The state of the record belongs
- * in the right rail, which exists to be read.
- */
-export function NavItem({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left transition-colors",
-        active
-          ? "bg-primary/10 font-medium text-primary"
-          : "text-sidebar-foreground/70 hover:bg-primary/10 hover:text-primary",
-      )}
-    >
-      <Icon className={cn("size-4 shrink-0", active ? "text-primary" : "text-sidebar-foreground/60")} />
-      <span className="truncate text-[13px]">{label}</span>
-    </button>
-  );
-}

@@ -609,6 +609,93 @@ body.v2-theme {
   background-clip: padding-box;
 }
 
+/* ── Integration panels — readable, still light ──────────────────────────────
+ *
+ * The brief was exact: the panels' light grey is LIKED, it is just too faint to
+ * read. So this is a nudge, not a repaint, and it is scoped rather than global —
+ * moving `--muted-foreground` on `.v2-theme` itself would shift every v2 screen
+ * in the product for a note about one board.
+ *
+ * `.panel-text` is emitted by the `_panels/_kit.tsx` primitives that every panel
+ * renders through (PanelSection, PanelCard, PanelNote, PanelRow, CopyValue,
+ * StatusChip, PanelLoading, PanelError). Redefining a custom PROPERTY rather
+ * than setting `color` is the whole trick: it cascades, so a raw
+ * `text-muted-foreground` paragraph written inline in any of the thirteen panel
+ * files inherits the corrected value — with no edit to those files, several of
+ * which are being written in parallel (V2_PLAN §2).
+ *
+ * Contrast, measured (WCAG 2.1 relative luminance):
+ *
+ *              was                       now
+ *   light      #737373  4.74:1 on white  #666666  5.74:1     body text
+ *   dark       #a1a1a1  6.92:1 on card   #b3b3b3  8.53:1     body text
+ *
+ * Both were nominally passing at 14px; neither was comfortable at the 11–13px
+ * this board actually uses, which is 47 `text-[11px]` and 78 `text-xs` call
+ * sites. Dark was already fine and moves least — the light theme is where the
+ * complaint came from.
+ */
+.v2-theme .panel-text {
+  --muted-foreground: 0 0% 40%;
+}
+.dark .v2-theme .panel-text {
+  --muted-foreground: 0 0% 70%;
+}
+
+/* Ink for the tinted callouts.
+ *
+ * `--warning` and `--destructive` are ACCENT values — chosen to sit under white
+ * text on a solid button. Used as 12px type on a 10% wash of themselves, which
+ * is what `PanelNote` and `StatusChip` do 55 times across the panels, they land
+ * at:
+ *
+ *   light  warn    #ebA40a on #fdf6e7   1.98:1   ✗ (AA needs 4.5)
+ *   light  danger  #e60007 on #fce5e7   4.04:1   ✗
+ *   light  success #16a24a on #e7f6ee   2.99:1   ✗
+ *
+ * Same hue, same saturation, taken down to a reading weight in light and left
+ * near where they were in dark (which already passed comfortably):
+ *
+ *   light  warn    5.54:1   dark  10.2:1
+ *   light  danger  5.40:1   dark   6.71:1
+ *   light  success 5.13:1   dark   9.00:1
+ *
+ * The border and background tints are untouched, so the callouts still read as
+ * amber and red at a glance — only the letters got legible.
+ */
+.v2-theme .panel-ink-warn {
+  color: hsl(41 92% 27%);
+}
+.dark .v2-theme .panel-ink-warn {
+  color: hsl(41 92% 72%);
+}
+.v2-theme .panel-ink-danger {
+  color: hsl(357 72% 42%);
+}
+.dark .v2-theme .panel-ink-danger {
+  color: hsl(359 100% 76%);
+}
+.v2-theme .panel-ink-success {
+  color: hsl(142 78% 26%);
+}
+.dark .v2-theme .panel-ink-success {
+  color: hsl(142 70% 62%);
+}
+
+/* The two alpha-dimmed variants the panels use for secondary lines start from
+ * the corrected token above and still land under 4.5:1, so they are lifted here
+ * rather than in thirteen files this session does not own. Scoped to `p`/`span`
+ * so an `opacity-80` on an icon or a control is left alone. */
+.v2-theme .panel-text .text-muted-foreground\/70 {
+  color: hsl(var(--muted-foreground) / 0.92);
+}
+.v2-theme .panel-text .text-muted-foreground\/50 {
+  color: hsl(var(--muted-foreground) / 0.85);
+}
+.v2-theme .panel-text :is(p, span).opacity-80 {
+  opacity: 0.95;
+}
+
 /* Soft ambient page background — faint indigo glow, adapts to light/dark */
 .v2-theme .bg-app-gradient {
   /* Every layer must be brand-derived. The top-left wash was a literal

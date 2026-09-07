@@ -3,8 +3,13 @@
 /**
  * Insights — the data layer.
  *
- * Four reads, one React Query key, everything derived in one pass so the tiles
- * and the charts can never disagree with each other.
+ * Five reads, one React Query key, everything derived in one pass so the
+ * receipt and the charts can never disagree with each other.
+ *
+ * The ledger rows, the refunds and the receivables are RETAINED on the returned
+ * object, not just summed. Every dialog the receipt opens itemises the exact
+ * array its own headline figure was summed from, so a list can never fail to
+ * add up to the row above it and opening a dialog costs no round trip.
  *
  * ⚠️ TENANT ISOLATION. RLS is OFF on `rentals` and `vehicles`, and
  * `view_aging_receivables` is a plain (non-`security_invoker`) view that `anon`
@@ -23,9 +28,11 @@ import { useTenant } from '@/contexts/TenantContext';
 import {
   classify,
   netMargin,
+  receiptFor,
   toNumber,
   totalsFor,
   type PnlEntry,
+  type Receipt,
   type Totals,
 } from './_money-model';
 
@@ -104,7 +111,25 @@ export const PERIOD_OPTIONS: { value: PeriodMonths; label: string }[] = [
   { value: 12, label: 'Last 12 months' },
 ];
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
+/**
+ * A `Date` as `YYYY-MM-DD`, read off the LOCAL calendar.
+ *
+ * Not `toISOString().slice(0, 10)`, which converts to UTC first. Every `Date`
+ * built below is a local midnight, so in any timezone east of UTC that
+ * conversion lands on the previous day: an operator in Karachi asking for the
+ * last 12 months was silently given 12 months and one extra day, starting on
+ * the last day of the month before. The dates on this page are calendar dates
+ * as the operator means them, so they are formatted as calendar dates.
+ */
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** The day after `date`, as `YYYY-MM-DD`. An exclusive upper bound. */
+function dayAfter(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * The window a period selects: the first day of the month `months - 1` back,
@@ -247,6 +272,41 @@ export type MixSlice = {
   share: number;
 };
 
+/**
+ * One ledger row, kept for the receipt's dialogs.
+ *
+ * The hero row totals are summed from these; the dialog that opens behind a row
+ * itemises the very same array. Nothing is re-fetched and nothing is re-summed,
+ * so a dialog cannot show a list that fails to add up to the row above it.
+ *
+ * `reference` is the ledger's only human-ish handle on a cost: it is
+ * `service:<uuid>` or `vexp:<uuid>`, an opaque pointer rather than a
+ * description. `useCostDescriptions` in `_receipt-data.ts` resolves those on
+ * demand; without it the dialog can only say "Servicing" or "Running costs".
+ */
+export type LedgerRow = PnlEntry & { id: string; reference: string | null };
+
+/** One refund, as the "money you gave back" dialog lists it. */
+export type RefundRow = {
+  id: string;
+  amount: number;
+  date: string | null;
+  reason: string | null;
+  customerName: string | null;
+  vehicleId: string | null;
+};
+
+/** One customer who owes money, as `view_aging_receivables` reports them. */
+export type ReceivableRow = {
+  customerId: string | null;
+  customerName: string | null;
+  bucket_0_30: number;
+  bucket_31_60: number;
+  bucket_61_90: number;
+  bucket_90_plus: number;
+  total: number;
+};
+
 export type AgingBuckets = {
   bucket_0_30: number;
   bucket_31_60: number;
@@ -257,6 +317,8 @@ export type AgingBuckets = {
 
 export type InsightsData = {
   totals: Totals;
+  /** The same model as `totals`, said the way the operator says it. */
+  receipt: Receipt;
   margin: number | null;
   utilisation: number | null;
   fleetSize: number;
@@ -265,6 +327,19 @@ export type InsightsData = {
   worstVehicles: VehicleProfit[];
   mix: MixSlice[];
   aging: AgingBuckets;
+
+  /* The receipt's dialogs read these. Every one of them is the exact set of
+   * rows the figure above it was summed from — see `LedgerRow`. */
+
+  /** Every ledger row in the period, in the order it was fetched. */
+  ledger: LedgerRow[];
+  /** Every refund processed in the period, newest first. */
+  refunds: RefundRow[];
+  /** Everyone who owes money, worst debt first. NOT period-scoped. */
+  receivables: ReceivableRow[];
+  /** Vehicle id → the label to print for it. Misses are removed vehicles. */
+  vehicleLabels: Map<string, string>;
+
   /** True when any read hit the row ceiling, so the screen can say so. */
   truncated: boolean;
   /** No ledger rows in the window at all — the "nothing here yet" case. */
@@ -299,12 +374,36 @@ function foldMix(byCategory: Map<string, number>, keep: number): MixSlice[] {
 type VehicleRow = { id: string; make: string | null; model: string | null; year: number | null; reg: string | null; status: string | null };
 type RentalRow = { start_date: string | null; end_date: string | null; status: string | null };
 type AgingRow = {
+  customer_id: string | null;
+  customer_name: string | null;
   bucket_0_30: number | string | null;
   bucket_31_60: number | string | null;
   bucket_61_90: number | string | null;
   bucket_90_plus: number | string | null;
   total_due: number | string | null;
 };
+type PaymentRefundRow = {
+  id: string;
+  customer_id: string | null;
+  vehicle_id: string | null;
+  refund_amount: number | string | null;
+  refund_reason: string | null;
+  refund_processed_at: string | null;
+};
+type CustomerNameRow = { id: string; name: string | null };
+
+/**
+ * `.in()` puts every id in the URL. PostgREST/Supabase sit behind a proxy with
+ * a URL length limit, so a tenant with a lot of refunds would get a 414 rather
+ * than an error anyone could read. Chunked well under it.
+ */
+const IN_CHUNK = 200;
+
+/** What to print for a vehicle id, including when the vehicle is long gone. */
+export function vehicleName(labels: Map<string, string>, id: string | null): string {
+  if (!id) return 'Not tied to a car';
+  return labels.get(id) ?? `Removed vehicle (${id.slice(0, 8)})`;
+}
 
 export function useInsights(months: PeriodMonths) {
   const { tenant } = useTenant();
@@ -317,18 +416,22 @@ export function useInsights(months: PeriodMonths) {
     queryFn: async () => {
       const { from, to } = periodRange(months);
 
-      // Four reads, in parallel. Each one filters on tenant_id — see the file
+      // Five reads, in parallel. Each one filters on tenant_id — see the file
       // header. `vehicles` is deliberately NOT date-filtered: the denominator of
       // utilisation is the fleet you have, not the fleet that happened to earn.
-      const [ledger, vehicles, rentals, aging] = await Promise.all([
-        fetchAll<PnlEntry>(() =>
+      const [ledger, vehicles, rentals, aging, refunds] = await Promise.all([
+        fetchAll<LedgerRow>(() =>
           supabase
             .from('pnl_entries')
-            .select('entry_date, side, category, amount, vehicle_id')
+            .select('id, entry_date, side, category, amount, vehicle_id, reference')
             .eq('tenant_id', tenantId!)
             .gte('entry_date', from)
             .lte('entry_date', to)
-            .order('entry_date', { ascending: true }) as unknown as PageQuery<PnlEntry>,
+            .order('entry_date', { ascending: true })
+            // A tiebreaker, because `entry_date` is not unique and the paginator
+            // walks by offset: without a total order, two rows on the same date
+            // can swap between pages and be fetched twice or not at all.
+            .order('id', { ascending: true }) as unknown as PageQuery<LedgerRow>,
         ),
         fetchAll<VehicleRow>(() =>
           supabase
@@ -352,11 +455,64 @@ export function useInsights(months: PeriodMonths) {
         fetchAll<AgingRow>(() =>
           supabase
             .from('view_aging_receivables')
-            .select('bucket_0_30, bucket_31_60, bucket_61_90, bucket_90_plus, total_due')
+            .select(
+              'customer_id, customer_name, bucket_0_30, bucket_31_60, bucket_61_90, bucket_90_plus, total_due',
+            )
             .eq('tenant_id', tenantId!)
             .order('customer_id', { ascending: true }) as unknown as PageQuery<AgingRow>,
         ),
+
+        /*
+         * Refunds.
+         *
+         * `refund_amount > 0` is the test, NOT `refund_status`. On production
+         * today 17 rows carry a real, processed refund and the status column
+         * reads 'completed' on some and 'none' on others — 'none' being what a
+         * refund handed back outside Stripe leaves behind. Filtering on the
+         * status string would drop money the operator genuinely gave back.
+         *
+         * `refund_processed_at` is a timestamptz and `from`/`to` are calendar
+         * dates, so the upper bound is the day AFTER `to`, exclusive — a
+         * `.lte('…', to)` would silently drop everything refunded later than
+         * midnight on the last day of the window, which on the current month
+         * means most of today.
+         */
+        fetchAll<PaymentRefundRow>(() =>
+          supabase
+            .from('payments')
+            .select('id, customer_id, vehicle_id, refund_amount, refund_reason, refund_processed_at')
+            .eq('tenant_id', tenantId!)
+            .gt('refund_amount', 0)
+            .gte('refund_processed_at', from)
+            .lt('refund_processed_at', dayAfter(to))
+            .order('refund_processed_at', { ascending: false })
+            .order('id', { ascending: true }) as unknown as PageQuery<PaymentRefundRow>,
+        ),
       ]);
+
+      /*
+       * Customer names for the refunds, and only for the refunds.
+       *
+       * Second-stage rather than parallel because the ids come out of the read
+       * above. Bounded by the number of refunds, which is small — the whole
+       * platform has 17 — so this is a cheap round trip and never a table scan.
+       */
+      const refundCustomerIds = [
+        ...new Set(refunds.rows.map((r) => r.customer_id).filter((id): id is string => !!id)),
+      ];
+      const customerNames = new Map<string, string>();
+      for (let i = 0; i < refundCustomerIds.length; i += IN_CHUNK) {
+        const chunk = refundCustomerIds.slice(i, i + IN_CHUNK);
+        const { data, error } = await supabase
+          .from('customers')
+          .select('id, name')
+          .eq('tenant_id', tenantId!)
+          .in('id', chunk);
+        if (error) throw error;
+        for (const c of (data ?? []) as CustomerNameRow[]) {
+          if (c.name) customerNames.set(c.id, c.name);
+        }
+      }
 
       const totals = totalsFor(ledger.rows);
 
@@ -416,6 +572,9 @@ export function useInsights(months: PeriodMonths) {
       };
 
       const vehicleById = new Map(vehicles.rows.map((v) => [v.id, v]));
+      // Labels, resolved once. The dialogs print a car name on every line and
+      // must not each rebuild this — and must not each invent their own format.
+      const vehicleLabels = new Map(vehicles.rows.map((v) => [v.id, vehicleLabel(v, v.id)]));
       const ranked: VehicleProfit[] = [...byVehicle.entries()]
         .map(([vehicleId, profit]) => ({
           vehicleId,
@@ -432,6 +591,32 @@ export function useInsights(months: PeriodMonths) {
 
       const fleetSize = vehicles.rows.filter((v) => isFleetVehicle(v.status)).length;
 
+      /*
+       * Who owes what, worst first.
+       *
+       * "Worst" is oldest before biggest: a customer 100 days late for $200 is
+       * a more urgent phone call than one 10 days late for $2,000, and sorting
+       * on the total alone buries exactly the debts that are going bad.
+       */
+      const receivables: ReceivableRow[] = aging.rows
+        .map((r) => ({
+          customerId: r.customer_id,
+          customerName: r.customer_name,
+          bucket_0_30: toNumber(r.bucket_0_30),
+          bucket_31_60: toNumber(r.bucket_31_60),
+          bucket_61_90: toNumber(r.bucket_61_90),
+          bucket_90_plus: toNumber(r.bucket_90_plus),
+          total: toNumber(r.total_due),
+        }))
+        .filter((r) => r.total > 0)
+        .sort(
+          (a, b) =>
+            b.bucket_90_plus - a.bucket_90_plus ||
+            b.bucket_61_90 - a.bucket_61_90 ||
+            b.bucket_31_60 - a.bucket_31_60 ||
+            b.total - a.total,
+        );
+
       const agingTotals = aging.rows.reduce<AgingBuckets>(
         (acc, r) => ({
           bucket_0_30: acc.bucket_0_30 + toNumber(r.bucket_0_30),
@@ -443,8 +628,20 @@ export function useInsights(months: PeriodMonths) {
         { bucket_0_30: 0, bucket_31_60: 0, bucket_61_90: 0, bucket_90_plus: 0, total: 0 },
       );
 
+      const refundRows: RefundRow[] = refunds.rows.map((r) => ({
+        id: r.id,
+        amount: toNumber(r.refund_amount),
+        date: r.refund_processed_at,
+        reason: r.refund_reason,
+        customerName: r.customer_id ? (customerNames.get(r.customer_id) ?? null) : null,
+        vehicleId: r.vehicle_id,
+      }));
+
+      const gaveBack = refundRows.reduce((sum, r) => sum + r.amount, 0);
+
       return {
         totals,
+        receipt: receiptFor(totals, gaveBack),
         margin: netMargin(totals),
         utilisation: computeUtilisation({ rentals: rentals.rows, fleetSize, from, to }),
         fleetSize,
@@ -453,8 +650,16 @@ export function useInsights(months: PeriodMonths) {
         worstVehicles,
         mix: foldMix(byCategory, 5),
         aging: agingTotals,
+        ledger: ledger.rows,
+        refunds: refundRows,
+        receivables,
+        vehicleLabels,
         truncated:
-          ledger.truncated || vehicles.truncated || rentals.truncated || aging.truncated,
+          ledger.truncated ||
+          vehicles.truncated ||
+          rentals.truncated ||
+          aging.truncated ||
+          refunds.truncated,
         hasLedger: ledger.rows.length > 0,
       };
     },

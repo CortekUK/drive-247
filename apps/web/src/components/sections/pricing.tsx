@@ -10,6 +10,7 @@ import {
   PRICING_FOOTNOTE,
   SIGNUP_PLANS,
   type SignupPlan,
+  type SignupPlanId,
 } from "@/lib/plans";
 
 interface PricingSectionProps {
@@ -21,6 +22,16 @@ interface PricingSectionProps {
    * that came back with nothing, still gets three cards.
    */
   plans?: readonly SignupPlan[];
+  /**
+   * Hand a plan press to the caller instead of opening the signup dialog.
+   *
+   * Omitted on the marketing page, which is the default and the reason this
+   * section exists. Supplying it ALSO withholds <OnboardingProvider>: that
+   * provider owns the live dialog, the provisioning overlay and a passive
+   * session probe, and a caller running its own flow wants none of them on the
+   * page.
+   */
+  onSelectPlan?(planId: SignupPlanId): void;
 }
 
 /**
@@ -42,102 +53,108 @@ interface PricingSectionProps {
  * a different figure in the dialog header and order summary. One array, one
  * price.
  */
-export function PricingSection({ plans = SIGNUP_PLANS }: PricingSectionProps) {
+export function PricingSection({
+  plans = SIGNUP_PLANS,
+  onSelectPlan,
+}: PricingSectionProps) {
   const { ref, visible } = useFadeIn();
 
   // Belt and braces against an empty array reaching the grid: `fetchSignupPlans`
   // already falls back, but a default parameter only fires for `undefined`.
   const catalogue = plans.length > 0 ? plans : SIGNUP_PLANS;
 
-  return (
-    <OnboardingProvider plans={catalogue}>
-      <section
-        id="pricing"
-        aria-labelledby="pricing-heading"
-        className="bg-muted/50 py-20 sm:py-24"
-      >
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          {/* Section heading */}
-          <div className="flex items-center justify-center gap-4">
-            <div className="h-px w-12 bg-border" />
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-              Pricing
-            </p>
-            <div className="h-px w-12 bg-border" />
-          </div>
-
-          <h2
-            id="pricing-heading"
-            className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight"
-          >
-            Simple pricing,{" "}
-            <span className="text-indigo-600 dark:text-indigo-400">
-              sized to your fleet
-            </span>
-          </h2>
-
-          <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
-            Pick the plan that fits your fleet today. Every plan includes the
-            whole platform — you can be taking direct bookings the same day.
+  const section = (
+    <section
+      id="pricing"
+      aria-labelledby="pricing-heading"
+      className="bg-muted/50 py-20 sm:py-24"
+    >
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Section heading */}
+        <div className="flex items-center justify-center gap-4">
+          <div className="h-px w-12 bg-border" />
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Pricing
           </p>
-
-          {/* Cards. useFadeIn is applied once, on the wrapper, exactly as the
-              other sections do — the observer is one-shot, so it must sit on a
-              node that is present from first paint. */}
-          <div
-            ref={ref}
-            // `items-stretch` (not `items-start`) is what makes the three cards
-            // one height: each PlanCard is `h-full`, so it only fills the row if
-            // the row stretches it. With `items-start` every card shrink-wrapped
-            // its own content and the tiers ended up visibly different sizes.
-            /*
-              Columns follow the number of VISIBLE plans, and the grid narrows to
-              match. `md:grid-cols-3` was hardcoded, so hiding a plan in the admin
-              dashboard left the remaining cards clinging to the left with a
-              third of the row empty — the layout silently assumed three plans
-              forever. One plan centres at card width, two at two-thirds, three
-              at full width, so the section stays balanced whatever is published.
-            */
-            className={`mx-auto mt-12 grid gap-6 md:items-stretch ${
-              catalogue.length === 1
-                ? "max-w-sm md:grid-cols-1"
-                : catalogue.length === 2
-                  ? "max-w-3xl md:grid-cols-2"
-                  : "md:grid-cols-3"
-            } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
-          >
-            {catalogue.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} />
-            ))}
-          </div>
-
-          {/* Nothing in PLATFORM_INCLUDED is plan-gated, which is exactly why it
-              is listed once here instead of being repeated on all three cards. */}
-          <div className="mt-12 rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
-            <h3 className="text-center text-lg font-semibold tracking-tight">
-              Every plan includes the full platform
-            </h3>
-            <ul className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-              {PLATFORM_INCLUDED.map((feature) => (
-                <li
-                  key={feature}
-                  className="flex items-start gap-2.5 text-sm text-muted-foreground"
-                >
-                  <Check
-                    className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400"
-                    aria-hidden="true"
-                  />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            {PRICING_FOOTNOTE}
-          </p>
+          <div className="h-px w-12 bg-border" />
         </div>
-      </section>
-    </OnboardingProvider>
+
+        <h2
+          id="pricing-heading"
+          className="mt-5 text-center text-3xl font-bold tracking-tighter sm:text-4xl lg:text-[44px] lg:leading-tight"
+        >
+          Simple pricing,{" "}
+          <span className="text-indigo-600 dark:text-indigo-400">
+            sized to your fleet
+          </span>
+        </h2>
+
+        <p className="mx-auto mt-3 max-w-xl text-center leading-relaxed text-muted-foreground">
+          Pick the plan that fits your fleet today. Every plan includes the
+          whole platform — you can be taking direct bookings the same day.
+        </p>
+
+        {/* Cards. useFadeIn is applied once, on the wrapper, exactly as the
+            other sections do — the observer is one-shot, so it must sit on a
+            node that is present from first paint. */}
+        <div
+          ref={ref}
+          // `items-stretch` (not `items-start`) is what makes the three cards
+          // one height: each PlanCard is `h-full`, so it only fills the row if
+          // the row stretches it. With `items-start` every card shrink-wrapped
+          // its own content and the tiers ended up visibly different sizes.
+          /*
+            Columns follow the number of VISIBLE plans, and the grid narrows to
+            match. `md:grid-cols-3` was hardcoded, so hiding a plan in the admin
+            dashboard left the remaining cards clinging to the left with a
+            third of the row empty — the layout silently assumed three plans
+            forever. One plan centres at card width, two at two-thirds, three
+            at full width, so the section stays balanced whatever is published.
+          */
+          className={`mx-auto mt-12 grid gap-6 md:items-stretch ${
+            catalogue.length === 1
+              ? "max-w-sm md:grid-cols-1"
+              : catalogue.length === 2
+                ? "max-w-3xl md:grid-cols-2"
+                : "md:grid-cols-3"
+          } ${visible ? "fade-in-visible" : "fade-in-hidden"}`}
+        >
+          {catalogue.map((plan) => (
+            <PlanCard key={plan.id} plan={plan} onSelect={onSelectPlan} />
+          ))}
+        </div>
+
+        {/* Nothing in PLATFORM_INCLUDED is plan-gated, which is exactly why it
+            is listed once here instead of being repeated on all three cards. */}
+        <div className="mt-12 rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+          <h3 className="text-center text-lg font-semibold tracking-tight">
+            Every plan includes the full platform
+          </h3>
+          <ul className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+            {PLATFORM_INCLUDED.map((feature) => (
+              <li
+                key={feature}
+                className="flex items-start gap-2.5 text-sm text-muted-foreground"
+              >
+                <Check
+                  className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400"
+                  aria-hidden="true"
+                />
+                {feature}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          {PRICING_FOOTNOTE}
+        </p>
+      </div>
+    </section>
   );
+
+  // A caller that handles plan presses itself gets the grid and nothing else.
+  if (onSelectPlan) return section;
+
+  return <OnboardingProvider plans={catalogue}>{section}</OnboardingProvider>;
 }

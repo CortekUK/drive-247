@@ -142,14 +142,34 @@ export function useCreditWallet() {
       const credits = typeof arg === "number" ? arg : arg.credits;
       const termsAccepted = typeof arg === "number" ? undefined : arg.termsAccepted;
 
+      // Built here rather than at module scope: it has to read the location at
+      // the moment of the click, not at import.
+      const returnUrl = (status: "success" | "cancelled") => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("status", status);
+        return url.toString();
+      };
+
       const { data: sessionData, error } = await supabase.functions.invoke(
         "create-credit-checkout",
         {
           body: {
             credits,
             tenantId: tenant!.id,
-            successUrl: `${window.location.origin}/credits?status=success`,
-            cancelUrl: `${window.location.origin}/credits?status=cancelled`,
+            // Come back to WHERE THE BUY STARTED, not to a fixed page.
+            //
+            // The credits UI now renders in two places — standalone at
+            // `/credits`, and as the Credits tab of `/subscription` (the
+            // "Billing" row in the rail). Hardcoding `/credits` here meant
+            // buying from the Billing tab silently relocated you to a different
+            // screen on the way back from Stripe, which reads as the app losing
+            // your place at the exact moment you have just paid.
+            //
+            // `pathname + search` preserves the tab, so `?tab=credits` survives
+            // the round trip; `status` is appended to whatever is already
+            // there rather than replacing it.
+            successUrl: returnUrl("success"),
+            cancelUrl: returnUrl("cancelled"),
             ...(termsAccepted === true ? { acceptedTos: true } : {}),
           },
         }

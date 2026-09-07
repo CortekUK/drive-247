@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useTenantSubscription,
   TenantSubscriptionInvoice,
 } from "@/hooks/use-tenant-subscription";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useTenant } from "@/contexts/TenantContext";
+import { isLeanTenant } from "@/lib/lean-areas";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PricingCard } from "@/components/subscription/pricing-card";
+import { CreditsPanel } from "@/components/billing/credits-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
   CardContent,
@@ -25,6 +27,17 @@ import {
 import { UsageDashboard } from "@/components/settings/usage-dashboard";
 import { LocalInvoiceView } from "@/components/settings/subscription-settings";
 import { CardBrandIcon, CardOnFile } from "@/components/subscription/card-brand-icon";
+// Canary-only sample billing data. See the header of billing-preview.tsx for
+// why the gate is written on the SLUG and not as a `V2Area`.
+import {
+  useIsBillingPreviewTenant,
+  useBillingPreview,
+  usePreviewInvoices,
+  usePreviewSubscription,
+  PreviewDataPill,
+  PreviewDataNotice,
+  PreviewDisabledNote,
+} from "@/components/billing/billing-preview";
 import {
   CreditCard,
   Download,
@@ -72,6 +85,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function SubscriptionPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const {
     subscription,
@@ -92,6 +106,34 @@ export default function SubscriptionPage() {
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
 
+  // ── Preview mode (canary tenant only) ──────────────────────────────────────
+  //
+  // Only ONE of this page's three render paths draws the product — the Plan /
+  // Invoices / Credits tab strip below, which sits behind `isSubscribed`. The
+  // canary has no subscription, so it lands on the "no plans available" dead end
+  // and the screens being built cannot be reviewed. On that tenant, and only
+  // while there is nothing real to show, render the subscribed layout against
+  // sample data instead.
+  //
+  // `hasRealData` includes `invoicesLoading` so a real invoice arriving a beat
+  // after the subscription query can never flash sample data first, and the
+  // whole thing switches itself off the moment northwind has a real
+  // subscription or a real invoice — truth always wins.
+  const isPreviewTenant = useIsBillingPreviewTenant();
+  const previewActive = useBillingPreview(
+    !!subscription || invoices.length > 0 || invoicesLoading,
+  );
+  const previewSubscription = usePreviewSubscription(previewActive);
+  const previewInvoices = usePreviewInvoices(previewActive);
+
+  /** What the subscribed layout below renders — real data unless it is absent. */
+  const shownSubscription = previewActive ? previewSubscription : subscription;
+  const shownInvoices = previewActive ? previewInvoices : invoices;
+
+  // No tab state: the page is one column now. `?tab=credits` links that
+  // predate this still resolve — they land on the same page, and the Credits
+  // section is simply further down it rather than behind a click.
+
   /**
    * Billing history + receipt viewer, shared by every branch of this page and
    * identical to Settings. Replaces a bespoke table that mapped the FULL invoice
@@ -101,18 +143,18 @@ export default function SubscriptionPage() {
    * Renders nothing when there are no invoices.
    */
   const billingHistory =
-    invoices.length > 0 ? (
+    shownInvoices.length > 0 ? (
       <>
         <UsageDashboard
-          invoices={invoices}
-          invoicesLoading={invoicesLoading}
+          invoices={shownInvoices}
+          invoicesLoading={previewActive ? false : invoicesLoading}
           onViewInvoice={setViewingInvoice}
         />
         <LocalInvoiceView
           invoice={viewingInvoice}
           tenantName={tenant?.company_name || "Tenant"}
-          cardBrand={subscription?.card_brand}
-          cardLast4={subscription?.card_last4}
+          cardBrand={shownSubscription?.card_brand}
+          cardLast4={shownSubscription?.card_last4}
           open={!!viewingInvoice}
           onClose={() => setViewingInvoice(null)}
         />
@@ -167,6 +209,10 @@ export default function SubscriptionPage() {
   };
 
   const handleManagePayment = async () => {
+    // Belt and braces: the buttons are disabled in preview, but this opens a
+    // real Stripe Billing Portal session against a subscription that does not
+    // exist, so it must not be reachable by any path while previewing.
+    if (previewActive) return;
     // Explicit marker so the poll above runs on return; window.location.href
     // carried none, so the card change raced the webhook and often never showed.
     const origin = window.location.origin;
@@ -179,7 +225,11 @@ export default function SubscriptionPage() {
     }
   };
 
-  if (isLoading || plansLoading) {
+  // The extra `invoicesLoading` wait applies to the canary ONLY, so no other
+  // tenant's first paint is held up by a query this page did not previously
+  // block on. It exists so the preview decision is made once, against settled
+  // data, instead of rendering "choose your plan" for a frame and then swapping.
+  if (isLoading || plansLoading || (isPreviewTenant && invoicesLoading)) {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -205,7 +255,16 @@ export default function SubscriptionPage() {
   // fell through to the pricing cards, free to buy a SECOND subscription while
   // the original debt sat unpaid and unmentioned. This page is the one the hard
   // paywall whitelists, so that is exactly where they land.
-  if (isGraceExpired || subscription?.status === "past_due" || owesOutstandingInvoice) {
+  //
+  // `!previewActive` is defensive rather than load-bearing: preview requires no
+  // real subscription AND no real invoices, and each of these three conditions
+  // requires one or the other, so they are already mutually exclusive. Written
+  // explicitly so a later change to either side cannot quietly put a fabricated
+  // "payment required" screen in front of an operator.
+  if (
+    !previewActive &&
+    (isGraceExpired || subscription?.status === "past_due" || owesOutstandingInvoice)
+  ) {
     return (
       <div className="p-6 space-y-6">
         <Card className="max-w-2xl mx-auto">
@@ -270,8 +329,13 @@ export default function SubscriptionPage() {
     );
   }
 
-  // Unsubscribed state
-  if (!isSubscribed) {
+  // Unsubscribed state.
+  //
+  // This is the branch the canary hits, and the one that renders "No
+  // subscription plans are available yet" for a tenant with no plans — i.e. the
+  // dead end preview exists to step around. Every other tenant still lands here
+  // exactly as before.
+  if (!isSubscribed && !previewActive) {
     const hasPlans = plans && plans.length > 0;
 
     return (
@@ -344,24 +408,56 @@ export default function SubscriptionPage() {
     <div className="container mx-auto p-6">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Subscription</h1>
-          <p className="mt-1 truncate text-muted-foreground">
-            Manage your {subscription?.plan_name || "subscription"}
-          </p>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            {/* "Billing" is the canary's name for this screen, because on the
+                canary it also holds Credits. The other 36 still get a page that
+                is only the subscription, so renaming it for them would be a
+                visible change to a shared screen for no reason. */}
+            {isLeanTenant(tenant?.slug) ? "Billing" : "Subscription"}
+          </h1>
+            {/* Non-negotiable marker. A fabricated invoice that reads as real is
+                worse than an empty page, so the label sits next to the title,
+                above the fold, on every tab. */}
+            {previewActive && <PreviewDataPill />}
+          </div>
+          {previewActive ? (
+            <PreviewDataNotice className="mt-1.5 max-w-xl" />
+          ) : (
+            <p className="mt-1 truncate text-muted-foreground">
+              Manage your {subscription?.plan_name || "subscription"}
+            </p>
+          )}
         </div>
-        <Button variant="outline" size="sm" onClick={refetch} className="shrink-0">
+        {/* Refetching is harmless, but in preview it would refresh queries whose
+            answers this screen is not showing — an inert control that looks
+            live. Disabled instead. */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={refetch}
+          disabled={previewActive}
+          title={previewActive ? "Not available while previewing sample data" : undefined}
+          className="shrink-0"
+        >
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
       </div>
 
-      <Tabs defaultValue="plan">
-        <TabsList>
-          <TabsTrigger value="plan">Plan</TabsTrigger>
-          <TabsTrigger value="invoices">Invoices</TabsTrigger>
-        </TabsList>
+      {/* CANARY GETS ONE PAGE; EVERYONE ELSE KEEPS THEIR TABS.
+          Plan / Invoices / Credits used to sit behind a tab strip for every
+          tenant. Billing reads better top to bottom — what you are on, what you
+          have been charged, what you have left — and the strip hid two thirds of
+          that behind a click.
 
-        <TabsContent value="plan" className="mt-6">
+          But that is a visible change to a shared screen, and the other 36
+          tenants are not part of this work. They render exactly the layout they
+          rendered yesterday. The bodies below are shared, so the two layouts
+          cannot drift apart. */}
+      {isLeanTenant(tenant?.slug) ? (
+        <div className="space-y-10">
+          <section className="mt-6">
           <div className="grid gap-6 md:grid-cols-2">
             {/* Plan Details */}
             <div className="rounded-lg border bg-card p-6">
@@ -371,24 +467,29 @@ export default function SubscriptionPage() {
                     tenant (agreed on a sales call), so "Pro" / "$0.00" / a
                     hardcoded "active" badge state facts this tenant may never
                     have agreed to, on the screen they check their billing on.
-                    Mirrors subscription-settings.tsx. */}
+                    Mirrors subscription-settings.tsx.
+
+                    The ONE exception is `previewActive` on the canary, where
+                    these values come from billing-preview.tsx — and that state
+                    announces itself with the "Preview data" pill in the header
+                    and disables every money action on the page. */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Plan</span>
                   <span className="font-medium capitalize">
-                    {subscription?.plan_name || "—"}
+                    {shownSubscription?.plan_name || "—"}
                   </span>
                 </div>
-                {subscription?.status && (
+                {shownSubscription?.status && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Status</span>
-                    <StatusBadge status={subscription.status} />
+                    <StatusBadge status={shownSubscription.status} />
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Amount</span>
                   <span className="font-medium">
-                    {subscription?.amount != null
-                      ? `${formatCurrency(subscription.amount, subscription.currency || "usd")}/${subscription.interval || "month"}`
+                    {shownSubscription?.amount != null
+                      ? `${formatCurrency(shownSubscription.amount, shownSubscription.currency || "usd")}/${shownSubscription.interval || "month"}`
                       : "Custom pricing"}
                   </span>
                 </div>
@@ -400,8 +501,8 @@ export default function SubscriptionPage() {
                       the first thing to collide with its own label once the
                       grid dropped to one column. */}
                   <span className="min-w-0 text-right text-sm">
-                    {formatDate(subscription?.current_period_start ?? null)} –{" "}
-                    {formatDate(subscription?.current_period_end ?? null)}
+                    {formatDate(shownSubscription?.current_period_start ?? null)} –{" "}
+                    {formatDate(shownSubscription?.current_period_end ?? null)}
                   </span>
                 </div>
                 {/* Never present the day access ENDS as the day they will be
@@ -411,7 +512,7 @@ export default function SubscriptionPage() {
                     Mirrors subscription-settings.tsx. */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
-                    {subscription?.cancel_at || subscription?.canceled_at
+                    {shownSubscription?.cancel_at || shownSubscription?.canceled_at
                       ? "Access Ends"
                       : "Next Payment"}
                   </span>
@@ -419,8 +520,8 @@ export default function SubscriptionPage() {
                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
                       {formatDate(
-                        subscription?.cancel_at ??
-                          subscription?.current_period_end ??
+                        shownSubscription?.cancel_at ??
+                          shownSubscription?.current_period_end ??
                           null,
                       )}
                     </span>
@@ -432,23 +533,23 @@ export default function SubscriptionPage() {
             {/* Payment Method */}
             <div className="rounded-lg border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Payment Method</h2>
-              {subscription?.card_last4 ? (
+              {shownSubscription?.card_last4 ? (
                 <div className="space-y-4">
                   {/* Real network artwork, and the same CardOnFile block Settings
                       renders, so the two billing surfaces cannot drift. The old
                       markup also printed a bare "Expires undefined/undefined"
                       whenever Stripe had not sent expiry back yet. */}
                   <CardOnFile
-                    brand={subscription.card_brand}
-                    last4={subscription.card_last4}
-                    expMonth={subscription.card_exp_month}
-                    expYear={subscription.card_exp_year}
+                    brand={shownSubscription.card_brand}
+                    last4={shownSubscription.card_last4}
+                    expMonth={shownSubscription.card_exp_month}
+                    expYear={shownSubscription.card_exp_year}
                     className="rounded-lg bg-muted/50 p-3"
                   />
                   <Button
                     variant="outline"
                     onClick={handleManagePayment}
-                    disabled={createPortalSession.isPending}
+                    disabled={createPortalSession.isPending || previewActive}
                     className="w-full"
                   >
                     {createPortalSession.isPending ? (
@@ -460,6 +561,7 @@ export default function SubscriptionPage() {
                       "Update Payment Method"
                     )}
                   </Button>
+                  {previewActive && <PreviewDisabledNote />}
                 </div>
               ) : (
                 <div className="py-4 text-center">
@@ -473,10 +575,11 @@ export default function SubscriptionPage() {
                   <Button
                     variant="outline"
                     onClick={handleManagePayment}
-                    disabled={createPortalSession.isPending}
+                    disabled={createPortalSession.isPending || previewActive}
                   >
                     Add Payment Method
                   </Button>
+                  {previewActive && <PreviewDisabledNote className="mt-3" />}
                 </div>
               )}
 
@@ -497,28 +600,211 @@ export default function SubscriptionPage() {
               </div>
             </div>
           </div>
-        </TabsContent>
+          </section>
 
-        <TabsContent value="invoices" className="mt-6">
+          <section>
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">Invoices</h2>
           {/* Same component as Settings: last three transactions by default with
               a "Show all" escape hatch, a per-row download, and the Stripe-style
               receipt viewer. The bespoke table that used to live here mapped the
               FULL invoice list and had no receipt view. */}
-          {invoicesLoading ? (
+          {invoicesLoading && !previewActive ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-          ) : invoices.length === 0 ? (
+          ) : shownInvoices.length === 0 ? (
             <div className="rounded-lg border bg-card px-6 py-8 text-center">
               <p className="text-sm text-muted-foreground">No invoices yet</p>
             </div>
           ) : (
             billingHistory
           )}
-        </TabsContent>
-      </Tabs>
+          </section>
+
+          <section>
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">Credits</h2>
+            <CreditsPanel />
+          </section>
+        </div>
+      ) : (
+        <Tabs defaultValue="plan">
+          {/* Two tabs, exactly as before. Credits is deliberately NOT here:
+              merging it into this screen is canary work, and `/credits` remains
+              its own page in these tenants' sidebar, unchanged. */}
+          <TabsList>
+            <TabsTrigger value="plan">Plan</TabsTrigger>
+            <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="plan" className="mt-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Plan Details */}
+            <div className="rounded-lg border bg-card p-6">
+              <h2 className="text-lg font-semibold mb-4">Plan Details</h2>
+              <div className="space-y-4">
+                {/* No invented plan, price or status. Pricing is custom per
+                    tenant (agreed on a sales call), so "Pro" / "$0.00" / a
+                    hardcoded "active" badge state facts this tenant may never
+                    have agreed to, on the screen they check their billing on.
+                    Mirrors subscription-settings.tsx.
+
+                    The ONE exception is `previewActive` on the canary, where
+                    these values come from billing-preview.tsx — and that state
+                    announces itself with the "Preview data" pill in the header
+                    and disables every money action on the page. */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Plan</span>
+                  <span className="font-medium capitalize">
+                    {shownSubscription?.plan_name || "—"}
+                  </span>
+                </div>
+                {shownSubscription?.status && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <StatusBadge status={shownSubscription.status} />
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Amount</span>
+                  <span className="font-medium">
+                    {shownSubscription?.amount != null
+                      ? `${formatCurrency(shownSubscription.amount, shownSubscription.currency || "usd")}/${shownSubscription.interval || "month"}`
+                      : "Custom pricing"}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <span className="shrink-0 text-sm text-muted-foreground">
+                    Current Period
+                  </span>
+                  {/* A full date range is the longest value in this card and was
+                      the first thing to collide with its own label once the
+                      grid dropped to one column. */}
+                  <span className="min-w-0 text-right text-sm">
+                    {formatDate(shownSubscription?.current_period_start ?? null)} –{" "}
+                    {formatDate(shownSubscription?.current_period_end ?? null)}
+                  </span>
+                </div>
+                {/* Never present the day access ENDS as the day they will be
+                    charged again. A tenant who has cancelled is scheduled to
+                    terminate on cancel_at, and labelling that "Next Payment" is
+                    a support ticket (or a chargeback) waiting to happen.
+                    Mirrors subscription-settings.tsx. */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    {shownSubscription?.cancel_at || shownSubscription?.canceled_at
+                      ? "Access Ends"
+                      : "Next Payment"}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">
+                      {formatDate(
+                        shownSubscription?.cancel_at ??
+                          shownSubscription?.current_period_end ??
+                          null,
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div className="rounded-lg border bg-card p-6">
+              <h2 className="text-lg font-semibold mb-4">Payment Method</h2>
+              {shownSubscription?.card_last4 ? (
+                <div className="space-y-4">
+                  {/* Real network artwork, and the same CardOnFile block Settings
+                      renders, so the two billing surfaces cannot drift. The old
+                      markup also printed a bare "Expires undefined/undefined"
+                      whenever Stripe had not sent expiry back yet. */}
+                  <CardOnFile
+                    brand={shownSubscription.card_brand}
+                    last4={shownSubscription.card_last4}
+                    expMonth={shownSubscription.card_exp_month}
+                    expYear={shownSubscription.card_exp_year}
+                    className="rounded-lg bg-muted/50 p-3"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleManagePayment}
+                    disabled={createPortalSession.isPending || previewActive}
+                    className="w-full"
+                  >
+                    {createPortalSession.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Redirecting...
+                      </>
+                    ) : (
+                      "Update Payment Method"
+                    )}
+                  </Button>
+                  {previewActive && <PreviewDisabledNote />}
+                </div>
+              ) : (
+                <div className="py-4 text-center">
+                  <CardBrandIcon
+                    brand={null}
+                    className="mx-auto mb-3 h-10 w-[3.75rem] text-muted-foreground"
+                  />
+                  <p className="mb-3 text-sm text-muted-foreground">
+                    No payment method on file
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={handleManagePayment}
+                    disabled={createPortalSession.isPending || previewActive}
+                  >
+                    Add Payment Method
+                  </Button>
+                  {previewActive && <PreviewDisabledNote className="mt-3" />}
+                </div>
+              )}
+
+              <div className="mt-6 pt-4 border-t">
+                <h3 className="text-sm font-medium mb-2">
+                  Need to cancel?
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Please contact us at{" "}
+                  <a
+                    href="mailto:support@drive-247.com"
+                    className="text-primary hover:underline"
+                  >
+                    support@drive-247.com
+                  </a>{" "}
+                  to discuss cancellation.
+                </p>
+              </div>
+            </div>
+          </div>
+          </TabsContent>
+
+          <TabsContent value="invoices" className="mt-6">
+          {/* Same component as Settings: last three transactions by default with
+              a "Show all" escape hatch, a per-row download, and the Stripe-style
+              receipt viewer. The bespoke table that used to live here mapped the
+              FULL invoice list and had no receipt view. */}
+          {invoicesLoading && !previewActive ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : shownInvoices.length === 0 ? (
+            <div className="rounded-lg border bg-card px-6 py-8 text-center">
+              <p className="text-sm text-muted-foreground">No invoices yet</p>
+            </div>
+          ) : (
+            billingHistory
+          )}
+          </TabsContent>
+
+        </Tabs>
+      )}
     </div>
   );
 }

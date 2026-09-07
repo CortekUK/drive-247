@@ -45,6 +45,38 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // 3. The design playground always renders as the canary.
+  //
+  // `/playground/*` is a fake-data sandbox whose entire purpose is to preview
+  // northwind's v2 look. That theme is applied by the ROOT layout as a class on
+  // <body> (src/app/layout.tsx), and the v2 base rules are keyed on
+  // `body.v2-theme` — the typeface, the 14px desktop base size and the font
+  // smoothing all hang off that selector, so putting the class on a nested
+  // wrapper <div> gets the colour tokens and none of the rest.
+  //
+  // A nested layout cannot reach <body>, so pinning the slug here is the only
+  // place that can make the sandbox render byte-identically to the canary on
+  // plain `localhost:4002`. Visiting `northwind.portal.localhost:4002` already
+  // worked; this just removes the need to know that.
+  //
+  // Delete this block when the playground is folded into the real app.
+  //
+  // DEVELOPMENT ONLY. `/playground` is a top-level route — it sits OUTSIDE the
+  // `(dashboard)` group, so it inherits no auth check — and this block pins it
+  // to the canary on whatever host it is reached from. Without the guard below
+  // that means `revtek.portal.drive-247.com/playground`, on every operator's
+  // own domain, serving unreleased v2 screens to anyone on the internet.
+  //
+  // It is not a DATA leak (nothing under `playground/` touches Supabase,
+  // `useTenant` or `useQuery` — verified), but unreleased product design on a
+  // paying tenant's domain is not something to ship by omission.
+  if (
+    process.env.NODE_ENV === 'development' &&
+    request.nextUrl.pathname.startsWith('/playground')
+  ) {
+    tenantSlug = 'northwind';
+  }
+
   // Add tenant context to headers so it's available in server components.
   const requestHeaders = new Headers(request.headers);
   if (tenantSlug) {

@@ -3,11 +3,17 @@
 /**
  * Insights — the screen.
  *
- * One period selector and six things to read: four numbers, then four charts in
- * descending order of how often an operator needs them. There is deliberately
- * nothing else on it. /reports and /pl-dashboard between them offer dozens of
- * controls and still cannot answer "am I making money", which is the only
- * question most operators open them to ask.
+ * A receipt at the top and four charts under it, in descending order of how
+ * often an operator needs them. There is deliberately nothing else on it.
+ * /reports and /pl-dashboard between them offer dozens of controls and still
+ * cannot answer "am I making money", which is the only question most operators
+ * open them to ask.
+ *
+ * The receipt is the page. Every figure on it opens the rows it was summed
+ * from, so "where did that number come from" is a click and never an email.
+ * The period selector lives on the receipt for the same reason — it is what the
+ * operator is looking at when they think to change it — and still governs the
+ * charts, because they all read one query.
  *
  * This is a Client Component because it holds the period state and the query.
  * The gate lives one file up in `page.tsx`, on the server — see the docblock
@@ -17,15 +23,8 @@
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTenant } from '@/contexts/TenantContext';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui-v2/select';
-import { PERIOD_OPTIONS, useInsights, type PeriodMonths } from './_data';
-import { KpiRow } from './_kpis';
+import { useInsights, type PeriodMonths } from './_data';
+import { MoneyReceipt } from './_receipt';
 import { MoneyOwedByAge, ProfitByVehicle, RevenueMix, RevenueVsCosts } from './_charts';
 
 export function InsightsView() {
@@ -42,29 +41,11 @@ export function InsightsView() {
 
   return (
     <div className="mx-auto w-full max-w-[1560px] space-y-8 px-2 pb-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight">Insights</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            What the business earned, what it cost to run, and what is still owed.
-          </p>
-        </div>
-
-        <Select
-          value={String(months)}
-          onValueChange={(v) => setMonths(Number(v) as PeriodMonths)}
-        >
-          <SelectTrigger className="w-[170px]" aria-label="Reporting period">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIOD_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={String(o.value)}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <header>
+        <h1 className="text-3xl font-semibold leading-tight tracking-tight">Insights</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          What the business earned, what it cost to run, and what is still owed.
+        </p>
       </header>
 
       {/*
@@ -95,7 +76,13 @@ export function InsightsView() {
         </div>
       ) : null}
 
-      <KpiRow data={data} loading={isLoading} currency={currency} />
+      <MoneyReceipt
+        data={data}
+        loading={isLoading}
+        currency={currency}
+        months={months}
+        onMonthsChange={setMonths}
+      />
 
       <RevenueVsCosts data={data} loading={isLoading} currency={currency} />
 
@@ -121,14 +108,19 @@ export function InsightsView() {
           </h2>
           <ul className="mt-3 space-y-2.5">
             <li>
-              <span className="font-medium text-foreground">Operating revenue</span> is what you
-              earned. Sales tax and refundable security deposits are taken out — that money is
-              collected on someone else&apos;s behalf and was never yours.
+              <span className="font-medium text-foreground">Money that was never yours</span> is
+              sales tax and refundable security deposits. Both are charged to the customer and both
+              are owed straight back out, so they come off the top line rather than sitting in it.
             </li>
             <li>
-              <span className="font-medium text-foreground">Net profit</span> is operating revenue
-              minus what it cost to run the operation: servicing, expenses, and the rest of the
-              day-to-day.
+              <span className="font-medium text-foreground">Money you gave back</span> is refunds.
+              The ledger does not record a refund against the sale it reverses, so they are
+              subtracted on their own line — otherwise they would not be subtracted at all.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Money you kept</span> is what is left
+              after all of that and after what it cost to run the operation: servicing, expenses,
+              and the rest of the day-to-day.
             </li>
             <li>
               <span className="font-medium text-foreground">Buying and selling vehicles is not in

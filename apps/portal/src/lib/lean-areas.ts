@@ -193,6 +193,97 @@ const LEAN_TENANTS: readonly string[] = ['northwind'];
  * `tenant-health` is the super-admin Tenant Health Score screen. It lives in
  * apps/admin, which is not tenant-scoped, so the key here is a placeholder for
  * any portal-side surface only.
+ *
+ * ── The four `settings-*` keys ───────────────────────────────────────────────
+ *
+ * `settings-payments`, `settings-messaging`, `settings-insurance` and
+ * `settings-esign` are a DIFFERENT KIND of entry from everything above, and the
+ * difference is the whole reason they are safe.
+ *
+ * Every key above hides a feature the lean product does not carry. These four
+ * hide a SECOND COPY of a feature the lean product very much does carry. The
+ * canary now has `/integrations` — twelve cards, each opening a panel that
+ * fully manages its integration — so a lean tenant had two places to configure
+ * Stripe, Square, Twilio, Bonzah and BoldSign, which is one more than any
+ * operator can keep straight. Nothing is being taken away; a duplicate is.
+ *
+ * MEASURED AGAINST PRODUCTION (63 tenant rows) at the time of gating:
+ *   - 53 tenants on `payment_model = 'own'`, 2 on `payment_provider = 'square'`
+ *   - 7 tenants hold Twilio SMS credentials, 3 have `twilio_voice_enabled`
+ *   - 35 tenants have `integration_bonzah = true`
+ *   - 49 tenants are on `boldsign_mode = 'live'`
+ * Those are live money and live comms paths on the OTHER 56 tenants, all of
+ * which reach them through exactly these Settings tabs — `/integrations` is
+ * `notFound()` for every one of them (`isV2('appearance', slug)`). Deleting a
+ * tab would therefore not tidy the canary, it would take Stripe onboarding,
+ * Twilio setup, Bonzah credentials and the BoldSign mode switch off 56 paying
+ * operators at once. Which is the inversion Fleet Quotes, Tesla Fleet and
+ * Accounting already cost this project three times. So: presentation only.
+ *
+ * WHAT THIS GATE DOES NOT DO, deliberately:
+ *
+ *  - It does not hide `blacklist`. The Global Blacklist is a booking/risk rule,
+ *    not an integration, and it has no card on the board. It is RELOCATED into
+ *    "Booking Rules" for lean tenants (see `app-sidebar-v2.tsx`) so that the
+ *    now-empty "Integrations" settings group disappears rather than sitting
+ *    next to a real Integrations page holding one unrelated row.
+ *
+ *  - It does not make the `insurance` tab UNRENDERABLE. Bonzah's 10-step
+ *    application wizard — file uploads, signature pad, graded quiz, draft
+ *    autosave — lives only in `components/settings/bonzah-onboarding/`, and the
+ *    board's own Bonzah panel DEEP-LINKS BACK TO IT (`ONBOARDING_HREF =
+ *    "/settings?tab=insurance"` in `_panels/bonzah.tsx`). Hiding that body
+ *    would leave "Start the Bonzah application" pointing at nothing. So the tab
+ *    leaves the navigation, and the body narrows to the wizard alone — the one
+ *    thing the panel does not carry. That is not a duplicate surface; it is the
+ *    panel's own sub-screen, reached only from the panel.
+ *
+ *  - It does not silently drop the ~20 deep links that already point at these
+ *    tabs (`use-platform-status`, `use-setup-guide`, `use-setup-status`, the
+ *    dashboard Bonzah widgets, `stripe-connect-status.ts`, …) — nor the two
+ *    OAuth callbacks, `stripe-oauth-callback` and `square-oauth-callback`,
+ *    which HARDCODE `/settings?tab=payments&oauth=…|&square=…` as the landing
+ *    and are edge functions this work must not touch (V2_PLAN §7). A hidden tab
+ *    with a board home hands off to it instead, query string intact, so an
+ *    operator returning from Stripe or Square lands on the card rather than on
+ *    a bounced-to-General settings page. See `settingsTabBoardTarget`.
+ *
+ * ── `reports`, `pl-dashboard`, `reminders` ───────────────────────────────────
+ *
+ * The first two are the SAME KIND of entry as the four `settings-*` keys above:
+ * they hide a second (and third) copy of something the lean product now carries
+ * once. `/insights` replaces both — one screen, an honest money model, and none
+ * of the clutter Ghulam asked to be rid of. Leaving all three in the rail meant
+ * an operator had three places to ask "did I make money?" and got three
+ * different answers, because the two originals disagree with each other and
+ * with reality (they count the vehicle PURCHASE PRICE as an operating cost, so
+ * they told a profitable operator like RevTek it was down 101,538 when it was
+ * up 21,553).
+ *
+ * `reminders` is a plain lean-surface cut: the canary's product does not carry
+ * the reminders queue.
+ *
+ * ALL THREE ARE GATED, NOT DELETED, and the reason is the one this file has now
+ * paid for three times (Fleet Quotes, Tesla Fleet, Vehicle Owners):
+ *
+ *   - `pnl_entries` holds 12,559 rows across 31 tenants. `/reports`,
+ *     `/pl-dashboard`, `/reports/vehicle-profitability` and the
+ *     `generate-export` edge function all read it, and `generate-export` is the
+ *     ONLY export backend in the product — an operator's CSV and XLSX downloads
+ *     come out of it.
+ *   - `reminders` holds 642 rows across 19 tenants, the newest written
+ *     2026-09-06 — i.e. it is being used right now, today.
+ *
+ * So the routes, the components, the hooks, the views, the edge function and
+ * the `reports` / `pl_dashboard` / `reminders` keys in `permissions.ts` all stay
+ * exactly where they are and keep serving the other 56 tenants. Only what the
+ * canary SEES changes. Note in particular that the `permissions.ts` wiring must
+ * NOT be removed alongside a gate: `canAccessRoute` treats an unmapped route as
+ * ALLOWED, so deleting a tab key while the route still answers would WIDEN
+ * manager access rather than narrow it.
+ *
+ * `/reminders/analytics` rides the same `reminders` key by prefix match, so it
+ * is covered by the same gate with no second entry.
  */
 export const LEAN_HIDDEN_AREAS = [
   'enquiries',
@@ -208,6 +299,13 @@ export const LEAN_HIDDEN_AREAS = [
   'cmd',
   'inshur',
   'tenant-health',
+  'settings-payments',
+  'settings-messaging',
+  'settings-insurance',
+  'settings-esign',
+  'reports',
+  'pl-dashboard',
+  'reminders',
 ] as const;
 
 export type LeanHiddenArea = (typeof LEAN_HIDDEN_AREAS)[number];
@@ -282,4 +380,106 @@ export function resolveBoldSignMode(
  */
 export function isTestModeUiHidden(tenantSlug: string | null | undefined): boolean {
   return isLeanTenant(tenantSlug);
+}
+
+/* ── Settings tabs the Integrations board now owns ─────────────────────────── */
+
+/**
+ * Settings tab value → the lean area that hides it.
+ *
+ * ONE map, read by every navigation surface, because the alternative already
+ * shipped a bug. Before this existed the E-Signatures tab was filtered out of
+ * the mobile trigger row and its body was blanked — but nobody filtered the
+ * DESKTOP sidebar, so a lean tenant saw "E-Signatures" in the settings nav and
+ * got an empty page when they clicked it. Tesla had the mirror-image defect:
+ * both nav surfaces hid it, but `?tab=tesla` typed by hand still selected a tab
+ * whose body rendered nothing. Three call sites, three chances to disagree.
+ *
+ * `accounting`, `inshur` and `tesla` are folded in here rather than left on
+ * their own booleans so that the next tab added cannot repeat it.
+ */
+const SETTINGS_TAB_AREAS: Readonly<Record<string, LeanHiddenArea>> = {
+  payments: 'settings-payments',
+  messaging: 'settings-messaging',
+  insurance: 'settings-insurance',
+  esign: 'settings-esign',
+  accounting: 'accounting',
+  inshur: 'inshur',
+  tesla: 'tesla',
+};
+
+/**
+ * Should this Settings tab be hidden from the settings NAVIGATION?
+ *
+ * Navigation is the desktop sidebar group list and the mobile trigger row.
+ * Whether the tab's BODY still renders is a separate question — see
+ * `settingsTabBoardCard`, and note that `insurance` deliberately answers
+ * `true` here while remaining renderable.
+ *
+ * Fails OPEN, like everything else in this module: an unrecognised tab value or
+ * an unresolved slug is not hidden, so the 56 non-canary tenants and the tick
+ * before `tenantSlug` resolves both keep today's navigation exactly.
+ */
+export function isSettingsTabHidden(
+  tabValue: string,
+  tenantSlug: string | null | undefined,
+): boolean {
+  const area = SETTINGS_TAB_AREAS[tabValue];
+  if (!area) return false;
+  return isAreaHidden(area, tenantSlug);
+}
+
+/**
+ * Which board card a hidden Settings tab hands the operator off to, or `null`.
+ *
+ * `null` is not "no destination"; it means the tab's body must KEEP RENDERING
+ * for a lean tenant even though the tab has left the navigation:
+ *
+ *  - `insurance` — the Bonzah application wizard lives only in Settings and the
+ *    board's Bonzah panel links back into it (`ONBOARDING_HREF`). Redirecting
+ *    would send that link to the board it came from, which is a loop.
+ *
+ *    WHEN THE WIZARD MOVES INSIDE THE BONZAH DIALOG (in flight separately),
+ *    this becomes a one-line change: return `'Bonzah'` here instead of falling
+ *    through to `null`, and drop the `hideInsuranceNav ? … : …` branch on the
+ *    `insurance` TabsContent in `settings/page.tsx`. Do it in that ORDER and
+ *    only once `ONBOARDING_HREF` no longer points at `/settings?tab=insurance`
+ *    — flipping this first turns the panel's own "Start the Bonzah application"
+ *    button into a redirect back to the panel.
+ *  - `accounting` / `inshur` — already hidden by their own gates, which do not
+ *    render a body at all. There is nothing to hand off.
+ *
+ * `tesla` DOES get a target: its body was already blanked for lean tenants, so
+ * a typed `?tab=tesla` was landing on an empty page rather than the card that
+ * now manages it.
+ *
+ * The value is the board CARD NAME to open, or `''` for the bare grid — never a
+ * URL, so the caller keeps ownership of the query string and can merge the
+ * incoming search params in. That merge is the point: `?oauth=…`, `?square=…`
+ * and `?reason=…` are how a returning OAuth flow reports its outcome, and the
+ * board reads them (`useSquareOAuthReturn`, and the board's own `?open=`
+ * handling) exactly as the Settings tab used to.
+ *
+ * A card name here must match `_panels/registry.ts` EXACTLY — the board looks
+ * the name up in its `integrations` list and silently opens nothing on a miss.
+ * The test file pins these against the registry for that reason.
+ */
+export const SETTINGS_TAB_BOARD_ROUTE = '/integrations';
+
+export function settingsTabBoardCard(tabValue: string): string | null {
+  switch (tabValue) {
+    // Two cards, and no way to tell from a bare `?tab=payments` which the
+    // operator wanted — Stripe Connect and Square both live under it. The grid
+    // itself is the honest landing.
+    case 'payments':
+      return '';
+    case 'messaging':
+      return 'Twilio Messages';
+    case 'esign':
+      return 'BoldSign';
+    case 'tesla':
+      return 'Tesla';
+    default:
+      return null;
+  }
 }

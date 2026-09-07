@@ -1,0 +1,60 @@
+-- ============================================================================
+-- ROLLBACK for PENDING_20260903_drop_accounting_ledger_trigger.sql.txt
+-- DRAFT — NOT APPLIED. NOT A MIGRATION (.sql.txt on purpose).
+--
+-- Recreates `enqueue_financial_event_on_ledger_insert` exactly as
+-- supabase/migrations/20260526150000_enqueue_financial_event_on_ledger_insert.sql
+-- defines it. Safe to run twice.
+--
+-- The trigger FUNCTION is never dropped by the forward draft, so this really is
+-- just the re-attach. If someone drops the function too, restore it from that
+-- migration first — this file will fail loudly rather than silently do nothing.
+-- ============================================================================
+
+BEGIN;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+       AND p.proname = 'enqueue_financial_event_for_ledger_entry'
+  ) THEN
+    RAISE EXCEPTION
+      'public.enqueue_financial_event_for_ledger_entry() is missing — restore it from migration 20260526150000 before running this rollback';
+  END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS enqueue_financial_event_on_ledger_insert
+  ON public.ledger_entries;
+
+CREATE TRIGGER enqueue_financial_event_on_ledger_insert
+  AFTER INSERT ON public.ledger_entries
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enqueue_financial_event_for_ledger_entry();
+
+GRANT EXECUTE ON FUNCTION public.enqueue_financial_event_for_ledger_entry()
+  TO service_role;
+
+COMMIT;
+
+-- NOTE: this restores the tap, not the water. Ledger rows inserted while the
+-- trigger was absent produced no financial_events row and will not be
+-- backfilled by re-attaching. If the outbox has to be complete, replay them:
+--
+--   SELECT public.enqueue_financial_event(
+--            p_tenant_id    := le.tenant_id,
+--            p_event_type   := (CASE WHEN le.type = 'Payment' THEN 'payment'
+--                                    ELSE 'charge' END)::public.financial_event_type,
+--            ... )
+--     FROM public.ledger_entries le
+--    WHERE le.created_at >= '<drop timestamp>'
+--      AND NOT EXISTS (SELECT 1 FROM public.financial_events fe
+--                       WHERE fe.source_table = 'ledger_entries'
+--                         AND fe.source_id = le.id);
+--
+-- Fill in the event_type mapping from migration 20260526150000 before running
+-- it; enqueue_financial_event is idempotent on
+-- (tenant_id, source_table, source_id, event_type), so the NOT EXISTS guard is
+-- belt-and-braces rather than load-bearing.

@@ -66,7 +66,6 @@ export function countActiveRentalFilters(filters: RentalFilters): number {
     filters.bonzahStatus,
     filters.startDateFrom,
     filters.startDateTo,
-    filters.extensionRequested,
     filters.cancellationRequested,
   ].filter(Boolean).length;
 }
@@ -221,13 +220,8 @@ export function RentalsFilterPanel({ filters, onChange, onClear, onClose }: Prop
         className="lg:col-span-2"
       >
         <div className="flex flex-wrap gap-2">
-          <FilterChip
-            active={!!filters.extensionRequested}
-            color="#d97706"
-            onClick={() => toggle("extensionRequested")}
-          >
-            Extension requested
-          </FilterChip>
+          {/* "Extension requested" was removed with the rest of the extension
+              surface. Cancellation is a different thing and stays. */}
           <FilterChip
             active={!!filters.cancellationRequested}
             color="#dc2626"
