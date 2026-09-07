@@ -1,8 +1,8 @@
 {
   "meta": {
-    "generatedAt": "2026-09-04T07:46:02.282Z",
+    "generatedAt": "2026-09-07T10:32:48.483Z",
     "projectRef": "hviqoaokxvlancmftwuo",
-    "gitSha": "1eba30e3d7a8571bb452a75180a5543cbe0305dd",
+    "gitSha": "ad8082dd70b1f528b71d6dec31acdc7f32f99021",
     "note": "Baseline of v1. Regenerate ONLY together with an intentional, reviewed change to v1, and commit both in the same commit."
   },
   "schema": {
@@ -48,6 +48,36 @@
           "verification_id": {
             "type": "uuid",
             "nullable": false,
+            "default": null
+          }
+        }
+      },
+      "_bk_inquiry_spelling_20260905": {
+        "rls": false,
+        "columns": {
+          "captured_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": "now()"
+          },
+          "col": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "old_value": {
+            "type": "jsonb",
+            "nullable": true,
+            "default": null
+          },
+          "row_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "src": {
+            "type": "text",
+            "nullable": true,
             "default": null
           }
         }
@@ -743,7 +773,7 @@
         }
       },
       "app_users": {
-        "rls": false,
+        "rls": true,
         "columns": {
           "auth_user_id": {
             "type": "uuid",
@@ -1561,6 +1591,16 @@
             "default": null
           },
           "tenant_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "turo_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "turo_reservation_uid": {
             "type": "uuid",
             "nullable": true,
             "default": null
@@ -3010,6 +3050,11 @@
             "nullable": true,
             "default": "0"
           },
+          "draft_content": {
+            "type": "jsonb",
+            "nullable": true,
+            "default": null
+          },
           "id": {
             "type": "uuid",
             "nullable": false,
@@ -4227,6 +4272,16 @@
           },
           "timezone": {
             "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_guest_ref": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_promotion_batch_id": {
+            "type": "uuid",
             "nullable": true,
             "default": null
           },
@@ -11745,6 +11800,31 @@
             "nullable": true,
             "default": null
           },
+          "turo_promoted_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "turo_promotion_batch_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "turo_reservation_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_total_amount": {
+            "type": "numeric",
+            "nullable": true,
+            "default": null
+          },
+          "turo_vehicle_match": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
           "unlimited_mileage_tier": {
             "type": "text",
             "nullable": true,
@@ -12153,6 +12233,76 @@
           "table_name": {
             "type": "text",
             "nullable": false,
+            "default": null
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "signup_attempts": {
+        "rls": true,
+        "columns": {
+          "auth_user_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "email": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "error_code": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "ip_address": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "metadata": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "outcome": {
+            "type": "text",
+            "nullable": false,
+            "default": null
+          },
+          "plan_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "scope": {
+            "type": "text",
+            "nullable": false,
+            "default": null
+          },
+          "stripe_customer_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "stripe_subscription_id": {
+            "type": "text",
+            "nullable": true,
             "default": null
           },
           "tenant_id": {
@@ -13304,6 +13454,71 @@
             "type": "timestamp with time zone",
             "nullable": false,
             "default": "now()"
+          }
+        }
+      },
+      "tenant_api_keys": {
+        "rls": true,
+        "columns": {
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "created_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "label": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "last_used_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "rate_window_count": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "rate_window_start": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "revoked_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "revoked_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "scope": {
+            "type": "text",
+            "nullable": false,
+            "default": "'fleet_quote'::text"
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "token_hash": {
+            "type": "text",
+            "nullable": false,
+            "default": null
           }
         }
       },
@@ -15375,6 +15590,11 @@
             "nullable": true,
             "default": "'09:00:00'::time without time zone"
           },
+          "turo_bridge_enabled": {
+            "type": "boolean",
+            "nullable": false,
+            "default": "false"
+          },
           "twilio_account_sid": {
             "type": "text",
             "nullable": true,
@@ -15652,9 +15872,214 @@
           }
         }
       },
+      "turo_bridge_conflicts": {
+        "rls": true,
+        "columns": {
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "detail": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "kind": {
+            "type": "text",
+            "nullable": false,
+            "default": null
+          },
+          "overlap_end": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "overlap_start": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "rental_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "reservation_row_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "resolution": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "resolved_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "resolved_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "severity": {
+            "type": "text",
+            "nullable": false,
+            "default": null
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "updated_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "vehicle_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "turo_bridge_customers": {
+        "rls": true,
+        "columns": {
+          "confirmed_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "confirmed_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "display_name": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "display_name_norm": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "email": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "field_confidence": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "first_seen_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "last_seen_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "last_seen_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "match_basis": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "match_key": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "match_state": {
+            "type": "text",
+            "nullable": false,
+            "default": "'unmatched'::text"
+          },
+          "matched_customer_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "phone": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "raw": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "turo_guest_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "unmapped": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "updated_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          }
+        }
+      },
       "turo_bridge_reservations": {
         "rls": true,
         "columns": {
+          "block_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "blocked_date_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
           "created_at": {
             "type": "timestamp with time zone",
             "nullable": false,
@@ -15670,8 +16095,33 @@
             "nullable": true,
             "default": null
           },
+          "field_confidence": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "first_seen_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "first_seen_run_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
           "guest_name": {
             "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "hold_override_until": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "hold_until": {
+            "type": "timestamp with time zone",
             "nullable": true,
             "default": null
           },
@@ -15680,15 +16130,135 @@
             "nullable": false,
             "default": "gen_random_uuid()"
           },
+          "ignore_reason": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "ignored_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "ignored_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "last_seen_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "last_seen_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "last_seen_run_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "match_basis": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "matched_vehicle_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "missing_evidence_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "missing_review_raised_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "missing_run_count": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "missing_since": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "missing_streak": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "parser_version": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "presence_changed_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "presence_reason": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "presence_state": {
+            "type": "text",
+            "nullable": false,
+            "default": "'OBSERVED'::text"
+          },
+          "previous_vehicle_map_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "promoted_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "promoted_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "promoted_rental_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "promotion_batch_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
           "raw": {
             "type": "jsonb",
             "nullable": false,
             "default": "'{}'::jsonb"
           },
+          "release_evidence": {
+            "type": "jsonb",
+            "nullable": true,
+            "default": null
+          },
           "reservation_id": {
             "type": "text",
             "nullable": false,
             "default": null
+          },
+          "seen_count": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
           },
           "source": {
             "type": "text",
@@ -15700,10 +16270,35 @@
             "nullable": true,
             "default": null
           },
+          "state_changed_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "state_reason": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
           "status": {
             "type": "text",
             "nullable": false,
             "default": "'synced'::text"
+          },
+          "superseded_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "superseded_by_reservation_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "sync_state": {
+            "type": "text",
+            "nullable": false,
+            "default": "'pending_match'::text"
           },
           "synced_at": {
             "type": "timestamp with time zone",
@@ -15720,12 +16315,77 @@
             "nullable": true,
             "default": null
           },
+          "turo_account_fingerprint": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_bridge_customer_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "turo_guest_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_status": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_trip_status": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_vehicle_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "unknown_fields": {
+            "type": "jsonb",
+            "nullable": true,
+            "default": null
+          },
+          "unmapped": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
           "updated_at": {
             "type": "timestamp with time zone",
             "nullable": false,
             "default": "now()"
           },
+          "vehicle_changed_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
           "vehicle_label": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "vehicle_map_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "vehicle_match_confidence": {
+            "type": "numeric",
+            "nullable": true,
+            "default": null
+          },
+          "vehicle_match_method": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "vehicle_plate": {
             "type": "text",
             "nullable": true,
             "default": null
@@ -15768,6 +16428,421 @@
           "token": {
             "type": "text",
             "nullable": false,
+            "default": null
+          },
+          "turo_account_fingerprint": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "turo_promotion_batches": {
+        "rls": true,
+        "columns": {
+          "acknowledgements": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "actor_app_user_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "counts": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'{}'::jsonb"
+          },
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "plan_hash": {
+            "type": "text",
+            "nullable": false,
+            "default": null
+          },
+          "revert_report": {
+            "type": "jsonb",
+            "nullable": true,
+            "default": null
+          },
+          "reverted_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "reverted_by": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          }
+        }
+      },
+      "turo_sync_job_pages": {
+        "rls": true,
+        "columns": {
+          "byte_count": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "cursor_in": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "cursor_out": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "degraded_reason": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "http_status": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "job_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "observed_keys": {
+            "type": "jsonb",
+            "nullable": false,
+            "default": "'[]'::jsonb"
+          },
+          "record_count": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "requested_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "seq": {
+            "type": "integer",
+            "nullable": false,
+            "default": null
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "url_path": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "turo_sync_jobs": {
+        "rls": true,
+        "columns": {
+          "completeness": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "degraded": {
+            "type": "boolean",
+            "nullable": true,
+            "default": null
+          },
+          "degraded_reason": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "feed_reported_total": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "finished_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "heartbeat_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "http_error_count": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "is_authoritative": {
+            "type": "boolean",
+            "nullable": true,
+            "default": null
+          },
+          "job_kind": {
+            "type": "text",
+            "nullable": false,
+            "default": null
+          },
+          "notes": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "observed_complete": {
+            "type": "boolean",
+            "nullable": true,
+            "default": null
+          },
+          "observed_from": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "observed_to": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "observed_turo_vehicle_ids": {
+            "type": "ARRAY",
+            "nullable": false,
+            "default": "'{}'::text[]"
+          },
+          "pages_fetched": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "parse_failure_count": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "parsed_count": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "progress_denominator": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "raw_item_count": {
+            "type": "integer",
+            "nullable": true,
+            "default": null
+          },
+          "reader_outcome": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "records_ingested": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "records_seen": {
+            "type": "integer",
+            "nullable": false,
+            "default": "0"
+          },
+          "requested_window_end": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "requested_window_start": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "saw_end_of_feed": {
+            "type": "boolean",
+            "nullable": false,
+            "default": "false"
+          },
+          "source": {
+            "type": "text",
+            "nullable": false,
+            "default": "'turo'::text"
+          },
+          "started_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "state": {
+            "type": "text",
+            "nullable": false,
+            "default": "'running'::text"
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "token_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "turo_account_fingerprint": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "turo_account_ref": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "updated_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "window_end": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "window_start": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          }
+        }
+      },
+      "turo_vehicle_map": {
+        "rls": true,
+        "columns": {
+          "alias_labels": {
+            "type": "ARRAY",
+            "nullable": false,
+            "default": "'{}'::text[]"
+          },
+          "confirmation_note": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "confirmed_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "confirmed_by": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "created_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "display_label": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "display_label_norm": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "first_seen_job_id": {
+            "type": "uuid",
+            "nullable": true,
+            "default": null
+          },
+          "id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": "gen_random_uuid()"
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": false,
+            "default": "true"
+          },
+          "match_key": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "plate_hint": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "retired_at": {
+            "type": "timestamp with time zone",
+            "nullable": true,
+            "default": null
+          },
+          "tenant_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "turo_vehicle_id": {
+            "type": "text",
+            "nullable": true,
+            "default": null
+          },
+          "updated_at": {
+            "type": "timestamp with time zone",
+            "nullable": false,
+            "default": "now()"
+          },
+          "vehicle_id": {
+            "type": "uuid",
+            "nullable": false,
+            "default": null
+          },
+          "vin_hint": {
+            "type": "text",
+            "nullable": true,
             "default": null
           }
         }
@@ -18162,13 +19237,37 @@
         "table_name": "blocked_dates",
         "name": "blocked_dates_source_type_check",
         "kind": "c",
-        "definition": "CHECK ((source_type = ANY (ARRAY['manual'::text, 'maintenance'::text, 'swap'::text])))"
+        "definition": "CHECK ((source_type = ANY (ARRAY['manual'::text, 'maintenance'::text, 'swap'::text, 'turo'::text])))"
       },
       "blocked_dates.blocked_dates_tenant_id_fkey": {
         "table_name": "blocked_dates",
         "name": "blocked_dates_tenant_id_fkey",
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "blocked_dates.blocked_dates_turo_job_fkey": {
+        "table_name": "blocked_dates",
+        "name": "blocked_dates_turo_job_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (turo_job_id) REFERENCES turo_sync_jobs(id) ON DELETE SET NULL"
+      },
+      "blocked_dates.blocked_dates_turo_reason_is_opaque": {
+        "table_name": "blocked_dates",
+        "name": "blocked_dates_turo_reason_is_opaque",
+        "kind": "c",
+        "definition": "CHECK (((source_type <> 'turo'::text) OR ((COALESCE(reason, 'Turo trip'::text) = 'Turo trip'::text) AND (COALESCE(reason_code, 'turo_trip'::text) = 'turo_trip'::text))))"
+      },
+      "blocked_dates.blocked_dates_turo_requires_vehicle": {
+        "table_name": "blocked_dates",
+        "name": "blocked_dates_turo_requires_vehicle",
+        "kind": "c",
+        "definition": "CHECK (((source_type <> 'turo'::text) OR ((vehicle_id IS NOT NULL) AND (tenant_id IS NOT NULL) AND (turo_reservation_uid IS NOT NULL))))"
+      },
+      "blocked_dates.blocked_dates_turo_reservation_fkey": {
+        "table_name": "blocked_dates",
+        "name": "blocked_dates_turo_reservation_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (turo_reservation_uid) REFERENCES turo_bridge_reservations(id) ON DELETE SET NULL"
       },
       "blocked_dates.blocked_dates_vehicle_id_fkey": {
         "table_name": "blocked_dates",
@@ -19178,6 +20277,12 @@
         "kind": "c",
         "definition": "CHECK ((customer_type = ANY (ARRAY['Individual'::text, 'Company'::text])))"
       },
+      "customers.customers_id_tenant_key": {
+        "table_name": "customers",
+        "name": "customers_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
       "customers.customers_identity_verification_status_check": {
         "table_name": "customers",
         "name": "customers_identity_verification_status_check",
@@ -19201,6 +20306,12 @@
         "name": "customers_tenant_id_fkey",
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "customers.customers_turo_promotion_batch_fkey": {
+        "table_name": "customers",
+        "name": "customers_turo_promotion_batch_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (turo_promotion_batch_id) REFERENCES turo_promotion_batches(id) ON DELETE SET NULL"
       },
       "customers.customers_type_check": {
         "table_name": "customers",
@@ -22190,6 +23301,12 @@
         "kind": "c",
         "definition": "CHECK (((driver_age_range IS NULL) OR (driver_age_range = ANY (ARRAY['under_25'::text, '25_70'::text, 'over_70'::text]))))"
       },
+      "rentals.rentals_id_tenant_key": {
+        "table_name": "rentals",
+        "name": "rentals_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
       "rentals.rentals_id_verification_waived_by_fkey": {
         "table_name": "rentals",
         "name": "rentals_id_verification_waived_by_fkey",
@@ -22315,6 +23432,12 @@
         "name": "rentals_tenant_id_fkey",
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "rentals.rentals_turo_promotion_batch_fkey": {
+        "table_name": "rentals",
+        "name": "rentals_turo_promotion_batch_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (turo_promotion_batch_id) REFERENCES turo_promotion_batches(id) ON DELETE SET NULL"
       },
       "rentals.rentals_unlimited_mileage_tier_check": {
         "table_name": "rentals",
@@ -22459,6 +23582,24 @@
         "name": "settings_audit_tenant_id_fkey",
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "signup_attempts.signup_attempts_auth_user_id_fkey": {
+        "table_name": "signup_attempts",
+        "name": "signup_attempts_auth_user_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+      },
+      "signup_attempts.signup_attempts_pkey": {
+        "table_name": "signup_attempts",
+        "name": "signup_attempts_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "signup_attempts.signup_attempts_tenant_id_fkey": {
+        "table_name": "signup_attempts",
+        "name": "signup_attempts_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL"
       },
       "signup_plans.signup_plans_amount_cents_check": {
         "table_name": "signup_plans",
@@ -23003,6 +24144,42 @@
       "subscription_plans.subscription_plans_tenant_id_fkey": {
         "table_name": "subscription_plans",
         "name": "subscription_plans_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "tenant_api_keys.tenant_api_keys_created_by_fkey": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_created_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
+      },
+      "tenant_api_keys.tenant_api_keys_hash_len": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_hash_len",
+        "kind": "c",
+        "definition": "CHECK ((char_length(token_hash) = 64))"
+      },
+      "tenant_api_keys.tenant_api_keys_pkey": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "tenant_api_keys.tenant_api_keys_revoked_by_fkey": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_revoked_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (revoked_by) REFERENCES auth.users(id)"
+      },
+      "tenant_api_keys.tenant_api_keys_scope_check": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_scope_check",
+        "kind": "c",
+        "definition": "CHECK ((scope = 'fleet_quote'::text))"
+      },
+      "tenant_api_keys.tenant_api_keys_tenant_id_fkey": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_tenant_id_fkey",
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
       },
@@ -23732,11 +24909,299 @@
         "kind": "f",
         "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
       },
+      "turo_bridge_conflicts.turo_bridge_conflicts_detail_is_object": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_detail_is_object",
+        "kind": "c",
+        "definition": "CHECK ((jsonb_typeof(detail) = 'object'::text))"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_job_tenant_fkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE SET NULL (job_id)"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_kind_check": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_kind_check",
+        "kind": "c",
+        "definition": "CHECK ((kind = ANY (ARRAY['overlap_committed'::text, 'overlap_soft'::text, 'vehicle_unresolved'::text, 'vehicle_foreign_tenant'::text, 'succession_ambiguous'::text, 'account_mismatch'::text, 'extension_after_release'::text, 'missing_review'::text, 'promotion_refused'::text, 'guard_not_installed'::text])))"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_pkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_rental_id_fkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_rental_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (rental_id) REFERENCES rentals(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_reservation_tenant_fkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_reservation_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (reservation_row_id, tenant_id) REFERENCES turo_bridge_reservations(id, tenant_id) ON DELETE CASCADE"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_resolved_by_fkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_resolved_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (resolved_by) REFERENCES app_users(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_resolved_together": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_resolved_together",
+        "kind": "c",
+        "definition": "CHECK (((resolved_at IS NULL) = (resolved_by IS NULL)))"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_severity_check": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_severity_check",
+        "kind": "c",
+        "definition": "CHECK ((severity = ANY (ARRAY['blocking'::text, 'review'::text])))"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_tenant_id_fkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_vehicle_id_fkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_vehicle_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_customers.turo_bridge_customers_candidate_needs_target": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_candidate_needs_target",
+        "kind": "c",
+        "definition": "CHECK (((match_state <> 'candidate'::text) OR (matched_customer_id IS NOT NULL)))"
+      },
+      "turo_bridge_customers.turo_bridge_customers_confirmed_by_fkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_confirmed_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (confirmed_by) REFERENCES app_users(id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_confirmed_needs_human": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_confirmed_needs_human",
+        "kind": "c",
+        "definition": "CHECK (((match_state <> 'confirmed'::text) OR ((matched_customer_id IS NOT NULL) AND (confirmed_by IS NOT NULL) AND (confirmed_at IS NOT NULL))))"
+      },
+      "turo_bridge_customers.turo_bridge_customers_customer_tenant_fkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_customer_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (matched_customer_id, tenant_id) REFERENCES customers(id, tenant_id) ON DELETE SET NULL (matched_customer_id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_first_job_tenant_fkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_first_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (first_seen_job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE SET NULL (first_seen_job_id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_has_identity": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_has_identity",
+        "kind": "c",
+        "definition": "CHECK (((COALESCE(btrim(turo_guest_id), ''::text) <> ''::text) OR (turo_norm_label(display_name) <> ''::text)))"
+      },
+      "turo_bridge_customers.turo_bridge_customers_id_tenant_key": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_job_tenant_fkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (last_seen_job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE SET NULL (last_seen_job_id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_json_shapes": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_json_shapes",
+        "kind": "c",
+        "definition": "CHECK (((jsonb_typeof(raw) = 'object'::text) AND (jsonb_typeof(unmapped) = 'object'::text) AND (jsonb_typeof(field_confidence) = 'object'::text)))"
+      },
+      "turo_bridge_customers.turo_bridge_customers_match_basis_check": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_match_basis_check",
+        "kind": "c",
+        "definition": "CHECK (((match_basis IS NULL) OR (match_basis = ANY (ARRAY['turo_guest_id'::text, 'email_exact'::text, 'phone_exact'::text, 'name_exact'::text, 'name_fuzzy'::text, 'human'::text]))))"
+      },
+      "turo_bridge_customers.turo_bridge_customers_match_state_check": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_match_state_check",
+        "kind": "c",
+        "definition": "CHECK ((match_state = ANY (ARRAY['unmatched'::text, 'candidate'::text, 'confirmed'::text, 'ignored'::text])))"
+      },
+      "turo_bridge_customers.turo_bridge_customers_pkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_tenant_id_fkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "turo_bridge_customers.turo_bridge_customers_tenant_key_unique": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_tenant_key_unique",
+        "kind": "u",
+        "definition": "UNIQUE (tenant_id, match_key)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_unmatched_has_no_target": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_unmatched_has_no_target",
+        "kind": "c",
+        "definition": "CHECK (((match_state <> 'unmatched'::text) OR (matched_customer_id IS NULL)))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_blocked_date_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_blocked_date_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (blocked_date_id) REFERENCES blocked_dates(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_cancellation_needs_evidence": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_cancellation_needs_evidence",
+        "kind": "c",
+        "definition": "CHECK (((sync_state <> 'cancellation_candidate'::text) OR ((missing_evidence_job_id IS NOT NULL) AND (missing_since IS NOT NULL))))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_dates_ordered": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_dates_ordered",
+        "kind": "c",
+        "definition": "CHECK (((starts_at IS NULL) OR (ends_at IS NULL) OR (ends_at >= starts_at))) NOT VALID"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_fingerprint_valid": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_fingerprint_valid",
+        "kind": "c",
+        "definition": "CHECK (((turo_account_fingerprint IS NULL) OR (turo_account_fingerprint ~ '^[0-9a-f]{64}$'::text)))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_first_job_tenant_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_first_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (first_seen_job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE SET NULL (first_seen_job_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_guest_tenant_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_guest_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (turo_bridge_customer_id, tenant_id) REFERENCES turo_bridge_customers(id, tenant_id) ON DELETE SET NULL (turo_bridge_customer_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_id_tenant_key": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_ignored_by_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_ignored_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (ignored_by) REFERENCES app_users(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_ignored_needs_human": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_ignored_needs_human",
+        "kind": "c",
+        "definition": "CHECK (((sync_state <> 'ignored'::text) OR ((ignored_by IS NOT NULL) AND (ignored_at IS NOT NULL))))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_json_shapes": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_json_shapes",
+        "kind": "c",
+        "definition": "CHECK (((jsonb_typeof(unmapped) = 'object'::text) AND (jsonb_typeof(field_confidence) = 'object'::text)))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_last_job_tenant_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_last_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (last_seen_job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE SET NULL (last_seen_job_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_match_basis_check": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_match_basis_check",
+        "kind": "c",
+        "definition": "CHECK (((match_basis IS NULL) OR (match_basis = ANY (ARRAY['turo_vehicle_id'::text, 'label_exact'::text, 'label_alias'::text, 'human'::text]))))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_matched_vehicle_tenant_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_matched_vehicle_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (matched_vehicle_id, tenant_id) REFERENCES vehicles(id, tenant_id) ON DELETE SET NULL (matched_vehicle_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_missing_job_tenant_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_missing_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (missing_evidence_job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE SET NULL (missing_evidence_job_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_missing_needs_since": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_missing_needs_since",
+        "kind": "c",
+        "definition": "CHECK (((presence_state <> 'MISSING'::text) OR (missing_since IS NOT NULL)))"
+      },
       "turo_bridge_reservations.turo_bridge_reservations_pkey": {
         "table_name": "turo_bridge_reservations",
         "name": "turo_bridge_reservations_pkey",
         "kind": "p",
         "definition": "PRIMARY KEY (id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_presence_state_check": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_presence_state_check",
+        "kind": "c",
+        "definition": "CHECK ((presence_state = ANY (ARRAY['OBSERVED'::text, 'MISSING'::text, 'COMPLETED_HOLD'::text, 'CLOSED'::text, 'CANCELLED'::text, 'SUPERSEDED'::text, 'RELEASED_BY_OPERATOR'::text, 'QUARANTINED'::text])))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_promoted_by_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_promoted_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (promoted_by) REFERENCES app_users(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_promoted_needs_rental": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_promoted_needs_rental",
+        "kind": "c",
+        "definition": "CHECK (((sync_state <> 'promoted'::text) OR (promoted_rental_id IS NOT NULL)))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_promoted_rental_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_promoted_rental_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (promoted_rental_id) REFERENCES rentals(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_promotion_batch_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_promotion_batch_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (promotion_batch_id) REFERENCES turo_promotion_batches(id) ON DELETE SET NULL"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_release_needs_evidence": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_release_needs_evidence",
+        "kind": "c",
+        "definition": "CHECK (((presence_state <> ALL (ARRAY['CANCELLED'::text, 'CLOSED'::text, 'RELEASED_BY_OPERATOR'::text])) OR ((release_evidence IS NOT NULL) AND (jsonb_typeof(release_evidence) = 'object'::text) AND (release_evidence ? 'class'::text) AND ((release_evidence ->> 'class'::text) = ANY (ARRAY['E1'::text, 'E2'::text, 'E3'::text, 'E4'::text, 'E5'::text])))))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_reservation_id_nonblank": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_reservation_id_nonblank",
+        "kind": "c",
+        "definition": "CHECK (((btrim(reservation_id) <> ''::text) AND (char_length(reservation_id) <= 200))) NOT VALID"
       },
       "turo_bridge_reservations.turo_bridge_reservations_source_check": {
         "table_name": "turo_bridge_reservations",
@@ -23744,11 +25209,29 @@
         "kind": "c",
         "definition": "CHECK ((source = ANY (ARRAY['turo'::text, 'fixture'::text])))"
       },
+      "turo_bridge_reservations.turo_bridge_reservations_staged_needs_vehicle": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_staged_needs_vehicle",
+        "kind": "c",
+        "definition": "CHECK (((sync_state <> ALL (ARRAY['staged'::text, 'promoted'::text])) OR ((matched_vehicle_id IS NOT NULL) AND (vehicle_map_id IS NOT NULL))))"
+      },
       "turo_bridge_reservations.turo_bridge_reservations_status_check": {
         "table_name": "turo_bridge_reservations",
         "name": "turo_bridge_reservations_status_check",
         "kind": "c",
         "definition": "CHECK ((status = ANY (ARRAY['synced'::text, 'imported'::text, 'failed'::text])))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_superseded_needs_successor": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_superseded_needs_successor",
+        "kind": "c",
+        "definition": "CHECK (((presence_state <> 'SUPERSEDED'::text) OR (superseded_by_reservation_id IS NOT NULL)))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_sync_state_check": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_sync_state_check",
+        "kind": "c",
+        "definition": "CHECK ((sync_state = ANY (ARRAY['pending_match'::text, 'staged'::text, 'promoted'::text, 'cancellation_candidate'::text, 'conflict'::text, 'ignored'::text])))"
       },
       "turo_bridge_reservations.turo_bridge_reservations_tenant_id_fkey": {
         "table_name": "turo_bridge_reservations",
@@ -23761,6 +25244,30 @@
         "name": "turo_bridge_reservations_tenant_reservation_key",
         "kind": "u",
         "definition": "UNIQUE (tenant_id, reservation_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_vehicle_map_tenant_fkey": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_vehicle_map_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (vehicle_map_id, tenant_id) REFERENCES turo_vehicle_map(id, tenant_id) ON DELETE SET NULL (vehicle_map_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_vehicle_match_confidence_range": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_vehicle_match_confidence_range",
+        "kind": "c",
+        "definition": "CHECK (((vehicle_match_confidence IS NULL) OR ((vehicle_match_confidence >= (0)::numeric) AND (vehicle_match_confidence <= (1)::numeric))))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_vehicle_match_method_check": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_vehicle_match_method_check",
+        "kind": "c",
+        "definition": "CHECK (((vehicle_match_method IS NULL) OR (vehicle_match_method = ANY (ARRAY['listing_map'::text, 'plate_exact'::text, 'reg_normalised'::text, 'vin_suggested'::text, 'label_parsed'::text, 'operator'::text, 'unresolved'::text]))))"
+      },
+      "turo_bridge_tokens.turo_bridge_tokens_fingerprint_valid": {
+        "table_name": "turo_bridge_tokens",
+        "name": "turo_bridge_tokens_fingerprint_valid",
+        "kind": "c",
+        "definition": "CHECK (((turo_account_fingerprint IS NULL) OR (turo_account_fingerprint ~ '^[0-9a-f]{64}$'::text)))"
       },
       "turo_bridge_tokens.turo_bridge_tokens_pkey": {
         "table_name": "turo_bridge_tokens",
@@ -23779,6 +25286,276 @@
         "name": "turo_bridge_tokens_token_key",
         "kind": "u",
         "definition": "UNIQUE (token)"
+      },
+      "turo_promotion_batches.turo_promotion_batches_ack_is_object": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_ack_is_object",
+        "kind": "c",
+        "definition": "CHECK ((jsonb_typeof(acknowledgements) = 'object'::text))"
+      },
+      "turo_promotion_batches.turo_promotion_batches_actor_app_user_id_fkey": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_actor_app_user_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (actor_app_user_id) REFERENCES app_users(id) ON DELETE SET NULL"
+      },
+      "turo_promotion_batches.turo_promotion_batches_counts_is_object": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_counts_is_object",
+        "kind": "c",
+        "definition": "CHECK ((jsonb_typeof(counts) = 'object'::text))"
+      },
+      "turo_promotion_batches.turo_promotion_batches_id_tenant_key": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
+      "turo_promotion_batches.turo_promotion_batches_pkey": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "turo_promotion_batches.turo_promotion_batches_reverted_by_fkey": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_reverted_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (reverted_by) REFERENCES app_users(id) ON DELETE SET NULL"
+      },
+      "turo_promotion_batches.turo_promotion_batches_tenant_id_fkey": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_byte_count_check": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_byte_count_check",
+        "kind": "c",
+        "definition": "CHECK (((byte_count IS NULL) OR (byte_count >= 0)))"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_job_seq_key": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_job_seq_key",
+        "kind": "u",
+        "definition": "UNIQUE (job_id, seq)"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_job_tenant_fkey": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_job_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (job_id, tenant_id) REFERENCES turo_sync_jobs(id, tenant_id) ON DELETE CASCADE"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_pkey": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_record_count_check": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_record_count_check",
+        "kind": "c",
+        "definition": "CHECK (((record_count IS NULL) OR (record_count >= 0)))"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_seq_check": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_seq_check",
+        "kind": "c",
+        "definition": "CHECK ((seq >= 0))"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_tenant_id_fkey": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "turo_sync_jobs.turo_sync_jobs_counts_nonneg": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_counts_nonneg",
+        "kind": "c",
+        "definition": "CHECK (((parsed_count >= 0) AND ((raw_item_count IS NULL) OR (raw_item_count >= 0))))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_degraded_reason_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_degraded_reason_check",
+        "kind": "c",
+        "definition": "CHECK (((degraded_reason IS NULL) OR (degraded_reason = ANY (ARRAY['waf_challenge'::text, 'waf_empty_200'::text, 'captcha'::text, 'session_expired'::text, 'not_signed_in'::text, 'http_error'::text, 'shape_unrecognised'::text, 'page_cap_reached'::text, 'worker_killed'::text, 'tab_closed'::text, 'timeout'::text, 'user_cancelled'::text, 'heartbeat_lost'::text, 'unknown'::text]))))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_failure_needs_reason": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_failure_needs_reason",
+        "kind": "c",
+        "definition": "CHECK (((state <> ALL (ARRAY['failed'::text, 'abandoned'::text])) OR (degraded_reason IS NOT NULL)))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_feed_reported_total_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_feed_reported_total_check",
+        "kind": "c",
+        "definition": "CHECK (((feed_reported_total IS NULL) OR (feed_reported_total >= 0)))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_finished_iff_terminal": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_finished_iff_terminal",
+        "kind": "c",
+        "definition": "CHECK (((state = 'running'::text) = (finished_at IS NULL)))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_http_error_count_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_http_error_count_check",
+        "kind": "c",
+        "definition": "CHECK ((http_error_count >= 0))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_id_tenant_key": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_ingested_le_seen": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_ingested_le_seen",
+        "kind": "c",
+        "definition": "CHECK ((records_ingested <= records_seen))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_job_kind_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_job_kind_check",
+        "kind": "c",
+        "definition": "CHECK ((job_kind = ANY (ARRAY['trips'::text, 'vehicles'::text, 'guests'::text, 'earnings_csv'::text, 'manual_single'::text])))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_pages_fetched_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_pages_fetched_check",
+        "kind": "c",
+        "definition": "CHECK ((pages_fetched >= 0))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_parse_failure_count_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_parse_failure_count_check",
+        "kind": "c",
+        "definition": "CHECK ((parse_failure_count >= 0))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_parsed_le_seen": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_parsed_le_seen",
+        "kind": "c",
+        "definition": "CHECK ((parsed_count <= records_seen))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_pkey": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_reader_outcome_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_reader_outcome_check",
+        "kind": "c",
+        "definition": "CHECK (((reader_outcome IS NULL) OR (reader_outcome = ANY (ARRAY['OK'::text, 'NO_TRIPS_CONFIRMED'::text, 'EMPTY_UNCONFIRMED'::text, 'NOT_LOGGED_IN'::text, 'BOT_BLOCKED'::text, 'RATE_LIMITED'::text, 'UNREACHABLE'::text, 'SHAPE_CHANGED'::text, 'TRUNCATED'::text, 'PAGINATION_STALLED'::text, 'UNPARSEABLE'::text, 'NO_TRIPS'::text, 'UNKNOWN'::text]))))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_records_ingested_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_records_ingested_check",
+        "kind": "c",
+        "definition": "CHECK ((records_ingested >= 0))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_records_seen_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_records_seen_check",
+        "kind": "c",
+        "definition": "CHECK ((records_seen >= 0))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_requested_window_ordered": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_requested_window_ordered",
+        "kind": "c",
+        "definition": "CHECK (((requested_window_start IS NULL) OR (requested_window_end IS NULL) OR (requested_window_end >= requested_window_start)))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_source_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_source_check",
+        "kind": "c",
+        "definition": "CHECK ((source = ANY (ARRAY['turo'::text, 'fixture'::text])))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_state_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_state_check",
+        "kind": "c",
+        "definition": "CHECK ((state = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text, 'abandoned'::text])))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_tenant_id_fkey": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "turo_sync_jobs.turo_sync_jobs_token_id_fkey": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_token_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (token_id) REFERENCES turo_bridge_tokens(id) ON DELETE SET NULL"
+      },
+      "turo_sync_jobs.turo_sync_jobs_turo_account_fingerprint_check": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_turo_account_fingerprint_check",
+        "kind": "c",
+        "definition": "CHECK (((turo_account_fingerprint IS NULL) OR (turo_account_fingerprint ~ '^[0-9a-f]{64}$'::text)))"
+      },
+      "turo_sync_jobs.turo_sync_jobs_window_ordered": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_window_ordered",
+        "kind": "c",
+        "definition": "CHECK (((window_start IS NULL) OR (window_end IS NULL) OR (window_end >= window_start)))"
+      },
+      "turo_vehicle_map.turo_vehicle_map_confirmed_by_fkey": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_confirmed_by_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (confirmed_by) REFERENCES app_users(id)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_has_identity": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_has_identity",
+        "kind": "c",
+        "definition": "CHECK (((COALESCE(btrim(turo_vehicle_id), ''::text) <> ''::text) OR (turo_norm_label(display_label) <> ''::text)))"
+      },
+      "turo_vehicle_map.turo_vehicle_map_id_tenant_key": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_pkey": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_pkey",
+        "kind": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_retired_iff_inactive": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_retired_iff_inactive",
+        "kind": "c",
+        "definition": "CHECK ((is_active = (retired_at IS NULL)))"
+      },
+      "turo_vehicle_map.turo_vehicle_map_tenant_id_fkey": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_tenant_id_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE"
+      },
+      "turo_vehicle_map.turo_vehicle_map_tenant_key_unique": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_tenant_key_unique",
+        "kind": "u",
+        "definition": "UNIQUE (tenant_id, match_key)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_vehicle_tenant_fkey": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_vehicle_tenant_fkey",
+        "kind": "f",
+        "definition": "FOREIGN KEY (vehicle_id, tenant_id) REFERENCES vehicles(id, tenant_id) ON DELETE CASCADE"
       },
       "user_nav_preferences.user_nav_preferences_app_user_id_fkey": {
         "table_name": "user_nav_preferences",
@@ -24271,6 +26048,12 @@
         "name": "vehicles_fuel_type_check",
         "kind": "c",
         "definition": "CHECK ((fuel_type = ANY (ARRAY['Petrol'::text, 'Diesel'::text, 'Hybrid'::text, 'Electric'::text])))"
+      },
+      "vehicles.vehicles_id_tenant_key": {
+        "table_name": "vehicles",
+        "name": "vehicles_id_tenant_key",
+        "kind": "u",
+        "definition": "UNIQUE (id, tenant_id)"
       },
       "vehicles.vehicles_owner_id_fkey": {
         "table_name": "vehicles",
@@ -24863,6 +26646,11 @@
         "table_name": "blocked_dates",
         "name": "blocked_dates_pkey",
         "definition": "CREATE UNIQUE INDEX blocked_dates_pkey ON public.blocked_dates USING btree (id)"
+      },
+      "blocked_dates.blocked_dates_turo_reservation_idx": {
+        "table_name": "blocked_dates",
+        "name": "blocked_dates_turo_reservation_idx",
+        "definition": "CREATE INDEX blocked_dates_turo_reservation_idx ON public.blocked_dates USING btree (turo_reservation_uid) WHERE (turo_reservation_uid IS NOT NULL)"
       },
       "blocked_dates.idx_blocked_dates_end": {
         "table_name": "blocked_dates",
@@ -25639,10 +27427,20 @@
         "name": "idx_customer_users_tenant",
         "definition": "CREATE INDEX idx_customer_users_tenant ON public.customer_users USING btree (tenant_id)"
       },
+      "customers.customers_id_tenant_key": {
+        "table_name": "customers",
+        "name": "customers_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX customers_id_tenant_key ON public.customers USING btree (id, tenant_id)"
+      },
       "customers.customers_pkey": {
         "table_name": "customers",
         "name": "customers_pkey",
         "definition": "CREATE UNIQUE INDEX customers_pkey ON public.customers USING btree (id)"
+      },
+      "customers.customers_turo_guest_uniq": {
+        "table_name": "customers",
+        "name": "customers_turo_guest_uniq",
+        "definition": "CREATE UNIQUE INDEX customers_turo_guest_uniq ON public.customers USING btree (tenant_id, turo_guest_ref) WHERE (turo_guest_ref IS NOT NULL)"
       },
       "customers.idx_customers_customer_type": {
         "table_name": "customers",
@@ -27849,6 +29647,16 @@
         "name": "idx_rentals_tenant_id",
         "definition": "CREATE INDEX idx_rentals_tenant_id ON public.rentals USING btree (tenant_id)"
       },
+      "rentals.idx_rentals_vehicle_date_range": {
+        "table_name": "rentals",
+        "name": "idx_rentals_vehicle_date_range",
+        "definition": "CREATE INDEX idx_rentals_vehicle_date_range ON public.rentals USING btree (vehicle_id, start_date, end_date)"
+      },
+      "rentals.rentals_id_tenant_key": {
+        "table_name": "rentals",
+        "name": "rentals_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX rentals_id_tenant_key ON public.rentals USING btree (id, tenant_id)"
+      },
       "rentals.rentals_pkey": {
         "table_name": "rentals",
         "name": "rentals_pkey",
@@ -27858,6 +29666,16 @@
         "table_name": "rentals",
         "name": "rentals_rental_number_key",
         "definition": "CREATE UNIQUE INDEX rentals_rental_number_key ON public.rentals USING btree (rental_number)"
+      },
+      "rentals.rentals_turo_batch_idx": {
+        "table_name": "rentals",
+        "name": "rentals_turo_batch_idx",
+        "definition": "CREATE INDEX rentals_turo_batch_idx ON public.rentals USING btree (turo_promotion_batch_id) WHERE (turo_promotion_batch_id IS NOT NULL)"
+      },
+      "rentals.rentals_turo_reservation_uniq": {
+        "table_name": "rentals",
+        "name": "rentals_turo_reservation_uniq",
+        "definition": "CREATE UNIQUE INDEX rentals_turo_reservation_uniq ON public.rentals USING btree (tenant_id, turo_reservation_id) WHERE (turo_reservation_id IS NOT NULL)"
       },
       "review_tags.idx_review_tags_tenant": {
         "table_name": "review_tags",
@@ -27988,6 +29806,31 @@
         "table_name": "settings_audit",
         "name": "settings_audit_pkey",
         "definition": "CREATE UNIQUE INDEX settings_audit_pkey ON public.settings_audit USING btree (id)"
+      },
+      "signup_attempts.idx_signup_attempts_auth_user": {
+        "table_name": "signup_attempts",
+        "name": "idx_signup_attempts_auth_user",
+        "definition": "CREATE INDEX idx_signup_attempts_auth_user ON public.signup_attempts USING btree (auth_user_id, created_at DESC)"
+      },
+      "signup_attempts.idx_signup_attempts_created": {
+        "table_name": "signup_attempts",
+        "name": "idx_signup_attempts_created",
+        "definition": "CREATE INDEX idx_signup_attempts_created ON public.signup_attempts USING btree (created_at DESC)"
+      },
+      "signup_attempts.idx_signup_attempts_email": {
+        "table_name": "signup_attempts",
+        "name": "idx_signup_attempts_email",
+        "definition": "CREATE INDEX idx_signup_attempts_email ON public.signup_attempts USING btree (lower(email), created_at DESC)"
+      },
+      "signup_attempts.idx_signup_attempts_ip": {
+        "table_name": "signup_attempts",
+        "name": "idx_signup_attempts_ip",
+        "definition": "CREATE INDEX idx_signup_attempts_ip ON public.signup_attempts USING btree (ip_address, created_at DESC)"
+      },
+      "signup_attempts.signup_attempts_pkey": {
+        "table_name": "signup_attempts",
+        "name": "signup_attempts_pkey",
+        "definition": "CREATE UNIQUE INDEX signup_attempts_pkey ON public.signup_attempts USING btree (id)"
       },
       "signup_plans.signup_plans_one_highlighted": {
         "table_name": "signup_plans",
@@ -28243,6 +30086,21 @@
         "table_name": "subscription_plans",
         "name": "subscription_plans_pkey",
         "definition": "CREATE UNIQUE INDEX subscription_plans_pkey ON public.subscription_plans USING btree (id)"
+      },
+      "tenant_api_keys.tenant_api_keys_pkey": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_pkey",
+        "definition": "CREATE UNIQUE INDEX tenant_api_keys_pkey ON public.tenant_api_keys USING btree (id)"
+      },
+      "tenant_api_keys.tenant_api_keys_tenant_idx": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_tenant_idx",
+        "definition": "CREATE INDEX tenant_api_keys_tenant_idx ON public.tenant_api_keys USING btree (tenant_id) WHERE (revoked_at IS NULL)"
+      },
+      "tenant_api_keys.tenant_api_keys_token_hash_key": {
+        "table_name": "tenant_api_keys",
+        "name": "tenant_api_keys_token_hash_key",
+        "definition": "CREATE UNIQUE INDEX tenant_api_keys_token_hash_key ON public.tenant_api_keys USING btree (token_hash)"
       },
       "tenant_credit_wallets.tenant_credit_wallets_pkey": {
         "table_name": "tenant_credit_wallets",
@@ -28544,20 +30402,110 @@
         "name": "testimonials_pkey",
         "definition": "CREATE UNIQUE INDEX testimonials_pkey ON public.testimonials USING btree (id)"
       },
+      "turo_bridge_conflicts.turo_bridge_conflicts_open_unique": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_open_unique",
+        "definition": "CREATE UNIQUE INDEX turo_bridge_conflicts_open_unique ON public.turo_bridge_conflicts USING btree (reservation_row_id, kind) WHERE (resolved_at IS NULL)"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_pkey": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_pkey",
+        "definition": "CREATE UNIQUE INDEX turo_bridge_conflicts_pkey ON public.turo_bridge_conflicts USING btree (id)"
+      },
+      "turo_bridge_conflicts.turo_bridge_conflicts_tenant_open_idx": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_tenant_open_idx",
+        "definition": "CREATE INDEX turo_bridge_conflicts_tenant_open_idx ON public.turo_bridge_conflicts USING btree (tenant_id, severity, created_at DESC) WHERE (resolved_at IS NULL)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_id_tenant_key": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX turo_bridge_customers_id_tenant_key ON public.turo_bridge_customers USING btree (id, tenant_id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_name_idx": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_name_idx",
+        "definition": "CREATE INDEX turo_bridge_customers_name_idx ON public.turo_bridge_customers USING btree (tenant_id, display_name_norm)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_pkey": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_pkey",
+        "definition": "CREATE UNIQUE INDEX turo_bridge_customers_pkey ON public.turo_bridge_customers USING btree (id)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_tenant_key_unique": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_tenant_key_unique",
+        "definition": "CREATE UNIQUE INDEX turo_bridge_customers_tenant_key_unique ON public.turo_bridge_customers USING btree (tenant_id, match_key)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_tenant_state_idx": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_tenant_state_idx",
+        "definition": "CREATE INDEX turo_bridge_customers_tenant_state_idx ON public.turo_bridge_customers USING btree (tenant_id, match_state)"
+      },
+      "turo_bridge_customers.turo_bridge_customers_unmapped_idx": {
+        "table_name": "turo_bridge_customers",
+        "name": "turo_bridge_customers_unmapped_idx",
+        "definition": "CREATE INDEX turo_bridge_customers_unmapped_idx ON public.turo_bridge_customers USING gin (unmapped)"
+      },
       "turo_bridge_reservations.idx_turo_bridge_reservations_tenant_synced": {
         "table_name": "turo_bridge_reservations",
         "name": "idx_turo_bridge_reservations_tenant_synced",
         "definition": "CREATE INDEX idx_turo_bridge_reservations_tenant_synced ON public.turo_bridge_reservations USING btree (tenant_id, synced_at DESC)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_hold_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_hold_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_hold_idx ON public.turo_bridge_reservations USING btree (tenant_id, hold_until) WHERE (sync_state = ANY (ARRAY['staged'::text, 'promoted'::text]))"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_id_tenant_key": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX turo_bridge_reservations_id_tenant_key ON public.turo_bridge_reservations USING btree (id, tenant_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_last_job_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_last_job_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_last_job_idx ON public.turo_bridge_reservations USING btree (last_seen_job_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_missing_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_missing_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_missing_idx ON public.turo_bridge_reservations USING btree (tenant_id, missing_since) WHERE (presence_state = 'MISSING'::text)"
       },
       "turo_bridge_reservations.turo_bridge_reservations_pkey": {
         "table_name": "turo_bridge_reservations",
         "name": "turo_bridge_reservations_pkey",
         "definition": "CREATE UNIQUE INDEX turo_bridge_reservations_pkey ON public.turo_bridge_reservations USING btree (id)"
       },
+      "turo_bridge_reservations.turo_bridge_reservations_plate_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_plate_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_plate_idx ON public.turo_bridge_reservations USING btree (tenant_id, vehicle_plate) WHERE (vehicle_plate IS NOT NULL)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_presence_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_presence_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_presence_idx ON public.turo_bridge_reservations USING btree (tenant_id, presence_state)"
+      },
       "turo_bridge_reservations.turo_bridge_reservations_tenant_reservation_key": {
         "table_name": "turo_bridge_reservations",
         "name": "turo_bridge_reservations_tenant_reservation_key",
         "definition": "CREATE UNIQUE INDEX turo_bridge_reservations_tenant_reservation_key ON public.turo_bridge_reservations USING btree (tenant_id, reservation_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_tenant_state_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_tenant_state_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_tenant_state_idx ON public.turo_bridge_reservations USING btree (tenant_id, sync_state)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_turo_vehicle_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_turo_vehicle_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_turo_vehicle_idx ON public.turo_bridge_reservations USING btree (tenant_id, turo_vehicle_id)"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_unmapped_idx": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_unmapped_idx",
+        "definition": "CREATE INDEX turo_bridge_reservations_unmapped_idx ON public.turo_bridge_reservations USING gin (unmapped)"
       },
       "turo_bridge_tokens.idx_turo_bridge_tokens_tenant": {
         "table_name": "turo_bridge_tokens",
@@ -28573,6 +30521,101 @@
         "table_name": "turo_bridge_tokens",
         "name": "turo_bridge_tokens_token_key",
         "definition": "CREATE UNIQUE INDEX turo_bridge_tokens_token_key ON public.turo_bridge_tokens USING btree (token)"
+      },
+      "turo_promotion_batches.turo_promotion_batches_id_tenant_key": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX turo_promotion_batches_id_tenant_key ON public.turo_promotion_batches USING btree (id, tenant_id)"
+      },
+      "turo_promotion_batches.turo_promotion_batches_pkey": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_pkey",
+        "definition": "CREATE UNIQUE INDEX turo_promotion_batches_pkey ON public.turo_promotion_batches USING btree (id)"
+      },
+      "turo_promotion_batches.turo_promotion_batches_plan_uniq": {
+        "table_name": "turo_promotion_batches",
+        "name": "turo_promotion_batches_plan_uniq",
+        "definition": "CREATE UNIQUE INDEX turo_promotion_batches_plan_uniq ON public.turo_promotion_batches USING btree (tenant_id, plan_hash)"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_job_idx": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_job_idx",
+        "definition": "CREATE INDEX turo_sync_job_pages_job_idx ON public.turo_sync_job_pages USING btree (job_id, seq)"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_job_seq_key": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_job_seq_key",
+        "definition": "CREATE UNIQUE INDEX turo_sync_job_pages_job_seq_key ON public.turo_sync_job_pages USING btree (job_id, seq)"
+      },
+      "turo_sync_job_pages.turo_sync_job_pages_pkey": {
+        "table_name": "turo_sync_job_pages",
+        "name": "turo_sync_job_pages_pkey",
+        "definition": "CREATE UNIQUE INDEX turo_sync_job_pages_pkey ON public.turo_sync_job_pages USING btree (id)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_authoritative_idx": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_authoritative_idx",
+        "definition": "CREATE INDEX turo_sync_jobs_authoritative_idx ON public.turo_sync_jobs USING btree (tenant_id, job_kind, finished_at DESC) WHERE is_authoritative"
+      },
+      "turo_sync_jobs.turo_sync_jobs_heartbeat_idx": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_heartbeat_idx",
+        "definition": "CREATE INDEX turo_sync_jobs_heartbeat_idx ON public.turo_sync_jobs USING btree (heartbeat_at) WHERE (state = 'running'::text)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_id_tenant_key": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX turo_sync_jobs_id_tenant_key ON public.turo_sync_jobs USING btree (id, tenant_id)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_one_running_per_kind": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_one_running_per_kind",
+        "definition": "CREATE UNIQUE INDEX turo_sync_jobs_one_running_per_kind ON public.turo_sync_jobs USING btree (tenant_id, job_kind) WHERE (state = 'running'::text)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_pkey": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_pkey",
+        "definition": "CREATE UNIQUE INDEX turo_sync_jobs_pkey ON public.turo_sync_jobs USING btree (id)"
+      },
+      "turo_sync_jobs.turo_sync_jobs_qualifying_idx": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_qualifying_idx",
+        "definition": "CREATE INDEX turo_sync_jobs_qualifying_idx ON public.turo_sync_jobs USING btree (tenant_id, job_kind, finished_at DESC) WHERE observed_complete"
+      },
+      "turo_sync_jobs.turo_sync_jobs_tenant_started_idx": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_tenant_started_idx",
+        "definition": "CREATE INDEX turo_sync_jobs_tenant_started_idx ON public.turo_sync_jobs USING btree (tenant_id, started_at DESC)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_active_label_unique": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_active_label_unique",
+        "definition": "CREATE UNIQUE INDEX turo_vehicle_map_active_label_unique ON public.turo_vehicle_map USING btree (tenant_id, display_label_norm) WHERE (is_active AND (display_label_norm <> ''::text))"
+      },
+      "turo_vehicle_map.turo_vehicle_map_alias_idx": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_alias_idx",
+        "definition": "CREATE INDEX turo_vehicle_map_alias_idx ON public.turo_vehicle_map USING gin (alias_labels)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_id_tenant_key": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX turo_vehicle_map_id_tenant_key ON public.turo_vehicle_map USING btree (id, tenant_id)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_pkey": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_pkey",
+        "definition": "CREATE UNIQUE INDEX turo_vehicle_map_pkey ON public.turo_vehicle_map USING btree (id)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_tenant_key_unique": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_tenant_key_unique",
+        "definition": "CREATE UNIQUE INDEX turo_vehicle_map_tenant_key_unique ON public.turo_vehicle_map USING btree (tenant_id, match_key)"
+      },
+      "turo_vehicle_map.turo_vehicle_map_vehicle_idx": {
+        "table_name": "turo_vehicle_map",
+        "name": "turo_vehicle_map_vehicle_idx",
+        "definition": "CREATE INDEX turo_vehicle_map_vehicle_idx ON public.turo_vehicle_map USING btree (tenant_id, vehicle_id) WHERE is_active"
       },
       "user_nav_preferences.user_nav_preferences_app_user_id_key": {
         "table_name": "user_nav_preferences",
@@ -28823,6 +30866,11 @@
         "table_name": "vehicles",
         "name": "idx_vehicles_tenant_id",
         "definition": "CREATE INDEX idx_vehicles_tenant_id ON public.vehicles USING btree (tenant_id)"
+      },
+      "vehicles.vehicles_id_tenant_key": {
+        "table_name": "vehicles",
+        "name": "vehicles_id_tenant_key",
+        "definition": "CREATE UNIQUE INDEX vehicles_id_tenant_key ON public.vehicles USING btree (id, tenant_id)"
       },
       "vehicles.vehicles_pkey": {
         "table_name": "vehicles",
@@ -31261,6 +33309,11 @@
         "args": "",
         "result": "trigger"
       },
+      "tenant_api_key_rate_limited(p_key_id uuid, p_limit integer, p_window_seconds integer)": {
+        "name": "tenant_api_key_rate_limited",
+        "args": "p_key_id uuid, p_limit integer, p_window_seconds integer",
+        "result": "boolean"
+      },
       "tenants_payment_provider_immutable()": {
         "name": "tenants_payment_provider_immutable",
         "args": "",
@@ -31380,6 +33433,46 @@
         "name": "tstz_dist",
         "args": "timestamp with time zone, timestamp with time zone",
         "result": "interval"
+      },
+      "turo_blocked_dates_delete_guard()": {
+        "name": "turo_blocked_dates_delete_guard",
+        "args": "",
+        "result": "trigger"
+      },
+      "turo_bridge_presence_guard()": {
+        "name": "turo_bridge_presence_guard",
+        "args": "",
+        "result": "trigger"
+      },
+      "turo_bridge_reservations_guard()": {
+        "name": "turo_bridge_reservations_guard",
+        "args": "",
+        "result": "trigger"
+      },
+      "turo_norm_label(p_label text)": {
+        "name": "turo_norm_label",
+        "args": "p_label text",
+        "result": "text"
+      },
+      "turo_promotion_guards()": {
+        "name": "turo_promotion_guards",
+        "args": "",
+        "result": "jsonb"
+      },
+      "turo_reap_stale_sync_jobs(p_stale_after interval)": {
+        "name": "turo_reap_stale_sync_jobs",
+        "args": "p_stale_after interval",
+        "result": "integer"
+      },
+      "turo_release_block(p_block_id uuid, p_job_id uuid)": {
+        "name": "turo_release_block",
+        "args": "p_block_id uuid, p_job_id uuid",
+        "result": "boolean"
+      },
+      "turo_sync_jobs_guard()": {
+        "name": "turo_sync_jobs_guard",
+        "args": "",
+        "result": "trigger"
       },
       "unblock_customer(p_customer_id uuid)": {
         "name": "unblock_customer",
@@ -31813,6 +33906,14 @@
         "function_name": "public.fleet_health_recompute",
         "timing": "AFTER",
         "events": "INSERT DELETE",
+        "enabled": "O"
+      },
+      "blocked_dates.turo_blocked_dates_delete_guard_trg": {
+        "table_name": "blocked_dates",
+        "name": "turo_blocked_dates_delete_guard_trg",
+        "function_name": "public.turo_blocked_dates_delete_guard",
+        "timing": "BEFORE",
+        "events": "DELETE",
         "enabled": "O"
       },
       "blog_categories.set_blog_categories_updated_at": {
@@ -32959,6 +35060,62 @@
         "events": "UPDATE",
         "enabled": "O"
       },
+      "turo_bridge_conflicts.turo_bridge_conflicts_set_updated_at": {
+        "table_name": "turo_bridge_conflicts",
+        "name": "turo_bridge_conflicts_set_updated_at",
+        "function_name": "public.set_updated_at",
+        "timing": "BEFORE",
+        "events": "UPDATE",
+        "enabled": "O"
+      },
+      "turo_bridge_customers.set_turo_bridge_customers_updated_at": {
+        "table_name": "turo_bridge_customers",
+        "name": "set_turo_bridge_customers_updated_at",
+        "function_name": "public.set_updated_at",
+        "timing": "BEFORE",
+        "events": "UPDATE",
+        "enabled": "O"
+      },
+      "turo_bridge_reservations.turo_bridge_presence_guard_trg": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_presence_guard_trg",
+        "function_name": "public.turo_bridge_presence_guard",
+        "timing": "BEFORE",
+        "events": "INSERT UPDATE",
+        "enabled": "O"
+      },
+      "turo_bridge_reservations.turo_bridge_reservations_guard_trg": {
+        "table_name": "turo_bridge_reservations",
+        "name": "turo_bridge_reservations_guard_trg",
+        "function_name": "public.turo_bridge_reservations_guard",
+        "timing": "BEFORE",
+        "events": "INSERT UPDATE",
+        "enabled": "O"
+      },
+      "turo_sync_jobs.set_turo_sync_jobs_updated_at": {
+        "table_name": "turo_sync_jobs",
+        "name": "set_turo_sync_jobs_updated_at",
+        "function_name": "public.set_updated_at",
+        "timing": "BEFORE",
+        "events": "UPDATE",
+        "enabled": "O"
+      },
+      "turo_sync_jobs.turo_sync_jobs_guard_trg": {
+        "table_name": "turo_sync_jobs",
+        "name": "turo_sync_jobs_guard_trg",
+        "function_name": "public.turo_sync_jobs_guard",
+        "timing": "BEFORE",
+        "events": "INSERT UPDATE",
+        "enabled": "O"
+      },
+      "turo_vehicle_map.set_turo_vehicle_map_updated_at": {
+        "table_name": "turo_vehicle_map",
+        "name": "set_turo_vehicle_map_updated_at",
+        "function_name": "public.set_updated_at",
+        "timing": "BEFORE",
+        "events": "UPDATE",
+        "enabled": "O"
+      },
       "user_nav_preferences.set_user_nav_preferences_updated_at": {
         "table_name": "user_nav_preferences",
         "name": "set_user_nav_preferences_updated_at",
@@ -33154,7 +35311,7 @@
     }
   },
   "edgeFunctions": {
-    "_shared": "be02c72c56248683",
+    "_shared": "ae9a1812a15d9811",
     "accept-offer": "3f0067011a5c8311",
     "accrue-payg-charges": "fde80b5fc6957746",
     "activate-installment-plan": "fe1ec668f18bf927",
@@ -33179,7 +35336,7 @@
     "audit-stripe-payment": "6068d70a3497c71b",
     "audit-uk-connect-balances": "3e3ec1d310b0f15c",
     "auth-rate-limit": "879670f45b4e4768",
-    "auto-extend-rentals": "eec20d010b6bad84",
+    "auto-extend-rentals": "0717c952f38dfd52",
     "automation-execute-step": "b1d9a56c0becf151",
     "automation-poll-pending": "87696b0889784c6d",
     "automation-publish": "9b8e473a98c3e901",
@@ -33236,7 +35393,7 @@
     "create-installment-checkout": "1fc78e7fa16d7333",
     "create-offer-link": "29b0fcabb34cafe8",
     "create-preauth-checkout": "2e0306fabd39e7b1",
-    "create-sales-onboarding": "77108fcda6c9ffb2",
+    "create-sales-onboarding": "9a6b8ffc6bddd7cf",
     "create-square-card-payment": "7ee90ee6c05cc80d",
     "create-subscription-checkout": "fe433d03a68ebd3d",
     "create-subscription-link": "9c47da9f788f46cb",
@@ -33262,6 +35419,7 @@
     "feedback-insights": "82b7966927132a6a",
     "fetch-payment-intent": "747b0672f56a6e1e",
     "finalize-payg-rental": "78934171dd524b41",
+    "fleet-quote-api": "09978a2dbe3a6669",
     "generate-expense-summary": "271156efe7aaca71",
     "generate-export": "ff74beea381130d3",
     "generate-insurance-reminders": "fdaf90982c85efe7",
@@ -33330,6 +35488,7 @@
     "pay-installment-early": "128f49d87c231133",
     "place-deposit-hold": "a22330655b9b551e",
     "platform-rental-notify": "0bfe9826a354ccab",
+    "probe-checkout-sessions": "ca1fe356486796fa",
     "process-accounting-sync": "dd76206e5243f592",
     "process-ai-verification": "07d8db06957cb824",
     "process-backfill-jobs": "e0b187cfff50e2c7",
@@ -33386,7 +35545,7 @@
     "send-booking-email": "2aedf658e5b3f616",
     "send-booking-notification": "fc3005dcf092578a",
     "send-contact-email": "578ad46ef143cc0f",
-    "send-cp-enquiry": "46adeac81576dd94",
+    "send-cp-enquiry": "3100d122ed023a51",
     "send-email-message": "005fb9b5f2ba7aa0",
     "send-excess-mileage-payment-link": "029946bc03fd5c9e",
     "send-installment-failed": "35eb0324a7428575",
@@ -33415,6 +35574,7 @@
     "set-square-mode": "b78d48e818e9a86c",
     "settings": "73a51bbf5fe575e4",
     "signout-tenant-users": "f771e66080b80f7d",
+    "signup-begin-oauth": "efa7b51e38f260e5",
     "signup-begin": "8f782e2b52059b28",
     "signup-password-reset": "a15015d44f0b10ed",
     "signup-payment-intent": "353f764f1f12cfd9",
@@ -33436,7 +35596,7 @@
     "stripe-webhook": "279d1e85f56f4e92",
     "submit-application": "c8a112d9aa318a0a",
     "submit-customer-registration": "7ad115abd46ffa72",
-    "submit-enquiry": "9e4562a9133b4dc2",
+    "submit-enquiry": "4b64c53e294506cc",
     "subscription-link": "e1d3b7e62f221124",
     "subscription-webhook": "923b8fb004d99eca",
     "summarize-bonzah-submission": "baf32ce9ab477cc8",
@@ -33619,9 +35779,6 @@
     "apps/booking/next.config.ts": "2680ccb8ae2c1f53",
     "apps/booking/postcss.config.js": "0c5b64e1f2d9d32b",
     "apps/booking/public/service-worker.js": "715156769c2ce932",
-    "apps/booking/src/__tests__/components/time-picker.test.ts": "54d0ebb3cbf45c1b",
-    "apps/booking/src/__tests__/lib/vehicle-identity.test.ts": "760c79496fa3336f",
-    "apps/booking/src/__tests__/setup.ts": "64ac38fc2ab4d598",
     "apps/booking/src/app/(customer-portal)/layout.tsx": "de432bc325cc2cfb",
     "apps/booking/src/app/(customer-portal)/portal/agreements/page.tsx": "efd2f06e7ad23926",
     "apps/booking/src/app/(customer-portal)/portal/bookings/[id]/page.tsx": "8d776f46e65215f8",
@@ -33648,16 +35805,16 @@
     "apps/booking/src/app/blog/blog-listing-client.tsx": "514cb6de571f1231",
     "apps/booking/src/app/blog/page.tsx": "7ba5e17fde862089",
     "apps/booking/src/app/booking-cancelled/page.tsx": "d726a17ff023d723",
-    "apps/booking/src/app/booking-enquiry-submitted/page.tsx": "a34b4649d81f0889",
+    "apps/booking/src/app/booking-enquiry-submitted/page.tsx": "557bf03a4593566b",
     "apps/booking/src/app/booking-pending/page.tsx": "8421314a407240cb",
     "apps/booking/src/app/booking-success/page.tsx": "d54b3284bcd18e80",
     "apps/booking/src/app/booking-v2/layout.tsx": "55696c58da3e4af4",
     "apps/booking/src/app/booking-v2/page.tsx": "cc55d80aa4072eb7",
     "apps/booking/src/app/booking/checkout/page.tsx": "60cf73ff42069184",
     "apps/booking/src/app/booking/page.tsx": "79bcf5184ab25bde",
-    "apps/booking/src/app/booking/vehicles/page.tsx": "5919d83a9c5dcab4",
+    "apps/booking/src/app/booking/vehicles/page.tsx": "2a9254de723db9eb",
     "apps/booking/src/app/checkout/[paymentId]/page.tsx": "1a5d5850285cef55",
-    "apps/booking/src/app/contact/page.tsx": "bd4aad2ab1fdf85a",
+    "apps/booking/src/app/contact/page.tsx": "99ced2cb17789c81",
     "apps/booking/src/app/error.tsx": "6606983b8c3d90d7",
     "apps/booking/src/app/faq/page.tsx": "52c9305f2d8ecffc",
     "apps/booking/src/app/fleet/page.tsx": "3f3dee912b15d54f",
@@ -33684,7 +35841,7 @@
     "apps/booking/src/components/BlockedAccountDialog.tsx": "f39f359576fcd992",
     "apps/booking/src/components/BonzahDetailsForm.tsx": "33562e28f7b36cc4",
     "apps/booking/src/components/BonzahInsuranceSelector.tsx": "55a43819ffca0bfb",
-    "apps/booking/src/components/BookingCheckoutStep.tsx": "91329d0a95a081fc",
+    "apps/booking/src/components/BookingCheckoutStep.tsx": "656677bb8c736c47",
     "apps/booking/src/components/BookingConfirmation.tsx": "5d0a14927ecb8057",
     "apps/booking/src/components/BookingPersistenceGuard.tsx": "1466a58db8b30a89",
     "apps/booking/src/components/CheckoutProgressOverlay.tsx": "02393c70a6e88984",
@@ -33697,13 +35854,13 @@
     "apps/booking/src/components/GoogleAnalytics.tsx": "40bf4501a8a2c974",
     "apps/booking/src/components/HeroCarousel.tsx": "e35f394b12cb35a6",
     "apps/booking/src/components/InstallmentSelector.tsx": "9d6829c9436132f8",
-    "apps/booking/src/components/InvoiceDialog.tsx": "09979cd85f9d13c6",
+    "apps/booking/src/components/InvoiceDialog.tsx": "7de86f0fedc64a08",
     "apps/booking/src/components/LocationAutocomplete.tsx": "ad9ac77fa2a6ff02",
     "apps/booking/src/components/LocationAutocompleteWithRadius.tsx": "184347948c75d4d2",
     "apps/booking/src/components/LocationPicker.tsx": "dc6fb9332be7b585",
     "apps/booking/src/components/MaintenanceBanner.tsx": "f8add286468a99f0",
-    "apps/booking/src/components/MultiStepBookingWidget.tsx": "f2fac616182a69ec",
-    "apps/booking/src/components/Navigation.tsx": "b593eb5baaf632e3",
+    "apps/booking/src/components/MultiStepBookingWidget.tsx": "033fc8b4afe36b74",
+    "apps/booking/src/components/Navigation.tsx": "5ceb67ece1e51a86",
     "apps/booking/src/components/PWAInstall.tsx": "78136836a7c8f713",
     "apps/booking/src/components/QueryClientProvider.tsx": "736abdb5f64ce50d",
     "apps/booking/src/components/SEO.tsx": "12b6d940941159e5",
@@ -33764,7 +35921,7 @@
     "apps/booking/src/components/customer-portal/trax-chat/TraxChatPopup.tsx": "d269b307eee372d8",
     "apps/booking/src/components/customer-portal/trax-chat/TraxChatWidget.tsx": "e516cff12e127b2c",
     "apps/booking/src/components/customer-portal/trax-chat/index.ts": "c46605be4af28ed4",
-    "apps/booking/src/components/enquiry/enquiry-modal.tsx": "3eb29a8fac163a22",
+    "apps/booking/src/components/enquiry/enquiry-modal.tsx": "338d83194eb482b7",
     "apps/booking/src/components/home/legacy-home.tsx": "604b81a92f305c8a",
     "apps/booking/src/components/installments/CustomerInstallmentsView.tsx": "8c5931b53ae8511c",
     "apps/booking/src/components/installments/InstallmentCalendar.tsx": "5e27b080c744a781",
@@ -33911,7 +36068,6 @@
     "apps/booking/src/vite-env.d.ts": "65996936fbb04291",
     "apps/booking/tailwind.config.ts": "dc60c4f41e72c96f",
     "apps/booking/vite.config.ts": "fc927a322078d1af",
-    "apps/booking/vitest.config.ts": "7f1f132b827c6094",
     "apps/portal/next-env.d.ts": "7ad303e40d4fddf4",
     "apps/portal/next.config.js": "7f46d2995ca76944",
     "apps/portal/postcss.config.js": "fa650b380adfabb1",
@@ -33922,13 +36078,23 @@
     "apps/portal/src/__tests__/components/charge-deposit-dialog.test.ts": "ee52a6485b7cc450",
     "apps/portal/src/__tests__/components/connect-stripe-required-dialog.test.tsx": "c3e2f85cd3f38143",
     "apps/portal/src/__tests__/components/deposit-hold-verify-permissions.test.ts": "742785c840911e5c",
+    "apps/portal/src/__tests__/components/dev-page-gate.test.tsx": "107c24a90916c7f4",
+    "apps/portal/src/__tests__/components/dev-section-gate.test.tsx": "37d990f1d6b60708",
     "apps/portal/src/__tests__/components/dynamic-theme-provider.test.tsx": "bc59fe6cb0484e5c",
-    "apps/portal/src/__tests__/components/integrations-board-cmd-gate.test.tsx": "7771c0c427eb88ac",
+    "apps/portal/src/__tests__/components/empty-state-preview.test.tsx": "e10fb1078fab1399",
+    "apps/portal/src/__tests__/components/first-run-arrival-gate.test.tsx": "7f739c31860ee219",
+    "apps/portal/src/__tests__/components/first-run-wizard-gate.test.tsx": "a1e5189fcf542ae2",
+    "apps/portal/src/__tests__/components/first-time-sequence.test.tsx": "5a4d86952f0267c1",
+    "apps/portal/src/__tests__/components/integrations-board-cmd-gate.test.tsx": "f8efc7af8af2f36b",
+    "apps/portal/src/__tests__/components/integrations-board-pins.test.tsx": "a51b0d977f6b6b44",
     "apps/portal/src/__tests__/components/rental-id-verification-override.test.ts": "276400d0faae7fbb",
     "apps/portal/src/__tests__/components/rental-id-waiver.test.ts": "fdf81c8e30ba4ed2",
+    "apps/portal/src/__tests__/components/teaching-empty-states.test.tsx": "8da3c0c6ab2f66ea",
+    "apps/portal/src/__tests__/components/vehicle-status-reserved.test.ts": "32c6c2a584609b72",
     "apps/portal/src/__tests__/helpers/edge-source.ts": "76bdf37b16f81cdf",
     "apps/portal/src/__tests__/helpers/permissions-source.ts": "73c646c6aa777ab4",
     "apps/portal/src/__tests__/helpers/source.ts": "bcafb592f9826b74",
+    "apps/portal/src/__tests__/hooks/use-first-rental-tour.test.tsx": "4e4b2d94cb4cd540",
     "apps/portal/src/__tests__/hooks/use-pickup-locations.test.ts": "d12fab764d704565",
     "apps/portal/src/__tests__/lib/accounting-backoff.test.ts": "9c7f96b07636dd46",
     "apps/portal/src/__tests__/lib/agreement-datetime.test.ts": "284dbd7e4689e4d4",
@@ -33949,20 +36115,30 @@
     "apps/portal/src/__tests__/lib/deposit-hold-idempotency.test.ts": "b4c5f5cb85bbdc8c",
     "apps/portal/src/__tests__/lib/deposit-hold-row.test.ts": "a71186e8cf1ec492",
     "apps/portal/src/__tests__/lib/deposit-hold-status-machine.test.ts": "741715913b493967",
+    "apps/portal/src/__tests__/lib/dev-actions.test.ts": "2f02f1270dab3054",
+    "apps/portal/src/__tests__/lib/dev-overrides.test.ts": "ae889fca1bd6935d",
+    "apps/portal/src/__tests__/lib/dev-route-permissions.test.ts": "a06e269d047f5a27",
     "apps/portal/src/__tests__/lib/expense-utils.test.ts": "05007e051156bc0b",
+    "apps/portal/src/__tests__/lib/explainer-manifest.test.ts": "c673c03c1ecca02c",
     "apps/portal/src/__tests__/lib/feedback-throttle.test.ts": "81b348b5702f25da",
+    "apps/portal/src/__tests__/lib/first-rental-tour.test.ts": "1b081119c2887dd2",
+    "apps/portal/src/__tests__/lib/first-run-arrival.test.ts": "1cdc1fd1ed7be3c1",
+    "apps/portal/src/__tests__/lib/first-run-questions.test.ts": "2e95534fb1ee46b2",
     "apps/portal/src/__tests__/lib/fleet-health-csv.test.ts": "d5b5d3ff299229aa",
     "apps/portal/src/__tests__/lib/fleet-health-fixes.test.ts": "c89a5b5ef2965504",
     "apps/portal/src/__tests__/lib/fleet-health-p0.test.ts": "cf0e3c0d2a7e1c42",
     "apps/portal/src/__tests__/lib/fleet-health-status.test.ts": "23edbf6d1a34c100",
     "apps/portal/src/__tests__/lib/fleet-health.test.ts": "9d80cb5598effc92",
+    "apps/portal/src/__tests__/lib/fleet-quote-sync.test.ts": "9764f616cc4e8f51",
     "apps/portal/src/__tests__/lib/fleet-quote.test.ts": "a0371cdf87398173",
     "apps/portal/src/__tests__/lib/inshur-transforms.test.ts": "848e76c783850667",
+    "apps/portal/src/__tests__/lib/integration-pins.test.ts": "7cd914bfa9321a46",
     "apps/portal/src/__tests__/lib/lean-areas-accounting.test.ts": "ba03ade80858080c",
-    "apps/portal/src/__tests__/lib/lean-areas-cmd.test.ts": "22d918a47e1add31",
+    "apps/portal/src/__tests__/lib/lean-areas-cmd.test.ts": "dd5230472cdf0834",
     "apps/portal/src/__tests__/lib/lean-areas.test.ts": "cd985a046acf0262",
     "apps/portal/src/__tests__/lib/lean-boldsign.test.ts": "e3eeefa9993b2f57",
     "apps/portal/src/__tests__/lib/lean-quotes.test.ts": "51a7dece2e4d5090",
+    "apps/portal/src/__tests__/lib/lean-settings-integrations.test.ts": "658925e55d115ce8",
     "apps/portal/src/__tests__/lib/lean-test-mode-ui.test.ts": "bec7e24dcddd5deb",
     "apps/portal/src/__tests__/lib/payg-rate.test.ts": "d4e3f6c35016d337",
     "apps/portal/src/__tests__/lib/platform-tos.test.ts": "cafcc675079f89de",
@@ -33980,34 +36156,35 @@
     "apps/portal/src/app/(auth)/login/page.tsx": "1470f6f26521ff48",
     "apps/portal/src/app/(auth)/reset-password/page.tsx": "5368b4577faa35e4",
     "apps/portal/src/app/(dashboard)/agreements/analytics/page.tsx": "60d57d59f677224a",
-    "apps/portal/src/app/(dashboard)/agreements/page.tsx": "4ded993ef3b758bc",
+    "apps/portal/src/app/(dashboard)/agreements/page.tsx": "3cf61e7506ffc5c6",
     "apps/portal/src/app/(dashboard)/audit-logs/page.tsx": "e7a3581ee673db4b",
     "apps/portal/src/app/(dashboard)/automations/[id]/page.tsx": "55470a245ab0e3f3",
     "apps/portal/src/app/(dashboard)/automations/page.tsx": "2ea26268cf33dc3b",
     "apps/portal/src/app/(dashboard)/blocked-customers/page.tsx": "7809af4124717ed6",
-    "apps/portal/src/app/(dashboard)/blocked-dates/page.tsx": "0bc458cba0b96b8f",
-    "apps/portal/src/app/(dashboard)/cms/about/page.tsx": "5ae241e55bda5494",
+    "apps/portal/src/app/(dashboard)/blocked-dates/page.tsx": "5ddb8d694af16e33",
+    "apps/portal/src/app/(dashboard)/cms/about/page.tsx": "a007ae486b5d73a9",
     "apps/portal/src/app/(dashboard)/cms/blog/[id]/page.tsx": "f108034a95aaec7d",
     "apps/portal/src/app/(dashboard)/cms/blog/categories/page.tsx": "b6514aeeb75d82b2",
     "apps/portal/src/app/(dashboard)/cms/blog/page.tsx": "bfdbb530e834b565",
     "apps/portal/src/app/(dashboard)/cms/blog/settings/page.tsx": "5588c0c1c6a91b9f",
-    "apps/portal/src/app/(dashboard)/cms/contact/page.tsx": "dfcfcda0be539bce",
-    "apps/portal/src/app/(dashboard)/cms/fleet/page.tsx": "2f036a8ea1306dd2",
-    "apps/portal/src/app/(dashboard)/cms/home/page.tsx": "66168e2eb2e425d6",
-    "apps/portal/src/app/(dashboard)/cms/page.tsx": "68455bd3c3898feb",
-    "apps/portal/src/app/(dashboard)/cms/privacy/page.tsx": "a99383721a2de713",
-    "apps/portal/src/app/(dashboard)/cms/promotions/page.tsx": "522bf15991f56c1c",
-    "apps/portal/src/app/(dashboard)/cms/reviews/page.tsx": "cd2d2b9de5495529",
-    "apps/portal/src/app/(dashboard)/cms/site-settings/page.tsx": "6e1789c045196659",
-    "apps/portal/src/app/(dashboard)/cms/terms/page.tsx": "1c36155ca895977a",
+    "apps/portal/src/app/(dashboard)/cms/contact/page.tsx": "b9c83b0fdf558f57",
+    "apps/portal/src/app/(dashboard)/cms/fleet/page.tsx": "64c118574d1ac7ad",
+    "apps/portal/src/app/(dashboard)/cms/home/page.tsx": "28d032f5a2c6c1c5",
+    "apps/portal/src/app/(dashboard)/cms/page.tsx": "71daea640e86c6b1",
+    "apps/portal/src/app/(dashboard)/cms/privacy/page.tsx": "fbf0adb1e84fd095",
+    "apps/portal/src/app/(dashboard)/cms/promotions/page.tsx": "8919d1485c552d57",
+    "apps/portal/src/app/(dashboard)/cms/reviews/page.tsx": "616b52e75aae0bbd",
+    "apps/portal/src/app/(dashboard)/cms/site-settings/page.tsx": "185073a619d5a3b1",
+    "apps/portal/src/app/(dashboard)/cms/terms/page.tsx": "ce06f5e25b88f19f",
     "apps/portal/src/app/(dashboard)/credits/analytics/page.tsx": "e22127798dd98e3a",
-    "apps/portal/src/app/(dashboard)/credits/page.tsx": "8742605536867f80",
-    "apps/portal/src/app/(dashboard)/customers/[id]/page.tsx": "25c572154f0151fa",
+    "apps/portal/src/app/(dashboard)/credits/page.tsx": "4f9cfc00864f363c",
+    "apps/portal/src/app/(dashboard)/customers/[id]/page.tsx": "8d60a8e65b29eb10",
     "apps/portal/src/app/(dashboard)/customers/analytics/page.tsx": "d2b593de98da9b7f",
-    "apps/portal/src/app/(dashboard)/customers/page.tsx": "fb3fac39e73a8988",
+    "apps/portal/src/app/(dashboard)/customers/page.tsx": "c9c1c9f20c6d15d2",
+    "apps/portal/src/app/(dashboard)/dev/page.tsx": "4ffcf3f7df93e2be",
     "apps/portal/src/app/(dashboard)/documents/analytics/page.tsx": "a9cf7d1eaea653f8",
     "apps/portal/src/app/(dashboard)/documents/page.tsx": "fbf6b8f7a49df95e",
-    "apps/portal/src/app/(dashboard)/enquiries/page.tsx": "6027701798f37f89",
+    "apps/portal/src/app/(dashboard)/enquiries/page.tsx": "42fa44813b75f7e6",
     "apps/portal/src/app/(dashboard)/error.tsx": "880b3278da79e42f",
     "apps/portal/src/app/(dashboard)/expenses/page.tsx": "d30e224fb53bfb28",
     "apps/portal/src/app/(dashboard)/fines/[id]/page.tsx": "6acc7a77abd0d611",
@@ -34015,21 +36192,50 @@
     "apps/portal/src/app/(dashboard)/fines/new/page.tsx": "9d5fbd174e8d0c4f",
     "apps/portal/src/app/(dashboard)/fines/page.tsx": "d101fdca4eea9ecc",
     "apps/portal/src/app/(dashboard)/fleet-health/page.tsx": "aba2b52ece2001bf",
+    "apps/portal/src/app/(dashboard)/insights/_charts.tsx": "85c7549cd32712ac",
+    "apps/portal/src/app/(dashboard)/insights/_data.ts": "57e0ad7d7999a676",
+    "apps/portal/src/app/(dashboard)/insights/_kit.tsx": "8b19243f57414fa8",
+    "apps/portal/src/app/(dashboard)/insights/_money-model.ts": "4ca1706c7e5dc527",
+    "apps/portal/src/app/(dashboard)/insights/_receipt-data.ts": "99fa8e896de3ce44",
+    "apps/portal/src/app/(dashboard)/insights/_receipt-dialogs.tsx": "b057936dcc1fbae7",
+    "apps/portal/src/app/(dashboard)/insights/_receipt.tsx": "304b6ec0f81f195a",
+    "apps/portal/src/app/(dashboard)/insights/insights-view.tsx": "6e1d39ad38901874",
+    "apps/portal/src/app/(dashboard)/insights/page.tsx": "3ce6e618591b4447",
     "apps/portal/src/app/(dashboard)/insurance/page.tsx": "20dc6384e5157c06",
     "apps/portal/src/app/(dashboard)/insurances/analytics/page.tsx": "e90b61f49a79cfc0",
-    "apps/portal/src/app/(dashboard)/insurances/page.tsx": "c5701921fbe30105",
-    "apps/portal/src/app/(dashboard)/integrations/integrations-board.tsx": "0cd86ca50cdf2ae5",
+    "apps/portal/src/app/(dashboard)/insurances/page.tsx": "5e8cfc74c3c4173f",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/_kit.tsx": "e169ce06fc4daba0",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/boldsign.tsx": "eb6d8b8fe2b9371e",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/bonzah-onboarding-v2.tsx": "c79a399cbea7f59c",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/bonzah.tsx": "741df54433465557",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/checkmydriver.tsx": "1f13d3573de3cee3",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/custom-domain.tsx": "8d53a4ed89bd107d",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/inshur.tsx": "0fd2787c4d857e79",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/registry.ts": "dfee4cc5155c3382",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/square-data.ts": "ebe824797f15a40a",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/square.tsx": "bb2228a1362e062e",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/stripe-connect.tsx": "2799d0a88c22aac2",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/tesla.tsx": "c07192b0fe76ab20",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/turo-sync.tsx": "5932e91f71eecc4c",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/twilio-calling.tsx": "8aa51948b1d3c5b8",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/twilio-messages-data.ts": "fb9bdeb538e89620",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/twilio-messages.tsx": "a804c5b565bf1b73",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/xero-data.ts": "19751be798ed1897",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/xero.tsx": "81827b7cc54ed057",
+    "apps/portal/src/app/(dashboard)/integrations/_panels/zoho.tsx": "27322ac2a154e248",
+    "apps/portal/src/app/(dashboard)/integrations/integration-pins.ts": "57387d1f6602f522",
+    "apps/portal/src/app/(dashboard)/integrations/integrations-board.tsx": "8bddf3eeccd06cf7",
     "apps/portal/src/app/(dashboard)/integrations/page.tsx": "24d804ad2c56ca8a",
-    "apps/portal/src/app/(dashboard)/invoices/page.tsx": "91d536fe37b97164",
-    "apps/portal/src/app/(dashboard)/layout.tsx": "5c149aad3d22aba9",
+    "apps/portal/src/app/(dashboard)/invoices/page.tsx": "3d88a7ac10c81709",
+    "apps/portal/src/app/(dashboard)/layout.tsx": "8a931f35f103b959",
     "apps/portal/src/app/(dashboard)/leads/[id]/page.tsx": "4a3a035dd66d7339",
-    "apps/portal/src/app/(dashboard)/leads/page.tsx": "d8c1292a1c7378c3",
+    "apps/portal/src/app/(dashboard)/leads/page.tsx": "a0ae4eaaa588edd5",
     "apps/portal/src/app/(dashboard)/messages/page.tsx": "c47a3b5a8e8df9ae",
     "apps/portal/src/app/(dashboard)/owner-payouts/page.tsx": "eb5fc6c5a7baad16",
     "apps/portal/src/app/(dashboard)/page.tsx": "2419861de5fcfc38",
     "apps/portal/src/app/(dashboard)/payments/[id]/page.tsx": "6deee701312a39d0",
     "apps/portal/src/app/(dashboard)/payments/analytics/page.tsx": "c7a7648d158b90df",
-    "apps/portal/src/app/(dashboard)/payments/page.tsx": "737ac2706eb1623f",
+    "apps/portal/src/app/(dashboard)/payments/page.tsx": "66a54ff5452122cf",
     "apps/portal/src/app/(dashboard)/pending-bookings/page.tsx": "b9150354615e6495",
     "apps/portal/src/app/(dashboard)/pl-dashboard/monthly/[month]/page.tsx": "4384d8e8c587196c",
     "apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx": "d6a623d04fc050ad",
@@ -34039,7 +36245,7 @@
     "apps/portal/src/app/(dashboard)/quotes/page.tsx": "e6044166edef1a3a",
     "apps/portal/src/app/(dashboard)/reminders/analytics/page.tsx": "998ef0a3fbe785ad",
     "apps/portal/src/app/(dashboard)/reminders/page.tsx": "5639abc279c718b7",
-    "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx": "092ec2d5731cc4f7",
+    "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx": "c8f0a106229e5afc",
     "apps/portal/src/app/(dashboard)/rentals/analytics/page.tsx": "7d97be2dcd1e517d",
     "apps/portal/src/app/(dashboard)/rentals/new/page.tsx": "5c7b14fa96d58d1e",
     "apps/portal/src/app/(dashboard)/rentals/page.tsx": "56fde0a513fdc9cc",
@@ -34053,17 +36259,17 @@
     "apps/portal/src/app/(dashboard)/settings/email-templates/[key]/page.tsx": "7c3d0adcec7d0e5c",
     "apps/portal/src/app/(dashboard)/settings/email-templates/page.tsx": "d42d42fa038ec287",
     "apps/portal/src/app/(dashboard)/settings/lead-management/page.tsx": "ef4b142ddc1881b0",
-    "apps/portal/src/app/(dashboard)/settings/page.tsx": "5c0d6bde6964a6ee",
+    "apps/portal/src/app/(dashboard)/settings/page.tsx": "66ecc36fc60b64e4",
     "apps/portal/src/app/(dashboard)/settings/reminders/page.tsx": "1a1f8d6c620c5b7f",
     "apps/portal/src/app/(dashboard)/settings/users/page.tsx": "325c1f6800f63e02",
-    "apps/portal/src/app/(dashboard)/subscription/page.tsx": "86958435efc112ba",
+    "apps/portal/src/app/(dashboard)/subscription/page.tsx": "bfdc23d30017faa9",
     "apps/portal/src/app/(dashboard)/testimonials/page.tsx": "84bcc21d025377a3",
     "apps/portal/src/app/(dashboard)/users/page.tsx": "18cfc865cee863dd",
     "apps/portal/src/app/(dashboard)/vehicle-owners/[id]/page.tsx": "90b1b1a5950d2bae",
     "apps/portal/src/app/(dashboard)/vehicle-owners/page.tsx": "f0c637e3e7cdf1cc",
-    "apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx": "191c8bb5ac019859",
+    "apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx": "c8f65589cd4792ec",
     "apps/portal/src/app/(dashboard)/vehicles/analytics/page.tsx": "9624623fbf270686",
-    "apps/portal/src/app/(dashboard)/vehicles/page.tsx": "ce364f725b84940f",
+    "apps/portal/src/app/(dashboard)/vehicles/page.tsx": "ba566c602019585e",
     "apps/portal/src/app/(dashboard)/welcome/page.tsx": "087c147ce5eb5cdc",
     "apps/portal/src/app/api/esign/route.ts": "6abf5458b5efcd18",
     "apps/portal/src/app/api/esign/sign/route.ts": "1cfea4fd828dc446",
@@ -34072,10 +36278,48 @@
     "apps/portal/src/app/api/esign/view/route.ts": "38c62ef4f6b1e2d4",
     "apps/portal/src/app/api/esign/void/route.ts": "f03f84837682011f",
     "apps/portal/src/app/global-error.tsx": "c614b13c66fa9eb1",
-    "apps/portal/src/app/layout.tsx": "77a11571923f4800",
+    "apps/portal/src/app/layout.tsx": "73fef7ce7ac47a3c",
     "apps/portal/src/app/manifest.webmanifest/route.ts": "36254e2c849bd104",
     "apps/portal/src/app/not-found.tsx": "70257843b72504f1",
     "apps/portal/src/app/payment-preview/page.tsx": "7df2d1afff769a16",
+    "apps/portal/src/app/playground/_force-light.tsx": "73dedc43c219f231",
+    "apps/portal/src/app/playground/_shared.tsx": "82002a0a8a3dbc17",
+    "apps/portal/src/app/playground/cms-fake/_spec.ts": "d3b5b528d4a7afe2",
+    "apps/portal/src/app/playground/cms-fake/page.tsx": "e50c5565c23c0d23",
+    "apps/portal/src/app/playground/customer-detail-fake/_bits.tsx": "45d358e974eb12da",
+    "apps/portal/src/app/playground/customer-detail-fake/_data.ts": "c33c41115acfb663",
+    "apps/portal/src/app/playground/customer-detail-fake/_history.tsx": "efb8ed6096bb6ab9",
+    "apps/portal/src/app/playground/customer-detail-fake/_overview.tsx": "42f86926606e5120",
+    "apps/portal/src/app/playground/customer-detail-fake/_person.tsx": "51fa114d8b7e9395",
+    "apps/portal/src/app/playground/customer-detail-fake/_sidebar.tsx": "1b01b893fe003d16",
+    "apps/portal/src/app/playground/customer-detail-fake/_standing.tsx": "fa42c9764fae6aad",
+    "apps/portal/src/app/playground/customer-detail-fake/page.tsx": "ed8f6b93e91fc5e9",
+    "apps/portal/src/app/playground/layout.tsx": "57bb26743ff9bdd0",
+    "apps/portal/src/app/playground/page.tsx": "8278dfe9c5c68dfb",
+    "apps/portal/src/app/playground/rental-create-fake/_agreement-tab.tsx": "de3ff3e381964d94",
+    "apps/portal/src/app/playground/rental-create-fake/_customer-tab.tsx": "c6f06e35a402cf74",
+    "apps/portal/src/app/playground/rental-create-fake/_extensions.tsx": "e25b7908919d5815",
+    "apps/portal/src/app/playground/rental-create-fake/_extras-tab.tsx": "452c4b5e3861abea",
+    "apps/portal/src/app/playground/rental-create-fake/_handover-tab.tsx": "405dcfbf149f2a96",
+    "apps/portal/src/app/playground/rental-create-fake/_insurance-tab.tsx": "89a51ccb4c9efc88",
+    "apps/portal/src/app/playground/rental-create-fake/_payment-plan.tsx": "1e2b3c58faf6c45c",
+    "apps/portal/src/app/playground/rental-create-fake/_payments-actions.tsx": "4553bf3ffe4a15b4",
+    "apps/portal/src/app/playground/rental-create-fake/_payments-model.ts": "82add7a6de2bd356",
+    "apps/portal/src/app/playground/rental-create-fake/_payments-segments.tsx": "af29779caa819cf5",
+    "apps/portal/src/app/playground/rental-create-fake/_payments-tab.tsx": "1590174b75b18730",
+    "apps/portal/src/app/playground/rental-create-fake/_right-sidebar.tsx": "c2beb3dafce0f702",
+    "apps/portal/src/app/playground/rental-create-fake/_vehicle-tab.tsx": "e3f5bf1c6b7427af",
+    "apps/portal/src/app/playground/rental-create-fake/_when-where-tab.tsx": "ef68275efde255ec",
+    "apps/portal/src/app/playground/rental-create-fake/page.tsx": "7fddfa1ae1434dc1",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_data.ts": "700d91f9a5c0e6ca",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_overview-rail.tsx": "860759e1849489f0",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_tabs-car.tsx": "7f89f30d22eb9f17",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_tabs-going-out.tsx": "c69cea4370cb3252",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_tabs-money.tsx": "216dabc91cfe611d",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_tabs-record.tsx": "4a558745da412056",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_tabs-upkeep.tsx": "4eac135484d16901",
+    "apps/portal/src/app/playground/vehicle-detail-fake/_ui.tsx": "49b13e94be6f6add",
+    "apps/portal/src/app/playground/vehicle-detail-fake/page.tsx": "dfcecc74716723af",
     "apps/portal/src/app/providers.tsx": "62cfd95ef7c11b58",
     "apps/portal/src/client-schemas/customers/add-customer-document.ts": "a11379a2bfb1281c",
     "apps/portal/src/client-schemas/customers/customer-form-modal.ts": "8bc0891507e9bcf7",
@@ -34126,8 +36370,15 @@
     "apps/portal/src/client-schemas/website-content/trust-badges-editor.ts": "2bd7a5d13c264b34",
     "apps/portal/src/components/agreements/generate-agreement-dialog.tsx": "d0854b21598410a1",
     "apps/portal/src/components/auth-v2/brand-surface.ts": "a2d9b6c3c54de7ce",
-    "apps/portal/src/components/auth-v2/login-v2.tsx": "8fc5499b8a715024",
+    "apps/portal/src/components/auth-v2/login-v2.tsx": "77b05e3f484e5f3d",
     "apps/portal/src/components/automations/automation-flow-canvas.tsx": "8f45ac13483a363d",
+    "apps/portal/src/components/availability-v2/availability-model.ts": "5ee01c3dd947a89a",
+    "apps/portal/src/components/availability-v2/availability-v2.tsx": "dc599214d3c69890",
+    "apps/portal/src/components/availability-v2/day-editor.tsx": "25541b9aed175076",
+    "apps/portal/src/components/availability-v2/time-pick.tsx": "1bb43814aeff6cba",
+    "apps/portal/src/components/availability-v2/use-availability-source.ts": "128b8a23c15cbc56",
+    "apps/portal/src/components/availability-v2/week-calendar.tsx": "b8d430f15e97f2f6",
+    "apps/portal/src/components/availability-v2/weekly-default-strip.tsx": "6fd78dbd2dd66aaa",
     "apps/portal/src/components/banners/app-banner-stack.tsx": "c02086b08d8a45e0",
     "apps/portal/src/components/banners/banner-stack.tsx": "9cf4718604d568dc",
     "apps/portal/src/components/banners/banner-types.ts": "b32d028681e2fdd2",
@@ -34135,6 +36386,8 @@
     "apps/portal/src/components/banners/sources/deposit-hold-banners.tsx": "3c8257f3fb3a025e",
     "apps/portal/src/components/banners/use-app-banners.ts": "8e2b063b28c62a8f",
     "apps/portal/src/components/banners/use-banner-dismissal.ts": "7cdaec1a0f85793a",
+    "apps/portal/src/components/billing/billing-preview.tsx": "d5068f3bf8052f52",
+    "apps/portal/src/components/billing/credits-panel.tsx": "58c8ef3edd0b9b08",
     "apps/portal/src/components/blocked-dates/blocked-dates-manager.tsx": "eb5720f50554127d",
     "apps/portal/src/components/blocked-dates/working-hours-card.tsx": "fe2f6b2aea4ca4c6",
     "apps/portal/src/components/chat/BookingPicker.tsx": "1616d3b1c041b928",
@@ -34159,6 +36412,32 @@
     "apps/portal/src/components/chat/VoiceCallBar.tsx": "8013bcc8821ec4e1",
     "apps/portal/src/components/chat/call-transcript-dialog.tsx": "df2762354a763c24",
     "apps/portal/src/components/chat/index.ts": "d4cd4fd322e8c5b0",
+    "apps/portal/src/components/cms-v2/cms-image-picker.tsx": "e748db55f894d01f",
+    "apps/portal/src/components/cms-v2/cms-overview.tsx": "ed60bcfd769e28be",
+    "apps/portal/src/components/cms-v2/cms-page-editor.tsx": "0e7f7cc0d5213461",
+    "apps/portal/src/components/cms-v2/cms-spec.ts": "4c8cf00f76334c84",
+    "apps/portal/src/components/cms-v2/cms-visual-editor.tsx": "6fa37a7f858004e1",
+    "apps/portal/src/components/cms-v2/website-settings.tsx": "fef91a5801773eee",
+    "apps/portal/src/components/customers-v2/customer-detail/customer-detail-v2.tsx": "5862bd6bff63703a",
+    "apps/portal/src/components/customers-v2/customer-detail/derive.ts": "c67dece3477c5ac0",
+    "apps/portal/src/components/customers-v2/customer-detail/kit.tsx": "008eabe058dac411",
+    "apps/portal/src/components/customers-v2/customer-detail/overview-rail.tsx": "86695e5b72c7d8ee",
+    "apps/portal/src/components/customers-v2/customer-detail/section-account.tsx": "273ab591a74bd060",
+    "apps/portal/src/components/customers-v2/customer-detail/section-activity.tsx": "d3b9f7c3b42ef44c",
+    "apps/portal/src/components/customers-v2/customer-detail/section-consent.tsx": "54d6aa6863a7b4a7",
+    "apps/portal/src/components/customers-v2/customer-detail/section-documents.tsx": "24367f756a269044",
+    "apps/portal/src/components/customers-v2/customer-detail/section-fines.tsx": "98b5a926d3561622",
+    "apps/portal/src/components/customers-v2/customer-detail/section-identity.tsx": "5a40352d74fca3f6",
+    "apps/portal/src/components/customers-v2/customer-detail/section-licence.tsx": "4838c67c13d069df",
+    "apps/portal/src/components/customers-v2/customer-detail/section-money.tsx": "1759494af94be518",
+    "apps/portal/src/components/customers-v2/customer-detail/section-rentals.tsx": "0a28de2404931e90",
+    "apps/portal/src/components/customers-v2/customer-detail/section-reviews.tsx": "a5f9c4f0c818e3f9",
+    "apps/portal/src/components/customers-v2/customer-detail/section-verification.tsx": "31356c4a7952c6a8",
+    "apps/portal/src/components/customers-v2/customer-detail/sections.ts": "f948ca767fa36fe7",
+    "apps/portal/src/components/customers-v2/customer-detail/types.ts": "0e4d7b72877d1565",
+    "apps/portal/src/components/customers-v2/customer-detail/use-customer-detail-v2.ts": "e6977feefb4895aa",
+    "apps/portal/src/components/customers-v2/customer-detail/use-customer-draft.ts": "aa4d945eb9425738",
+    "apps/portal/src/components/customers-v2/customer-detail/use-customer-record.ts": "9b2e66bc69f057b0",
     "apps/portal/src/components/customers/add-customer-document-dialog.tsx": "2b12880588010227",
     "apps/portal/src/components/customers/allocate-payment-dialog.tsx": "576f40dc9b3298fc",
     "apps/portal/src/components/customers/collect-payment-dialog.tsx": "a2b986663bb081a4",
@@ -34185,12 +36464,12 @@
     "apps/portal/src/components/dashboard-v2/card-surface.tsx": "bdd7da70323ed679",
     "apps/portal/src/components/dashboard-v2/dashboard-v2.tsx": "f970b2fd82207034",
     "apps/portal/src/components/dashboard-v2/home/home-bands.tsx": "ac8d3bf863096e21",
-    "apps/portal/src/components/dashboard-v2/home/mock.ts": "ebbd2403ab3c39c3",
+    "apps/portal/src/components/dashboard-v2/home/mock.ts": "fa35df52bb09b17e",
     "apps/portal/src/components/dashboard-v2/home/ui.tsx": "9b067ab48f8e926e",
     "apps/portal/src/components/dashboard-v2/money-at-risk.tsx": "7de52ec600f13060",
     "apps/portal/src/components/dashboard-v2/needs-you-now.tsx": "63d4b4dd69ef26e0",
     "apps/portal/src/components/dashboard-v2/on-the-move-today.tsx": "a4af9d4ff9f47852",
-    "apps/portal/src/components/dashboard-v2/setup-guide.tsx": "cb34bcee859006b6",
+    "apps/portal/src/components/dashboard-v2/setup-guide.tsx": "d6420ca0e3a11641",
     "apps/portal/src/components/dashboard-v2/where-you-stand.tsx": "9fb55e2583fbee96",
     "apps/portal/src/components/dashboard/accounting-connection-expired-banner.tsx": "efc903e1fc298413",
     "apps/portal/src/components/dashboard/action-items.tsx": "c3000603ddec853e",
@@ -34214,7 +36493,11 @@
     "apps/portal/src/components/dashboard/revenue-chart.tsx": "6e21b5895c8f1dea",
     "apps/portal/src/components/dashboard/setup-hub.tsx": "60ee3d2c38e21664",
     "apps/portal/src/components/dashboard/setup-reminder-dialog.tsx": "a547f519e0e83e83",
-    "apps/portal/src/components/enquiries/enquiry-detail-drawer.tsx": "b090fb32a51f0781",
+    "apps/portal/src/components/dev/dev-page.tsx": "61eb3cd80bfd1ae1",
+    "apps/portal/src/components/dev/empty-state-preview.tsx": "15161f5363f7ad38",
+    "apps/portal/src/components/empty-states/lean-empty-states.tsx": "519ecd28bae52594",
+    "apps/portal/src/components/empty-states/teaching-empty-state.tsx": "65091a497c65fe06",
+    "apps/portal/src/components/enquiries/enquiry-detail-drawer.tsx": "4ddbb683e373a6e5",
     "apps/portal/src/components/expenses/datetime-picker.tsx": "4445a70168314283",
     "apps/portal/src/components/expenses/expense-ai-summary.tsx": "adfca556d12b4f41",
     "apps/portal/src/components/expenses/expense-categories-dialog.tsx": "97eb4512268e3f66",
@@ -34224,6 +36507,7 @@
     "apps/portal/src/components/expenses/expense-pie-chart.tsx": "f10c8b0655508161",
     "apps/portal/src/components/expenses/expense-tab-panel.tsx": "91b4885d4b8c3e8d",
     "apps/portal/src/components/expenses/expense-table.tsx": "ab35ebef934d381c",
+    "apps/portal/src/components/explainers/explainer.tsx": "91972fe2ed47350d",
     "apps/portal/src/components/feedback/feedback-dialog.tsx": "3ae842a4cc2e7f81",
     "apps/portal/src/components/feedback/feedback-force-prompt.tsx": "5f2c5e4168c32fbc",
     "apps/portal/src/components/fines/add-fine-dialog.tsx": "9ba2bf8cef1712a9",
@@ -34271,7 +36555,7 @@
     "apps/portal/src/components/leads/attach-automation-dropdown.tsx": "a30647ac5442a08b",
     "apps/portal/src/components/leads/blacklist-confirm-dialog.tsx": "017d7e70754851ae",
     "apps/portal/src/components/leads/convert-to-rental-dialog.tsx": "5b9bba9630a6d66d",
-    "apps/portal/src/components/leads/lead-activity-timeline.tsx": "164fc1b9121ec853",
+    "apps/portal/src/components/leads/lead-activity-timeline.tsx": "5ce9194512b8e4e6",
     "apps/portal/src/components/leads/lead-ai-next-action.tsx": "3905b88c92464067",
     "apps/portal/src/components/leads/lead-automations-panel.tsx": "472d8b6e465a76a3",
     "apps/portal/src/components/leads/lead-board-column.tsx": "50d607a9e9573cfd",
@@ -34286,11 +36570,13 @@
     "apps/portal/src/components/leads/lead-message-bubble.tsx": "e5c2376288afc3b7",
     "apps/portal/src/components/leads/lead-notes-list.tsx": "a59809c079f4b399",
     "apps/portal/src/components/leads/lead-workspace.tsx": "8de7f20eed6e6d03",
-    "apps/portal/src/components/leads/new-lead-dialog.tsx": "255c7d6b0e6487ac",
+    "apps/portal/src/components/leads/new-lead-dialog.tsx": "0af53c469f78ee09",
     "apps/portal/src/components/leads/offer-builder-dialog.tsx": "db62cd05677472e6",
     "apps/portal/src/components/legal/terms-consent.tsx": "7d6a01ee92afae9f",
     "apps/portal/src/components/migration/constants.ts": "cd4d558fd73c7fa3",
     "apps/portal/src/components/migration/migration-blocker-dialog.tsx": "4aeb25313a543872",
+    "apps/portal/src/components/onboarding/first-rental-tour.tsx": "92477bfc896cf002",
+    "apps/portal/src/components/onboarding/first-run-wizard.tsx": "fc2a14d1a57fcc12",
     "apps/portal/src/components/payments/SquareCardForm.tsx": "140a6d277a353426",
     "apps/portal/src/components/payments/payment-filters.tsx": "a8695ac6ec836fb3",
     "apps/portal/src/components/payments/payment-links-panel.tsx": "bbe452eedec68e71",
@@ -34308,16 +36594,37 @@
     "apps/portal/src/components/rentals-v2/booking-mode-selector.tsx": "930e02ea841d74cc",
     "apps/portal/src/components/rentals-v2/customer-step.tsx": "491d39d42a121afe",
     "apps/portal/src/components/rentals-v2/rental-create-v2.tsx": "e99a5275e52458ff",
-    "apps/portal/src/components/rentals-v2/rental-onboarding-shell.tsx": "2c6ccaaa9d47736e",
-    "apps/portal/src/components/rentals-v2/rentals-filter-bar.tsx": "906708a87b004bec",
-    "apps/portal/src/components/rentals-v2/rentals-filter-panel.tsx": "8ac11a156ecd4004",
-    "apps/portal/src/components/rentals-v2/rentals-list-v2.tsx": "dfc802bfcdbbbd3a",
-    "apps/portal/src/components/rentals-v2/rentals-overview.tsx": "e6643208305b20dd",
+    "apps/portal/src/components/rentals-v2/rental-detail/_kit.tsx": "9c218a385f3592c9",
+    "apps/portal/src/components/rentals-v2/rental-detail/multi-period.ts": "c3d9bc7a936fab39",
+    "apps/portal/src/components/rentals-v2/rental-detail/payments-actions.tsx": "6c8b6eef2ddb9969",
+    "apps/portal/src/components/rentals-v2/rental-detail/payments-model.ts": "fbc1f60c33244a76",
+    "apps/portal/src/components/rentals-v2/rental-detail/payments-segments.tsx": "c7c632a24ad9e759",
+    "apps/portal/src/components/rentals-v2/rental-detail/rail-activity.tsx": "777b8fdae4ffd2cc",
+    "apps/portal/src/components/rentals-v2/rental-detail/rail-extensions.tsx": "642153d79ab624d5",
+    "apps/portal/src/components/rentals-v2/rental-detail/rail-messages.tsx": "2acaebd7dbda27b4",
+    "apps/portal/src/components/rentals-v2/rental-detail/rental-detail-v2.tsx": "c3a3661c3579137d",
+    "apps/portal/src/components/rentals-v2/rental-detail/right-rail.tsx": "178eab9b17c515d7",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-agreement.tsx": "40adadc71c5b7f5c",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-customer.tsx": "dfd912da85ec41be",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-extras.tsx": "f97bca67a8f6edca",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-handover.tsx": "f843b810704c3fc4",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-insurance.tsx": "a8d71a5bc19deab8",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-payments.tsx": "315ff1de5e3be479",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-vehicle.tsx": "7f2433ed020838e8",
+    "apps/portal/src/components/rentals-v2/rental-detail/stage-when-where.tsx": "6a65c96438c5e8aa",
+    "apps/portal/src/components/rentals-v2/rental-detail/stages.ts": "603c5fb35bab3bc6",
+    "apps/portal/src/components/rentals-v2/rental-detail/use-rental-detail-v2.ts": "fc08d5254e2c0bbb",
+    "apps/portal/src/components/rentals-v2/rental-onboarding-shell.tsx": "683cd700e396e896",
+    "apps/portal/src/components/rentals-v2/rentals-filter-bar.tsx": "e2b50a0225c5c71c",
+    "apps/portal/src/components/rentals-v2/rentals-filter-panel.tsx": "9d3844d892b77d07",
+    "apps/portal/src/components/rentals-v2/rentals-list-v2.tsx": "84f0a5382bf41f17",
+    "apps/portal/src/components/rentals-v2/rentals-overview-flip.tsx": "3e33c14cf7effa8c",
+    "apps/portal/src/components/rentals-v2/rentals-overview.tsx": "36f04f60b25e147f",
     "apps/portal/src/components/rentals-v2/rentals-request-chips.tsx": "61618703a74314c2",
-    "apps/portal/src/components/rentals-v2/vehicle-step.tsx": "b6b5b1f7acd3e032",
+    "apps/portal/src/components/rentals-v2/vehicle-step.tsx": "09cc08eeabea0efa",
     "apps/portal/src/components/rentals/AdminExtendRentalDialog.tsx": "19a469cf2667d3b2",
     "apps/portal/src/components/rentals/AgreementTimeline.tsx": "de79fe6ea77672ff",
-    "apps/portal/src/components/rentals/ExtensionRequestDialog.tsx": "79f6ffa30ed4705b",
+    "apps/portal/src/components/rentals/ExtensionRequestDialog.tsx": "6c713ea1cb95f3fc",
     "apps/portal/src/components/rentals/InstallmentPlanCard.tsx": "6141ad6ecac7c9fb",
     "apps/portal/src/components/rentals/InsuranceTimeline.tsx": "4d6f2f643619d4ea",
     "apps/portal/src/components/rentals/VehicleConflictDialog.tsx": "cc2d6a849ccdaeb9",
@@ -34461,27 +36768,28 @@
     "apps/portal/src/components/shared/forms/currency-input.tsx": "bd2a01d25959dfb1",
     "apps/portal/src/components/shared/forms/date-picker-input.tsx": "a6864195ac8918f5",
     "apps/portal/src/components/shared/forms/rental-date-picker.tsx": "381a006e4f961251",
-    "apps/portal/src/components/shared/layout/app-sidebar-v2.tsx": "adff5b8e8ab74450",
-    "apps/portal/src/components/shared/layout/app-sidebar.tsx": "36f3d0331d39360a",
+    "apps/portal/src/components/shared/layout/app-sidebar-v2.tsx": "4b78a2c4a441b705",
+    "apps/portal/src/components/shared/layout/app-sidebar.tsx": "4bce2b7f65986dac",
     "apps/portal/src/components/shared/layout/avatar-crop-dialog.tsx": "4cf2533a54b712b1",
     "apps/portal/src/components/shared/layout/bonzah-balance.tsx": "6672ef4c09ea8061",
     "apps/portal/src/components/shared/layout/brand-logo.tsx": "216c838613563149",
     "apps/portal/src/components/shared/layout/credit-balance.tsx": "1d69e3c2d50204ac",
-    "apps/portal/src/components/shared/layout/dock-sheets.tsx": "c6ea2b89c2f5c49c",
+    "apps/portal/src/components/shared/layout/dev-section.tsx": "d20bdda2a6fa7ff2",
+    "apps/portal/src/components/shared/layout/dock-sheets.tsx": "37e104ee6d51eb55",
     "apps/portal/src/components/shared/layout/dynamic-theme-provider.tsx": "4aac764a381725ea",
     "apps/portal/src/components/shared/layout/global-search.tsx": "93e5ce802827ed5b",
     "apps/portal/src/components/shared/layout/header-search.tsx": "b808652bc26d19f8",
-    "apps/portal/src/components/shared/layout/hero-typed-headline.tsx": "c6e8c06f9c6feb2d",
+    "apps/portal/src/components/shared/layout/hero-typed-headline.tsx": "983d58b74dec641f",
     "apps/portal/src/components/shared/layout/layout.tsx": "392b95ea91cf1cc7",
     "apps/portal/src/components/shared/layout/notification-bell.tsx": "87c323998bdcfe0c",
     "apps/portal/src/components/shared/layout/org-switcher.tsx": "f2738b6c2d58ef8c",
-    "apps/portal/src/components/shared/layout/quick-dock.tsx": "692d4c4c5b5b7dd5",
+    "apps/portal/src/components/shared/layout/quick-dock.tsx": "8a886833b13025ff",
     "apps/portal/src/components/shared/layout/sidebar-customizer-dialog.tsx": "396e40e7c424d028",
     "apps/portal/src/components/shared/layout/sidebar-promo.tsx": "83635e765a02a0a9",
     "apps/portal/src/components/shared/layout/sidebar-search-scene.tsx": "47276521de3894db",
     "apps/portal/src/components/shared/layout/tenant-not-found.tsx": "e5e97ff13677c0ba",
     "apps/portal/src/components/shared/layout/theme-toggle.tsx": "86a8e1986856e1b2",
-    "apps/portal/src/components/shared/layout/user-menu-v2.tsx": "e691a373f41202dc",
+    "apps/portal/src/components/shared/layout/user-menu-v2.tsx": "a8e591bc3b84bc01",
     "apps/portal/src/components/shared/layout/user-menu.tsx": "509c9adc70e413c3",
     "apps/portal/src/components/shared/rental-picker.tsx": "63074b243c5ddac3",
     "apps/portal/src/components/shared/status/fine-status-badge.tsx": "ae483e50ea619e64",
@@ -34628,6 +36936,20 @@
     "apps/portal/src/components/vehicle-owners/create-payout-dialog.tsx": "6718a600ec48eafa",
     "apps/portal/src/components/vehicle-owners/owner-form-dialog.tsx": "b956f5c86a523ebf",
     "apps/portal/src/components/vehicle-owners/record-payment-dialog.tsx": "18a46aaab42e939b",
+    "apps/portal/src/components/vehicles-v2/kit.tsx": "3a91c86b5f7d33d9",
+    "apps/portal/src/components/vehicles-v2/overview-rail.tsx": "a45844d7e094729e",
+    "apps/portal/src/components/vehicles-v2/sections.ts": "8819302f6378f72e",
+    "apps/portal/src/components/vehicles-v2/tab-addons.tsx": "44c04bc813b3d6e0",
+    "apps/portal/src/components/vehicles-v2/tab-availability.tsx": "15ee228598a06d57",
+    "apps/portal/src/components/vehicles-v2/tab-keys.tsx": "94f4b29f514e8ba9",
+    "apps/portal/src/components/vehicles-v2/tab-listing.tsx": "4826c999c07588b6",
+    "apps/portal/src/components/vehicles-v2/tab-money.tsx": "2089432ec666f783",
+    "apps/portal/src/components/vehicles-v2/tab-pickup.tsx": "1af4b1ea47e48acb",
+    "apps/portal/src/components/vehicles-v2/tab-rates.tsx": "dcf45bdab45b6f55",
+    "apps/portal/src/components/vehicles-v2/tab-upkeep.tsx": "96c88af2285037ab",
+    "apps/portal/src/components/vehicles-v2/tab-vehicle.tsx": "912e8a78398bbe0e",
+    "apps/portal/src/components/vehicles-v2/use-vehicle-record.ts": "18ceb81b0641b012",
+    "apps/portal/src/components/vehicles-v2/vehicle-detail-v2.tsx": "e4f12430169363c6",
     "apps/portal/src/components/vehicles/acquisition-badge.tsx": "be20bd76e88e0ebc",
     "apps/portal/src/components/vehicles/add-service-record-dialog.tsx": "e70e5318e7f60c3b",
     "apps/portal/src/components/vehicles/add-vehicle-dialog.tsx": "37ec2a5dcdac037a",
@@ -34657,7 +36979,7 @@
     "apps/portal/src/components/vehicles/vehicle-photo-thumbnail.tsx": "676db386a633c937",
     "apps/portal/src/components/vehicles/vehicle-photo-upload.tsx": "a82f928bc73eaa1e",
     "apps/portal/src/components/vehicles/vehicle-plates-panel.tsx": "940f8058db096d22",
-    "apps/portal/src/components/vehicles/vehicle-status-badge.tsx": "9ad8b7832ac3855d",
+    "apps/portal/src/components/vehicles/vehicle-status-badge.tsx": "4903c63e50a31664",
     "apps/portal/src/components/vehicles/vehicle-undo-disposal-dialog.tsx": "55ad2ee23bc99c24",
     "apps/portal/src/components/vehicles/warranty-status-chip.tsx": "c01973ab6a7100cb",
     "apps/portal/src/components/voice/global-voice-call-provider.tsx": "7b00dac8e35739b7",
@@ -34667,8 +36989,8 @@
     "apps/portal/src/components/website-content/carousel-images-editor.tsx": "c2d3b7c94f68a995",
     "apps/portal/src/components/website-content/carousel-media-editor.tsx": "f64b9e189604da28",
     "apps/portal/src/components/website-content/contact-card-editor.tsx": "6c0db7cdc9c4da86",
-    "apps/portal/src/components/website-content/contact-form-editor.tsx": "cf95c3e869211646",
-    "apps/portal/src/components/website-content/contact-info-editor.tsx": "37b9c45aee25fea1",
+    "apps/portal/src/components/website-content/contact-form-editor.tsx": "7969aeed1211a52e",
+    "apps/portal/src/components/website-content/contact-info-editor.tsx": "cb618608cc14b3d9",
     "apps/portal/src/components/website-content/cta-editor.tsx": "8e863f4289b8109d",
     "apps/portal/src/components/website-content/empty-state-editor.tsx": "299ab708e8c47846",
     "apps/portal/src/components/website-content/extras-editor.tsx": "86f2643f96d2058a",
@@ -34746,13 +37068,16 @@
     "apps/portal/src/hooks/use-chat-messages.ts": "705a86c293767aa3",
     "apps/portal/src/hooks/use-chat.ts": "3e6619401e40e4f4",
     "apps/portal/src/hooks/use-cmd-verification.ts": "3d6af152a5c55057",
+    "apps/portal/src/hooks/use-cms-draft-write.ts": "49d391ce5c504326",
     "apps/portal/src/hooks/use-cms-media.ts": "f5936fda3bc73d76",
     "apps/portal/src/hooks/use-cms-page-sections.ts": "0e67969024beae4f",
     "apps/portal/src/hooks/use-cms-pages.ts": "087b0a3deb509ae4",
+    "apps/portal/src/hooks/use-cms-row-write.ts": "7e76bacee411e1a4",
+    "apps/portal/src/hooks/use-cms-section-write.ts": "4f95b068a9895467",
     "apps/portal/src/hooks/use-cms-versions.ts": "3d42539c39527285",
     "apps/portal/src/hooks/use-conversation-messages.ts": "eaa3cb9bac223e22",
     "apps/portal/src/hooks/use-conversation.ts": "ec777ce871393044",
-    "apps/portal/src/hooks/use-credit-wallet.ts": "d9ccc001c0538a64",
+    "apps/portal/src/hooks/use-credit-wallet.ts": "12f8d7d7e60255c3",
     "apps/portal/src/hooks/use-customer-active-rentals.ts": "3e9b90d9bfb8c3c9",
     "apps/portal/src/hooks/use-customer-balance.ts": "d0310e200aa03c74",
     "apps/portal/src/hooks/use-customer-blocking.ts": "631c1b04598fdb02",
@@ -34777,7 +37102,7 @@
     "apps/portal/src/hooks/use-email-notification-prefs.ts": "7c32ea918dc67f73",
     "apps/portal/src/hooks/use-email-templates.ts": "c03563d834707ca3",
     "apps/portal/src/hooks/use-enhanced-rentals.ts": "0fc6d99094b58793",
-    "apps/portal/src/hooks/use-enquiries.ts": "9531f51f6341aca3",
+    "apps/portal/src/hooks/use-enquiries.ts": "0106c43307f1c982",
     "apps/portal/src/hooks/use-enquiry-stats.ts": "8e890898184d730d",
     "apps/portal/src/hooks/use-esign-credit-alert-config.ts": "e12a569d07f99cca",
     "apps/portal/src/hooks/use-esign-usage.ts": "9b9754fba0d9a5eb",
@@ -34791,11 +37116,14 @@
     "apps/portal/src/hooks/use-feedback-after-review.ts": "06caeb77122cc464",
     "apps/portal/src/hooks/use-feedback-settings.ts": "eff4ab9a957eb8f4",
     "apps/portal/src/hooks/use-fines-data.ts": "f04f9e8c4df6702c",
+    "apps/portal/src/hooks/use-first-rental-tour.ts": "8a0199a22a667846",
+    "apps/portal/src/hooks/use-first-run-wizard.ts": "28dc381985366612",
     "apps/portal/src/hooks/use-fleet-daily-prices.ts": "1afe88e005211209",
     "apps/portal/src/hooks/use-fleet-health-import.ts": "3f6d658b5925dc89",
     "apps/portal/src/hooks/use-fleet-health.ts": "2505f499323ed757",
     "apps/portal/src/hooks/use-fleet-quote.ts": "603a58811eba299f",
-    "apps/portal/src/hooks/use-gig-driver-images.ts": "0835eee1a0523071",
+    "apps/portal/src/hooks/use-forced-empty-state.ts": "bf476aacfd05b172",
+    "apps/portal/src/hooks/use-gig-driver-images.ts": "d920274b99e3c2c4",
     "apps/portal/src/hooks/use-global-search.ts": "63ab5fd54a718109",
     "apps/portal/src/hooks/use-go-live-request.ts": "f00337a7e28beb35",
     "apps/portal/src/hooks/use-google-maps-loader.ts": "acdfda6f5b453375",
@@ -34865,7 +37193,7 @@
     "apps/portal/src/hooks/use-review-tags.ts": "40c41ad93bf99b4f",
     "apps/portal/src/hooks/use-send-lead-message.ts": "54e0e6ed049d19f5",
     "apps/portal/src/hooks/use-session-guard.ts": "9fb84bd84197fafe",
-    "apps/portal/src/hooks/use-setup-guide.ts": "1b40ea77f8c3f543",
+    "apps/portal/src/hooks/use-setup-guide.ts": "398a454c38c5a86e",
     "apps/portal/src/hooks/use-setup-reminder.ts": "e8fc35ed32eb5a60",
     "apps/portal/src/hooks/use-setup-status.ts": "c1f3af0b865d9b6b",
     "apps/portal/src/hooks/use-square-connection.ts": "ee37a311c176193c",
@@ -34903,6 +37231,7 @@
     "apps/portal/src/hooks/use-vehicle-swap.ts": "70d7fdf6abe699ff",
     "apps/portal/src/hooks/use-voice-call.ts": "0f527f3afb4f04c7",
     "apps/portal/src/hooks/use-void-payment-link.ts": "d493ca2abd77f550",
+    "apps/portal/src/hooks/use-website-tenant-settings.ts": "b2d3b8b61094a9af",
     "apps/portal/src/hooks/use-weekend-pricing.ts": "1ae76bdaca1d4219",
     "apps/portal/src/hooks/use-welcome-pack.ts": "58a4b7d6aac58f7e",
     "apps/portal/src/hooks/use-whatsapp-meta.ts": "b0403e1d0f397f21",
@@ -34934,14 +37263,20 @@
     "apps/portal/src/lib/customers-csv.ts": "a17e06303d2afc20",
     "apps/portal/src/lib/date-utils.ts": "78690366b320ce7a",
     "apps/portal/src/lib/default-agreement-template.ts": "d2bdc7d1271f759f",
-    "apps/portal/src/lib/default-email-templates.ts": "b5ff8a98ecab171b",
+    "apps/portal/src/lib/default-email-templates.ts": "b047c57f6c975db6",
     "apps/portal/src/lib/delivery-tiers.ts": "ea72fd5157dc002d",
+    "apps/portal/src/lib/dev-actions.ts": "2ef9d600aa6dc155",
+    "apps/portal/src/lib/dev-overrides.ts": "01ef7764ab8fc87e",
     "apps/portal/src/lib/edge-error.ts": "aa0a3118edc4fcc7",
     "apps/portal/src/lib/email-template-variables.ts": "618de3c216c12557",
     "apps/portal/src/lib/esign-credit-alert.ts": "81fe394466085a09",
     "apps/portal/src/lib/expense-utils.ts": "76514497793235a9",
+    "apps/portal/src/lib/explainers.ts": "562b0cb2cbabe73d",
     "apps/portal/src/lib/feature-access.ts": "49d7d9635393a3dd",
     "apps/portal/src/lib/feedback-throttle.ts": "23f8ecfcd3619d14",
+    "apps/portal/src/lib/first-rental-tour.ts": "23d267a2ae861b5d",
+    "apps/portal/src/lib/first-run-arrival.ts": "130d279749b19635",
+    "apps/portal/src/lib/first-run-questions.ts": "7d7dda10f6781470",
     "apps/portal/src/lib/fleet-health-csv.ts": "755c2db881ebd74c",
     "apps/portal/src/lib/fleet-health-units.ts": "bcb7ec4dbc7959dd",
     "apps/portal/src/lib/fleet-quote.ts": "478a3765015e9dda",
@@ -34951,8 +37286,8 @@
     "apps/portal/src/lib/insurance-utils.ts": "1ead19997ad92563",
     "apps/portal/src/lib/invoice-utils.ts": "1cc3dd532698690a",
     "apps/portal/src/lib/lead-stage-machine.ts": "6d49ae810b6ce6cf",
-    "apps/portal/src/lib/lean-areas.ts": "2e70a8d040fde2f0",
-    "apps/portal/src/lib/legal/urls.ts": "615f708b43e3e853",
+    "apps/portal/src/lib/lean-areas.ts": "1b1faaa3e09c47b8",
+    "apps/portal/src/lib/legal/urls.ts": "d4c680b67ff93beb",
     "apps/portal/src/lib/mileage-utils.ts": "b6129f444c2763ed",
     "apps/portal/src/lib/mot-tax-utils.ts": "bbc2b2ba26ca45e9",
     "apps/portal/src/lib/nav-preferences.ts": "f28bb984b8de6061",
@@ -34961,7 +37296,7 @@
     "apps/portal/src/lib/payment-provider.tsx": "7d4e61aae334b3f7",
     "apps/portal/src/lib/payment-status.ts": "a7ed8308fbb14e9e",
     "apps/portal/src/lib/pdf-to-image.ts": "f68d5281009c14b9",
-    "apps/portal/src/lib/permissions.ts": "992e29bf66390e08",
+    "apps/portal/src/lib/permissions.ts": "bc11f1f0d02f60fe",
     "apps/portal/src/lib/push.ts": "c53d5a19c8fa99b0",
     "apps/portal/src/lib/reminder-generator.ts": "8fbb62992f02b75f",
     "apps/portal/src/lib/reminder-notifier.ts": "5e4265422845ca72",
@@ -34973,6 +37308,7 @@
     "apps/portal/src/lib/services/index.ts": "faa86524a6f8ddc3",
     "apps/portal/src/lib/services/notification-service.ts": "c5aead0510939fac",
     "apps/portal/src/lib/services/sms-service.ts": "11e6518dd5b20588",
+    "apps/portal/src/lib/site-v2-url.ts": "46f8fcb8743d3c76",
     "apps/portal/src/lib/stripe-connect-status.ts": "5518a6703164c969",
     "apps/portal/src/lib/template-variables.ts": "eab4ef12b13668da",
     "apps/portal/src/lib/tenant-logo-sync.ts": "ecea0c13ea475533",
@@ -34983,12 +37319,13 @@
     "apps/portal/src/lib/usage-categories.ts": "279b178ecb6a0644",
     "apps/portal/src/lib/utils.ts": "d1f1e0d62cb8d8d1",
     "apps/portal/src/lib/v2-context.tsx": "4c78b1026b270c13",
-    "apps/portal/src/lib/v2.ts": "4b6d328c682d03ef",
+    "apps/portal/src/lib/v2.ts": "7caeb523d6a0fb68",
     "apps/portal/src/lib/vehicle-utils.ts": "88201ce67229b4d7",
     "apps/portal/src/lib/verification-provider.ts": "e240ab3cfeb1bf9f",
     "apps/portal/src/middleware/tenantMiddleware.ts": "28248e4cf5dad16d",
-    "apps/portal/src/proxy.ts": "8d7966da03d9e4f5",
+    "apps/portal/src/proxy.ts": "b1a05e5475223bc0",
     "apps/portal/src/stores/auth-store.ts": "7a24153312d806a7",
+    "apps/portal/src/stores/cms-outline-store.ts": "d83abaf567830e69",
     "apps/portal/src/stores/feedback-store.ts": "a44da166706c2aa7",
     "apps/portal/src/stores/settings-store.ts": "545a760f6eb4f498",
     "apps/portal/src/types/blog.ts": "64f10ea5f508eaa7",
@@ -35005,14 +37342,15 @@
     "apps/web/src/actions/strategy-call.ts": "2c253ce3c4efc6ac",
     "apps/web/src/app/(marketing)/layout.tsx": "9167064b6cc4c324",
     "apps/web/src/app/(marketing)/page.tsx": "e44be3ca86b69820",
-    "apps/web/src/app/(marketing)/privacy/page.tsx": "d74c99c2b9d4007d",
+    "apps/web/src/app/(marketing)/privacy/page.tsx": "b3be07d57791ace9",
     "apps/web/src/app/(marketing)/security/page.tsx": "c41131a884d4242c",
     "apps/web/src/app/(marketing)/terms/page.tsx": "0447f66618024218",
     "apps/web/src/app/api/strategy-call/booking/route.ts": "087aa2c7b1f6ab4a",
     "apps/web/src/app/api/strategy-call/events/route.ts": "f918442b49ce0d8d",
+    "apps/web/src/app/demo-signup/page.tsx": "7923d0d30d35dcdb",
     "apps/web/src/app/layout.tsx": "3d869628c757489c",
     "apps/web/src/app/robots.ts": "b3fa82e48c7220c2",
-    "apps/web/src/app/signup-preview/page.tsx": "2796c631a259aca5",
+    "apps/web/src/app/signup-preview/page.tsx": "f8dc47fd1cc5f23e",
     "apps/web/src/app/sitemap.ts": "602ec79d2679cf81",
     "apps/web/src/app/strategy-call/confirmation/confirmation-client.tsx": "3aba49de2855f397",
     "apps/web/src/app/strategy-call/confirmation/legacy-confirmation.tsx": "3adcbad74605c5d9",
@@ -35026,24 +37364,25 @@
     "apps/web/src/components/layout/header.tsx": "e79973c9f4771f6f",
     "apps/web/src/components/legal/interim-platform-terms.tsx": "d0816c73438cf704",
     "apps/web/src/components/legal/platform-tos-document.tsx": "5322f6265e0e08b4",
-    "apps/web/src/components/onboarding/onboarding-api.ts": "10a987272bf0629d",
-    "apps/web/src/components/onboarding/onboarding-dialog.tsx": "5daf825a0555a2ce",
-    "apps/web/src/components/onboarding/onboarding-provider.tsx": "6a300eeaceebfe6c",
-    "apps/web/src/components/onboarding/onboarding-types.ts": "a839609cd5ae526c",
+    "apps/web/src/components/onboarding/onboarding-api.ts": "7a56710465e1a4cc",
+    "apps/web/src/components/onboarding/onboarding-dialog.tsx": "87201209ed36f0c7",
+    "apps/web/src/components/onboarding/onboarding-provider.tsx": "af922604705dea5d",
+    "apps/web/src/components/onboarding/onboarding-types.ts": "c59710556f8c9581",
     "apps/web/src/components/onboarding/password-toggle.tsx": "dfa99fdcd0f464c8",
-    "apps/web/src/components/onboarding/provisioning-screen.tsx": "2796bdc9e4336b15",
-    "apps/web/src/components/onboarding/steps/account-step.tsx": "0d35222034af360c",
-    "apps/web/src/components/onboarding/steps/business-step.tsx": "30bdc97bb6a13954",
+    "apps/web/src/components/onboarding/provisioning-screen.tsx": "884bab4957261071",
+    "apps/web/src/components/onboarding/steps/account-step.tsx": "0440923cc2967b29",
     "apps/web/src/components/onboarding/steps/password-reset-panel.tsx": "c420d74fb1b643d1",
     "apps/web/src/components/onboarding/steps/payment-step.tsx": "d29d76648de607bd",
     "apps/web/src/components/onboarding/stripe-prewarm.ts": "72a347e20abf7787",
-    "apps/web/src/components/pricing/plan-card.tsx": "f2bbdda26a1c026c",
+    "apps/web/src/components/onboarding/tenant-draft.ts": "267d88f975c51f34",
+    "apps/web/src/components/onboarding/tenant-identity-fields.tsx": "d93d301cb87494fb",
+    "apps/web/src/components/pricing/plan-card.tsx": "58d2ec20c1cf23ff",
     "apps/web/src/components/sections/credibility-strip.tsx": "d31367c5c9ce59ce",
     "apps/web/src/components/sections/cta-band.tsx": "9a7f9a9d3b9dafab",
     "apps/web/src/components/sections/faq-section.tsx": "88c7d0ba6e189f4e",
     "apps/web/src/components/sections/hero.tsx": "c7babe27eddd45f4",
     "apps/web/src/components/sections/operations-dashboard.tsx": "820fa506ebc486d8",
-    "apps/web/src/components/sections/pricing.tsx": "a9895da4c11671e1",
+    "apps/web/src/components/sections/pricing.tsx": "04a3e2545a3aaf48",
     "apps/web/src/components/sections/problem-section.tsx": "2c4cff69f0fda126",
     "apps/web/src/components/sections/product-showcase.tsx": "0ff8a708c6b2c511",
     "apps/web/src/components/sections/social-proof.tsx": "d149e59f068a474f",
@@ -35052,6 +37391,11 @@
     "apps/web/src/components/shared/json-ld.tsx": "baa761ea49289f9a",
     "apps/web/src/components/shared/theme-provider.tsx": "3e6cde377550aa2d",
     "apps/web/src/components/shared/theme-toggle.tsx": "108a9cd67634e5aa",
+    "apps/web/src/components/signup-journey/signup-journey.tsx": "070560edfa884ae8",
+    "apps/web/src/components/signup-journey/steps/journey-account-step.tsx": "ccb34e4c6d75236a",
+    "apps/web/src/components/signup-journey/steps/journey-handoff-step.tsx": "62b2a77bfbc67c35",
+    "apps/web/src/components/signup-journey/steps/journey-payment-step.tsx": "0326d77e91500645",
+    "apps/web/src/components/signup-journey/steps/journey-verify-step.tsx": "bde944ee6248be44",
     "apps/web/src/components/strategy-call/booking-summary.tsx": "c15ac64d15f20c6d",
     "apps/web/src/components/strategy-call/confirmation-video.tsx": "2ed9882d4ad215ef",
     "apps/web/src/components/ui/accordion.tsx": "848c9181a1ea0726",
@@ -35071,7 +37415,8 @@
     "apps/web/src/lib/legal/platform-tos.ts": "c00b23a41493f354",
     "apps/web/src/lib/plans-server.ts": "68621cf376b54bd0",
     "apps/web/src/lib/plans.ts": "82a60fdb221b0d25",
-    "apps/web/src/lib/signup-validation.ts": "475333002fbbb1a0",
+    "apps/web/src/lib/signup-journey.ts": "da3bdd7d4794ea46",
+    "apps/web/src/lib/signup-validation.ts": "7b13015bc600e4fa",
     "apps/web/src/lib/strategy-call/booking.ts": "813e197554a4bd0c",
     "apps/web/src/lib/strategy-call/confirmation-content.test.ts": "a3b0dec4be858561",
     "apps/web/src/lib/strategy-call/confirmation-content.ts": "9f39fa955fa5cb4e",
@@ -35085,10 +37430,10 @@
     "apps/web/src/lib/strategy-call/supabase-admin.ts": "63d9c47e3602861e",
     "apps/web/src/lib/strategy-call/validation.test.ts": "ad3c31561ec8c2b8",
     "apps/web/src/lib/strategy-call/validation.ts": "14dcad00b3e4143a",
-    "apps/web/src/lib/supabase/browser.ts": "f67181a614c201fa",
+    "apps/web/src/lib/supabase/browser.ts": "03d892631314f368",
     "apps/web/src/lib/utils.ts": "7c8c3dfc0cdd370d",
     "apps/web/vitest.config.ts": "305cb39391bfe9e3",
-    "supabase/config.toml": "2951d40addf1d1ed",
+    "supabase/config.toml": "f44e20b0ad46e786",
     "supabase/migrations/20251219083413_remote_schema.sql": "5b04f08a8cfa6926",
     "supabase/migrations/20251219150000_fix_view_pl_by_vehicle_tenant_id.sql": "1b2a14f68630b363",
     "supabase/migrations/20251219160000_auto_seed_cms_pages_for_new_tenant.sql": "bd7104a3292184b0",
@@ -35474,6 +37819,8 @@
     "supabase/migrations/20260826120000_square_checkout_idempotency.sql": "1ba5027a0a3b678d",
     "supabase/migrations/20260826130000_square_cron_jobs.sql": "17be12e3670e7977",
     "supabase/migrations/20260827090000_tenant_chooses_provider_once.sql": "3ce6735e31910451",
-    "supabase/migrations/20260827093000_fix_provider_lock_trigger_scope.sql": "97c2acd4b2c2b0cd"
+    "supabase/migrations/20260827093000_fix_provider_lock_trigger_scope.sql": "97c2acd4b2c2b0cd",
+    "supabase/migrations/20260904120000_add_tenant_first_run.sql": "72b8430ee2111bc9",
+    "supabase/migrations/20260905140000_add_cms_section_draft_content.sql": "89c5c521af74824b"
   }
 }
