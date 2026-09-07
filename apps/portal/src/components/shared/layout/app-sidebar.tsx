@@ -212,7 +212,8 @@ export function AppSidebar() {
   // than being folded into the sentence.
   const paymentDueLabel = "Your payment is due.";
   // Past the window there are no days left to count down — say so.
-  const paymentDueDetail = isGraceExpired ? "Overdue" : `${graceDaysRemaining}d left`;
+  /* No countdown — same decision as the v2 rail. See app-sidebar-v2.tsx. */
+  const paymentDueDetail = isGraceExpired ? "Overdue" : "Action needed";
   const paymentDueClass = paymentDueCritical
     ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";

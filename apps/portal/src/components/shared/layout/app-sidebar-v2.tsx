@@ -381,7 +381,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const {
     isInGracePeriod,
     isGraceExpired,
-    graceDaysRemaining,
     graceSeverity,
   } = useTenantSubscription();
   const { isManager, canView, canViewSettings } = useManagerPermissions();
@@ -396,11 +395,17 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // surfaces flatly contradicting each other at the worst possible moment.
   const paymentDue = isInGracePeriod || isGraceExpired;
   const paymentDueCritical = graceSeverity === "critical" || isGraceExpired;
-  // The client's wording, verbatim. The countdown rides alongside it rather
-  // than being folded into the sentence.
+  // The client's wording, verbatim.
   const paymentDueLabel = "Your payment is due.";
-  // Past the window there are no days left to count down — say so.
-  const paymentDueDetail = isGraceExpired ? "Overdue" : `${graceDaysRemaining}d left`;
+  /**
+   * NO COUNTDOWN. This used to read "4d left", and the decision was taken to
+   * stop showing one: a countdown invites an operator to wait it out, it turns
+   * a fixable card problem into a deadline to manage, and the window itself is
+   * now a super admin setting that can change under them mid-count. The state
+   * is what matters, so the chip says which state they are in and the action
+   * stays one click away.
+   */
+  const paymentDueDetail = isGraceExpired ? "Overdue" : "Action needed";
   const paymentDueClass = paymentDueCritical
     ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
     : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400";

@@ -32,6 +32,8 @@ interface AdminSettings {
   maintenance_banner_message: string;
   maintenance_banner_type: 'info' | 'warning' | 'critical';
   subscription_gate_disabled: boolean;
+  /** Days a tenant keeps access after a failed payment, before the blocker. */
+  subscription_grace_days: number;
   updated_at?: string;
 }
 
@@ -43,6 +45,9 @@ export default function SettingsPage() {
     maintenance_banner_message: 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.',
     maintenance_banner_type: 'warning',
     subscription_gate_disabled: false,
+    // The window a tenant keeps working after a payment fails. 7 is what the
+    // column defaults to and what the product did before this was configurable.
+    subscription_grace_days: 7,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,6 +77,7 @@ export default function SettingsPage() {
           maintenance_banner_message: data.maintenance_banner_message || 'We are currently performing scheduled maintenance. Some features may be temporarily unavailable.',
           maintenance_banner_type: data.maintenance_banner_type || 'warning',
           subscription_gate_disabled: (data as any).subscription_gate_disabled ?? false,
+          subscription_grace_days: (data as any).subscription_grace_days ?? 7,
           updated_at: data.updated_at,
         });
       }
@@ -95,6 +101,7 @@ export default function SettingsPage() {
             maintenance_banner_message: settings.maintenance_banner_message,
             maintenance_banner_type: settings.maintenance_banner_type,
             subscription_gate_disabled: settings.subscription_gate_disabled,
+            subscription_grace_days: settings.subscription_grace_days,
             updated_at: new Date().toISOString(),
           } as any)
           .eq('id', settings.id);
@@ -110,6 +117,7 @@ export default function SettingsPage() {
             maintenance_banner_message: settings.maintenance_banner_message,
             maintenance_banner_type: settings.maintenance_banner_type,
             subscription_gate_disabled: settings.subscription_gate_disabled,
+            subscription_grace_days: settings.subscription_grace_days,
           } as any)
           .neq('id', settings.id);
       } else {
@@ -122,6 +130,7 @@ export default function SettingsPage() {
             maintenance_banner_message: settings.maintenance_banner_message,
             maintenance_banner_type: settings.maintenance_banner_type,
             subscription_gate_disabled: settings.subscription_gate_disabled,
+            subscription_grace_days: settings.subscription_grace_days,
           } as any)
           .select()
           .single();
@@ -366,6 +375,46 @@ export default function SettingsPage() {
                   {settings.subscription_gate_disabled ? 'Blocker Hidden' : 'Blocker Active'}
                 </Badge>
               </label>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Payment grace period — how long a tenant keeps access after a
+            failed payment, before the blocking dialog. This used to be
+            `const GRACE_DAYS = 7` in the portal, i.e. a deploy to change the
+            moment a paying business loses its own bookings. */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-base">Payment Grace Period</CardTitle>
+                <CardDescription className="mt-1">
+                  How long a tenant keeps full access after a subscription payment fails or an
+                  invoice goes unpaid. During the window they see a warning and a Pay now action;
+                  once it expires the blocking dialog appears. Tenants are never shown a countdown —
+                  only the state they are in. Applies to every tenant.
+                </CardDescription>
+              </div>
+              <div className="ml-4 shrink-0 text-right">
+                <select
+                  value={settings.subscription_grace_days}
+                  onChange={(e) =>
+                    setSettings({ ...settings, subscription_grace_days: Number(e.target.value) })
+                  }
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {[3, 7, 10, 14, 30].map((d) => (
+                    <option key={d} value={d}>
+                      {d} days
+                    </option>
+                  ))}
+                </select>
+                <Badge variant="outline" className="ml-2 whitespace-nowrap">
+                  {settings.subscription_grace_days === 0
+                    ? 'Blocks immediately'
+                    : `Blocks after ${settings.subscription_grace_days} days`}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
         </Card>

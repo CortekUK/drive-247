@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/stores/auth-store";
+import { useSubscriptionGraceDays } from "@/hooks/use-subscription-grace-days";
 import { toast } from "sonner";
 
 export interface TenantSubscription {
@@ -296,14 +297,19 @@ export function useTenantSubscription() {
   // ── Dunning / grace period ────────────────────────────────────────────────
   // A declined card must NOT lock an operator out of their business on day one.
   // Stripe moves the subscription to `past_due` and keeps retrying; we give the
-  // tenant 7 days to fix it, warning with escalating urgency, and only hard-block
-  // once that window closes.
+  // tenant a window to fix it and only hard-block once that window closes.
+  //
+  // HOW LONG IS A SUPER ADMIN SETTING, not a constant. It used to be
+  // `const GRACE_DAYS = 7` — a number deciding when a paying business loses
+  // access to its own bookings, changeable only by a deploy. It now comes from
+  // `admin_settings.subscription_grace_days`; see use-subscription-grace-days.ts
+  // for which row wins and what happens when the read fails.
   //
   // ANCHOR: the oldest still-open invoice, NOT current_period_end. When a charge
   // fails Stripe still rolls current_period_end forward to the next cycle, so
   // anchoring on it would put the deadline a month in the future and the block
   // would never fire. The unpaid invoice is the thing that is actually overdue.
-  const GRACE_DAYS = 7;
+  const GRACE_DAYS = useSubscriptionGraceDays();
   const isPastDue = subscriptionQuery.data?.status === "past_due";
 
   // A TICK, BECAUSE THE DEADLINE PASSES WITH NO DATA CHANGE.
@@ -407,7 +413,7 @@ export function useTenantSubscription() {
       ? Math.max(0, Math.ceil((graceEndsAt - Date.now()) / 86_400_000))
       : 0;
 
-  /** Inside the 7 days — warn, do not block. */
+  /** Inside the configured window — warn, do not block. */
   const isInGracePeriod = isPastDue && graceEndsAt != null && Date.now() < graceEndsAt;
 
   /**

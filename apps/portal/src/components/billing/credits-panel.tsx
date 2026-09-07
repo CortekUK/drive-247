@@ -87,7 +87,7 @@ const CATEGORY_ICONS: Record<string, any> = {
   verification: ShieldCheck,
 };
 
-function TransactionTypeBadge({ type, isTest }: { type: CreditTransaction["type"]; isTest: boolean }) {
+function TransactionTypeBadge({ type }: { type: CreditTransaction["type"] }) {
   const config: Record<string, { label: string; class: string }> = {
     purchase: { label: "Purchase", class: "text-green-500" },
     usage: { label: "Usage", class: "text-red-500" },
@@ -101,14 +101,9 @@ function TransactionTypeBadge({ type, isTest }: { type: CreditTransaction["type"
   return (
     <span className="flex items-center gap-1.5">
       <span className={`text-sm ${c.class}`}>{c.label}</span>
-      {isTest && (
-        <Badge
-          variant="outline"
-          className="border-orange-500/50 text-orange-500 text-[10px] px-1.5 py-0"
-        >
-          TEST
-        </Badge>
-      )}
+      {/* No TEST badge. Test-mode rows are filtered out of this list entirely
+          (see the transaction query), so a badge here would only ever label a
+          row that should not be on a customer's billing history at all. */}
     </span>
   );
 }
@@ -124,7 +119,6 @@ export function CreditsPanel() {
   const {
     wallet: realWallet,
     balance: realBalance,
-    testBalance: realTestBalance,
     isLowBalance,
     transactions: realTransactions,
     costs: realCosts,
@@ -147,7 +141,10 @@ export function CreditsPanel() {
   const hasRealCreditData =
     isLoading ||
     (!!realWallet &&
-      (realBalance > 0 || realTestBalance > 0 || realTransactions.length > 0)) ||
+      /* `test_balance` still counts as REAL data even though it is no longer
+         shown: a tenant holding only sandbox credits has a real wallet, and
+         treating them as empty would swap it for the sample preview. */
+      (realBalance > 0 || (realWallet.test_balance ?? 0) > 0 || realTransactions.length > 0)) ||
     realTransactions.length > 0;
   const previewActive = useBillingPreview(hasRealCreditData);
 
@@ -162,7 +159,6 @@ export function CreditsPanel() {
 
   const wallet = previewActive ? previewWallet : realWallet;
   const balance = previewActive ? previewWallet!.balance : realBalance;
-  const testBalance = previewActive ? previewWallet!.test_balance : realTestBalance;
   const transactions = previewActive ? previewTransactions : realTransactions;
   // Service costs are PLATFORM-wide, not per tenant — if real rates are
   // configured they are the honest thing to show even on the preview screen.
@@ -391,25 +387,16 @@ export function CreditsPanel() {
           </CardContent>
         </Card>
 
-        {/* Test Credits */}
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-yellow-500/30 bg-yellow-500/[0.06] dark:bg-yellow-500/[0.08]">
-          <CardContent className="p-6">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Test Credits</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold tracking-tight text-yellow-700 dark:text-yellow-300">{testBalance.toFixed(0)}</span>
-                <span className="text-sm text-yellow-600/60 dark:text-yellow-400/60">remaining</span>
-              </div>
-            </div>
+        {/* The "Test Credits" card stood here — a yellow panel showing a
+           sandbox balance that cannot be bought, next to the real one that
+           can. It is gone from the customer's view by decision: two balances
+           on a billing page is two answers to "how much have I got left", and
+           the sandbox one is an internal concept a paying operator has no use
+           for.
 
-            <div className="mt-5 pt-5 border-t">
-              <p className="text-xs text-muted-foreground">
-                Free sandbox credits for testing integrations in test mode. Cannot be purchased.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
+           The DATA is untouched. `test_balance`, `is_test_mode` and the
+           test-mode transactions all still exist and are still written — this
+           removes the customer-facing concept, not the infrastructure. */}
         {/* Service Costs */}
         <Card className="overflow-hidden">
           <CardContent className="p-6">
@@ -477,7 +464,7 @@ export function CreditsPanel() {
                         {formatDateTime(tx.created_at)}
                       </td>
                       <td className="py-2.5 px-4">
-                        <TransactionTypeBadge type={tx.type} isTest={tx.is_test_mode} />
+                        <TransactionTypeBadge type={tx.type} />
                       </td>
                       <td className="py-2.5 px-4 text-sm text-muted-foreground max-w-[300px] truncate">
                         {tx.description || "—"}
