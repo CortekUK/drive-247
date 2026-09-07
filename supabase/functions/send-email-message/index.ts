@@ -27,7 +27,12 @@ Deno.serve(async (req) => {
 
     if (!appUser) return errorResponse('User not found', 403);
 
-    const { channelId, customerId, content, tenantId: bodyTenantId } = await req.json();
+    /* `subject` and `metadata` are BOTH OPTIONAL and both new. Older clients
+       send neither and get exactly the behaviour they always got: the
+       "Message from <tenant>" subject below, and no metadata on the row. */
+    const {
+      channelId, customerId, content, tenantId: bodyTenantId, subject, metadata,
+    } = await req.json();
 
     if (!content) return errorResponse('content is required');
     if (!channelId || !customerId) return errorResponse('channelId and customerId are required');
@@ -72,7 +77,13 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: `${fromName} <${fromEmail}>`,
         to: [customer.email],
-        subject: `Message from ${fromName}`,
+        /* The composer's subject when it sent one. The fallback is the old
+           hardcoded line, so nothing that omits it changes. Trimmed and length
+           capped because this goes straight into a mail header. */
+        subject:
+          typeof subject === 'string' && subject.trim()
+            ? subject.trim().slice(0, 200)
+            : `Message from ${fromName}`,
         html: `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
           <p style="font-size: 15px; line-height: 1.6; color: #333;">${content.replace(/\n/g, '<br/>')}</p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
@@ -100,7 +111,16 @@ Deno.serve(async (req) => {
         channel: 'email',
         external_id: emailData.id || null,
         external_status: 'sent',
-        metadata: { email_to: customer.email },
+        /* Caller metadata first, then the fields this function owns — so a
+           booking reference attached in the composer survives, and email_to
+           cannot be overwritten by whatever the client sent. */
+        metadata: {
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
+          email_to: customer.email,
+          ...(typeof subject === 'string' && subject.trim()
+            ? { subject: subject.trim().slice(0, 200) }
+            : {}),
+        },
       })
       .select()
       .single();

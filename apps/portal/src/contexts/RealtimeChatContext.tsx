@@ -8,6 +8,12 @@ import { useAuthStore } from '@/stores/auth-store';
 
 export type MessageChannel = 'in_app' | 'sms' | 'email' | 'voice';
 
+/** What a send actually did. `error` is operator-readable, not a stack. */
+export interface SendResult {
+  ok: boolean;
+  error?: string;
+}
+
 // Event payload types matching the Socket.io API for backward compatibility
 interface NewMessagePayload {
   id: number;
@@ -61,7 +67,18 @@ interface RealtimeChatContextType {
   isConnected: boolean;
   joinRoom: (customerId: string) => void;
   leaveRoom: (customerId: string) => void;
-  sendMessage: (customerId: string, content: string, metadata?: Record<string, unknown>, channel?: MessageChannel) => void;
+  /**
+   * Send on a channel. RESOLVES TO A RESULT rather than void: every failure
+   * path in here used to console.error and return, so a caller could not tell
+   * a delivered message from a dropped one and every composer showed success
+   * unconditionally. Callers that ignore the return value are unaffected.
+   */
+  sendMessage: (
+    customerId: string,
+    content: string,
+    metadata?: Record<string, unknown>,
+    channel?: MessageChannel,
+  ) => Promise<SendResult>;
   markRead: (channelId: string) => void;
   sendTyping: (customerId: string, isTyping: boolean) => void;
   sendBulkMessage: (customerIds: string[], content: string) => void;
@@ -370,10 +387,10 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
 
   const sendMessage = useCallback(
     async (customerId: string, content: string, metadata?: Record<string, unknown>, channel: MessageChannel = 'in_app') => {
-      if (!tenant || !appUser) return;
+      if (!tenant || !appUser) return { ok: false, error: 'Not signed in.' };
 
       const channelId = await getOrCreateChannel(customerId);
-      if (!channelId) return;
+      if (!channelId) return { ok: false, error: 'Could not open a conversation for this customer.' };
 
       // For SMS / Email: call the edge function which handles delivery + DB insert
       if (channel === 'sms' || channel === 'email') {
@@ -385,12 +402,29 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
               customerId,
               content,
               tenantId: tenant.id,
+              /* METADATA USED NOT TO TRAVEL ON THESE TWO CHANNELS. The in-app
+                 branch below has always persisted it, so a booking attached to
+                 an SMS or an email was accepted by the composer, sent, and then
+                 silently missing from the message that landed. Both functions
+                 now persist whatever arrives; both ignore it when absent, so
+                 older clients are unaffected. */
+              metadata: metadata || {},
+              /* Email only, and optional: send-email-message falls back to its
+                 own "Message from <tenant>" subject when this is missing, which
+                 is what every existing caller keeps getting. */
+              subject: typeof metadata?.subject === 'string' ? metadata.subject : undefined,
             },
           });
 
           if (error) {
             console.error(`[RealtimeChat] ${channel} send error:`, error);
-            return;
+            return {
+              ok: false,
+              error:
+                channel === 'sms'
+                  ? 'The message could not be sent by SMS. Check the number and your Twilio settings.'
+                  : 'The email could not be sent. Check your email settings and try again.',
+            };
           }
 
           // Manually emit the new message to listeners so the UI updates immediately
@@ -421,8 +455,9 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
           }
         } catch (err) {
           console.error(`[RealtimeChat] ${channel} send failed:`, err);
+          return { ok: false, error: 'Could not reach the sending service. Try again in a moment.' };
         }
-        return;
+        return { ok: true };
       }
 
       // For in-app: insert message directly - Postgres Changes will broadcast it
@@ -441,7 +476,7 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
 
       if (error) {
         console.error('[RealtimeChat] Error sending message:', error);
-        return;
+        return { ok: false, error: 'The message could not be saved. Try again.' };
       }
 
       // Manually notify listeners so the UI updates immediately
@@ -468,6 +503,8 @@ export function RealtimeChatProvider({ children }: { children: React.ReactNode }
           updated_at: new Date().toISOString(),
         })
         .eq('id', channelId);
+
+      return { ok: true };
     },
     [tenant, appUser, getOrCreateChannel]
   );
@@ -629,7 +666,9 @@ export function useRealtimeChat() {
       isConnected: false,
       joinRoom: () => {},
       leaveRoom: () => {},
-      sendMessage: () => {},
+      /* The no-provider fallback has to satisfy the same contract now, and
+         "not connected" is a truthful failure rather than a silent success. */
+      sendMessage: async () => ({ ok: false, error: 'Messaging is not connected.' }),
       markRead: () => {},
       sendTyping: () => {},
       sendBulkMessage: () => {},

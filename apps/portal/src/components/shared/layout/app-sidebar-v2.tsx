@@ -41,7 +41,6 @@ import {
   ShieldX,
   Search,
   X,
-  Inbox,
   Wallet,
   AlertTriangle,
   BookOpen,
@@ -91,7 +90,6 @@ import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { useTenant } from "@/contexts/TenantContext";
 import { isAreaHidden, isLeanTenant, isSettingsTabHidden } from "@/lib/lean-areas";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
-import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
@@ -381,7 +379,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // so this badge is the only standing signal that work has come due.
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
-  const { data: enquiryStats } = useEnquiryStats();
   const { appUser } = useAuthStore();
   const {
     isInGracePeriod,
@@ -746,22 +743,21 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
       // the sidebar to reach it was one level of nesting too many. Messages was
       // dropped outright.
       //
-      // What is left is Inquiries, which is itself conditional, so this group
-      // is frequently empty — and an empty group must not render as a dead
-      // "Customers" row sitting under the real one. It does not: the
-      // `.filter(g => g.items.length > 0)` below removes it. That filter is
-      // load-bearing now rather than defensive, which is why it is called out
-      // here as well as at its own definition.
+      // Inquiries was the last entry here and has been removed from the portal
+      // flow. THE GROUP IS THEREFORE ALWAYS EMPTY, and an empty group must not
+      // render as a dead "Customers" row sitting under the real one. It does
+      // not: the `.filter(g => g.items.length > 0)` below removes it — the same
+      // filter that already handled the case where Inquiries was conditionally
+      // absent. That filter is load-bearing, which is why it is called out here
+      // as well as at its own definition.
+      //
+      // The group is kept rather than deleted because it is the anchor the
+      // sibling comments above refer to, and because whatever replaces
+      // Inquiries under Customers belongs here. /enquiries itself still exists
+      // as a route and the data behind it is untouched; what went is the way in.
       label: "Customers",
       icon: Users,
-      items: [
-        // Enquiries folds into Leads once lead management is on — same as v1.
-        // The lean-areas gate is the second half of the condition and must stay:
-        // a lean tenant never sees Enquiries at all.
-        ...(leadManagementEnabled || isAreaHidden("enquiries", tenantSlug)
-          ? []
-          : [{ name: "Inquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
-      ],
+      items: [] as NavItem[],
     },
     ...(leadManagementEnabled && !isAreaHidden("leads", tenantSlug)
       ? [{

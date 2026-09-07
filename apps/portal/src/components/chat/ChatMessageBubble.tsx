@@ -6,6 +6,7 @@ import { Check, CheckCheck, MessageSquare, Mail, AlertCircle, Phone as PhoneIcon
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ChatMessage, MessageChannel } from '@/hooks/use-chat-messages';
 import { BookingReferenceCard } from './BookingReferenceCard';
+import { AttachmentList } from '@/components/messages-v2/attachment-list';
 import type { BookingReference } from './BookingPicker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState, useRef } from 'react';
@@ -62,12 +63,21 @@ export function ChatMessageBubble({
     to_number?: string;
   } | undefined;
   const hasBookingReference = metadata?.type === 'booking_reference' && metadata?.booking;
+  /* Attachments ride on `metadata.attachments` as storage PATHS, never URLs —
+     the bucket is private and links are signed per click. Read defensively:
+     every other consumer of this metadata predates the field. */
+  const attachments = Array.isArray((message.metadata as { attachments?: unknown } | undefined)?.attachments)
+    ? ((message.metadata as { attachments?: unknown }).attachments as {
+        name: string; path: string; size: number; mime: string;
+      }[])
+    : [];
   const isVoicemail = metadata?.type === 'voicemail' && metadata?.recording_url;
   const isVoiceCall = metadata?.type === 'voice_call';
 
   // Hide placeholder text for special message types
   const displayContent =
     (hasBookingReference && message.content === 'Shared a booking') ||
+    (attachments.length > 0 && message.content === 'Shared a booking') ||
     isVoicemail ||
     isVoiceCall
       ? ''
@@ -122,6 +132,10 @@ export function ChatMessageBubble({
           )}
         >
           {/* Booking reference card */}
+          {attachments.length > 0 && (
+            <AttachmentList attachments={attachments} isOwnMessage={isOwnMessage} />
+          )}
+
           {hasBookingReference && metadata?.booking && (
             <BookingReferenceCard booking={metadata.booking} isOwnMessage={isOwnMessage} />
           )}

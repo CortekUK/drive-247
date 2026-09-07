@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Inbox, Wallet, AlertTriangle, BookOpen, Wrench } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Wallet, AlertTriangle, BookOpen, Wrench } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -36,7 +36,6 @@ import { isAreaHidden } from "@/lib/lean-areas";
 import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
-import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTenantSubscription } from "@/hooks/use-tenant-subscription";
 import { useSetupStatus } from "@/hooks/use-setup-status";
@@ -189,7 +188,6 @@ export function AppSidebar() {
   const { needsAttention: fleetNeedsAttention } = useFleetHealthStats();
   const { data: pendingBookingsCount } = usePendingBookingsCount();
   const { unreadCount: chatUnreadCount } = useUnreadCount();
-  const { data: enquiryStats } = useEnquiryStats();
   const { appUser } = useAuthStore();
   const {
     isTrialing,
@@ -310,9 +308,9 @@ export function AppSidebar() {
       items: [
         { name: "Customers", href: "/customers", icon: AnimatedUsers },
         { name: "Blocked Customers", href: "/blocked-customers", icon: AnimatedBan },
-        ...(leadManagementEnabled
-          ? []
-          : [{ name: "Inquiries", href: "/enquiries", icon: Inbox, badge: enquiryStats?.pending || 0 }]),
+        // Inquiries removed from the portal flow. The route and its data are
+        // untouched; this was the way in. Unlike v2's Customers group, this one
+        // keeps three other entries, so nothing empties out here.
         { name: "Messages", href: "/messages", icon: AnimatedMessageSquare, badge: chatUnreadCount || 0 },
       ],
     },

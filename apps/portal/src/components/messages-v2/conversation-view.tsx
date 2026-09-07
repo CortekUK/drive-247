@@ -41,7 +41,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { format, isSameDay } from "date-fns";
 import {
   ArrowLeft, Car, Mail, MessageCircle, MessageSquare, Phone,
-  PhoneCall, Send, Loader2, Info, Paperclip, X,
+  PhoneCall, Send, Loader2, Info, Paperclip, X, AlertTriangle, ChevronDown,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
@@ -50,9 +50,11 @@ import { Textarea } from "@/components/ui-v2/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useSocket, type MessageChannel } from "@/contexts/RealtimeChatContext";
-import { ChatMessageBubble, DateSeparator } from "@/components/chat";
+import { ChatMessageBubble, DateSeparator, VoiceCallBar } from "@/components/chat";
+import { useVoiceCall } from "@/hooks/use-voice-call";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 import { AttachMenu } from "@/components/messages-v2/attach-menu";
+import { useChatAttachments } from "@/components/messages-v2/use-chat-attachments";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 
 type Mode = MessageChannel | "call";
@@ -111,9 +113,9 @@ function ChannelSwitcher({
 /* ── the pending attachments, above the composer ──────────────────────────
    One row for both kinds, because to the person sending they are one idea:
    things riding along with this message. The booking chip carries the rental
-   number and car; a file chip carries its name and says plainly that it will
-   not be delivered — there is no upload path in the chat backend, and a chip
-   that looked ordinary would be a promise the send cannot keep. */
+   number and car; a file chip carries its name. Files really upload now — to
+   the private, tenant-scoped `chat-attachments` bucket — so the chip no longer
+   carries the "not sent yet" caveat it needed while this was mocked. */
 function PendingRow({
   files, booking, onRemoveFile, onRemoveBooking,
 }: {
@@ -146,12 +148,7 @@ function PendingRow({
           </button>
         </span>
       ))}
-      {files.length > 0 && (
-        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
-          <Info className="h-3 w-3" />
-          Files are not sent yet
-        </span>
-      )}
+
     </div>
   );
 }
@@ -166,7 +163,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
     channel.id,
     customerId,
   );
-  const { sendMessage, markRead, joinRoom } = useSocket();
+  const { sendMessage, markRead, joinRoom, onNewMessage } = useSocket();
   const { toast } = useToast();
 
   const [mode, setMode] = useState<Mode>(channel.last_channel || "in_app");
@@ -175,7 +172,20 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
   const [booking, setBooking] = useState<BookingReference | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  /* Set just before loadMore so the scroll effect can tell "older messages
+     arrived above me" from "a new message arrived below me" — the two grow the
+     same array and want opposite behaviour. */
+  const restoreRef = useRef<number | null>(null);
+
+  /* The real call integration, the same one ChatWindow drives: a Twilio Voice
+     device in the browser with status, duration, mute and hold. Call mode does
+     NOT send a message — it places a call. */
+  const voiceCall = useVoiceCall();
+  const { upload, uploading, progress } = useChatAttachments();
 
   /* Join and clear unread on open — the same two calls the old window made. */
   useEffect(() => {
@@ -184,9 +194,50 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
     void markRead(customerId);
   }, [customerId, joinRoom, markRead]);
 
+  /* AND AGAIN WHEN ONE ARRIVES WHILE YOU ARE LOOKING AT IT. Marking read only
+     on mount leaves a conversation you are actively reading counting up in the
+     dock badge, and the operator is then told to go and read something already
+     on their screen. Only for THIS customer, and only for messages from them:
+     marking our own sends read would be meaningless. */
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    const unsub = onNewMessage((payload) => {
+      if (payload.senderType !== "customer") return;
+      if (payload.channelId !== channel.id) return;
+      void markRead(customerId);
+    });
+    return unsub;
+  }, [onNewMessage, markRead, customerId, channel.id]);
+
+  /* ── SCROLLING, AND THE TWO THINGS IT MUST NOT DO ────────────────────────
+     It must not yank you to the bottom while you are reading history, and it
+     must not leave you stranded when you load older messages. Both come from
+     the same array getting longer, so intent is recorded before the change
+     rather than guessed after it. */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (restoreRef.current !== null) {
+      // Older messages were prepended: keep the same message under the cursor
+      // by restoring the distance from the BOTTOM, which is invariant.
+      el.scrollTop = el.scrollHeight - restoreRef.current;
+      restoreRef.current = null;
+      return;
+    }
+    // A new message: follow it only if they were already at the bottom.
+    if (atBottom) endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, atBottom]);
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  }
+
+  function handleLoadMore() {
+    const el = scrollRef.current;
+    restoreRef.current = el ? el.scrollHeight - el.scrollTop : null;
+    loadMore();
+  }
 
   const disabled: Partial<Record<Mode, string>> = useMemo(
     () => ({
@@ -198,23 +249,65 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
 
   async function handleSend() {
     const text = body.trim();
-    if (mode === "email" && !subject.trim()) {
-      toast({ title: "Subject required", description: "An email needs a subject line.", variant: "destructive" });
-      return;
+    if (disabled[mode] || mode === "call") return;
+    /* An email needs both. The backend will happily send an empty body under a
+       subject, and that is not a thing anybody meant to do. */
+    if (mode === "email") {
+      if (!subject.trim()) {
+        toast({ title: "Subject required", description: "An email needs a subject line.", variant: "destructive" });
+        return;
+      }
+      if (!text) {
+        toast({ title: "Nothing to send", description: "Write something in the body first.", variant: "destructive" });
+        return;
+      }
     }
     if (!text && !booking) return;
-    if (disabled[mode]) return;
 
     setSending(true);
+    setSendError(null);
     const metadata: Record<string, unknown> = {};
     if (booking) { metadata.type = "booking_reference"; metadata.booking = booking; }
     if (mode === "email") metadata.subject = subject.trim();
 
+    /* Upload BEFORE sending, and abandon the send if it fails. A message that
+       arrives naming three files and carrying two is worse than one that did
+       not send: nobody can tell which is missing. */
+    if (files.length) {
+      const up = await upload(channel.id, files);
+      if (!up.ok) {
+        setSending(false);
+        setSendError(up.error ?? "The files could not be uploaded.");
+        return;
+      }
+      if (up.attachments?.length) metadata.attachments = up.attachments;
+    }
+
     const content = text || "Shared a booking";
+    /* Held, not discarded. The composer clears optimistically so it feels
+       immediate, but a failed send has to be able to give the text back —
+       retyping a paragraph because the network blinked is unforgivable. */
+    const held = { body, subject, booking, files };
     setBody(""); setSubject(""); setBooking(null); setFiles([]);
+
     try {
-      await sendMessage(customerId, content, Object.keys(metadata).length ? metadata : undefined,
-        mode === "call" ? "voice" : (mode as MessageChannel));
+      const result = await sendMessage(
+        customerId,
+        content,
+        Object.keys(metadata).length ? metadata : undefined,
+        mode as MessageChannel,
+      );
+      if (result && result.ok === false) {
+        setBody(held.body); setSubject(held.subject);
+        setBooking(held.booking); setFiles(held.files);
+        setSendError(result.error ?? "The message could not be sent.");
+      } else if (mode === "email") {
+        toast({ title: "Email sent", description: `Sent to ${email}.` });
+      }
+    } catch {
+      setBody(held.body); setSubject(held.subject);
+      setBooking(held.booking); setFiles(held.files);
+      setSendError("The message could not be sent. Try again.");
     } finally {
       setSending(false);
     }
@@ -265,8 +358,30 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
         )}
       </header>
 
+      {/* ── the live call ──────────────────────────────────────────────────
+          Between the header and the history, exactly where ChatWindow puts it,
+          and only while a call exists. It owns mute, hold, accept, reject and
+          hangup — which is the reason Call mode drives useVoiceCall instead of
+          a tel: link that would hand all of that to the operating system. */}
+      {voiceCall.status !== "idle" && (
+        <VoiceCallBar
+          status={voiceCall.status}
+          duration={voiceCall.duration}
+          isMuted={voiceCall.isMuted}
+          isOnHold={voiceCall.isOnHold}
+          callerNumber={voiceCall.callerNumber}
+          callerName={voiceCall.incomingCall ? undefined : name}
+          incomingCall={voiceCall.incomingCall ? { from: voiceCall.incomingCall.from } : null}
+          onEndCall={voiceCall.endCall}
+          onToggleMute={voiceCall.toggleMute}
+          onToggleHold={voiceCall.toggleHold}
+          onAcceptCall={voiceCall.acceptCall}
+          onRejectCall={voiceCall.rejectCall}
+        />
+      )}
+
       {/* ── history ────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollRef} onScroll={onScroll} className="relative flex-1 overflow-y-auto px-6 py-6">
         {isLoading ? (
           <div className="space-y-4">
             {[0, 1, 2, 3].map((i) => (
@@ -290,7 +405,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
           <div className="mx-auto max-w-3xl">
             {hasMore && (
               <div className="mb-4 flex justify-center">
-                <Button variant="ghost" size="sm" className="rounded-full" onClick={loadMore} disabled={isLoadingMore}>
+                <Button variant="ghost" size="sm" className="rounded-full" onClick={handleLoadMore} disabled={isLoadingMore}>
                   {isLoadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Load earlier messages"}
                 </Button>
               </div>
@@ -323,15 +438,38 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
               {disabled[mode]}. Add one on the customer record to use this channel.
             </p>
           ) : mode === "call" ? (
-            /* A call is not a message. It gets an action and a record of one,
-               rather than a text box that would send the word "call". */
+            /* A call is not a message, so this is an action rather than a text
+               box. It drives the SAME integration ChatWindow uses —
+               useVoiceCall, a Twilio Voice device in the browser — not a tel:
+               link, which would hand the call to the operating system and lose
+               the status, duration and hangup this UI can show. */
             <div className="flex flex-col items-start gap-3 rounded-2xl bg-muted/50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <p className="text-[13px] font-medium">Call {name}</p>
-                <p className="mt-0.5 text-[12px] text-muted-foreground">{phone}</p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  {voiceCall.status === "idle"
+                    ? phone
+                    : voiceCall.status === "connecting"
+                      ? "Connecting…"
+                      : `In call · ${phone}`}
+                </p>
               </div>
-              <Button asChild className="gap-2 rounded-full">
-                <a href={`tel:${phone}`}><PhoneCall className="h-4 w-4" />Start call</a>
+              <Button
+                className="gap-2 rounded-full"
+                disabled={voiceCall.status !== "idle"}
+                onClick={() => {
+                  if (!phone) return;
+                  if (voiceCall.status !== "idle") {
+                    toast({ title: "Call in progress", description: "End the current call first." });
+                    return;
+                  }
+                  voiceCall.makeCall(phone);
+                }}
+              >
+                {voiceCall.status === "connecting"
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <PhoneCall className="h-4 w-4" />}
+                {voiceCall.status === "idle" ? "Start call" : "On a call"}
               </Button>
             </div>
           ) : mode === "email" ? (
@@ -365,7 +503,11 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                 />
                 <Button onClick={handleSend} disabled={sending} className="gap-2 rounded-full">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Send email
+                  {uploading
+                    ? `Uploading ${progress.done + 1} of ${progress.total}…`
+                    : sending
+                      ? "Sending…"
+                      : "Send email"}
                 </Button>
               </div>
             </div>
@@ -387,12 +529,25 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
               />
               <Button
                 onClick={handleSend}
-                disabled={sending || (!body.trim() && !booking)}
+                title={uploading ? `Uploading ${progress.done + 1} of ${progress.total}` : undefined}
+                disabled={sending || (!body.trim() && !booking && !files.length)}
                 size="icon"
                 className="h-11 w-11 shrink-0 rounded-full"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
+            </div>
+          )}
+
+          {sendError && (
+            /* Tinted, specific, and dismissible — and the composer still holds
+               what you wrote, so "try again" means pressing send again. */
+            <div className="flex items-start gap-2.5 rounded-2xl bg-destructive/10 px-4 py-3 text-[13px] text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p className="flex-1 leading-relaxed">{sendError}</p>
+              <button type="button" onClick={() => setSendError(null)} aria-label="Dismiss">
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 

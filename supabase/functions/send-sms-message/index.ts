@@ -28,7 +28,11 @@ Deno.serve(async (req) => {
 
     if (!appUser) return errorResponse('User not found', 403);
 
-    const { channelId, customerId, content, phoneNumber, tenantId: bodyTenantId, threadId } = await req.json();
+    /* `metadata` is optional and new. Older clients omit it and the row is
+       written with {} exactly as before. */
+    const {
+      channelId, customerId, content, phoneNumber, tenantId: bodyTenantId, threadId, metadata,
+    } = await req.json();
 
     if (!content) return errorResponse('content is required');
 
@@ -74,7 +78,9 @@ Deno.serve(async (req) => {
           channel: 'sms',
           external_id: smsResult.messageId,
           external_status: 'queued',
-          metadata: {},
+          /* Was hardcoded {}, which silently dropped a booking reference the
+             composer had already accepted and shown. */
+          metadata: metadata && typeof metadata === 'object' ? metadata : {},
         })
         .select()
         .single();

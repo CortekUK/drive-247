@@ -140,7 +140,7 @@ export function AttachMenu({
                 <span className="min-w-0">
                   <span className="block text-[13px] font-medium">Upload file</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    Not delivered yet — shown on the message
+                    Up to 10MB, sent with the message
                   </span>
                 </span>
               </button>
