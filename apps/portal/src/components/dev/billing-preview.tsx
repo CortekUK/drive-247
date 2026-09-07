@@ -97,6 +97,13 @@ export function BillingPreview() {
           <p className="font-medium text-foreground">Where to look</p>
           <ul className="mt-1.5 space-y-1">
             <li>
+              <span className="font-medium text-foreground">Active</span> — the control. No
+              payment chip, no blocking dialog, no Finish Setup gate. On this tenant it looks the
+              same as Off, because northwind has no subscription and no plans, so its real state
+              is already un-gated — Active is worth using as the AFTER in a before/after: block
+              the app, then select this and watch it come back.
+            </li>
+            <li>
               <span className="font-medium text-foreground">Payment failed / Overdue</span> —
               warning on Billing, and the chip at the bottom of the sidebar.
             </li>
@@ -111,9 +118,24 @@ export function BillingPreview() {
             </li>
             <li>
               <span className="font-medium text-foreground">Payment recovered</span> — select it
-              while blocked to watch access come back without a reload.
+              while blocked to watch access come back without a reload. Identical to Active; it
+              exists so the recovery step reads as a recovery.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">Off</span> — this tenant's real
+              billing state, whatever it happens to be. Always where to end up.
             </li>
           </ul>
+
+          {/* The single most confusing thing about reviewing Billing on this
+              tenant, and nothing on screen said it. */}
+          <p className="mt-3 border-t border-border/60 pt-2.5">
+            The plan, price and invoices on the Billing page are SAMPLE data from the page&rsquo;s
+            own preview, which switches itself on because northwind has no real subscription and
+            no invoices. That is separate from these states and is why the money buttons there are
+            inert. These states drive the warnings, the chip and the blocker; they do not create a
+            subscription.
+          </p>
         </div>
       </CardContent>
     </Card>
