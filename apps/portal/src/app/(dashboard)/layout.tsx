@@ -42,6 +42,7 @@ import { TraxAIDialog } from "@/components/chat";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { AppBannerStack } from "@/components/banners/app-banner-stack";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
+import { DevBillingStatePill } from "@/components/dev/dev-billing-escape";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
@@ -499,6 +500,14 @@ export default function DashboardLayout({
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />
+
+        {/* A standing "this is not real" marker, and the exit from wherever you
+            are. It matters most for the states that only WARN: a red chip in
+            the sidebar looks identical whether a card really failed or somebody
+            left a preview switched on an hour ago. Renders nothing unless the
+            build is development, the tenant is the canary, and a state is
+            actually selected. */}
+        <DevBillingStatePill />
 
         {/* Confirms a subscription that was paid OUTSIDE the portal — a sales
             link. Purely reassurance: dismissible, blocks nothing, and renders

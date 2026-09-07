@@ -11,6 +11,7 @@ import {
   readBillingScenario,
   setBillingScenario,
 } from "@/lib/dev-overrides";
+import { applyBillingScenario } from "@/hooks/use-billing-scenario";
 
 function fakeStorage(): Storage {
   const map = new Map<string, string>();
@@ -107,5 +108,85 @@ describe("the production guard", () => {
     const store = fakeStorage();
     setBillingScenario("payment_failed", store);
     expect(readBillingScenario(store)).toBe("payment_failed");
+  });
+});
+
+/**
+ * The guarantee the whole feature rests on: with previews OFF, real billing
+ * behaves exactly as it did. Asserted by object IDENTITY rather than equality,
+ * so a future "harmless" spread cannot slip in and start handing every consumer
+ * a new object on every render.
+ */
+describe("real billing is untouched", () => {
+  const real = {
+    isSubscribed: true,
+    hasExpiredSubscription: false,
+    isPastDue: false,
+    isInGracePeriod: false,
+    isGraceExpired: false,
+    graceDaysRemaining: 0,
+    graceSeverity: "none" as const,
+    graceEndsAt: null,
+    owesOutstandingInvoice: false,
+    isResolved: true,
+    subscription: { id: "sub_real" },
+  };
+
+  it("returns the caller's own object when no state is selected", () => {
+    expect(applyBillingScenario(real, "off", "northwind")).toBe(real);
+  });
+
+  it("returns the caller's own object on any tenant but the canary", () => {
+    /* The gate is on the SLUG, and every other tenant on the platform must be
+       unreachable by this even with a state selected. */
+    expect(applyBillingScenario(real, "grace_expired", "jangramrentals")).toBe(real);
+    expect(applyBillingScenario(real, "grace_expired", null)).toBe(real);
+    expect(applyBillingScenario(real, "grace_expired", "")).toBe(real);
+  });
+
+  it("blocks on the canary when the expired state is selected", () => {
+    const out = applyBillingScenario(real, "grace_expired", "northwind");
+    expect(out).not.toBe(real);
+    expect(out.isGraceExpired).toBe(true);
+    expect(out.hasExpiredSubscription).toBe(true);
+    expect(out.isSubscribed).toBe(false);
+  });
+
+  it("warns without blocking for a failed or overdue payment", () => {
+    for (const s of ["payment_failed", "overdue"] as const) {
+      const out = applyBillingScenario(real, s, "northwind");
+      expect(out.isPastDue).toBe(true);
+      expect(out.isInGracePeriod).toBe(true);
+      /* Still has access — the window is the whole point. */
+      expect(out.isSubscribed).toBe(true);
+      expect(out.isGraceExpired).toBe(false);
+    }
+  });
+
+  it("treats a failed payment and an overdue one as the same state", () => {
+    /* The spec calls them one user problem: the payment was missed. Two
+       warnings saying one thing is how a UI stops being read. */
+    const failed = applyBillingScenario(real, "payment_failed", "northwind");
+    const overdue = applyBillingScenario(real, "overdue", "northwind");
+    expect(failed.isPastDue).toBe(overdue.isPastDue);
+    expect(failed.isInGracePeriod).toBe(overdue.isInGracePeriod);
+    expect(failed.graceSeverity).toBe(overdue.graceSeverity);
+  });
+
+  it("restores access when payment is recovered", () => {
+    const blocked = applyBillingScenario(real, "grace_expired", "northwind");
+    expect(blocked.isSubscribed).toBe(false);
+    const back = applyBillingScenario(blocked, "recovered", "northwind");
+    expect(back.isSubscribed).toBe(true);
+    expect(back.isGraceExpired).toBe(false);
+    expect(back.owesOutstandingInvoice).toBe(false);
+  });
+
+  it("never drops a key the caller supplied", () => {
+    /* The patch is a merge, not a replacement: everything the hook returns —
+       invoices, mutations, refetch — has to survive it. */
+    const out = applyBillingScenario(real, "grace_expired", "northwind");
+    for (const k of Object.keys(real)) expect(out).toHaveProperty(k);
+    expect(out.subscription).toEqual({ id: "sub_real" });
   });
 });

@@ -150,6 +150,25 @@ function patchFor(scenario: Exclude<BillingScenarioId, "off">): Partial<Overrida
   }
 }
 
+/**
+ * The gate and the patch, as one pure function — so the guarantee that matters
+ * can actually be asserted rather than reasoned about.
+ *
+ * THAT GUARANTEE: with no scenario selected, or on any tenant but the canary,
+ * this returns the CALLER'S OWN OBJECT — the same reference, not a copy of it.
+ * Real billing behaviour is then untouched by definition, and the test proves
+ * identity rather than equality so a future "harmless" spread cannot creep in.
+ */
+export function applyBillingScenario<T extends Overridable>(
+  real: T,
+  scenario: BillingScenarioId,
+  tenantSlug: string | null | undefined,
+): T {
+  if (scenario === "off") return real;
+  if (!tenantSlug || !isLeanTenant(tenantSlug)) return real;
+  return { ...real, ...patchFor(scenario) };
+}
+
 export function useBillingScenarioOverride<T extends Overridable>(real: T): T {
   const { tenant } = useTenant();
 
@@ -163,10 +182,8 @@ export function useBillingScenarioOverride<T extends Overridable>(real: T): T {
   );
 
   /* GATE 1 is inside `readBillingScenario` (a NODE_ENV literal, folded away in
-     a production build). GATE 2 is here, and is why a planted key on a live
-     operator's browser cannot do anything even if the first somehow passed. */
-  if (scenario === "off") return real;
-  if (!tenant?.slug || !isLeanTenant(tenant.slug)) return real;
-
-  return { ...real, ...patchFor(scenario) };
+     a production build). GATES 2 and 3 are in `applyBillingScenario`, which is
+     why a planted key on a live operator's browser cannot do anything even if
+     the first somehow passed. */
+  return applyBillingScenario(real, scenario, tenant?.slug);
 }
