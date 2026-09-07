@@ -189,6 +189,50 @@ export function setBillingScenario(id: BillingScenarioId, storage?: Storage | nu
   }
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   SAMPLE BILLING DATA
+
+   Separate from the billing STATES above, and it answers a different question.
+   The states change what the app believes about a real subscription; this
+   substitutes a sample plan, invoices and wallet so the Billing screens can be
+   reviewed on a tenant that has none.
+
+   It used to switch itself on, gated on the tenant SLUG alone with no build
+   check — so sample billing data rendered for the canary IN PRODUCTION, on a
+   real tenant's real billing page, the moment they had no subscription. That
+   is the one thing sample data must never do. It is now a deliberate developer
+   choice, in a development build, like everything else in this file.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+export const BILLING_SAMPLE_KEY = "d247.dev.billingSampleData";
+
+export function readBillingSampleData(storage?: Storage | null): boolean {
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return false;
+    try {
+      return store.getItem(BILLING_SAMPLE_KEY) === "on";
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export function setBillingSampleData(on: boolean, storage?: Storage | null): void {
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return;
+    try {
+      if (on) store.setItem(BILLING_SAMPLE_KEY, "on");
+      else store.removeItem(BILLING_SAMPLE_KEY);
+    } catch {
+      return;
+    }
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
+  }
+}
+
 /**
  * The listing pages that carry a teaching empty state, in the order they sit
  * in the sidebar. Each `id` is what the page passes to `useForcedEmptyState`,
@@ -341,7 +385,8 @@ export function subscribeDevOverrides(onChange: () => void): () => void {
            without this line selecting a billing state simply did nothing in
            the other tab until it was reloaded. `storage` events fire only in
            OTHER tabs, so the same-tab custom event above cannot cover it. */
-        event.key === BILLING_SCENARIO_KEY
+        event.key === BILLING_SCENARIO_KEY ||
+        event.key === BILLING_SAMPLE_KEY
       ) onChange();
     };
     window.addEventListener("storage", onStorage);

@@ -6,9 +6,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  BILLING_SAMPLE_KEY,
   BILLING_SCENARIOS,
   BILLING_SCENARIO_KEY,
+  readBillingSampleData,
   readBillingScenario,
+  setBillingSampleData,
   setBillingScenario,
 } from "@/lib/dev-overrides";
 import { applyBillingScenario } from "@/hooks/use-billing-scenario";
@@ -221,5 +224,71 @@ describe("cross-tab propagation", () => {
     unsubscribe();
     window.dispatchEvent(new StorageEvent("storage", { key: BILLING_SCENARIO_KEY }));
     expect(onChange).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Sample billing data used to switch itself on, gated on the tenant slug with
+ * NO build check — so a sample plan and sample invoices rendered for the canary
+ * in production, on a real tenant's real billing page, whenever they had no
+ * subscription. These are the guards that stop that.
+ */
+describe("sample billing data", () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it("is off unless a developer turns it on", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const store = fakeStorage();
+    expect(readBillingSampleData(store)).toBe(false);
+    setBillingSampleData(true, store);
+    expect(readBillingSampleData(store)).toBe(true);
+  });
+
+  it("leaves no key behind when turned off", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const store = fakeStorage();
+    setBillingSampleData(true, store);
+    setBillingSampleData(false, store);
+    expect(store.getItem(BILLING_SAMPLE_KEY)).toBeNull();
+  });
+
+  it("CANNOT be switched on in production, even with the key planted", () => {
+    const store = fakeStorage();
+    store.setItem(BILLING_SAMPLE_KEY, "on");
+    vi.stubEnv("NODE_ENV", "production");
+    expect(readBillingSampleData(store)).toBe(false);
+    setBillingSampleData(true, store);
+    /* And it cannot be written either — the planted value is all there is. */
+    expect(readBillingSampleData(store)).toBe(false);
+  });
+
+  it("treats any value but 'on' as off", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const store = fakeStorage();
+    store.setItem(BILLING_SAMPLE_KEY, "true");
+    expect(readBillingSampleData(store)).toBe(false);
+  });
+
+  it("survives storage that throws", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const hostile = {
+      getItem: () => { throw new Error("denied"); },
+      setItem: () => { throw new Error("denied"); },
+      removeItem: () => { throw new Error("denied"); },
+    } as unknown as Storage;
+    expect(readBillingSampleData(hostile)).toBe(false);
+    expect(() => setBillingSampleData(true, hostile)).not.toThrow();
+  });
+
+  it("is a SEPARATE switch from the billing states", () => {
+    /* They answer different questions: the states change what the app believes
+       about a real subscription; this substitutes sample data. Turning one off
+       must not turn the other off. */
+    vi.stubEnv("NODE_ENV", "development");
+    const store = fakeStorage();
+    setBillingSampleData(true, store);
+    setBillingScenario("grace_expired", store);
+    setBillingScenario("off", store);
+    expect(readBillingSampleData(store)).toBe(true);
   });
 });

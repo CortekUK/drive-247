@@ -23,7 +23,9 @@ import {
 } from "@/components/ui-v2/card";
 import {
   BILLING_SCENARIOS,
+  readBillingSampleData,
   readBillingScenario,
+  setBillingSampleData,
   setBillingScenario,
   subscribeDevOverrides,
   type BillingScenarioId,
@@ -34,6 +36,11 @@ export function BillingPreview() {
     subscribeDevOverrides,
     () => readBillingScenario(),
     () => "off" as BillingScenarioId,
+  );
+  const sampleData = useSyncExternalStore(
+    subscribeDevOverrides,
+    () => readBillingSampleData(),
+    () => false,
   );
 
   return (
@@ -88,6 +95,34 @@ export function BillingPreview() {
         <p className="text-[12px] leading-relaxed text-muted-foreground">
           {BILLING_SCENARIOS.find((s) => s.id === scenario)?.hint}
         </p>
+
+        {/* A different question from the states above, so a separate control.
+            The states change what the app BELIEVES about a real subscription;
+            this substitutes a sample plan, invoices and wallet so the screens
+            can be reviewed on a tenant that has none.
+
+            It used to switch itself on, and was gated on the tenant slug with
+            no build check — so sample billing data rendered for this tenant in
+            PRODUCTION whenever they had no subscription. Now it is a choice,
+            and only in a development build. */}
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-2xl bg-muted/40 px-4 py-3">
+          <input
+            type="checkbox"
+            checked={sampleData}
+            onChange={(e) => setBillingSampleData(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+          />
+          <span className="min-w-0">
+            <span className="block text-[12px] font-medium text-foreground">
+              Sample billing data
+            </span>
+            <span className="mt-0.5 block text-[12px] leading-relaxed text-muted-foreground">
+              A sample plan, invoices and credit wallet, so the Billing screens can be reviewed
+              on this tenant. Real data always wins — with a real subscription or a real invoice
+              present, this does nothing.
+            </span>
+          </span>
+        </label>
 
         {/* The state changes what the whole app does, not just one page, so say
             where to look — otherwise the blocked state gets reviewed on the

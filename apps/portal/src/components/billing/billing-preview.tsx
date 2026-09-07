@@ -44,7 +44,9 @@
 
 import { useMemo } from "react";
 import { Eye } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import { useTenant } from "@/contexts/TenantContext";
+import { readBillingSampleData, subscribeDevOverrides } from "@/lib/dev-overrides";
 import { NORTHWIND } from "@/lib/v2";
 import { cn } from "@/lib/utils";
 import type {
@@ -68,7 +70,12 @@ import type {
  */
 export function useIsBillingPreviewTenant(): boolean {
   const { tenant } = useTenant();
-  return tenant?.slug === NORTHWIND;
+  /* The slug is necessary and NOT sufficient. This used to be the whole test,
+     with no build check — so sample billing data rendered for the canary IN
+     PRODUCTION, on a real tenant's real billing page, whenever they had no
+     subscription. Sample money on a real billing screen is the one thing this
+     file exists to avoid, and it was doing it. */
+  return tenant?.slug === NORTHWIND && process.env.NODE_ENV === "development";
 }
 
 /**
@@ -80,7 +87,18 @@ export function useIsBillingPreviewTenant(): boolean {
  * never flashes sample data first.
  */
 export function useBillingPreview(hasRealData: boolean): boolean {
-  return useIsBillingPreviewTenant() && !hasRealData;
+  /* Subscribed, so flipping the toggle in /dev — or in another tab — moves this
+     screen without a reload, the same as the billing states. */
+  const enabled = useSyncExternalStore(
+    subscribeDevOverrides,
+    () => readBillingSampleData(),
+    () => false,
+  );
+  /* A DELIBERATE developer choice now, not something that happens on its own.
+     `!hasRealData` is kept as the final guard: even with the toggle on, real
+     billing data always wins, so sample rows can never sit on top of a real
+     subscription or a real invoice. */
+  return enabled && useIsBillingPreviewTenant() && !hasRealData;
 }
 
 // ── Markers ──────────────────────────────────────────────────────────
