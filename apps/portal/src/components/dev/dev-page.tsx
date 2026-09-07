@@ -7,6 +7,7 @@ import { Compass, Loader2, Rocket, Sparkles, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import { EmptyStatePreview } from '@/components/dev/empty-state-preview';
 import { MessagesPreview } from '@/components/dev/messages-preview';
+import { BillingPreview } from '@/components/dev/billing-preview';
 import { useTenant } from '@/contexts/TenantContext';
 import { supabase } from '@/integrations/supabase/client';
 import { isLeanTenant } from '@/lib/lean-areas';
@@ -322,6 +323,7 @@ export function DevPageBody() {
       <EmptyStatePreview />
 
       <MessagesPreview />
+      <BillingPreview />
 
       {status && (
         <p

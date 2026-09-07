@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAuth } from "@/stores/auth-store";
 import { useSubscriptionGraceDays } from "@/hooks/use-subscription-grace-days";
+import { useBillingScenarioOverride } from "@/hooks/use-billing-scenario";
 import { toast } from "sonner";
 
 export interface TenantSubscription {
@@ -527,7 +528,13 @@ export function useTenantSubscription() {
     (!pastSubscriptionNeeded || pastSubscriptionSettled) &&
     (!isPastDue || invoicesSettled);
 
-  return {
+  /* ── developer state override, LAST ────────────────────────────────────────
+     Deliberately the final step, applied to the finished object rather than
+     woven through the derivations above: everything before this line is the
+     real thing, unchanged and still running, and one place decides what a
+     scenario replaces. `off`, a production bundle, or any tenant but the
+     canary returns the real values untouched — see use-billing-scenario.ts. */
+  const real = {
     subscription: subscriptionQuery.data,
     isSubscribed,
     hasExpiredSubscription,
@@ -551,4 +558,6 @@ export function useTenantSubscription() {
     createPortalSession,
     refetch,
   };
+
+  return useBillingScenarioOverride(real);
 }

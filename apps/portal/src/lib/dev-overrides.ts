@@ -119,6 +119,70 @@ export function setMessagesScenario(id: MessagesScenarioId, storage?: Storage | 
   if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+   BILLING STATES
+
+   The dunning states cannot be reached by clicking. `past_due` arrives from a
+   Stripe webhook after a card actually fails, and grace expiry is a CLOCK
+   EVENT — you would have to fail a real payment and then wait out the
+   configured window to see the blocked screen once. So the states nobody can
+   reach are exactly the ones nobody has reviewed.
+
+   This selects one. It overrides what `use-tenant-subscription` DERIVES —
+   is it past due, is the window open, has it closed — and changes nothing it
+   FETCHES: no row is written, no Stripe call is made, and the real queries
+   keep running underneath. Turning it off restores the true state on the next
+   render.
+
+   Composed inside the same two gates as everything else in this file: the
+   NODE_ENV literal (folded away in a production bundle) and, at the consumer,
+   `isLeanTenant(tenant.slug)`. A key planted on a live operator's browser does
+   nothing.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+export const BILLING_SCENARIO_KEY = "d247.dev.billingScenario";
+
+export const BILLING_SCENARIOS = [
+  { id: "off", label: "Off", hint: "Real subscription state" },
+  { id: "active", label: "Active", hint: "Paid, renewing normally" },
+  { id: "payment_failed", label: "Payment failed", hint: "Card declined, window open" },
+  { id: "overdue", label: "Overdue", hint: "Due date passed, window open" },
+  { id: "grace_expiring", label: "Grace, nearly out", hint: "Same warning, stronger tone" },
+  { id: "grace_expired", label: "Grace expired", hint: "Window closed — app blocked" },
+  { id: "recovered", label: "Payment recovered", hint: "Paid; access restored" },
+] as const;
+
+export type BillingScenarioId = (typeof BILLING_SCENARIOS)[number]["id"];
+
+const BILLING_IDS: ReadonlySet<string> = new Set(BILLING_SCENARIOS.map((s) => s.id));
+
+/** Read the selected billing state. Anything unrecognised reads as "off". */
+export function readBillingScenario(storage?: Storage | null): BillingScenarioId {
+  if (process.env.NODE_ENV !== "development") return "off";
+  const store = resolve(storage);
+  if (!store) return "off";
+  try {
+    const raw = store.getItem(BILLING_SCENARIO_KEY);
+    return raw && BILLING_IDS.has(raw) ? (raw as BillingScenarioId) : "off";
+  } catch {
+    return "off";
+  }
+}
+
+/** Select a billing state, or "off" to go back to the real one. */
+export function setBillingScenario(id: BillingScenarioId, storage?: Storage | null): void {
+  if (process.env.NODE_ENV !== "development") return;
+  const store = resolve(storage);
+  if (!store) return;
+  try {
+    if (id === "off") store.removeItem(BILLING_SCENARIO_KEY);
+    else store.setItem(BILLING_SCENARIO_KEY, id);
+  } catch {
+    return;
+  }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
+}
+
 /**
  * The listing pages that carry a teaching empty state, in the order they sit
  * in the sidebar. Each `id` is what the page passes to `useForcedEmptyState`,
