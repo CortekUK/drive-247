@@ -19,12 +19,18 @@
  * thing the dock's own Messages badge counted, and put the answer in two
  * places. `chat_message` is excluded from the centre entirely now.
  *
- * ── the count is not the hook's raw total ───────────────────────────────────
+ * ── the count comes from the database, not from a loaded page ───────────────
  *
- * `useNotifications().unreadCount` counts every row including chat. This badge
- * must agree with what opening it will actually show, so it counts the same
- * filtered set the panel does. A badge promising four and opening onto three is
- * the specific bug that makes people stop trusting a badge.
+ * This used to count the rows `useNotifications()` happened to have in memory —
+ * which was the newest 50, capped. A tenant with 65 notifications and 20 unread
+ * older ones showed a badge that was simply wrong, and no amount of opening the
+ * panel corrected it.
+ *
+ * `useNotificationCounts()` asks the database for an exact count over the same
+ * filter the panel lists by (chat excluded, tenant and audience scoped), so the
+ * badge and the panel are two readings of one query. A badge promising four and
+ * opening onto three is the specific bug that makes people stop trusting a
+ * badge.
  *
  * ── the root must stay a single <button> ────────────────────────────────────
  *
@@ -35,16 +41,12 @@
 
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
-import { useNotifications } from "@/hooks/use-notifications";
+import { useNotificationCounts } from "@/hooks/use-notifications";
 import { NotificationSheet } from "@/components/notifications/notification-sheet";
-import { isNotificationCentreType } from "@/components/notifications/taxonomy";
 
 export function NotificationBell() {
-  const { notifications } = useNotifications();
-
-  const unread = notifications.filter(
-    (n) => !n.is_read && isNotificationCentreType(n.type),
-  ).length;
+  const { data: counts } = useNotificationCounts();
+  const unread = counts?.unread ?? 0;
 
   return (
     <NotificationSheet

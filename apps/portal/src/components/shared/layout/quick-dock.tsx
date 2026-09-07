@@ -6,8 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tool
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { MessagesSheet } from "@/components/shared/layout/dock-sheets";
 import { useUnreadCount } from "@/hooks/use-unread-count";
-import { useNotifications } from "@/hooks/use-notifications";
-import { isNotificationCentreType } from "@/components/notifications/taxonomy";
+import { useNotificationCounts } from "@/hooks/use-notifications";
 
 const BTN =
   "relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 ease-out hover:-translate-x-1 hover:scale-110 hover:text-primary";
@@ -99,14 +98,14 @@ DockButton.displayName = "DockButton";
 export function QuickDock() {
   const [tucked, setTucked] = useState(false);
   const { unreadCount: chatUnread } = useUnreadCount();
-  const { notifications } = useNotifications();
-  /* NOT the hook's raw unreadCount: that counts `chat_message` rows, which the
-     Messages badge beside this one already counts. Adding both would show
-     every unread chat twice in the collapsed handle. The notification centre
-     excludes chat for the same reason — see taxonomy.ts. */
-  const notifUnread = notifications.filter(
-    (n) => !n.is_read && isNotificationCentreType(n.type),
-  ).length;
+  /* An EXACT count from the database, not a count of whatever rows happened to
+     be loaded — the list is paginated, so counting it here under-reported the
+     moment a tenant passed one page. Chat is excluded inside the query for the
+     same reason it always was: the Messages badge beside this one already
+     counts those, and adding both showed every unread chat twice in the
+     collapsed handle. See notification-filters.ts. */
+  const { data: notifCounts } = useNotificationCounts();
+  const notifUnread = notifCounts?.unread ?? 0;
   /* The collapsed handle's badge. It has to be the sum of exactly what the dock
      can still open, or a tucked dock advertises work that expanding it will not
      show. */
