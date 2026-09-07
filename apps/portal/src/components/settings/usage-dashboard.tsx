@@ -120,6 +120,11 @@ function InvoiceHistoryTable({
             <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">
               Receipt
             </th>
+            {/* Paying is not a document. It belongs with the status — what you
+                owe — not among the things you can open and read. */}
+            <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">
+              Payment
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -137,8 +142,8 @@ function InvoiceHistoryTable({
             const docs = billingDocumentsOf(inv);
             const docStatus = billingStatusOf(inv);
             return (
-              <tr key={inv.id} className="border-b last:border-0">
-                <td className="whitespace-nowrap py-2.5 px-3 text-sm text-muted-foreground">
+              <tr key={inv.id} className="border-b transition-colors last:border-0 hover:bg-muted/40">
+                <td className="whitespace-nowrap py-3 px-3 text-sm text-muted-foreground">
                   {formatDate(inv.period_start)} – {formatDate(inv.period_end)}
                 </td>
                 {hasAnyBreakdown && (
@@ -162,7 +167,7 @@ function InvoiceHistoryTable({
                 <td className="whitespace-nowrap py-2.5 px-3 text-sm text-right font-medium tabular-nums">
                   {formatCurrencyFromCents(inv.amount_due, inv.currency)}
                 </td>
-                <td className="py-2.5 px-3 text-sm">
+                <td className="py-3 px-3 text-sm">
                   <span
                     className={
                       inv.status === "paid"
@@ -180,7 +185,7 @@ function InvoiceHistoryTable({
                   </span>
                 </td>
                 {/* ── Invoice: the bill. Exists once Stripe raises it. */}
-                <td className="py-2.5 px-3 text-sm">
+                <td className="py-3 px-3 text-sm">
                   <div className="flex items-center gap-2.5">
                     <button
                       onClick={() => onViewInvoice(inv)}
@@ -208,17 +213,6 @@ function InvoiceHistoryTable({
                         <Download className="h-4 w-4" />
                       </span>
                     )}
-                    {/* Pay stays with the bill — it is the thing owed. */}
-                    {docStatus !== "paid" && docStatus !== "void" && docs.invoiceView && (
-                      <a
-                        href={docs.invoiceView}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-orange-600 hover:underline"
-                      >
-                        Pay
-                      </a>
-                    )}
                   </div>
                 </td>
 
@@ -226,7 +220,7 @@ function InvoiceHistoryTable({
                      it did. A dash rather than a disabled button: there is no
                      document to enable, and offering proof of a payment that
                      never completed is the one thing this column must not do. */}
-                <td className="py-2.5 px-3 text-sm">
+                <td className="py-3 px-3 text-sm">
                   {docs.hasReceipt && docs.receiptView ? (
                     <div className="flex items-center gap-2.5">
                       <a
@@ -256,6 +250,29 @@ function InvoiceHistoryTable({
                           ? "Paid, but Stripe has not returned a receipt for this charge yet"
                           : "No receipt: this invoice has not been paid"
                       }
+                    >
+                      &mdash;
+                    </span>
+                  )}
+                </td>
+
+                {/* ── Payment: only while something is actually owed. */}
+                <td className="py-3 px-3 text-sm">
+                  {docStatus === "paid" || docStatus === "void" || docStatus === "refunded" ? (
+                    <span className="text-muted-foreground/50">&mdash;</span>
+                  ) : docs.invoiceView ? (
+                    <a
+                      href={docs.invoiceView}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-orange-600 hover:underline"
+                    >
+                      Pay now
+                    </a>
+                  ) : (
+                    <span
+                      className="text-muted-foreground/50"
+                      title="No payment link on this invoice — contact support"
                     >
                       &mdash;
                     </span>

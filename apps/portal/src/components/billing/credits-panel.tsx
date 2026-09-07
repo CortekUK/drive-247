@@ -282,55 +282,51 @@ export function CreditsPanel() {
 
   return (
     <div className="space-y-5">
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
-        <div className="min-w-0 space-y-1.5">
-          <p className="text-muted-foreground text-sm sm:text-base">Buy and manage credits for platform services</p>
-          {/* The panel is embedded as a tab AND used standalone at /credits, so
-              it carries its own marker rather than relying on a page header. */}
-          {previewActive && <PreviewDataPill />}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={previewActive}
-            title={previewActive ? "Not available while previewing sample data" : undefined}
-            className="shrink-0"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          {/* Buy Credits used to sit HERE, at the far right of the section
-              header, a full card-width away from the balance and the quantity
-              selector it acts on. It is inside the Live Credits card now,
-              directly under the stepper — the three things are one action. */}
-        </div>
+      {/* ── Header ──
+          No Refresh button. The page already has one in its own header, and two
+          refresh controls on one screen is a debug console, not a billing page.
+          This panel is also embedded there, so the page-level one already
+          refetches what this shows. */}
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-muted-foreground text-sm">
+          Credits pay for e-signatures, verifications and messages.
+        </p>
+        {previewActive && <PreviewDataPill />}
       </div>
       {previewActive && <PreviewDisabledNote />}
 
-      {/* ── Balance Cards ── */}
-      <div className="grid items-start gap-5 grid-cols-1 sm:max-w-sm">
-        {/* Live Credits */}
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
-          <CardContent className="p-6">
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Live Credits</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
-                  {balance.toFixed(0)}
-                </span>
-                <span className="text-sm text-emerald-600/60 dark:text-emerald-400/60">remaining</span>
-              </div>
+      {/* ── One wide card: balance, amount, buy ────────────────────────────
+          These were a narrow card floating in a two-column grid whose right
+          half was empty, with the Buy button in the section header a full
+          card-width away from the quantity it acts on. They are one row of one
+          card now, because they are one action: this is what I have, this is
+          how many I want, buy them. */}
+      <Card className="overflow-hidden border-emerald-500/25 bg-emerald-500/[0.05] dark:bg-emerald-500/[0.07]">
+        <CardContent className="flex flex-col gap-5 p-5 sm:flex-row sm:items-end sm:justify-between">
+          {/* Balance */}
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              Live credits
+            </p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-4xl font-bold leading-none tracking-tight text-emerald-700 dark:text-emerald-300">
+                {balance.toFixed(0)}
+              </span>
+              <span className="text-sm text-emerald-700/60 dark:text-emerald-400/60">remaining</span>
             </div>
+          </div>
 
-            <div className="mt-5 pt-5 border-t">
-              <p className="text-xs font-medium text-muted-foreground mb-3">Amount to buy</p>
-              <div className="flex items-center rounded-lg border bg-background w-fit">
+          {/* Amount + buy, side by side and aligned on their baselines so the
+              stepper and the button read as one control. */}
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Amount to buy</p>
+              <div className="flex w-fit items-center rounded-lg border bg-background">
                 <button
                   type="button"
+                  aria-label="Fewer credits"
                   onClick={() => setLiveBuyAmount((v) => Math.max(MIN_PURCHASE_CREDITS, v - 5))}
-                  className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -339,45 +335,39 @@ export function CreditsPanel() {
                   min={MIN_PURCHASE_CREDITS}
                   max={10000}
                   value={liveBuyAmount}
-                  onChange={(e) => setLiveBuyAmount(Math.max(MIN_PURCHASE_CREDITS, parseInt(e.target.value) || MIN_PURCHASE_CREDITS))}
+                  onChange={(e) =>
+                    setLiveBuyAmount(Math.max(MIN_PURCHASE_CREDITS, parseInt(e.target.value) || MIN_PURCHASE_CREDITS))
+                  }
                   className="h-9 w-16 border-x bg-transparent text-center text-sm font-semibold focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <button
                   type="button"
+                  aria-label="More credits"
                   onClick={() => setLiveBuyAmount((v) => Math.min(10000, v + 5))}
-                  className="flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex h-9 w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
-
-              <Button
-                onClick={handleBuyCredits}
-                disabled={buyCredits.isPending || previewActive}
-                className="mt-3 w-full gap-2"
-              >
-                {buyCredits.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Buy {liveBuyAmount} credits
-              </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* The "Test Credits" card stood here — a yellow panel showing a
-           sandbox balance that cannot be bought, next to the real one that
-           can. It is gone from the customer's view by decision: two balances
-           on a billing page is two answers to "how much have I got left", and
-           the sandbox one is an internal concept a paying operator has no use
-           for.
+            <Button
+              onClick={handleBuyCredits}
+              disabled={buyCredits.isPending || previewActive}
+              className="h-9 gap-2"
+            >
+              {buyCredits.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Buy {liveBuyAmount} credits
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-           The DATA is untouched. `test_balance`, `is_test_mode` and the
-           test-mode transactions all still exist and are still written — this
-           removes the customer-facing concept, not the infrastructure. */}
-        {/* The "Service Costs" card stood here — a price list of credits per
+      {/* The "Service Costs" card stood here — a price list of credits per
            service (e-sign, license verification, Twilio). Removed from Billing
            by request: this page answers what you have and how to buy more, and
            a rate card is reference material that made the section wider and
@@ -389,7 +379,6 @@ export function CreditsPanel() {
            is gone is the standalone price list — nothing else on this page read
            it, so the query and its icon map went with it rather than being left
            behind as decoration. */}
-      </div>
 
       {/* ── Everything below is SECONDARY, and folded away ──────────────────
           Transaction history, the usage chart and auto-refill are useful and

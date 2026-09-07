@@ -426,7 +426,12 @@ export default function SubscriptionPage() {
 
   // Subscribed state
   return (
-    <div className="container mx-auto p-6">
+    /* ONE container for the whole page, at a fixed width rather than Tailwind's
+       `container`, whose max-width jumps at each breakpoint — which is what left
+       a band of dead space down the right on a wide display and made the
+       sections look like they belonged to different pages. Every section below
+       sits inside this, so they all share the same left and right edges. */
+    <div className="mx-auto w-full max-w-[1240px] p-6">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
