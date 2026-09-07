@@ -12,6 +12,7 @@ import {
   setBillingScenario,
 } from "@/lib/dev-overrides";
 import { applyBillingScenario } from "@/hooks/use-billing-scenario";
+import { subscribeDevOverrides } from "@/lib/dev-overrides";
 
 function fakeStorage(): Storage {
   const map = new Map<string, string>();
@@ -188,5 +189,37 @@ describe("real billing is untouched", () => {
     const out = applyBillingScenario(real, "grace_expired", "northwind");
     for (const k of Object.keys(real)) expect(out).toHaveProperty(k);
     expect(out.subscription).toEqual({ id: "sub_real" });
+  });
+});
+
+describe("cross-tab propagation", () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  it("notifies when the billing key changes in ANOTHER tab", () => {
+    /* /dev in one tab and the screen under review in another is the obvious
+       way to use this, and the listener originally knew only about the empty
+       state and messages keys — so selecting a billing state did nothing in
+       the other tab until it was reloaded. `storage` fires only in OTHER tabs,
+       so the same-tab custom event cannot cover this. */
+    vi.stubEnv("NODE_ENV", "development");
+    const onChange = vi.fn();
+    const unsubscribe = subscribeDevOverrides(onChange);
+
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: BILLING_SCENARIO_KEY, newValue: "grace_expired" }),
+    );
+    expect(onChange).toHaveBeenCalledTimes(1);
+
+    /* And a clear() — key null — wipes ours too, so it must also notify. */
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    /* Somebody else's key must not wake every consumer of this store. */
+    window.dispatchEvent(new StorageEvent("storage", { key: "unrelated.app.key" }));
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    window.dispatchEvent(new StorageEvent("storage", { key: BILLING_SCENARIO_KEY }));
+    expect(onChange).toHaveBeenCalledTimes(2);
   });
 });

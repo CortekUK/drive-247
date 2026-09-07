@@ -94,29 +94,32 @@ const SCENARIO_IDS: ReadonlySet<string> = new Set(MESSAGE_SCENARIOS.map((s) => s
 
 /** Read the selected scenario. Anything unrecognised reads as "off". */
 export function readMessagesScenario(storage?: Storage | null): MessagesScenarioId {
-  if (process.env.NODE_ENV !== "development") return "off";
-  const store = resolve(storage);
-  if (!store) return "off";
-  try {
-    const raw = store.getItem(MESSAGES_SCENARIO_KEY);
-    return raw && SCENARIO_IDS.has(raw) ? (raw as MessagesScenarioId) : "off";
-  } catch {
-    return "off";
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return "off";
+    try {
+      const raw = store.getItem(MESSAGES_SCENARIO_KEY);
+      return raw && SCENARIO_IDS.has(raw) ? (raw as MessagesScenarioId) : "off";
+    } catch {
+      return "off";
+    }
   }
+  return "off";
 }
 
 /** Select a scenario, or "off" to go back to real data. No-op in production. */
 export function setMessagesScenario(id: MessagesScenarioId, storage?: Storage | null): void {
-  if (process.env.NODE_ENV !== "development") return;
-  const store = resolve(storage);
-  if (!store) return;
-  try {
-    if (id === "off") store.removeItem(MESSAGES_SCENARIO_KEY);
-    else store.setItem(MESSAGES_SCENARIO_KEY, id);
-  } catch {
-    return;
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return;
+    try {
+      if (id === "off") store.removeItem(MESSAGES_SCENARIO_KEY);
+      else store.setItem(MESSAGES_SCENARIO_KEY, id);
+    } catch {
+      return;
+    }
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
   }
-  if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -158,29 +161,32 @@ const BILLING_IDS: ReadonlySet<string> = new Set(BILLING_SCENARIOS.map((s) => s.
 
 /** Read the selected billing state. Anything unrecognised reads as "off". */
 export function readBillingScenario(storage?: Storage | null): BillingScenarioId {
-  if (process.env.NODE_ENV !== "development") return "off";
-  const store = resolve(storage);
-  if (!store) return "off";
-  try {
-    const raw = store.getItem(BILLING_SCENARIO_KEY);
-    return raw && BILLING_IDS.has(raw) ? (raw as BillingScenarioId) : "off";
-  } catch {
-    return "off";
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return "off";
+    try {
+      const raw = store.getItem(BILLING_SCENARIO_KEY);
+      return raw && BILLING_IDS.has(raw) ? (raw as BillingScenarioId) : "off";
+    } catch {
+      return "off";
+    }
   }
+  return "off";
 }
 
 /** Select a billing state, or "off" to go back to the real one. */
 export function setBillingScenario(id: BillingScenarioId, storage?: Storage | null): void {
-  if (process.env.NODE_ENV !== "development") return;
-  const store = resolve(storage);
-  if (!store) return;
-  try {
-    if (id === "off") store.removeItem(BILLING_SCENARIO_KEY);
-    else store.setItem(BILLING_SCENARIO_KEY, id);
-  } catch {
-    return;
+  if (process.env.NODE_ENV === "development") {
+    const store = resolve(storage);
+    if (!store) return;
+    try {
+      if (id === "off") store.removeItem(BILLING_SCENARIO_KEY);
+      else store.setItem(BILLING_SCENARIO_KEY, id);
+    } catch {
+      return;
+    }
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
   }
-  if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
 }
 
 /**
@@ -329,7 +335,13 @@ export function subscribeDevOverrides(onChange: () => void): () => void {
       if (
         event.key === null ||
         event.key === FORCE_EMPTY_STATE_KEY ||
-        event.key === MESSAGES_SCENARIO_KEY
+        event.key === MESSAGES_SCENARIO_KEY ||
+        /* Added late, and its absence was a real bug: /dev in one tab and the
+           screen under review in another is the OBVIOUS way to use this, and
+           without this line selecting a billing state simply did nothing in
+           the other tab until it was reloaded. `storage` events fire only in
+           OTHER tabs, so the same-tab custom event above cannot cover it. */
+        event.key === BILLING_SCENARIO_KEY
       ) onChange();
     };
     window.addEventListener("storage", onStorage);
