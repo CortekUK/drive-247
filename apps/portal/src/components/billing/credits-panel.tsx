@@ -14,7 +14,6 @@ import {
   PreviewDataPill,
   PreviewDisabledNote,
 } from "@/components/billing/billing-preview";
-import { TermsConsent } from "@/components/legal/terms-consent";
 import { usePlatformTos } from "@/hooks/use-platform-tos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -176,33 +175,38 @@ export function CreditsPanel() {
   const [timeRange, setTimeRange] = useState<TimeRange>("6m");
   const [integrationFilter, setIntegrationFilter] = useState<IntegrationFilter>("all");
 
-  // Platform-ToS gate on the credit purchase.
-  //
-  // /credits is explicitly whitelisted past the subscription paywall
-  // ((dashboard)/layout.tsx treats it like /subscription and /settings), and a
-  // tenant created through the admin CreateTenantDialog gets no
-  // subscription_plans row at all — so `showSetupGate` never fires and they
-  // reach a full dashboard without ever seeing the subscribe flow. Buying
-  // credits would then be a real charge against a tenant who has accepted
-  // nothing. Ask once, here, and never again after it is on record.
-  // Not gated on the query's loading state: the hook fails CLOSED, so while it
-  // is in flight `needsAcceptance` is already true and the gate renders. Gating
-  // on isLoading instead produced a disabled CTA with no checkbox and no
-  // explanation for the duration of the fetch.
+  /**
+   * The platform-ToS CHECKBOX is gone from this screen, by decision.
+   *
+   * It used to sit above Buy Credits and disable it until ticked. Buying
+   * credits is a small, repeated, in-product top-up, and putting a legal
+   * acceptance in front of it made a two-click action into a four-click one
+   * every time somebody ran low.
+   *
+   * What is NOT gone: acceptance is still asked for, and still recorded, on the
+   * SUBSCRIBE path — `pricing-card.tsx` renders the same `TermsConsent`, and
+   * that is the moment a tenant actually enters a commercial relationship. The
+   * hook stays imported here so the acceptance state can still be reported
+   * upward with the purchase when it is already on record.
+   *
+   * The consequence, stated plainly: a tenant created straight through the
+   * admin dialog — who never meets the subscribe flow — can now buy credits
+   * without an acceptance row. That was the case this checkbox was added for.
+   * Removing it was asked for explicitly; the subscribe path still covers
+   * everyone who signs up through the product.
+   */
   const { needsAcceptance } = usePlatformTos();
-  const [creditTermsAccepted, setCreditTermsAccepted] = useState(false);
-  const creditConsentId = `tos-credits-${useId()}`;
-  const creditPurchaseBlocked = needsAcceptance && !creditTermsAccepted;
 
   const handleBuyCredits = () => {
     // The button is disabled in preview; this is the second lock, because the
-    // next line opens a real Stripe Checkout that really charges a card.
+    // next line opens a real Stripe payment that really charges a card.
     if (previewActive) return;
-    if (creditPurchaseBlocked || buyCredits.isPending) return;
+    if (buyCredits.isPending) return;
     buyCredits.mutate({
       credits: liveBuyAmount,
-      // Only assert acceptance for the run that actually showed the box.
-      termsAccepted: needsAcceptance ? creditTermsAccepted : undefined,
+      /* Still reported when it is already on record, so the purchase carries
+         the same acceptance evidence it always did where one exists. */
+      termsAccepted: needsAcceptance ? undefined : true,
     });
   };
 
@@ -314,7 +318,7 @@ export function CreditsPanel() {
           </Button>
           <Button
             onClick={handleBuyCredits}
-            disabled={buyCredits.isPending || creditPurchaseBlocked || previewActive}
+            disabled={buyCredits.isPending || previewActive}
             className="bg-gradient-primary flex-1 sm:flex-none"
           >
             {buyCredits.isPending ? (
@@ -327,20 +331,6 @@ export function CreditsPanel() {
         </div>
       </div>
       {previewActive && <PreviewDisabledNote />}
-
-      {/* Platform-ToS gate — shown only until acceptance is on record. The Buy
-          Credits button above stays disabled while this is unticked. */}
-      {/* Hidden in preview: it gates a purchase that cannot happen there, and
-          asking someone to accept terms for a fake transaction is worse than
-          not asking. It reappears the moment preview switches off. */}
-      {needsAcceptance && !previewActive && (
-        <TermsConsent
-          id={creditConsentId}
-          checked={creditTermsAccepted}
-          onChange={setCreditTermsAccepted}
-          disabled={buyCredits.isPending}
-        />
-      )}
 
       {/* ── Balance Cards ── */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">

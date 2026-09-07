@@ -38,6 +38,18 @@ export interface TenantSubscriptionInvoice {
   stripe_invoice_id: string;
   stripe_invoice_pdf: string | null;
   stripe_hosted_invoice_url: string | null;
+  /**
+   * The RECEIPT — proof the invoice was paid, and a different document from
+   * the two above, which are the bill.
+   *
+   * Stripe puts `receipt_url` on the CHARGE, so `subscription-webhook` fetches
+   * it when `invoice.paid` arrives. NULL means no successful payment was
+   * recorded, and the UI must not offer a receipt: an unpaid or failed invoice
+   * has a bill and nothing else.
+   */
+  stripe_receipt_url: string | null;
+  stripe_charge_id: string | null;
+  stripe_payment_intent_id: string | null;
   status: string;
   amount_due: number;
   amount_paid: number;

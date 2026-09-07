@@ -1116,6 +1116,37 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
 
   const { baseAmount, usageAmount, usageQuantity } = parseInvoiceLineItems(invoice);
 
+  /* ── the RECEIPT, which is not the invoice ────────────────────────────────
+     An invoice is the bill; a receipt is proof that it was paid. They are two
+     different documents and the Billing page offers them as two different
+     actions, so the receipt has to be a real Stripe object rather than a local
+     re-render of the invoice.
+     Stripe puts `receipt_url` on the CHARGE, not on the invoice, so it has to
+     be fetched. Best-effort by design: a receipt we could not retrieve must
+     never fail the invoice write — the payment happened either way, and the
+     row carrying the money matters more than the link to its receipt. */
+  let receiptUrl: string | null = null;
+  let chargeId: string | null = typeof invoice.charge === "string" ? invoice.charge : null;
+  const paymentIntentId: string | null =
+    typeof invoice.payment_intent === "string" ? invoice.payment_intent : null;
+
+  try {
+    /* The client is an OPTIONAL parameter on this handler, so it can genuinely
+       be absent — and calling through it unguarded would turn a missing
+       receipt into a thrown invoice write. */
+    if (!stripe) throw new Error("no stripe client in scope");
+    if (!chargeId && paymentIntentId) {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+      chargeId = typeof pi.latest_charge === "string" ? pi.latest_charge : null;
+    }
+    if (chargeId) {
+      const charge = await stripe.charges.retrieve(chargeId);
+      receiptUrl = charge.receipt_url ?? null;
+    }
+  } catch (e) {
+    console.error("Could not retrieve the Stripe receipt for invoice", invoice.id, e);
+  }
+
   const { error } = await supabase
     .from("tenant_subscription_invoices")
     .upsert({
@@ -1124,6 +1155,9 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       stripe_invoice_id: invoice.id,
       stripe_invoice_pdf: invoice.invoice_pdf || null,
       stripe_hosted_invoice_url: invoice.hosted_invoice_url || null,
+      stripe_receipt_url: receiptUrl,
+      stripe_charge_id: chargeId,
+      stripe_payment_intent_id: paymentIntentId,
       status: "paid",
       amount_due: invoice.amount_due || 0,
       amount_paid: invoice.amount_paid || 0,
