@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { PricingCard } from "@/components/subscription/pricing-card";
 import { CreditCard, Loader2, Mail, ShieldAlert } from "lucide-react";
+import { DevBillingStateEscape } from "@/components/dev/dev-billing-escape";
 
 interface SubscriptionGateDialogProps {
   /**
@@ -99,6 +100,12 @@ export function SubscriptionGateDialog({
     <Dialog open={open}>
       <DialogContent
         className="sm:max-w-md max-h-[90vh] overflow-y-auto [&>button:last-child]:hidden"
+        /* The application behind this is BLURRED, not merely dimmed. A dimmed
+           dashboard still reads as a dashboard you could use if you squinted,
+           and this screen's whole job is to say that you cannot. `bg-background/70`
+           rather than the default `bg-black/80`: with a blur underneath it, a
+           heavy black wash makes the page look broken rather than paused. */
+        overlayClassName="bg-background/70 backdrop-blur-md"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
@@ -250,6 +257,18 @@ export function SubscriptionGateDialog({
             Sign out
           </button>
         )}
+
+        {/* A way OUT of a state a developer switched on.
+            This dialog is deliberately inescapable — no Esc, no click-outside,
+            no close button — which is right for a real unpaid tenant and wrong
+            for someone reviewing the screen: the /dev page that turns the mock
+            off is itself behind this gate, so selecting "Grace expired" locked
+            the tester out of the switch. Signing out did not help either, since
+            the flag lives in localStorage and survives it.
+
+            Renders nothing unless a dev scenario is actually active, and
+            nothing at all in a production bundle. */}
+        <DevBillingStateEscape />
       </DialogContent>
     </Dialog>
   );

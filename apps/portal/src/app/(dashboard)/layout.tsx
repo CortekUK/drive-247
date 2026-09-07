@@ -136,10 +136,19 @@ export default function DashboardLayout({
 
   // Pages where the user MUST be able to reach even without a subscription —
   // otherwise they'd have no way to subscribe or contact us.
+  //
+  // `/dev` joins them IN DEVELOPMENT ONLY. The blocked state is mockable from
+  // that page, and `/dev` lives inside this same dashboard — so selecting
+  // "Grace expired" put the blocker over the switch that turns it off, and
+  // signing out did not help because the flag is in localStorage and survives
+  // it. The literal comparison is folded away in a production build, so this
+  // adds no bypass anywhere a real tenant can reach; the dialog also carries
+  // its own exit (see dev-billing-escape.tsx).
   const isSubscriptionPage =
     pathname === "/subscription" ||
     pathname === "/credits" ||
-    pathname?.startsWith("/settings");
+    pathname?.startsWith("/settings") ||
+    (process.env.NODE_ENV === "development" && pathname === "/dev");
 
   /**
    * Messages is a FULL-BLEED WORKSPACE — it takes the whole window, navigation

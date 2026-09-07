@@ -31,6 +31,19 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     /**
+     * Extra classes for the OVERLAY behind the dialog.
+     *
+     * The overlay is rendered by this component, so without a way through,
+     * styling it meant either restyling every dialog in the app or rebuilding
+     * the portal by hand. Optional and unset by default, so every existing
+     * dialog renders byte-for-byte what it did.
+     *
+     * Used by the subscription blocker, which blurs the application behind it:
+     * a dimmed dashboard still reads as a dashboard you could use, and that
+     * screen's whole job is to say you cannot.
+     */
+    overlayClassName?: string;
+    /**
      * Render the corner "×"? Defaults to true, so every existing dialog in the
      * app is untouched. Pass false for a dialog that must not be dismissible:
      * the button is then NOT RENDERED, rather than hidden with a `hidden`
@@ -41,9 +54,9 @@ const DialogContent = React.forwardRef<
      */
     showCloseButton?: boolean;
   }
->(({ className, children, showCloseButton = true, ...props }, ref) => (
+>(({ className, children, showCloseButton = true, overlayClassName, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
