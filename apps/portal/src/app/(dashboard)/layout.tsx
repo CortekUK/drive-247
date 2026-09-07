@@ -141,6 +141,25 @@ export default function DashboardLayout({
     pathname === "/credits" ||
     pathname?.startsWith("/settings");
 
+  /**
+   * Messages is a FULL-BLEED WORKSPACE — it takes the whole window, navigation
+   * sidebar included.
+   *
+   * Every other page is content inside the app chrome. Messages is not: it is
+   * three columns that each need real width (conversation list, thread,
+   * customer overview), and with the 256px nav rail also on screen the thread —
+   * the one column that actually carries the work — was the narrowest thing on
+   * a 1520px display. So on this route only, the sidebar is not rendered and
+   * `main` gives up its padding.
+   *
+   * Scoped to the route rather than the component: nothing about the sidebar
+   * changes, it simply is not mounted here, so leaving Messages brings it back
+   * with no state to restore and no other page affected. The rail's header
+   * carries a way out (see `conversation-rail.tsx`) since the nav is gone.
+   */
+  const isMessagesWorkspace =
+    pathname === "/messages" || !!pathname?.startsWith("/messages/");
+
   const hasActivePlans = !!plans && plans.length > 0;
 
   // Every reason the blocker must stay hidden, in one place.
@@ -364,7 +383,7 @@ export default function DashboardLayout({
           same on both trees. `undefined` outside the gate leaves the element's
           class list byte-for-byte what it was for the other 56 tenants. */}
       <Provider className={v2Theme ? "bg-background bg-app-gradient" : undefined}>
-        {v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
+        {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
 
         {/* v2 has no top bar — and the SidebarTrigger lived in it. On desktop
             the sidebar still collapses the way the source does: the
@@ -375,7 +394,7 @@ export default function DashboardLayout({
             all. Mirrors the dock's tucked handle on the opposite edge.
             `Trigger` is the v2 trigger here, from the same module as
             `Provider`, so the sidebar context still resolves. */}
-        {v2Chrome && (
+        {v2Chrome && !isMessagesWorkspace && (
           <Trigger
             aria-label="Open navigation"
             className="fixed left-0 top-1/2 z-40 h-11 w-7 -translate-y-1/2 rounded-l-none rounded-r-2xl border border-l-0 border-border/70 bg-card text-muted-foreground shadow-[6px_0_20px_-12px_rgba(0,0,0,0.18)] md:hidden"
@@ -427,7 +446,20 @@ export default function DashboardLayout({
           {/* `pt-0` exists because the v1 header already supplies the top
               gap. With the header gone, v2 needs its own — the source's main
               is a plain `p-4`. */}
-          <main className={`flex flex-1 flex-col gap-4 p-4${v2Chrome ? "" : " pt-0"}`}>
+          {/* The workspace route gets a definite height and no padding: its own
+              layout owns the box and clips inside it, which is what keeps the
+              page itself from ever scrolling behind the columns. v1 chrome
+              still has the 4rem header row above, so it subtracts it; v2 has
+              no top bar at all. */}
+          <main
+            className={
+              isMessagesWorkspace
+                ? `flex flex-1 flex-col overflow-hidden p-0 ${
+                    v2Chrome ? "h-svh" : "h-[calc(100svh-4rem)]"
+                  }`
+                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? "" : " pt-0"}`
+            }
+          >
             {children}
           </main>
         </Inset>

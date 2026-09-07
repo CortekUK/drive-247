@@ -25,7 +25,7 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { Mail, MessageCircle, MessageSquare, Phone, Search, Send } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, MessageSquare, Phone, Search, Send } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Input } from "@/components/ui-v2/input";
 import { Button } from "@/components/ui-v2/button";
@@ -33,6 +33,7 @@ import { useChatChannels, type ChatChannel } from "@/hooks/use-chat-channels";
 import type { MessageChannel } from "@/contexts/RealtimeChatContext";
 import { mockChannelDecoration, type MockChannelDecoration } from "@/components/messages-v2/mock-conversation";
 import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
+import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
 
 const initials = (name?: string | null) =>
   (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -147,7 +148,20 @@ export function ConversationRail({
     <div className="flex min-h-0 w-full flex-col border-r border-border/50">
       <div className="shrink-0 space-y-3 border-b border-border/50 px-3 py-3">
         <div className="flex items-center justify-between gap-2">
-          <h1 className="text-[15px] font-semibold tracking-tight">Messages</h1>
+          {/* The portal nav is not on screen inside Messages — the workspace
+              takes the whole window. This is the way out, and it is the only
+              one on v2 chrome, so it is a real control rather than a hover
+              affordance. */}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Button
+              asChild variant="ghost" size="icon"
+              title="Back to the portal" aria-label="Back to the portal"
+              className="-ml-1 h-8 w-8 shrink-0 rounded-full text-muted-foreground"
+            >
+              <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
+            </Button>
+            <h1 className="truncate text-[15px] font-semibold tracking-tight">Messages</h1>
+          </div>
           {onBulkMessage && (
             <Button
               variant="ghost" size="icon" onClick={onBulkMessage}
@@ -169,7 +183,9 @@ export function ConversationRail({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* The one scroll region in this column. The search header above is a
+          sibling, not a wrapper, so it stays put without `sticky`. */}
+      <div className={`min-h-0 flex-1 overflow-y-auto ${NO_SCROLLBAR}`}>
         {isLoading ? (
           <div className="space-y-1 p-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (

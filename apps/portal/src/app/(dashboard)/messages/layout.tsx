@@ -32,6 +32,7 @@ import { BulkMessageModal } from "@/components/chat";
 import { ConversationRail } from "@/components/messages-v2/conversation-rail";
 import { CustomerContext } from "@/components/messages-v2/customer-context";
 import { useChatChannels } from "@/hooks/use-chat-channels";
+import { useV2 } from "@/lib/v2-context";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
@@ -43,13 +44,24 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
 
   const selected = selectedId ? channels.find((c) => c.id === selectedId) ?? null : null;
 
+  /* The v2 quick dock is `fixed right-0`, so on every other page it floats over
+     whatever happens to be at the right edge. Here that was the customer
+     overview's contact rows. Reserving its lane costs 48px and is the only way
+     the right column can be read at its full width; v1 tenants never mount the
+     dock, so they never pay for it. */
+  const hasQuickDock = useV2("chrome");
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+    /* `h-full` — the dashboard shell gave this route a definite viewport height
+       and clipped it, so the workspace can fill it exactly instead of doing its
+       own viewport arithmetic. Two elements both computing `100vh - something`
+       is how the page ended up with a scrollbar behind the columns' own. */
+    <div className={`flex h-full overflow-hidden ${hasQuickDock ? "pr-12" : ""}`}>
       {/* Left — compact, and the only always-visible column on a narrow window.
           Hidden once a conversation is open on small screens so the thread gets
           the whole width; the thread carries its own Back control there. */}
       <div
-        className={`w-full min-h-0 shrink-0 md:flex md:w-[300px] ${
+        className={`w-full min-h-0 shrink-0 md:flex md:w-[292px] ${
           selectedId ? "hidden md:flex" : "flex"
         }`}
       >

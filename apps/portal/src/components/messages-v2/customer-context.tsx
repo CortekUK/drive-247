@@ -33,6 +33,7 @@ import { Button } from "@/components/ui-v2/button";
 import { useCustomerRentals } from "@/hooks/use-customer-rentals";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 import type { MessageChannel } from "@/contexts/RealtimeChatContext";
+import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
 
 const initials = (name?: string | null) =>
   (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -94,31 +95,37 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
   const preferred = CHANNEL_LABEL[channel.last_channel] ?? "In-app";
 
   return (
-    /* `min-h-0` + `overflow-y-auto` means this scrolls ONLY when its own
-       content is taller than the shell — a customer with one rental does not
-       get a scrollbar track down the side of an obviously short panel. It also
-       cannot push the shell taller, which is what produced the second,
-       page-level scrollbar beside the first. */
-    <aside className="hidden min-h-0 w-[300px] shrink-0 overflow-y-auto border-l border-border/50 xl:block">
-      <div className="space-y-6 p-5">
-        {/* Identity */}
+    /* Narrower than the conversation list on purpose: the visual order the
+       brief asks for is thread first, list second, this third, and width is how
+       that order is actually expressed. Everything here is also one click away
+       on the customer screen, which is why it is the first column to go as the
+       window narrows. */
+    <aside className="hidden min-h-0 w-[276px] shrink-0 flex-col border-l border-border/50 xl:flex">
+      {/* Who you are talking to stays put; only the detail below it moves. */}
+      <div className="shrink-0 border-b border-border/50 px-5 py-4">
         <div className="flex flex-col items-center text-center">
-          <Avatar className="h-16 w-16">
+          <Avatar className="h-14 w-14">
             <AvatarImage src={channel.customer?.profile_photo_url || undefined} alt={name} />
             <AvatarFallback className="bg-primary/10 text-base font-semibold text-primary">
               {initials(name)}
             </AvatarFallback>
           </Avatar>
-          <p className="mt-3 text-[14px] font-semibold leading-tight">{name}</p>
-          {email && <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{email}</p>}
-          <Button asChild variant="outline" size="sm" className="mt-3 gap-1.5 rounded-full">
+          <p className="mt-2.5 text-[14px] font-semibold leading-tight">{name}</p>
+          {email && (
+            <p className="mt-0.5 w-full truncate text-[12px] text-muted-foreground">{email}</p>
+          )}
+          <Button asChild variant="outline" size="sm" className="mt-3 h-8 gap-1.5 rounded-full">
             <Link href={`/customers/${customerId}`}>
               Open customer
               <ExternalLink className="h-3 w-3" />
             </Link>
           </Button>
         </div>
+      </div>
 
+      {/* One scroll region, and it only scrolls when the content genuinely
+          overflows — a customer with a single rental never does. */}
+      <div className={`min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4 ${NO_SCROLLBAR}`}>
         <Section title="Contact">
           <div className="rounded-2xl bg-muted/40 px-3.5 py-2">
             {email && (

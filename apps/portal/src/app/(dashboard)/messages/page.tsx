@@ -13,6 +13,13 @@
  * entry, or Back from the first conversation would land on it and immediately
  * bounce forward again.
  *
+ * ⚠ THE AUTO-SELECT IS DESKTOP-ONLY. Below `md` the rail and the thread do not
+ * share the screen — the rail IS the screen, and the thread replaces it — so
+ * selecting for the user there would mean `/messages` could never show the
+ * list, and the thread's own Back control would bounce straight back into a
+ * conversation. On a phone this stays the list, which is what "Messages" means
+ * when only one column fits.
+ *
  * ⚠ `?customerId=` IS LOAD-BEARING. Enquiries and the customer detail screen
  * both deep-link here to open — or start — a conversation with one person, and
  * that resolution takes priority over the most-recent default. The
@@ -51,6 +58,11 @@ export default function MessagesIndexPage() {
       return;
     }
 
+    /* Same breakpoint as the layout's `md:` rail. Read at effect time rather
+       than tracked: this only ever decides the FIRST landing, and a person
+       resizing a window mid-session should not be navigated by it. */
+    if (typeof window !== "undefined" && !window.matchMedia("(min-width: 768px)").matches) return;
+
     /* The most recent conversation. Sorted here rather than trusting the
        hook's order, because "most recent" is the promise being made. */
     const newest = [...channels].sort(
@@ -61,10 +73,12 @@ export default function MessagesIndexPage() {
     if (newest) router.replace(`/messages/${newest.id}`);
   }, [channels, tenant?.id, targetCustomerId, joinRoom, router]);
 
+  /* Deliberately quiet on desktop: with conversations present this is a single
+     frame before the redirect, and a spinner that flashes for 16ms reads as a
+     glitch rather than as progress. On mobile there is no redirect coming, and
+     the centre column is not on screen at all — the rail has it — so this
+     renders nothing either way and the empty state below is what matters. */
   if (isLoading || channels.length > 0) {
-    /* Deliberately quiet. With conversations present this is a single frame
-       before the redirect, and a spinner that flashes for 16ms reads as a
-       glitch rather than as progress. */
     return <div className="flex-1" />;
   }
 

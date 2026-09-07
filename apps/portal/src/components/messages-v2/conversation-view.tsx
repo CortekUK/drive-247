@@ -57,6 +57,7 @@ import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides
 import { useVoiceCall } from "@/hooks/use-voice-call";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 import { AttachMenu } from "@/components/messages-v2/attach-menu";
+import { NO_SCROLLBAR } from "@/components/messages-v2/no-scrollbar";
 import { useChatAttachments } from "@/components/messages-v2/use-chat-attachments";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 
@@ -402,7 +403,14 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
       )}
 
       {/* ── history ────────────────────────────────────────────────────── */}
-      <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-6 py-8">
+      {/* The ONLY scroll region in this column — the header above and the
+          composer below are siblings, so they hold their place without
+          `sticky` and without a second scroll container between them. */}
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className={`relative min-h-0 flex-1 overflow-y-auto px-6 py-8 lg:px-10 ${NO_SCROLLBAR}`}
+      >
         {isLoading ? (
           <div className="space-y-4">
             {[0, 1, 2, 3].map((i) => (
@@ -423,7 +431,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto w-full max-w-5xl">
             {hasMore && !previewing && (
               <div className="mb-4 flex justify-center">
                 <Button variant="ghost" size="sm" className="rounded-full" onClick={handleLoadMore} disabled={isLoadingMore}>
@@ -450,8 +458,12 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
       </div>
 
       {/* ── composer ───────────────────────────────────────────────────── */}
-      <div className="border-t border-border/50 px-6 py-4">
-        <div className="mx-auto max-w-4xl space-y-3">
+      <div className="border-t border-border/50 px-6 py-4 lg:px-10">
+        {/* `max-w-5xl` here is the SAME cap the history uses, which is what
+            makes the column width independent of the composer mode: Email
+            swaps a one-line box for a subject + body and grows DOWNWARDS, and
+            the thread above never moves a pixel sideways. */}
+        <div className="mx-auto w-full max-w-5xl space-y-3">
           <ChannelSwitcher mode={mode} setMode={setMode} disabled={disabled} />
 
           {disabled[mode] ? (
@@ -514,7 +526,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 placeholder={`Write to ${name.split(" ")[0]}…`}
-                className="min-h-[160px] resize-y rounded-2xl"
+                className={`min-h-[160px] resize-y rounded-2xl ${NO_SCROLLBAR}`}
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <AttachMenu
@@ -546,7 +558,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
                 }}
                 placeholder={mode === "sms" ? `Text ${name.split(" ")[0]}…` : `Message ${name.split(" ")[0]}…`}
-                className="max-h-40 min-h-[44px] flex-1 resize-none rounded-3xl py-3"
+                className={`max-h-40 min-h-[44px] flex-1 resize-none rounded-3xl py-3 ${NO_SCROLLBAR}`}
               />
               <Button
                 onClick={handleSend}

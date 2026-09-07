@@ -100,7 +100,7 @@ function EmailItem({
   return (
     <div className={`mt-4 flex w-full ${own ? "justify-end" : "justify-start"}`}>
       <div
-        className={`w-full max-w-[min(30rem,85%)] overflow-hidden rounded-2xl ring-1 ${
+        className={`w-full max-w-[min(42rem,80%)] overflow-hidden rounded-2xl ring-1 ${
           own ? "bg-primary/[0.06] ring-primary/15" : "bg-card ring-foreground/5"
         }`}
       >
