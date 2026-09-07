@@ -54,7 +54,6 @@ import { DateSeparator, VoiceCallBar } from "@/components/chat";
 import { TimelineItem } from "@/components/messages-v2/timeline-item";
 import { mockMessages } from "@/components/messages-v2/mock-conversation";
 import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
-import { CustomerContext } from "@/components/messages-v2/customer-context";
 import { useVoiceCall } from "@/hooks/use-voice-call";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 import { AttachMenu } from "@/components/messages-v2/attach-menu";
@@ -348,11 +347,11 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
   }, [messages]);
 
   return (
-    /* A row, not a column: the conversation takes the width it can and the
-       context rail sits beside it on wide screens. `min-w-0` on the column is
-       what stops a long message from pushing the rail off the edge. */
-    <div className="flex h-[calc(100vh-4rem)]">
-      <div className="flex min-w-0 flex-1 flex-col">
+    /* NO HEIGHT OF ITS OWN. The workspace layout owns the box; this fills it.
+       Two components each claiming `h-[calc(100vh-4rem)]` is precisely how the
+       nested scrollbars appeared — the inner one could not shrink, so it
+       overflowed the outer one, and both drew a track. */
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* ── header ─────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-4 border-b border-border/50 px-6 py-4">
         {/* The sidebar becomes a Back rail on this route, but a Back control
@@ -402,21 +401,8 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
         />
       )}
 
-      {previewing && (
-        /* Impossible to mistake for real data, and one click from gone. A
-           preview that looks like production is how a fixture ends up in a
-           screenshot presented as evidence. */
-        <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-[12px] text-amber-700">
-          <Info className="h-3.5 w-3.5 shrink-0" />
-          <span>
-            Showing the <strong className="font-semibold">{scenario}</strong> preview — mocked data
-            for design review. Change it in /dev.
-          </span>
-        </div>
-      )}
-
       {/* ── history ────────────────────────────────────────────────────── */}
-      <div ref={scrollRef} onScroll={onScroll} className="relative flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollRef} onScroll={onScroll} className="relative min-h-0 flex-1 overflow-y-auto px-6 py-8">
         {isLoading ? (
           <div className="space-y-4">
             {[0, 1, 2, 3].map((i) => (
@@ -437,7 +423,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-4xl">
             {hasMore && !previewing && (
               <div className="mb-4 flex justify-center">
                 <Button variant="ghost" size="sm" className="rounded-full" onClick={handleLoadMore} disabled={isLoadingMore}>
@@ -465,7 +451,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
 
       {/* ── composer ───────────────────────────────────────────────────── */}
       <div className="border-t border-border/50 px-6 py-4">
-        <div className="mx-auto max-w-3xl space-y-3">
+        <div className="mx-auto max-w-4xl space-y-3">
           <ChannelSwitcher mode={mode} setMode={setMode} disabled={disabled} />
 
           {disabled[mode] ? (
@@ -594,9 +580,6 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
           />
         </div>
       </div>
-      </div>
-
-      <CustomerContext channel={channel} />
     </div>
   );
 }

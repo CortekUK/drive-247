@@ -94,7 +94,12 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
   const preferred = CHANNEL_LABEL[channel.last_channel] ?? "In-app";
 
   return (
-    <aside className="hidden w-[300px] shrink-0 overflow-y-auto border-l border-border/50 xl:block">
+    /* `min-h-0` + `overflow-y-auto` means this scrolls ONLY when its own
+       content is taller than the shell — a customer with one rental does not
+       get a scrollbar track down the side of an obviously short panel. It also
+       cannot push the shell taller, which is what produced the second,
+       page-level scrollbar beside the first. */
+    <aside className="hidden min-h-0 w-[300px] shrink-0 overflow-y-auto border-l border-border/50 xl:block">
       <div className="space-y-6 p-5">
         {/* Identity */}
         <div className="flex flex-col items-center text-center">

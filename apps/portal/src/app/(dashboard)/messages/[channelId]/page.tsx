@@ -29,7 +29,7 @@ export default function ConversationPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[calc(100vh-4rem)] flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center gap-4 border-b border-border/50 px-6 py-4">
           <div className="h-11 w-11 animate-pulse rounded-full bg-muted" />
           <div className="space-y-2">
@@ -53,7 +53,7 @@ export default function ConversationPage() {
      nothing, so this is its own state with a way back. */
   if (!channel) {
     return (
-      <div className="flex h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 text-center">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
         <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
           <MessageSquare className="h-6 w-6" />
         </div>
