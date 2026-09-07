@@ -28,6 +28,7 @@ import {
 import { UsageDashboard } from "@/components/settings/usage-dashboard";
 import { LocalInvoiceView } from "@/components/settings/subscription-settings";
 import { CardBrandIcon, CardOnFile } from "@/components/subscription/card-brand-icon";
+import { PaymentMethods, type SavedCard } from "@/components/subscription/payment-methods";
 // Canary-only sample billing data. See the header of billing-preview.tsx for
 // why the gate is written on the SLUG and not as a `V2Area`.
 import {
@@ -129,6 +130,23 @@ export default function SubscriptionPage() {
 
   /** What the subscribed layout below renders — real data unless it is absent. */
   const shownSubscription = previewActive ? previewSubscription : subscription;
+
+  /* The saved cards, as a LIST — the UI is built for several, and the product
+     currently stores one, denormalised on the subscription row. When Stripe
+     payment-method functions exist this becomes their result and nothing above
+     it changes. */
+  const savedCards: SavedCard[] = shownSubscription?.card_last4
+    ? [
+        {
+          brand: shownSubscription.card_brand,
+          last4: shownSubscription.card_last4,
+          expMonth: shownSubscription.card_exp_month,
+          expYear: shownSubscription.card_exp_year,
+          /* The only card on file is by definition the one Stripe charges. */
+          isPrimary: true,
+        },
+      ]
+    : [];
   const shownInvoices = previewActive ? previewInvoices : invoices;
 
   // No tab state: the page is one column now. `?tab=credits` links that
@@ -531,58 +549,19 @@ export default function SubscriptionPage() {
               </div>
             </div>
 
-            {/* Payment Method */}
+            {/* Billing methods — a card that looks like a card. See
+                payment-methods.tsx for why one appears today and why no empty
+                "Secondary" slot is drawn for a backend that does not exist. */}
             <div className="rounded-lg border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Payment Method</h2>
-              {shownSubscription?.card_last4 ? (
-                <div className="space-y-4">
-                  {/* Real network artwork, and the same CardOnFile block Settings
-                      renders, so the two billing surfaces cannot drift. The old
-                      markup also printed a bare "Expires undefined/undefined"
-                      whenever Stripe had not sent expiry back yet. */}
-                  <CardOnFile
-                    brand={shownSubscription.card_brand}
-                    last4={shownSubscription.card_last4}
-                    expMonth={shownSubscription.card_exp_month}
-                    expYear={shownSubscription.card_exp_year}
-                    className="rounded-lg bg-muted/50 p-3"
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={handleManagePayment}
-                    disabled={createPortalSession.isPending || previewActive}
-                    className="w-full"
-                  >
-                    {createPortalSession.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Redirecting...
-                      </>
-                    ) : (
-                      "Update Payment Method"
-                    )}
-                  </Button>
-                  {previewActive && <PreviewDisabledNote />}
-                </div>
-              ) : (
-                <div className="py-4 text-center">
-                  <CardBrandIcon
-                    brand={null}
-                    className="mx-auto mb-3 h-10 w-[3.75rem] text-muted-foreground"
-                  />
-                  <p className="mb-3 text-sm text-muted-foreground">
-                    No payment method on file
-                  </p>
-                  <Button
-                    variant="outline"
-                    onClick={handleManagePayment}
-                    disabled={createPortalSession.isPending || previewActive}
-                  >
-                    Add Payment Method
-                  </Button>
-                  {previewActive && <PreviewDisabledNote className="mt-3" />}
-                </div>
-              )}
+              <h2 className="text-lg font-semibold mb-4">Billing Methods</h2>
+              <PaymentMethods
+                cards={savedCards}
+                onManage={handleManagePayment}
+                isPending={createPortalSession.isPending}
+                disabled={previewActive}
+                disabledNote={previewActive ? <PreviewDisabledNote /> : null}
+              />
+
 
               {/* Was a mailto: and a sentence — the dead end §12 describes.
                   This files a real request into the super admin's queue, emails
@@ -594,6 +573,11 @@ export default function SubscriptionPage() {
               </div>
             </div>
           </div>
+          </section>
+
+          <section>
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">Credits</h2>
+            <CreditsPanel />
           </section>
 
           <section>
@@ -615,11 +599,6 @@ export default function SubscriptionPage() {
           ) : (
             billingHistory
           )}
-          </section>
-
-          <section>
-            <h2 className="mb-4 text-lg font-semibold tracking-tight">Credits</h2>
-            <CreditsPanel />
           </section>
         </div>
       ) : (

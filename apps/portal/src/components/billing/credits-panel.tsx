@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
+  ChevronDown,
   CircleDollarSign,
   Loader2,
   RefreshCw,
@@ -421,6 +422,26 @@ export function CreditsPanel() {
         </Card>
       </div>
 
+      {/* ── Everything below is SECONDARY, and folded away ──────────────────
+          Transaction history, the usage chart and auto-refill are useful and
+          none of them is what somebody opens Billing to find. Left expanded
+          they ran to three full-width cards and a chart, pushing Invoices &
+          Receipts off the bottom of the screen and making the page feel like an
+          analytics dashboard that happens to mention a plan.
+
+          Folded, not deleted: every control still works, one click away, and
+          the summary line says what is in there so the click is informed. */}
+      <details className="group rounded-2xl border border-border bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium">Usage &amp; settings</p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              Transaction history, usage over time, and auto&#8209;refill
+            </p>
+          </div>
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-6 border-t border-border/60 p-5">
       {/* ── Transaction History (full width) ── */}
       <Card>
         <CardHeader className="pb-2">
@@ -599,6 +620,8 @@ export function CreditsPanel() {
           )}
         </CardContent>
       </Card>
+        </div>
+      </details>
     </div>
   );
 }
