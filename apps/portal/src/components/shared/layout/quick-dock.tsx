@@ -1,13 +1,11 @@
 "use client";
 
-import { forwardRef, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { Sparkles, MessageCircle, Inbox, ChevronLeft, ChevronRight } from "lucide-react";
+import { forwardRef, useState, type ComponentProps, type ReactNode } from "react";
+import { MessageCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
-import { MessagesSheet, EnquiriesSheet } from "@/components/shared/layout/dock-sheets";
-import { TraxLauncher, type TraxLauncherHandle } from "@/components/trax/trax-launcher";
+import { MessagesSheet } from "@/components/shared/layout/dock-sheets";
 import { useUnreadCount } from "@/hooks/use-unread-count";
-import { useEnquiryStats } from "@/hooks/use-enquiry-stats";
 import { useNotifications } from "@/hooks/use-notifications";
 
 const BTN =
@@ -43,18 +41,18 @@ function DockBadge({ count }: { count: number }) {
  * where it lands nowhere and the tooltip never opens.
  *
  * The tooltip also spells out the count, because the badge caps at "9+" and
- * that is exactly when the real number is worth knowing.
+ * that is exactly when the real number is worth knowing. It says "unread"
+ * outright now: the label used to be a prop because Inquiries counted
+ * "pending", and with that icon gone every remaining count means one thing.
  */
 const DockButton = forwardRef<
   HTMLButtonElement,
   {
     label: string;
     count?: number;
-    /** What the count means here — "unread" for messages, "pending" for enquiries. */
-    countLabel?: string;
     icon: ReactNode;
   } & ComponentProps<"button">
->(({ label, count = 0, countLabel = "unread", icon, ...props }, ref) => (
+>(({ label, count = 0, icon, ...props }, ref) => (
   <Tooltip>
     <TooltipTrigger asChild>
       <button ref={ref} type="button" aria-label={label} className={BTN} {...props}>
@@ -66,7 +64,7 @@ const DockButton = forwardRef<
       <span className="font-medium">{label}</span>
       {count > 0 && (
         <span className="font-semibold text-primary">
-          {count} {countLabel}
+          {count} unread
         </span>
       )}
     </TooltipContent>
@@ -79,34 +77,32 @@ DockButton.displayName = "DockButton";
  * so it doesn't compete with content, and can be collapsed into a thin handle
  * that still surfaces the collective unread count.
  *
- * Four affordances, in the source's order: Ask AI · Messages · Enquiries ·
- * Notifications. With the v2 top header gone this dock is the only place three
- * of them are reachable from, so none of the four is conditional.
+ * TWO affordances: Messages · Notifications.
  *
- * `onAskAI` stays optional for a caller that already owns a Trax instance and
- * wants the dock to drive it (the source's layout does exactly that). When no
- * opener is supplied the dock mounts its own single instance via
- * `TraxLauncher` — see that file for why the conversation cannot simply be
- * mounted here with a custom button. Either way there is exactly ONE Trax on
- * screen: two would mean two `useChat()` states and two conversations that
- * each forget what the other was told.
+ * It carried four. Ask AI and Inquiries were removed from the dock on request —
+ * NEITHER FEATURE WAS DELETED. Trax still opens from the rental detail rail,
+ * the vehicle overview rail and the setup guide, and /enquiries is still a page
+ * in the sidebar. What went is this dock's shortcut to them, which is the only
+ * thing that was asked for; ripping out the features behind two icons would
+ * have taken working screens with it.
  *
- * Every count below comes from an existing tenant-scoped hook — all three
- * filter on `.eq('tenant_id', tenant.id)`. This component issues no query of
- * its own.
+ * The dock consequently no longer owns a Trax instance, so `onAskAI` is gone
+ * too. The layout's own `<TraxAIDialog />` is untouched and remains the single
+ * instance on screen — which was always the constraint here: two would mean two
+ * `useChat()` states and two conversations that each forget what the other was
+ * told.
+ *
+ * Both counts come from an existing tenant-scoped hook, each filtering on
+ * `.eq('tenant_id', tenant.id)`. This component issues no query of its own.
  */
-export function QuickDock({ onAskAI }: { onAskAI?: () => void } = {}) {
+export function QuickDock() {
   const [tucked, setTucked] = useState(false);
-  const traxRef = useRef<TraxLauncherHandle>(null);
   const { unreadCount: chatUnread } = useUnreadCount();
-  const { data: enquiryStats } = useEnquiryStats();
   const { unreadCount: notifUnread } = useNotifications();
-  const enquiryPending = enquiryStats?.pending || 0;
-  const collective = (chatUnread || 0) + enquiryPending + (notifUnread || 0);
-
-  // Only mount our own Trax when nobody else owns one.
-  const ownsTrax = !onAskAI;
-  const askAI = onAskAI ?? (() => traxRef.current?.open());
+  /* The collapsed handle's badge. It has to be the sum of exactly what the dock
+     can still open, or a tucked dock advertises work that expanding it will not
+     show. */
+  const collective = (chatUnread || 0) + (notifUnread || 0);
 
   return (
     <>
@@ -148,25 +144,12 @@ export function QuickDock({ onAskAI }: { onAskAI?: () => void } = {}) {
             <div className="my-1.5 w-0 self-stretch bg-border/60 opacity-0 transition-all duration-200 group-hover:w-px group-hover:opacity-100" />
 
             <div className="flex flex-col items-center gap-0.5 p-1">
-              <DockButton label="Ask AI" onClick={askAI} icon={<Sparkles className={ICON} />} />
-
               <MessagesSheet
                 trigger={
                   <DockButton
                     label="Messages"
                     count={chatUnread || 0}
                     icon={<MessageCircle className={ICON} />}
-                  />
-                }
-              />
-
-              <EnquiriesSheet
-                trigger={
-                  <DockButton
-                    label="Inquiries"
-                    count={enquiryPending}
-                    countLabel="pending"
-                    icon={<Inbox className={ICON} />}
                   />
                 }
               />
@@ -184,14 +167,6 @@ export function QuickDock({ onAskAI }: { onAskAI?: () => void } = {}) {
           </div>
         </div>
       )}
-
-      {/*
-        Outside the collapsed/expanded branch on purpose. Tucking the dock must
-        not unmount Trax: that would close an open conversation mid-sentence and
-        throw away every message in it, because the transcript lives in the
-        dialog's own `useChat()` state.
-      */}
-      {ownsTrax && <TraxLauncher ref={traxRef} />}
     </>
   );
 }

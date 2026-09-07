@@ -112,6 +112,8 @@ import { TraxIcon } from "@/components/chat/TraxIcon";
 // detail page, the same way it becomes the Settings rail on /settings — see
 // `isRentalDetailPage` below.
 import { useV2 } from "@/lib/v2-context";
+import { useQuery } from "@tanstack/react-query";
+import type { ChatChannel } from "@/hooks/use-chat-channels";
 import { useRentalDetailV2 } from "@/components/rentals-v2/rental-detail/use-rental-detail-v2";
 import {
   STAGES,
@@ -533,6 +535,38 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const { detail: rentalDetail } = useRentalDetailV2(isRentalDetailPage ? rentalDetailId : null);
   const rentalStageValues = stageValues(rentalDetail);
 
+  /* ── /messages/<channel id> ────────────────────────────────────────────────
+     A conversation takes the whole width, so the sidebar becomes a Back rail
+     for it — the same move Settings and rental detail already make, for the
+     same reason: this layout draws a 280px sidebar, and a full-width chat
+     beside it is not full width.
+
+     Matched on a UUID rather than "anything after /messages/", because
+     /messages itself is a real route that still wants the ordinary nav. An
+     unrecognised path falls through to that nav, which is a working screen;
+     a false positive would be a rail with no conversation behind it. */
+  const messageChannelId =
+    pathname?.match(
+      /^\/messages\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/
+    )?.[1] ?? null;
+  /* ⚠ SUBSCRIBES TO THE CACHE, NEVER FETCHES. Calling useChatChannels() here
+     looked right and was wrong: this sidebar renders on EVERY page, and that
+     hook is `enabled: !!tenant`, so the rail would have fired a chat-channels
+     query (and its sms-unknown-threads sibling) on every screen in the portal
+     just to put a name on a header it shows on one route.
+
+     Same key, `enabled: false`: React Query still re-renders this when the
+     cache changes, so arriving from the list is instant and a pasted URL fills
+     in the moment the conversation page's own fetch lands. Until then the rail
+     says "Loading…", which is true. */
+  const { data: messageChannels = [] } = useQuery<ChatChannel[]>({
+    queryKey: ["chat-channels", tenant?.id],
+    enabled: false,
+  });
+  const conversation = messageChannelId
+    ? messageChannels.find((c) => c.id === messageChannelId) ?? null
+    : null;
+
   /* ── vehicle record mode ───────────────────────────────────────────────
    *
    * The same move as the rental rail above, for the same reason: the v2 vehicle
@@ -853,6 +887,51 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // piece of furniture wearing different contents. What differs is the body —
   // Settings lists tabs, this lists DECISIONS, and each row shows the rental's
   // answer where it has one and the stage's question where it does not.
+  if (messageChannelId) {
+    const who = conversation?.customer?.name ?? "Conversation";
+    const detail = conversation?.customer?.email ?? conversation?.customer?.phone ?? "Loading…";
+    return (
+      <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
+        <SidebarHeader className="h-16">
+          <div className="flex h-full w-full items-center px-2 transition-all duration-300 ease-in-out">
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    href="/messages"
+                    className="flex h-8 w-full items-center justify-center rounded-md transition-colors hover:bg-muted/50"
+                  >
+                    <ArrowLeft className="h-4 w-4 shrink-0" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">Back to messages</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Link
+                href="/messages"
+                className="flex h-8 items-center gap-2 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span className="text-[13px]">All messages</span>
+              </Link>
+            )}
+          </div>
+        </SidebarHeader>
+
+        {/* Who this conversation is with — the identity of the record, in the
+            slot Settings and rental detail put their own titles. */}
+        {!collapsed && (
+          <div className="px-4 pb-1 pt-4">
+            <h2 className="truncate text-sm font-semibold text-foreground">{who}</h2>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{detail}</p>
+          </div>
+        )}
+
+        <SidebarContent className="gap-0 transition-all duration-300 ease-in-out" />
+      </Sidebar>
+    );
+  }
+
   if (isRentalDetailPage && rentalDetailId) {
     const heroTitle = rentalDetail
       ? (rentalDetail.customerName ?? rentalDetail.rentalNumber ?? "Rental")

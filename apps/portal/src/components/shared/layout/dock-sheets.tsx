@@ -4,10 +4,9 @@ import { useState, type ComponentProps, type ReactNode, type ElementType } from 
 import Link from "next/link";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui-v2/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
-import { MessageSquare, Inbox } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useChatChannels } from "@/hooks/use-chat-channels";
-import { useEnquiries } from "@/hooks/use-enquiries";
 
 const initials = (name?: string | null) =>
   (name || "?")
@@ -131,54 +130,6 @@ export function MessagesSheet({ trigger }: { trigger: ReactNode }) {
   );
 }
 
-/* ── Enquiries ─────────────────────────────────────────────────────────── */
-
-function EnquiriesList({ onClose }: { onClose: () => void }) {
-  // Same as above — `useEnquiries` is tenant-scoped (`.eq("tenant_id", tenant.id)`).
-  const { data: enquiries = [], isLoading } = useEnquiries();
-
-  if (isLoading) {
-    return <div className="px-5 py-20 text-center text-sm text-muted-foreground/70">Loading…</div>;
-  }
-  if (enquiries.length === 0) {
-    return <EmptyState icon={Inbox} text="No inquiries" />;
-  }
-  return (
-    <div className="divide-y divide-border/40">
-      {enquiries.slice(0, 40).map((e) => (
-        <Link
-          key={e.id}
-          href="/enquiries"
-          onClick={onClose}
-          className="block px-5 py-3 transition-colors hover:bg-accent/40"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[13px] font-semibold">{e.customer_name}</p>
-            <span
-              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                e.status === "new" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {e.status}
-            </span>
-          </div>
-          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
-            {e.description || e.customer_email}
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground/60">
-            {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
-          </p>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-export function EnquiriesSheet({ trigger }: { trigger: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <SheetShell open={open} setOpen={setOpen} trigger={trigger} title="Inquiries" viewAllHref="/enquiries">
-      <EnquiriesList onClose={() => setOpen(false)} />
-    </SheetShell>
-  );
-}
+/* EnquiriesSheet lived here and was removed with the dock's Inquiries icon —
+   it had exactly one caller, this dock. The /enquiries PAGE is untouched and
+   still reachable from the sidebar; only the dock shortcut is gone. */

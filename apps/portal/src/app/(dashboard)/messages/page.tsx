@@ -1,16 +1,31 @@
 "use client";
 
+/**
+ * /messages — the conversation list.
+ *
+ * The conversation itself is a ROUTE now (`/messages/<channel id>`), not a pane
+ * beside this one. See `components/messages-v2/conversation-list.tsx` for why,
+ * and `app-sidebar-v2.tsx` for the Back rail that route gets.
+ *
+ * ⚠ `?customerId=` IS LOAD-BEARING AND MUST KEEP WORKING. Enquiries and the
+ * customer detail screen both link here with it to open — or start — a
+ * conversation with one person. The old page selected a channel in local state;
+ * this one resolves the same thing to a channel id and navigates. When no
+ * channel exists yet it asks the realtime context to create one and waits for
+ * the list to refresh, exactly as before: the creation path is unchanged,
+ * only where the result lands is.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChannelList, ChatWindow, BulkMessageModal } from "@/components/chat";
-import { useChatChannels, type ChatChannel } from "@/hooks/use-chat-channels";
+import { BulkMessageModal } from "@/components/chat";
+import { ConversationList } from "@/components/messages-v2/conversation-list";
+import { useChatChannels } from "@/hooks/use-chat-channels";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useTenant } from "@/contexts/TenantContext";
 import { useSocket } from "@/contexts/RealtimeChatContext";
-import { cn } from "@/lib/utils";
 
 export default function MessagesPage() {
-  const [selectedChannel, setSelectedChannel] = useState<ChatChannel | null>(null);
   const [bulkMessageOpen, setBulkMessageOpen] = useState(false);
   const { canEdit } = useManagerPermissions();
   const { tenant } = useTenant();
@@ -21,28 +36,14 @@ export default function MessagesPage() {
   const targetCustomerId = searchParams?.get("customerId") ?? null;
   const joinedFor = useRef<string | null>(null);
 
-  const smsEnabled = !!(tenant as any)?.integration_twilio_sms;
-
-  const handleSelectChannel = (channel: ChatChannel) => {
-    setSelectedChannel(channel);
-  };
-
-  // Auto-select the channel for ?customerId=… (e.g. coming from Enquiries detail).
-  // If no channel exists yet, ask the realtime context to create one, then pick it
-  // up the next time `channels` refreshes. Strip the query param once selected so
-  // back/forward navigation doesn't keep re-applying it.
   useEffect(() => {
     if (!targetCustomerId || !tenant?.id) return;
 
     const existing = channels.find((c) => c.customer_id === targetCustomerId);
     if (existing) {
-      if (selectedChannel?.id !== existing.id) {
-        setSelectedChannel(existing);
-      }
-      const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
-      next.delete("customerId");
-      const qs = next.toString();
-      router.replace(qs ? `/messages?${qs}` : "/messages");
+      // replace, not push: the list is where Back should land, not this URL
+      // with a query param that would re-fire this effect on the way out.
+      router.replace(`/messages/${existing.id}`);
       return;
     }
 
@@ -50,49 +51,14 @@ export default function MessagesPage() {
       joinedFor.current = targetCustomerId;
       void joinRoom(targetCustomerId);
     }
-  }, [targetCustomerId, channels, tenant?.id, joinRoom, router, searchParams, selectedChannel?.id]);
+  }, [targetCustomerId, channels, tenant?.id, joinRoom, router]);
 
   return (
-    <div className="container mx-auto h-[calc(100vh-64px)] flex flex-col">
-      {/* Chat layout - full height */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Channel list - left panel: hidden on mobile when a chat is selected */}
-        <div className={cn(
-          "w-full md:w-[340px] shrink-0 border-r border-border/50 bg-card/30",
-          selectedChannel ? "hidden md:block" : "block"
-        )}>
-          <ChannelList
-            selectedChannelId={selectedChannel?.id || null}
-            onSelectChannel={handleSelectChannel}
-            onBulkMessage={canEdit('messages') ? () => setBulkMessageOpen(true) : undefined}
-          />
-        </div>
-
-        {/* Chat window - right panel: hidden on mobile when no chat is selected */}
-        <div className={cn(
-          "flex-1 min-w-0 bg-background/50",
-          selectedChannel ? "block" : "hidden md:block"
-        )}>
-          <ChatWindow
-            channelId={selectedChannel?.id || null}
-            customerId={selectedChannel?.customer_id || null}
-            customerName={selectedChannel?.customer?.name || "Customer"}
-            customerAvatar={selectedChannel?.customer?.profile_photo_url || null}
-            customerEmail={selectedChannel?.customer?.email || null}
-            customerPhone={selectedChannel?.customer?.phone || null}
-            twilioPhoneNumber={(tenant as any)?.twilio_phone_number || null}
-            onBack={() => setSelectedChannel(null)}
-            lastChannel={selectedChannel?.last_channel || 'in_app'}
-            smsEnabled={smsEnabled}
-          />
-        </div>
-      </div>
-
-      {/* Bulk message modal */}
-      <BulkMessageModal
-        open={bulkMessageOpen}
-        onOpenChange={setBulkMessageOpen}
+    <>
+      <ConversationList
+        onBulkMessage={canEdit("messages") ? () => setBulkMessageOpen(true) : undefined}
       />
-    </div>
+      <BulkMessageModal open={bulkMessageOpen} onOpenChange={setBulkMessageOpen} />
+    </>
   );
 }
