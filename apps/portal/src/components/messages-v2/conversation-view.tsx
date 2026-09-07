@@ -354,7 +354,10 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
        overflowed the outer one, and both drew a track. */
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* ── header ─────────────────────────────────────────────────────── */}
-      <header className="flex items-center gap-4 border-b border-border/50 px-6 py-4">
+      {/* `shrink-0`: the history between these two is the only thing that gives
+          way. Without it a flex column will compress the header and composer
+          before it shrinks the scroll region. */}
+      <header className="flex shrink-0 items-center gap-4 border-b border-border/50 px-6 py-4">
         {/* The sidebar becomes a Back rail on this route, but a Back control
             has to exist inside the view too: the rail collapses to an icon on
             narrow screens and disappears entirely on mobile. */}
@@ -458,7 +461,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
       </div>
 
       {/* ── composer ───────────────────────────────────────────────────── */}
-      <div className="border-t border-border/50 px-6 py-4 lg:px-10">
+      <div className="shrink-0 border-t border-border/50 px-6 py-4 lg:px-10">
         {/* `max-w-5xl` here is the SAME cap the history uses, which is what
             makes the column width independent of the composer mode: Email
             swaps a one-line box for a subject + body and grows DOWNWARDS, and

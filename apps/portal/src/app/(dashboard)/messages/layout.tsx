@@ -52,11 +52,14 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
   const hasQuickDock = useV2("chrome");
 
   return (
-    /* `h-full` — the dashboard shell gave this route a definite viewport height
-       and clipped it, so the workspace can fill it exactly instead of doing its
-       own viewport arithmetic. Two elements both computing `100vh - something`
-       is how the page ended up with a scrollbar behind the columns' own. */
-    <div className={`flex h-full overflow-hidden ${hasQuickDock ? "pr-12" : ""}`}>
+    /* `h-full` + `min-h-0` — the dashboard shell hands this route a bounded
+       viewport-height box, so the workspace fills it exactly rather than doing
+       its own `100vh - something` arithmetic. `min-h-0` keeps the flex floor
+       off it for the same reason it is on every column below: without it a
+       long thread makes the container as tall as the thread, and then the
+       PAGE scrolls all three columns together instead of the history scrolling
+       inside one. */
+    <div className={`flex h-full min-h-0 overflow-hidden ${hasQuickDock ? "pr-12" : ""}`}>
       {/* Left — compact, and the only always-visible column on a narrow window.
           Hidden once a conversation is open on small screens so the thread gets
           the whole width; the thread carries its own Back control there. */}

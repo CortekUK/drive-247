@@ -382,7 +382,23 @@ export default function DashboardLayout({
           (`.v2-theme body { @apply bg-background }`), so the composite is the
           same on both trees. `undefined` outside the gate leaves the element's
           class list byte-for-byte what it was for the other 56 tenants. */}
-      <Provider className={v2Theme ? "bg-background bg-app-gradient" : undefined}>
+      <Provider
+        className={
+          [
+            v2Theme ? "bg-background bg-app-gradient" : "",
+            /* Messages is the ONE route where the app itself must not scroll.
+               The bound has to be here, at the top of the chain: this wrapper
+               is `min-h-svh`, a floor and not a ceiling, so anything taller
+               inside pushed the whole page — all three columns together —
+               rather than scrolling within itself. Measured, not assumed: with
+               only the floor, `main` came out 4250px tall in an 820px window
+               and the document scrolled 3430px. */
+            isMessagesWorkspace ? "h-svh overflow-hidden" : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined
+        }
+      >
         {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
 
         {/* v2 has no top bar — and the SidebarTrigger lived in it. On desktop
@@ -446,17 +462,18 @@ export default function DashboardLayout({
           {/* `pt-0` exists because the v1 header already supplies the top
               gap. With the header gone, v2 needs its own — the source's main
               is a plain `p-4`. */}
-          {/* The workspace route gets a definite height and no padding: its own
-              layout owns the box and clips inside it, which is what keeps the
-              page itself from ever scrolling behind the columns. v1 chrome
-              still has the 4rem header row above, so it subtracts it; v2 has
-              no top bar at all. */}
+          {/* `min-h-0` is the whole fix, and it is not decoration: a flex item
+              defaults to `min-height: auto`, which floors it at its CONTENT
+              height. That floor beat both `flex-1` and an explicit `h-svh`, so
+              a long conversation made this element as tall as the thread and
+              the document scrolled instead of the history. With the floor
+              removed, `flex-1` distributes the wrapper's bounded height and no
+              viewport arithmetic is needed anywhere — v1's 4rem header is a
+              sibling above, so the flex pass subtracts it on its own. */}
           <main
             className={
               isMessagesWorkspace
-                ? `flex flex-1 flex-col overflow-hidden p-0 ${
-                    v2Chrome ? "h-svh" : "h-[calc(100svh-4rem)]"
-                  }`
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
                 : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? "" : " pt-0"}`
             }
           >
