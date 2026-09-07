@@ -29,6 +29,7 @@ import { UsageDashboard } from "@/components/settings/usage-dashboard";
 import { LocalInvoiceView } from "@/components/settings/subscription-settings";
 import { CardBrandIcon, CardOnFile } from "@/components/subscription/card-brand-icon";
 import { PaymentMethods, type SavedCard } from "@/components/subscription/payment-methods";
+import { PaymentMethodsDialog } from "@/components/subscription/payment-methods-dialog";
 // Canary-only sample billing data. See the header of billing-preview.tsx for
 // why the gate is written on the SLUG and not as a `V2Area`.
 import {
@@ -107,6 +108,7 @@ export default function SubscriptionPage() {
 
   const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<TenantSubscriptionInvoice | null>(null);
+  const [methodsOpen, setMethodsOpen] = useState(false);
 
   // ── Preview mode (canary tenant only) ──────────────────────────────────────
   //
@@ -477,11 +479,19 @@ export default function SubscriptionPage() {
       {isLeanTenant(tenant?.slug) ? (
         <div className="space-y-10">
           <section className="mt-6">
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Plan Details */}
-            <div className="rounded-lg border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Plan Details</h2>
-              <div className="space-y-4">
+          {/* `items-start`: without it the grid stretches both children to the
+              taller one, which gave Plan Details a large empty bottom purely
+              because Billing Methods happened to be taller. Each card is now
+              as tall as its own content. */}
+          <div className="grid items-start gap-6 md:grid-cols-2">
+            {/* Plan Details — compact. Five label/value pairs were laid out with
+                card padding and `space-y-4`, which is form spacing: the card ran
+                close to 300px tall for about 90px of text and pushed Credits
+                below the fold. Denser rows, and the height now follows the
+                content rather than the card beside it. */}
+            <div className="rounded-lg border bg-card p-5">
+              <h2 className="mb-1 text-[15px] font-semibold tracking-tight">Plan Details</h2>
+              <div className="divide-y divide-border/50 [&>div]:py-2.5">
                 {/* No invented plan, price or status. Pricing is custom per
                     tenant (agreed on a sales call), so "Pro" / "$0.00" / a
                     hardcoded "active" badge state facts this tenant may never
@@ -554,13 +564,7 @@ export default function SubscriptionPage() {
                 "Secondary" slot is drawn for a backend that does not exist. */}
             <div className="rounded-lg border bg-card p-6">
               <h2 className="text-lg font-semibold mb-4">Billing Methods</h2>
-              <PaymentMethods
-                cards={savedCards}
-                onManage={handleManagePayment}
-                isPending={createPortalSession.isPending}
-                disabled={previewActive}
-                disabledNote={previewActive ? <PreviewDisabledNote /> : null}
-              />
+              <PaymentMethods cards={savedCards} onManage={() => setMethodsOpen(true)} />
 
 
               {/* Was a mailto: and a sentence — the dead end §12 describes.
@@ -579,6 +583,18 @@ export default function SubscriptionPage() {
             <h2 className="mb-4 text-lg font-semibold tracking-tight">Credits</h2>
             <CreditsPanel />
           </section>
+
+          {/* One instance for the page. `mocked` while previewing: the dialog is
+              fully interactive against sample cards so Primary / Secondary /
+              add / remove can be reviewed, and nothing reaches Stripe. */}
+          <PaymentMethodsDialog
+            open={methodsOpen}
+            onOpenChange={setMethodsOpen}
+            cards={savedCards}
+            mocked={previewActive}
+            onAddCard={handleManagePayment}
+            isRedirecting={createPortalSession.isPending}
+          />
 
           <section>
             <h2 className="mb-4 text-lg font-semibold tracking-tight">Invoices &amp; Receipts</h2>
@@ -613,10 +629,14 @@ export default function SubscriptionPage() {
 
           <TabsContent value="plan" className="mt-6">
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Plan Details */}
-            <div className="rounded-lg border bg-card p-6">
-              <h2 className="text-lg font-semibold mb-4">Plan Details</h2>
-              <div className="space-y-4">
+            {/* Plan Details — compact. Five label/value pairs were laid out with
+                card padding and `space-y-4`, which is form spacing: the card ran
+                close to 300px tall for about 90px of text and pushed Credits
+                below the fold. Denser rows, and the height now follows the
+                content rather than the card beside it. */}
+            <div className="rounded-lg border bg-card p-5">
+              <h2 className="mb-1 text-[15px] font-semibold tracking-tight">Plan Details</h2>
+              <div className="divide-y divide-border/50 [&>div]:py-2.5">
                 {/* No invented plan, price or status. Pricing is custom per
                     tenant (agreed on a sales call), so "Pro" / "$0.00" / a
                     hardcoded "active" badge state facts this tenant may never

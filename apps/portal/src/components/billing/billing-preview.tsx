@@ -185,8 +185,12 @@ export function buildPreviewInvoices(): TenantSubscriptionInvoice[] {
     base: number | null;
     usage: number | null;
     usageQty: number | null;
+    unpaid?: boolean;
   }[] = [
-    { monthsAgo: 0, number: "PREVIEW-0004", base: PREVIEW_AMOUNT_CENTS, usage: 1_200, usageQty: 12 },
+    /* The newest one is OPEN and has been attempted — so the preview carries a
+       Failed row with an invoice and NO receipt, which is the rule in
+       billing-documents.ts and the one case worth being able to look at. */
+    { monthsAgo: 0, number: "PREVIEW-0004", base: PREVIEW_AMOUNT_CENTS, usage: 1_200, usageQty: 12, unpaid: true },
     { monthsAgo: 1, number: "PREVIEW-0003", base: PREVIEW_AMOUNT_CENTS, usage: 700, usageQty: 7 },
     { monthsAgo: 2, number: "PREVIEW-0002", base: null, usage: null, usageQty: null },
     { monthsAgo: 3, number: "PREVIEW-0001", base: null, usage: null, usageQty: null },
@@ -203,16 +207,26 @@ export function buildPreviewInvoices(): TenantSubscriptionInvoice[] {
       tenant_id: "preview",
       subscription_id: "preview-subscription",
       stripe_invoice_id: `in_preview_${i}`,
-      stripe_invoice_pdf: null,
-      stripe_hosted_invoice_url: null,
-      status: "paid",
+      /* Sample documents that resolve to a real, harmless Stripe host. They
+         exist so the Invoice and Receipt actions can be SEEN; they are not
+         claimed to be this tenant's, and every money action on the page is off
+         while preview is on. */
+      stripe_invoice_pdf: `https://invoice.stripe.com/i/preview_${i}.pdf`,
+      stripe_hosted_invoice_url: `https://invoice.stripe.com/i/preview_${i}`,
+      /* A receipt ONLY where the money actually arrived. The unpaid row gets
+         null, which is what makes the "no receipt for a failed invoice" rule
+         visible rather than merely documented. */
+      stripe_receipt_url: r.unpaid ? null : `https://pay.stripe.com/receipts/preview_${i}`,
+      stripe_charge_id: r.unpaid ? null : `ch_preview_${i}`,
+      stripe_payment_intent_id: r.unpaid ? null : `pi_preview_${i}`,
+      status: r.unpaid ? "open" : "paid",
       amount_due: total,
-      amount_paid: total,
+      amount_paid: r.unpaid ? 0 : total,
       currency: "usd",
       period_start: periodStart,
       period_end: periodEnd,
       due_date: periodStart,
-      paid_at: paidAt,
+      paid_at: r.unpaid ? null : paidAt,
       invoice_number: r.number,
       base_amount: r.base,
       usage_amount: r.usage,

@@ -30,7 +30,7 @@
  * ever reaches this application.
  */
 
-import { CheckCircle2, CreditCard, Loader2, Plus, ShieldCheck } from "lucide-react";
+import { CheckCircle2, CreditCard, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardBrandIcon } from "@/components/subscription/card-brand-icon";
 
@@ -99,15 +99,10 @@ function PaymentCard({ card }: { card: SavedCard }) {
 export function PaymentMethods({
   cards,
   onManage,
-  isPending,
-  disabled,
-  disabledNote,
 }: {
   cards: SavedCard[];
+  /** Opens the management dialog. Always available — see the button below. */
   onManage: () => void;
-  isPending: boolean;
-  disabled?: boolean;
-  disabledNote?: React.ReactNode;
 }) {
   const hasAny = cards.length > 0;
 
@@ -132,33 +127,26 @@ export function PaymentMethods({
         </div>
       )}
 
+      {/* NEVER disabled. This used to carry `disabled={previewActive}`, which on
+          the canary is always — so it rendered as a live control and swallowed
+          every click. It opens a dialog now; whether the dialog can write
+          anything is the dialog's business, not this button's. */}
       <Button
         variant="outline"
         onClick={onManage}
-        disabled={isPending || disabled}
         className="w-full gap-2 rounded-full"
       >
-        {isPending ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Opening Stripe…
-          </>
-        ) : (
-          <>
-            {hasAny ? <CreditCard className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {hasAny ? "Manage payment methods" : "Add payment method"}
-          </>
-        )}
+        {hasAny ? <CreditCard className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+        {hasAny ? "Manage payment methods" : "Add payment method"}
       </Button>
 
-      {/* Where a person looks when they wonder whether this is safe. */}
-      <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
-        <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" />
-        Cards are held by Stripe. Adding or changing one opens Stripe&rsquo;s own secure page —
-        no card number ever reaches Drive247.
+      {/* One line. The paragraph that stood here explained Stripe's custody of
+          card numbers in three sentences, on a card whose job is to show which
+          card gets charged. */}
+      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <ShieldCheck className="h-3 w-3 shrink-0" />
+        Payment details are securely handled by Stripe.
       </p>
-
-      {disabledNote}
     </div>
   );
 }
