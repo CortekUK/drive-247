@@ -10,9 +10,11 @@
  * still the only way a message leaves this screen, `markRead` still clears the
  * unread count, and `ChatMessageBubble` still draws every bubble — including
  * the booking-reference card, which already existed and already renders from
- * `metadata.booking`. `BookingPicker` is reused whole for the same reason: a
- * second rental selector would be a second thing to keep in step with the
- * shape `ChatMessageBubble` expects.
+ * `metadata.booking`. The rental selector reuses BookingPicker's DATA — the
+ * same `useCustomerRentals` query and the same `BookingReference` shape — so
+ * what this produces is byte-identical to what the bubble already renders, but
+ * draws its own list: see attach-menu.tsx. BookingPicker itself is untouched
+ * and still serves CustomerChatInput.
  *
  * What is new is the SHELL: a header, a channel switcher that makes the active
  * channel unmistakable, a composer per channel, and the spacing.
@@ -24,6 +26,11 @@
  * is how people send subject-less email. Call is not a message at all, so it
  * gets an action rather than a text box.
  *
+ * The composer has ONE attachment control. It briefly had two paperclips an
+ * inch apart — this file's own file button and BookingPicker's, which draws a
+ * paperclip of its own — doing different things with no way to tell which was
+ * which. See attach-menu.tsx.
+ *
  * WhatsApp is deliberately absent. It was never in this surface —
  * `MessageChannel` is `in_app | sms | email | voice` — so there was nothing to
  * remove here. The WhatsApp settings elsewhere belong to lockbox notifications
@@ -33,8 +40,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format, isSameDay } from "date-fns";
 import {
-  ArrowLeft, Mail, MessageCircle, MessageSquare, Paperclip, Phone,
-  PhoneCall, Send, Loader2, Info, X,
+  ArrowLeft, Car, Mail, MessageCircle, MessageSquare, Phone,
+  PhoneCall, Send, Loader2, Info, Paperclip, X,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Button } from "@/components/ui-v2/button";
@@ -44,7 +51,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useSocket, type MessageChannel } from "@/contexts/RealtimeChatContext";
 import { ChatMessageBubble, DateSeparator } from "@/components/chat";
-import { BookingPicker, type BookingReference } from "@/components/chat/BookingPicker";
+import type { BookingReference } from "@/components/chat/BookingPicker";
+import { AttachMenu } from "@/components/messages-v2/attach-menu";
 import type { ChatChannel } from "@/hooks/use-chat-channels";
 
 type Mode = MessageChannel | "call";
@@ -100,62 +108,51 @@ function ChannelSwitcher({
   );
 }
 
-/* ── attachments ──────────────────────────────────────────────────────────
-   THIS IS A MOCK AND SAYS SO. There is no file-upload path in the chat
-   backend — the only paperclip in the old UI opened the booking picker. The
-   button therefore collects a file and shows it, so the flow is testable end
-   to end, and states plainly that it will not be delivered. A button that
-   looked real and silently dropped the file would be worse than no button. */
-function AttachmentRow({
-  files, onAdd, onRemove,
+/* ── the pending attachments, above the composer ──────────────────────────
+   One row for both kinds, because to the person sending they are one idea:
+   things riding along with this message. The booking chip carries the rental
+   number and car; a file chip carries its name and says plainly that it will
+   not be delivered — there is no upload path in the chat backend, and a chip
+   that looked ordinary would be a promise the send cannot keep. */
+function PendingRow({
+  files, booking, onRemoveFile, onRemoveBooking,
 }: {
   files: File[];
-  onAdd: (f: File[]) => void;
-  onRemove: (i: number) => void;
+  booking: BookingReference | null;
+  onRemoveFile: (i: number) => void;
+  onRemoveBooking: () => void;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  if (!files.length && !booking) return null;
   return (
-    <>
-      <input
-        ref={ref}
-        type="file"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          onAdd(Array.from(e.target.files ?? []));
-          e.target.value = "";
-        }}
-      />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9 shrink-0 rounded-full text-muted-foreground"
-        title="Attach a file (not delivered yet)"
-        onClick={() => ref.current?.click()}
-      >
-        <Paperclip className="h-4 w-4" />
-      </Button>
-      {files.length > 0 && (
-        <div className="flex w-full flex-wrap items-center gap-2 px-1 pb-1">
-          {files.map((f, i) => (
-            <span
-              key={`${f.name}-${i}`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-[12px] text-muted-foreground"
-            >
-              {f.name}
-              <button type="button" onClick={() => onRemove(i)} aria-label={`Remove ${f.name}`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
-            <Info className="h-3 w-3" />
-            Attachments are not sent yet
-          </span>
-        </div>
+    <div className="flex flex-wrap items-center gap-2">
+      {booking && (
+        <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 py-1 pl-2.5 pr-1.5 text-[12px] font-medium text-primary">
+          <Car className="h-3.5 w-3.5" />
+          {booking.rentalNumber || "Rental"} · {booking.vehicle.make} {booking.vehicle.model}
+          <button type="button" onClick={onRemoveBooking} aria-label="Remove booking"
+            className="rounded-full p-0.5 hover:bg-primary/15">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
       )}
-    </>
+      {files.map((f, i) => (
+        <span key={`${f.name}-${i}`}
+          className="inline-flex items-center gap-2 rounded-full bg-muted py-1 pl-2.5 pr-1.5 text-[12px] text-muted-foreground">
+          <Paperclip className="h-3.5 w-3.5" />
+          <span className="max-w-[180px] truncate">{f.name}</span>
+          <button type="button" onClick={() => onRemoveFile(i)} aria-label={`Remove ${f.name}`}
+            className="rounded-full p-0.5 hover:bg-foreground/10">
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      {files.length > 0 && (
+        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
+          <Info className="h-3 w-3" />
+          Files are not sent yet
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -361,14 +358,11 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
                 className="min-h-[160px] resize-y rounded-2xl"
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1">
-                  <AttachmentRow
-                    files={files}
-                    onAdd={(f) => setFiles((p) => [...p, ...f])}
-                    onRemove={(i) => setFiles((p) => p.filter((_, x) => x !== i))}
-                  />
-                  <BookingPicker customerId={customerId} onSelect={setBooking} />
-                </div>
+                <AttachMenu
+                  customerId={customerId}
+                  onFiles={(f) => setFiles((p) => [...p, ...f])}
+                  onBooking={setBooking}
+                />
                 <Button onClick={handleSend} disabled={sending} className="gap-2 rounded-full">
                   {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Send email
@@ -377,12 +371,11 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
             </div>
           ) : (
             <div className="flex items-end gap-2">
-              <AttachmentRow
-                files={files}
-                onAdd={(f) => setFiles((p) => [...p, ...f])}
-                onRemove={(i) => setFiles((p) => p.filter((_, x) => x !== i))}
+              <AttachMenu
+                customerId={customerId}
+                onFiles={(f) => setFiles((p) => [...p, ...f])}
+                onBooking={setBooking}
               />
-              <BookingPicker customerId={customerId} onSelect={setBooking} />
               <Textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
@@ -403,16 +396,12 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
             </div>
           )}
 
-          {booking && (
-            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
-                {booking.rentalNumber || "Rental"} · {booking.vehicle.make} {booking.vehicle.model}
-              </span>
-              <button type="button" onClick={() => setBooking(null)} className="hover:text-foreground">
-                Remove
-              </button>
-            </div>
-          )}
+          <PendingRow
+            files={files}
+            booking={booking}
+            onRemoveFile={(i) => setFiles((p) => p.filter((_, x) => x !== i))}
+            onRemoveBooking={() => setBooking(null)}
+          />
         </div>
       </div>
     </div>
