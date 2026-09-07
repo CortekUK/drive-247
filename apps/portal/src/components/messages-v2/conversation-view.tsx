@@ -37,7 +37,7 @@
  * and are a different feature.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { format, isSameDay } from "date-fns";
 import {
   ArrowLeft, Car, Mail, MessageCircle, MessageSquare, Phone,
@@ -50,7 +50,11 @@ import { Textarea } from "@/components/ui-v2/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useSocket, type MessageChannel } from "@/contexts/RealtimeChatContext";
-import { ChatMessageBubble, DateSeparator, VoiceCallBar } from "@/components/chat";
+import { DateSeparator, VoiceCallBar } from "@/components/chat";
+import { TimelineItem } from "@/components/messages-v2/timeline-item";
+import { mockMessages } from "@/components/messages-v2/mock-conversation";
+import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
+import { CustomerContext } from "@/components/messages-v2/customer-context";
 import { useVoiceCall } from "@/hooks/use-voice-call";
 import type { BookingReference } from "@/components/chat/BookingPicker";
 import { AttachMenu } from "@/components/messages-v2/attach-menu";
@@ -159,10 +163,24 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
   const email = channel.customer?.email || null;
   const phone = channel.customer?.phone || null;
 
-  const { messages, isLoading, loadMore, hasMore, isLoadingMore } = useChatMessages(
-    channel.id,
-    customerId,
+  const { messages: realMessages, isLoading: realLoading, loadMore, hasMore, isLoadingMore } =
+    useChatMessages(channel.id, customerId);
+
+  /* ── THE REVIEW PREVIEW ────────────────────────────────────────────────────
+     A developer-only, per-browser override for judging the timeline without
+     writing rows anybody would have to clean up. It swaps the DATA and nothing
+     else: every item still renders through TimelineItem, which keys on the
+     same channel and metadata a real message carries. Reads "off" in any
+     production build — `readMessagesScenario` returns "off" outside
+     development regardless of what is in localStorage. */
+  const scenario = useSyncExternalStore(
+    subscribeDevOverrides,
+    () => readMessagesScenario(),
+    () => "off" as const,
   );
+  const previewing = scenario !== "off";
+  const messages = previewing ? mockMessages(scenario) : realMessages;
+  const isLoading = previewing ? false : realLoading;
   const { sendMessage, markRead, joinRoom, onNewMessage } = useSocket();
   const { toast } = useToast();
 
@@ -330,7 +348,11 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
   }, [messages]);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    /* A row, not a column: the conversation takes the width it can and the
+       context rail sits beside it on wide screens. `min-w-0` on the column is
+       what stops a long message from pushing the rail off the edge. */
+    <div className="flex h-[calc(100vh-4rem)]">
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* ── header ─────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-4 border-b border-border/50 px-6 py-4">
         {/* The sidebar becomes a Back rail on this route, but a Back control
@@ -380,6 +402,19 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
         />
       )}
 
+      {previewing && (
+        /* Impossible to mistake for real data, and one click from gone. A
+           preview that looks like production is how a fixture ends up in a
+           screenshot presented as evidence. */
+        <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-[12px] text-amber-700">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Showing the <strong className="font-semibold">{scenario}</strong> preview — mocked data
+            for design review. Change it in /dev.
+          </span>
+        </div>
+      )}
+
       {/* ── history ────────────────────────────────────────────────────── */}
       <div ref={scrollRef} onScroll={onScroll} className="relative flex-1 overflow-y-auto px-6 py-6">
         {isLoading ? (
@@ -403,7 +438,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
           </div>
         ) : (
           <div className="mx-auto max-w-3xl">
-            {hasMore && (
+            {hasMore && !previewing && (
               <div className="mb-4 flex justify-center">
                 <Button variant="ghost" size="sm" className="rounded-full" onClick={handleLoadMore} disabled={isLoadingMore}>
                   {isLoadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Load earlier messages"}
@@ -413,13 +448,13 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
             {rows.map(({ message, newDay, isFirstInGroup, isLastInGroup }) => (
               <div key={message.id}>
                 {newDay && <DateSeparator date={message.created_at} />}
-                <ChatMessageBubble
+                <TimelineItem
                   message={message}
-                  isOwnMessage={message.sender_type === "tenant"}
                   isFirstInGroup={isFirstInGroup}
                   isLastInGroup={isLastInGroup}
                   customerName={name}
                   customerAvatar={channel.customer?.profile_photo_url || undefined}
+                  customerEmail={email}
                 />
               </div>
             ))}
@@ -559,6 +594,9 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
           />
         </div>
       </div>
+      </div>
+
+      <CustomerContext channel={channel} />
     </div>
   );
 }

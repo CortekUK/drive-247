@@ -64,6 +64,62 @@ export const FORCE_EMPTY_STATE_KEY = "d247.dev.forceEmptyState";
 export const DEV_OVERRIDES_EVENT = "d247:dev-overrides";
 
 /**
+ * The Messages conversation preview.
+ *
+ * Same shape as the forced empty states above and for the same reason: a
+ * per-browser developer preference, not tenant state, so it lives in
+ * localStorage and never touches the database. It exists so the conversation
+ * timeline can be REVIEWED — call events, inbound and outbound email, a failed
+ * send, attachments — without writing a single row anybody would have to clean
+ * up afterwards.
+ *
+ * The renderers it drives are NOT mock-only. They read a message's channel and
+ * metadata exactly as a real one would, so when the backend starts producing
+ * these states they already draw correctly; only the DATA here is invented.
+ */
+export const MESSAGES_SCENARIO_KEY = "d247.dev.messagesScenario";
+
+export const MESSAGE_SCENARIOS = [
+  { id: "off", label: "Off", hint: "Real conversation data" },
+  { id: "mixed", label: "Active mixed", hint: "In-app, SMS, email, calls, attachments" },
+  { id: "email", label: "Email-heavy", hint: "Inbound and outbound email thread" },
+  { id: "calls", label: "Call history", hint: "Completed, missed and outgoing calls" },
+  { id: "failed", label: "Failed send", hint: "A message that did not go out" },
+  { id: "empty", label: "New conversation", hint: "Nothing said yet" },
+] as const;
+
+export type MessagesScenarioId = (typeof MESSAGE_SCENARIOS)[number]["id"];
+
+const SCENARIO_IDS: ReadonlySet<string> = new Set(MESSAGE_SCENARIOS.map((s) => s.id));
+
+/** Read the selected scenario. Anything unrecognised reads as "off". */
+export function readMessagesScenario(storage?: Storage | null): MessagesScenarioId {
+  if (process.env.NODE_ENV !== "development") return "off";
+  const store = resolve(storage);
+  if (!store) return "off";
+  try {
+    const raw = store.getItem(MESSAGES_SCENARIO_KEY);
+    return raw && SCENARIO_IDS.has(raw) ? (raw as MessagesScenarioId) : "off";
+  } catch {
+    return "off";
+  }
+}
+
+/** Select a scenario, or "off" to go back to real data. No-op in production. */
+export function setMessagesScenario(id: MessagesScenarioId, storage?: Storage | null): void {
+  if (process.env.NODE_ENV !== "development") return;
+  const store = resolve(storage);
+  if (!store) return;
+  try {
+    if (id === "off") store.removeItem(MESSAGES_SCENARIO_KEY);
+    else store.setItem(MESSAGES_SCENARIO_KEY, id);
+  } catch {
+    return;
+  }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(DEV_OVERRIDES_EVENT));
+}
+
+/**
  * The listing pages that carry a teaching empty state, in the order they sit
  * in the sidebar. Each `id` is what the page passes to `useForcedEmptyState`,
  * and `EmptyStatePageId` is derived from these keys so a typo'd id on a page
@@ -206,7 +262,11 @@ export function subscribeDevOverrides(onChange: () => void): () => void {
     if (typeof window === "undefined") return () => {};
     const onStorage = (event: StorageEvent) => {
       // `key === null` is "storage.clear()" — that wipes ours too.
-      if (event.key === null || event.key === FORCE_EMPTY_STATE_KEY) onChange();
+      if (
+        event.key === null ||
+        event.key === FORCE_EMPTY_STATE_KEY ||
+        event.key === MESSAGES_SCENARIO_KEY
+      ) onChange();
     };
     window.addEventListener("storage", onStorage);
     window.addEventListener(DEV_OVERRIDES_EVENT, onChange);
