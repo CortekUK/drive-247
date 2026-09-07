@@ -297,7 +297,7 @@ export function CreditsPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0 space-y-1.5">
@@ -317,24 +317,16 @@ export function CreditsPanel() {
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button
-            onClick={handleBuyCredits}
-            disabled={buyCredits.isPending || previewActive}
-            className="bg-gradient-primary flex-1 sm:flex-none"
-          >
-            {buyCredits.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4 mr-2" />
-            )}
-            Buy Credits
-          </Button>
+          {/* Buy Credits used to sit HERE, at the far right of the section
+              header, a full card-width away from the balance and the quantity
+              selector it acts on. It is inside the Live Credits card now,
+              directly under the stepper — the three things are one action. */}
         </div>
       </div>
       {previewActive && <PreviewDisabledNote />}
 
       {/* ── Balance Cards ── */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid items-start gap-5 grid-cols-1 md:grid-cols-2">
         {/* Live Credits */}
         <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
           <CardContent className="p-6">
@@ -374,6 +366,19 @@ export function CreditsPanel() {
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
+
+              <Button
+                onClick={handleBuyCredits}
+                disabled={buyCredits.isPending || previewActive}
+                className="mt-3 w-full gap-2"
+              >
+                {buyCredits.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Buy {liveBuyAmount} credits
+              </Button>
             </div>
           </CardContent>
         </Card>

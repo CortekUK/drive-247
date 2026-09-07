@@ -477,7 +477,7 @@ export default function SubscriptionPage() {
           rendered yesterday. The bodies below are shared, so the two layouts
           cannot drift apart. */}
       {isLeanTenant(tenant?.slug) ? (
-        <div className="space-y-10">
+        <div className="space-y-8">
           <section className="mt-6">
           {/* `items-start`: without it the grid stretches both children to the
               taller one, which gave Plan Details a large empty bottom purely
@@ -555,6 +555,14 @@ export default function SubscriptionPage() {
                       )}
                     </span>
                   </div>
+              {/* Was a mailto: and a sentence — the dead end §12 describes.
+                  This files a real request into the super admin's queue, emails
+                  the team, and then SHOWS the operator that their request is
+                  open, so they are never left wondering whether it was heard.
+                  Still nothing destructive: Stripe is untouched. */}
+              <div className="mt-6 pt-4 border-t">
+                <CancelSubscriptionCard />
+              </div>
                 </div>
               </div>
             </div>
@@ -567,14 +575,6 @@ export default function SubscriptionPage() {
               <PaymentMethods cards={savedCards} onManage={() => setMethodsOpen(true)} />
 
 
-              {/* Was a mailto: and a sentence — the dead end §12 describes.
-                  This files a real request into the super admin's queue, emails
-                  the team, and then SHOWS the operator that their request is
-                  open, so they are never left wondering whether it was heard.
-                  Still nothing destructive: Stripe is untouched. */}
-              <div className="mt-6 pt-4 border-t">
-                <CancelSubscriptionCard />
-              </div>
             </div>
           </div>
           </section>

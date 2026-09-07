@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { Download } from "lucide-react";
+import {
+  billingDocumentsOf, billingStatusOf, BILLING_STATUS_LABEL,
+} from "@/lib/billing-documents";
 import { TenantSubscriptionInvoice } from "@/hooks/use-tenant-subscription";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUsageData } from "@/hooks/use-usage-data";
@@ -108,8 +111,14 @@ function InvoiceHistoryTable({
             <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">
               Status
             </th>
+            {/* TWO columns, named. A single "Actions" column could not say
+                which document you were opening, and an invoice (the bill) and
+                a receipt (proof it was paid) are different documents. */}
             <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">
-              Actions
+              Invoice
+            </th>
+            <th className="text-left py-2.5 px-3 text-xs font-semibold text-primary">
+              Receipt
             </th>
           </tr>
         </thead>
@@ -120,8 +129,13 @@ function InvoiceHistoryTable({
             // carry both, so this is populated in practice — but a row whose
             // webhook never landed can have neither, and we show a disabled
             // control rather than a dead link.
-            const documentUrl =
-              inv.stripe_invoice_pdf || inv.stripe_hosted_invoice_url || null;
+            /* One place decides which documents a row has and what its status
+               is called, shared with the rest of Billing. `documentUrl` used to
+               fall back from the PDF to the hosted invoice page and label the
+               result "receipt", which is what made an unpaid bill look like
+               proof of payment. */
+            const docs = billingDocumentsOf(inv);
+            const docStatus = billingStatusOf(inv);
             return (
               <tr key={inv.id} className="border-b last:border-0">
                 <td className="whitespace-nowrap py-2.5 px-3 text-sm text-muted-foreground">
@@ -158,37 +172,28 @@ function InvoiceHistoryTable({
                           : "text-muted-foreground"
                     }
                   >
-                    {inv.status === "paid"
-                      ? "Paid"
-                      : inv.status === "open"
-                        ? "Open"
-                        : inv.status}
+                    {/* Stripe stores no "overdue" or "failed" invoice status.
+                        Both are an OPEN invoice read against its due date and
+                        its retry count, derived in one place so this table and
+                        the rest of Billing cannot disagree. */}
+                    {BILLING_STATUS_LABEL[billingStatusOf(inv)]}
                   </span>
                 </td>
+                {/* ── Invoice: the bill. Exists once Stripe raises it. */}
                 <td className="py-2.5 px-3 text-sm">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <button
                       onClick={() => onViewInvoice(inv)}
                       className="text-primary hover:underline"
                     >
                       View
                     </button>
-                    {(inv.status === "open" || inv.status === "uncollectible") && inv.stripe_hosted_invoice_url && (
+                    {docs.invoiceDownload ? (
                       <a
-                        href={inv.stripe_hosted_invoice_url}
+                        href={docs.invoiceDownload}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium text-orange-600 hover:underline"
-                      >
-                        Pay
-                      </a>
-                    )}
-                    {documentUrl ? (
-                      <a
-                        href={documentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Download invoice"
+                        title="Download invoice PDF"
                         aria-label={`Download invoice for ${formatDate(inv.period_start)}`}
                         className="text-muted-foreground transition-colors hover:text-primary"
                       >
@@ -196,14 +201,65 @@ function InvoiceHistoryTable({
                       </a>
                     ) : (
                       <span
-                        title="Invoice document not available"
-                        aria-label="Invoice document not available"
+                        title="Invoice PDF not available"
+                        aria-label="Invoice PDF not available"
                         className="cursor-not-allowed text-muted-foreground/40"
                       >
                         <Download className="h-4 w-4" />
                       </span>
                     )}
+                    {/* Pay stays with the bill — it is the thing owed. */}
+                    {docStatus !== "paid" && docStatus !== "void" && docs.invoiceView && (
+                      <a
+                        href={docs.invoiceView}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-orange-600 hover:underline"
+                      >
+                        Pay
+                      </a>
+                    )}
                   </div>
+                </td>
+
+                {/* ── Receipt: proof the money arrived, so it exists only when
+                     it did. A dash rather than a disabled button: there is no
+                     document to enable, and offering proof of a payment that
+                     never completed is the one thing this column must not do. */}
+                <td className="py-2.5 px-3 text-sm">
+                  {docs.hasReceipt && docs.receiptView ? (
+                    <div className="flex items-center gap-2.5">
+                      <a
+                        href={docs.receiptView}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        View
+                      </a>
+                      <a
+                        href={docs.receiptView}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open the Stripe receipt to save or print it"
+                        aria-label={`Receipt for ${formatDate(inv.period_start)}`}
+                        className="text-muted-foreground transition-colors hover:text-primary"
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    </div>
+                  ) : (
+                    <span
+                      className="text-muted-foreground/50"
+                      title={
+                        docStatus === "paid"
+                          ? "Paid, but Stripe has not returned a receipt for this charge yet"
+                          : "No receipt: this invoice has not been paid"
+                      }
+                    >
+                      &mdash;
+                    </span>
+                  )}
                 </td>
               </tr>
             );
@@ -403,11 +459,14 @@ export function UsageDashboard({
   onViewInvoice: (invoice: TenantSubscriptionInvoice) => void;
 }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <UsageSummary />
 
-      <div className="space-y-4">
-        <h3 className="text-sm font-medium">Invoices</h3>
+      <div className="space-y-3">
+        {/* No "Invoices" subheading. The section above this already says
+            "Invoices & Receipts", and the table now has a column for each — so
+            a heading naming only one of the two documents was both redundant
+            and wrong. */}
         {invoicesLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
