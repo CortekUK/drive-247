@@ -448,24 +448,28 @@ export function CommandCenter({
                       Requested
                     </span>
                   ) : item.goLiveStatus === null && (
-                    (item.isComplete && (item.integrationStatus === "test" || item.integrationStatus === "live")) ||
-                    item.id === "credits"
+                    /* `|| item.id === "credits"` stood here, giving the credits
+                       row a "Request test credits" button. There is no
+                       user-facing concept of test credits any more — an
+                       operator sees one balance, the live one. The request TYPE
+                       (`credits_test`) and the super admin's queue for it are
+                       untouched; this removes the customer's door to it, not
+                       the room behind it. */
+                    item.isComplete && (item.integrationStatus === "test" || item.integrationStatus === "live")
                   ) ? (
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-[11px] h-7 px-2.5"
                       onClick={() => {
-                        const integrationType = item.id === "stripe-connect" ? "stripe_connect" : item.id === "credits" ? "credits_test" : item.id;
+                        const integrationType = item.id === "stripe-connect" ? "stripe_connect" : item.id;
                         submitRequest.mutate(
                           { integrationType },
                           {
                             onSuccess: () => {
                               toast({
                                 title: "Request sent",
-                                description: item.id === "credits"
-                                  ? "Your request for test credits has been sent to the platform admin."
-                                  : `Your request to switch to ${item.mode === "live" ? "test" : "live"} mode has been sent to the platform admin.`,
+                                description: `Your request to switch to ${item.mode === "live" ? "test" : "live"} mode has been sent to the platform admin.`,
                               });
                             },
                             onError: () => {
@@ -479,7 +483,7 @@ export function CommandCenter({
                         );
                       }}
                     >
-                      {item.id === "credits" ? "Request test credits" : item.mode === "live" ? "Request Test" : "Request Live"}
+                      {item.mode === "live" ? "Request Test" : "Request Live"}
                     </Button>
                   ) : null}
 

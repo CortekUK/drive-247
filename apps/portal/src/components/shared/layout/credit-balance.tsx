@@ -6,7 +6,7 @@ import { useCreditWallet } from "@/hooks/use-credit-wallet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function CreditBalance() {
-  const { balance, testBalance, isLowBalance, isLoading } = useCreditWallet();
+  const { balance, isLowBalance, isLoading } = useCreditWallet();
 
   if (isLoading) return null;
 
@@ -26,16 +26,16 @@ export function CreditBalance() {
         </Link>
       </TooltipTrigger>
       <TooltipContent>
-        <div className="space-y-0.5 text-xs">
+        {/* One balance. The "Test credits" line under this one is gone — there
+            is no user-facing concept of test credits, and two numbers in a
+            tooltip is two answers to a one-number question. */}
+        <div className="text-xs">
           <p>
-            Live credits:{" "}
+            Credits:{" "}
             <span className={isLowBalance ? "text-red-400 font-medium" : "font-medium"}>
               {balance.toFixed(0)}
             </span>
             {isLowBalance && " (low)"}
-          </p>
-          <p>
-            Test credits: <span className="font-medium">{testBalance.toFixed(0)}</span>
           </p>
         </div>
       </TooltipContent>

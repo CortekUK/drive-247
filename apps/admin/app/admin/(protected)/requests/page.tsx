@@ -72,6 +72,10 @@ const integrationLabels: Record<string, string> = {
   bonzah: 'Bonzah Insurance',
   boldsign: 'BoldSign E-Sign',
   credits_test: 'Test Credits',
+  // Not an integration — a tenant asking to leave. It shares this queue because
+  // the queue is already tenant → platform requests with a requester, a note
+  // and an approve/reject, and a second table would have meant a second page.
+  subscription_cancellation: 'Cancellation Request',
 };
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info';
@@ -98,6 +102,10 @@ function getIntegrationBadge(type: string): { variant: BadgeVariant; label: stri
       return { variant: 'secondary', label: 'BoldSign E-Sign' };
     case 'credits_test':
       return { variant: 'warning', label: 'Test Credits' };
+    // Destructive in intent, so it reads as destructive in the list: this is
+    // the one request type where doing nothing has a cost.
+    case 'subscription_cancellation':
+      return { variant: 'destructive', label: 'Cancellation Request' };
     default:
       return { variant: 'outline', label: integrationLabels[type] || type };
   }

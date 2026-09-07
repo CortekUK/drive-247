@@ -12,6 +12,7 @@ import { isLeanTenant } from "@/lib/lean-areas";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PricingCard } from "@/components/subscription/pricing-card";
 import { CreditsPanel } from "@/components/billing/credits-panel";
+import { CancelSubscriptionCard } from "@/components/subscription/cancel-subscription-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -583,27 +584,20 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
+              {/* Was a mailto: and a sentence — the dead end §12 describes.
+                  This files a real request into the super admin's queue, emails
+                  the team, and then SHOWS the operator that their request is
+                  open, so they are never left wondering whether it was heard.
+                  Still nothing destructive: Stripe is untouched. */}
               <div className="mt-6 pt-4 border-t">
-                <h3 className="text-sm font-medium mb-2">
-                  Need to cancel?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Please contact us at{" "}
-                  <a
-                    href="mailto:support@drive-247.com"
-                    className="text-primary hover:underline"
-                  >
-                    support@drive-247.com
-                  </a>{" "}
-                  to discuss cancellation.
-                </p>
+                <CancelSubscriptionCard />
               </div>
             </div>
           </div>
           </section>
 
           <section>
-            <h2 className="mb-4 text-lg font-semibold tracking-tight">Invoices</h2>
+            <h2 className="mb-4 text-lg font-semibold tracking-tight">Invoices &amp; Receipts</h2>
           {/* Same component as Settings: last three transactions by default with
               a "Show all" escape hatch, a per-row download, and the Stripe-style
               receipt viewer. The bespoke table that used to live here mapped the
@@ -635,7 +629,7 @@ export default function SubscriptionPage() {
               its own page in these tenants' sidebar, unchanged. */}
           <TabsList>
             <TabsTrigger value="plan">Plan</TabsTrigger>
-            <TabsTrigger value="invoices">Invoices</TabsTrigger>
+            <TabsTrigger value="invoices">Invoices &amp; Receipts</TabsTrigger>
           </TabsList>
 
           <TabsContent value="plan" className="mt-6">
@@ -764,20 +758,13 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
+              {/* Was a mailto: and a sentence — the dead end §12 describes.
+                  This files a real request into the super admin's queue, emails
+                  the team, and then SHOWS the operator that their request is
+                  open, so they are never left wondering whether it was heard.
+                  Still nothing destructive: Stripe is untouched. */}
               <div className="mt-6 pt-4 border-t">
-                <h3 className="text-sm font-medium mb-2">
-                  Need to cancel?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Please contact us at{" "}
-                  <a
-                    href="mailto:support@drive-247.com"
-                    className="text-primary hover:underline"
-                  >
-                    support@drive-247.com
-                  </a>{" "}
-                  to discuss cancellation.
-                </p>
+                <CancelSubscriptionCard />
               </div>
             </div>
           </div>
