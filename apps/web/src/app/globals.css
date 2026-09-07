@@ -139,6 +139,33 @@
 }
 
 @layer utilities {
+  /**
+   * Hide the scrollbar, keep the scrolling.
+   *
+   * For a container that is SUPPOSED to fit and only overflows on a viewport
+   * nobody controls — a short window, a zoomed browser, a phone in landscape.
+   * The signup dialog is the case this was added for: its content is laid out
+   * to fit, so a permanent scrollbar track down the panel edge was chrome
+   * advertising a problem that is not normally there.
+   *
+   * NOT `overflow: hidden`. The element keeps scrolling by wheel, trackpad,
+   * touch and keyboard, so when a screen genuinely is too short the content is
+   * still reachable — it is only the bar that goes. Removing the overflow
+   * instead would clip those fields with no way to reach them at all.
+   *
+   * The trade is a real one: no visible affordance that there is more below.
+   * Only use it where something else carries that job — in the dialog, the
+   * submit button is sticky, so the primary action is never the thing hiding
+   * off the bottom edge.
+   */
+  .scrollbar-none {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* legacy Edge */
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none; /* Chrome, Safari */
+  }
+
   .fade-in-hidden {
     opacity: 0;
     transform: translateY(16px);

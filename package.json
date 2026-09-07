@@ -14,6 +14,7 @@
     "dev:web": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs web && turbo run dev --filter=web",
     "dev:admin": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs admin && turbo run dev --filter=admin",
     "dev:bonzah": "node scripts/guard-db-env.mjs && node scripts/kill-dev-ports.mjs bonzah && turbo run dev --filter=bonzah",
+    "dev:site": "node scripts/kill-dev-ports.mjs @drive247/web && npm --prefix v2/apps/web run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "update-branding": "node scripts/bulk-update-branding.js",

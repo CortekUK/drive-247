@@ -29,6 +29,8 @@
 import { useState } from "react";
 import { ExternalLink, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTenant } from "@/contexts/TenantContext";
+import { isLeanTenant } from "@/lib/lean-areas";
 import {
   Dialog,
   DialogContent,
@@ -106,9 +108,19 @@ function ExplainerDialog({
           <DialogTitle className="flex items-center gap-2 text-base">
             <Play className="h-4 w-4 fill-current text-primary" />
             {explainer?.title}
-            {explainer && (
+            {/* Duration only when it is real. A placeholder carries 0, and
+                "0:00" would be a promise about a video that does not exist. */}
+            {explainer && explainer.durationSeconds > 0 && (
               <span className="text-xs font-normal tabular-nums text-muted-foreground">
                 {formatExplainerDuration(explainer.durationSeconds)}
+              </span>
+            )}
+            {/* Said out loud rather than left to be discovered. Someone
+                reviewing the checklist needs to know in one glance that the
+                plumbing is finished and the content is not. */}
+            {explainer?.isPlaceholder && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Sample
               </span>
             )}
           </DialogTitle>
@@ -150,11 +162,16 @@ export function ExplainerChip({
   className,
 }: ExplainerChipProps) {
   const [open, setOpen] = useState(false);
-  const explainer = getExplainer(id);
+  const { tenantSlug } = useTenant();
+  // The canary sees the stand-in reel so the affordance can be built and
+  // reviewed before any video exists; every other tenant keeps the empty-URL
+  // contract and sees no control at all. See `ExplainerLookupOptions`.
+  const explainer = getExplainer(id, { allowPlaceholder: isLeanTenant(tenantSlug) });
 
   if (!explainer) return null;
 
-  const duration = formatExplainerDuration(explainer.durationSeconds);
+  const duration =
+    explainer.durationSeconds > 0 ? formatExplainerDuration(explainer.durationSeconds) : null;
 
   return (
     <>
@@ -165,7 +182,9 @@ export function ExplainerChip({
           e.preventDefault();
           setOpen(true);
         }}
-        aria-label={`${label}: ${explainer.title} (${duration})`}
+        aria-label={
+          duration ? `${label}: ${explainer.title} (${duration})` : `${label}: ${explainer.title}`
+        }
         className={cn(
           "inline-flex shrink-0 items-center gap-1.5 transition-colors",
           variant === "chip"
@@ -176,7 +195,7 @@ export function ExplainerChip({
       >
         <Play className="h-3 w-3 fill-current" />
         {label}
-        <span className="tabular-nums opacity-70">({duration})</span>
+        {duration && <span className="tabular-nums opacity-70">({duration})</span>}
       </button>
 
       <ExplainerDialog
@@ -205,7 +224,10 @@ export function ExplainerChip({
 export function ExplainerShelfButton({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [playing, setPlaying] = useState<ReadyExplainer | null>(null);
-  const ready = listReadyExplainers();
+  const { tenantSlug } = useTenant();
+  // Same rule as the individual chips, so the shelf and the rows can never
+  // disagree about which videos exist.
+  const ready = listReadyExplainers({ allowPlaceholder: isLeanTenant(tenantSlug) });
 
   if (ready.length === 0) return null;
 

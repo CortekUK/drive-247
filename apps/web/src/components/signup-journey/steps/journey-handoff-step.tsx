@@ -28,6 +28,8 @@ import {
   Circle,
   CircleCheck,
   ExternalLink,
+  Globe,
+  LayoutDashboard,
   Loader2,
 } from "lucide-react";
 
@@ -35,6 +37,7 @@ import type { JourneyPaymentOutcome } from "@/components/signup-journey/steps/jo
 import {
   MILESTONE_COPY,
   PROVISION_MILESTONES,
+  type ProvisionMilestone,
 } from "@/components/onboarding/onboarding-types";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -42,11 +45,39 @@ import { JOURNEY_TENANT_SLUG, portalHandoffUrl } from "@/lib/signup-journey";
 import { cn } from "@/lib/utils";
 
 /**
- * Per-milestone dwell. Eight milestones, so the whole run is a shade over three
- * seconds — long enough to read the list going by, short enough that nobody
- * watching starts talking over it.
+ * How long each milestone sits on screen, in ms.
+ *
+ * DELIBERATELY UNEVEN, and that is the whole point. A fixed interval — this was
+ * 420ms for every line — makes eight steps tick past like a metronome, and a
+ * metronome reads as a progress bar someone drew rather than as work being
+ * done. Real provisioning is lumpy: some steps are a database write, one is an
+ * OpenAI round trip. Giving each line a length that matches what it actually
+ * represents is what makes the screen believable.
+ *
+ * `brand_ready` is the longest because it is genuinely the slowest in the live
+ * flow — it is the one that calls OpenAI, and it is the milestone
+ * `SLOW_MILESTONE` in onboarding-types.ts names for exactly that reason. The
+ * two cheap checks at the top are the quickest. The last step is slower again,
+ * so the run lands rather than stopping dead.
+ *
+ * Totals ~12.4s. Long enough to feel like setup actually happened — which is
+ * the point of showing it at all — and to read every line without hurrying.
+ *
+ * THIS LIVES HERE, NOT IN `onboarding-types.ts`. That module is shared with the
+ * LIVE signup, whose milestone list advances only when the server confirms a
+ * step and never on a timer. Putting durations there would hand the real flow a
+ * set of fake ones.
  */
-const MILESTONE_INTERVAL_MS = 420;
+const MILESTONE_DWELL_MS: Record<ProvisionMilestone, number> = {
+  validated: 900,
+  payment_verified: 1100,
+  brand_ready: 3200,
+  workspace_created: 1400,
+  account_linked: 1200,
+  billing_ready: 1300,
+  subscription_linked: 1500,
+  site_published: 1800,
+};
 
 interface JourneyHandoffStepProps {
   slug: string;
@@ -68,9 +99,12 @@ export function JourneyHandoffStep({
 
   React.useEffect(() => {
     if (done) return;
+    // The dwell of the milestone CURRENTLY RUNNING — index `completed`, since
+    // that many are finished and this is the next one — not a fixed interval.
+    const running = PROVISION_MILESTONES[completed];
     const timer = window.setTimeout(
       () => setCompleted((n) => n + 1),
-      MILESTONE_INTERVAL_MS,
+      MILESTONE_DWELL_MS[running],
     );
     return () => window.clearTimeout(timer);
   }, [completed, done]);
@@ -85,6 +119,8 @@ export function JourneyHandoffStep({
   const percent = (completed / PROVISION_MILESTONES.length) * 100;
   /** The address the operator's portal answers on. */
   const portalAddress = `${slug || JOURNEY_TENANT_SLUG}.portal.drive-247.com`;
+  /** The public site customers book on — the other half of what they just bought. */
+  const bookingAddress = `${slug || JOURNEY_TENANT_SLUG}.drive-247.com`;
 
   if (!done) {
     return (
@@ -148,16 +184,53 @@ export function JourneyHandoffStep({
 
   return (
     <div className="animate-in fade-in-0 duration-300">
-      <p className="text-xs tracking-[0.12em] text-muted-foreground uppercase">
-        Your portal
-      </p>
-      <p className="mt-1.5 font-mono text-[17px] break-all sm:text-lg">
-        {portalAddress}
-      </p>
+      {/*
+        The two addresses the operator now owns, given equal weight in one
+        panel. This screen used to name only the portal, in body text, with the
+        booking site mentioned in the sentence above and never shown — so the
+        thing an operator most wants to see at this moment, their own public
+        URL, was the one thing missing. They are the reward; they should look
+        like it rather than like a caption.
+      */}
+      <div className="overflow-hidden rounded-xl border border-border">
+        <div className="flex items-start gap-3 p-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+            <LayoutDashboard className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
+              Your portal
+            </p>
+            <p className="mt-1 font-mono text-[15px] break-all sm:text-base">
+              {portalAddress}
+            </p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Where you run the fleet.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 border-t border-border p-4">
+          <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+            <Globe className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium tracking-[0.12em] text-muted-foreground uppercase">
+              Your booking site
+            </p>
+            <p className="mt-1 font-mono text-[15px] break-all sm:text-base">
+              {bookingAddress}
+            </p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Live now. This is what customers see.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Only stated when Stripe actually answered. Nothing is invented. */}
       {payment && !payment.simulated && payment.last4 && (
-        <p className="mt-5 text-sm text-muted-foreground">
+        <p className="mt-4 text-sm text-muted-foreground">
           Paid with your {payment.brand ?? "card"} ending {payment.last4}.
         </p>
       )}

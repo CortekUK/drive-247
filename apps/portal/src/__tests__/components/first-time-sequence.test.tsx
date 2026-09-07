@@ -38,6 +38,7 @@ import { FirstRunWizard } from '@/components/onboarding/first-run-wizard';
 import { useFirstRentalTour } from '@/hooks/use-first-rental-tour';
 import { hasSeenTour } from '@/lib/first-rental-tour';
 import { clearTourSeenFlags, resetFirstRunRow, type FirstRunClient } from '@/lib/dev-actions';
+import { FIRST_RUN_QUESTIONS } from '@/lib/first-run-questions';
 
 // ── Test doubles ───────────────────────────────────────────────────────────
 
@@ -237,6 +238,51 @@ afterEach(async () => {
 // ── The sequence ───────────────────────────────────────────────────────────
 
 describe('first-time sequence — wizard, then tour, then the /dev reset', () => {
+/**
+ * Finish the wizard the only way an operator now can: answer what is required,
+ * skip only what the author marked optional, then press the final button.
+ *
+ * These tests used to click a "Skip for now" that ended the whole wizard in one
+ * go. That control was removed by explicit request — nobody may skip the whole
+ * thing — so what they were really using it for (getting past the wizard to
+ * test what happens next) needs the honest route instead.
+ */
+/** Answer whatever control the current step is showing. */
+async function answerCurrentStep() {
+  const choice = container.querySelector<HTMLElement>('[role="radio"], [role="checkbox"]');
+  if (choice) {
+    await click(choice);
+    return;
+  }
+  const input = container.querySelector<HTMLInputElement>('input[type="text"]');
+  if (!input) return;
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    'value',
+  )!.set!;
+  await act(async () => {
+    setter.call(input, 'Denver, CO');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function finishWizard() {
+  for (let i = 0; i < FIRST_RUN_QUESTIONS.length - 1; i += 1) {
+    if (document.body.textContent?.includes('Skip this question')) {
+      await click(button('Skip this question'));
+      continue;
+    }
+    await answerCurrentStep();
+    await click(button('Continue'));
+  }
+  if (document.body.textContent?.includes('Skip this question')) {
+    await click(button('Skip this question'));
+  } else {
+    await answerCurrentStep();
+    await click(button('Go to my dashboard'));
+  }
+}
+
   it('runs wizard → tour once, stays gone on reload, and comes back exactly the same after the reset', async () => {
     // ── 1. A brand-new operator ──────────────────────────────────────────
     await render();
@@ -251,7 +297,7 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     expect(hasSeenTour(APP_USER_ID), 'and did not burn its one run').toBe(false);
 
     // Finish the wizard (skipping is the same act as completing, for the row).
-    await click(button('Skip for now'));
+    await finishWizard();
     expect(stored.get(TENANT.id), 'the row now exists').toBeTruthy();
     expect(wizardIsUp(), 'the wizard let go on its own').toBe(false);
 
@@ -297,7 +343,7 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     await wait(TOUR_WINDOW_MS);
     expect(tourIsActive(), 'and the tour still waits for it').toBe(false);
 
-    await click(button('Skip for now'));
+    await finishWizard();
     expect(wizardIsUp()).toBe(false);
     await wait(TOUR_WINDOW_MS);
     expect(tourIsActive(), 'then fires again, in the same order as the first time').toBe(true);
@@ -312,7 +358,7 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     // the same one, and it is why the button clears the whole `d247.tour.`
     // namespace rather than the seen flag alone.
     await render();
-    await click(button('Skip for now'));
+    await finishWizard();
     await wait(TOUR_WINDOW_MS);
     expect(tourIsActive()).toBe(true);
 
@@ -327,7 +373,7 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     // …but NOT clearTourSeenFlags().
     await hardReload();
     expect(wizardIsUp()).toBe(true);
-    await click(button('Skip for now'));
+    await finishWizard();
     await wait(TOUR_WINDOW_MS);
     expect(
       currentStepId(),
@@ -338,7 +384,7 @@ describe('first-time sequence — wizard, then tour, then the /dev reset', () =>
     await resetFirstRunRow(fakeSupabase as unknown as FirstRunClient, TENANT.id);
     expect(clearTourSeenFlags(), 'seen AND progress, one prefix').toBeGreaterThan(1);
     await hardReload();
-    await click(button('Skip for now'));
+    await finishWizard();
     await wait(TOUR_WINDOW_MS);
     expect(currentStepId(), 'back to the top').toBe('welcome');
   }, 20_000);

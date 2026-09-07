@@ -46,7 +46,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { checkSlugAvailability } from "@/lib/signup-journey";
 import {
   ACCOUNT_FIELD_ORDER,
@@ -201,14 +200,19 @@ export function JourneyAccountStep({
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      {/* ── social first ─────────────────────────────────────────────────── */}
-      <div className="space-y-3">
+      {/* ── social first ───────────────────────────────────────────────────
+          Side by side from `sm`. Stacked they were two 48px rows plus a gap —
+          ~108px of a panel that had to lose ~375px to stop scrolling — for two
+          buttons that are alternatives to each other and read perfectly well as
+          a pair. They stack again on a phone, where a full-width tap target
+          matters more than the vertical room. */}
+      <div className="grid gap-3 sm:grid-cols-2">
         <Button
           type="button"
           variant="outline"
           size="lg"
           onClick={() => handleSocial("Google")}
-          className="h-12 w-full justify-center gap-3 text-[15px] font-medium"
+          className="h-11 w-full justify-center gap-3 text-[15px] font-medium"
         >
           <GoogleMark />
           Sign up with Google
@@ -219,7 +223,7 @@ export function JourneyAccountStep({
           size="lg"
           onClick={() => handleSocial("Apple")}
           className={cn(
-            "h-12 w-full justify-center gap-3 text-[15px] font-medium",
+            "h-11 w-full justify-center gap-3 text-[15px] font-medium",
             "bg-black text-white hover:bg-black/85",
             "dark:bg-white dark:text-black dark:hover:bg-white/90",
           )}
@@ -237,14 +241,25 @@ export function JourneyAccountStep({
         )}
       </div>
 
-      <div className="mt-7 flex items-center gap-4">
-        <Separator className="flex-1" />
-        <span className="text-xs text-muted-foreground">or</span>
-        <Separator className="flex-1" />
-      </div>
+      {/*
+        The "or" divider that sat here is gone, and so is the one that used to
+        split the form in half further down. Between them they cost ~110px of a
+        panel that was already ~375px short of fitting, and the second one was
+        where the scroll began — which is what read as the form "breaking"
+        partway down. The social buttons and the fields below are legible as
+        alternatives from their own shapes; a rule and the word "or" was
+        decoration paid for in the one currency this dialog had none of.
+      */}
 
-      {/* ── email and password ───────────────────────────────────────────── */}
-      <div className="mt-7 space-y-5">
+      {/* ── the two halves, side by side from `lg` ─────────────────────────
+          Stacked, the credential fields (340px) and the business fields
+          (243px) came to ~583px on their own. Side by side the taller column
+          is ~312px, which is the single biggest reason this step now fits
+          without a scrollbar. Below `lg` they stack as before — on a phone the
+          panel is a full-height sheet and scrolling there is expected. */}
+      <div className="mt-6 grid gap-x-8 gap-y-4 md:grid-cols-2 md:items-start lg:gap-x-10">
+        {/* ── email and password ─────────────────────────────────────────── */}
+        <div className="space-y-4">
         <div>
           <Label htmlFor="journey-full-name">
             Full name
@@ -384,7 +399,12 @@ export function JourneyAccountStep({
           <div
             id="journey-password-rules"
             aria-live="polite"
-            className="mt-3 space-y-1.5"
+            // One wrapping row rather than one rule per line. Two short rules
+            // stacked cost a whole line of height each in the column that
+            // decides whether this step scrolls; side by side they cost one.
+            // `flex-wrap` keeps them readable when a narrow column cannot hold
+            // both, so nothing is lost on a phone.
+            className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1"
           >
             {ruleState.map(({ rule, met }) => (
               <p
@@ -438,40 +458,56 @@ export function JourneyAccountStep({
         </div>
       </div>
 
-      <Separator className="!my-8" />
-
-      {/* The live component. Business name, web address with availability,
-          terms — the three things `signup-provision` actually requires. */}
-      <div className="space-y-5">
-        <TenantIdentityFields
-          value={tenant}
-          busy={false}
-          errors={{
-            companyName: errors.companyName,
-            slug: errors.slug,
-            acceptedTerms: errors.acceptedTerms,
-          }}
-          onChange={onTenantChange}
-          onClearError={clearFieldError}
-          onCheckSlug={checkSlugAvailability}
-          onSlugStateChange={setSlugState}
-          companyNameRef={companyNameRef}
-          slugRef={slugRef}
-          termsRef={termsRef}
-        />
+        {/* The live component. Business name, web address with availability,
+            terms — the three things `signup-provision` actually requires. */}
+        <div className="space-y-4">
+          <TenantIdentityFields
+            value={tenant}
+            busy={false}
+            errors={{
+              companyName: errors.companyName,
+              slug: errors.slug,
+              acceptedTerms: errors.acceptedTerms,
+            }}
+            onChange={onTenantChange}
+            onClearError={clearFieldError}
+            onCheckSlug={checkSlugAvailability}
+            onSlugStateChange={setSlugState}
+            companyNameRef={companyNameRef}
+            slugRef={slugRef}
+            termsRef={termsRef}
+          />
+        </div>
       </div>
 
       {/* One primary action. Leaving is the close button in the corner, which is
           where a dialog's exit belongs — a second "Back to plans" here would
-          compete with it. */}
-      <Button
-        type="submit"
-        size="lg"
-        className="mt-9 h-12 w-full bg-indigo-600 text-[15px] text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-      >
-        Create my account
-        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-      </Button>
+          compete with it.
+
+          STICKY, and that is the part that makes this safe on every screen.
+          The trims above make the step fit a normal laptop, but "fits" is a
+          claim about a viewport height nobody controls — a short window, a
+          zoomed browser, a phone in landscape, or a validation error appearing
+          under three fields at once all put it back over the edge. Pinned to
+          the bottom of the scroll area, the button is reachable at any height
+          instead of being the first thing clipped, which is exactly what was
+          happening here.
+
+          The negative margins bleed the backing to the panel's edges so content
+          scrolls UNDER it rather than appearing beside it, and the gradient
+          above it says there is more below rather than cutting the last field
+          off with a hard line. */}
+      <div className="sticky bottom-0 -mx-6 mt-7 bg-background px-6 pb-1 sm:-mx-10 sm:px-10">
+        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 w-full bg-indigo-600 text-[15px] text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+        >
+          Create my account
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
     </form>
   );
 }
