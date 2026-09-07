@@ -23,7 +23,7 @@
  * blank preview and a lost preview look identical and only one of them is fine.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { MessageSquare, Search, Send, Mail, Phone, MessageCircle } from "lucide-react";
@@ -32,6 +32,8 @@ import { Input } from "@/components/ui-v2/input";
 import { Button } from "@/components/ui-v2/button";
 import { useChatChannels, type ChatChannel } from "@/hooks/use-chat-channels";
 import type { MessageChannel } from "@/contexts/RealtimeChatContext";
+import { mockChannelDecoration, type MockChannelDecoration } from "@/components/messages-v2/mock-conversation";
+import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
 
 const initials = (name?: string | null) =>
   (name || "?")
@@ -49,10 +51,17 @@ const CHANNEL_MARK: Record<MessageChannel, { icon: typeof Mail; label: string }>
   voice: { icon: Phone, label: "Call" },
 };
 
-function Row({ channel }: { channel: ChatChannel }) {
+function Row({ channel, mock }: { channel: ChatChannel; mock?: MockChannelDecoration | null }) {
   const name = channel.customer?.name || "Unknown customer";
-  const unread = channel.unread_count || 0;
-  const mark = CHANNEL_MARK[channel.last_message_channel ?? channel.last_channel] ?? CHANNEL_MARK.in_app;
+  /* A preview decoration replaces only what it covers, so a row still shows the
+     real customer it belongs to — the point is to judge the LIST, not to invent
+     people. */
+  const unread = mock ? mock.unread : channel.unread_count || 0;
+  const preview = mock ? mock.preview : channel.last_message_preview;
+  const at = mock ? mock.at : channel.last_message_at;
+  const mark =
+    CHANNEL_MARK[mock ? mock.channel : channel.last_message_channel ?? channel.last_channel] ??
+    CHANNEL_MARK.in_app;
   const MarkIcon = mark.icon;
 
   return (
@@ -85,9 +94,7 @@ function Row({ channel }: { channel: ChatChannel }) {
           </p>
           <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <MarkIcon className="h-3 w-3" aria-label={mark.label} />
-            {channel.last_message_at
-              ? formatDistanceToNow(new Date(channel.last_message_at), { addSuffix: true })
-              : "—"}
+            {at ? formatDistanceToNow(new Date(at), { addSuffix: true }) : "Not yet"}
           </span>
         </div>
         {/* An empty preview and a LOST preview render the same, so the empty
@@ -97,7 +104,7 @@ function Row({ channel }: { channel: ChatChannel }) {
             unread > 0 ? "text-foreground/80" : "text-muted-foreground"
           }`}
         >
-          {channel.last_message_preview || (
+          {preview || (
             <span className="italic text-muted-foreground/70">No messages yet</span>
           )}
         </p>
@@ -126,20 +133,42 @@ export function ConversationList({ onBulkMessage }: { onBulkMessage?: () => void
   const { channels, isLoading } = useChatChannels();
   const [query, setQuery] = useState("");
 
+  /* The same developer preview the conversation uses. Without it here the list
+     kept reading its real (empty) data, so every row said "No messages yet"
+     while the conversation behind it was full — which made the list impossible
+     to judge and "open any conversation" read as broken. */
+  const scenario = useSyncExternalStore(
+    subscribeDevOverrides,
+    () => readMessagesScenario(),
+    () => "off" as const,
+  );
+  const previewing = scenario !== "off";
+
   /* Name, email, or message — the three things somebody actually remembers
-     about a conversation they are trying to find again. */
+     about a conversation they are trying to find again. Searches the PREVIEW
+     TEXT ACTUALLY ON SCREEN, so under a scenario the message half of the search
+     matches what the row is showing rather than the real row underneath it. */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return channels;
-    return channels.filter((c) => {
+    return channels.filter((c, i) => {
       const name = c.customer?.name?.toLowerCase() ?? "";
       const email = c.customer?.email?.toLowerCase() ?? "";
-      const preview = c.last_message_preview?.toLowerCase() ?? "";
-      return name.includes(q) || email.includes(q) || preview.includes(q);
+      const shown = previewing
+        ? mockChannelDecoration(scenario, i)?.preview ?? ""
+        : c.last_message_preview ?? "";
+      return name.includes(q) || email.includes(q) || shown.toLowerCase().includes(q);
     });
-  }, [channels, query]);
+  }, [channels, query, previewing, scenario]);
 
-  const totalUnread = channels.reduce((n, c) => n + (c.unread_count || 0), 0);
+  /* Decoration is keyed on the row's index in the FULL list, not the filtered
+     one, so searching does not renumber every preview under the cursor. */
+  const decorationFor = (id: string): MockChannelDecoration | null =>
+    previewing ? mockChannelDecoration(scenario, channels.findIndex((c) => c.id === id)) : null;
+
+  const totalUnread = previewing
+    ? channels.reduce((n, c) => n + (decorationFor(c.id)?.unread ?? 0), 0)
+    : channels.reduce((n, c) => n + (c.unread_count || 0), 0);
 
   return (
     <div className="mx-auto w-full max-w-[900px] space-y-5 px-1 pb-10 pt-6">
@@ -194,7 +223,7 @@ export function ConversationList({ onBulkMessage }: { onBulkMessage?: () => void
         ) : (
           <div className="divide-y divide-border/40">
             {filtered.map((c) => (
-              <Row key={c.id} channel={c} />
+              <Row key={c.id} channel={c} mock={decorationFor(c.id)} />
             ))}
           </div>
         )}

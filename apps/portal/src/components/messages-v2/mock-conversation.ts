@@ -261,3 +261,59 @@ export function mockMessages(scenario: MessagesScenarioId): ChatMessage[] {
   const build = SCENARIOS[scenario];
   return build ? build() : [];
 }
+
+/* ── the LIST, not just the conversation ──────────────────────────────────
+   The first version of this file previewed only the open conversation, so the
+   Messages list still read its real (empty) data and every row said "No
+   messages yet" — which made the list impossible to judge and the instruction
+   "open any conversation" read as broken.
+
+   Each row is decorated from the scenario, varied by its position so the list
+   looks like traffic rather than one message copy-pasted down the page. It is
+   derived, not random: the same row gets the same preview on every render, so
+   nothing shuffles under the cursor. */
+export interface MockChannelDecoration {
+  preview: string;
+  at: string;
+  unread: number;
+  channel: "in_app" | "sms" | "email" | "voice";
+}
+
+const LIST_LINES: { preview: string; channel: MockChannelDecoration["channel"]; minutes: number; unread: number }[] = [
+  { preview: "Received, thank you. That is credited against the final invoice.", channel: "in_app", minutes: 72, unread: 2 },
+  { preview: "Question about return time", channel: "email", minutes: 5 * HOUR, unread: 1 },
+  { preview: "Your deposit of £250 has been released and should be back with you in 3–5 working days.", channel: "sms", minutes: 2 * HOUR, unread: 0 },
+  { preview: "Missed call", channel: "voice", minutes: DAY, unread: 1 },
+  { preview: "Read it through, all looks fine. Please add the second driver.", channel: "email", minutes: 2 * DAY, unread: 3 },
+  { preview: "6pm is fine — I have moved the return slot. Nothing further to pay.", channel: "in_app", minutes: 4 * HOUR, unread: 0 },
+  { preview: "Sorry I missed you twice — I am free after 2pm today if that suits.", channel: "sms", minutes: DAY + 30, unread: 0 },
+  { preview: "Here is the fuel receipt from the top-up on Tuesday.", channel: "in_app", minutes: 90, unread: 1 },
+];
+
+/**
+ * How one row of the Messages list should read under a scenario.
+ *
+ * `index` is the row's position, so the decoration is stable per row and the
+ * list does not reshuffle on every render.
+ */
+export function mockChannelDecoration(
+  scenario: MessagesScenarioId,
+  index: number,
+): MockChannelDecoration | null {
+  if (scenario === "off") return null;
+  /* A brand-new conversation is the one scenario where "No messages yet" IS
+     the thing being reviewed, so the list keeps saying it. */
+  if (scenario === "empty") return { preview: "", at: ago(0), unread: 0, channel: "in_app" };
+
+  const pool =
+    scenario === "email"
+      ? LIST_LINES.filter((l) => l.channel === "email")
+      : scenario === "calls"
+        ? LIST_LINES.filter((l) => l.channel === "voice" || l.channel === "sms")
+        : scenario === "failed"
+          ? LIST_LINES.filter((l) => l.channel === "sms" || l.channel === "in_app")
+          : LIST_LINES;
+
+  const line = pool[index % pool.length];
+  return { preview: line.preview, at: ago(line.minutes), unread: line.unread, channel: line.channel };
+}
