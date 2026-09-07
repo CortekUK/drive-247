@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { isLeanTenant } from "@/lib/lean-areas";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { toast } from "sonner";
@@ -144,7 +145,18 @@ export function useCreditWallet() {
 
       // Built here rather than at module scope: it has to read the location at
       // the moment of the click, not at import.
+      //
+      // CANARY ONLY, and the fallback is the OLD behaviour byte for byte.
+      // Following the current location is needed because on the canary the
+      // credits UI also renders inside /subscription, and coming back to a
+      // fixed /credits would silently relocate the operator at the exact moment
+      // they have just paid. Nowhere else renders it in two places, so nowhere
+      // else needs the change — and this is a live money path, so the other 36
+      // keep the URL they have always been sent to.
       const returnUrl = (status: "success" | "cancelled") => {
+        if (!isLeanTenant(tenant?.slug)) {
+          return `${window.location.origin}/credits?status=${status}`;
+        }
         const url = new URL(window.location.href);
         url.searchParams.set("status", status);
         return url.toString();
