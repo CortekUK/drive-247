@@ -10,7 +10,6 @@ import {
   useBillingPreview,
   buildPreviewWallet,
   buildPreviewTransactions,
-  buildPreviewCosts,
   PreviewDataPill,
   PreviewDisabledNote,
 } from "@/components/billing/billing-preview";
@@ -49,9 +48,6 @@ import {
   RefreshCw,
   Plus,
   Minus,
-  FileSignature,
-  MessageSquare,
-  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -79,13 +75,6 @@ function formatDayLabel(dayStr: string) {
 
 type TimeRange = "7d" | "30d" | "3m" | "6m" | "12m";
 type IntegrationFilter = "all" | "esign" | "twilio" | "verification";
-
-const CATEGORY_ICONS: Record<string, any> = {
-  esign: FileSignature,
-  twilio: MessageSquare,
-  sms: MessageSquare,
-  verification: ShieldCheck,
-};
 
 function TransactionTypeBadge({ type }: { type: CreditTransaction["type"] }) {
   const config: Record<string, { label: string; class: string }> = {
@@ -121,7 +110,6 @@ export function CreditsPanel() {
     balance: realBalance,
     isLowBalance,
     transactions: realTransactions,
-    costs: realCosts,
     isLoading,
     buyCredits,
     updateAutoRefill,
@@ -160,10 +148,6 @@ export function CreditsPanel() {
   const wallet = previewActive ? previewWallet : realWallet;
   const balance = previewActive ? previewWallet!.balance : realBalance;
   const transactions = previewActive ? previewTransactions : realTransactions;
-  // Service costs are PLATFORM-wide, not per tenant — if real rates are
-  // configured they are the honest thing to show even on the preview screen.
-  // Sample rates fill in only when that table is empty.
-  const costs = previewActive && realCosts.length === 0 ? buildPreviewCosts() : realCosts;
 
   // Mirrors CREDIT_CONFIG.MIN_PURCHASE_CREDITS in the edge function: the
   // credits account settles in AED and Stripe rejects Checkout totals under
@@ -326,7 +310,7 @@ export function CreditsPanel() {
       {previewActive && <PreviewDisabledNote />}
 
       {/* ── Balance Cards ── */}
-      <div className="grid items-start gap-5 grid-cols-1 md:grid-cols-2">
+      <div className="grid items-start gap-5 grid-cols-1 sm:max-w-sm">
         {/* Live Credits */}
         <Card className="overflow-hidden transition-all duration-200 hover:shadow-md border-emerald-500/30 bg-emerald-500/[0.06] dark:bg-emerald-500/[0.08]">
           <CardContent className="p-6">
@@ -393,38 +377,18 @@ export function CreditsPanel() {
            The DATA is untouched. `test_balance`, `is_test_mode` and the
            test-mode transactions all still exist and are still written — this
            removes the customer-facing concept, not the infrastructure. */}
-        {/* Service Costs */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-6">
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold">Service Costs</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Credits per service
-              </p>
-            </div>
-            <div className="grid gap-2">
-              {costs.map((cost) => {
-                const Icon = CATEGORY_ICONS[cost.category] || CircleDollarSign;
-                return (
-                  <div key={cost.id} className="flex items-center gap-3 rounded-lg border p-2.5">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10">
-                      <Icon className="h-3.5 w-3.5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-tight">{cost.label}</p>
-                    </div>
-                    <span className="text-sm font-semibold shrink-0">
-                      {cost.cost_credits} cr
-                    </span>
-                  </div>
-                );
-              })}
-              {costs.length === 0 && (
-                <p className="text-sm text-muted-foreground py-4 text-center">No service costs configured</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {/* The "Service Costs" card stood here — a price list of credits per
+           service (e-sign, license verification, Twilio). Removed from Billing
+           by request: this page answers what you have and how to buy more, and
+           a rate card is reference material that made the section wider and
+           longer without helping either question.
+
+           The RATES are untouched where they matter: the credit ledger still
+           charges them, `credit_costs` is unchanged, and each usage row inside
+           "Usage & settings" still shows what that particular action cost. What
+           is gone is the standalone price list — nothing else on this page read
+           it, so the query and its icon map went with it rather than being left
+           behind as decoration. */}
       </div>
 
       {/* ── Everything below is SECONDARY, and folded away ──────────────────
