@@ -7,6 +7,7 @@ import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { MessagesSheet } from "@/components/shared/layout/dock-sheets";
 import { useUnreadCount } from "@/hooks/use-unread-count";
 import { useNotifications } from "@/hooks/use-notifications";
+import { isNotificationCentreType } from "@/components/notifications/taxonomy";
 
 const BTN =
   "relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 ease-out hover:-translate-x-1 hover:scale-110 hover:text-primary";
@@ -98,7 +99,14 @@ DockButton.displayName = "DockButton";
 export function QuickDock() {
   const [tucked, setTucked] = useState(false);
   const { unreadCount: chatUnread } = useUnreadCount();
-  const { unreadCount: notifUnread } = useNotifications();
+  const { notifications } = useNotifications();
+  /* NOT the hook's raw unreadCount: that counts `chat_message` rows, which the
+     Messages badge beside this one already counts. Adding both would show
+     every unread chat twice in the collapsed handle. The notification centre
+     excludes chat for the same reason — see taxonomy.ts. */
+  const notifUnread = notifications.filter(
+    (n) => !n.is_read && isNotificationCentreType(n.type),
+  ).length;
   /* The collapsed handle's badge. It has to be the sum of exactly what the dock
      can still open, or a tucked dock advertises work that expanding it will not
      show. */

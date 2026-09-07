@@ -24,7 +24,7 @@ export function useNotifications() {
   const queryKey = ["notifications", tenant?.id, appUser?.id];
 
   // Fetch notifications for current user and tenant
-  const { data: notifications, isLoading } = useQuery({
+  const { data: notifications, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
       if (!appUser?.id || !tenant?.id) {
@@ -177,6 +177,12 @@ export function useNotifications() {
     notifications: notifications || [],
     unreadCount,
     isLoading,
+    /* Exposed so a failed fetch can be SHOWN. The query already threw on
+       error; nothing downstream could see it, so the panel rendered "no
+       notifications" for a request that never came back — the one message that
+       makes somebody stop checking. */
+    error,
+    refetch,
     markAsRead,
     markAllAsRead,
     deleteNotification,
