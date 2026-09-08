@@ -384,10 +384,13 @@ export default function Booking() {
   return (
     <div className="min-h-screen bg-background">
       <SEO
-        title="Rental Booking — Drive 247"
-        description="Book your luxury vehicle rental with Drive 247. Choose pickup and return details for premium cars."
+        /* No brand here: <SEO> already prefixes the tenant's own app name, so
+           naming a company in the title both duplicated it and named the WRONG
+           one on every tenant that is not us. */
+        title="Rental Booking"
+        description="Book your vehicle rental. Choose pickup and return details."
         keywords="luxury car rental booking, premium vehicle booking"
-        canonical={typeof window !== 'undefined' ? `${window.location.origin}/booking` : 'https://drive247.com/booking'}
+        canonical={typeof window !== 'undefined' ? `${window.location.origin}/booking` : undefined}
       />
       <Navigation />
 

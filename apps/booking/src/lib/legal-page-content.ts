@@ -14,6 +14,7 @@
 
 import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { FALLBACK_COMPANY_NAME } from '@/lib/tenant-defaults';
 import {
   defaultPrivacyContent,
   defaultTermsContent,
@@ -158,7 +159,11 @@ export async function getLegalTenantBranding(): Promise<{
 }> {
   const fallback = {
     slug: null as string | null,
-    name: 'Drive 247',
+    /* A tenant's Privacy Policy and Terms named OUR company when their own
+       branding could not be resolved — on their domain, as their legal
+       document. Neutral instead: a placeholder is visibly unconfigured, where
+       another company's name is confidently wrong in a binding document. */
+    name: FALLBACK_COMPANY_NAME,
     contactEmail: null as string | null,
     contactPhone: null as string | null,
     twilioPhone: null as string | null,

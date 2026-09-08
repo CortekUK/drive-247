@@ -18,6 +18,7 @@ import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
 import { formatCurrency, getUnlimitedLabel, formatDistance, getDistanceUnitShort, getPerMonthLabel, type DistanceUnit } from "@/lib/format-utils";
 import { isUnlimitedMileage, getUnlimitedMileageOption } from "@/lib/mileage-utils";
+import { FALLBACK_APP_NAME } from '@/lib/tenant-defaults';
 import {
   vehiclePublicColumns,
   displayRegistration,
@@ -154,7 +155,7 @@ const Pricing = () => {
   const content = mergeWithDefaults(rawContent, defaultFleetContent);
 
   // Use the tenant's app_name for dynamic titles
-  const appName = branding.app_name || 'Drive 247';
+  const appName = branding.app_name || FALLBACK_APP_NAME;
   const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // CMS-driven inclusions and extras

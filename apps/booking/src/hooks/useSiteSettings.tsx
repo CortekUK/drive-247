@@ -4,6 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { LogoContent, SiteContactContent, SocialLinksContent, FooterSettingsContent } from "./usePageContent";
 import { useTenant } from "@/contexts/TenantContext";
+import {
+  FALLBACK_COMPANY_NAME,
+  FALLBACK_LOGO_ALT,
+  fallbackCopyright,
+} from '@/lib/tenant-defaults';
 
 export interface SiteSettings {
   id: string;
@@ -46,7 +51,7 @@ export interface SiteSettings {
 
 const defaultSettings: SiteSettings = {
   id: "",
-  company_name: "Drive 247",
+  company_name: FALLBACK_COMPANY_NAME,
   phone: "",
   phone_display: "",
   email: "",
@@ -63,7 +68,7 @@ const defaultSettings: SiteSettings = {
   light_logo_url: null,
   dark_logo_url: null,
   logo_url: null,
-  logo_alt: "Drive 247",
+  logo_alt: FALLBACK_LOGO_ALT,
   favicon_url: null,
   accent_color: "#F5B942",
   notification_emails: [],
@@ -72,7 +77,7 @@ const defaultSettings: SiteSettings = {
   privacy_policy_url: "/privacy",
   terms_url: "/terms",
   footer_tagline: null,
-  copyright_text: `© ${new Date().getFullYear()} Drive 247. All rights reserved.`,
+  copyright_text: fallbackCopyright(),
   facebook_url: null,
   instagram_url: null,
   twitter_url: null,

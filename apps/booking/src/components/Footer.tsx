@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useHasFaqs } from "@/hooks/useHasFaqs";
+import { FALLBACK_COMPANY_NAME, FALLBACK_LOGO_ALT } from '@/lib/tenant-defaults';
 
 const Footer = () => {
   const { settings } = useSiteSettings();
@@ -45,13 +46,13 @@ const Footer = () => {
           {settings.logo_url ? (
             <img
               src={settings.dark_logo_url || settings.logo_url}
-              alt={settings.logo_alt || "Drive247"}
+              alt={settings.logo_alt || FALLBACK_LOGO_ALT}
               className="h-14 w-auto max-w-[140px] mb-3 object-contain"
             />
           ) : (
             <>
               <h3 className="text-lg font-display font-bold text-white mb-2 uppercase tracking-wide">
-                {settings.company_name || "Drive247"}
+                {settings.company_name || FALLBACK_COMPANY_NAME}
               </h3>
               <div className="w-10 h-[2px] mb-3" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
             </>
@@ -66,13 +67,13 @@ const Footer = () => {
             {settings.logo_url ? (
               <img
                 src={settings.dark_logo_url || settings.logo_url}
-                alt={settings.logo_alt || "Drive247"}
+                alt={settings.logo_alt || FALLBACK_LOGO_ALT}
                 className="h-20 w-auto max-w-[160px] mb-4 object-contain"
               />
             ) : (
               <>
                 <h3 className="text-xl font-display font-bold text-white mb-2 uppercase tracking-wide">
-                  {settings.company_name || "Drive247"}
+                  {settings.company_name || FALLBACK_COMPANY_NAME}
                 </h3>
                 <div className="w-12 h-[2px] mb-4" style={{ backgroundColor: 'hsl(var(--accent))' }}></div>
               </>

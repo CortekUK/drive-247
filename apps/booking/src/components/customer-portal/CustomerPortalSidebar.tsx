@@ -35,6 +35,7 @@ import { isDarkForMode } from '@/lib/theme-mode';
 import { useCustomerUnreadCount } from '@/hooks/use-customer-unread';
 import { useCustomerOnboarding } from '@/hooks/use-customer-onboarding';
 import { useCustomerAuthStore } from '@/stores/customer-auth-store';
+import { FALLBACK_COMPANY_NAME, FALLBACK_LOGO_ALT } from '@/lib/tenant-defaults';
 
 const navItems = [
   {
@@ -115,7 +116,7 @@ export function CustomerPortalSidebar() {
               />
             ) : (
               <span className="font-semibold text-lg">
-                {settings.company_name || 'Drive247'}
+                {settings.company_name || FALLBACK_COMPANY_NAME}
               </span>
             )}
           </Link>

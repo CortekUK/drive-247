@@ -22,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
 import { useBrandingSettings } from '@/hooks/useBrandingSettings';
 import { createCompanyNameReplacer } from '@/utils/tenantName';
+import { FALLBACK_APP_NAME } from '@/lib/tenant-defaults';
 
 export default function LegacyHome() {
   const { tenant } = useTenant();
@@ -36,7 +37,7 @@ export default function LegacyHome() {
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
 
   // Use the tenant's app_name for dynamic titles
-  const appName = branding.app_name || 'Drive 247';
+  const appName = branding.app_name || FALLBACK_APP_NAME;
   const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Hero carousel media - prefer new carousel_media format, fall back to carousel_images, then defaults

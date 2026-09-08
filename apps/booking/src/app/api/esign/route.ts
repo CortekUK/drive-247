@@ -16,6 +16,7 @@ import {
     type RentalTimeFacts,
 } from '@/lib/agreement-datetime';
 import { resolveBoldSignMode } from '@/lib/lean-tenants';
+import { FALLBACK_COMPANY_NAME } from '@/lib/tenant-defaults';
 
 // BoldSign configuration — resolved per-request based on tenant mode
 const BOLDSIGN_BASE_URL = process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com';
@@ -288,7 +289,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         promo_code: rental?.promo_code || '',
 
         // Company / Tenant
-        company_name: tenant?.company_name || 'Drive 247',
+        company_name: tenant?.company_name || FALLBACK_COMPANY_NAME,
         company_email: tenant?.contact_email || '',
         company_phone: tenant?.contact_phone || tenant?.phone || '',
         company_address: tenant?.address || '',
@@ -339,7 +340,7 @@ function htmlToText(html: string): string {
 function generateDefaultAgreement(rental: any, customer: any, vehicle: any, tenant: any, termsText: string = '', timeFacts?: RentalTimeFacts): string {
     // No processTemplate on this path, so the times are composed here too.
     const _times = timeFacts ?? buildRentalTimeFacts(rental, tenant as any, []);
-    const companyName = tenant?.company_name || 'Drive 247';
+    const companyName = tenant?.company_name || FALLBACK_COMPANY_NAME;
     const cc = tenant?.currency_code || 'USD';
 
     return `
@@ -903,7 +904,7 @@ export async function POST(request: NextRequest) {
         let emailSent = false;
         try {
             const refId = body.rentalId.substring(0, 8).toUpperCase();
-            const companyName = tenant?.company_name || 'Drive 247';
+            const companyName = tenant?.company_name || FALLBACK_COMPANY_NAME;
             const vehicleDesc = [vehicle?.make, vehicle?.model].filter(Boolean).join(' ') || 'your vehicle';
 
             // Fetch signing link from BoldSign — retry until ready (max 15s)
@@ -969,7 +970,7 @@ export async function POST(request: NextRequest) {
                     .maybeSingle();
 
                 if (customerUser?.id) {
-                    const companyName = tenant?.company_name || 'Drive 247';
+                    const companyName = tenant?.company_name || FALLBACK_COMPANY_NAME;
                     await supabase
                         .from('customer_notifications')
                         .insert({

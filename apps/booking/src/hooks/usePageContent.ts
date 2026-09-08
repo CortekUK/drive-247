@@ -512,7 +512,7 @@ export const usePageContent = (slug: string) => {
 // Default content for Contact page (used as fallback)
 export const defaultContactContent: PageContent = {
   hero: {
-    title: "Contact Drive247",
+    title: "Contact us",
     subtitle: "Get in touch for premium vehicle rentals, chauffeur services, and exclusive offers.",
   },
   contact_info: {
@@ -535,7 +535,7 @@ export const defaultContactContent: PageContent = {
   contact_form: {
     title: "Send Us a Message",
     subtitle: "We typically reply within 2 hours during business hours.",
-    success_message: "Thank you for contacting Drive247. Our concierge team will respond within 2 hours during business hours (CST).",
+    success_message: "Thank you for getting in touch. We will respond as soon as we can.",
     gdpr_text: "I consent to being contacted regarding my inquiry.",
     submit_button_text: "Send Message",
     subject_options: ["General Inquiry", "Corporate Rental", "Vehicle Availability", "Partnerships"],
@@ -560,13 +560,13 @@ export const defaultContactContent: PageContent = {
     ],
   },
   seo: {
-    title: "Contact Drive247 — Luxury Car Rentals",
-    description: "Get in touch with Drive247 for premium vehicle rentals, chauffeur services, and exclusive offers.",
-    keywords: "contact Drive247, luxury car rental, premium vehicle rental contact, chauffeur service inquiry",
+    title: "Contact us",
+    description: "Get in touch about vehicle rentals, availability and offers.",
+    keywords: "car rental contact, vehicle rental enquiry, rental availability",
   },
   pwa_install: {
-    title: "Install Drive247",
-    description: "Scan the QR code to add Drive247 to your home screen for fast, seamless bookings.",
+    title: "Install this app",
+    description: "Scan the QR code to add this site to your home screen for fast, seamless bookings.",
   },
 };
 // Default content for Reviews page (used as fallback)
@@ -577,14 +577,14 @@ export const defaultReviewsContent: PageContent = {
   },
   feedback_cta: {
     title: "Would you like to share your experience?",
-    description: "We value your feedback and would love to hear about your rental experience with Drive247.",
+    description: "We value your feedback and would love to hear about your rental experience.",
     button_text: "Submit Feedback",
-    empty_state_message: "Be the first to share your Drive247 experience.",
+    empty_state_message: "Be the first to share your experience.",
   },
   seo: {
-    title: "Drive247 — Customer Reviews",
-    description: "Read verified customer reviews of Drive247's luxury car rentals. Real experiences from our distinguished clientele.",
-    keywords: "Drive247 reviews, luxury car rental reviews, customer testimonials, verified reviews",
+    title: "Customer reviews",
+    description: "Read verified customer reviews. Real experiences from real renters.",
+    keywords: "car rental reviews, customer testimonials, verified reviews",
   },
 };
 
@@ -592,17 +592,17 @@ export const defaultReviewsContent: PageContent = {
 // Default content for About page (used as fallback)
 export const defaultAboutContent: PageContent = {
   hero: {
-    title: "About Drive247",
+    title: "About us",
     subtitle: "Setting the standard for premium luxury vehicle rentals across the United States.",
   },
   about_story: {
     title: "Excellence in Every Rental",
     founded_year: "2010",
-    content: `<p>Drive247 was founded with a simple vision: to provide the highest standard of premium vehicle rentals with unmatched flexibility and service.</p>
+    content: `<p>us was founded with a simple vision: to provide the highest standard of premium vehicle rentals with unmatched flexibility and service.</p>
 <p>What began as a boutique rental service has grown into the trusted choice for executives, professionals, and discerning clients who demand the finest vehicles with exceptional service.</p>
 <p>Our founders recognized the need for a rental service that truly understood the unique requirements of premium vehicle hire—offering flexible daily, weekly, and monthly rates without compromising on quality.</p>
-<p>Discretion, reliability, and uncompromising quality became the pillars upon which Drive247 was built.</p>
-<p>Drive247 operates a fleet of the finest vehicles, each maintained to the highest standards and equipped with premium amenities. From Rolls-Royce to Range Rover, every vehicle represents automotive excellence.</p>
+<p>Discretion, reliability, and uncompromising quality became the pillars upon which us was built.</p>
+<p>us operates a fleet of the finest vehicles, each maintained to the highest standards and equipped with premium amenities. From Rolls-Royce to Range Rover, every vehicle represents automotive excellence.</p>
 <p>We offer flexible rental periods tailored to your needs—whether it's a day, a week, or a month, we provide premium vehicles with transparent pricing and exceptional service.</p>
 <p>Our commitment extends beyond just providing vehicles. We ensure every rental includes comprehensive insurance, 24/7 support, and meticulous vehicle preparation.</p>
 <p>We will never claim to be the biggest company — but what we are, is the pinnacle of excellence in luxury vehicle rentals.</p>
@@ -688,9 +688,9 @@ export const defaultAboutContent: PageContent = {
     tagline: "Professional • Discreet • 24/7 Availability",
   },
   seo: {
-    title: "About Drive247 — Premium Luxury Car Rentals",
-    description: "Discover Drive247 — the USA's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.",
-    keywords: "about Drive247, luxury car rental USA, premium vehicle hire, executive car rental, luxury fleet",
+    title: "About us — Premium Luxury Car Rentals",
+    description: "Discover us — the USA's trusted name in premium car rentals, offering unmatched quality, flexibility, and discretion.",
+    keywords: "about us, luxury car rental USA, premium vehicle hire, executive car rental, luxury fleet",
   },
 };
 
@@ -766,7 +766,7 @@ export const defaultFleetContent: PageContent = {
     monthly: { title: "Monthly", description: "Exclusive long-term rates for regular clients." },
   },
   inclusions: {
-    section_title: "Every Drive247 Rental Includes",
+    section_title: "Every us Rental Includes",
     section_subtitle: "Peace of mind and premium service come standard with every vehicle.",
     standard_title: "Standard Inclusions",
     standard_items: [
@@ -821,7 +821,7 @@ export const defaultHomeContent: PageContent = {
     line2: "Online",
   },
   service_highlights: {
-    title: "Why Choose Drive247",
+    title: "Why Choose us",
     subtitle: "Delivering excellence through premium vehicle rentals and exceptional service.",
     services: [
       { icon: "ThumbsUp", title: "Outstanding Services", description: "Experience top-tier car rental services tailored for your convenience. Our well-maintained vehicles, transparent pricing, and seamless booking process ensure a hassle-free journey every time." },
@@ -857,7 +857,7 @@ export const defaultHomeContent: PageContent = {
   },
   seo: {
     title: "Premium Luxury Car Rentals",
-    description: "Rent premium luxury vehicles with Drive247. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.",
+    description: "Rent premium luxury vehicles with us. Flexible daily, weekly, and monthly rates. Top-tier fleet and exceptional service.",
     keywords: "luxury car rental, premium vehicle hire, exotic car rental",
   },
 };
@@ -867,7 +867,7 @@ export const defaultPrivacyContent: PageContent = {
   privacy_content: {
     title: "Privacy Policy",
     content: `<h2>Introduction</h2>
-<p>Drive247 is committed to protecting your privacy and ensuring the security of your personal information. This policy outlines how we collect, use, and safeguard your data.</p>
+<p>us is committed to protecting your privacy and ensuring the security of your personal information. This policy outlines how we collect, use, and safeguard your data.</p>
 
 <h2>Information We Collect</h2>
 <p>We collect information necessary to provide our services, including:</p>
@@ -911,8 +911,8 @@ export const defaultPrivacyContent: PageContent = {
   },
   seo: {
     title: "Privacy Policy | Drive 917",
-    description: "Learn about how Drive247 collects, uses, and protects your personal information.",
-    keywords: "privacy policy, data protection, Drive247 privacy",
+    description: "Learn about how us collects, uses, and protects your personal information.",
+    keywords: "privacy policy, data protection, us privacy",
   },
 };
 
@@ -921,7 +921,7 @@ export const defaultTermsContent: PageContent = {
   terms_content: {
     title: "Terms of Service",
     content: `<h2>Service Agreement</h2>
-<p>By booking our services, you agree to these terms and conditions. Drive247 reserves the right to modify these terms at any time, with changes effective immediately upon posting.</p>
+<p>By booking our services, you agree to these terms and conditions. us reserves the right to modify these terms at any time, with changes effective immediately upon posting.</p>
 
 <h2>Booking and Payment</h2>
 <ul>
@@ -949,7 +949,7 @@ export const defaultTermsContent: PageContent = {
 </ul>
 
 <h2>Liability</h2>
-<p>While we take every precaution to ensure your safety and comfort, Drive247's liability is limited to the value of the service provided. We are not liable for delays caused by circumstances beyond our control, including traffic, weather, or road conditions.</p>
+<p>While we take every precaution to ensure your safety and comfort, our liability is limited to the value of the service provided. We are not liable for delays caused by circumstances beyond our control, including traffic, weather, or road conditions.</p>
 
 <h2>Confidentiality</h2>
 <p>All client information is kept strictly confidential unless disclosure is required by law.</p>`,
@@ -957,8 +957,8 @@ export const defaultTermsContent: PageContent = {
   },
   seo: {
     title: "Terms of Service | Drive 917",
-    description: "Read the terms and conditions for Drive247 car rental services.",
-    keywords: "terms of service, rental terms, Drive247 terms",
+    description: "Read the terms and conditions for us car rental services.",
+    keywords: "terms of service, rental terms, us terms",
   },
 };
 

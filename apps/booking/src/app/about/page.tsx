@@ -20,6 +20,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Clock, Car, Star, Shield, Crown, Lock, PhoneCall, Check } from "lucide-react";
+import { FALLBACK_APP_NAME } from '@/lib/tenant-defaults';
 
 // Icon mapping for Why Choose Us items
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -61,7 +62,7 @@ const About = () => {
   const content = mergeWithDefaults(rawContent, defaultAboutContent);
 
   // Use the tenant's app_name for dynamic titles
-  const appName = branding.app_name || 'Drive 247';
+  const appName = branding.app_name || FALLBACK_APP_NAME;
 
   // Helper to replace generic company names with the tenant's actual name
   const replaceCompanyName = createCompanyNameReplacer(appName);

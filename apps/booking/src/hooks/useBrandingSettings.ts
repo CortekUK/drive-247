@@ -1,6 +1,7 @@
 'use client';
 
 import { useTenant } from "@/contexts/TenantContext";
+import { FALLBACK_COMPANY_NAME } from '@/lib/tenant-defaults';
 
 export interface BrandingSettings {
   // Base colors
@@ -47,7 +48,7 @@ const DEFAULT_BRANDING: BrandingSettings = {
   dark_header_footer_color: null,
   logo_url: null,
   favicon_url: null,
-  app_name: 'Drive 247',
+  app_name: FALLBACK_COMPANY_NAME,
   hero_background_url: null,
   meta_title: null,
   meta_description: null,

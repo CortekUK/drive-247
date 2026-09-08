@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { FALLBACK_COMPANY_NAME, FALLBACK_LOGO_ALT } from '@/lib/tenant-defaults';
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -92,7 +93,7 @@ const Navigation = () => {
             {settings.logo_url ? (
               <img
                 src={settings.dark_logo_url || settings.logo_url}
-                alt={settings.logo_alt || 'Drive247'}
+                alt={settings.logo_alt || FALLBACK_LOGO_ALT}
                 className="h-16 lg:h-20 w-auto max-w-[200px] object-contain"
               />
             ) : (
@@ -101,7 +102,7 @@ const Navigation = () => {
                   className="text-base lg:text-lg xl:text-2xl font-luxury font-semibold leading-tight whitespace-nowrap tracking-wide uppercase"
                   style={{ color: 'hsl(var(--nav-foreground))' }}
                 >
-                  {settings.company_name || 'Drive247'}
+                  {settings.company_name || FALLBACK_COMPANY_NAME}
                 </span>
                 <div className="h-0.5 w-full bg-accent/60 mt-0.5 lg:mt-1" />
               </div>

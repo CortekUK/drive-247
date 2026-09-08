@@ -23,6 +23,7 @@ import { usePageContent, defaultContactContent, mergeWithDefaults } from "@/hook
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useBrandingSettings } from "@/hooks/useBrandingSettings";
 import { createCompanyNameReplacer } from "@/utils/tenantName";
+import { FALLBACK_APP_NAME } from '@/lib/tenant-defaults';
 
 const contactSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
@@ -62,7 +63,7 @@ const Contact = () => {
   );
 
   // Use the tenant's app_name for dynamic titles
-  const appName = branding.app_name || 'Drive 247';
+  const appName = branding.app_name || FALLBACK_APP_NAME;
   const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Derive contact settings from CMS content

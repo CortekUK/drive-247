@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useBrandingSettings } from '@/hooks/useBrandingSettings';
+import { FALLBACK_APP_NAME } from '@/lib/tenant-defaults';
 
 interface SEOProps {
   title: string;
@@ -14,8 +15,10 @@ interface SEOProps {
 const SEO = ({ title, description, keywords, schema, canonical }: SEOProps) => {
   const { branding } = useBrandingSettings();
 
-  const siteUrl = 'https://drive247.com';
-  const appName = branding.app_name || 'Drive 247';
+  /* The tenant's OWN origin. This was hardcoded to our domain, so a tenant's
+     canonical URL and og:image both pointed at drive247.com from their site. */
+  const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const appName = branding.app_name || FALLBACK_APP_NAME;
   const fullTitle = `${appName} | ${title}`;
 
   // Use OG image from branding settings, fall back to favicon

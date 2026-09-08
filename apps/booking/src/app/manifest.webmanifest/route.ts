@@ -20,7 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
-const FALLBACK_NAME = 'Drive 247';
+const FALLBACK_NAME = 'Car Rental';
 // Drive247 brand purple, sampled from the mark's ring gradient.
 const FALLBACK_THEME = '#6333f7';
 

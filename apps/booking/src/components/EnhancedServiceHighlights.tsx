@@ -1,6 +1,7 @@
 import { ThumbsUp, Users, MapPin, Baby, Settings, Headphones, Shield, Car, Clock, Phone, Star, Award, CheckCircle, Fuel, Wifi, Crown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { FALLBACK_SERVICE_HIGHLIGHTS_TITLE } from '@/lib/tenant-defaults';
 
 // Map icon names to actual icon components
 const getIconComponent = (iconName: string) => {
@@ -37,7 +38,7 @@ const EnhancedServiceHighlights = () => {
       <div className="container mx-auto px-4 relative">
         <div className="text-center mb-16 animate-fade-in">
           <h2 className="text-4xl md:text-5xl font-display font-bold mb-4 text-foreground">
-            {content.service_highlights?.title || "Why Choose Drive247"}
+            {content.service_highlights?.title || FALLBACK_SERVICE_HIGHLIGHTS_TITLE}
           </h2>
           <div className="flex items-center justify-center mt-6">
             <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-primary to-transparent" />

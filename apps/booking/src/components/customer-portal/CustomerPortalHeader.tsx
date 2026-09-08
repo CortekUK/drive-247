@@ -33,6 +33,7 @@ import { useTheme } from 'next-themes';
 import { useTenant } from '@/contexts/TenantContext';
 import { isDarkForMode } from '@/lib/theme-mode';
 import { Separator } from '@/components/ui/separator';
+import { FALLBACK_COMPANY_NAME, FALLBACK_LOGO_ALT } from '@/lib/tenant-defaults';
 
 function CustomerNotificationBell({
   notifications,
@@ -213,7 +214,7 @@ export function CustomerPortalHeader() {
             />
           ) : (
             <span className="font-semibold text-sm">
-              {settings.company_name || 'Drive247'}
+              {settings.company_name || FALLBACK_COMPANY_NAME}
             </span>
           )}
         </Link>
