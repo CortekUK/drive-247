@@ -127,6 +127,15 @@ function StatusChoice({
   );
 }
 
+/**
+ * Which days an edit lands on.
+ *
+ * `day` means this WEEKDAY in the recurring pattern — every future Monday —
+ * not one calendar date. A single date is a different concept entirely and has
+ * its own editor on the calendar below; this card never touches one.
+ */
+type ApplyScope = 'day' | 'all';
+
 function DayEditorBody({
   title,
   initialState,
@@ -138,11 +147,19 @@ function DayEditorBody({
   initialState: DayState;
   initialHours: { open: string; close: string };
   onCancel: () => void;
-  onApply: (state: DayState, hours: { open: string; close: string }) => void;
+  onApply: (
+    state: DayState,
+    hours: { open: string; close: string },
+    scope: ApplyScope,
+  ) => void;
 }) {
   const [state, setState] = useState<DayState>(initialState);
   const [open, setOpen] = useState(initialHours.open);
   const [close, setClose] = useState(initialHours.close);
+  /* Defaults to the narrow one, deliberately: editing Monday and silently
+     rewriting the whole week is the mistake worth making impossible by
+     default. Widening it is a click the operator chooses to make. */
+  const [scope, setScope] = useState<ApplyScope>('day');
 
   return (
     <div className="w-[260px] space-y-3">
@@ -165,11 +182,36 @@ function DayEditorBody({
         </div>
       )}
 
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium text-muted-foreground">Apply to</p>
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted/60 p-1">
+          {([
+            ['day', 'This day only'],
+            ['all', 'All days'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setScope(value)}
+              aria-pressed={scope === value}
+              className={cn(
+                'rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors',
+                scope === value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={() => onApply(state, { open, close })}>
+        <Button size="sm" onClick={() => onApply(state, { open, close }, scope)}>
           Apply
         </Button>
       </div>
@@ -200,11 +242,23 @@ export function WeeklyHoursCard({
     return { enabled: true, open: hours.open, close: hours.close };
   };
 
-  const applyDay = (day: DayKey, state: DayState, hours: { open: string; close: string }) => {
-    onChange({
-      ...defaults,
-      days: { ...defaults.days, [day]: hoursFor(state, hours) },
-    });
+  const applyDay = (
+    day: DayKey,
+    state: DayState,
+    hours: { open: string; close: string },
+    scope: ApplyScope,
+  ) => {
+    const value = hoursFor(state, hours);
+    /* "All days" is all SEVEN, weekend included — the editor says "All days"
+       and it has to mean it. `Set weekdays` in the header is the Monday-Friday
+       one, and the two are deliberately different actions. */
+    const days = { ...defaults.days };
+    if (scope === 'all') {
+      for (const d of DAY_KEYS) days[d] = { ...value };
+    } else {
+      days[day] = value;
+    }
+    onChange({ ...defaults, days });
     setEditing(null);
   };
 
@@ -307,7 +361,7 @@ export function WeeklyHoursCard({
                     close: state === 'open' ? d.close : '17:00',
                   }}
                   onCancel={() => setEditing(null)}
-                  onApply={(s, h) => applyDay(day, s, h)}
+                  onApply={(s, h, scope) => applyDay(day, s, h, scope)}
                 />
               </PopoverContent>
             </Popover>
