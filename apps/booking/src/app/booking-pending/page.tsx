@@ -16,8 +16,10 @@ import { useTenant } from "@/contexts/TenantContext";
 import { formatCurrency } from "@/lib/format-utils";
 import { parseDateOnly } from "@/lib/date-utils";
 import { vehiclePublicColumnsNested, vehicleDisplayName, displayRegistration } from "@/lib/vehicle-identity";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 const BookingPendingContent = () => {
+  const { settings } = useSiteSettings();
   const searchParams = useSearchParams();
   const { customerUser } = useCustomerAuthStore();
   const { clearBooking } = useBookingStore();
@@ -236,10 +238,17 @@ const BookingPendingContent = () => {
                 <div className="text-center text-muted-foreground mb-8">
                   <p className="mb-2">Questions about your booking?</p>
                   <div className="flex items-center justify-center gap-6 text-sm">
-                    <a href="mailto:support@drive-247.com" className="flex items-center gap-2 hover:text-accent transition-colors">
+                    {/* The tenant's own inbox. This was hardcoded to
+                        support@drive-247.com, so a customer who needed help
+                        with THEIR booking emailed US — the operator never saw
+                        it. Hidden entirely when the tenant has no email set,
+                        because a dead mailto is worse than no link. */}
+                    {settings.email && (
+                    <a href={`mailto:${settings.email}`} className="flex items-center gap-2 hover:text-accent transition-colors">
                       <Mail className="w-4 h-4" />
-                      support@drive-247.com
+                      {settings.email}
                     </a>
+                    )}
                     <a href="tel:+1234567890" className="flex items-center gap-2 hover:text-accent transition-colors">
                       <Phone className="w-4 h-4" />
                       (123) 456-7890

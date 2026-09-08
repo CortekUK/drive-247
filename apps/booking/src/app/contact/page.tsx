@@ -68,11 +68,18 @@ const Contact = () => {
 
   // Derive contact settings from CMS content
   const contactSettings = useMemo(() => ({
-    phone: content.contact_info?.phone?.number || siteSettings.phone_display,
-    email: content.contact_info?.email?.address || siteSettings.email,
-    office_address: content.contact_info?.office?.address || siteSettings.office_address,
+    /* SITE SETTINGS FIRST — the order used to be the other way round.
+       Business details are edited in one place now, so a per-page value must
+       not shadow it: with page-first, a tenant who had ever typed a phone
+       number here could change Site Settings forever and see nothing move.
+       The page value stays as a FALLBACK so tenants who only ever filled the
+       CMS field keep their details until they set them globally. */
+    phone: siteSettings.phone_display || siteSettings.phone || content.contact_info?.phone?.number || "",
+    email: siteSettings.email || content.contact_info?.email?.address || "",
+    office_address: siteSettings.office_address || content.contact_info?.office?.address || "",
+    /* Availability is page COPY, not a business detail — it stays page-first. */
     availability: content.contact_info?.phone?.availability || siteSettings.availability,
-    whatsapp_number: content.contact_info?.whatsapp?.number || siteSettings.whatsapp_number || siteSettings.phone,
+    whatsapp_number: siteSettings.whatsapp_number || content.contact_info?.whatsapp?.number || siteSettings.phone || "",
     whatsapp_description: content.contact_info?.whatsapp?.description || "Quick response for urgent inquiries",
     email_response_time: content.contact_info?.email?.response_time || "Response within 2 hours during business hours (PST)",
   }), [content, siteSettings]);

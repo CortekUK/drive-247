@@ -2,11 +2,32 @@ import { Phone, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePageContent, defaultHomeContent, mergeWithDefaults } from "@/hooks/usePageContent";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 const ContactCard = () => {
   // CMS Content
   const { data: rawContent } = usePageContent("home");
   const content = mergeWithDefaults(rawContent, defaultHomeContent);
+  const { settings } = useSiteSettings();
+
+  /**
+   * Business details come from SITE SETTINGS, which is the single place a
+   * tenant edits them.
+   *
+   * These two lines previously read
+   *   content.contact_card?.phone_number || "+19725156635"
+   *   content.contact_card?.email        || "info@drive247.com"
+   * — a real phone number and our own inbox, published on every tenant's
+   * homepage that had not filled the CMS field. A visitor calling it reached
+   * the wrong business.
+   *
+   * The legacy per-page value is still honoured as a FALLBACK so a tenant who
+   * filled it before Site Settings existed does not lose their number. When
+   * neither exists the button is not rendered at all: a "Call now" that dials
+   * nothing is worse than no button.
+   */
+  const phone = settings.phone || content.contact_card?.phone_number || "";
+  const email = settings.email || content.contact_card?.email || "";
 
   return (
     <section className="py-16 bg-background">
@@ -23,7 +44,8 @@ const ContactCard = () => {
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 shrink-0">
-                <a href={`tel:${content.contact_card?.phone_number || "+19725156635"}`}>
+                {phone && (
+                <a href={`tel:${phone}`}>
                   <Button
                     size="lg"
                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 py-6 shadow-md hover:shadow-lg transition-all"
@@ -32,7 +54,9 @@ const ContactCard = () => {
                     {content.contact_card?.call_button_text || "Call Now"}
                   </Button>
                 </a>
-                <a href={`mailto:${content.contact_card?.email || "info@drive247.com"}`}>
+                )}
+                {email && (
+                <a href={`mailto:${email}`}>
                   <Button
                     size="lg"
                     variant="outline"
@@ -42,6 +66,7 @@ const ContactCard = () => {
                     {content.contact_card?.email_button_text || "Email Us"}
                   </Button>
                 </a>
+                )}
               </div>
             </div>
           </CardContent>

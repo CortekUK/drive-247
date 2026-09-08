@@ -221,7 +221,11 @@ export const PAGES: PageSpec[] = [
           { key: "headline", label: "Headline", type: "text", fallback: "Reliable car rentals you can count on" },
           { key: "subheading", label: "Subheading", type: "textarea", fallback: "Quality vehicles. Transparent pricing." },
           { key: "trust_line", label: "Trust line", type: "text", hint: "Sits under the buttons. Separate items with •" },
-          { key: "phone_number", label: "Phone number", type: "text" },
+          /* The phone NUMBER was editable here as well as in Site Settings and
+             on the Contact page — three places for one fact. It is a global
+             business detail, so it lives in Site Settings alone now and the
+             website reads it from there. The button LABEL stays: that is page
+             copy, not a business detail. */
           { key: "phone_cta_text", label: "Phone button", type: "text", fallback: "Call us" },
           { key: "book_cta_text", label: "Book button", type: "text", fallback: "Book now" },
           {
@@ -387,8 +391,9 @@ export const PAGES: PageSpec[] = [
         fields: [
           { key: "title", label: "Heading", type: "text", fallback: "Questions?" },
           { key: "description", label: "Description", type: "textarea" },
-          { key: "phone_number", label: "Phone", type: "text" },
-          { key: "email", label: "Email", type: "text" },
+          /* Phone and email removed for the same reason as the hero: they are
+             global business details, edited once in Site Settings. The button
+             labels below are page copy and stay. */
           { key: "call_button_text", label: "Call button", type: "text", fallback: "Call us" },
           { key: "email_button_text", label: "Email button", type: "text", fallback: "Email us" },
         ],
@@ -662,14 +667,22 @@ export const PAGES: PageSpec[] = [
       {
         key: "contact_info",
         title: "Contact details",
-        blurb: "Anything left empty falls back to your business details in Site settings, then to your tenant record.",
+        /* The phone NUMBER, email ADDRESS and street ADDRESS were editable here
+           as well as in Site settings — and the website read this copy first,
+           so a tenant who had ever typed a number here could change Site
+           settings forever and watch nothing move. Those three are global
+           business details and now live in Site settings alone.
+
+           What stays is the page COPY around them: when you answer the phone,
+           how quickly you reply, and the WhatsApp note. Those are specific to
+           this page and belong to it. The stored values are untouched and are
+           still read as a fallback for tenants who filled them before this
+           changed — see apps/booking/src/app/contact/page.tsx. */
+        blurb: "Your phone, email and address come from Site settings. These are the notes shown beside them.",
         fields: [
-          { key: "phone.number", label: "Phone", type: "text" },
           { key: "phone.availability", label: "Phone hours", type: "text" },
-          { key: "email.address", label: "Email", type: "text" },
           { key: "email.response_time", label: "Reply time", type: "text", fallback: "Response within 2 hours" },
-          { key: "office.address", label: "Address", type: "textarea" },
-          { key: "whatsapp.number", label: "WhatsApp", type: "text", hint: "Falls back to your phone number." },
+          { key: "whatsapp.number", label: "WhatsApp", type: "text", hint: "Only if it differs from your main phone number." },
           { key: "whatsapp.description", label: "WhatsApp note", type: "text", fallback: "Quick response for urgent inquiries" },
         ],
       },
