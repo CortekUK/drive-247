@@ -42,6 +42,8 @@ interface Stats {
   totalRentals: number;
   activeVehicles: number;
   avgRating: number;
+  /** How many real testimonials this tenant has. 0 means publish no rating. */
+  reviewCount: number;
   yearsExperience: number;
 }
 
@@ -51,6 +53,7 @@ const About = () => {
     totalRentals: 0,
     activeVehicles: 0,
     avgRating: 0,
+    reviewCount: 0,
     yearsExperience: 0
   });
   const [statsAnimated, setStatsAnimated] = useState(false);
@@ -97,6 +100,7 @@ const About = () => {
           totalRentals: 0,
           activeVehicles: 0,
           avgRating: 0,
+          reviewCount: 0,
           yearsExperience: 0
         });
         return;
@@ -142,6 +146,7 @@ const About = () => {
         totalRentals: rentalsCount || 0,
         activeVehicles: vehiclesCount || 0,
         avgRating: parseFloat(avgRating.toFixed(1)),
+        reviewCount: testimonials?.length ?? 0,
         yearsExperience: 0  // Only show if explicitly set via CMS
       });
     } catch (error) {
@@ -163,25 +168,50 @@ const About = () => {
     }
   };
 
+  /**
+   * Structured data is published to search engines as FACT about this business.
+   * What stood here was almost entirely invented: a `reviewCount` hardcoded to
+   * "100" regardless of how many reviews the tenant had (often none), a
+   * `foundingDate` of 2010, `addressCountry: "US"` for tenants anywhere, a
+   * description naming the United States, and a URL falling back to our own
+   * domain. A fabricated review count is a search-engine policy violation as
+   * well as a false claim.
+   *
+   * Every field below is now either the tenant's own value or absent.
+   */
+  const reviewCount = Number(stats.reviewCount) || 0;
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "CarRental",
     "name": appName,
-    "description": "Premium luxury vehicle rentals across the United States",
-    "url": typeof window !== 'undefined' ? window.location.origin : "https://drive247.com",
-    "telephone": settings.phone,
-    "email": settings.email,
-    "address": {
-      "@type": "PostalAddress",
-      "addressCountry": "US"
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": stats.avgRating.toString(),
-      "reviewCount": "100"
-    },
-    "foundingDate": "2010",
-    "slogan": "Setting the standard for premium luxury vehicle rentals"
+    ...(content.seo?.description ? { "description": content.seo.description } : {}),
+    ...(typeof window !== "undefined" ? { "url": window.location.origin } : {}),
+    ...(settings.phone ? { "telephone": settings.phone } : {}),
+    ...(settings.email ? { "email": settings.email } : {}),
+    ...(settings.city || settings.country
+      ? {
+          "address": {
+            "@type": "PostalAddress",
+            ...(settings.address_line1 ? { "streetAddress": settings.address_line1 } : {}),
+            ...(settings.city ? { "addressLocality": settings.city } : {}),
+            ...(settings.state ? { "addressRegion": settings.state } : {}),
+            ...(settings.zip ? { "postalCode": settings.zip } : {}),
+            ...(settings.country ? { "addressCountry": settings.country } : {}),
+          },
+        }
+      : {}),
+    ...(reviewCount > 0
+      ? {
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": stats.avgRating.toString(),
+            "reviewCount": String(reviewCount),
+          },
+        }
+      : {}),
+    ...(content.about_story?.founded_year
+      ? { "foundingDate": String(content.about_story.founded_year) }
+      : {}),
   };
 
   return (

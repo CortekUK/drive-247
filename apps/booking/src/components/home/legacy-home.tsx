@@ -117,22 +117,48 @@ export default function LegacyHome() {
     loadTestimonialStats();
   }, [tenant?.id]);
 
+  /**
+   * Structured data — every claim here is published to search engines as fact
+   * about the tenant's business, so every one of them has to be true.
+   *
+   * What was here: a hardcoded telephone `+1-800-123-4567`, `addressCountry:
+   * 'US'` for tenants who may trade anywhere, "Premium luxury car rentals in
+   * the USA" as the description, and — worst — an `aggregateRating` of 5.0
+   * with a reviewCount of 0 for every tenant with no testimonials. That is a
+   * fabricated five-star rating in schema.org markup, which search engines
+   * treat as a policy violation and a visitor sees as a lie.
+   *
+   * Now: only fields the tenant has actually provided, and the rating is
+   * OMITTED unless real reviews exist.
+   */
+  const reviewCount = Number(testimonialStats.count) || 0;
   const businessSchema = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     'name': appName,
-    'description': 'Premium luxury car rentals in the USA',
-    'telephone': '+1-800-123-4567',
-    'address': {
-      '@type': 'PostalAddress',
-      'addressCountry': 'US'
-    },
-    'priceRange': '$$$',
-    'aggregateRating': {
-      '@type': 'AggregateRating',
-      'ratingValue': testimonialStats.avgRating,
-      'reviewCount': testimonialStats.count
-    }
+    ...(settings.email ? { 'email': settings.email } : {}),
+    ...(settings.phone ? { 'telephone': settings.phone } : {}),
+    ...(settings.city || settings.country
+      ? {
+          'address': {
+            '@type': 'PostalAddress',
+            ...(settings.address_line1 ? { 'streetAddress': settings.address_line1 } : {}),
+            ...(settings.city ? { 'addressLocality': settings.city } : {}),
+            ...(settings.state ? { 'addressRegion': settings.state } : {}),
+            ...(settings.zip ? { 'postalCode': settings.zip } : {}),
+            ...(settings.country ? { 'addressCountry': settings.country } : {}),
+          },
+        }
+      : {}),
+    ...(reviewCount > 0
+      ? {
+          'aggregateRating': {
+            '@type': 'AggregateRating',
+            'ratingValue': testimonialStats.avgRating,
+            'reviewCount': testimonialStats.count,
+          },
+        }
+      : {}),
   };
 
   return (

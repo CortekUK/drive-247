@@ -68,9 +68,18 @@ const Promotions = () => {
       // The Promotions page is pure advertisement — operator-authored cards managed in
       // the portal CMS (the `promotions` table). It is intentionally decoupled from promo
       // codes: duration discounts apply automatically at checkout and are never shown here.
+      /* `is_active` is the operator's on/off switch, and it was never applied
+         here — the page's own status filter defaults to "all", so a promotion
+         switched OFF in the portal was still advertised to customers, offer
+         and promo code included. Filtered in the QUERY rather than the client
+         so an inactive promotion never reaches the browser at all. Expiry and
+         scheduling stay client-side: those are presentation states the page
+         already labels ("expired", "scheduled") and an operator may legitimately
+         want a finished offer still listed. */
       let promoQuery = supabase
         .from("promotions")
         .select("*")
+        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
       if (tenant?.id) {
