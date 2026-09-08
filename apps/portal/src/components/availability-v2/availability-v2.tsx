@@ -38,13 +38,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, format, isSameDay, startOfWeek } from 'date-fns';
 import {
-  AlertTriangle,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Eye,
-  Info,
+  Loader2,
   RotateCcw,
+  Save,
 } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import { Switch } from '@/components/ui-v2/switch';
@@ -57,9 +56,11 @@ import {
 } from '@/components/ui-v2/select';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { WeekCalendar } from './week-calendar';
 import { WeeklyDefaultStrip } from './weekly-default-strip';
 import { useAvailabilitySource } from './use-availability-source';
+import { useAvailabilitySave } from './use-availability-save';
 import {
   blocksForDate,
   isoOf,
@@ -145,17 +146,105 @@ export function AvailabilityV2() {
     !!draft && JSON.stringify(draft) !== JSON.stringify(source.defaults);
   const touched = exceptionCount > 0 || patternTouched;
 
-  const openDays = days.filter((d) => d.open).length;
-  const blockedDays = days.filter((d) => !d.open).length;
   const thisWeek = isSameDay(weekStart, startOfWeek(new Date(), { weekStartsOn: 1 }));
   const TIMEZONE_OPTIONS = useMemo(
     () => buildTimezoneOptions(defaults.timezone),
     [defaults.timezone],
   );
 
-  const resetPreview = () => {
+  /**
+   * Reset — discard UNSAVED edits and return to what is in the database.
+   *
+   * It writes nothing. `source.defaults` is the last value read from `tenants`,
+   * and clearing `exceptions` drops the per-date edits that were never saved;
+   * real `blocked_dates` rows are untouched because they were never in this
+   * state to begin with.
+   */
+  const resetDraft = () => {
     setDraft(source.defaults);
     setExceptions({});
+  };
+
+  const save = useAvailabilitySave();
+
+  /**
+   * Which of the on-screen exceptions can actually be PERSISTED.
+   *
+   * `{kind:'closed'}` becomes a `blocked_dates` row — a real, tenant-wide,
+   * full-day closure the booking site already honours.
+   *
+   * `{kind:'hours'}` — "this Friday 10-2 instead of the usual 9-5" — CANNOT be
+   * saved. `blocked_dates.start_date` and `.end_date` are DATE columns; there
+   * is no time anywhere on that table, so a custom-hours override has nowhere
+   * to live. It is counted here and refused loudly at save time rather than
+   * accepted and dropped, because silently losing an operator's opening hours
+   * is the worst outcome this screen can produce.
+   */
+  const closureDates = useMemo(
+    () =>
+      Object.entries(exceptions)
+        .filter(([, ex]) => ex.kind === 'closed')
+        .map(([iso]) => iso),
+    [exceptions],
+  );
+  const customHourDates = useMemo(
+    () =>
+      Object.entries(exceptions)
+        .filter(([, ex]) => ex.kind === 'hours')
+        .map(([iso]) => iso),
+    [exceptions],
+  );
+
+  /* Dates already closed in the database — so saving the same date twice does
+     not write a duplicate row. */
+  const alreadyClosed = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of source.blocks) {
+      if (b.scope !== 'tenant') continue;
+      for (let d = new Date(`${b.start}T00:00:00`); isoOf(d) <= b.end; d = addDays(d, 1)) {
+        set.add(isoOf(d));
+      }
+    }
+    return set;
+  }, [source.blocks]);
+
+  const handleSave = () => {
+    if (customHourDates.length > 0) {
+      toast.error('Custom hours for a single date cannot be saved yet', {
+        description:
+          `${customHourDates.length} date(s) use custom hours. The blocked-dates table stores ` +
+          'dates only, with no times, so this needs a schema change. Close the whole day instead, ' +
+          'or remove the override before saving.',
+      });
+      return;
+    }
+
+    save.mutate(
+      {
+        defaults,
+        addClosures: closureDates.filter((iso) => !alreadyClosed.has(iso)),
+        removeClosureIds: [],
+      },
+      {
+        onSuccess: (result) => {
+          /* The saved values become the new baseline, so Save and Reset both go
+             quiet. `seeded` is released so the refetched row can re-seed the
+             draft rather than the stale one persisting. */
+          seeded.current = false;
+          setExceptions({});
+          toast.success('Availability saved', {
+            description:
+              result.closuresAdded > 0
+                ? `Weekly hours updated and ${result.closuresAdded} date(s) closed.`
+                : 'Weekly hours updated.',
+          });
+        },
+        /* Never silent. The message says which half succeeded — see the hook. */
+        onError: (error: Error) => {
+          toast.error('Could not save availability', { description: error.message });
+        },
+      },
+    );
   };
 
   return (
@@ -167,15 +256,18 @@ export function AvailabilityV2() {
             <h1 className="font-heading text-3xl font-semibold leading-tight tracking-tight">
               Availability
             </h1>
-            {/*
-              Permanent, not dismissible, and next to the title rather than at
-              the foot of the page. An operator must never have to wonder
-              whether they just edited live availability.
-            */}
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-inset ring-warning/60">
-              <Eye className="size-3.5 text-warning" />
-              Preview — changes aren&apos;t saved
-            </span>
+            {/* Was a permanent yellow "Preview — changes aren't saved" pill.
+                That was TRUE while this screen could not write anything, and it
+                is false now that Save does. It is replaced by a quiet marker
+                that appears only when there is genuinely something unsaved, and
+                disappears the moment it is saved — which is the same fact,
+                stated when it applies. */}
+            {touched && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-inset ring-warning/40">
+                <span aria-hidden className="size-1.5 rounded-full bg-warning" />
+                Unsaved changes
+              </span>
+            )}
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
             One week at a time. Set the pattern once underneath, then change any single day on top
@@ -184,6 +276,30 @@ export function AvailabilityV2() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Save and Reset, at the top right where the brief asks for them.
+              Reset is an icon and secondary to Save; both are inert until
+              something has actually been edited. */}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Reset unsaved changes"
+            title="Reset unsaved changes"
+            disabled={!touched || save.isPending || !editable}
+            onClick={resetDraft}
+          >
+            <RotateCcw />
+          </Button>
+          <Button
+            size="sm"
+            disabled={!touched || save.isPending || !editable}
+            onClick={handleSave}
+          >
+            {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+            {save.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+
+          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+
           <Button
             variant="outline"
             size="icon-sm"
@@ -254,28 +370,11 @@ export function AvailabilityV2() {
           </Select>
         </label>
 
-        <div className="ml-auto flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span>
-              <span className="font-medium text-foreground">{openDays}</span> open ·{' '}
-              <span className="font-medium text-foreground">{blockedDays}</span> closed
-            </span>
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 font-medium',
-                exceptionCount > 0
-                  ? 'bg-warning/25 text-foreground ring-1 ring-inset ring-warning/50'
-                  : 'text-muted-foreground',
-              )}
-            >
-              {exceptionCount} exception{exceptionCount === 1 ? '' : 's'}
-            </span>
-          </span>
-          <Button variant="outline" size="sm" disabled={!touched} onClick={resetPreview}>
-            <RotateCcw />
-            Reset preview
-          </Button>
-        </div>
+          {/* The "5 open · 2 closed · 0 exceptions" counts and the
+              "Reset preview" button stood here. Both are gone: the counts
+              restate what the calendar directly below already shows, and Reset
+              is now an icon beside Save in the header, where a person looks for
+              it. One source of truth per fact. */}
       </div>
 
       {/* ── the weekly pattern, then the week it governs ─────────────────
