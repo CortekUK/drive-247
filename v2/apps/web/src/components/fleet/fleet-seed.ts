@@ -90,6 +90,13 @@ export async function loadFleetSeed(
       // on other dates; anything else (Maintenance, Sold…) is off the market.
       .or('status.ilike.available,status.ilike.rented')
       .eq('is_paused', false)
+      // Website visibility, set per vehicle in the portal's
+      // Website Content -> Our Fleet. Browse-only, and deliberately NOT applied
+      // to a lookup of one vehicle by id: a customer who already started a
+      // booking, or holds a link to a car the operator has since hidden, must
+      // still reach that page. `NOT FALSE` rather than `= true` because the
+      // column is nullable on rows written before it existed.
+      .not('show_on_website', 'is', false)
       // `NOT TRUE`, not `= false`: the column is nullable and `= false` would
       // drop every row that never had it set.
       .not('is_disposed', 'is', true)

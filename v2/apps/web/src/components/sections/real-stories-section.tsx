@@ -1,8 +1,9 @@
 import { Users } from "lucide-react";
+import Link from "next/link";
 
 import { MarqueeStrip } from "@/components/sections/marquee-strip";
-import { DEFAULT_STORIES } from "@/lib/cms/defaults";
-import { loadTestimonials } from "@/lib/cms/server";
+import { loadSection, loadTestimonials } from "@/lib/cms/server";
+import { DEFAULT_FEEDBACK_CTA } from "@/lib/cms/defaults";
 import type { TestimonialItem } from "@/lib/cms/types";
 
 /**
@@ -17,9 +18,17 @@ import type { TestimonialItem } from "@/lib/cms/types";
  * section keys at all (its `reviews` CMS page is seeded with zero sections).
  */
 export async function RealStoriesSection() {
-  const rows = await loadTestimonials();
-  const stories: readonly TestimonialItem[] =
-    rows && rows.length > 0 ? rows : DEFAULT_STORIES;
+  const [rows, cta] = await Promise.all([
+    loadTestimonials(),
+    /* "Before you have reviews" in the portal. It had no consumer, so the
+       shipped sentence was the only thing a visitor could ever see here. */
+    loadSection("reviews", "feedback_cta", DEFAULT_FEEDBACK_CTA),
+  ]);
+  /* Ten invented five-star reviews from "Jhon Doe" used to fill this wall for
+     any tenant without their own — see the note in `testimonial-quotes.tsx`.
+     The page keeps its heading and says plainly that there is nothing here yet,
+     which is honest and tells the operator exactly what to do. */
+  const stories: readonly TestimonialItem[] = rows ?? [];
 
   return (
     <section className="bg-white">
@@ -37,15 +46,47 @@ export async function RealStoriesSection() {
           </p>
         </header>
 
-        <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {stories.map((story) => (
-            <ReviewCard key={story.id} story={story} />
-          ))}
-        </ul>
+        {stories.length === 0 ? (
+          <p className="mx-auto mt-10 max-w-[420px] text-center text-sm text-brand-text-soft">
+            {cta.empty_state_message.trim() ||
+              "No reviews yet — they appear here as customers leave them."}
+          </p>
+        ) : (
+          <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {stories.map((story) => (
+              <ReviewCard key={story.id} story={story} />
+            ))}
+          </ul>
+        )}
       </div>
 
       <MarqueeStrip />
-    </section>
+    
+        {/* "Ask for a review" — shown only once an operator has written it, so
+            a tenant who leaves it blank sees no empty box. */}
+        {(cta.title.trim() !== "" || cta.description.trim() !== "") && (
+          <aside className="mx-auto mt-12 max-w-xl rounded-2xl bg-brand-cream px-6 py-8 text-center ring-1 ring-brand-border-soft">
+            {cta.title.trim() !== "" && (
+              <h3 className="text-xl font-semibold tracking-tight text-brand-text">
+                {cta.title}
+              </h3>
+            )}
+            {cta.description.trim() !== "" && (
+              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-brand-text-soft">
+                {cta.description}
+              </p>
+            )}
+            {cta.button_text.trim() !== "" && (
+              <Link
+                href="/contact"
+                className="mt-5 inline-flex items-center justify-center rounded-full bg-brand-text px-7 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                {cta.button_text}
+              </Link>
+            )}
+          </aside>
+        )}
+      </section>
   );
 }
 

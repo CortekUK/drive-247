@@ -3,7 +3,6 @@
 import { TestimonialCard } from "@/components/cards/testimonial-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTestimonials } from "@/hooks/use-testimonials";
-import { DEFAULT_TESTIMONIALS } from "@/lib/cms/defaults";
 import type { TestimonialItem } from "@/lib/cms/types";
 
 /** The band is a two-up grid; more quotes than that belong on /reviews. */
@@ -38,11 +37,25 @@ export function TestimonialQuotes({ seed }: { seed: TestimonialItem[] | null }) 
     );
   }
 
-  // The designed copy is the floor, not a placeholder: a tenant nobody has
-  // written testimonials for still gets a finished-looking page.
-  const real = testimonials.length > 0;
-  const source = real ? testimonials : DEFAULT_TESTIMONIALS;
-  const items = source.slice(0, VISIBLE);
+  /**
+   * No real quotes means NO QUOTES.
+   *
+   * This used to fall back to the shipped example testimonials, defending it as
+   * "the designed copy is the floor, not a placeholder: a tenant nobody has
+   * written testimonials for still gets a finished-looking page". What that
+   * actually published was invented five-star reviews, signed with invented
+   * customer names, praising Drive247 — on a real rental company's own website,
+   * presented to their customers as that company's reviews.
+   *
+   * A finished-looking page is not worth a fabricated one. Fake reviews mislead
+   * the customer reading them, they are not the operator's to stand behind, and
+   * in most markets publishing them is unlawful. An empty band costs a tenant a
+   * little polish until they collect a real review; the alternative costs their
+   * customer the truth.
+   */
+  if (testimonials.length === 0) return null;
+
+  const items = testimonials.slice(0, VISIBLE);
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -51,8 +64,7 @@ export function TestimonialQuotes({ seed }: { seed: TestimonialItem[] | null }) 
           key={testimonial.id}
           quote={testimonial.quote}
           author={testimonial.author}
-          // Only a real row is editable — see TestimonialCard.
-          rowId={real ? testimonial.id : undefined}
+          rowId={testimonial.id}
         />
       ))}
     </div>

@@ -24,6 +24,19 @@ export async function TestimonialsSection() {
 
   const title = header.title.trim();
 
+  /**
+   * No quotes means no BAND, heading included.
+   *
+   * `TestimonialQuotes` stopped inventing example testimonials, which was
+   * right — but this wrapper kept rendering the heading above them, so a
+   * tenant with no reviews got "What our customers say" floating over empty
+   * space. A heading is a promise that something follows it.
+   *
+   * Still shown in the EDITOR, where the empty band is the only place an
+   * operator can see and set this heading at all.
+   */
+  if ((seed?.length ?? 0) === 0 && !editing) return null;
+
   return (
     <section {...cmsSection("home.testimonials_header", "Reviews")} className="bg-brand-cream">
       <div className="container-page py-12 lg:py-20">

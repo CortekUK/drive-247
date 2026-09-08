@@ -152,6 +152,20 @@ export const ICONS_SERVICE = [
   "Car", "Clock", "Phone", "Star", "Award", "CheckCircle", "Fuel", "Wifi", "Crown",
 ] as const;
 
+/**
+ * lowercase — the "How it works" steps.
+ *
+ * Every name here exists in the v2 site's icon map (`lib/cms/icons.ts`), which
+ * lowercases before lookup and falls back to a sparkle for anything it does not
+ * know. Offering an icon the site cannot resolve would be a picker that
+ * silently does nothing.
+ */
+export const ICONS_STEPS = [
+  "map-pin", "car", "shield-check", "user-round", "key", "calendar", "clock",
+  "credit-card", "check-circle", "clipboard-check", "phone", "route", "tag",
+  "sparkles", "zap", "navigation",
+] as const;
+
 /** lowercase — `app/about/page.tsx` iconMap, shared by stats and why_choose_us. */
 export const ICONS_ABOUT = [
   "clock", "car", "crown", "star", "shield", "phone", "check", "lock",
@@ -311,6 +325,39 @@ export const PAGES: PageSpec[] = [
             label: "When the fleet cannot load",
             type: "textarea",
             fallback: "We could not load the fleet just now — please try again shortly.",
+          },
+        ],
+      },
+      {
+        /*
+         * The band renders on the HOME page, so it is edited here.
+         *
+         * There was only one "How it works" in the whole spec and it sat on the
+         * Promotions page, while the band it drives has always been on the home
+         * page — so an operator editing their homepage could not find it, and
+         * an operator editing Promotions changed their homepage without meaning
+         * to. `how-it-works-section.tsx` reads this first and falls back to
+         * `promotions / how_it_works`, so tenants who already wrote steps there
+         * keep them until they write these.
+         */
+        key: "how_it_works",
+        title: "How it works",
+        blurb: "The numbered steps band. Each step gets its own icon, by position.",
+        fields: [
+          { key: "title", label: "Heading", type: "text", fallback: "How It Works" },
+          { key: "subtitle", label: "Subheading", type: "textarea" },
+          {
+            key: "steps",
+            label: "Steps",
+            type: "list",
+            noun: "step",
+            hint: "Up to six. Leave an icon unset and it follows the position.",
+            item: [
+              { key: "icon", label: "Icon", type: "icon", icons: ICONS_STEPS },
+              { key: "number", label: "No.", type: "text" },
+              { key: "title", label: "Title", type: "text" },
+              { key: "description", label: "Description", type: "textarea" },
+            ],
           },
         ],
       },
@@ -621,6 +668,7 @@ export const PAGES: PageSpec[] = [
             type: "list",
             noun: "step",
             item: [
+              { key: "icon", label: "Icon", type: "icon", icons: ICONS_STEPS },
               { key: "number", label: "No.", type: "text" },
               { key: "title", label: "Title", type: "text" },
               { key: "description", label: "Description", type: "textarea" },

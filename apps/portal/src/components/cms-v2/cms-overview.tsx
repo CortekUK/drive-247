@@ -29,7 +29,7 @@ import { Button } from "@/components/ui-v2/button";
 import { Skeleton } from "@/components/ui-v2/skeleton";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useTenant } from "@/contexts/TenantContext";
-import { getBookingBaseUrl } from "@/lib/booking-url";
+import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
 
 /** Without these on the website, the booking flow has no policy to point at. */
 const REQUIRED = ["privacy", "terms"];
@@ -55,7 +55,13 @@ export function CmsOverview() {
     };
   }, [pages]);
 
-  const siteUrl = getBookingBaseUrl(tenant?.slug);
+  /* The V2 site, not the v1 booking app. These two builders resolve to the same
+     production host — Vercel decides which project answers `{slug}.drive-247.com`
+     — but in DEV they differ: v1 runs on :3000, the v2 site on :4006. This
+     screen is part of the v2 CMS and previews the v2 site in its iframe, so a
+     "view your website" link built from the v1 helper sent the operator to a
+     port with nothing listening. See `lib/site-v2-url.ts`. */
+  const siteUrl = getSiteV2BaseUrl(tenant?.slug);
 
   if (isLoading) {
     return (

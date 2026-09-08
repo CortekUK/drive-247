@@ -55,7 +55,7 @@ import { useCMSMedia } from "@/hooks/use-cms-media";
 import { useCmsSectionWrite } from "@/hooks/use-cms-section-write";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useTenant } from "@/contexts/TenantContext";
-import { getBookingBaseUrl } from "@/lib/booking-url";
+import { getSiteV2BaseUrl } from "@/lib/site-v2-url";
 import { VersionHistoryDialog } from "@/components/website-content/version-history-dialog";
 import { CmsVisualEditor, SITE_V2_PATHS } from "./cms-visual-editor";
 import {
@@ -76,13 +76,20 @@ import {
  * and `home` is the root. Getting this wrong sends the operator to a 404 from
  * the one link on the screen that is meant to prove their edit worked.
  */
+/**
+ * Slug -> path on the tenant's website, for the "View on your website" link.
+ *
+ * DERIVED from `SITE_V2_PATHS` rather than repeated, because this was a second
+ * hand-maintained copy of the same map and it had already drifted: it sent
+ * `reviews` to `/testimonials`, which is the v1 route. On the v2 site that page
+ * is `/reviews`, so the link 404'd.
+ *
+ * `privacy` and `terms` are added on top: the CMS carries their content and an
+ * operator expects a link to it, but the v2 site has no route for either yet,
+ * so these two 404 today. That is a missing page to build, not a missing link.
+ */
 const PAGE_PATHS: Record<string, string> = {
-  home: "/",
-  about: "/about",
-  fleet: "/fleet",
-  reviews: "/testimonials",
-  promotions: "/promotions",
-  contact: "/contact",
+  ...SITE_V2_PATHS,
   privacy: "/privacy",
   terms: "/terms",
 };
@@ -274,8 +281,14 @@ function CmsFieldEditor({
   );
 
   const live = page?.status === "published";
+  /* The V2 site, not the v1 booking app. These two builders resolve to the same
+     production host — Vercel decides which project answers `{slug}.drive-247.com`
+     — but in DEV they differ: v1 runs on :3000, the v2 site on :4006. This
+     screen is part of the v2 CMS and previews the v2 site in its iframe, so a
+     "view your website" link built from the v1 helper sent the operator to a
+     port with nothing listening. See `lib/site-v2-url.ts`. */
   const siteUrl = useMemo(() => {
-    const base = getBookingBaseUrl(tenant?.slug);
+    const base = getSiteV2BaseUrl(tenant?.slug);
     const path = PAGE_PATHS[slug];
     return base && path ? `${base}${path}` : "";
   }, [tenant?.slug, slug]);

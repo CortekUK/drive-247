@@ -300,3 +300,125 @@ function promoItemFromRow(
     accent: promoAccent(index),
   };
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * Blog
+ * ═════════════════════════════════════════════════════════════════════════ */
+
+export interface BlogPostSummary {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featuredImageUrl: string | null;
+  authorName: string | null;
+  publishedAt: string | null;
+  readingTimeMinutes: number | null;
+}
+
+export interface BlogPostFull extends BlogPostSummary {
+  content: string;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  noindex: boolean;
+}
+
+/* Only `published` rows, always. A draft is the operator's working copy — the
+   Portal list shows Northwind's one post as Draft, and it must not be public
+   simply because the site knows how to render posts now. */
+const PUBLIC_POST_COLUMNS =
+  "id, title, slug, excerpt, featured_image_url, author_name, published_at, reading_time_minutes";
+
+interface PostRow {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featured_image_url: string | null;
+  author_name: string | null;
+  published_at: string | null;
+  reading_time_minutes: number | null;
+  content?: string;
+  meta_title?: string | null;
+  meta_description?: string | null;
+  noindex?: boolean;
+}
+
+function toSummary(row: PostRow): BlogPostSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    excerpt: row.excerpt,
+    featuredImageUrl: row.featured_image_url,
+    authorName: row.author_name,
+    publishedAt: row.published_at,
+    readingTimeMinutes: row.reading_time_minutes,
+  };
+}
+
+export async function fetchBlogPosts(tenantId: string): Promise<BlogPostSummary[]> {
+  try {
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select(PUBLIC_POST_COLUMNS)
+      .eq("tenant_id", tenantId)
+      .eq("status", "published")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(48)
+      .overrideTypes<PostRow[], { merge: false }>();
+
+    if (error) {
+      console.error("[cms] blog list query failed", {
+        message: error.message,
+        code: error.code,
+      });
+      return [];
+    }
+
+    return (data ?? []).map(toSummary);
+  } catch (cause) {
+    console.error("[cms] blog list threw", cause);
+    return [];
+  }
+}
+
+export async function fetchBlogPost(
+  tenantId: string,
+  slug: string,
+): Promise<BlogPostFull | null> {
+  try {
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select(`${PUBLIC_POST_COLUMNS}, content, meta_title, meta_description, noindex`)
+      // Tenant AND slug: slugs are only unique within a tenant, so dropping the
+      // tenant filter would serve one operator's post on another's domain.
+      .eq("tenant_id", tenantId)
+      .eq("slug", slug)
+      .eq("status", "published")
+      .maybeSingle()
+      .overrideTypes<PostRow, { merge: false }>();
+
+    if (error || !data) {
+      if (error) {
+        console.error("[cms] blog post query failed", {
+          slug,
+          message: error.message,
+          code: error.code,
+        });
+      }
+      return null;
+    }
+
+    return {
+      ...toSummary(data),
+      content: data.content ?? "",
+      metaTitle: data.meta_title ?? null,
+      metaDescription: data.meta_description ?? null,
+      noindex: data.noindex === true,
+    };
+  } catch (cause) {
+    console.error("[cms] blog post threw", cause);
+    return null;
+  }
+}

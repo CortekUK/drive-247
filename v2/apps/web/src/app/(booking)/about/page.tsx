@@ -6,8 +6,11 @@ import { StatsStrip } from "@/components/sections/stats-strip";
 import { TestimonialsSection } from "@/components/sections/testimonials-section";
 import { UncompromisingStandardsSection } from "@/components/sections/uncompromising-standards-section";
 import { WhyChooseUsSection } from "@/components/sections/why-choose-us-section";
+import { pageMetadata } from "@/lib/cms/metadata";
 
-export const metadata = { title: "About" };
+export function generateMetadata() {
+  return pageMetadata("about", "About");
+}
 
 export default function AboutPage() {
   return (
@@ -18,8 +21,8 @@ export default function AboutPage() {
       <WhyChooseUsSection />
       <StatsStrip />
       <TestimonialsSection />
-      <FaqSection />
-      <CtaBanner />
+      <FaqSection page="about" />
+      <CtaBanner page="about" />
     </>
   );
 }

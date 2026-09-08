@@ -275,6 +275,9 @@ function buildFacets(vehicles: readonly Vehicle[]): VehicleFacets {
  *    rows exist saved both "Available" and "available".
  *  - `is_paused = false` — the operator has taken the car off the road. Held
  *    server-side so it holds whether or not dates have been chosen.
+ *  - `show_on_website IS NOT FALSE` — the operator hid this car from their
+ *    website. Distinct from paused: the car is still on the road and still
+ *    rentable from the Portal, it is just not advertised.
  *  - `is_disposed IS NOT TRUE` — `NOT TRUE` rather than `= false`, because the
  *    column is nullable and `= false` drops every row that never had it set.
  *
@@ -313,6 +316,13 @@ export function useVehicles(options: UseVehiclesOptions = {}): UseVehiclesResult
         .eq('tenant_id', tenant.id)
         .or('status.ilike.available,status.ilike.rented')
         .eq('is_paused', false)
+        // Website visibility, set per vehicle in the portal's
+        // Website Content -> Our Fleet. Browse-only, and deliberately NOT applied
+        // to a lookup of one vehicle by id: a customer who already started a
+        // booking, or holds a link to a car the operator has since hidden, must
+        // still reach that page. `NOT FALSE` rather than `= true` because the
+        // column is nullable on rows written before it existed.
+        .not('show_on_website', 'is', false)
         .not('is_disposed', 'is', true);
 
       if (durationTier) {

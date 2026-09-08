@@ -83,7 +83,33 @@ export default function CMSFleetEditor() {
   // other 56 tenants render. Placed after every hook so the hook order is
   // identical on both paths.
   const v2 = useV2("cms");
-  if (v2) return <CmsPageEditor slug="fleet" />;
+  /* Which vehicles reach the website is NOT a CMS section — it is one boolean
+     on each real `vehicles` row — so it has no entry in `cms-spec.ts` and the
+     spec-driven editor cannot render it. It rode into v1 as a tab; on v2 it
+     goes in the `after` slot, the same way `/cms/site-settings` carries the
+     settings that are `tenants` columns. Without this the toggle exists only
+     on the v1 branch and is unreachable for any tenant on the new editor. */
+  if (v2)
+    return (
+      <CmsPageEditor
+        slug="fleet"
+        after={
+          <section className="border-t border-foreground/[0.07] py-6">
+            <div className="pl-[22px]">
+              <h2 className="font-heading text-[15px] font-semibold tracking-tight">
+                Vehicles on your website
+              </h2>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                Your real fleet. Turn one off to take it off your website only.
+              </p>
+              <div className="mt-3">
+                <WebsiteVehiclesPanel canEdit={canEdit("cms")} />
+              </div>
+            </div>
+          </section>
+        }
+      />
+    );
 
   if (isLoading) {
     return (

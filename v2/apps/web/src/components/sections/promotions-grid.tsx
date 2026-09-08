@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCmsSection } from "@/hooks/use-cms";
 import { usePromotions } from "@/hooks/use-promotions";
 import {
-  DEFAULT_PROMOTIONS,
   DEFAULT_PROMOTIONS_EMPTY_STATE,
 } from "@/lib/cms/defaults";
 import { isRemoteImage } from "@/lib/cms/format";
@@ -50,14 +49,21 @@ const GRID = "mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4";
  * Three outcomes, and telling them apart is the whole job:
  *
  *  - the operator has promotions running  -> show them;
- *  - the operator has promotions, none currently live -> show THEIR empty-state
- *    copy from `promotions / empty_state`, because a card wall of offers that
- *    have expired would be a lie;
- *  - the operator has never created one   -> show the designed fallback offers,
- *    so an unconfigured tenant's page is not a hole.
+ *  - otherwise                            -> show THEIR empty-state copy from
+ *    `promotions / empty_state`.
  *
- * `configured` is what separates the middle case from the last; see
- * `PromotionsResult`.
+ * There used to be a third branch: a tenant who had never created a promotion
+ * got four DESIGNED FALLBACK OFFERS — "Early Bird", "EV Explorer", "Weekend
+ * Escape", "Business Class", each with a badge and a discount label — on the
+ * grounds that "an unconfigured tenant's page is not a hole".
+ *
+ * Those are commercial offers. Northwind has zero promotions in the database
+ * and was advertising all four, so a customer could arrive asking to claim a
+ * discount that does not exist and that the operator never agreed to honour —
+ * and could not remove without inventing a real promotion to replace it. The
+ * reasoning was already sound one line up, where expired offers are called "a
+ * lie"; offers that never existed are no better. A page with an honest "no
+ * offers right now" is the correct hole.
  */
 export function PromotionsGrid({
   seed,
@@ -67,7 +73,7 @@ export function PromotionsGrid({
   /** The `promotions` page-sections map from the server render. */
   sectionsSeed: PageSections;
 }) {
-  const { items, configured, isLoading } = usePromotions(seed);
+  const { items, isLoading } = usePromotions(seed);
   // Read on the client from the same cache the promotions query lives in, so
   // the copy shown when the last campaign expires is the operator's current
   // copy — not whatever was true when this page was first rendered.
@@ -91,11 +97,13 @@ export function PromotionsGrid({
     );
   }
 
-  if (items.length === 0 && configured) {
+  /* No `&& configured`: nothing running means nothing shown, whether the
+     operator has never made an offer or their last one expired. */
+  if (items.length === 0) {
     return <PromotionsEmptyState content={emptyState} />;
   }
 
-  const promos: readonly PromoItem[] = items.length > 0 ? items : DEFAULT_PROMOTIONS;
+  const promos: readonly PromoItem[] = items;
 
   return (
     <ul className={GRID}>

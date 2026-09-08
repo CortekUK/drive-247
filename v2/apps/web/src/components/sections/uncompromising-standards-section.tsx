@@ -38,13 +38,19 @@ export async function UncompromisingStandardsSection() {
             ))}
           </div>
 
-          <div className="mt-2 flex flex-col gap-1">
-            <p className="text-sm font-medium text-brand-text-soft">
-              Founder Drive 247
-            </p>
-            <p className="text-sm text-brand-text-soft">Jhon Doe</p>
-            <FounderSignature />
-          </div>
+          {/*
+            A signed founder's statement used to sit here — "Founder Drive 247",
+            "Jhon Doe", and a handwritten signature graphic — hardcoded, so it
+            appeared on EVERY tenant's About page. It named our company as the
+            author of their story and attributed it to a person who does not
+            exist, above a signature none of them wrote.
+
+            There is no founder field in the About spec (`cms-spec.ts` has
+            `title`, `founded_year` and `content`), so there is nothing real to
+            put in its place, and inventing one for each tenant is the bug. The
+            story copy above IS the operator's own words; it stands unsigned
+            until a signature field exists to fill honestly.
+          */}
         </div>
 
         <div className="relative overflow-hidden rounded-[18px]">
@@ -59,28 +65,5 @@ export async function UncompromisingStandardsSection() {
         </div>
       </div>
     </section>
-  );
-}
-
-function FounderSignature() {
-  return (
-    <svg
-      width="80"
-      height="40"
-      viewBox="0 0 80 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-      className="mt-2 text-brand-text-soft"
-    >
-      <path
-        d="M4 28 C 6 22, 10 14, 14 18 C 16 22, 12 28, 16 32 C 20 28, 24 16, 28 22 C 32 28, 32 18, 36 22 C 40 28, 42 22, 46 26 C 50 30, 56 18, 62 24 C 66 28, 60 36, 56 32"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
   );
 }

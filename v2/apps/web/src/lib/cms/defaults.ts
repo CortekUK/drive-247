@@ -159,6 +159,22 @@ export const DEFAULT_FAQ_SECTION: FaqSectionContent = {
     "Don’t Let Final Doubts Stop You. Get the Complete Information You Need for a Confident and Stress-Free Booking Experience.",
 };
 
+/* ----------------------------------------------------------------- reviews */
+
+/** `reviews / hero`. Neutral: it describes the page, and claims nothing. */
+export const DEFAULT_REVIEWS_HERO = {
+  title: "What our customers say",
+  subtitle: "",
+};
+
+/** `reviews / feedback_cta`. Empty: every field is the operator's to write. */
+export const DEFAULT_FEEDBACK_CTA = {
+  title: "",
+  description: "",
+  button_text: "",
+  empty_state_message: "",
+};
+
 /* ------------------------------------------------------------------- about */
 
 export const DEFAULT_ABOUT_HERO: HeroContent = {
@@ -281,13 +297,33 @@ export const DEFAULT_CONTACT_HERO: HeroContent = {
  * fallback for both, so an unconfigured tenant's contact page at least tells a
  * consistent story.
  */
-export const FALLBACK_OFFICE_ADDRESS =
+/**
+ * Our own registered office. Kept as a NAMED constant purely so it is greppable
+ * and obvious, and deliberately no longer used as any tenant's fallback
+ * address — see `DEFAULT_CONTACT_INFO` and `ContactMapSection`.
+ */
+export const DRIVE247_OFFICE_ADDRESS =
   "IFZA - Building A1 DDP - Dubai Silicon Oasis - Industrial Area - Dubai - United Arab Emirates";
 
+/**
+ * EMPTY, and that is the whole point.
+ *
+ * This used to ship a phone number (`+133-394-3439-1435`), a support inbox
+ * (`support@carrentals.io`) and our own Dubai office as the DEFAULT contact
+ * details for the contact page. `ContactDetailsSection` is written to omit any
+ * row the operator left blank — but a non-empty default meant it never saw a
+ * blank, so every tenant who had not filled the form published a phone number
+ * that reaches nobody and an address that is not theirs. A customer who calls
+ * it does not reach the company they are trying to rent from.
+ *
+ * With the fields empty the section's existing "blank means absent" logic
+ * finally applies, and `site-settings / contact` becomes the real source, which
+ * is where a tenant enters these once for the whole site.
+ */
 export const DEFAULT_CONTACT_INFO: ContactInfoContent = {
-  phone: { number: "+133-394-3439-1435", availability: "" },
-  email: { address: "support@carrentals.io", response_time: "" },
-  office: { address: FALLBACK_OFFICE_ADDRESS },
+  phone: { number: "", availability: "" },
+  email: { address: "", response_time: "" },
+  office: { address: "" },
   whatsapp: { number: "", description: "" },
 };
 
@@ -320,9 +356,13 @@ export const DEFAULT_RENTAL_RATES: RentalRatesContent = {
 
 /* ----------------------------------------------------------- site settings */
 
+/* `logo_alt` is the text a screen reader announces in place of the logo, and it
+   defaulted to "Drive247" — so a tenant who had uploaded their own logo but not
+   typed alt text had their mark announced as OUR company. Blank instead: every
+   consumer already treats an empty value as "fall back to the tenant's name". */
 export const DEFAULT_SITE_LOGO: LogoContent = {
   logo_url: "",
-  logo_alt: "Drive247",
+  logo_alt: "",
   favicon_url: "",
 };
 
@@ -358,42 +398,14 @@ export const DEFAULT_SITE_SOCIAL: SocialLinksContent = {
 
 /* ------------------------------------------ table-backed content fallbacks */
 
-/**
- * The two long-form quotes the home/about/fleet band shows. Formerly
- * `TESTIMONIALS` in `lib/fixtures/landing.ts`.
- */
-export const DEFAULT_TESTIMONIALS: readonly TestimonialItem[] = [
-  {
-    id: "marcus",
-    author: "Marcus J.",
-    source: "",
-    stars: 5,
-    quote:
-      "Finally, a rental service that values precision. I was skeptical about the ‘Exact Car’ promise, but the Porsche 911 I booked was the exact one waiting for me — fully fueled, spotless, and with the maintenance vitals exactly as shown on the site. It’s a level of transparency I’ve never seen in the industry.",
-  },
-  {
-    id: "sarah",
-    author: "Sarah L.",
-    source: "",
-    stars: 5,
-    quote:
-      "I rented the Aston Martin for a weekend trip, and the ‘Readiness Pulse’ wasn’t just a marketing gimmick. You can tell these cars are digitally monitored; the engine felt tight, the brakes were sharp, and the cabin was showroom-clean. Drive247 has completely removed the ‘what if’ from renting high-performance vehicles.",
-  },
-];
+/* `DEFAULT_TESTIMONIALS` held the two example quotes the home band fell
+   back to — invented customers praising Drive247 on someone else's site.
+   Deleted for the same reason as `DEFAULT_STORIES` above. */
 
-/** The /reviews wall. Formerly `REVIEWS` in `lib/fixtures/reviews.ts`. */
-export const DEFAULT_STORIES: readonly TestimonialItem[] = [
-  { id: "r1", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "The car was spotless and the pricing was exactly what I saw online — no hidden insurance fees or surprise taxes at checkout. Refreshingly honest." },
-  { id: "r2", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "Landing at 2 AM is usually a nightmare for car rentals. With Drive 247, I was in my Tesla and out of the lot in 5 minutes. No lines, no desk, just drive." },
-  { id: "r3", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "Drive247 has revolutionized our travel documentation, making it super easy to share our adventures!" },
-  { id: "r4", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "Drive247 has revolutionized our travel documentation, making it super easy to share our adventures!" },
-  { id: "r5", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "Great rates and even better service. I appreciate the transparency regarding fuel and tolls. It makes business travel much easier to expense." },
-  { id: "r6", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "The most tech-forward rental I've ever used. Unlocking the car with my phone felt like the future. I'm never going back to traditional rental counters." },
-  { id: "r7", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "Clean, reliable, and modern. You can tell these cars are well-maintained. The peace of mind alone is worth the switch to Drive 247." },
-  { id: "r8", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "I needed a last-minute van for a family trip. The booking process was seamless on my phone and the customer support team was live when I had a question." },
-  { id: "r9", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "Pickup was a breeze and the car was exactly as advertised. The 'No Hidden Fees' promise really delivered — I paid the price I saw on screen." },
-  { id: "r10", author: "Jhon Doe", source: "Tesla Model 3", stars: 5, quote: "From my first booking to my fifth, Drive 247 has been consistent. Same level of cleanliness, same friendly support, same fair pricing every time." },
-];
+/* `DEFAULT_STORIES` held ten invented five-star reviews, every one signed
+   "Jhon Doe", used to fill the /reviews wall for any tenant without their
+   own. Deleted rather than left unused: a constant like this gets picked
+   up again by the next person filling an empty-looking page. */
 
 /** Formerly `FAQS` in `lib/fixtures/landing.ts`. */
 export const DEFAULT_FAQS: readonly FaqItem[] = [
@@ -429,50 +441,7 @@ export const DEFAULT_FAQS: readonly FaqItem[] = [
   },
 ];
 
-/** Formerly `PROMOTIONS` in `lib/fixtures/promotions.ts`. */
-export const DEFAULT_PROMOTIONS: readonly PromoItem[] = [
-  {
-    id: "early-bird",
-    badge: "Early Bird",
-    label: "Save",
-    discount: "15%",
-    caption: "Book 30 days in advance and save 15%.",
-    validUntil: "",
-    image: "/booking_landingpage/promo-early-bird.jpg",
-    imageAlt: "White Range Rover at sunrise",
-    accent: "amber",
-  },
-  {
-    id: "ev-explorer",
-    badge: "EV Explorer",
-    label: "Deal",
-    discount: "20% OFF",
-    caption: "Drive electric on weekday rentals and save 20%.",
-    validUntil: "",
-    image: "/booking_landingpage/promo-ev-explorer.jpg",
-    imageAlt: "BMW electric SUV at a charging point",
-    accent: "forest",
-  },
-  {
-    id: "weekend-escape",
-    badge: "Weekend Escape",
-    label: "Friday → Monday",
-    discount: "10% OFF",
-    caption: "Pick up Friday, return Monday — three days, one fixed rate.",
-    validUntil: "",
-    image: "/booking_landingpage/promo-weekend-escape.jpg",
-    imageAlt: "Black Toyota Land Cruiser with roof rack",
-    accent: "stone",
-  },
-  {
-    id: "business-class",
-    badge: "Business Class",
-    label: "Loyalty",
-    discount: "25% OFF",
-    caption: "Five rentals or more this quarter unlocks a premium tier rate.",
-    validUntil: "",
-    image: "/booking_landingpage/promo-business-class.jpg",
-    imageAlt: "Black Porsche Panamera at dusk",
-    accent: "deep",
-  },
-];
+/* `DEFAULT_PROMOTIONS` held four invented offers — Early Bird, EV Explorer,
+   Weekend Escape, Business Class — each with a badge and a discount label,
+   shown to any tenant who had never created a promotion. They are commercial
+   claims a customer can act on, so they are deleted rather than left unused. */

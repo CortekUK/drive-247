@@ -2,7 +2,11 @@ import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { ContactForm } from "@/components/forms/contact-form";
-import { DEFAULT_CONTACT_INFO, DEFAULT_TRUST_BADGES } from "@/lib/cms/defaults";
+import {
+  DEFAULT_CONTACT_INFO,
+  DEFAULT_SITE_CONTACT,
+  DEFAULT_TRUST_BADGES,
+} from "@/lib/cms/defaults";
 import { resolveIcon } from "@/lib/cms/icons";
 import { loadSection } from "@/lib/cms/server";
 import { Editable, cmsSection } from "@/lib/cms/editable";
@@ -33,15 +37,51 @@ type DetailRow = {
  * Trust badges are absent from the Figma design, so they default to empty and
  * appear only once configured.
  */
+/** "12 Peak Street", "Denver", "CO", "80202" -> one line. */
+function joinAddress(parts: readonly string[]): string {
+  return parts.map((part) => part.trim()).filter((part) => part !== "").join(", ");
+}
+
 export async function ContactDetailsSection() {
-  const [info, trust] = await Promise.all([
+  const [info, site, trust] = await Promise.all([
     loadSection("contact", "contact_info", DEFAULT_CONTACT_INFO),
+    /**
+     * The BUSINESS DETAILS, from the one place a tenant enters them.
+     *
+     * This section read `contact / contact_info` alone, so it showed nothing at
+     * all for an operator who had filled in Site Settings — which is exactly
+     * what the portal tells them to do: the Contact page in the CMS says in so
+     * many words, "Your phone, email and address come from Site settings. These
+     * are the notes shown beside them." The page did not honour its own
+     * instruction, and the result was a Contact page with a heading and no way
+     * to make contact.
+     *
+     * Site Settings wins; the page's own fields remain as a fallback so a
+     * tenant who filled them in before Site Settings existed keeps their
+     * details. The NOTES beside each row (phone hours, reply time) stay
+     * page-level throughout — they are copy about this page, not business
+     * facts.
+     */
+    loadSection("site-settings", "contact", DEFAULT_SITE_CONTACT),
     loadSection("contact", "trust_badges", DEFAULT_TRUST_BADGES),
   ]);
 
-  const email = info.email.address.trim();
-  const phone = info.phone.number.trim();
-  const office = info.office.address.trim();
+  const email = site.email.trim() || info.email.address.trim();
+  /* `phone_display` is the formatted one a human reads; `phone` is dialable. */
+  const phone = site.phone_display.trim() || site.phone.trim() || info.phone.number.trim();
+  const dialable = site.phone.trim() || phone;
+  const office =
+    joinAddress([
+      site.address_line1,
+      site.address_line2,
+      site.city,
+      site.state,
+      site.zip,
+      site.country,
+    ]) || info.office.address.trim();
+  /* WhatsApp stays page-only: Site Settings has no field for it, and the CMS
+     hint here says to fill it in "only if it differs from your main phone
+     number" — so a blank means "same as the phone", not "missing". */
   const whatsapp = info.whatsapp.number.trim();
 
   const rows: DetailRow[] = [];
@@ -66,7 +106,7 @@ export async function ContactDetailsSection() {
       label: "Phone Number",
       value: phone,
       note: info.phone.availability.trim(),
-      href: `tel:${phone.replace(/[^+\d]/g, "")}`,
+      href: `tel:${dialable.replace(/[^+\d]/g, "")}`,
       path: "contact.contact_info.phone.number",
       notePath: "contact.contact_info.phone.availability",
     });

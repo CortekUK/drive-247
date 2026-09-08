@@ -1,8 +1,11 @@
 import { AboutHeroSection } from "@/components/sections/about-hero-section";
 import { CtaBanner } from "@/components/sections/cta-banner";
 import { PromotionsListSection } from "@/components/sections/promotions-list-section";
+import { pageMetadata } from "@/lib/cms/metadata";
 
-export const metadata = { title: "Promotions" };
+export function generateMetadata() {
+  return pageMetadata("promotions", "Promotions");
+}
 
 export default function PromotionsPage() {
   return (

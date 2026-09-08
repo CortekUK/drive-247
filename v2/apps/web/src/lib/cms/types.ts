@@ -311,6 +311,12 @@ export interface HowItWorksStep {
   number: string;
   title: string;
   description: string;
+  /**
+   * The operator's chosen icon, by name. Optional: the field was added after
+   * these rows existed, so stored steps have none and fall back to the icon
+   * their position implies.
+   */
+  icon?: string;
 }
 
 export interface HowItWorksContent {

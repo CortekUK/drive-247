@@ -90,7 +90,37 @@ export default function CMSAboutEditor() {
   // other 56 tenants render. Placed after every hook so the hook order is
   // identical on both paths.
   const v2 = useV2("cms");
-  if (v2) return <CmsPageEditor slug="about" />;
+  /* The FAQ QUESTIONS are rows in the `faqs` table, not a CMS section, so they
+     have no entry in `cms-spec.ts` and the spec-driven editor cannot render
+     them. On v1 they were a tab; on v2 they go in the `after` slot, the same
+     way `/cms/site-settings` carries its `tenants` columns and `/cms/fleet`
+     carries website visibility.
+
+     Without this the About page offered a "FAQ prompt" heading and button with
+     no way to reach the questions they introduce — an operator could style the
+     band but never edit a single question in it. */
+  if (v2)
+    return (
+      <CmsPageEditor
+        slug="about"
+        after={
+          <section className="border-t border-foreground/[0.07] py-6">
+            <div className="pl-[22px]">
+              <h2 className="font-heading text-[15px] font-semibold tracking-tight">
+                Questions &amp; answers
+              </h2>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                The questions shown under the heading above. These save on their
+                own — they are live as soon as you edit them, with no publish.
+              </p>
+              <div className="mt-3">
+                <FAQsManager />
+              </div>
+            </div>
+          </section>
+        }
+      />
+    );
 
   if (isLoading) {
     return (

@@ -6,19 +6,35 @@ import { usePathname } from "next/navigation";
 import { BrandMark } from "@/components/layout/brand-mark";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { NAV_LINKS } from "@/lib/constants";
+import type { PageSections } from "@/lib/cms/types";
 import { cn } from "@/lib/utils";
 
-export function Navbar() {
+/** `siteSettings` is the server's copy of the `site-settings` sections, so the
+    logo is in the first HTML rather than appearing a beat after hydration. */
+export function Navbar({
+  siteSettings,
+  tenantName,
+  blogEnabled = false,
+}: {
+  siteSettings?: PageSections | null;
+  tenantName?: string | null;
+  blogEnabled?: boolean;
+}) {
   const pathname = usePathname();
+  /* Blog sits before Contact, so "Contact" stays the last item — it is the one
+     visitors look for at the end of a nav. */
+  const links = blogEnabled
+    ? [...NAV_LINKS.slice(0, -1), { href: "/blog", label: "Blog" }, NAV_LINKS[NAV_LINKS.length - 1]]
+    : NAV_LINKS;
 
   return (
     <header className="relative z-30">
       <div className="container-page flex items-center justify-between gap-3 py-6">
-        <BrandMark />
+        <BrandMark seed={siteSettings} nameSeed={tenantName} withName />
 
         <nav aria-label="Primary" className="hidden flex-1 lg:block">
           <ul className="flex items-center justify-center">
-            {NAV_LINKS.map((link, index) => {
+            {links.map((link, index) => {
               const isActive =
                 link.href === "/"
                   ? pathname === "/"

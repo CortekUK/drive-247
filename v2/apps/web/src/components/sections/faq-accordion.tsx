@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFaqs } from "@/hooks/use-faqs";
-import { DEFAULT_FAQS } from "@/lib/cms/defaults";
 import { Editable } from "@/lib/cms/editable";
 import type { FaqItem } from "@/lib/cms/types";
 
@@ -28,15 +27,26 @@ export function FaqAccordion({ seed }: { seed: FaqItem[] | null }) {
     );
   }
 
-  /*
-    Only REAL rows are marked editable. `DEFAULT_FAQS` is the shipped example
-    set, shown to a tenant who has written none of their own — its ids
-    ("exact-car", "sanitized") are not row ids, so marking them would give the
-    operator boxes to type into whose contents could never be saved anywhere.
-  */
-  const real = faqs.length > 0;
-  const items = real ? faqs : DEFAULT_FAQS;
+  /**
+   * No questions of their own means NO QUESTIONS.
+   *
+   * A shipped example set used to fill this for any tenant who had written
+   * none — and unlike placeholder marketing copy, those five made specific
+   * OPERATIONAL PROMISES in the operator's voice: that the fleet is "digitally
+   * integrated", that every listing is "tied to a specific VIN and license
+   * plate", that vehicles carry "Real-Time Health Monitoring", and how
+   * sanitising, fuelling and delivery work. Northwind has zero FAQ rows and was
+   * publishing all five.
+   *
+   * A customer reads an FAQ as a commitment by the company they are renting
+   * from. Inventing those is worse than having none, and the operator cannot
+   * even correct them: the example ids are not row ids, so the boxes were not
+   * editable either.
+   */
+  const items = faqs;
   const first = items[0];
+  if (items.length === 0) return null;
+  const real = true;
 
   return (
     <Accordion

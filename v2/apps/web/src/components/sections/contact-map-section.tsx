@@ -5,7 +5,6 @@ import {
   DEFAULT_SITE_CONTACT,
   DEFAULT_SITE_LOGO,
   EMPTY_CONTACT_INFO,
-  FALLBACK_OFFICE_ADDRESS,
 } from "@/lib/cms/defaults";
 import { loadSection } from "@/lib/cms/server";
 import { Editable, cmsSection } from "@/lib/cms/editable";
@@ -13,22 +12,24 @@ import { Editable, cmsSection } from "@/lib/cms/editable";
 /**
  * The location card and map.
  *
- * The shipped fallback is Drive247's own Dubai office, embedded by COORDINATES
- * rather than by name — a coordinate embed avoids Google's auto-generated place
- * tooltip sitting over the card. That is why it is a constant here and not in
- * `DEFAULT_SITE_CONTACT`: an operator's default address must never silently be
- * ours.
+ * ── no address means no map ─────────────────────────────────────────────────
+ *
+ * This used to fall back to Drive247's own Dubai office, embedded by
+ * coordinates, with our street address printed on the card as the tenant's.
+ * The comment defending it argued the constant lived here rather than in
+ * `DEFAULT_SITE_CONTACT` so an operator's default address "must never silently
+ * be ours" — but that is precisely what it rendered: a US operator's contact
+ * page showed a map of Dubai Silicon Oasis captioned as their office, and the
+ * "Get directions" link sent their customer there.
+ *
+ * A missing address is now a missing SECTION. There is no honest map to draw
+ * for a business whose location we do not know, and a wrong one is worse than
+ * none — someone acts on it.
  *
  * Once an operator fills in `site-settings / contact` (or the contact page's
- * `office.address`), the embed switches to a query on THEIR address and the
- * links point at their `google_maps_url` when they set one.
+ * `office.address`), the embed queries THEIR address and the links point at
+ * their `google_maps_url` when they set one.
  */
-// Dubai Silicon Oasis approx 25.118, 55.391
-const FALLBACK_EMBED =
-  "https://maps.google.com/maps?q=25.1180,55.3910&z=14&output=embed&iwloc=near";
-
-const FALLBACK_MAP_LINK =
-  "https://www.google.com/maps/place/Dubai+Silicon+Oasis,+Dubai,+UAE";
 
 function joinAddress(parts: readonly string[]): string {
   return parts.map((part) => part.trim()).filter((part) => part !== "").join(", ");
@@ -68,18 +69,20 @@ export async function ContactMapSection() {
   const address = info.office.address.trim() || siteAddress;
   const hasAddress = address !== "";
 
-  const embedSrc = hasAddress
-    ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=14&output=embed&iwloc=near`
-    : FALLBACK_EMBED;
+  /* Nothing to show, so show nothing. Returning null drops the whole section
+     rather than leaving an empty framed box on the page. */
+  if (!hasAddress) return null;
+
+  const embedSrc = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=14&output=embed&iwloc=near`;
 
   const mapLink =
     site.google_maps_url.trim() ||
-    (hasAddress
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
-      : FALLBACK_MAP_LINK);
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
-  const displayAddress = hasAddress ? address : FALLBACK_OFFICE_ADDRESS;
-  const name = logo.logo_alt.trim() || "Drive247";
+  const displayAddress = address;
+  /* The iframe title is read aloud, so it must name the TENANT. It fell back to
+     "Drive247", announcing us on their page. */
+  const name = logo.logo_alt.trim() || "Our";
 
   return (
     <section {...cmsSection("site-settings.contact", "Map")} className="bg-brand-cream">

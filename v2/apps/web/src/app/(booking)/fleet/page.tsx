@@ -4,11 +4,15 @@ import { loadFleetSeed } from "@/components/fleet/fleet-seed";
 import { AboutHeroSection } from "@/components/sections/about-hero-section";
 import { CtaBanner } from "@/components/sections/cta-banner";
 import { FaqSection } from "@/components/sections/faq-section";
+import { FleetInclusionsSection } from "@/components/sections/fleet-inclusions-section";
 import { FleetPricingSection } from "@/components/sections/fleet-pricing-section";
 import { TestimonialsSection } from "@/components/sections/testimonials-section";
 import { DEV_FALLBACK_TENANT_SLUG, TENANT_HEADER } from "@/lib/constants";
+import { pageMetadata } from "@/lib/cms/metadata";
 
-export const metadata = { title: "Fleet and Pricing" };
+export function generateMetadata() {
+  return pageMetadata("fleet", "Fleet and Pricing");
+}
 
 /**
  * The fleet page.
@@ -49,6 +53,7 @@ export default async function FleetPage() {
         ctaHref="#fleet"
       />
       <FleetPricingSection seed={seed} />
+      <FleetInclusionsSection />
       <TestimonialsSection />
       <FaqSection />
       <CtaBanner />

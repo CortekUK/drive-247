@@ -48,7 +48,8 @@ export function FeatureCard({
           className,
         )}
       >
-        <div className="space-y-3">
+        {/* z-10 so the copy is never the thing that loses. */}
+        <div className="relative z-10 space-y-3">
           <h3 className="text-xl font-semibold leading-snug text-brand-text">
             {t}
           </h3>
@@ -58,16 +59,32 @@ export function FeatureCard({
         </div>
 
         {imageSrc && (
-          <Image
-            {...(imageCmsPath ? cmsImage(imageCmsPath, imageSrc) : {})}
-            src={imageSrc}
-            alt={imageAlt}
-            width={2000}
-            height={828}
-            priority={false}
-            sizes="(min-width: 1024px) 60vw, 100vw"
-            className="pointer-events-none absolute bottom-2 right-2 h-auto w-[120%] max-w-none object-contain object-bottom"
-          />
+          /*
+           * A SPACER in normal flow, with the photo bleeding out of it.
+           *
+           * The photo used to be positioned against the card itself, so it sat
+           * at a fixed distance from the bottom no matter how much copy was
+           * above it. The card's `min-h` was sized for the shipped one-line
+           * description; an operator who wrote three lines had their own words
+           * disappear behind the car — the text did not wrap around it or push
+           * it down, it was simply covered.
+           *
+           * `mt-auto` pins this block to the bottom for short copy (the Figma
+           * look, unchanged), and long copy pushes it down and grows the card
+           * instead of colliding with it.
+           */
+          <div className="pointer-events-none relative mt-auto h-[200px] w-full">
+            <Image
+              {...(imageCmsPath ? cmsImage(imageCmsPath, imageSrc) : {})}
+              src={imageSrc}
+              alt={imageAlt}
+              width={2000}
+              height={828}
+              priority={false}
+              sizes="(min-width: 1024px) 60vw, 100vw"
+              className="absolute -right-5 bottom-0 h-auto w-[120%] max-w-none object-contain object-bottom"
+            />
+          </div>
         )}
       </article>
     );
