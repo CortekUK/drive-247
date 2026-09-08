@@ -46,7 +46,7 @@ export function TimePick({ value, onChange, disabled, className, ...rest }: Time
       >
         <SelectValue />
       </SelectTrigger>
-      <SelectContent className="max-h-[260px]">
+      <SelectContent tone="surface" className="max-h-[260px]">
         {options.map((t) => (
           <SelectItem key={t} value={t} className="text-xs">
             {formatTime(t)}

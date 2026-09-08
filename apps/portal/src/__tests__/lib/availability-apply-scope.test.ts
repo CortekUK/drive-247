@@ -96,3 +96,34 @@ describe("apply scope", () => {
     expect(out.timezone).toBe("America/Chicago");
   });
 });
+
+/**
+ * The toolbar summary. It replaced seven permanently-rendered rows, so it has
+ * to stay a sentence — if it degenerates into a list of all seven days it has
+ * not bought back the vertical space it was added for.
+ */
+describe("weekly summary", () => {
+  it("groups a run of identical days into a range", async () => {
+    const { weeklySummary } = await import("@/components/availability-v2/weekly-hours-card");
+    const out = weeklySummary(base());
+    expect(out).toContain("Mon–Fri");
+    expect(out).toContain("Sat, Sun closed");
+  });
+
+  it("says 24/7 when the tenant-wide flag is on, and nothing else", async () => {
+    const { weeklySummary } = await import("@/components/availability-v2/weekly-hours-card");
+    /* That flag overrides every per-day column, so listing days would be a lie. */
+    expect(weeklySummary({ ...base(), alwaysOpen: true })).toBe("Open 24/7");
+  });
+
+  it("does not spell out all seven days when they differ", async () => {
+    const { weeklySummary } = await import("@/components/availability-v2/weekly-hours-card");
+    const d = base();
+    d.days.wednesday = { enabled: true, open: "11:00", close: "15:00" };
+    const out = weeklySummary(d);
+    /* Wednesday breaks the run, so the summary must still read as segments
+       rather than seven comma-separated days. */
+    expect(out).toContain("Wed");
+    expect(out.split("·").length).toBeLessThanOrEqual(5);
+  });
+});

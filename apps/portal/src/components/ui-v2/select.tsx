@@ -60,15 +60,29 @@ function SelectContent({
   children,
   position = "popper",
   align = "center",
+  /**
+   * The v2 dropdown is deliberately DARK — a translucent near-black panel over
+   * a blur — and `dropdown-menu.tsx` matches it, so it is a style choice rather
+   * than an accident. It reads as an OS menu on light, text-heavy screens
+   * though, so a surface can opt into the page's own colours instead.
+   *
+   * Defaults to the dark panel, so every existing dropdown in the app is
+   * byte-for-byte what it was.
+   */
+  tone = "dark",
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: React.ComponentProps<typeof SelectPrimitive.Content> & {
+  tone?: "dark" | "surface";
+}) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         data-slot="select-content"
+        data-tone={tone}
         data-align-trigger={position === "item-aligned"}
         className={cn(
-                                  "dark z-50 max-h-[var(--radix-select-content-available-height)] min-w-36 origin-[var(--radix-select-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 !animate-none relative bg-popover/70 before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] before:backdrop-blur-2xl before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-foreground/10 [&_[data-slot$=-item][data-highlighted]]:bg-foreground/10 [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-slot$=-trigger]:focus]:bg-foreground/10 [&_[data-slot$=-trigger][aria-expanded=true]]:!bg-foreground/10 [&_[data-variant=destructive]:focus]:!bg-foreground/10 [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
+                                  tone === "dark" ? "dark bg-popover/70" : "border border-border bg-popover",
+          "z-50 max-h-[var(--radix-select-content-available-height)] min-w-36 origin-[var(--radix-select-content-transform-origin)] overflow-x-hidden overflow-y-auto rounded-3xl text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 dark:ring-foreground/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 !animate-none relative before:pointer-events-none before:absolute before:inset-0 before:-z-[1] before:rounded-[inherit] data-[tone=dark]:before:backdrop-blur-2xl data-[tone=dark]:before:backdrop-saturate-150 [&_[data-slot$=-item]:focus]:bg-foreground/10 [&_[data-slot$=-item][data-highlighted]]:bg-foreground/10 [&_[data-slot$=-separator]]:bg-foreground/5 [&_[data-slot$=-trigger]:focus]:bg-foreground/10 [&_[data-slot$=-trigger][aria-expanded=true]]:!bg-foreground/10 [&_[data-variant=destructive]:focus]:!bg-foreground/10 [&_[data-variant=destructive]]:!text-accent-foreground [&_[data-variant=destructive]_*]:!text-accent-foreground",
                                   position === "popper" &&
                                     "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
                                   className

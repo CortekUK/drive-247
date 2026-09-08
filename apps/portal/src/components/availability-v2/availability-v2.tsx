@@ -44,6 +44,7 @@ import {
   Loader2,
   RotateCcw,
   Save,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import { Switch } from '@/components/ui-v2/switch';
@@ -58,7 +59,13 @@ import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { WeekCalendar } from './week-calendar';
-import { WeeklyHoursCard } from './weekly-hours-card';
+import { WeeklyHoursCard, weeklySummary } from './weekly-hours-card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui-v2/dialog';
 import { useAvailabilitySource } from './use-availability-source';
 import { useAvailabilitySave } from './use-availability-save';
 import {
@@ -158,6 +165,7 @@ export function AvailabilityV2() {
   };
 
   const save = useAvailabilitySave();
+  const [hoursOpen, setHoursOpen] = useState(false);
 
   /**
    * Which of the on-screen exceptions can actually be PERSISTED.
@@ -240,12 +248,19 @@ export function AvailabilityV2() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1560px] space-y-6 px-2 pb-10">
+    /* A calendar app, not a settings page that ends in a calendar.
+       The page is exactly the height of the area the dashboard gives it and
+       clips; the header and toolbar take what they need, and the calendar gets
+       every remaining pixel. `min-h-0` on the calendar row is what lets it
+       shrink instead of pushing the page taller — without it a flex child
+       refuses to go below its content and the whole document scrolls, which is
+       the behaviour being fixed. */
+    <div className="mx-auto flex h-[calc(100svh-2rem)] w-full max-w-[1560px] flex-col gap-3 overflow-hidden px-2 pb-2">
       {/* ── header ───────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-3xl font-semibold leading-tight tracking-tight">
+            <h1 className="font-heading text-2xl font-semibold leading-tight tracking-tight">
               Availability
             </h1>
             {/* Was a permanent yellow "Preview — changes aren't saved" pill.
@@ -261,9 +276,8 @@ export function AvailabilityV2() {
               </span>
             )}
           </div>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            One week at a time. Set the pattern once underneath, then change any single day on top
-            of it.
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            Control when customers can book online.
           </p>
         </div>
 
@@ -280,8 +294,24 @@ export function AvailabilityV2() {
           page header, which put "what am I looking at" and "what can I do about
           it" in two places. `justify-between` on the row, with each side its own
           flex group, so the two halves stay apart without a fixed gap. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-2.5">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {/* The weekly pattern, as a sentence and a button. Seven editable
+              rows lived here permanently and cost roughly 300px above the
+              calendar — the reason the calendar started below the fold. The
+              rows are unchanged; they moved into the dialog. */}
+          <button
+            type="button"
+            onClick={() => setHoursOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-[13px] transition-colors hover:bg-accent"
+          >
+            <SlidersHorizontal className="size-3.5 text-muted-foreground" />
+            <span className="font-medium">Weekly hours</span>
+            <span className="text-muted-foreground">{weeklySummary(defaults)}</span>
+          </button>
+
+          <span className="h-5 w-px bg-border" aria-hidden />
+
         <label htmlFor="availability-always-open" className="flex cursor-pointer items-center gap-2.5">
           <Switch
             id="availability-always-open"
@@ -309,7 +339,7 @@ export function AvailabilityV2() {
             <SelectTrigger className="h-7 w-[190px] text-xs" aria-label="Timezone">
               <SelectValue placeholder="Choose a timezone" />
             </SelectTrigger>
-            <SelectContent className="max-h-72">
+            <SelectContent tone="surface" className="max-h-72">
               {TIMEZONE_OPTIONS.map((tz) => (
                 <SelectItem key={tz} value={tz} className="text-xs">
                   {timezoneLabel(tz)}
@@ -380,28 +410,17 @@ export function AvailabilityV2() {
         </div>
       </div>
 
-      {/* ── the weekly pattern, then the week it governs ─────────────────
-          The strip sits at the TOP of the card, above the calendar. Its cells
-          are still column-aligned with the days below, which is the whole
-          point of welding the two together: "the rule" and "the days the rule
-          produces" share a vertical line, so a change to Monday visibly
-          repaints every Monday underneath it.
-
-          It was originally at the foot. Top reads better because the pattern is
-          what you set FIRST and the calendar is the result — and because the
-          strip is fixed height while the calendar is tall, so anchored to the
-          bottom it drifted off screen exactly when you wanted it. */}
+      {/* ── the week ─────────────────────────────────────────────────────
+          `flex-1 min-h-0` — this takes every pixel the header and toolbar did
+          not, and `min-h-0` is what allows it to be SHORTER than its content
+          so the grid inside scrolls rather than the page. The weekly pattern
+          used to sit above it as a strip; it is a dialog now, because it was
+          the reason the calendar began below the fold. */}
       {source.isLoading && !source.hasRealHours ? (
         <CalendarSkeleton />
       ) : (
-        <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          {/* Seven rows, not seven columns. The strip that stood here was
-              column-aligned with the calendar so "the rule" and "the days it
-              governs" shared a vertical line — a nice idea that cost 21
-              controls (a switch and two stacked dropdowns per day) for
-              something an operator reads as one sentence. The card lists the
-              week instead, and the calendar below still shows the result. */}
-          <WeeklyHoursCard defaults={defaults} onChange={setDraft} canEdit={editable} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card">
+
           <WeekCalendar
             days={days}
             defaults={defaults}
@@ -412,6 +431,21 @@ export function AvailabilityV2() {
         </div>
       )}
 
+
+      {/* Weekly hours — the same card, in a dialog. Editing a recurring
+          pattern is deliberate and occasional; it does not need to occupy a
+          third of the workspace while somebody looks at next week. */}
+      <Dialog open={hoursOpen} onOpenChange={setHoursOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Weekly hours</DialogTitle>
+          </DialogHeader>
+          <WeeklyHoursCard defaults={defaults} onChange={setDraft} canEdit={editable} />
+          <p className="text-[12px] text-muted-foreground">
+            Changes apply when you save on the page behind this.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

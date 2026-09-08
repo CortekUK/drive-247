@@ -423,3 +423,49 @@ function BulkWeekdays({
     </div>
   );
 }
+
+/**
+ * The week in one line, for the toolbar — "Mon–Fri 9:00 AM – 5:00 PM · Sat, Sun
+ * closed". Grouping runs of identical days is what keeps it a sentence rather
+ * than a list: the common case is five identical weekdays and a closed weekend,
+ * and spelling all seven out would be the thing this replaces.
+ */
+export function weeklySummary(defaults: WeeklyDefaults): string {
+  if (defaults.alwaysOpen) return 'Open 24/7';
+
+  const SHORT: Record<DayKey, string> = {
+    monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
+    friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
+  };
+
+  /* A day's "shape" — two days group together only if they say the same thing. */
+  const shapeOf = (day: DayKey): string => {
+    const state = stateOf(defaults, day);
+    if (state === 'closed') return 'closed';
+    if (state === 'always') return '24h';
+    const d = defaults.days[day];
+    return `${d.open}-${d.close}`;
+  };
+
+  const runs: { shape: string; days: DayKey[] }[] = [];
+  for (const day of DAY_KEYS) {
+    const shape = shapeOf(day);
+    const last = runs[runs.length - 1];
+    if (last && last.shape === shape) last.days.push(day);
+    else runs.push({ shape, days: [day] });
+  }
+
+  const label = (run: { shape: string; days: DayKey[] }) => {
+    /* Three or more consecutive days read better as a range than a list. */
+    const span =
+      run.days.length >= 3
+        ? `${SHORT[run.days[0]]}–${SHORT[run.days[run.days.length - 1]]}`
+        : run.days.map((d) => SHORT[d]).join(', ');
+    if (run.shape === 'closed') return `${span} closed`;
+    if (run.shape === '24h') return `${span} 24h`;
+    const [open, close] = run.shape.split('-');
+    return `${span} ${formatTime(open)}–${formatTime(close)}`;
+  };
+
+  return runs.map(label).join(' · ');
+}
