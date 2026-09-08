@@ -163,11 +163,15 @@ function DayColumn({
     ? ((toMinutes(day.to) - toMinutes(day.from)) / 60) * pxPerHour
     : 0;
 
-  const hatch = isRealBlock
-    ? 'repeating-linear-gradient(45deg, hsl(var(--destructive) / 0.16) 0px, hsl(var(--destructive) / 0.16) 6px, transparent 6px, transparent 13px)'
+  /* A flat wash, not diagonal hatching. The stripes read as "broken" rather
+     than "not open" — a closed Sunday is a normal state of a business, and it
+     was the loudest thing on the screen. Kept distinguishable by TONE, so a
+     blocked date and a routine closure are still not the same colour. */
+  const closedFill = isRealBlock
+    ? 'bg-destructive/[0.06]'
     : isException
-      ? 'repeating-linear-gradient(45deg, hsl(var(--warning) / 0.28) 0px, hsl(var(--warning) / 0.28) 6px, transparent 6px, transparent 13px)'
-      : 'repeating-linear-gradient(45deg, hsl(var(--muted-foreground) / 0.12) 0px, hsl(var(--muted-foreground) / 0.12) 6px, transparent 6px, transparent 13px)';
+      ? 'bg-warning/[0.10]'
+      : 'bg-muted/40';
 
   const label = day.open
     ? day.allDay
@@ -235,33 +239,55 @@ function DayColumn({
             style={{ height: GRID_HEIGHT, backgroundImage: hourLines }}
           >
             {day.open ? (
-              <span
-                className={cn(
-                  'absolute left-1 right-1 flex flex-col gap-0.5 overflow-hidden rounded-lg px-1.5 py-1',
-                  isException
-                    ? 'border-2 border-dashed border-warning bg-warning/25'
-                    : 'border border-primary/30 bg-primary/12',
-                )}
-                style={{ top, height: Math.max(height, 22) }}
-              >
+              day.allDay ? (
+                /* A 24-hour day gets a compact bar, not a column-height slab.
+                   The grid no longer stretches to midnight for it (see
+                   `hourWindow`), so a block spanning "the whole day" would
+                   have been both enormous and a lie about the visible range. */
                 <span
                   className={cn(
-                    'truncate text-[11px] font-medium leading-tight',
-                    isException ? 'text-foreground' : 'text-primary',
+                    'absolute inset-x-1 top-1 flex items-center justify-center rounded-lg px-1.5 py-1 text-[11px] font-medium',
+                    isException
+                      ? 'border border-dashed border-warning bg-warning/20 text-foreground'
+                      : 'bg-primary/10 text-primary',
                   )}
                 >
-                  {day.allDay ? '24 hours' : formatTimeShort(day.from)}
+                  Open 24 hours
                 </span>
-                {height > 44 && !day.allDay && (
-                  <span className="truncate text-[11px] leading-tight text-muted-foreground">
-                    to {formatTimeShort(day.to)}
+              ) : (
+                <span
+                  className={cn(
+                    'absolute left-1 right-1 flex flex-col justify-center gap-0.5 overflow-hidden rounded-lg px-1.5 py-1',
+                    isException
+                      ? 'border border-dashed border-warning bg-warning/20'
+                      : 'border border-primary/20 bg-primary/[0.08]',
+                  )}
+                  style={{ top, height: Math.max(height, 22) }}
+                >
+                  {/* One readable range beats "9am" over "to 5pm". */}
+                  <span
+                    className={cn(
+                      'truncate text-[11px] font-medium leading-tight',
+                      isException ? 'text-foreground' : 'text-primary',
+                    )}
+                  >
+                    {height > 34
+                      ? `${formatTimeShort(day.from)} – ${formatTimeShort(day.to)}`
+                      : formatTimeShort(day.from)}
                   </span>
-                )}
-              </span>
+                  {height > 58 && (
+                    <span className="truncate text-[11px] leading-tight text-muted-foreground">
+                      Available online
+                    </span>
+                  )}
+                </span>
+              )
             ) : (
               <span
-                className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-1 text-center"
-                style={{ backgroundImage: hatch }}
+                className={cn(
+                  'absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-1 text-center',
+                  closedFill,
+                )}
               >
                 <Ban
                   className={cn(

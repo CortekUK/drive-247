@@ -1,60 +1,48 @@
 'use client';
 
 /**
- * WEEKLY HOURS — seven rows, three controls each at most.
+ * WEEKLY HOURS — a schedule you read, not a form you fill in.
  *
- * ── what this replaces ──────────────────────────────────────────────────────
+ * ── the change ──────────────────────────────────────────────────────────────
  *
- * Seven columns, each with a purple switch and two stacked time dropdowns:
- * 21 controls for a thing an operator reads as one sentence ("we open nine to
- * five, closed weekends"). The switch and the word "Closed" also said the same
- * thing twice, in two places, per day.
+ * This card has been through two shapes. First seven columns with a switch and
+ * two stacked dropdowns each — 21 permanent controls. Then seven rows with a
+ * status dropdown and a range button — 14. It still read as a settings table,
+ * because every control was on screen whether or not anybody was editing.
  *
- * Now: one horizontal row per day, a state selector, and — when the day is
- * open — ONE control showing the range. Start and end are chosen inside it, so
- * the resting state is `9:00 AM — 5:00 PM` rather than two permanent boxes.
+ * Now the resting state is TEXT:
  *
- * ── the three states, and why they are a selector ───────────────────────────
+ *   Monday      9:00 AM — 5:00 PM      Open
+ *   Saturday    —                      Closed
  *
- *   Open        — the day has hours, and the range control appears
- *   Open 24 hours — no hours to show, because there is no closing time
- *   Closed      — no hours to show, because there is no opening time
+ * and the whole row is a button. Click it and the editor opens over that row.
+ * The week is legible at a glance, which is what an operator wants 95% of the
+ * time, and the controls appear for the 5%.
  *
- * A switch can express two of those three. The third then needs its own
- * control, which is how the old row ended up with a switch AND a separate
- * always-open concept AND a "Closed" label. One selector holds all three, and
- * the row below it shows only what applies.
+ * ── 24 hours: per-day, and the tenant-wide flag still wins ──────────────────
  *
- * ── 24 hours is per-day here, and the global flag still wins ────────────────
- *
- * `tenants.working_hours_always_open` is a TENANT-WIDE flag: when it is on,
- * every day is open around the clock regardless of the per-day columns. A day
- * is therefore shown as "Open 24 hours" when either that flag is set or the
- * day's own range spans midnight to midnight. Setting a single day to 24 hours
- * writes 00:00–23:59 on that day and does NOT touch the global flag — turning
- * one Tuesday into a 24-hour day must never silently open all seven.
+ * `tenants.working_hours_always_open` opens EVERY day around the clock. A day
+ * set to 24 hours here writes 00:00–23:59 on that day's own columns and does
+ * NOT touch the global flag — one Tuesday must never silently open all seven.
+ * While the global flag is on, the rows show it and are not editable, because
+ * they are not this card's to change.
  */
 
 import { useState } from 'react';
-import { Clock } from 'lucide-react';
+import { CalendarRange } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui-v2/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui-v2/select';
 import { cn } from '@/lib/utils';
 import { TimePick } from './time-pick';
 import {
   DAY_KEYS,
+  WEEKDAY_KEYS,
   formatTime,
+  type DayHours,
   type DayKey,
   type WeeklyDefaults,
 } from './availability-model';
@@ -77,98 +65,119 @@ const FULL_DAY = { open: '00:00', close: '23:59' };
 function stateOf(defaults: WeeklyDefaults, day: DayKey): DayState {
   const d = defaults.days[day];
   if (!d.enabled) return 'closed';
-  /* The tenant-wide flag outranks the day's own hours — see the header. */
   if (defaults.alwaysOpen) return 'always';
   if (d.open === FULL_DAY.open && d.close === FULL_DAY.close) return 'always';
   return 'open';
 }
 
-/** Very light, and no traffic-light colours: this is a schedule, not an alarm. */
-const STATE_STYLE: Record<DayState, string> = {
-  open: 'text-foreground',
-  always: 'text-primary',
-  closed: 'text-muted-foreground',
+/** One label per concept. "24 hours" already says "all day"; both would not. */
+const STATE_LABEL: Record<DayState, string> = {
+  open: 'Open',
+  always: '24 hours',
+  closed: 'Closed',
 };
 
 /**
- * The range, as ONE control. Reads as "9:00 AM — 5:00 PM"; opens a popover
- * holding the two pickers, so the two dropdowns exist only while somebody is
- * actually changing them.
+ * Quiet by design. The status must not be louder than the hours — the hours
+ * are what somebody came to read.
  */
-function TimeRange({
-  open,
-  close,
-  disabled,
-  onApply,
+const STATE_CHIP: Record<DayState, string> = {
+  open: 'text-muted-foreground',
+  always: 'bg-primary/10 text-primary',
+  closed: 'bg-muted text-muted-foreground',
+};
+
+/** What the row shows where the times go. */
+function hoursText(defaults: WeeklyDefaults, day: DayKey): string {
+  const state = stateOf(defaults, day);
+  if (state === 'closed') return '—';
+  if (state === 'always') return 'Open all day';
+  const d = defaults.days[day];
+  return `${formatTime(d.open)} — ${formatTime(d.close)}`;
+}
+
+/* ─────────────────────────── the row editor ─────────────────────────────── */
+
+function StatusChoice({
+  value,
+  onChange,
 }: {
-  open: string;
-  close: string;
-  disabled?: boolean;
-  onApply: (open: string, close: string) => void;
+  value: DayState;
+  onChange: (v: DayState) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [draftOpen, setDraftOpen] = useState(open);
-  const [draftClose, setDraftClose] = useState(close);
-
-  /* Seeded when the popover opens, so Cancel genuinely abandons the edit rather
-     than leaving half of it behind. */
-  const onOpenChange = (next: boolean) => {
-    if (next) {
-      setDraftOpen(open);
-      setDraftClose(close);
-    }
-    setIsOpen(next);
-  };
-
   return (
-    <Popover open={isOpen} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
+    <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
+      {(['open', 'always', 'closed'] as const).map((s) => (
         <button
+          key={s}
           type="button"
-          disabled={disabled}
+          onClick={() => onChange(s)}
+          aria-pressed={value === s}
           className={cn(
-            'inline-flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-[13px] tabular-nums transition-colors',
-            'hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60',
+            'rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors',
+            value === s
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
-          <Clock className="size-3.5 text-muted-foreground" />
-          {formatTime(open)}
-          <span className="text-muted-foreground">—</span>
-          {formatTime(close)}
+          {s === 'always' ? '24 hours' : s === 'open' ? 'Open' : 'Closed'}
         </button>
-      </PopoverTrigger>
-
-      <PopoverContent className="w-auto p-3" align="start">
-        <div className="flex items-end gap-2">
-          <div>
-            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Opens</p>
-            <TimePick value={draftOpen} onChange={setDraftOpen} aria-label="Opening time" />
-          </div>
-          <span className="pb-2 text-muted-foreground">—</span>
-          <div>
-            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Closes</p>
-            <TimePick value={draftClose} onChange={setDraftClose} aria-label="Closing time" />
-          </div>
-        </div>
-
-        <div className="mt-3 flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              onApply(draftOpen, draftClose);
-              setIsOpen(false);
-            }}
-          >
-            Apply
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+      ))}
+    </div>
   );
 }
+
+function DayEditorBody({
+  title,
+  initialState,
+  initialHours,
+  onCancel,
+  onApply,
+}: {
+  title: string;
+  initialState: DayState;
+  initialHours: { open: string; close: string };
+  onCancel: () => void;
+  onApply: (state: DayState, hours: { open: string; close: string }) => void;
+}) {
+  const [state, setState] = useState<DayState>(initialState);
+  const [open, setOpen] = useState(initialHours.open);
+  const [close, setClose] = useState(initialHours.close);
+
+  return (
+    <div className="w-[260px] space-y-3">
+      <p className="text-[13px] font-semibold">{title}</p>
+
+      <StatusChoice value={state} onChange={setState} />
+
+      {/* Times only where there are times to set. */}
+      {state === 'open' && (
+        <div className="flex items-end gap-2">
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Opens</p>
+            <TimePick value={open} onChange={setOpen} aria-label="Opening time" />
+          </div>
+          <span className="pb-2 text-muted-foreground">—</span>
+          <div className="min-w-0">
+            <p className="mb-1 text-[11px] font-medium text-muted-foreground">Closes</p>
+            <TimePick value={close} onChange={setClose} aria-label="Closing time" />
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={() => onApply(state, { open, close })}>
+          Apply
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────── the card ──────────────────────────────── */
 
 export function WeeklyHoursCard({
   defaults,
@@ -179,103 +188,184 @@ export function WeeklyHoursCard({
   onChange: (next: WeeklyDefaults) => void;
   canEdit: boolean;
 }) {
-  const setDay = (day: DayKey, patch: Partial<WeeklyDefaults['days'][DayKey]>) => {
-    onChange({
-      ...defaults,
-      days: { ...defaults.days, [day]: { ...defaults.days[day], ...patch } },
-    });
+  const [editing, setEditing] = useState<DayKey | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const lockedByGlobal = defaults.alwaysOpen;
+  const interactive = canEdit && !lockedByGlobal;
+
+  /** One place turns a chosen state into stored columns. */
+  const hoursFor = (state: DayState, hours: { open: string; close: string }): DayHours => {
+    if (state === 'closed') return { enabled: false, open: hours.open, close: hours.close };
+    if (state === 'always') return { enabled: true, ...FULL_DAY };
+    return { enabled: true, open: hours.open, close: hours.close };
   };
 
-  const setState = (day: DayKey, next: DayState) => {
-    if (next === 'closed') {
-      setDay(day, { enabled: false });
-      return;
-    }
-    if (next === 'always') {
-      /* The day's own columns, NOT the tenant-wide flag. See the header. */
-      setDay(day, { enabled: true, ...FULL_DAY });
-      return;
-    }
-    /* Back to normal hours. If the day was storing a full-day range, give it
-       something sensible to show rather than 00:00–23:59 labelled "Open". */
-    const d = defaults.days[day];
-    const wasFullDay = d.open === FULL_DAY.open && d.close === FULL_DAY.close;
-    setDay(day, {
-      enabled: true,
-      open: wasFullDay ? '09:00' : d.open,
-      close: wasFullDay ? '17:00' : d.close,
+  const applyDay = (day: DayKey, state: DayState, hours: { open: string; close: string }) => {
+    onChange({
+      ...defaults,
+      days: { ...defaults.days, [day]: hoursFor(state, hours) },
     });
+    setEditing(null);
+  };
+
+  /** Monday–Friday in one action — the schedule most operators actually have. */
+  const applyWeekdays = (hours: { open: string; close: string }) => {
+    const days = { ...defaults.days };
+    for (const day of WEEKDAY_KEYS) {
+      days[day] = { enabled: true, open: hours.open, close: hours.close };
+    }
+    onChange({ ...defaults, days });
+    setBulkOpen(false);
   };
 
   return (
     <section className="rounded-2xl border border-border bg-card">
-      <div className="flex items-baseline justify-between gap-3 border-b border-border/60 px-5 py-3.5">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-3">
+        <h2 className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
           Weekly hours
         </h2>
-        <p className="text-[12px] text-muted-foreground">
-          Applies to every week until you change it
-        </p>
+
+        {/* Most businesses do not set five days one at a time. */}
+        <Popover open={bulkOpen} onOpenChange={setBulkOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[12px]" disabled={!interactive}>
+              <CalendarRange className="size-3.5" />
+              Set weekdays
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-auto p-3">
+            <BulkWeekdays
+              initial={defaults.days.monday}
+              onCancel={() => setBulkOpen(false)}
+              onApply={applyWeekdays}
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="divide-y divide-border/50">
         {DAY_KEYS.map((day) => {
-          const d = defaults.days[day];
           const state = stateOf(defaults, day);
-          /* The tenant-wide flag is not this row's to switch off, so a row it
-             governs is shown but not editable into another state. */
-          const lockedByGlobal = defaults.alwaysOpen;
+          const d = defaults.days[day];
+
+          const row = (
+            <>
+              <span className="w-[92px] shrink-0 text-[13px] font-medium">{DAY_LABEL[day]}</span>
+              <span
+                className={cn(
+                  'flex-1 text-left text-[13px] tabular-nums',
+                  state === 'closed' ? 'text-muted-foreground' : 'text-foreground',
+                )}
+              >
+                {hoursText(defaults, day)}
+              </span>
+              <span
+                className={cn(
+                  'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  STATE_CHIP[state],
+                )}
+              >
+                {STATE_LABEL[state]}
+              </span>
+            </>
+          );
+
+          /* Read-only when the tenant-wide flag governs the week, or the user
+             cannot edit. A row that opens an editor which then refuses to
+             change anything is worse than a row that does not open. */
+          if (!interactive) {
+            return (
+              <div key={day} className="flex items-center gap-3 px-5 py-2">
+                {row}
+              </div>
+            );
+          }
 
           return (
-            <div key={day} className="flex items-center gap-3 px-5 py-2.5">
-              <span className="w-[104px] shrink-0 text-[13px] font-medium">{DAY_LABEL[day]}</span>
-
-              <Select
-                value={state}
-                onValueChange={(v) => setState(day, v as DayState)}
-                disabled={!canEdit || lockedByGlobal}
-              >
-                <SelectTrigger
-                  className={cn('h-8 w-[136px] text-[13px]', STATE_STYLE[state])}
-                  aria-label={`${DAY_LABEL[day]} availability`}
+            <Popover
+              key={day}
+              open={editing === day}
+              onOpenChange={(o) => setEditing(o ? day : null)}
+            >
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 px-5 py-2 text-left transition-colors hover:bg-accent/50"
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open" className="text-[13px]">Open</SelectItem>
-                  <SelectItem value="always" className="text-[13px]">Open 24 hours</SelectItem>
-                  <SelectItem value="closed" className="text-[13px]">Closed</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Only what applies. A closed day has no hours to show, and a
-                  24-hour day has no closing time — showing empty or greyed
-                  pickers for either is the clutter this replaces. */}
-              {state === 'open' && (
-                <TimeRange
-                  open={d.open}
-                  close={d.close}
-                  disabled={!canEdit}
-                  onApply={(o, c) => setDay(day, { open: o, close: c })}
+                  {row}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-3">
+                <DayEditorBody
+                  title={DAY_LABEL[day]}
+                  initialState={state}
+                  initialHours={{
+                    /* A closed or 24-hour day has no useful times to seed, so
+                       the editor offers a normal working day rather than
+                       00:00–23:59 under a label reading "Opens". */
+                    open: state === 'open' ? d.open : '09:00',
+                    close: state === 'open' ? d.close : '17:00',
+                  }}
+                  onCancel={() => setEditing(null)}
+                  onApply={(s, h) => applyDay(day, s, h)}
                 />
-              )}
-              {state === 'always' && (
-                <span className="text-[13px] text-muted-foreground">All day</span>
-              )}
-              {state === 'closed' && (
-                <span className="text-[13px] text-muted-foreground">Not bookable online</span>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
           );
         })}
       </div>
 
-      {defaults.alwaysOpen && (
+      {lockedByGlobal && (
         <p className="border-t border-border/60 px-5 py-2.5 text-[12px] text-muted-foreground">
-          This account is set to open 24/7, so every day is bookable around the clock. Turn that
-          off to set hours per day.
+          This account is open 24/7, so every day is bookable around the clock. Turn that off to
+          set hours per day.
         </p>
       )}
     </section>
+  );
+}
+
+function BulkWeekdays({
+  initial,
+  onCancel,
+  onApply,
+}: {
+  initial: DayHours;
+  onCancel: () => void;
+  onApply: (hours: { open: string; close: string }) => void;
+}) {
+  const [open, setOpen] = useState(initial.open || '09:00');
+  const [close, setClose] = useState(initial.close || '17:00');
+
+  return (
+    <div className="w-[260px] space-y-3">
+      <div>
+        <p className="text-[13px] font-semibold">Monday to Friday</p>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">
+          Sets all five and opens any that are closed. Saturday and Sunday are left alone.
+        </p>
+      </div>
+
+      <div className="flex items-end gap-2">
+        <div className="min-w-0">
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">Opens</p>
+          <TimePick value={open} onChange={setOpen} aria-label="Weekday opening time" />
+        </div>
+        <span className="pb-2 text-muted-foreground">—</span>
+        <div className="min-w-0">
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">Closes</p>
+          <TimePick value={close} onChange={setClose} aria-label="Weekday closing time" />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={() => onApply({ open, close })}>
+          Apply
+        </Button>
+      </div>
+    </div>
   );
 }

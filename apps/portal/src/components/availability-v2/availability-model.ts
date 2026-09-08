@@ -308,11 +308,25 @@ export function resolveDay(
 export function hourWindow(days: ResolvedDay[]): { startHour: number; endHour: number } {
   const openDays = days.filter((d) => d.open);
   if (openDays.length === 0) return { startHour: 8, endHour: 18 };
-  if (openDays.some((d) => d.allDay)) return { startHour: 0, endHour: 24 };
+
+  /**
+   * All-day days are EXCLUDED from the window.
+   *
+   * They used to force it to 00:00–24:00, so a single 24-hour Tuesday turned
+   * the whole week into a midnight-to-midnight grid: sixteen mostly-empty
+   * hours of scroll, and every other day's block squashed into a sliver. A
+   * 24-hour day is now stated in that day's header instead, which is both
+   * smaller and easier to read than a full-height rectangle.
+   */
+  const timed = openDays.filter((d) => !d.allDay);
+
+  /* Only 24-hour days open? Nothing to derive a window from, so show a normal
+     operating day rather than all 24 hours of it. */
+  if (timed.length === 0) return { startHour: 7, endHour: 22 };
 
   let min = 24 * 60;
   let max = 0;
-  for (const d of openDays) {
+  for (const d of timed) {
     min = Math.min(min, toMinutes(d.from));
     max = Math.max(max, toMinutes(d.to));
   }
