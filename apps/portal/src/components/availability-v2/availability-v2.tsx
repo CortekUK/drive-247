@@ -267,64 +267,21 @@ export function AvailabilityV2() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Save and Reset, at the top right where the brief asks for them.
-              Reset is an icon and secondary to Save; both are inert until
-              something has actually been edited. */}
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Reset unsaved changes"
-            title="Reset unsaved changes"
-            disabled={!touched || save.isPending || !editable}
-            onClick={resetDraft}
-          >
-            <RotateCcw />
-          </Button>
-          <Button
-            size="sm"
-            disabled={!touched || save.isPending || !editable}
-            onClick={handleSave}
-          >
-            {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-            {save.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
-
-          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
-
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Previous week"
-            onClick={() => setWeekStart((w) => addDays(w, -7))}
-          >
-            <ChevronLeft />
-          </Button>
-          <span className="min-w-[176px] text-center text-sm font-medium tabular-nums">
-            {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Next week"
-            onClick={() => setWeekStart((w) => addDays(w, 7))}
-          >
-            <ChevronRight />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={thisWeek}
-            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-          >
-            <CalendarDays />
-            This week
-          </Button>
-        </div>
+        {/* No actions here. Save, Reset and the week navigator moved into the
+            toolbar below, which is where the settings they act on already
+            live — a header carrying six controls made the title compete with
+            them. The unsaved marker stays beside the title because it is a
+            statement about the page, not a control. */}
       </header>
 
-      {/* ── global controls ──────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-3.5">
+      {/* ── the toolbar ──────────────────────────────────────────────────
+          One bar: the settings that shape the week on the left, the actions and
+          the week navigator on the right. They were split between here and the
+          page header, which put "what am I looking at" and "what can I do about
+          it" in two places. `justify-between` on the row, with each side its own
+          flex group, so the two halves stay apart without a fixed gap. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <label htmlFor="availability-always-open" className="flex cursor-pointer items-center gap-2.5">
           <Switch
             id="availability-always-open"
@@ -362,11 +319,65 @@ export function AvailabilityV2() {
           </Select>
         </label>
 
-          {/* The "5 open · 2 closed · 0 exceptions" counts and the
-              "Reset preview" button stood here. Both are gone: the counts
-              restate what the calendar directly below already shows, and Reset
-              is now an icon beside Save in the header, where a person looks for
-              it. One source of truth per fact. */}
+        </div>
+
+        {/* ── actions and week navigation ────────────────────────────────
+            Save is the only filled control on the page, so it reads as the
+            primary action without needing to be large. Reset is icon-only and
+            secondary; both are inert until something has actually been edited,
+            which is also how an operator can tell whether anything is pending
+            without hunting for the marker by the title. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Reset unsaved changes"
+            title="Reset unsaved changes"
+            disabled={!touched || save.isPending || !editable}
+            onClick={resetDraft}
+          >
+            <RotateCcw />
+          </Button>
+          <Button
+            size="sm"
+            disabled={!touched || save.isPending || !editable}
+            onClick={handleSave}
+          >
+            {save.isPending ? <Loader2 className="animate-spin" /> : <Save />}
+            {save.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+
+          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Previous week"
+            onClick={() => setWeekStart((w) => addDays(w, -7))}
+          >
+            <ChevronLeft />
+          </Button>
+          <span className="min-w-[150px] text-center text-[13px] font-medium tabular-nums">
+            {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
+          </span>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Next week"
+            onClick={() => setWeekStart((w) => addDays(w, 7))}
+          >
+            <ChevronRight />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={thisWeek}
+            onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
+          >
+            <CalendarDays />
+            This week
+          </Button>
+        </div>
       </div>
 
       {/* ── the weekly pattern, then the week it governs ─────────────────
