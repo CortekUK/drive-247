@@ -206,7 +206,10 @@ const About = () => {
                 <div className="h-[1px] w-20 sm:w-24 bg-gradient-to-r from-transparent via-accent to-transparent" />
               </div>
               <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                {content.hero?.subtitle || "Setting the standard for premium luxury vehicle rentals across the United States."}
+                {/* No country named: this fallback shows on tenants outside
+                    the US too, and the template has no way to know where they
+                    operate. */}
+                {content.hero?.subtitle || "Setting the standard for premium vehicle rentals."}
               </p>
             </div>
 
@@ -216,7 +219,13 @@ const About = () => {
                 {content.about_story?.title || "Excellence in Every Rental"}
               </h2>
               <div className="space-y-4 sm:space-y-6 text-sm sm:text-base md:text-lg text-muted-foreground leading-relaxed">
-                <p>Founded in {content.about_story?.founded_year || "2010"}</p>
+                {/* Only when the tenant has actually said so. This read
+                    `|| "2010"`, which printed a founding year for every
+                    operator who had never filled the field — a specific,
+                    checkable claim about their business that they never made. */}
+                {content.about_story?.founded_year && (
+                  <p>Founded in {content.about_story.founded_year}</p>
+                )}
                 {content.about_story?.content ? (
                   <div
                     className="prose prose-lg dark:prose-invert max-w-none [&>p]:mb-6 [&>ul]:list-disc [&>ul]:list-inside [&>ul]:pl-4"

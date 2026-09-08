@@ -81,7 +81,9 @@ const Contact = () => {
     availability: content.contact_info?.phone?.availability || siteSettings.availability,
     whatsapp_number: siteSettings.whatsapp_number || content.contact_info?.whatsapp?.number || siteSettings.phone || "",
     whatsapp_description: content.contact_info?.whatsapp?.description || "Quick response for urgent inquiries",
-    email_response_time: content.contact_info?.email?.response_time || "Response within 2 hours during business hours (PST)",
+    /* No timezone: "(PST)" was shown to every tenant regardless of where they
+       trade, which is wrong for most of them and unverifiable for all. */
+    email_response_time: content.contact_info?.email?.response_time || "Response within 2 hours during business hours",
   }), [content, siteSettings]);
 
   // LocalBusiness schema for SEO

@@ -23,10 +23,12 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useBrandingSettings } from '@/hooks/useBrandingSettings';
 import { createCompanyNameReplacer } from '@/utils/tenantName';
 import { FALLBACK_APP_NAME } from '@/lib/tenant-defaults';
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 export default function LegacyHome() {
   const { tenant } = useTenant();
   const { branding } = useBrandingSettings();
+  const { settings } = useSiteSettings();
   const [testimonialStats, setTestimonialStats] = useState({
     avgRating: '5.0',
     count: '0'
@@ -38,6 +40,10 @@ export default function LegacyHome() {
 
   // Use the tenant's app_name for dynamic titles
   const appName = branding.app_name || FALLBACK_APP_NAME;
+
+  /* Site settings first, then the legacy per-page value, then nothing. See the
+     hero button below for why the old hardcoded default had to go. */
+  const heroPhone = settings.phone || content.home_hero?.phone_number || '';
   const replaceCompanyName = createCompanyNameReplacer(appName);
 
   // Hero carousel media - prefer new carousel_media format, fall back to carousel_images, then defaults
@@ -164,12 +170,25 @@ export default function LegacyHome() {
 
                 {/* CTA Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
-                  <a href={`tel:${content.home_hero?.phone_number || '08001234567'}`}>
+                  {/* The number comes from SITE SETTINGS — one place, see
+                      apps/portal .../cms-v2/cms-spec.ts. `home_hero.phone_number`
+                      is a LEGACY fallback: it is no longer editable, and is read
+                      only so tenants who filled it before the consolidation keep
+                      their number until they set it globally. Safe to drop once
+                      those values are migrated into site_settings.
+
+                      The whole button is hidden when there is no number. It used
+                      to dial '08001234567' and read "Call 0800 123 4567" — a UK
+                      number on every tenant's homepage who had not edited the
+                      hero, including US operators. */}
+                  {heroPhone && (
+                  <a href={`tel:${heroPhone}`}>
                     <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base md:text-lg px-8 py-6 rounded-md shadow-glow hover:shadow-glow transition-all">
                       <Phone className="w-5 h-5 mr-2" />
-                      {content.home_hero?.phone_cta_text || 'Call 0800 123 4567'}
+                      {content.home_hero?.phone_cta_text || 'Call us'}
                     </Button>
                   </a>
+                  )}
                   <a href="#booking">
                     <Button size="lg" variant="outline" className="bg-transparent border-2 border-white text-white hover:bg-white/10 hover:border-white font-semibold text-base md:text-lg px-8 py-6 rounded-md transition-all">
                       {content.home_hero?.book_cta_text || 'Book Now'}

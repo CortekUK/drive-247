@@ -10,7 +10,32 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -44,6 +69,30 @@ export type Database = {
           tenant_id?: string | null
           verdict?: string | null
           verification_id?: string
+        }
+        Relationships: []
+      }
+      _bk_inquiry_spelling_20260905: {
+        Row: {
+          captured_at: string | null
+          col: string | null
+          old_value: Json | null
+          row_id: string | null
+          src: string | null
+        }
+        Insert: {
+          captured_at?: string | null
+          col?: string | null
+          old_value?: Json | null
+          row_id?: string | null
+          src?: string | null
+        }
+        Update: {
+          captured_at?: string | null
+          col?: string | null
+          old_value?: Json | null
+          row_id?: string | null
+          src?: string | null
         }
         Relationships: []
       }
@@ -498,6 +547,7 @@ export type Database = {
           notification_emails: string[] | null
           onboarding_digest_emails: string[]
           subscription_gate_disabled: boolean
+          subscription_grace_days: number
           updated_at: string | null
         }
         Insert: {
@@ -511,6 +561,7 @@ export type Database = {
           notification_emails?: string[] | null
           onboarding_digest_emails?: string[]
           subscription_gate_disabled?: boolean
+          subscription_grace_days?: number
           updated_at?: string | null
         }
         Update: {
@@ -524,6 +575,7 @@ export type Database = {
           notification_emails?: string[] | null
           onboarding_digest_emails?: string[]
           subscription_gate_disabled?: boolean
+          subscription_grace_days?: number
           updated_at?: string | null
         }
         Relationships: []
@@ -1804,6 +1856,8 @@ export type Database = {
           source_type: string
           start_date: string
           tenant_id: string | null
+          turo_job_id: string | null
+          turo_reservation_uid: string | null
           vehicle_id: string | null
         }
         Insert: {
@@ -1816,6 +1870,8 @@ export type Database = {
           source_type?: string
           start_date: string
           tenant_id?: string | null
+          turo_job_id?: string | null
+          turo_reservation_uid?: string | null
           vehicle_id?: string | null
         }
         Update: {
@@ -1828,6 +1884,8 @@ export type Database = {
           source_type?: string
           start_date?: string
           tenant_id?: string | null
+          turo_job_id?: string | null
+          turo_reservation_uid?: string | null
           vehicle_id?: string | null
         }
         Relationships: [
@@ -1851,6 +1909,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "blocked_dates_turo_job_fkey"
+            columns: ["turo_job_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_dates_turo_job_fkey"
+            columns: ["turo_job_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_dates_turo_reservation_fkey"
+            columns: ["turo_reservation_uid"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_reservations"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "blocked_dates_vehicle_id_fkey"
@@ -3605,6 +3684,7 @@ export type Database = {
           content: Json
           created_at: string | null
           display_order: number | null
+          draft_content: Json | null
           id: string
           is_visible: boolean | null
           page_id: string | null
@@ -3616,6 +3696,7 @@ export type Database = {
           content?: Json
           created_at?: string | null
           display_order?: number | null
+          draft_content?: Json | null
           id?: string
           is_visible?: boolean | null
           page_id?: string | null
@@ -3627,6 +3708,7 @@ export type Database = {
           content?: Json
           created_at?: string | null
           display_order?: number | null
+          draft_content?: Json | null
           id?: string
           is_visible?: boolean | null
           page_id?: string | null
@@ -4962,6 +5044,8 @@ export type Database = {
           stripe_customer_id_uk: string | null
           tenant_id: string | null
           timezone: string | null
+          turo_guest_ref: string | null
+          turo_promotion_batch_id: string | null
           type: string
           updated_at: string
           whatsapp_opt_in: boolean | null
@@ -5006,6 +5090,8 @@ export type Database = {
           stripe_customer_id_uk?: string | null
           tenant_id?: string | null
           timezone?: string | null
+          turo_guest_ref?: string | null
+          turo_promotion_batch_id?: string | null
           type: string
           updated_at?: string
           whatsapp_opt_in?: boolean | null
@@ -5050,6 +5136,8 @@ export type Database = {
           stripe_customer_id_uk?: string | null
           tenant_id?: string | null
           timezone?: string | null
+          turo_guest_ref?: string | null
+          turo_promotion_batch_id?: string | null
           type?: string
           updated_at?: string
           whatsapp_opt_in?: boolean | null
@@ -5089,6 +5177,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "customers_turo_promotion_batch_fkey"
+            columns: ["turo_promotion_batch_id"]
+            isOneToOne: false
+            referencedRelation: "turo_promotion_batches"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6498,6 +6593,51 @@ export type Database = {
           },
         ]
       }
+      first_run_questions: {
+        Row: {
+          created_at: string
+          help: string | null
+          id: string
+          is_published: boolean
+          is_required: boolean
+          kind: string
+          options: Json
+          placeholder: string | null
+          prompt: string
+          question_key: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          help?: string | null
+          id?: string
+          is_published?: boolean
+          is_required?: boolean
+          kind: string
+          options?: Json
+          placeholder?: string | null
+          prompt: string
+          question_key: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          help?: string | null
+          id?: string
+          is_published?: boolean
+          is_required?: boolean
+          kind?: string
+          options?: Json
+          placeholder?: string | null
+          prompt?: string
+          question_key?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fleet_health_trigger_errors: {
         Row: {
           context_id: string | null
@@ -6696,6 +6836,7 @@ export type Database = {
           id: string
           integration_type: string
           note: string | null
+          notified_at: string | null
           requested_by: string
           reviewed_at: string | null
           reviewed_by: string | null
@@ -6709,6 +6850,7 @@ export type Database = {
           id?: string
           integration_type: string
           note?: string | null
+          notified_at?: string | null
           requested_by: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -6722,6 +6864,7 @@ export type Database = {
           id?: string
           integration_type?: string
           note?: string | null
+          notified_at?: string | null
           requested_by?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -10813,8 +10956,10 @@ export type Database = {
           rejection_reason: string | null
           remaining_amount: number | null
           rental_id: string | null
+          square_idempotency_key: string | null
           square_order_id: string | null
           square_payment_id: string | null
+          square_payment_link_id: string | null
           square_refund_id: string | null
           status: string | null
           stripe_checkout_session_id: string | null
@@ -10855,8 +11000,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -10897,8 +11044,10 @@ export type Database = {
           rejection_reason?: string | null
           remaining_amount?: number | null
           rental_id?: string | null
+          square_idempotency_key?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
+          square_payment_link_id?: string | null
           square_refund_id?: string | null
           status?: string | null
           stripe_checkout_session_id?: string | null
@@ -11319,6 +11468,42 @@ export type Database = {
             referencedColumns: ["app_user_id"]
           },
         ]
+      }
+      platform_legal_documents: {
+        Row: {
+          body_md: string
+          created_at: string
+          effective_date: string | null
+          id: string
+          is_published: boolean
+          slug: string
+          title: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          body_md?: string
+          created_at?: string
+          effective_date?: string | null
+          id?: string
+          is_published?: boolean
+          slug: string
+          title: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          effective_date?: string | null
+          id?: string
+          is_published?: boolean
+          slug?: string
+          title?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
       }
       pnl_entries: {
         Row: {
@@ -14252,6 +14437,11 @@ export type Database = {
           start_date: string
           status: string | null
           tenant_id: string | null
+          turo_promoted_at: string | null
+          turo_promotion_batch_id: string | null
+          turo_reservation_id: string | null
+          turo_total_amount: number | null
+          turo_vehicle_match: string | null
           unlimited_mileage_tier: string | null
           unlimited_mileage_total: number | null
           updated_at: string
@@ -14398,6 +14588,11 @@ export type Database = {
           start_date: string
           status?: string | null
           tenant_id?: string | null
+          turo_promoted_at?: string | null
+          turo_promotion_batch_id?: string | null
+          turo_reservation_id?: string | null
+          turo_total_amount?: number | null
+          turo_vehicle_match?: string | null
           unlimited_mileage_tier?: string | null
           unlimited_mileage_total?: number | null
           updated_at?: string
@@ -14544,6 +14739,11 @@ export type Database = {
           start_date?: string
           status?: string | null
           tenant_id?: string | null
+          turo_promoted_at?: string | null
+          turo_promotion_batch_id?: string | null
+          turo_reservation_id?: string | null
+          turo_total_amount?: number | null
+          turo_vehicle_match?: string | null
           unlimited_mileage_tier?: string | null
           unlimited_mileage_total?: number | null
           updated_at?: string
@@ -14698,6 +14898,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "rentals_turo_promotion_batch_fkey"
+            columns: ["turo_promotion_batch_id"]
+            isOneToOne: false
+            referencedRelation: "turo_promotion_batches"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "rentals_vehicle_id_fkey"
@@ -15282,6 +15489,76 @@ export type Database = {
           },
           {
             foreignKeyName: "settings_audit_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      signup_attempts: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          email: string | null
+          error_code: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json
+          outcome: string
+          plan_id: string | null
+          scope: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          email?: string | null
+          error_code?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          outcome: string
+          plan_id?: string | null
+          scope: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          email?: string | null
+          error_code?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          outcome?: string
+          plan_id?: string | null
+          scope?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_attempts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signup_attempts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "signup_attempts_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -16353,6 +16630,73 @@ export type Database = {
           },
         ]
       }
+      tenant_api_keys: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          last_used_at: string | null
+          rate_window_count: number
+          rate_window_start: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          scope: string
+          tenant_id: string
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          rate_window_count?: number
+          rate_window_start?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope?: string
+          tenant_id: string
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          rate_window_count?: number
+          rate_window_start?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope?: string
+          tenant_id?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_api_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_api_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_api_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
       tenant_credit_wallets: {
         Row: {
           auto_refill_amount: number
@@ -16638,6 +16982,78 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tenant_first_run: {
+        Row: {
+          answers: Json
+          completed_at: string
+          completed_by: string | null
+          created_at: string
+          id: string
+          question_set_version: number
+          tenant_id: string
+          updated_at: string
+          was_skipped: boolean
+        }
+        Insert: {
+          answers?: Json
+          completed_at?: string
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          question_set_version?: number
+          tenant_id: string
+          updated_at?: string
+          was_skipped?: boolean
+        }
+        Update: {
+          answers?: Json
+          completed_at?: string
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          question_set_version?: number
+          tenant_id?: string
+          updated_at?: string
+          was_skipped?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_first_run_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_first_run_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "tenant_first_run_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_first_run_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_first_run_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
       }
       tenant_health_incidents: {
         Row: {
@@ -17018,9 +17434,12 @@ export type Database = {
           period_start: string | null
           refunded_at: string | null
           status: string
+          stripe_charge_id: string | null
           stripe_hosted_invoice_url: string | null
           stripe_invoice_id: string
           stripe_invoice_pdf: string | null
+          stripe_payment_intent_id: string | null
+          stripe_receipt_url: string | null
           subscription_id: string | null
           tenant_id: string
           updated_at: string
@@ -17048,9 +17467,12 @@ export type Database = {
           period_start?: string | null
           refunded_at?: string | null
           status?: string
+          stripe_charge_id?: string | null
           stripe_hosted_invoice_url?: string | null
           stripe_invoice_id: string
           stripe_invoice_pdf?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_receipt_url?: string | null
           subscription_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -17078,9 +17500,12 @@ export type Database = {
           period_start?: string | null
           refunded_at?: string | null
           status?: string
+          stripe_charge_id?: string | null
           stripe_hosted_invoice_url?: string | null
           stripe_invoice_id?: string
           stripe_invoice_pdf?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_receipt_url?: string | null
           subscription_id?: string | null
           tenant_id?: string
           updated_at?: string
@@ -17285,6 +17710,9 @@ export type Database = {
           currency_code: string | null
           custom_booking_domain: string | null
           custom_portal_domain: string | null
+          custom_site_accent_color: string | null
+          custom_site_eligible: boolean
+          custom_site_theme: Json | null
           customer_theme_mode: string
           dark_accent_color: string | null
           dark_background_color: string | null
@@ -17399,6 +17827,7 @@ export type Database = {
           payment_mode: string | null
           payment_model: string
           payment_provider: string
+          payment_provider_locked_at: string | null
           phone: string | null
           pickup_area_enabled: boolean | null
           pickup_area_radius_km: number | null
@@ -17472,6 +17901,7 @@ export type Database = {
           tuesday_close: string | null
           tuesday_enabled: boolean | null
           tuesday_open: string | null
+          turo_bridge_enabled: boolean
           twilio_account_sid: string | null
           twilio_api_key_secret: string | null
           twilio_api_key_sid: string | null
@@ -17552,6 +17982,9 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          custom_site_accent_color?: string | null
+          custom_site_eligible?: boolean
+          custom_site_theme?: Json | null
           customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
@@ -17666,6 +18099,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -17739,6 +18173,7 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          turo_bridge_enabled?: boolean
           twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
@@ -17819,6 +18254,9 @@ export type Database = {
           currency_code?: string | null
           custom_booking_domain?: string | null
           custom_portal_domain?: string | null
+          custom_site_accent_color?: string | null
+          custom_site_eligible?: boolean
+          custom_site_theme?: Json | null
           customer_theme_mode?: string
           dark_accent_color?: string | null
           dark_background_color?: string | null
@@ -17933,6 +18371,7 @@ export type Database = {
           payment_mode?: string | null
           payment_model?: string
           payment_provider?: string
+          payment_provider_locked_at?: string | null
           phone?: string | null
           pickup_area_enabled?: boolean | null
           pickup_area_radius_km?: number | null
@@ -18006,6 +18445,7 @@ export type Database = {
           tuesday_close?: string | null
           tuesday_enabled?: boolean | null
           tuesday_open?: string | null
+          turo_bridge_enabled?: boolean
           twilio_account_sid?: string | null
           twilio_api_key_secret?: string | null
           twilio_api_key_sid?: string | null
@@ -18254,6 +18694,1186 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
             referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_bridge_conflicts: {
+        Row: {
+          created_at: string
+          detail: Json
+          id: string
+          job_id: string | null
+          kind: string
+          overlap_end: string | null
+          overlap_start: string | null
+          rental_id: string | null
+          reservation_row_id: string
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          id?: string
+          job_id?: string | null
+          kind: string
+          overlap_end?: string | null
+          overlap_start?: string | null
+          rental_id?: string | null
+          reservation_row_id: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          id?: string
+          job_id?: string | null
+          kind?: string
+          overlap_end?: string | null
+          overlap_start?: string | null
+          rental_id?: string | null
+          reservation_row_id?: string
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_bridge_conflicts_job_tenant_fkey"
+            columns: ["job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_job_tenant_fkey"
+            columns: ["job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_rental_id_fkey"
+            columns: ["rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_reservation_tenant_fkey"
+            columns: ["reservation_row_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_reservations"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_pnl_rollup"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_fines_export"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_conflicts_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id"]
+          },
+        ]
+      }
+      turo_bridge_customers: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          display_name: string | null
+          display_name_norm: string | null
+          email: string | null
+          field_confidence: Json
+          first_seen_job_id: string | null
+          id: string
+          last_seen_at: string | null
+          last_seen_job_id: string | null
+          match_basis: string | null
+          match_key: string | null
+          match_state: string
+          matched_customer_id: string | null
+          phone: string | null
+          raw: Json
+          tenant_id: string
+          turo_guest_id: string | null
+          unmapped: Json
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          display_name_norm?: string | null
+          email?: string | null
+          field_confidence?: Json
+          first_seen_job_id?: string | null
+          id?: string
+          last_seen_at?: string | null
+          last_seen_job_id?: string | null
+          match_basis?: string | null
+          match_key?: string | null
+          match_state?: string
+          matched_customer_id?: string | null
+          phone?: string | null
+          raw?: Json
+          tenant_id: string
+          turo_guest_id?: string | null
+          unmapped?: Json
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          display_name?: string | null
+          display_name_norm?: string | null
+          email?: string | null
+          field_confidence?: Json
+          first_seen_job_id?: string | null
+          id?: string
+          last_seen_at?: string | null
+          last_seen_job_id?: string | null
+          match_basis?: string | null
+          match_key?: string | null
+          match_state?: string
+          matched_customer_id?: string | null
+          phone?: string | null
+          raw?: Json
+          tenant_id?: string
+          turo_guest_id?: string | null
+          unmapped?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_bridge_customers_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_customer_tenant_fkey"
+            columns: ["matched_customer_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_customer_tenant_fkey"
+            columns: ["matched_customer_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "view_aging_receivables"
+            referencedColumns: ["customer_id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_first_job_tenant_fkey"
+            columns: ["first_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_first_job_tenant_fkey"
+            columns: ["first_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_job_tenant_fkey"
+            columns: ["last_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_job_tenant_fkey"
+            columns: ["last_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_bridge_reservations: {
+        Row: {
+          block_id: string | null
+          blocked_date_id: string | null
+          created_at: string
+          currency: string | null
+          ends_at: string | null
+          field_confidence: Json
+          first_seen_job_id: string | null
+          first_seen_run_id: string | null
+          guest_name: string | null
+          hold_override_until: string | null
+          hold_until: string | null
+          id: string
+          ignore_reason: string | null
+          ignored_at: string | null
+          ignored_by: string | null
+          last_seen_at: string | null
+          last_seen_job_id: string | null
+          last_seen_run_id: string | null
+          match_basis: string | null
+          matched_vehicle_id: string | null
+          missing_evidence_job_id: string | null
+          missing_review_raised_at: string | null
+          missing_run_count: number | null
+          missing_since: string | null
+          missing_streak: number
+          parser_version: string | null
+          presence_changed_at: string
+          presence_reason: string | null
+          presence_state: string
+          previous_vehicle_map_id: string | null
+          promoted_at: string | null
+          promoted_by: string | null
+          promoted_rental_id: string | null
+          promotion_batch_id: string | null
+          raw: Json
+          release_evidence: Json | null
+          reservation_id: string
+          seen_count: number
+          source: string
+          starts_at: string | null
+          state_changed_at: string
+          state_reason: string | null
+          status: string
+          superseded_at: string | null
+          superseded_by_reservation_id: string | null
+          sync_state: string
+          synced_at: string
+          tenant_id: string
+          total_amount: number | null
+          turo_account_fingerprint: string | null
+          turo_bridge_customer_id: string | null
+          turo_guest_id: string | null
+          turo_status: string | null
+          turo_trip_status: string | null
+          turo_vehicle_id: string | null
+          unknown_fields: Json | null
+          unmapped: Json
+          updated_at: string
+          vehicle_changed_at: string | null
+          vehicle_label: string | null
+          vehicle_map_id: string | null
+          vehicle_match_confidence: number | null
+          vehicle_match_method: string | null
+          vehicle_plate: string | null
+        }
+        Insert: {
+          block_id?: string | null
+          blocked_date_id?: string | null
+          created_at?: string
+          currency?: string | null
+          ends_at?: string | null
+          field_confidence?: Json
+          first_seen_job_id?: string | null
+          first_seen_run_id?: string | null
+          guest_name?: string | null
+          hold_override_until?: string | null
+          hold_until?: string | null
+          id?: string
+          ignore_reason?: string | null
+          ignored_at?: string | null
+          ignored_by?: string | null
+          last_seen_at?: string | null
+          last_seen_job_id?: string | null
+          last_seen_run_id?: string | null
+          match_basis?: string | null
+          matched_vehicle_id?: string | null
+          missing_evidence_job_id?: string | null
+          missing_review_raised_at?: string | null
+          missing_run_count?: number | null
+          missing_since?: string | null
+          missing_streak?: number
+          parser_version?: string | null
+          presence_changed_at?: string
+          presence_reason?: string | null
+          presence_state?: string
+          previous_vehicle_map_id?: string | null
+          promoted_at?: string | null
+          promoted_by?: string | null
+          promoted_rental_id?: string | null
+          promotion_batch_id?: string | null
+          raw?: Json
+          release_evidence?: Json | null
+          reservation_id: string
+          seen_count?: number
+          source?: string
+          starts_at?: string | null
+          state_changed_at?: string
+          state_reason?: string | null
+          status?: string
+          superseded_at?: string | null
+          superseded_by_reservation_id?: string | null
+          sync_state?: string
+          synced_at?: string
+          tenant_id: string
+          total_amount?: number | null
+          turo_account_fingerprint?: string | null
+          turo_bridge_customer_id?: string | null
+          turo_guest_id?: string | null
+          turo_status?: string | null
+          turo_trip_status?: string | null
+          turo_vehicle_id?: string | null
+          unknown_fields?: Json | null
+          unmapped?: Json
+          updated_at?: string
+          vehicle_changed_at?: string | null
+          vehicle_label?: string | null
+          vehicle_map_id?: string | null
+          vehicle_match_confidence?: number | null
+          vehicle_match_method?: string | null
+          vehicle_plate?: string | null
+        }
+        Update: {
+          block_id?: string | null
+          blocked_date_id?: string | null
+          created_at?: string
+          currency?: string | null
+          ends_at?: string | null
+          field_confidence?: Json
+          first_seen_job_id?: string | null
+          first_seen_run_id?: string | null
+          guest_name?: string | null
+          hold_override_until?: string | null
+          hold_until?: string | null
+          id?: string
+          ignore_reason?: string | null
+          ignored_at?: string | null
+          ignored_by?: string | null
+          last_seen_at?: string | null
+          last_seen_job_id?: string | null
+          last_seen_run_id?: string | null
+          match_basis?: string | null
+          matched_vehicle_id?: string | null
+          missing_evidence_job_id?: string | null
+          missing_review_raised_at?: string | null
+          missing_run_count?: number | null
+          missing_since?: string | null
+          missing_streak?: number
+          parser_version?: string | null
+          presence_changed_at?: string
+          presence_reason?: string | null
+          presence_state?: string
+          previous_vehicle_map_id?: string | null
+          promoted_at?: string | null
+          promoted_by?: string | null
+          promoted_rental_id?: string | null
+          promotion_batch_id?: string | null
+          raw?: Json
+          release_evidence?: Json | null
+          reservation_id?: string
+          seen_count?: number
+          source?: string
+          starts_at?: string | null
+          state_changed_at?: string
+          state_reason?: string | null
+          status?: string
+          superseded_at?: string | null
+          superseded_by_reservation_id?: string | null
+          sync_state?: string
+          synced_at?: string
+          tenant_id?: string
+          total_amount?: number | null
+          turo_account_fingerprint?: string | null
+          turo_bridge_customer_id?: string | null
+          turo_guest_id?: string | null
+          turo_status?: string | null
+          turo_trip_status?: string | null
+          turo_vehicle_id?: string | null
+          unknown_fields?: Json | null
+          unmapped?: Json
+          updated_at?: string
+          vehicle_changed_at?: string | null
+          vehicle_label?: string | null
+          vehicle_map_id?: string | null
+          vehicle_match_confidence?: number | null
+          vehicle_match_method?: string | null
+          vehicle_plate?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_bridge_reservations_blocked_date_fkey"
+            columns: ["blocked_date_id"]
+            isOneToOne: false
+            referencedRelation: "blocked_dates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_first_job_tenant_fkey"
+            columns: ["first_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_first_job_tenant_fkey"
+            columns: ["first_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_guest_tenant_fkey"
+            columns: ["turo_bridge_customer_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_customers"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_ignored_by_fkey"
+            columns: ["ignored_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_ignored_by_fkey"
+            columns: ["ignored_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_last_job_tenant_fkey"
+            columns: ["last_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_last_job_tenant_fkey"
+            columns: ["last_seen_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_matched_vehicle_tenant_fkey"
+            columns: ["matched_vehicle_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_matched_vehicle_tenant_fkey"
+            columns: ["matched_vehicle_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_matched_vehicle_tenant_fkey"
+            columns: ["matched_vehicle_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_missing_job_tenant_fkey"
+            columns: ["missing_evidence_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_missing_job_tenant_fkey"
+            columns: ["missing_evidence_job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_promoted_by_fkey"
+            columns: ["promoted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_promoted_by_fkey"
+            columns: ["promoted_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_promoted_rental_fkey"
+            columns: ["promoted_rental_id"]
+            isOneToOne: false
+            referencedRelation: "rentals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_promoted_rental_fkey"
+            columns: ["promoted_rental_id"]
+            isOneToOne: false
+            referencedRelation: "v_rental_credit"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_promoted_rental_fkey"
+            columns: ["promoted_rental_id"]
+            isOneToOne: false
+            referencedRelation: "view_rentals_export"
+            referencedColumns: ["rental_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_promotion_batch_fkey"
+            columns: ["promotion_batch_id"]
+            isOneToOne: false
+            referencedRelation: "turo_promotion_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_reservations_vehicle_map_tenant_fkey"
+            columns: ["vehicle_map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_vehicle_map"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
+      turo_bridge_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          last_used_at: string | null
+          revoked_at: string | null
+          tenant_id: string
+          token: string
+          turo_account_fingerprint: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+          tenant_id: string
+          token: string
+          turo_account_fingerprint?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          revoked_at?: string | null
+          tenant_id?: string
+          token?: string
+          turo_account_fingerprint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_bridge_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_bridge_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_promotion_batches: {
+        Row: {
+          acknowledgements: Json
+          actor_app_user_id: string | null
+          counts: Json
+          created_at: string
+          id: string
+          plan_hash: string
+          revert_report: Json | null
+          reverted_at: string | null
+          reverted_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          acknowledgements?: Json
+          actor_app_user_id?: string | null
+          counts?: Json
+          created_at?: string
+          id?: string
+          plan_hash: string
+          revert_report?: Json | null
+          reverted_at?: string | null
+          reverted_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          acknowledgements?: Json
+          actor_app_user_id?: string | null
+          counts?: Json
+          created_at?: string
+          id?: string
+          plan_hash?: string
+          revert_report?: Json | null
+          reverted_at?: string | null
+          reverted_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_promotion_batches_actor_app_user_id_fkey"
+            columns: ["actor_app_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_promotion_batches_actor_app_user_id_fkey"
+            columns: ["actor_app_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_promotion_batches_reverted_by_fkey"
+            columns: ["reverted_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_promotion_batches_reverted_by_fkey"
+            columns: ["reverted_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_promotion_batches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_promotion_batches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_promotion_batches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_sync_job_pages: {
+        Row: {
+          byte_count: number | null
+          cursor_in: string | null
+          cursor_out: string | null
+          degraded_reason: string | null
+          http_status: number | null
+          id: string
+          job_id: string
+          observed_keys: Json
+          record_count: number | null
+          requested_at: string
+          seq: number
+          tenant_id: string
+          url_path: string | null
+        }
+        Insert: {
+          byte_count?: number | null
+          cursor_in?: string | null
+          cursor_out?: string | null
+          degraded_reason?: string | null
+          http_status?: number | null
+          id?: string
+          job_id: string
+          observed_keys?: Json
+          record_count?: number | null
+          requested_at?: string
+          seq: number
+          tenant_id: string
+          url_path?: string | null
+        }
+        Update: {
+          byte_count?: number | null
+          cursor_in?: string | null
+          cursor_out?: string | null
+          degraded_reason?: string | null
+          http_status?: number | null
+          id?: string
+          job_id?: string
+          observed_keys?: Json
+          record_count?: number | null
+          requested_at?: string
+          seq?: number
+          tenant_id?: string
+          url_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_sync_job_pages_job_tenant_fkey"
+            columns: ["job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_runs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_job_pages_job_tenant_fkey"
+            columns: ["job_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "turo_sync_jobs"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_job_pages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_sync_job_pages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_job_pages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      turo_sync_jobs: {
+        Row: {
+          completeness: string | null
+          created_at: string
+          degraded: boolean | null
+          degraded_reason: string | null
+          feed_reported_total: number | null
+          finished_at: string | null
+          heartbeat_at: string
+          http_error_count: number
+          id: string
+          is_authoritative: boolean | null
+          job_kind: string
+          notes: string | null
+          observed_complete: boolean | null
+          observed_from: string | null
+          observed_to: string | null
+          observed_turo_vehicle_ids: string[]
+          pages_fetched: number
+          parse_failure_count: number
+          parsed_count: number
+          progress_denominator: number | null
+          raw_item_count: number | null
+          reader_outcome: string | null
+          records_ingested: number
+          records_seen: number
+          requested_window_end: string | null
+          requested_window_start: string | null
+          saw_end_of_feed: boolean
+          source: string
+          started_at: string
+          state: string
+          tenant_id: string
+          token_id: string | null
+          turo_account_fingerprint: string | null
+          turo_account_ref: string | null
+          updated_at: string
+          window_end: string | null
+          window_start: string | null
+        }
+        Insert: {
+          completeness?: string | null
+          created_at?: string
+          degraded?: boolean | null
+          degraded_reason?: string | null
+          feed_reported_total?: number | null
+          finished_at?: string | null
+          heartbeat_at?: string
+          http_error_count?: number
+          id?: string
+          is_authoritative?: boolean | null
+          job_kind: string
+          notes?: string | null
+          observed_complete?: boolean | null
+          observed_from?: string | null
+          observed_to?: string | null
+          observed_turo_vehicle_ids?: string[]
+          pages_fetched?: number
+          parse_failure_count?: number
+          parsed_count?: number
+          progress_denominator?: number | null
+          raw_item_count?: number | null
+          reader_outcome?: string | null
+          records_ingested?: number
+          records_seen?: number
+          requested_window_end?: string | null
+          requested_window_start?: string | null
+          saw_end_of_feed?: boolean
+          source?: string
+          started_at?: string
+          state?: string
+          tenant_id: string
+          token_id?: string | null
+          turo_account_fingerprint?: string | null
+          turo_account_ref?: string | null
+          updated_at?: string
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Update: {
+          completeness?: string | null
+          created_at?: string
+          degraded?: boolean | null
+          degraded_reason?: string | null
+          feed_reported_total?: number | null
+          finished_at?: string | null
+          heartbeat_at?: string
+          http_error_count?: number
+          id?: string
+          is_authoritative?: boolean | null
+          job_kind?: string
+          notes?: string | null
+          observed_complete?: boolean | null
+          observed_from?: string | null
+          observed_to?: string | null
+          observed_turo_vehicle_ids?: string[]
+          pages_fetched?: number
+          parse_failure_count?: number
+          parsed_count?: number
+          progress_denominator?: number | null
+          raw_item_count?: number | null
+          reader_outcome?: string | null
+          records_ingested?: number
+          records_seen?: number
+          requested_window_end?: string | null
+          requested_window_start?: string | null
+          saw_end_of_feed?: boolean
+          source?: string
+          started_at?: string
+          state?: string
+          tenant_id?: string
+          token_id?: string | null
+          turo_account_fingerprint?: string | null
+          turo_account_ref?: string | null
+          updated_at?: string
+          window_end?: string | null
+          window_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_sync_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_sync_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_jobs_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      turo_vehicle_map: {
+        Row: {
+          alias_labels: string[]
+          confirmation_note: string | null
+          confirmed_at: string
+          confirmed_by: string
+          created_at: string
+          display_label: string | null
+          display_label_norm: string | null
+          first_seen_job_id: string | null
+          id: string
+          is_active: boolean
+          match_key: string | null
+          plate_hint: string | null
+          retired_at: string | null
+          tenant_id: string
+          turo_vehicle_id: string | null
+          updated_at: string
+          vehicle_id: string
+          vin_hint: string | null
+        }
+        Insert: {
+          alias_labels?: string[]
+          confirmation_note?: string | null
+          confirmed_at?: string
+          confirmed_by: string
+          created_at?: string
+          display_label?: string | null
+          display_label_norm?: string | null
+          first_seen_job_id?: string | null
+          id?: string
+          is_active?: boolean
+          match_key?: string | null
+          plate_hint?: string | null
+          retired_at?: string | null
+          tenant_id: string
+          turo_vehicle_id?: string | null
+          updated_at?: string
+          vehicle_id: string
+          vin_hint?: string | null
+        }
+        Update: {
+          alias_labels?: string[]
+          confirmation_note?: string | null
+          confirmed_at?: string
+          confirmed_by?: string
+          created_at?: string
+          display_label?: string | null
+          display_label_norm?: string | null
+          first_seen_job_id?: string | null
+          id?: string
+          is_active?: boolean
+          match_key?: string | null
+          plate_hint?: string | null
+          retired_at?: string | null
+          tenant_id?: string
+          turo_vehicle_id?: string | null
+          updated_at?: string
+          vehicle_id?: string
+          vin_hint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_vehicle_map_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_vehicle_tenant_fkey"
+            columns: ["vehicle_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_vehicle_tenant_fkey"
+            columns: ["vehicle_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "view_owner_revenue"
+            referencedColumns: ["vehicle_id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_vehicle_map_vehicle_tenant_fkey"
+            columns: ["vehicle_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "view_pl_by_vehicle"
+            referencedColumns: ["vehicle_id", "tenant_id"]
           },
         ]
       }
@@ -19662,6 +21282,7 @@ export type Database = {
           sale_proceeds: number | null
           security_deposit: number | null
           security_notes: string | null
+          show_on_website: boolean
           spare_key_holder: string | null
           spare_key_notes: string | null
           status: string | null
@@ -19738,6 +21359,7 @@ export type Database = {
           sale_proceeds?: number | null
           security_deposit?: number | null
           security_notes?: string | null
+          show_on_website?: boolean
           spare_key_holder?: string | null
           spare_key_notes?: string | null
           status?: string | null
@@ -19814,6 +21436,7 @@ export type Database = {
           sale_proceeds?: number | null
           security_deposit?: number | null
           security_notes?: string | null
+          show_on_website?: boolean
           spare_key_holder?: string | null
           spare_key_notes?: string | null
           status?: string | null
@@ -20761,6 +22384,125 @@ export type Database = {
           },
         ]
       }
+      turo_bridge_runs: {
+        Row: {
+          completeness: string | null
+          created_at: string | null
+          degraded: boolean | null
+          degraded_reason: string | null
+          feed_reported_total: number | null
+          finished_at: string | null
+          id: string | null
+          is_authoritative: boolean | null
+          job_kind: string | null
+          observed_complete: boolean | null
+          observed_from: string | null
+          observed_to: string | null
+          observed_turo_vehicle_ids: string[] | null
+          page_count: number | null
+          pagination_exhausted: boolean | null
+          parsed_count: number | null
+          progress_denominator: number | null
+          raw_item_count: number | null
+          reader_outcome: string | null
+          records_ingested: number | null
+          records_seen: number | null
+          source: string | null
+          started_at: string | null
+          state: string | null
+          tenant_id: string | null
+          token_id: string | null
+          turo_account_ref: string | null
+        }
+        Insert: {
+          completeness?: string | null
+          created_at?: string | null
+          degraded?: boolean | null
+          degraded_reason?: string | null
+          feed_reported_total?: number | null
+          finished_at?: string | null
+          id?: string | null
+          is_authoritative?: boolean | null
+          job_kind?: string | null
+          observed_complete?: boolean | null
+          observed_from?: string | null
+          observed_to?: string | null
+          observed_turo_vehicle_ids?: string[] | null
+          page_count?: number | null
+          pagination_exhausted?: boolean | null
+          parsed_count?: number | null
+          progress_denominator?: number | null
+          raw_item_count?: number | null
+          reader_outcome?: string | null
+          records_ingested?: number | null
+          records_seen?: number | null
+          source?: string | null
+          started_at?: string | null
+          state?: string | null
+          tenant_id?: string | null
+          token_id?: string | null
+          turo_account_ref?: string | null
+        }
+        Update: {
+          completeness?: string | null
+          created_at?: string | null
+          degraded?: boolean | null
+          degraded_reason?: string | null
+          feed_reported_total?: number | null
+          finished_at?: string | null
+          id?: string | null
+          is_authoritative?: boolean | null
+          job_kind?: string | null
+          observed_complete?: boolean | null
+          observed_from?: string | null
+          observed_to?: string | null
+          observed_turo_vehicle_ids?: string[] | null
+          page_count?: number | null
+          pagination_exhausted?: boolean | null
+          parsed_count?: number | null
+          progress_denominator?: number | null
+          raw_item_count?: number | null
+          reader_outcome?: string | null
+          records_ingested?: number | null
+          records_seen?: number | null
+          source?: string | null
+          started_at?: string | null
+          state?: string | null
+          tenant_id?: string | null
+          token_id?: string | null
+          turo_account_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "turo_sync_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "turo_sync_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "turo_sync_jobs_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "turo_bridge_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_customer_credit: {
         Row: {
           credit_available: number | null
@@ -21013,7 +22755,10 @@ export type Database = {
           company_name: string | null
           issue_count: number | null
           overall_ready: boolean | null
+          payment_provider: string | null
+          payments_ready: boolean | null
           slug: string | null
+          square_ready: boolean | null
           status: string | null
           stripe_account_status: string | null
           stripe_mode: string | null
@@ -22561,6 +24306,10 @@ export type Database = {
         Returns: Json
       }
       sync_vehicle_maintenance_status: { Args: never; Returns: number }
+      tenant_api_key_rate_limited: {
+        Args: { p_key_id: string; p_limit: number; p_window_seconds?: number }
+        Returns: boolean
+      }
       tesla_clear_tokens: { Args: { p_tenant_id: string }; Returns: undefined }
       tesla_get_tokens: {
         Args: { p_tenant_id: string }
@@ -22598,6 +24347,16 @@ export type Database = {
           p_ttl_seconds?: number
           p_worker_id: string
         }
+        Returns: boolean
+      }
+      turo_norm_label: { Args: { p_label: string }; Returns: string }
+      turo_promotion_guards: { Args: never; Returns: Json }
+      turo_reap_stale_sync_jobs: {
+        Args: { p_stale_after?: string }
+        Returns: number
+      }
+      turo_release_block: {
+        Args: { p_block_id: string; p_job_id: string }
         Returns: boolean
       }
       unblock_customer: { Args: { p_customer_id: string }; Returns: Json }
@@ -22756,12 +24515,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22785,11 +24544,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22810,11 +24569,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22835,11 +24594,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22852,11 +24611,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -22866,6 +24625,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],
