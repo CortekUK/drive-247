@@ -58,7 +58,7 @@ import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { WeekCalendar } from './week-calendar';
-import { WeeklyDefaultStrip } from './weekly-default-strip';
+import { WeeklyHoursCard } from './weekly-hours-card';
 import { useAvailabilitySource } from './use-availability-source';
 import { useAvailabilitySave } from './use-availability-save';
 import {
@@ -132,14 +132,6 @@ export function AvailabilityV2() {
     });
   };
 
-  /** How many dates ON SCREEN override each weekday. Shown in the strip. */
-  const overriddenByDay = useMemo(() => {
-    const counts: Partial<Record<DayKey, number>> = {};
-    for (const d of days) {
-      if (d.overridden) counts[d.dayKey] = (counts[d.dayKey] || 0) + 1;
-    }
-    return counts;
-  }, [days]);
 
   const exceptionCount = Object.keys(exceptions).length;
   const patternTouched =
@@ -392,12 +384,13 @@ export function AvailabilityV2() {
         <CalendarSkeleton />
       ) : (
         <div className="overflow-hidden rounded-3xl border border-border bg-card">
-          <WeeklyDefaultStrip
-            defaults={defaults}
-            onChange={setDraft}
-            canEdit={editable}
-            overriddenByDay={overriddenByDay}
-          />
+          {/* Seven rows, not seven columns. The strip that stood here was
+              column-aligned with the calendar so "the rule" and "the days it
+              governs" shared a vertical line — a nice idea that cost 21
+              controls (a switch and two stacked dropdowns per day) for
+              something an operator reads as one sentence. The card lists the
+              week instead, and the calendar below still shows the result. */}
+          <WeeklyHoursCard defaults={defaults} onChange={setDraft} canEdit={editable} />
           <WeekCalendar
             days={days}
             defaults={defaults}
