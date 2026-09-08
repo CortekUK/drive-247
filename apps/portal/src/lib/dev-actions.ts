@@ -165,7 +165,33 @@ export function clearChecklistState(
 
 // ── The first-run wizard's row ─────────────────────────────────────────────
 
-type QueryResult<T> = PromiseLike<{ data: T; error: { message: string } | null }>;
+type QueryResult<T> = PromiseLike<{
+  data: T;
+  error: { message: string; code?: string } | null;
+}>;
+
+/**
+ * Is this error "the table is not in this database", rather than "the database
+ * refused you"?
+ *
+ * The distinction decides whether the reset is a failure or a no-op, so it is
+ * worth being exact about. `tenant_first_run` was added by
+ * `supabase/migrations/20260904120000_add_tenant_first_run.sql`, which has only
+ * ever been applied to STAGING. Against production the delete comes back as an
+ * error, and every caller then treated the whole reset as refused — which is
+ * why "First-time operator" and "Full signup journey" both did nothing at all
+ * on a local pointed at prod, while "Quick tour" (pure localStorage) worked.
+ *
+ * Codes rather than message text where possible: `42P01` is Postgres's
+ * `undefined_table`, `PGRST205` is PostgREST failing to find it in the schema
+ * cache. The message match is a fallback for older PostgREST builds that
+ * returned neither.
+ */
+function isMissingTable(error: { message: string; code?: string }): boolean {
+  if (error.code === '42P01' || error.code === 'PGRST205') return true;
+  const m = error.message.toLowerCase();
+  return m.includes('could not find the table') || m.includes('does not exist');
+}
 
 /**
  * The slice of the Supabase client this module needs — structurally typed so a
@@ -185,8 +211,12 @@ export interface FirstRunClient {
 }
 
 export type FirstRunResetResult =
-  /** The row is gone — either just deleted, or there was none to delete. */
-  | { ok: true; deleted: number }
+  /**
+   * The row is gone — just deleted, none to delete, or no such table in this
+   * database. `absent` distinguishes the last case so the caller can say so
+   * rather than claiming it cleared something.
+   */
+  | { ok: true; deleted: number; absent?: boolean }
   /**
    * `blocked`: the row is still there after the delete. Row-level security
    * let this session READ it but not REMOVE it, and PostgREST reports that as
@@ -217,7 +247,21 @@ export async function resetFirstRunRow(
     .eq('tenant_id', tenantId)
     .select('id');
 
-  if (deleted.error) return { ok: false, reason: 'error', message: deleted.error.message };
+  if (deleted.error) {
+    // No such table in THIS database. There is no row anywhere, so there is
+    // nothing to clear and nothing has gone wrong — the wizard will re-arm on
+    // local state alone. Refusing here is what made both onboarding actions
+    // inert against production while reporting a database error the operator
+    // could do nothing about.
+    //
+    // Deliberately NOT merged with the `blocked` case below. A missing table
+    // means the flag cannot exist; RLS refusing a delete means the flag exists
+    // and is staying put. Treating those alike would let a genuine refusal pass
+    // as a successful reset, and the wizard would stay dark with the page
+    // insisting it had been reset.
+    if (isMissingTable(deleted.error)) return { ok: true, deleted: 0, absent: true };
+    return { ok: false, reason: 'error', message: deleted.error.message };
+  }
 
   const count = Array.isArray(deleted.data) ? deleted.data.length : 0;
   if (count > 0) return { ok: true, deleted: count };
@@ -228,7 +272,10 @@ export async function resetFirstRunRow(
     .eq('tenant_id', tenantId)
     .maybeSingle();
 
-  if (remaining.error) return { ok: false, reason: 'error', message: remaining.error.message };
+  if (remaining.error) {
+    if (isMissingTable(remaining.error)) return { ok: true, deleted: 0, absent: true };
+    return { ok: false, reason: 'error', message: remaining.error.message };
+  }
   if (remaining.data) {
     return {
       ok: false,

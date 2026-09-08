@@ -141,6 +141,7 @@ export function DevPageBody() {
     deleted: number;
     tourFlags: number;
     checklistKeys: number;
+    absent: boolean;
   }> => {
     const result = await resetFirstRunRow(supabase as unknown as FirstRunClient, tenantId);
     // `=== false`, not `!result.ok`: portal compiles with strictNullChecks off,
@@ -155,7 +156,12 @@ export function DevPageBody() {
     }
     const tourFlags = clearTourSeenFlags();
     const checklistKeys = clearChecklistState(tenantId);
-    return { deleted: result.deleted, tourFlags, checklistKeys };
+    return {
+      deleted: result.deleted,
+      tourFlags,
+      checklistKeys,
+      absent: result.absent === true,
+    };
   };
 
   /**
@@ -172,11 +178,12 @@ export function DevPageBody() {
    * unseen, on `/`, on the canary — fires after its short anchor poll.
    */
   const startAsFirstTimeOperator = async (): Promise<string> => {
-    const { deleted, tourFlags, checklistKeys } = await resetOnboardingState();
+    const { deleted, tourFlags, checklistKeys, absent } = await resetOnboardingState();
     window.location.assign('/');
     return (
-      `Reset done — first-run record ${deleted > 0 ? 'cleared' : 'was already clear'}, ` +
-      `${tourFlags} tour flag${tourFlags === 1 ? '' : 's'} and ${checklistKeys} checklist ` +
+      `Reset done — first-run record ${
+        absent ? 'not tracked on this database' : deleted > 0 ? 'cleared' : 'was already clear'
+      }, ${tourFlags} tour flag${tourFlags === 1 ? '' : 's'} and ${checklistKeys} checklist ` +
       `key${checklistKeys === 1 ? '' : 's'} cleared. Taking you to the dashboard…`
     );
   };
@@ -265,6 +272,26 @@ export function DevPageBody() {
         </div>
       </header>
 
+      {/* Directly under the header, ABOVE the actions.
+          It used to sit after the Empty States section, hundreds of pixels
+          below the fold. Clicking Run at the top therefore looked like it did
+          nothing — the failure was reported off screen, which is how a database
+          error that had a perfectly clear message read as a dead button. An
+          action's outcome belongs next to the action. */}
+      {status && (
+        <p
+          role={status.tone === 'error' ? 'alert' : 'status'}
+          data-dev-status={status.tone}
+          className={
+            status.tone === 'error'
+              ? 'rounded-lg bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive'
+              : 'rounded-lg bg-muted px-3 py-2 font-mono text-xs text-muted-foreground'
+          }
+        >
+          {status.text}
+        </p>
+      )}
+
       {sections.map((section) => (
         <section
           key={section.id}
@@ -319,20 +346,6 @@ export function DevPageBody() {
       ))}
 
       <EmptyStatePreview />
-
-      {status && (
-        <p
-          role={status.tone === 'error' ? 'alert' : 'status'}
-          data-dev-status={status.tone}
-          className={
-            status.tone === 'error'
-              ? 'rounded-lg bg-destructive/10 px-3 py-2 font-mono text-xs text-destructive'
-              : 'px-1 font-mono text-xs text-muted-foreground'
-          }
-        >
-          {status.text}
-        </p>
-      )}
     </div>
   );
 }

@@ -237,13 +237,13 @@ export function JourneyPaymentStep({
           {price}
         </span>
       </div>
-      <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
+      <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
         This starts your monthly subscription. Today covers your first month, it
         renews on the same date each month, and you can manage it from your
         portal at any time.
       </p>
 
-      <Separator className="my-7" />
+      <Separator className="my-5" />
 
       {!publishableKey ? (
         <PaymentUnavailablePanel
@@ -431,6 +431,27 @@ function JourneyCardForm({
         The message is cleared where it should be: at the top of the next
         submit.
       */}
+      {/*
+        NOT given its own bounded scroll. That was tried and reverted.
+
+        Capping the element's height put a second scroll region inside a panel
+        that already scrolls, and the sticky Pay button then sat ON TOP of the
+        element's own fields — "Mobile number" showing through underneath it —
+        because the button is pinned to the panel while the fields scrolled
+        independently behind it. Two nested scrolls with a floating control over
+        the seam reads as broken, which is worse than a long form.
+
+        The element's height is not ours to set in any case: it renders in a
+        cross-origin iframe, and when Link is enabled on the Stripe account it
+        adds a whole "Save my information" block — email, mobile, full name and
+        a legal line, roughly 420px — that no trimming of our own copy offsets.
+
+        THE REAL FIX IS ONE SETTING, NOT CODE: turning Link off for this Stripe
+        account removes that block and the step fits outright. There is no API
+        for it — `paymentMethodTypes: ['card']` above does not suppress Link's
+        inline signup, and the only `link` key in the Elements types is
+        `setup_future_usage`, not a display toggle.
+      */}
       <PaymentElement
         options={{
           layout: "tabs",
@@ -483,46 +504,57 @@ function JourneyCardForm({
         )}
       </div>
 
-      <Button
-        type="submit"
-        size="lg"
-        // `elementReady` is part of this, and it is load-bearing. Without it the
-        // button went live the moment Stripe.js finished loading, while the card
-        // fields were STILL SKELETONS — press it then and `createPaymentMethod`
-        // throws "Could not find a ready element to create a payment method
-        // from", which used to land in the catch below and carry the journey
-        // forward to "You're live." A payment that never happened, reported as
-        // success. On a slow connection that is the likeliest thing to happen
-        // in front of an audience.
-        disabled={submitting || !stripe || !elements || !elementReady}
-        className="mt-4 h-12 w-full bg-indigo-600 text-[15px] text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Confirming…
-          </>
-        ) : (
-          <>
-            <CreditCard className="h-4 w-4" aria-hidden="true" />
-            Pay {formatPlanPriceUsd(plan)} and continue
-          </>
-        )}
-      </Button>
+      {/* STICKY, for a stronger reason than on the account step.
+          This step's height is Stripe's, not ours: the Payment Element grows
+          with the wallet buttons it decides to show and with Link's "save my
+          info" block, so there is no set of paddings that makes it fit for
+          everyone. Pinning the action means the amount and the Pay button are
+          on screen whatever the Element renders — rather than the one control
+          that completes the purchase being the thing pushed under the fold. */}
+      <div className="sticky bottom-0 -mx-6 mt-4 bg-background px-6 pb-1 sm:-mx-10 sm:px-10">
+        <div className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-background to-transparent" />
 
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Lock className="h-3 w-3" aria-hidden="true" />
-          Card details go straight to Stripe. We never see them.
-        </p>
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={submitting}
-          className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
+        <Button
+          type="submit"
+          size="lg"
+          // `elementReady` is part of this, and it is load-bearing. Without it the
+          // button went live the moment Stripe.js finished loading, while the card
+          // fields were STILL SKELETONS — press it then and `createPaymentMethod`
+          // throws "Could not find a ready element to create a payment method
+          // from", which used to land in the catch below and carry the journey
+          // forward to "You're live." A payment that never happened, reported as
+          // success. On a slow connection that is the likeliest thing to happen
+          // in front of an audience.
+          disabled={submitting || !stripe || !elements || !elementReady}
+          className="h-12 w-full bg-indigo-600 text-[15px] text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 dark:bg-indigo-500 dark:hover:bg-indigo-600"
         >
-          Back
-        </button>
+          {submitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Confirming…
+            </>
+          ) : (
+            <>
+              <CreditCard className="h-4 w-4" aria-hidden="true" />
+              Pay {formatPlanPriceUsd(plan)} and continue
+            </>
+          )}
+        </Button>
+
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 pb-1">
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Lock className="h-3 w-3" aria-hidden="true" />
+            Card details go straight to Stripe. We never see them.
+          </p>
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={submitting}
+            className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline disabled:opacity-50"
+          >
+            Back
+          </button>
+        </div>
       </div>
     </form>
   );

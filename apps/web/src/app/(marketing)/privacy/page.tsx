@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 
+import { PublishedLegalDocument } from "@/components/legal/published-legal-document";
+import { fetchLegalDocument } from "@/lib/legal/legal-documents-server";
+
 /**
  * THE CANONICAL Drive247 Privacy Policy — drive-247.com/privacy
  *
@@ -36,7 +39,16 @@ export const metadata: Metadata = {
   description: "How Drive247 and Cortek handle your data.",
 };
 
-export default function PrivacyPage() {
+/**
+ * A super admin can now author this document in apps/admin, and what they
+ * publish wins. The prose below is unchanged and stays as the fallback — see
+ * the note in `terms/page.tsx` for why a compiled fallback is load-bearing
+ * rather than a nicety.
+ */
+export default async function PrivacyPage() {
+  const doc = await fetchLegalDocument("privacy");
+  if (doc) return <PublishedLegalDocument doc={doc} />;
+
   return (
     <article className="prose prose-zinc mx-auto max-w-3xl px-4 py-16 sm:px-6">
       <h1>Privacy Policy</h1>

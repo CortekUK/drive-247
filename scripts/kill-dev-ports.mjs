@@ -61,25 +61,39 @@ const PORTS = process.env.DEV_PORTS
  */
 const CANONICAL_BASE = 3000;
 
+/**
+ * Directories holding dev servers, in scan order.
+ *
+ * `v2/apps` is here because the v2 website — the site the portal's CMS editor
+ * embeds — lives at `v2/apps/web` on 4006 and is NOT a workspace: the root
+ * `workspaces` array is `["apps/*", "packages/*"]`, so `turbo run dev` never
+ * starts it and, until this line, nothing ever freed its port either. Starting
+ * it by hand after a crash then failed on EADDRINUSE with no script willing to
+ * clear it, which is the exact papercut this file exists to remove.
+ */
+const APP_DIRS = ['apps', join('v2', 'apps')];
+
 /** app name -> dev port for THIS worktree, from each workspace's own `dev` script. */
 function readAppPorts() {
   const ports = new Map();
-  let entries;
-  try {
-    entries = readdirSync(join(ROOT, 'apps'), { withFileTypes: true });
-  } catch {
-    return ports;
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    let pkg;
+  for (const dir of APP_DIRS) {
+    let entries;
     try {
-      pkg = JSON.parse(readFileSync(join(ROOT, 'apps', entry.name, 'package.json'), 'utf8'));
+      entries = readdirSync(join(ROOT, dir), { withFileTypes: true });
     } catch {
-      continue; // not a workspace, or unreadable — nothing to learn from it
+      continue; // directory absent in this checkout — nothing to learn from it
     }
-    const match = /--port[= ](\d+)/.exec(pkg.scripts?.dev ?? '');
-    if (match) ports.set(pkg.name ?? entry.name, Number(match[1]) - CANONICAL_BASE + base);
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      let pkg;
+      try {
+        pkg = JSON.parse(readFileSync(join(ROOT, dir, entry.name, 'package.json'), 'utf8'));
+      } catch {
+        continue; // not a workspace, or unreadable — nothing to learn from it
+      }
+      const match = /--port[= ](\d+)/.exec(pkg.scripts?.dev ?? '');
+      if (match) ports.set(pkg.name ?? entry.name, Number(match[1]) - CANONICAL_BASE + base);
+    }
   }
   return ports;
 }

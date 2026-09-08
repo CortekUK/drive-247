@@ -100,17 +100,183 @@ interface Rect {
   height: number;
 }
 
-const CARD_WIDTH = 352;
-const CENTERED_WIDTH = 408;
+const CARD_WIDTH = 400;
+const CENTERED_WIDTH = 468;
 /**
  * The Welcome card only. It is the one card that is an introduction rather
  * than a label on something — Trax says who it is and what the next minute is
  * for — and at 408px that landed as a notification. Wide enough to carry a
  * two-line headline at a size worth reading.
  */
-const WELCOME_WIDTH = 560;
+const WELCOME_WIDTH = 640;
+/** Visible space between the spotlight's outer edge and the card. */
 const GAP = 16;
-const PAD = 8;
+/**
+ * How far the spotlight stands off the element it is presenting.
+ *
+ * Was 8, which put the edge on the text's own bounding box — it read as a
+ * border drawn around the words rather than a light pointed at them.
+ */
+const PAD = 12;
+
+/**
+ * The spotlight's corner radius. ONE constant, THREE consumers: the pane, the
+ * lift, and the radius handed to `scrimHolePath`. Typed as a literal in any of
+ * them they drift by a pixel and the seam shows through the corners.
+ */
+const SPOT_RADIUS = 20;
+
+/**
+ * ONE NOTE KEPT FROM A REMOVED CONSTANT, so nobody re-derives it the hard way:
+ * an outer `box-shadow`'s inner edge cannot be feathered at any blur radius.
+ * The 9999px spread pushes the shadow's own blurred perimeter off-screen, so
+ * `0 0 28px 9999px` renders pixel-identical to `0 0 0 9999px`.
+ *
+ * A `BLUR_FEATHER` once cut the blur's hole 20px outside the dim's, to keep the
+ * two edges apart. It was removed: that ring ended up dimmed but NOT blurred,
+ * and around a floating panel it showed the page behind it sharp — a stray
+ * bright card under the highlighted one. The dim and the blur now share one
+ * hole, hugging the anchor exactly, and the rim floats outside both.
+ */
+
+/**
+ * How hard the page behind the tour is pushed back.
+ *
+ * A dim alone was not enough. At `0.45` every card, table row and sidebar label
+ * behind the tour stayed legible, so the eye kept reading the app instead of
+ * the one sentence the step is trying to say — the screen read as noise with a
+ * box on top of it. Blur is what actually separates the two planes: text stops
+ * resolving as text, and the card becomes the only thing in focus.
+ *
+ * Kept deliberately light. This is a guide, not a modal — the operator is meant
+ * to keep their bearings and see WHERE the thing being described sits on their
+ * own screen. Blur it out completely and the tour stops teaching the layout.
+ */
+const SCRIM = 'hsl(0 0% 4% / 0.38)';
+const SCRIM_BLUR = 'blur(5px)';
+
+/**
+ * The spotlight's edge, stacked outward from the hole.
+ *
+ * Every entry is ZERO-BLUR, which is what keeps it cheap enough to re-rasterise
+ * on every frame of the spring. Outer box-shadows paint front-to-back — first
+ * listed is on top — and are clipped OUT of the border box, so none of this can
+ * touch the highlighted element's own pixels. That matters: the target is
+ * arbitrary page content and must not be restyled.
+ *
+ *   0   – 1.5px  a near-white hairline: the lit lip of a raised surface, and
+ *                the reason the indigo below is legible at all. The old
+ *                `ring-2 ring-primary/60` sat straight on the seam with dimmed
+ *                grey on one side and white page on the other, and at that
+ *                alpha a single indigo hairline had contrast against neither —
+ *                so it read as the cut line rather than as an accent.
+ *   1.5 – 4.5px  the indigo band, tinted toward 250 so it belongs to the
+ *                primary ramp rather than sitting on it.
+ *   4.5 – 5.5px  a faint outer hairline, so the band has an edge of its own
+ *                and does not bleed into the dim.
+ *   5.5 – ∞      the dim.
+ */
+const SPOT_EDGE = [
+  '0 0 0 1.5px hsl(250 100% 99% / 0.62)',
+  '0 0 0 4.5px hsl(var(--primary) / 0.62)',
+  '0 0 0 5.5px hsl(250 100% 99% / 0.20)',
+].join(', ');
+
+/**
+ * The dim, carried by its own element sitting on the EXACT anchor rect.
+ *
+ * Split away from the rim above, and the split is the fix for a real artifact.
+ * The rim is drawn PAD outside the anchor so it does not sit on the element's
+ * own edge — but when the dim rode along with it, the ring between the element
+ * and the rim was left BRIGHT. Around a floating panel like the Setup guide
+ * dock, that ring is not empty space: it is the dashboard behind the dock,
+ * shown sharp and undimmed, and it reads as a stray card or toast wedged under
+ * the one being highlighted.
+ *
+ * Dimming from the exact rect means everything that is not the anchor is dark,
+ * and the rim floats over that instead of fencing off a bright margin.
+ */
+const SPOT_DIM = `0 0 0 9999px ${SCRIM}`;
+
+/**
+ * The lift — the reason this reads as presented rather than punched.
+ *
+ * A hole in a sheet and an object raised above one differ by exactly one thing:
+ * the second casts a shadow. These paint over the dim and are clipped out of
+ * the border box, so they darken the page around and below the anchor without
+ * laying a single pixel on the anchor itself.
+ *
+ * The 30px indigo bloom is doing separate work from the drop shadows. It is
+ * laid directly over the seam that cannot be feathered, spreading the visual
+ * transition across 30px so the eye reads a gradient instead of a cut.
+ */
+const SPOT_LIFT = [
+  '0 1px 3px -1px hsl(248 60% 4% / 0.40)',
+  '0 0 30px 0 hsl(var(--primary) / 0.26)',
+  '0 12px 26px -10px hsl(248 60% 4% / 0.45)',
+  '0 34px 60px -24px hsl(248 60% 4% / 0.60)',
+].join(', ');
+
+/** Keep the spotlight this far off the viewport edge. */
+const SPOT_EDGE_INSET = 6;
+
+/**
+ * Slack required between the card and the spotlight — see `clear()`.
+ *
+ * Large enough to absorb a one-render-stale card height and a dock that
+ * resizes itself, small enough that it never pushes a placement that genuinely
+ * fits into the centred fallback.
+ */
+const CLEAR_MARGIN = 10;
+
+/**
+ * The spotlight's box: the anchor, padded, clamped to the viewport.
+ *
+ * ONE function, FOUR consumers — the blur hole, the pane, the lift and the
+ * card's placement. They must agree to the pixel or the rim slides off the blur
+ * hole and shows a soft-edged sliver, so none of them may compute this again.
+ *
+ * The clamp is not cosmetic. Two live steps anchor full-width content, and
+ * unclamped the padded rect runs past the right edge of the screen and 12px
+ * into the 280px sidebar on the left — losing the treatment on exactly the
+ * targets where the seam is longest and most visible.
+ */
+function spotlightBox(anchor: Rect, viewportW: number, viewportH: number, pad: number): Rect {
+  const left = Math.max(SPOT_EDGE_INSET, anchor.left - pad);
+  const top = Math.max(SPOT_EDGE_INSET, anchor.top - pad);
+  const right = Math.min(viewportW - SPOT_EDGE_INSET, anchor.left + anchor.width + pad);
+  const bottom = Math.min(viewportH - SPOT_EDGE_INSET, anchor.top + anchor.height + pad);
+  return {
+    top,
+    left,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
+/**
+ * The whole viewport, minus a rounded hole over the highlighted element.
+ *
+ * `backdrop-filter` blurs everything under an element, and there is no way to
+ * exempt a region of it — so the spotlight's cut-out has to be cut out of the
+ * blur layer itself. `clip-path: path(evenodd, …)` does that in one property:
+ * an outer rectangle covering the screen and an inner rounded rect, with the
+ * even-odd fill rule leaving the inner one empty.
+ *
+ * Without this the highlighted control would be blurred along with everything
+ * else — which is precisely backwards, since it is the one thing the step is
+ * pointing at.
+ */
+function scrimHolePath(rect: Rect, radius: number, viewportW: number, viewportH: number): string {
+  const { top: y, left: x, width: w, height: h } = rect;
+  const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+  const hole =
+    `M${x + r},${y} H${x + w - r} A${r},${r} 0 0 1 ${x + w},${y + r} ` +
+    `V${y + h - r} A${r},${r} 0 0 1 ${x + w - r},${y + h} ` +
+    `H${x + r} A${r},${r} 0 0 1 ${x},${y + h - r} ` +
+    `V${y + r} A${r},${r} 0 0 1 ${x + r},${y} Z`;
+  return `path(evenodd, "M0,0 H${viewportW} V${viewportH} H0 Z ${hole}")`;
+}
 
 type Placement = Exclude<TourSide, 'center'>;
 
@@ -134,16 +300,94 @@ function positionFor(
   cardW: number,
   cardH: number,
 ): { left: number; top: number } {
+  // `anchor` here is the SPOTLIGHT's box, not the raw element rect — it already
+  // carries PAD and the viewport clamp. So GAP is measured from the edge the
+  // operator can actually see, which is what the constant is supposed to mean.
+  //
+  // Previously this took the raw rect and offset by GAP, leaving only
+  // GAP - PAD of real space: the card and the highlight read as touching, and
+  // on the Payments step the card's corner sat directly against the rim.
   switch (placement) {
     case 'right':
-      return { left: anchor.left + anchor.width + GAP, top: anchor.top - PAD };
+      return { left: anchor.left + anchor.width + GAP, top: anchor.top };
     case 'left':
-      return { left: anchor.left - GAP - cardW, top: anchor.top - PAD };
+      return { left: anchor.left - GAP - cardW, top: anchor.top };
     case 'top':
       return { left: anchor.left + anchor.width / 2 - cardW / 2, top: anchor.top - GAP - cardH };
     default:
-      return { left: anchor.left + anchor.width / 2 - cardW / 2, top: anchor.top + anchor.height + GAP };
+      return {
+        left: anchor.left + anchor.width / 2 - cardW / 2,
+        top: anchor.top + anchor.height + GAP,
+      };
   }
+}
+
+/**
+ * Where the card goes — or `null` if there is nowhere honest to put it.
+ *
+ * Returns only a placement that is BOTH fully on screen AND disjoint from the
+ * spotlight. There is deliberately no fallback and no clamping: a returned
+ * position is used verbatim.
+ *
+ * That is the whole point. The previous version chose a side, then clamped the
+ * result into the viewport on both axes — and the clamp was what broke the
+ * invariant. For a `right` placement on a wide anchor, `left` is
+ * `spot.right + GAP`, and clamping it back to `viewportW - cardW - GAP` yields
+ * a coordinate INSIDE the spotlight. Choosing well and then clamping undoes the
+ * choice on the very next line, which is how the card ended up sitting in the
+ * middle of the Brand Identity panel.
+ *
+ * So the check and the result are the same value. Two axis-aligned boxes are
+ * disjoint if they are disjoint on either axis, and an accepted candidate is
+ * disjoint by construction — nothing downstream may move it.
+ *
+ * `null` means "no side has room", and the caller degrades to the centred wash.
+ * Refusing to place is the correct answer there; squeezing is what produced the
+ * mess.
+ */
+function placeCard(
+  spot: Rect,
+  side: TourSide,
+  cardW: number,
+  cardH: number,
+  viewportW: number,
+  viewportH: number,
+): { left: number; top: number } | null {
+  const onScreen = (p: { left: number; top: number }) =>
+    p.left >= GAP &&
+    p.left + cardW <= viewportW - GAP &&
+    p.top >= GAP &&
+    p.top + cardH <= viewportH - GAP;
+
+  /**
+   * Clear of the spotlight, with room to spare.
+   *
+   * The margin is not padding — it is tolerance for the two ways the inputs go
+   * stale between placement and paint:
+   *
+   *   1. `cardH` is measured from the rendered card, so on a step change the
+   *      first render uses the PREVIOUS step's height. Underestimate it and a
+   *      card placed above the spotlight extends past its top edge.
+   *   2. Several anchors resize under their own steam. The Setup guide dock is
+   *      `position: fixed` and expands and minimises; when it grows, the
+   *      spotlight grows with it and can reach a card that was clear when it
+   *      was placed.
+   *
+   * Exact adjacency — the old test — turns either of those into a visible
+   * overlap, which is precisely what was happening on the Setup guide step.
+   * Requiring a real gap means a few pixels of drift costs nothing.
+   */
+  const clear = (p: { left: number; top: number }) =>
+    p.left + cardW + CLEAR_MARGIN <= spot.left ||
+    p.left >= spot.left + spot.width + CLEAR_MARGIN ||
+    p.top + cardH + CLEAR_MARGIN <= spot.top ||
+    p.top >= spot.top + spot.height + CLEAR_MARGIN;
+
+  for (const placement of placementsFor(side)) {
+    const p = positionFor(placement, spot, cardW, cardH);
+    if (onScreen(p) && clear(p)) return p;
+  }
+  return null;
 }
 
 function TourLayer({
@@ -171,6 +415,8 @@ function TourLayer({
 }) {
   const { step, element, notes } = resolved;
   const [rect, setRect] = useState<Rect | null>(null);
+  /** True when the anchor floats over the page — see `measure`. */
+  const [elevated, setElevated] = useState(false);
   const [cardH, setCardH] = useState(280);
   const cardRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
@@ -192,6 +438,21 @@ function TourLayer({
       return;
     }
     setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+
+    // Does this anchor FLOAT OVER the page, or sit in it?
+    //
+    // It decides how much room the spotlight leaves around it, and the two
+    // cases genuinely want opposite things. A page heading is text on the page:
+    // padding the hole reveals more of the same page, and without that room the
+    // rim crops the words. A docked panel — `position: fixed`, its own surface,
+    // its own shadow — has OTHER CONTENT behind it, so the same padding reveals
+    // the dashboard underneath it, sharp and undimmed, and reads as a stray
+    // card wedged under the highlighted one.
+    //
+    // Asking the element which it is costs one `getComputedStyle` per measure
+    // and needs no per-step configuration, so a future step cannot forget it.
+    const position = window.getComputedStyle(element).position;
+    setElevated(position === 'fixed' || position === 'sticky');
   }, [element, onAnchorLost]);
 
   // Measure before paint so the spotlight never renders at the wrong place for
@@ -280,8 +541,8 @@ function TourLayer({
     return () => previous?.focus?.({ preventScroll: true });
   }, [step.id]);
 
-  const centered = element === null;
-  if (!centered && !rect) return null;
+  const hasAnchor = element !== null;
+  if (hasAnchor && !rect) return null;
 
   const isLast = index === steps.length - 1;
   const isFirst = index === 0;
@@ -289,30 +550,78 @@ function TourLayer({
   const viewportW = typeof window === 'undefined' ? 1280 : window.innerWidth;
   const viewportH = typeof window === 'undefined' ? 800 : window.innerHeight;
   const isWelcome = step.id === 'welcome';
+
+  // The spotlight's geometry, computed ONCE. The blur hole, the pane, the lift
+  // and the card placement all read from this — recomputing it anywhere else is
+  // how the rim and the blur hole drift apart.
+  // Zero for a floating panel, PAD for anything sitting in the page.
+  const pad = elevated ? 0 : PAD;
+  const rawSpot = rect ? spotlightBox(rect, viewportW, viewportH, pad) : null;
+
+  /**
+   * Is this anchor too big to be worth pointing at?
+   *
+   * A spotlight is a gesture: "that one, there". It only carries meaning while
+   * the thing it surrounds is smaller than the thing it excludes. Past roughly
+   * two-thirds of the viewport there is nothing left to exclude — the rim runs
+   * around the whole screen, the dim survives only as a strip down one side,
+   * and the operator is being pointed at everything, which is to say nothing.
+   *
+   * This happened for real. The Booking-site step anchored to the whole Brand
+   * Identity card, which is taller than the viewport: the rim enclosed the
+   * screen, no card placement fitted, and the card was clamped down on top of
+   * the highlight. It read, in the team lead's words, "like a dropdown".
+   *
+   * So past the threshold the step degrades to the treatment the Welcome and
+   * Done steps already use — an even wash, no rim, card centred. That is honest
+   * about what it can say, and it still works: the page is behind the wash,
+   * legible enough to place, just not competing.
+   *
+   * Fixing the step's anchor is the better fix and is done separately. This is
+   * the floor under every future step, so a badly chosen anchor degrades to
+   * something calm instead of covering the screen.
+   */
+  const OVERSIZE = 0.66;
+  const oversized =
+    rawSpot !== null &&
+    (rawSpot.width * rawSpot.height) / (viewportW * viewportH) > OVERSIZE;
+
+  // The card's width in spotlight mode, needed BEFORE we know whether we are in
+  // spotlight mode — placement feasibility is one of the things that decides it.
+  const spotCardW = Math.min(CARD_WIDTH, viewportW - GAP * 2);
+
+  // Where the card would go, if a spotlight is even viable. `null` means no side
+  // has room for it without overlapping the highlight.
+  const placement =
+    hasAnchor && !oversized && rawSpot
+      ? placeCard(rawSpot, step.side, spotCardW, cardH, viewportW, viewportH)
+      : null;
+
+  // Three ways to end up on the even wash, and they get identical treatment:
+  // no anchor at all (Welcome, Done), an anchor too big to point at, or an
+  // anchor with nowhere to stand the card. The last is what stops the tour ever
+  // covering the thing it is describing.
+  const centered = !hasAnchor || oversized || placement === null;
+  const spot = centered ? null : rawSpot;
+
   const cardW = centered
     ? Math.min(isWelcome ? WELCOME_WIDTH : CENTERED_WIDTH, viewportW - GAP * 2)
-    : Math.min(CARD_WIDTH, viewportW - GAP * 2);
+    : spotCardW;
 
-  // Place to the preferred side, falling through the alternatives until one
-  // fits, then clamp into the viewport whatever happens. Narrow screens end up
-  // under the anchor rather than hanging off the edge.
+  // `placement` was already resolved above, and is used verbatim — see
+  // `placeCard`. Nothing clamps it here: an accepted placement is on screen and
+  // clear of the spotlight by construction, and re-clamping is exactly what
+  // used to drop the card on top of the anchor.
   let left: number;
   let top: number;
-  if (centered || !rect) {
+  if (centered || !placement) {
     left = (viewportW - cardW) / 2;
     // Trax sits to the LEFT of the Welcome card now, not under it, so there is
     // no vertical overhang to make room for and the card centres normally.
     top = Math.max(GAP, viewportH * 0.4 - cardH / 2);
   } else {
-    const fits = (p: { left: number; top: number }) =>
-      p.left >= GAP &&
-      p.left + cardW <= viewportW - GAP &&
-      p.top >= GAP &&
-      p.top + cardH <= viewportH - GAP;
-    const candidates = placementsFor(step.side).map((p) => positionFor(p, rect, cardW, cardH));
-    const chosen = candidates.find(fits) ?? candidates[0];
-    left = Math.min(Math.max(GAP, chosen.left), Math.max(GAP, viewportW - cardW - GAP));
-    top = Math.min(Math.max(GAP, chosen.top), Math.max(GAP, viewportH - cardH - GAP));
+    left = placement.left;
+    top = placement.top;
   }
 
   const progress = Math.round(((index + 1) / steps.length) * 100);
@@ -337,31 +646,114 @@ function TourLayer({
           animate={{ opacity: 1 }}
           transition={reduceMotion ? { duration: 0 } : { duration: 0.2 }}
           className="absolute inset-0"
-          style={{ background: 'hsl(0 0% 4% / 0.45)', pointerEvents: 'none' }}
-        />
-      ) : (
-        // Spotlight. One box-shadow does the dimming — a 9999px spread from the
-        // hole outward — which is far cheaper than four positioned panels and
-        // keeps the cut-out perfectly aligned with the ring around it.
-        <motion.div
-          aria-hidden
-          initial={reduceMotion ? false : { opacity: 0 }}
-          animate={{
-            opacity: 1,
-            top: rect!.top - PAD,
-            left: rect!.left - PAD,
-            width: rect!.width + PAD * 2,
-            height: rect!.height + PAD * 2,
-          }}
-          transition={
-            reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 38 }
-          }
-          className="absolute rounded-2xl ring-2 ring-primary/60"
           style={{
-            boxShadow: '0 0 0 9999px hsl(0 0% 4% / 0.45)',
+            background: SCRIM,
+            backdropFilter: SCRIM_BLUR,
+            WebkitBackdropFilter: SCRIM_BLUR,
             pointerEvents: 'none',
           }}
         />
+      ) : (
+        <>
+          {/* The blur that goes with the spotlight's dim.
+              Separate from the ring below because `backdrop-filter` cannot be
+              applied by a box-shadow: the shadow paints OVER the page, while
+              the blur has to be an element that sits over it and filters what
+              shows through. Clipped to everything-but-the-hole so the
+              highlighted control stays sharp while the rest of the app softens.
+
+              Rendered BEFORE the ring on purpose. A blur layer painted after it
+              would filter the ring itself — the ring sits 2px outside the hole,
+              so it falls in the blurred region — and the one element the step
+              is pointing at would come out softer than the page around it.
+
+              Not animated: framer cannot interpolate two `path()` strings, so
+              this is a plain CSS transition instead. */}
+          {spot && (
+            <div
+              aria-hidden
+              className="absolute inset-0 transition-[clip-path] duration-200 ease-out"
+              style={{
+                backdropFilter: SCRIM_BLUR,
+                WebkitBackdropFilter: SCRIM_BLUR,
+                // The hole is the anchor, EXACTLY — no feather ring.
+                //
+                // It used to be cut BLUR_FEATHER (20px) further out, to keep
+                // the blur's edge away from the dim's. But that ring was then
+                // dimmed and NOT blurred, and around a floating panel like the
+                // Setup guide dock the thing inside it is the dashboard behind
+                // the dock, shown sharp. It read as a stray card wedged under
+                // the highlighted one. Hugging the anchor means the only sharp
+                // pixels on screen are the anchor's own.
+                clipPath: scrimHolePath(spot, SPOT_RADIUS, viewportW, viewportH),
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+          {/* The pane — hard edges, the dim, and a breath of indigo inside.
+              Nothing here is blurred, so this is the layer that stays
+              pixel-locked to the geometry. No transform, ever: a fraction of a
+              percent of scale would slide the rim off its own edge.
+
+              The interior wash is small and load-bearing. The complaint was a
+              "pale lavender-grey slab" — undisturbed page, framed by a razor.
+              Framing it better does not fix that; the region has to stop being
+              an absence of scrim and become a tinted surface. 5% is a fraction
+              of a contrast step and it is the whole difference. */}
+          <motion.div
+            aria-hidden
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{
+              opacity: 1,
+              top: spot!.top,
+              left: spot!.left,
+              width: spot!.width,
+              height: spot!.height,
+            }}
+            transition={
+              reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 38 }
+            }
+            className="absolute bg-primary/[0.05] dark:bg-primary/[0.12]"
+            style={{
+              borderRadius: SPOT_RADIUS,
+              // Rim and dim on ONE element, both keyed to the same box.
+              // Splitting them put the rim `PAD` outside the dim's hole, which
+              // left a bright margin between the two — fine in theory, and in
+              // practice the page showing through around a floating panel. The
+              // padding now lives in the box itself (`pad` above), so there is
+              // no gap for anything to show through.
+              boxShadow: `${SPOT_EDGE}, ${SPOT_DIM}`,
+              pointerEvents: 'none',
+            }}
+          />
+          {/* The lift. Rendered AFTER the pane so its shadows fall on the dim
+              rather than under it, and after the blur so the bloom is not
+              itself blurred. This layer carries the settle precisely because
+              everything on it is feathered — half a percent of scale is nothing
+              on a soft shadow and would have been a visible misalignment on the
+              rim above. */}
+          <motion.div
+            aria-hidden
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.99 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              top: spot!.top,
+              left: spot!.left,
+              width: spot!.width,
+              height: spot!.height,
+            }}
+            transition={
+              reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 38 }
+            }
+            className="absolute"
+            style={{
+              borderRadius: SPOT_RADIUS,
+              boxShadow: SPOT_LIFT,
+              pointerEvents: 'none',
+            }}
+          />
+        </>
       )}
 
       <AnimatePresence mode="wait">

@@ -339,7 +339,7 @@ describe("the page manifest", () => {
     expect(hook).toMatch(/\(\) => false,?\s*\n?\s*\)/);
   });
 
-  it("the /dev page renders the control, below its two actions and above the status line", () => {
+  it("the /dev page renders the control below its two actions, and the status above them", () => {
     // The hookup is two lines in a file another surface owns — an import and
     // one JSX element — so pin both, and pin the placement: secondary to the
     // two main actions, never above them.
@@ -348,7 +348,15 @@ describe("the page manifest", () => {
     expect(page).toContain("<EmptyStatePreview />");
     const at = page.indexOf("<EmptyStatePreview />");
     expect(at).toBeGreaterThan(page.indexOf("{sections.map("));
-    expect(at).toBeLessThan(page.indexOf("{status && ("));
+
+    // The status line moved ABOVE the actions, and is pinned there.
+    //
+    // It used to sit last, after this control — hundreds of pixels below the
+    // fold on a normal window. So an action that failed reported it off screen
+    // and the button read as dead: that is exactly how a perfectly clear
+    // "missing table" database error was mistaken for a broken Run button.
+    // An action's outcome belongs where the action is.
+    expect(page.indexOf("{status && (")).toBeLessThan(page.indexOf("{sections.map("));
   });
 
   it("every guard is the literal NODE_ENV comparison, development branch first", () => {

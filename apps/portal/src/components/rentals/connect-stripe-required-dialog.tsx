@@ -90,7 +90,10 @@ export function ConnectStripeRequiredDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="sm:max-w-md"
+        // Wider than the `max-w-md` default (28rem). At that width the title
+        // wrapped to two lines, the description to three, and the three footer
+        // buttons had no room between them — the whole thing read as cramped.
+        className="p-7 sm:max-w-[34rem] sm:p-8"
         // Not rendered at all for a non-canary tenant, rather than hidden with
         // a utility class: the control must not exist, not merely be invisible.
         showCloseButton={closable}
@@ -106,17 +109,36 @@ export function ConnectStripeRequiredDialog({
           if (!closable) e.preventDefault();
         }}
       >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-primary" />
+        {/* The icon sits on its own tile above the title rather than inline
+            beside it. Inline, it competed with the first word for the start of
+            the reading line and pushed the title into an early wrap in a narrow
+            dialog; stacked, the title gets the full width and the eye lands on
+            the sentence rather than on a glyph. */}
+        <DialogHeader className="space-y-0">
+          <div className="mb-5 flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <CreditCard className="size-5" />
+          </div>
+          <DialogTitle className="text-[22px] font-semibold leading-[1.25] tracking-[-0.01em]">
             Connect Stripe to create rentals
           </DialogTitle>
-          <DialogDescription>
+          {/* `pr-8` keeps the second line clear of the close "×", which is
+              absolutely positioned in the top-right corner of the content. */}
+          <DialogDescription className="pr-8 pt-2.5 text-[14px] leading-relaxed">
             You need a connected Stripe account before you can take payments.
             Once Stripe is connected, you can create rentals as normal.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-2">
+        {/* Three actions of near-equal weight in one narrow row is what made
+            this read as cluttered: the eye had to compare "Skip for now
+            (testing)", "Back to rentals" and "Set up Stripe Connect" before it
+            could find the one that matters.
+
+            `sm:items-center` + a real gap replaces the primitive's `space-x-2`,
+            and the skip stays pushed to the far left via its own `sm:mr-auto`
+            — so the two decisions ("go set it up" / "go back") sit together on
+            the right and the testing-only escape hatch is visibly apart from
+            them rather than lined up as a third peer. */}
+        <DialogFooter className="mt-8 gap-2.5 sm:items-center sm:gap-3 sm:space-x-0">
           {/*
             Canary-only, and rendered conditionally rather than disabled: for a
             paying tenant the button must not EXIST, so there is nothing to
@@ -136,7 +158,8 @@ export function ConnectStripeRequiredDialog({
             <Button
               type="button"
               variant="ghost"
-              className="sm:mr-auto"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground sm:mr-auto"
               onClick={() => handleOpenChange(false)}
             >
               Skip for now (testing)

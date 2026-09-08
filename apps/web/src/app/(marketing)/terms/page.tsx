@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 
 import { InterimPlatformTerms } from "@/components/legal/interim-platform-terms";
 import { PlatformTosDocument } from "@/components/legal/platform-tos-document";
+import { PublishedLegalDocument } from "@/components/legal/published-legal-document";
+import { fetchLegalDocument } from "@/lib/legal/legal-documents-server";
 import { PLATFORM_TOS_IS_DRAFT } from "@/lib/legal/platform-tos";
 
 /**
@@ -40,6 +42,19 @@ export const metadata: Metadata = {
   description: "Terms governing use of the Drive247 platform.",
 };
 
-export default function TermsPage() {
+/**
+ * A super admin can now author this document in apps/admin, and what they
+ * publish wins. Everything below that is unchanged and stays as the fallback.
+ *
+ * The fallback is not a nicety. `fetchLegalDocument` returns null on ANY
+ * failure — no table yet, an outage, nothing published, a row with an empty
+ * body — and this page is prerendered, so without a compiled document to fall
+ * back on a Supabase blip would fail `next build` and take the marketing site
+ * down over a page that changes twice a year.
+ */
+export default async function TermsPage() {
+  const doc = await fetchLegalDocument("terms");
+  if (doc) return <PublishedLegalDocument doc={doc} />;
+
   return PLATFORM_TOS_IS_DRAFT ? <InterimPlatformTerms /> : <PlatformTosDocument />;
 }

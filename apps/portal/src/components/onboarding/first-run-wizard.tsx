@@ -5,8 +5,8 @@ import { Check } from 'lucide-react';
 import { motion, useReducedMotion, type Transition, type Variants } from 'motion/react';
 
 import { cn } from '@/lib/utils';
+import { useFirstRunQuestions } from '@/hooks/use-first-run-questions';
 import {
-  FIRST_RUN_QUESTIONS,
   isAnswered,
   type FirstRunAnswer,
   type FirstRunAnswers,
@@ -130,7 +130,10 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
   const stageRef = useRef<HTMLDivElement | null>(null);
   const baseId = useId();
 
-  const questions = FIRST_RUN_QUESTIONS;
+  // Authored by a super admin in apps/admin, falling back to the compiled list
+  // on any failure — see `useFirstRunQuestions`. The wizard neither knows nor
+  // cares which it got; both are the same `FirstRunQuestion[]`.
+  const { questions, isLoading: questionsLoading } = useFirstRunQuestions();
   const total = questions.length;
   const question = questions[step];
 
@@ -321,11 +324,16 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
       aria-label="Set up your account"
       onKeyDown={onRootKeyDown}
       tabIndex={-1}
-      className="fixed inset-0 z-[70] overflow-y-auto bg-background bg-app-gradient outline-none"
+      /* Not fully opaque any more. The dashboard stays mounted underneath, and
+         painting flat over it made this screen read as a separate app that had
+         replaced the portal. A heavy blur behind a near-opaque scrim keeps the
+         operator's sense of place — they can tell their portal is still there —
+         while nothing behind resolves sharply enough to compete for attention. */
+      className="fixed inset-0 z-[70] overflow-y-auto bg-background/85 outline-none supports-[backdrop-filter]:bg-background/75 supports-[backdrop-filter]:backdrop-blur-2xl supports-[backdrop-filter]:backdrop-saturate-150"
     >
       <LiquidWash step={step} reduced={reduced} />
 
-      <div className="relative mx-auto flex min-h-full w-full max-w-[64rem] flex-col px-6 pb-10 pt-14 sm:px-10 sm:pt-20 lg:px-16">
+      <div className="relative mx-auto flex min-h-full w-full max-w-[76rem] flex-col px-6 pb-10 pt-14 sm:px-10 sm:pt-20 lg:px-16">
         {/* One grid cell, two occupants: the question that is leaving and the
             one that has arrived. Neither is absolutely positioned, so neither
             can push the scroll height around mid-flight. */}
@@ -427,14 +435,30 @@ export function FirstRunWizard({ suppressed = false }: { suppressed?: boolean })
               </button>
             ) : null}
 
-            <button
-              type="button"
-              data-wizard-action=""
-              onClick={() => void finish(true)}
-              className="rounded-full text-sm text-muted-foreground underline-offset-4 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 disabled:opacity-40"
-            >
-              Skip for now
-            </button>
+            {/*
+              Skip THIS question — never the whole wizard.
+              It used to call `finish(true)`, which ended onboarding outright
+              from any step. So a question marked required was only required
+              until the operator noticed the link beside it, and the set of
+              answers a super admin had marked mandatory could be dismissed
+              wholesale in one click. That made `required` decorative.
+              It now advances one step, and it only appears on a question the
+              author actually marked optional — so "which questions they can
+              skip and which they cannot" is decided in the admin editor and
+              honoured here, rather than being overridden by the footer.
+            */}
+            {question && !question.required ? (
+              <button
+                type="button"
+                data-wizard-action=""
+                onClick={advance}
+                className="rounded-full text-sm text-muted-foreground underline-offset-4 outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30 disabled:opacity-40"
+              >
+                Skip this question
+              </button>
+            ) : (
+              <span />
+            )}
 
             <button
               type="button"
@@ -534,30 +558,34 @@ const groupVariants = (reduced: boolean): Variants =>
  * Colours come from `--primary` and `--chart-3`, the same two the app wash
  * uses, so a tenant on green never gets a purple corner.
  */
-function LiquidWash({ step, reduced }: { step: number; reduced: boolean }) {
+/**
+ * Ambient colour behind the questions. Symmetric, and it does not move.
+ *
+ * It used to be two mismatched blobs — 46rem against 42rem, `-top-48 -right-40`
+ * against `-bottom-56 -left-48` — that drifted to a new offset on every step,
+ * driven by `Math.sin(step)`. Two things went wrong with that. The mismatch
+ * read as a lopsided screen rather than as atmosphere, and the drift meant the
+ * background moved every time the question changed, so the eye was pulled to
+ * the corner at the exact moment it should have been going to the new question.
+ *
+ * Now both blobs are the same size, mirrored across both axes, and static. The
+ * screen is symmetric, nothing competes with the question, and the only thing
+ * that animates between steps is the question itself.
+ *
+ * `step` is still taken so callers do not have to change, and so the blobs can
+ * be brought back to life deliberately if that is ever wanted.
+ */
+function LiquidWash({ step: _step, reduced }: { step: number; reduced: boolean }) {
   if (reduced) return null;
-  const drift: Transition = { type: 'spring', stiffness: 26, damping: 24, mass: 1.6 };
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
-      <motion.div
-        className="absolute -right-40 -top-48 size-[46rem] rounded-full blur-[120px]"
-        style={{ backgroundColor: 'hsl(var(--primary) / 0.10)' }}
-        animate={{
-          x: Math.sin(step * 1.3) * 70,
-          y: Math.cos(step * 0.9) * 54,
-          scale: 1 + Math.sin(step * 0.7) * 0.07,
-        }}
-        transition={drift}
+      <div
+        className="absolute -right-48 -top-48 size-[44rem] rounded-full blur-[130px]"
+        style={{ backgroundColor: 'hsl(var(--primary) / 0.08)' }}
       />
-      <motion.div
-        className="absolute -bottom-56 -left-48 size-[42rem] rounded-full blur-[130px]"
-        style={{ backgroundColor: 'hsl(var(--chart-3) / 0.09)' }}
-        animate={{
-          x: Math.cos(step * 1.1) * 60,
-          y: Math.sin(step * 1.4) * 48,
-          scale: 1 + Math.cos(step * 0.8) * 0.06,
-        }}
-        transition={drift}
+      <div
+        className="absolute -bottom-48 -left-48 size-[44rem] rounded-full blur-[130px]"
+        style={{ backgroundColor: 'hsl(var(--chart-3) / 0.07)' }}
       />
     </div>
   );

@@ -334,8 +334,29 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     title: 'Your customers book here',
     body: 'Your name, logo and colours go on a public booking site that is already live for you.',
     route: '/settings?tab=branding',
-    anchors: ['[data-tour="booking-site-branding"]', '[id$="-trigger-branding"]'],
-    side: 'top',
+    // Point at the Branding ROW in the settings rail, not at the panel it
+    // opens. The panel (`[data-tour="booking-site-branding"]`) is a whole Card
+    // — Application Name, Company Logo and Favicon — and it is TALLER THAN THE
+    // VIEWPORT, so spotlighting it rimmed nearly the entire screen, left only a
+    // strip of sidebar dimmed, and slid around as the operator scrolled. A
+    // spotlight around everything points at nothing.
+    //
+    // The row is the thing the sentence is actually about: "your customers book
+    // here" is telling them WHERE this lives, and the answer is Settings →
+    // Branding. Once they are looking at the right row, the panel beside it is
+    // already on screen and needs no rim of its own.
+    //
+    // `[id$="-trigger-branding"]` used to sit here as the small-element
+    // fallback. It addresses Radix's generated TabsTrigger id from the v1
+    // settings page, which the v2 sidebar replaced — so it matched nothing, and
+    // every run fell through to the oversized card. Kept last, still, for a
+    // tenant rendering the v1 tab strip.
+    anchors: [
+      '[data-tour="settings-tab-branding"]',
+      '[data-tour="booking-site-branding"]',
+      '[id$="-trigger-branding"]',
+    ],
+    side: 'right',
     requires: { settingsTab: 'branding' },
     detail: (ctx) => (ctx.bookingUrl ? ctx.bookingUrl.replace(/^https?:\/\//, '') : null),
   },

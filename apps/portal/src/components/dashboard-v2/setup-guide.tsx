@@ -15,6 +15,7 @@ import {
   ExplainerShelfButton,
 } from "@/components/explainers/explainer";
 import { listReadyExplainers } from "@/lib/explainers";
+import { isLeanTenant } from "@/lib/lean-areas";
 
 type PanelState = "expanded" | "minimized" | "closed";
 
@@ -205,7 +206,7 @@ function Group({
  */
 export function SetupGuide() {
   const router = useRouter();
-  const { tenant } = useTenant();
+  const { tenant, tenantSlug } = useTenant();
   const { groups, progressPercent, completedItems, totalItems, isVisible } =
     useSetupGuide();
 
@@ -250,7 +251,10 @@ export function SetupGuide() {
 
   // Read once per render rather than inside the footer, so the footer's border
   // is dropped along with the button it would otherwise wrap around nothing.
-  const hasGuides = listReadyExplainers().length > 0;
+  // Same placeholder rule the chips use, so the shelf button cannot appear
+  // while every row is empty, or vanish while the rows all offer a video.
+  const hasGuides =
+    listReadyExplainers({ allowPlaceholder: isLeanTenant(tenantSlug) }).length > 0;
 
   // Land the operator on the group they are actually working on, the way
   // Stripe opens "Test Connect" for you. Only ever seeds the initial value —

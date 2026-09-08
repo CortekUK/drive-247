@@ -37,7 +37,13 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/30 duration-100 supports-[backdrop-filter]:backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+        // `blur-md`, not `blur-sm`. The portal behind a dialog is dense —
+        // tables, stat cards, a full sidebar — and at `sm` all of it stayed
+        // legible, so the page kept reading as noise around the dialog rather
+        // than receding behind it. This is v2-only: `components/ui/dialog.tsx`
+        // is a separate file on its own Radix primitives, so v1 tenants are
+        // untouched by this.
+        "fixed inset-0 isolate z-50 bg-black/30 duration-100 supports-[backdrop-filter]:backdrop-blur-md data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
         className
       )}
       {...props}
