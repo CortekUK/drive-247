@@ -210,6 +210,11 @@ const Pricing = () => {
       .select(
         vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
       )
+      // Website visibility. Configuration only — a hidden vehicle still exists
+      // in the operator Portal, still rents, and an in-flight booking or a
+      // signed agreement that already names it is untouched. This filter
+      // belongs on BROWSE queries only, never on a lookup of one vehicle by id.
+      .eq("show_on_website", true)
       .order("daily_rent");
 
     // Add tenant filter if tenant context exists

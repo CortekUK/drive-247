@@ -108,6 +108,9 @@ const BookingVehiclesContent = () => {
         .select(
           vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
         )
+        // Website visibility — same rule as the widget this page follows on
+        // from: a vehicle the operator has hidden is not offered to customers.
+        .eq("show_on_website", true)
         // Case-insensitive status match so rows saved as lowercase "available"/"rented"
         // aren't silently dropped (mirrors the homepage MultiStepBookingWidget query).
         .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")

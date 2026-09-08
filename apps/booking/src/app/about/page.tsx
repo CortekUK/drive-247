@@ -117,6 +117,9 @@ const About = () => {
       const { count: vehiclesCount } = await supabase
         .from("vehicles")
         .select("*", { count: "exact", head: true })
+        // A count including cars a visitor cannot find would overstate the
+        // fleet — this number sits next to "vehicles in our fleet".
+        .eq("show_on_website", true)
         .eq("tenant_id", tenant.id)
         .eq("is_paused", false)
         .eq("is_disposed", false);

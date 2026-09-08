@@ -967,6 +967,11 @@ const MultiStepBookingWidget = () => {
         vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS)
       )
       .eq("tenant_id", tenant.id)
+      // Website visibility. The widget IS the customer website, so a hidden
+      // vehicle must not be offered here either — otherwise "hidden" would
+      // mean "absent from the fleet page but still bookable". Operator-side
+      // booking is unaffected; this file is only the public widget.
+      .eq("show_on_website", true)
       .or("status.ilike.Available,status.ilike.available,status.ilike.Rented,status.ilike.rented")
       // Paused = off the road. Deliberately server-side: the blocked_dates and
       // tier filters below both sit inside `if (pickupDate && dropoffDate)`, so

@@ -23,6 +23,7 @@ import {
   Search,
   RotateCcw,
   Eye,
+  Car,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -51,13 +52,14 @@ import { CMS_DEFAULTS } from "@/constants/website-content";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useV2 } from "@/lib/v2-context";
 import { CmsPageEditor } from "@/components/cms-v2/cms-page-editor";
+import { WebsiteVehiclesPanel } from "@/components/cms-v2/website-vehicles-panel";
 
 export default function CMSFleetEditor() {
   const router = useRouter();
   const { data: page, isLoading } = useCMSPage("fleet");
   const { publishPage, isPublishing } = useCMSPages();
   const { updateSection, isUpdating } = useCMSPageSections("fleet");
-  const [activeTab, setActiveTab] = useState("rates");
+  const [activeTab, setActiveTab] = useState("vehicles");
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const { canEdit } = useManagerPermissions();
@@ -222,7 +224,14 @@ export default function CMSFleetEditor() {
             </div>
           )}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
+              {/* First, because it is the question an operator opens this page
+                  with: which of my cars does the public see? The other tabs are
+                  the copy around them. */}
+              <TabsTrigger value="vehicles" className="flex items-center gap-2">
+                <Car className="h-4 w-4" />
+                <span className="hidden lg:inline">Vehicles</span>
+              </TabsTrigger>
               <TabsTrigger value="rates" className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 <span className="hidden lg:inline">Rates</span>
@@ -243,6 +252,10 @@ export default function CMSFleetEditor() {
 
             <div className={!canEdit('cms') ? "pointer-events-none select-none" : ""}>
             <div className="mt-6">
+              <TabsContent value="vehicles" className="mt-0">
+                <WebsiteVehiclesPanel canEdit={canEdit('cms')} />
+              </TabsContent>
+
               <TabsContent value="rates" className="mt-0">
                 <RentalRatesEditor
                   content={ratesContent}
