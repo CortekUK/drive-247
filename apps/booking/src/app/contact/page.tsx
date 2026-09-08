@@ -86,21 +86,36 @@ const Contact = () => {
     email_response_time: content.contact_info?.email?.response_time || "Response within 2 hours during business hours",
   }), [content, siteSettings]);
 
-  // LocalBusiness schema for SEO
+  /**
+   * LocalBusiness schema — published to search engines as fact, so it states
+   * only what the tenant has actually configured.
+   *
+   * Removed: `addressCountry: "US"` (wrong for tenants trading elsewhere),
+   * `openingHours: "Mo-Su 00:00-23:59"` (a 24/7 claim nobody made — this page
+   * has no connection to the Availability settings that hold real hours),
+   * `priceRange: "$$$"` (a price band asserted for every operator), and a URL
+   * falling back to our own domain.
+   */
   const businessSchema = {
     "@context": "https://schema.org",
     "@type": "CarRental",
     "name": appName,
-    "description": "Premium luxury car rentals",
-    "url": typeof window !== 'undefined' ? window.location.origin : 'https://drive247.com',
-    "telephone": contactSettings.phone,
-    "email": contactSettings.email,
-    "address": {
-      "@type": "PostalAddress",
-      "addressCountry": "US"
-    },
-    "openingHours": "Mo-Su 00:00-23:59",
-    "priceRange": "$$$"
+    ...(content.seo?.description ? { "description": content.seo.description } : {}),
+    ...(typeof window !== "undefined" ? { "url": window.location.origin } : {}),
+    ...(contactSettings.phone ? { "telephone": contactSettings.phone } : {}),
+    ...(contactSettings.email ? { "email": contactSettings.email } : {}),
+    ...(siteSettings.city || siteSettings.country
+      ? {
+          "address": {
+            "@type": "PostalAddress",
+            ...(siteSettings.address_line1 ? { "streetAddress": siteSettings.address_line1 } : {}),
+            ...(siteSettings.city ? { "addressLocality": siteSettings.city } : {}),
+            ...(siteSettings.state ? { "addressRegion": siteSettings.state } : {}),
+            ...(siteSettings.zip ? { "postalCode": siteSettings.zip } : {}),
+            ...(siteSettings.country ? { "addressCountry": siteSettings.country } : {}),
+          },
+        }
+      : {}),
   };
 
   // Format phone number for tel: link (remove spaces and special chars except +)
