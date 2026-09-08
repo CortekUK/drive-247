@@ -199,6 +199,38 @@ export type ExplainerId = keyof typeof EXPLAINERS;
 export interface ReadyExplainer extends ExplainerEntry {
   id: ExplainerId;
   url: string;
+  /**
+   * True when this is the stand-in reel, not a real explainer. Consumers label
+   * it so nobody — operator or reviewer — mistakes it for finished content.
+   */
+  isPlaceholder: boolean;
+}
+
+/**
+ * The stand-in reel, for demonstrating the flow before any video is produced.
+ *
+ * Same file `components/rentals-v2/booking-mode-selector.tsx` already uses, so
+ * the app has exactly one placeholder rather than two that drift.
+ */
+export const SAMPLE_EXPLAINER_URL =
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
+export interface ExplainerLookupOptions {
+  /**
+   * Substitute the stand-in reel for entries that have no video yet.
+   *
+   * OFF by default, and that default is the load-bearing part: the empty-URL
+   * contract says a paying tenant must never be shown a control that does
+   * nothing, and showing them a cartoon rabbit instead is a worse answer than
+   * showing them nothing.
+   *
+   * Pass `true` only for the canary, so the checklist's video affordance can be
+   * built, reviewed and iterated on before a single file has been recorded.
+   * When the real videos land in the manifest this flag stops changing anything
+   * — a produced entry is returned on its own merits either way — so nothing
+   * needs unpicking later.
+   */
+  allowPlaceholder?: boolean;
 }
 
 /**
@@ -214,19 +246,48 @@ export interface ReadyExplainer extends ExplainerEntry {
  * duration — so that combination is treated as not-ready rather than rendered
  * as a confident "0:00".
  */
-export function getExplainer(id: ExplainerId | null | undefined): ReadyExplainer | null {
+export function getExplainer(
+  id: ExplainerId | null | undefined,
+  options?: ExplainerLookupOptions,
+): ReadyExplainer | null {
   if (!id) return null;
   const entry = (EXPLAINERS as Record<string, ExplainerEntry>)[id];
   if (!entry) return null;
-  if (!entry.url) return null;
+
+  if (!entry.url) {
+    // Unproduced. For everyone but the canary this is the end of the story —
+    // the empty-URL contract above — and the slot renders nothing.
+    if (!options?.allowPlaceholder) return null;
+    return {
+      ...entry,
+      id,
+      url: SAMPLE_EXPLAINER_URL,
+      // Deliberately NOT the sample file's real runtime. Duration is a promise
+      // about the video the operator is about to watch, and there is no such
+      // video yet; a number here would be a confident lie. Consumers render no
+      // time at all when this is 0, which is already how they treat an
+      // unproduced entry.
+      durationSeconds: 0,
+      isPlaceholder: true,
+    };
+  }
+
   if (!(entry.durationSeconds > 0)) return null;
-  return { ...entry, id };
+  return { ...entry, id, isPlaceholder: false };
 }
 
-/** Every produced video, in manifest order. Empty until the first file lands. */
-export function listReadyExplainers(): ReadyExplainer[] {
+/**
+ * Every produced video, in manifest order. Empty until the first file lands.
+ *
+ * Takes the same options as `getExplainer`, so the guides shelf on the canary
+ * lists the same placeholder set the individual rows offer. Without that the
+ * shelf would be empty while every row showed a Watch control — the two reading
+ * the manifest through different rules is exactly the drift this module exists
+ * to prevent.
+ */
+export function listReadyExplainers(options?: ExplainerLookupOptions): ReadyExplainer[] {
   return (Object.keys(EXPLAINERS) as ExplainerId[])
-    .map((id) => getExplainer(id))
+    .map((id) => getExplainer(id, options))
     .filter((e): e is ReadyExplainer => e !== null);
 }
 

@@ -265,9 +265,27 @@ describe('first-run arrival — tenant gate, three cases', () => {
     expect(madeNoise()).toBe(false);
   });
 
-  it('celebrates a skip too — the arrival is the moment, however they got here', SLOW, async () => {
+  /**
+   * Was "celebrates a skip too", clicking a "Skip for now" that ended the whole
+   * wizard. That control is gone by explicit request — nobody may skip the
+   * whole thing — so the surviving question is the one that still matters:
+   * does the arrival celebrate when the operator reached the end having
+   * skipped the questions that were optional?
+   */
+  it('celebrates even when the optional questions were skipped', SLOW, async () => {
     await renderFor({ id: 'northwind-id', slug: 'northwind' });
-    await click(button('Skip for now'));
+
+    for (let i = 0; i < FIRST_RUN_QUESTIONS.length - 1; i += 1) {
+      // Skip where the author allowed it, answer where they did not.
+      const skip = document.body.textContent?.includes('Skip this question');
+      if (skip) await click(button('Skip this question'));
+      else {
+        await answerCurrentStep();
+        await click(button('Continue'));
+      }
+    }
+    await answerCurrentStep();
+    await click(button('Go to my dashboard'));
 
     expect(wizardIsUp()).toBe(false);
     expect(confettiLayers()).toBe(1);

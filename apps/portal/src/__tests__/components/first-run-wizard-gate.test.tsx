@@ -312,24 +312,33 @@ describe('FirstRunWizard — shown exactly once', () => {
     expect(text).toContain(SENTINEL);
   });
 
-  it('"Skip for now" also counts as seen, and stores no answers', async () => {
+  /**
+   * The whole-wizard skip is GONE, by explicit request: "they should never be
+   * able to skip the whole thing."
+   *
+   * It used to be a "Skip for now" link in the footer calling `finish(true)`,
+   * which ended onboarding from any step. That made `required` decorative — a
+   * question was only required until the operator noticed the link beside it —
+   * and it meant the question set a super admin marks mandatory could be
+   * dismissed wholesale in one click.
+   *
+   * What replaced it is per-question: a "Skip this question" link that appears
+   * ONLY on a question whose author left it optional, and which advances one
+   * step rather than ending the wizard.
+   */
+  it('offers no way to skip the whole wizard from a required question', async () => {
     const tenant = { id: 'northwind-id-2', slug: 'northwind' };
 
     await renderFor(tenant);
     expect(wizardIsUp()).toBe(true);
 
-    await click(button('Skip for now'));
+    // FIRST_RUN_QUESTIONS[0] is required, so neither skip affordance is offered.
+    expect(document.body.textContent).not.toContain('Skip for now');
+    expect(document.body.textContent).not.toContain('Skip this question');
 
-    expect(upsertCount).toBe(1);
-    const row = stored.get(tenant.id)!;
-    expect(row.was_skipped).toBe(true);
-    expect(row.answers).toEqual({});
-    expect(wizardIsUp()).toBe(false);
-
-    // And it stays gone.
-    const text = await renderFor(tenant);
-    expect(wizardIsUp()).toBe(false);
-    expect(text).toContain(SENTINEL);
+    // Nothing was written, and the wizard is still up.
+    expect(upsertCount).toBe(0);
+    expect(wizardIsUp()).toBe(true);
   });
 
   it('will not advance past a required question that has no answer', async () => {

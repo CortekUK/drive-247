@@ -66,9 +66,25 @@ const SEVERITY_LABEL: Record<AnnouncementSeverity, string> = {
 /**
  * Severity keeps its own semantics — critical stays red regardless of the
  * tenant's brand, because "important" must not become "on-brand".
+ *
+ * `critical` is a SOLID red chip with white text, not a translucent tint.
+ * It used to be `bg-destructive/15 text-destructive`, which is the correct
+ * pattern on a white card and the wrong one here: this badge sits on the brand
+ * GRADIENT, so a 15% red wash composites over indigo into a muddy plum, and
+ * mid-red text on top of that had almost no luminance contrast — the one label
+ * that must be read at a glance was the least legible thing on the card.
+ *
+ * A solid fill fixes it without giving up the semantic: the chip is still
+ * unmistakably red, and white-on-red carries its own contrast regardless of
+ * what brand colour the tenant has chosen for the surface underneath. The ring
+ * keeps its edge from disappearing into a dark-red or maroon brand.
+ *
+ * The other three stay translucent white on purpose. They are not urgent, and
+ * a second solid chip would compete with this one.
  */
 const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
-  critical: 'border-destructive/30 bg-destructive/15 text-destructive',
+  critical:
+    'border-transparent bg-destructive text-white shadow-sm ring-1 ring-inset ring-white/20',
   major: 'border-white/30 bg-white/15 text-white',
   minor: 'border-white/25 bg-white/10 text-white/90',
   info: 'border-white/25 bg-white/10 text-white/90',

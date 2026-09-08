@@ -1420,6 +1420,16 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
                                 scroll={false}
                                 prefetch={false}
                                 onClick={closeMobileOnNav}
+                                // A stable, tour-addressable handle on every
+                                // settings nav row. The walkthrough needs to
+                                // point at ONE row — "this is Branding" — and
+                                // the only alternative was Radix's generated
+                                // `[id$="-trigger-branding"]`, which belongs to
+                                // the v1 TabsList this sidebar replaced and so
+                                // matches nothing here. That dead selector is
+                                // why the Booking-site step fell through to its
+                                // other anchor: the whole Brand Identity card.
+                                data-tour={`settings-tab-${item.value}`}
                                 className="flex items-center gap-2.5"
                               >
                                 <item.icon className="h-4 w-4 shrink-0" />

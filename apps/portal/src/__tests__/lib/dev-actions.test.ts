@@ -244,13 +244,54 @@ describe('resetFirstRunRow', () => {
   it('surfaces a database error from the delete verbatim', async () => {
     const { client } = fakeClient({
       deleted: null,
-      deleteError: { message: 'relation "public.tenant_first_run" does not exist' },
+      deleteError: { message: 'permission denied for table tenant_first_run' },
     });
     await expect(resetFirstRunRow(client, 'tenant-1')).resolves.toEqual({
       ok: false,
       reason: 'error',
-      message: 'relation "public.tenant_first_run" does not exist',
+      message: 'permission denied for table tenant_first_run',
     });
+  });
+
+  /**
+   * The table is only on staging — its migration has never been applied to
+   * production — so against prod the delete comes back as an error. Treating
+   * that as a failed reset is what made "First-time operator" and "Full signup
+   * journey" do nothing at all there, while "Quick tour" (pure localStorage)
+   * worked. A table that does not exist holds no row, so there is nothing to
+   * clear and nothing has gone wrong.
+   */
+  it.each([
+    ['a Postgres undefined_table code', { message: 'nope', code: '42P01' }],
+    ['a PostgREST schema-cache code', { message: 'nope', code: 'PGRST205' }],
+    [
+      'a bare Postgres message',
+      { message: 'relation "public.tenant_first_run" does not exist' },
+    ],
+    [
+      'a bare PostgREST message',
+      { message: "Could not find the table 'public.tenant_first_run' in the schema cache" },
+    ],
+  ])('treats a missing table as nothing-to-clear — %s', async (_label, deleteError) => {
+    const { client } = fakeClient({ deleted: null, deleteError });
+    await expect(resetFirstRunRow(client, 'tenant-1')).resolves.toEqual({
+      ok: true,
+      deleted: 0,
+      absent: true,
+    });
+  });
+
+  /**
+   * The distinction that must not collapse. A missing table means the flag
+   * cannot exist; RLS refusing the delete means the flag exists and is staying
+   * put. If the second ever passed as a successful reset, the wizard would stay
+   * dark while the page insisted it had been re-armed.
+   */
+  it('still refuses an RLS block, which is not a missing table', async () => {
+    const { client } = fakeClient({ deleted: [], remaining: { id: 'row-1' } });
+    const result = await resetFirstRunRow(client, 'tenant-1');
+    if (result.ok !== false) throw new Error('unreachable');
+    expect(result.reason).toBe('blocked');
   });
 
   it('surfaces a database error from the read-back too', async () => {

@@ -19,6 +19,8 @@ import {
   ChevronDown,
   LogOut,
   ScrollText,
+  Scale,
+  ListChecks,
   ArrowUpCircle,
   Megaphone,
   MessageSquareText,
@@ -90,6 +92,12 @@ function useNavigation() {
       label: 'Configuration',
       items: [
         { name: 'Settings', href: '/admin/settings', icon: Settings },
+        // Terms of Service and Privacy Policy, as served at drive-247.com.
+        // Not a tenant's rental terms — those are per-tenant CMS content and a
+        // different contract entirely. See ops/platform_legal_documents.sql.
+        { name: 'Legal Pages', href: '/admin/legal', icon: Scale },
+        // The first-run wizard's questions. Platform-wide, not per-tenant.
+        { name: 'Onboarding Questions', href: '/admin/onboarding-questions', icon: ListChecks },
         ...(user?.is_primary_super_admin
           ? [{ name: 'Manage Admins', href: '/admin/admins', icon: Users }]
           : []),

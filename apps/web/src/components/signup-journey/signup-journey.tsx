@@ -525,7 +525,10 @@ function JourneyDialog({
         <div
           data-slot="journey-overlay"
           className={cn(
-            "fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-sm dark:bg-slate-950/70",
+            // Heavier blur than `sm`: the pricing grid sits directly behind
+            // this dialog, and at `blur-sm` its cards and prices stayed legible
+            // enough to read as a second screen competing with the form.
+            "fixed inset-0 z-50 bg-slate-950/50 backdrop-blur-md dark:bg-slate-950/70",
             "animate-in fade-in-0 duration-200",
           )}
         />
@@ -553,30 +556,22 @@ function JourneyDialog({
           className={cn(
             // Full-height sheet on a phone, centred panel from `sm` up.
             "fixed inset-0 z-50 flex flex-col bg-background outline-none",
-            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[min(88dvh,54rem)] sm:w-[calc(100%-3rem)] sm:max-w-[42rem]",
+            // Wider and taller than it was (42rem / 88dvh). The account step
+            // needs roughly 1000px of stacked content against ~640px of room,
+            // so it overflowed and the body scrolled — and the scroll started
+            // right at the divider, which is what read as the form "breaking"
+            // partway down. The extra width is what lets the account step lay
+            // its two field groups side by side instead of stacked.
+            // `dvh`, not `vh`: on mobile Safari and Chrome the URL bar makes
+            // `vh` a promise the browser breaks, and the difference lands on
+            // the bottom of the panel — where the submit button is.
+            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:h-auto sm:max-h-[min(96dvh,62rem)] sm:w-[calc(100%-2rem)] sm:max-w-[62rem]",
             "sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:shadow-2xl",
             "data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:data-[state=open]:zoom-in-95",
             "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 sm:data-[state=closed]:zoom-out-95",
             "duration-200",
           )}
         >
-          {/*
-            The step indicator, and deliberately the quietest thing on screen:
-            a 2px rail along the very top edge. It answers "how far in am I"
-            without competing with the headline for attention.
-          */}
-          <div
-            aria-hidden="true"
-            className="h-0.5 w-full shrink-0 bg-muted sm:rounded-t-2xl"
-          >
-            <div
-              className="h-full bg-indigo-600 transition-[width] duration-500 ease-out dark:bg-indigo-400"
-              style={{
-                width: `${((index + 1) / JOURNEY_STEPS.length) * 100}%`,
-              }}
-            />
-          </div>
-
           {/* Plan, position, and the way out. */}
           <div className="flex shrink-0 items-center gap-4 px-6 pt-6 sm:px-10 sm:pt-8">
             <p className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
@@ -590,9 +585,38 @@ function JourneyDialog({
               )}
             </p>
 
-            <p className="shrink-0 text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase tabular-nums">
-              {`Step ${index + 1} of ${JOURNEY_STEPS.length}`}
-            </p>
+            {/*
+              Progress sits WITH the step count, not on the panel's top edge.
+
+              It used to be a 2px rail spanning the full width of the dialog,
+              flush against the rounded corners. At 25% it read as a stray
+              coloured line snagged on the top of the panel rather than as a
+              measure of anything — the one place on screen with no label to
+              tell you what it was. Beside "Step 1 of 4" it is self-explanatory:
+              the words say where you are and the segments show it.
+
+              Segments rather than a continuous bar, because the journey has
+              four discrete steps and a filling bar implies smooth progress
+              through something continuous. Hidden below `sm`, where the words
+              alone carry it and horizontal room is scarce.
+            */}
+            <div className="flex shrink-0 items-center gap-2.5">
+              <div className="hidden items-center gap-1 sm:flex" aria-hidden="true">
+                {JOURNEY_STEPS.map((step, i) => (
+                  <span
+                    key={step.key}
+                    className={cn(
+                      "h-1 w-5 rounded-full transition-colors duration-300",
+                      i <= index ? "bg-indigo-600 dark:bg-indigo-400" : "bg-muted",
+                    )}
+                  />
+                ))}
+              </div>
+
+              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase tabular-nums">
+                {`Step ${index + 1} of ${JOURNEY_STEPS.length}`}
+              </p>
+            </div>
 
             <DialogPrimitive.Close
               className={cn(
@@ -610,11 +634,11 @@ function JourneyDialog({
             The body scrolls, the chrome above it does not — so the plan, the
             step count and the way out are always reachable on a tall step.
           */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-7 pb-10 sm:px-10 sm:pt-9 sm:pb-12">
-            <DialogPrimitive.Title className="text-[27px] leading-[1.12] font-bold tracking-tighter text-balance sm:text-[32px]">
+          <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-8 sm:px-10 sm:pt-6 sm:pb-9">
+            <DialogPrimitive.Title className="text-[24px] leading-[1.14] font-bold tracking-tighter text-balance sm:text-[28px]">
               {title}
             </DialogPrimitive.Title>
-            <DialogPrimitive.Description className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+            <DialogPrimitive.Description className="mt-2.5 text-[15px] leading-relaxed text-muted-foreground">
               {description}
             </DialogPrimitive.Description>
 
@@ -622,7 +646,7 @@ function JourneyDialog({
                 stable, so nothing remounts while someone is typing. */}
             <div
               key={step}
-              className="mt-8 animate-in fade-in-0 slide-in-from-bottom-1 duration-300 sm:mt-9"
+              className="mt-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300 sm:mt-7"
             >
               {children}
             </div>
