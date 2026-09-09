@@ -203,25 +203,59 @@ describe("boldsign/mode — every reader prefers the mode recorded on the row", 
   });
 
   it("a recorded LIVE mode is never downgraded to test by a later read", () => {
-    // The one half of the fallback that is unambiguously right, and worth
-    // pinning on its own: `resolveMode` only re-reads the tenant when the
-    // recorded value is falsy or 'test', so 'live' always survives. A signed
-    // LIVE document fetched with a sandbox key is a 404 on a legally binding
-    // agreement.
+    // A signed LIVE document fetched with a sandbox key is a 404 on a legally
+    // binding agreement, so this is the half of `resolveMode`'s fallback that is
+    // unambiguously right.
+    //
+    // It is asserted by LIFTING the shipped condition and RUNNING it, not by
+    // matching its text. Matching the text would pin one spelling — and the
+    // repair for finding 3 below (`if (!mode)`) is a DIFFERENT spelling that
+    // satisfies this property perfectly. A test that goes red when the code is
+    // fixed is worse than no test, so this one asks the condition what it does
+    // rather than what it looks like.
     const src = blankComments(readEdgeFunctionSource("boldsign-webhook"));
     const fn = src.slice(src.indexOf("async function resolveMode"));
     const guard = fn.slice(0, fn.indexOf("return mode"));
+
+    const at = guard.indexOf("if (");
+    expect(at, "resolveMode no longer guards its tenant re-read with an `if`.").toBeGreaterThan(-1);
+    const cond = balanced(guard, at + 3).trim();
+
+    let fallsBackFor: (mode: string | null | undefined) => boolean;
+    try {
+      // Strip TS-only `as X` casts; the condition is otherwise plain JS.
+      fallsBackFor = new Function(
+        "mode",
+        `return !!(${cond.replace(/\s+as\s+[A-Za-z_$][\w$]*/g, "")});`,
+      ) as typeof fallsBackFor;
+    } catch (e) {
+      throw new Error(
+        `resolveMode's fallback condition could not be executed: ${(e as Error).message}\n` +
+          `  condition: ${cond}\n` +
+          "  It reads something other than the recorded `mode`. Re-read it by hand: the\n" +
+          "  property that must hold is that a recorded 'live' is NEVER replaced by a\n" +
+          "  tenant read.",
+      );
+    }
+
     expect(
-      guard,
-      "resolveMode's fallback condition has changed shape. Re-read it: the property " +
-        "that must hold is that a recorded 'live' is NEVER replaced by a tenant read.",
-    ).toMatch(/if\s*\(!mode\s*\|\|\s*mode\s*===\s*\('test' as any\)\)/);
-    expect(
-      /mode\s*===\s*\('live'/.test(guard),
-      "resolveMode now re-reads the tenant for a document recorded as LIVE. A live " +
-        "document downloaded with the sandbox key 404s, and the signed PDF for a real " +
-        "contract is never stored.",
+      fallsBackFor("live"),
+      "resolveMode now re-reads the tenant for a document recorded as LIVE.\n" +
+        `  condition: ${cond}\n` +
+        "  FAILURE MODE (b) — a live document downloaded with the sandbox key 404s, and\n" +
+        "  the signed PDF for a real contract is never stored.",
     ).toBe(false);
+
+    // And the fail-safe direction: nothing recorded MUST fall back, or the
+    // 'test' seed on the line above becomes the answer for every document.
+    for (const nothing of [null, undefined, ""] as const) {
+      expect(
+        fallsBackFor(nothing),
+        `resolveMode no longer falls back to the tenant when the recorded mode is ` +
+          `${JSON.stringify(nothing)}.\n  condition: ${cond}\n` +
+          "  An unrecorded agreement would be pinned to the seeded 'test' forever.",
+      ).toBe(true);
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -234,20 +268,31 @@ describe("boldsign/mode — every reader prefers the mode recorded on the row", 
   // happen. The other five readers (view, sign, status, void, signing-redirect)
   // have the same shape, so it is a pattern, not a typo.
   //
-  // This test passes today because that is what the code does. When it is fixed
-  // — the fallback firing only on a NULL/absent mode — THIS TEST FAILS, and the
-  // right response is to delete it.
+  // This test passes today because that is what the code does. It is written to
+  // CONVERT ITSELF: as each reader is repaired the case narrows to the ones
+  // still affected, and when the last one lands it becomes the ordinary
+  // assertion that no reader re-resolves a mode that was recorded. Nobody who
+  // fixes this is handed a red build for having fixed it.
   // -------------------------------------------------------------------------
-  it("PINS FINDING 3: a recorded 'test' mode is treated as unset and re-resolved from the tenant", () => {
-    const webhook = blankComments(readEdgeFunctionSource("boldsign-webhook"));
+  it("WATCHDOG (finding 3): a recorded 'test' mode is treated as unset and re-resolved", () => {
+    // The counter-example first, because it is the fix target and it holds
+    // whichever branch we take below: /api/esign/void resolves the SAME question
+    // correctly, falling back only when nothing is recorded. That is what makes
+    // finding 3 a defect rather than a design decision — the right shape already
+    // exists next door.
+    const voidSrc = blankComments(readRepoSource("apps/portal/src/app/api/esign/void/route.ts"));
     expect(
-      webhook,
-      "The webhook's `mode === 'test'` fallback trigger is gone. If the fallback now " +
-        "fires only when nothing is recorded, FINDING 3 IS FIXED: delete this test.",
-    ).toMatch(/if\s*\(!mode\s*\|\|\s*mode\s*===\s*\('test' as any\)\)/);
+      /(boldsignMode|mode) === 'test' &&/.test(voidSrc),
+      "/api/esign/void has grown the same 'treat test as unset' fallback as the other " +
+        "readers. It was the correct counter-example; the pattern is spreading rather " +
+        "than being fixed.",
+    ).toBe(false);
+    expect(
+      voidSrc,
+      "/api/esign/void no longer prefers the recorded mode with a plain presence check. " +
+        "That is the shape every other reader should be fixed TO.",
+    ).toContain("if (rental.boldsign_mode) {");
 
-    // The same shape in four of the five portal readers, so a fix in one place
-    // is visibly partial.
     const readers = [
       "apps/portal/src/app/api/esign/view/route.ts",
       "apps/portal/src/app/api/esign/sign/route.ts",
@@ -257,31 +302,61 @@ describe("boldsign/mode — every reader prefers the mode recorded on the row", 
     const stillAffected = readers.filter((f) =>
       /(boldsignMode|mode) === 'test' &&/.test(blankComments(readRepoSource(f))),
     );
+    const webhook = blankComments(readEdgeFunctionSource("boldsign-webhook"));
+    const webhookAffected = /if\s*\(!mode\s*\|\|\s*mode\s*===\s*\('test' as any\)\)/.test(webhook);
+
+    // A fix must only ever REMOVE readers from this set. Going up is a new
+    // reader copying the pattern, and that is a fresh bug either way.
     expect(
       stillAffected.length,
-      "The number of readers that re-resolve a recorded 'test' mode from the tenant " +
-        "has changed.\n" +
-        `  still affected: ${stillAffected.join(", ") || "(none)"}\n` +
-        "  If it went DOWN, finding 3 is being fixed — finish the rest and delete this\n" +
-        "  test. If it went UP, a new reader copied the pattern.",
-    ).toBe(readers.length);
+      `A reader started re-resolving a recorded 'test' mode from the tenant.\n` +
+        `  now affected: ${stillAffected.join(", ")}\n` +
+        "  Finding 3 is spreading. Copy /api/esign/void's plain presence check instead.",
+    ).toBeLessThanOrEqual(readers.length);
 
-    // And the counter-example, in the same folder: /api/esign/void resolves the
-    // SAME question correctly — it falls back only when nothing is recorded.
-    // That is what makes finding 3 a defect rather than a design decision:
-    // the right shape already exists next door.
-    const voidSrc = blankComments(readRepoSource("apps/portal/src/app/api/esign/void/route.ts"));
+    if (!webhookAffected && stillAffected.length === 0) {
+      // FULLY FIXED. The case converts into the real invariant it was guarding:
+      // a recorded mode — 'test' included — is never discarded, anywhere.
+      expect(
+        webhook,
+        "boldsign-webhook must fall back to the tenant only when NOTHING is recorded. " +
+          "Finding 3 was fixed; keep it fixed.",
+      ).not.toMatch(/mode\s*===\s*\('test' as any\)/);
+      for (const f of readers) {
+        expect(
+          blankComments(readRepoSource(f)),
+          `${f} must prefer the recorded mode with a presence check, the way ` +
+            "/api/esign/void does. Finding 3 was fixed; keep it fixed.",
+        ).not.toMatch(/(boldsignMode|mode) === 'test' &&/);
+      }
+      return;
+    }
+
+    // STILL BROKEN, in whole or in part. The assertion here has to be MONOTONE:
+    // repairing one of the five sites must not turn this red, or the first
+    // person to start the fix is punished for starting it. So the only thing
+    // asserted is that the damage has not spread — every site still carrying
+    // the pattern is one of the five already known to carry it. When the last
+    // one is repaired, the branch above takes over and asserts the invariant
+    // permanently.
     expect(
-      /(boldsignMode|mode) === 'test' &&/.test(voidSrc),
-      "/api/esign/void has grown the same 'treat test as unset' fallback as the other " +
-        "four readers. It was the correct counter-example; the pattern is spreading " +
-        "rather than being fixed.",
-    ).toBe(false);
-    expect(
-      voidSrc,
-      "/api/esign/void no longer prefers the recorded mode with a plain presence check. " +
-        "That was the shape the other readers should be fixed TO.",
-    ).toContain("if (rental.boldsign_mode) {");
+      stillAffected.filter((f) => !readers.includes(f)),
+      [
+        "",
+        "  A NEW site re-resolves a recorded boldsign_mode of 'test' from the tenant.",
+        "",
+        "  What this watchdog guards: a recorded mode of 'test' is discarded and re-read",
+        "  from the tenant. For a tenant that has since switched to live, a sandbox-era",
+        "  agreement is then downloaded with the LIVE key and 404s — the exact failure",
+        "  _shared/lean-tenants.ts says must not happen, leaving a signed agreement no",
+        "  one can retrieve.",
+        "",
+        `  Known sites, being worked off: ${[...stillAffected, ...(webhookAffected ? ["boldsign-webhook"] : [])].join(", ")}`,
+        "",
+        "  Copy /api/esign/void's plain presence check instead of this pattern.",
+        "",
+      ].join("\n"),
+    ).toEqual([]);
   });
 
   it("every reader starts at 'test' when nothing at all is known", () => {

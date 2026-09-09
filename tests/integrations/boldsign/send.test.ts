@@ -396,43 +396,69 @@ describe("boldsign/send — LEG B: the customer is actually emailed", () => {
   });
 
   // -------------------------------------------------------------------------
-  // FINDING 1 — pinned, not blessed.
+  // FINDING 1 — a watchdog that CONVERTS ITSELF, not a pin that goes red on a fix.
   //
-  // The automation send path reports an email it never sends. This test passes
-  // TODAY because that is what the code does; it is here so the defect is
-  // executable and cannot quietly change shape. When it is fixed, THIS TEST
-  // FAILS — and the correct response is to delete it, not to restore the bug.
+  // The automation send path reports an email it never sends: BoldSign's own
+  // mail is disabled (`DisableEmails: true`), nothing calls `send-signing-email`,
+  // and the handler returns a hardcoded `emailSent: true`. So the customer is
+  // never told, and `automation-execute-step` logs the step as succeeded.
+  //
+  // The shape below follows download-pdf.test.ts: while the defect is present
+  // the case pins it, executably. The MOMENT a delivery channel appears, the
+  // case flips to asserting the FIX and stays green — a developer who repairs
+  // this is never handed a red build for having done so, which is the one thing
+  // that would make people restore the bug to get CI back.
   // -------------------------------------------------------------------------
-  it("PINS FINDING 1: the automation send path returns emailSent:true and sends no email", () => {
+  it("WATCHDOG: the automation send path returns emailSent:true and sends no email", () => {
     const src = automationSendSrc();
 
-    expect(
-      src.includes("'DisableEmails', 'true'"),
-      "create-boldsign-document no longer disables BoldSign's own emails — which would " +
-        "actually FIX finding 1 by giving the automation path a delivery channel again. " +
-        "Re-read the finding before changing this test.",
-    ).toBe(true);
-
-    expect(
-      src.includes("send-signing-email"),
-      "create-boldsign-document now references send-signing-email. If it genuinely " +
-        "sends our email, FINDING 1 IS FIXED: delete this test and move the automation " +
-        "path into the leg B tests above with the other two send paths.",
-    ).toBe(false);
-
-    expect(
-      src,
-      "The hardcoded `emailSent: true` in create-boldsign-document has changed. If it " +
-        "now reports a real outcome, finding 1 is fixed — delete this test.",
-    ).toContain("emailSent: true");
-
-    // And the automation caller believes it. This is the consequence, in code:
-    // `automation-execute-step` logs the step as succeeded on any 2xx.
+    // The automation caller is what makes this reachable at all.
     expect(
       blankComments(readEdgeFunctionSource("automation-execute-step")),
       "automation-execute-step no longer proxies the agreement step to " +
         "create-boldsign-document. Finding 1 may no longer have a caller — re-check it.",
     ).toContain("create-boldsign-document");
+
+    const ownMailDisabled = src.includes("'DisableEmails', 'true'");
+    const wiresOurEmail = src.includes("send-signing-email");
+    const hardcodesSent = src.includes("emailSent: true");
+
+    if (wiresOurEmail || !hardcodesSent || !ownMailDisabled) {
+      // THE FIX LANDED. Assert it holds, and keep asserting it.
+      expect(
+        wiresOurEmail || !ownMailDisabled,
+        "create-boldsign-document no longer hardcodes `emailSent: true` — good — but it " +
+          "still has NO delivery channel: BoldSign's own mail is disabled and nothing " +
+          "invokes send-signing-email. Reporting the absence honestly is half the fix; " +
+          "the customer still is not told.",
+      ).toBe(true);
+      expect(
+        hardcodesSent,
+        "create-boldsign-document has a delivery channel now, but still returns a " +
+          "hardcoded `emailSent: true`. Derive it from the send outcome the way the two " +
+          "/api/esign routes do, or the caller is being told a fact nobody measured.",
+      ).toBe(false);
+      return;
+    }
+
+    // THE DEFECT IS STILL PRESENT. Pin it, executably, with the cost named.
+    expect(
+      { ownMailDisabled, wiresOurEmail, hardcodesSent },
+      [
+        "",
+        "  create-boldsign-document's leg B stopped matching the recorded defect.",
+        "",
+        "  What it pins: BoldSign's own email is disabled, our send-signing-email is",
+        "  never invoked, and the handler answers `emailSent: true` regardless. The",
+        "  generate_doc automation step therefore reports success for an agreement no",
+        "  customer was ever told about.",
+        "",
+        "  If you FIXED it, this case converts itself and stays green — it should not",
+        "  have reached this assertion. Reaching it means the shape changed some third",
+        "  way: re-read the finding before editing.",
+        "",
+      ].join("\n"),
+    ).toEqual({ ownMailDisabled: true, wiresOurEmail: false, hardcodesSent: true });
   });
 
   // -------------------------------------------------------------------------
@@ -443,34 +469,71 @@ describe("boldsign/send — LEG B: the customer is actually emailed", () => {
   // `{ rentalId, customerEmail, customerName }` and hard-refuses with 400 when
   // `rentalId` is absent — which it always is on that call.
   //
-  // Same treatment: pinned as the current truth, worded so that fixing it turns
-  // this red.
+  // Same self-converting treatment as finding 1: pinned while broken, and the
+  // moment the two sides agree it becomes the ordinary caller-contract
+  // assertion every other send path in this file already gets.
   // -------------------------------------------------------------------------
-  it("PINS FINDING 2: the automation caller sends a lead payload the function cannot read", () => {
+  it("WATCHDOG: the automation caller sends a lead payload the function cannot read", () => {
     const shape = readEdgeFunction("create-boldsign-document");
     const sent = payloadKeysAfterAnchor(
       readEdgeFunctionSource("automation-execute-step"),
       '"create-boldsign-document"',
       "automation-execute-step",
     );
+    const fnSrc = blankComments(readEdgeFunctionSource("create-boldsign-document"));
 
-    expect(shape.fields.sort()).toEqual(["customerEmail", "customerName", "rentalId"]);
+    // Derived, not re-typed: what the function can actually read off the body.
     expect(
-      sent.includes("rentalId"),
-      "automation-execute-step now sends `rentalId` to create-boldsign-document. That " +
-        "is FINDING 2 FIXED — the generate_doc automation step can finally produce a " +
-        "document. Delete this test and add the caller to the ESIGN_CALLERS table above.",
-    ).toBe(false);
+      shape.fields.sort(),
+      "create-boldsign-document's request shape changed. Re-derive finding 2 against " +
+        "the new fields before trusting either branch below.",
+    ).toEqual(["customerEmail", "customerName", "rentalId"]);
+
+    if (sent.includes("rentalId")) {
+      // THE FIX LANDED from the caller's side. This is now a real contract test:
+      // every key the automation sends must be one the function can read, and
+      // the required field must be among them.
+      const unreadable = sent.filter((k) => !shape.fields.includes(k));
+      expect(
+        unreadable,
+        "automation-execute-step now sends rentalId — the generate_doc step can finally " +
+          "produce a document — but it also sends key(s) create-boldsign-document cannot " +
+          "read. Either the function grew to accept them or the caller should stop " +
+          "sending them; a silently-ignored key is how finding 2 started.",
+      ).toEqual([]);
+      return;
+    }
+
+    if (!fnSrc.includes("rentalId is required")) {
+      // THE FIX LANDED from the function's side: it accepts a lead now. Then the
+      // lead keys must be readable, or the step still cannot work.
+      expect(
+        sent.filter((k) => !shape.fields.includes(k)),
+        "create-boldsign-document no longer hard-refuses a body with no rentalId, so it " +
+          "is meant to accept the automation's lead payload — but these keys are still " +
+          "not in anything it reads, so the step produces a document with no lead data.",
+      ).toEqual([]);
+      return;
+    }
+
+    // THE DEFECT IS STILL PRESENT: the two sides cannot talk to each other.
     expect(
       sent,
-      "The automation payload changed shape. Re-derive finding 2 before editing this test.",
+      [
+        "",
+        "  The automation payload changed shape without fixing finding 2.",
+        "",
+        "  What it pins: automation-execute-step invokes create-boldsign-document with a",
+        "  LEAD payload (leadId, vehicleId, startDate, …). The function destructures",
+        "  { rentalId, customerEmail, customerName } and answers 400 'rentalId is",
+        "  required' — always. The generate_doc automation step has never been able to",
+        "  produce a document.",
+        "",
+        "  If you FIXED it — from either side — this case converts itself and stays",
+        "  green. Reaching this assertion means the payload moved some third way.",
+        "",
+      ].join("\n"),
     ).toContain("leadId");
-
-    expect(
-      blankComments(readEdgeFunctionSource("create-boldsign-document")),
-      "create-boldsign-document no longer refuses a body with no rentalId. If it now " +
-        "accepts a lead, finding 2 may be fixed from the other side.",
-    ).toContain("rentalId is required");
   });
 });
 

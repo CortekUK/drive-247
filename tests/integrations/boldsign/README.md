@@ -71,6 +71,8 @@ three or the sentence means nothing:
 | `view.test.ts` | The request contract for seven view call sites against the route's destructure, and the edge function agreeing with it; a stored signed PDF short-circuiting **above** the BoldSign download; storage-path vs http URL; "no document for this rental" instead of a 500; the mode read from the row; the `0x8000` chunked base64 (an un-chunked `fromCharCode.apply` throws on every real PDF); an already-signed document refused for signing; the status route's terminal short-circuit and 60s cache. | `get-boldsign-document` with no identifier (400) and with an impossible rental (404); `/api/esign/view` with no identifier (400). |
 | `mode.test.ts` | The live/test key mapping in **all ten copies** of `getBoldSignApiKey`; the legacy fallback in both branches; the create path stamping `boldsign_mode` on both rows; resolve → key → send ordering; the test-mode "not legally binding" banner; the webhook's agreement → rental → tenant precedence; a recorded `live` never downgraded. Plus finding 3, pinned. | — (mode resolution needs a tenant row, and Layer 2 holds no database credentials by design) |
 | `webhook.test.ts` | `verify_jwt = false` in `config.toml`; a **watchdog** that skips with finding 4 while no verification exists and starts asserting order the moment one appears; the containment that currently limits a forged payload; signed-PDF download gated on completion; signing **not** activating the rental or the vehicle; the full status map. Plus findings 5 and 6, pinned. | one unsigned payload, stopped only by the missing document id — finding 4 in observable form. |
+| `routes.test.ts` | The **perimeter** of the six portal routes: the exported HTTP verbs of each, read off the exports (that list IS the method contract — Next 405s a verb with no handler); the `service_role` client and the anon-key fallback that silently 404s every agreement on an RLS-on table; the portal proxy's matcher excluding `/api`, so `x-tenant-slug` never arrives; the guards that **do** hold — void's dual already-signed refusal, its ladder, and rows marked voided only after BoldSign confirms; sign's already-signed and signer checks above the link call; signing-redirect issuing a 3xx rather than handing out the sign link; status writing back only the rows the request named. Plus **Layer 3**: the 60s properties cache and its exclusive-expiry boundary, and the 15s/30s/45s 429 backoff, all lifted from source and executed against hand-typed literals. Findings 7–10 as **watchdogs**. | void, status and signing-redirect each refusing an empty request, and a `GET /api/esign/void` observed as 405. |
+| `notify.test.ts` | **Leg C** — the agreement came back signed and the OPERATOR was told. `notify-signing-completed`'s `NotifyRequest` contract; a repo-wide caller sweep (with a control function to prove the sweep works) showing it has **none**; the trigger chain that replaced it, asserted link by link from the **deployed-schema snapshot** rather than from migration files; `notify-operator-email` still being `verify_jwt = false`, without which the pg_net dispatch 401s and every operator email stops; the two paths' clashing dedupe keys; and the orphan's own guard order and unconditional `success: true`. Findings 11 and 12 as watchdogs. | one unparseable body answered by the outer catch, above every branch that could email or write. |
 
 `boldsign-source.ts` is this folder's own helper. `tests/helpers/` is shared and
 was not edited; it knows three request-parsing shapes and throws on a fourth, so
@@ -80,12 +82,24 @@ locally instead — with the same rule kept: **every parser throws rather than
 returning an empty set**, because a parser that silently finds nothing makes
 every assertion against it pass for the wrong reason.
 
+`route-source.ts` is the second local helper, and it answers the questions a
+Next route raises that an edge function does not: which HTTP methods it exports
+(that list is the method contract), whether it establishes who is calling, and
+every `supabase.from(...)` chain with its tenant scoping. It also reads
+`scripts/v1-check/baseline.json` — the snapshot taken **from the running
+database** — because two of the delivery paths asserted here are triggers, and a
+migration file states an intention while only the snapshot states a fact. Same
+rule: every parser throws rather than returning empty.
+
 ## Findings — read these before trusting the green
 
-Six defects were found while reading the code. Five are **pinned**: a test
-asserts what the code does today, worded so that FIXING the defect turns the
-test red and the correct response is to delete the test. The sixth cannot be
-pinned honestly and is a skip.
+Twelve defects were found while reading the code. Findings 1–3, 5 and 6 are
+**pinned**: a test asserts what the code does today, worded so that FIXING the
+defect turns the test red and the correct response is to delete the test.
+Findings 4 and 7–12 are **watchdogs**: the case SKIPS with the finding printed
+in full, asserts nothing about today's behaviour, and converts itself into a
+real assertion the moment a fix lands. A watchdog is the honest shape wherever
+pinning would amount to writing the defect down as expected.
 
 1. **`create-boldsign-document` reports an email it never sends.** It sets
    `DisableEmails: 'true'`, never calls `send-signing-email`, and returns
@@ -131,6 +145,58 @@ pinned honestly and is a skip.
    `rental_additional_drivers.signing_status` never advances past the `'sent'`
    the send path stamps. An additional driver who HAS signed still shows as
    pending. *Pinned in `webhook.test.ts`.*
+7. **All six portal e-sign routes authenticate nobody, and scope nothing to a
+   tenant.** No `supabase.auth`, no session, no cookie, no `Authorization`
+   header, no `app_users` lookup, no role check — in any of them. Each builds a
+   `service_role` client (which bypasses every policy) and addresses rows by an
+   id read straight from the request. The portal proxy's matcher excludes
+   `/api`, so `x-tenant-slug` never arrives either. `/api/esign/view` returns
+   another tenant's signed agreement PDF; `/api/esign/void` revokes another
+   tenant's outstanding agreement, irreversibly; `/api/esign` issues an
+   agreement against any rental; `/api/esign/sign` mints a signing link for any
+   unsigned one; `/api/esign/status` writes `document_status` on any row. Under
+   V2_PLAN §5 (RLS off on `rentals`/`customers`/`customer_documents`) that is
+   data-loss-grade. The missing tenant filter is downstream of the missing auth
+   and not separately fixable: there is no tenant to filter by.
+   *Two watchdogs in `routes.test.ts`.*
+8. **`/api/esign` trusts `body.tenantId` for the money and the contract text,
+   while explicitly distrusting it for the row it writes.** The file's own
+   comment explains why the caller's value is unsafe — and the resolution
+   (`resolvedTenantId = rental.tenant_id || body.tenantId`) happens *after* the
+   `agreement_templates` lookup that decides WHICH CONTRACT TEXT the customer
+   signs, and after the `deduct_credits` RPC that spends a real wallet. 23
+   uses of `body.tenantId` against 3 of `resolvedTenantId`. The `credit_failed`
+   and `send_failed` inserts use the caller's value while the success insert
+   uses the server's, so the same route files the same row under two different
+   tenants depending on whether it worked. *Watchdog in `routes.test.ts`.*
+9. **`/api/esign/view` downloads a caller-supplied BoldSign document id.** When
+   `envelopeId` is in the body no row is read at all — the route goes straight
+   to `/v1/document/download` with the tenant's key and returns base64. The
+   other two identifiers at least pass through a database row.
+   *Watchdog in `routes.test.ts`.*
+10. **`/api/esign` returns the first eight characters of the BoldSign API key**
+    in its failure body (`apiKeyPrefix`), on a route with no authentication,
+    alongside the raw BoldSign error text. Debugging aid; log it, do not return
+    it. *Watchdog in `routes.test.ts`.*
+11. **The operator's signing bell fires on `'completed'` only, while the whole
+    codebase treats `'signed'` as equally terminal.** `boldsign-webhook` maps
+    BoldSign's per-signer `Signed` event to `'signed'`; every e-sign read path
+    is written `status === 'completed' || status === 'signed'`. An agreement
+    whose last delivered event is `Signed` reads as fully signed everywhere —
+    void refuses it, sign refuses it, the timeline ticks — and the operator gets
+    no bell and no email. Nothing turns red. (Related: the edge function
+    `notify-signing-completed`, which composed a far richer operator email, has
+    **zero callers** and was superseded by the trigger; the coverage survived,
+    the vehicle, reg, signed-at time and document link did not.)
+    *Watchdog in `notify.test.ts`.*
+12. **The operator-email dispatch trigger hardcodes the production project
+    URL.** `PERFORM net.http_post(url := 'https://hviqoaokxvlancmftwuo.supabase.co/functions/v1/notify-operator-email', …)`
+    is baked into the trigger body, so every database branched or restored from
+    these migrations dispatches its operator emails **into production**. And the
+    call is doubly silent: `PERFORM` discards the result, and the trigger wraps
+    itself in `EXCEPTION WHEN OTHERS THEN RETURN NEW` — correct for the INSERT,
+    but it means nothing anywhere observes a dropped operator email.
+    *Watchdog in `notify.test.ts`.*
 
 ## Layer 2, and the gates
 
@@ -193,6 +259,19 @@ inventing one would be worse than leaving the gap.
   wala test nahi chala rahe."* Opening the signing page end to end is BoldSign's
   own UI in a browser, so `view.test.ts` stops at the link being issued and the
   already-signed refusal.
-- **Extension-agreement period matching, void, and the credit wallet itself.**
-  Real surfaces, not among the three cases named, and each deserves its own file
-  when the scope widens.
+- **Extension-agreement period matching and the credit wallet itself.** Real
+  surfaces, not among the three cases named, and each deserves its own file when
+  the scope widens. (Void is no longer on this list: `routes.test.ts` covers its
+  guard ladder, because it turned out to be the one route in the folder that
+  resolves the test/live mode correctly and is therefore the model the other
+  five should be fixed to.)
+- **Running the six portal routes.** `routes.test.ts` reads them; it does not
+  execute them. Whether the auth that is missing would actually stop a request,
+  and whether a cross-tenant read really returns another operator's PDF, are
+  questions only a live call against a non-production portal can answer — and
+  the four Layer 2 cases here stop at input validation on purpose, because
+  every case beyond that reads or writes somebody's agreement.
+- **The `notify-signing-completed` → operator email content.** The trigger chain
+  is asserted end to end, but what `notify-operator-email` finally renders — the
+  branded template, the escaping, the same-origin link check — has its own
+  surface and is not e-signature.

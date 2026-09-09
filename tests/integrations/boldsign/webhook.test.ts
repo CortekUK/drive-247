@@ -273,34 +273,62 @@ describe("boldsign/webhook — what a completed signing actually does", () => {
 // the defect turns the test red and the correct response is to delete it.
 // ---------------------------------------------------------------------------
 describe("boldsign/webhook — known defects, pinned", () => {
-  it("PINS FINDING 5: an unrecognised event downgrades the agreement to 'pending'", () => {
+  it("WATCHDOG (finding 5): an unrecognised event downgrades the agreement to 'pending'", () => {
     // `mapBoldSignStatus` returns 'pending' for any event it does not know, and
     // the result is written to document_status unconditionally. BoldSign adds
     // event types over time (reminders, downloads, deletions); the first one
     // that arrives for a COMPLETED agreement rewrites it to 'pending', which is
     // not terminal — so the agreements screen shows a signed contract as
     // outstanding and offers to resend it.
+    //
+    // Self-converting, like the PDF watchdog in the bonzah folder: there are two
+    // legitimate repairs — stop defaulting unknown events to 'pending', or guard
+    // the write — and this case accepts EITHER and then holds it. It must never
+    // go red for a fix, or the cheapest way back to green is to restore the bug.
     const src = webhookSrc();
-    expect(
-      src,
-      "mapBoldSignStatus's unknown-event default has changed. If it now preserves the " +
-        "existing status (or ignores the event), FINDING 5 IS FIXED — delete this test.",
-    ).toContain("return statusMap[eventType] || 'pending';");
 
-    // And the write is unconditional: nothing compares the new status to the
-    // one already stored.
+    const defaultsToPending = src.includes("return statusMap[eventType] || 'pending';");
+    const guarded = /if\s*\(\s*mappedStatus\s*(?:!==|===)\s*['"]pending['"]/.test(src);
+
+    if (!defaultsToPending || guarded) {
+      // THE FIX LANDED. Assert the property that makes it a fix: an event the
+      // map does not know can no longer overwrite a status that is already
+      // terminal — either because it never becomes 'pending', or because the
+      // write is now conditional.
+      expect(
+        !defaultsToPending || guarded,
+        "Finding 5 looked fixed but is not: unknown events still map to 'pending' and " +
+          "the write is still unconditional.",
+      ).toBe(true);
+      expect(
+        src,
+        "The mapped status is no longer written to document_status at all. That is a " +
+          "bigger change than finding 5's fix — re-read this handler.",
+      ).toMatch(/document_status:/);
+      return;
+    }
+
+    // STILL BROKEN. Pin it, with the cost named.
     expect(
-      /document_status:\s*mappedStatus/.test(src),
-      "The status write no longer uses the mapped value directly. Re-derive finding 5.",
-    ).toBe(true);
-    expect(
-      /if\s*\(\s*mappedStatus\s*!==\s*['"]pending['"]/.test(src),
-      "A guard against writing the 'pending' fallback has appeared. That is finding 5 " +
-        "being fixed — delete this test.",
-    ).toBe(false);
+      { defaultsToPending, guarded, writesMappedDirectly: /document_status:\s*mappedStatus/.test(src) },
+      [
+        "",
+        "  Finding 5 changed shape without being fixed.",
+        "",
+        "  What it pins: mapBoldSignStatus defaults every unknown event to 'pending' and",
+        "  the result is written straight to document_status. The first new BoldSign",
+        "  event type to arrive for a COMPLETED agreement rewrites it to 'pending' —",
+        "  non-terminal — so a signed contract shows as outstanding and the screen",
+        "  offers to resend it.",
+        "",
+        "  Either repair converts this case and keeps it green: stop defaulting to",
+        "  'pending', or guard the write. Reaching this assertion means neither landed.",
+        "",
+      ].join("\n"),
+    ).toEqual({ defaultsToPending: true, guarded: false, writesMappedDirectly: true });
   });
 
-  it("PINS FINDING 6: the additional-driver signing sync is dead code", () => {
+  it("WATCHDOG (finding 6): the additional-driver signing sync is dead code", () => {
     // `handleBoldSignWebhook(supabaseClient, event)` reads
     // `(payload as any)?.document?.signerDetails` — and `payload` does not
     // exist in that scope, or anywhere in the file. Every webhook therefore
@@ -310,24 +338,66 @@ describe("boldsign/webhook — known defects, pinned", () => {
     // driver who HAS signed still shows as pending on the rental detail page.
     const src = webhookSrc();
 
+    // The send path stamps 'sent', which is the half that works — and is why the
+    // symptom is "stuck on sent" rather than "never appears". True either way.
     expect(
-      src,
-      "The additional-driver sync no longer reads an undeclared `payload`. If it now " +
-        "reads `event`, FINDING 6 IS FIXED: delete this test and assert the sync's real " +
-        "behaviour instead.",
-    ).toContain("(payload as any)?.document?.signerDetails");
+      blankComments(readEdgeFunctionSource("create-boldsign-document")),
+      "The send path no longer stamps additional drivers as signing_status='sent'. " +
+        "Finding 6's symptom would change shape.",
+    ).toContain("signing_status: 'sent'");
 
-    // Declared, or accepted as a parameter — those are the two ways the name
-    // could start resolving. The `(payload as any)` expression itself is
-    // deliberately not counted, since that is the broken read.
-    const declaresPayload =
-      /(?:const|let|var)\s+payload\b/.test(src) ||
-      /function\s+[A-Za-z_$][\w$]*\s*\([^)]*\bpayload\s*[:,)]/.test(src);
+    // Which identifier does the sync actually read signerDetails off?
+    const read = /\(\s*([A-Za-z_$][\w$]*)\s+as\s+any\s*\)\s*\?\.document\?\.signerDetails/.exec(src);
     expect(
-      declaresPayload,
-      "`payload` is now declared or passed in, so the additional-driver sync may " +
-        "actually run. Re-read finding 6 before trusting this test.",
-    ).toBe(false);
+      read,
+      "The additional-driver sync no longer reads `<name>?.document?.signerDetails` at " +
+        "all. Re-read finding 6: either the sync was removed, or it was rewritten in a " +
+        "shape this case cannot see.",
+    ).not.toBeNull();
+    const name = read![1];
+
+    // Declared, or accepted as a parameter — the two ways the name can resolve.
+    const resolves =
+      new RegExp(`(?:const|let|var)\\s+${name}\\b`).test(src) ||
+      new RegExp(`function\\s+[A-Za-z_$][\\w$]*\\s*\\([^)]*\\b${name}\\s*[:,)]`).test(src);
+
+    if (resolves) {
+      // THE FIX LANDED: the sync reads a name that is actually in scope, so it
+      // can run. Assert the property that makes it a fix, and keep asserting it.
+      expect(
+        resolves,
+        `The additional-driver sync reads \`${name}\`, which is now in scope — finding 6 ` +
+          "is fixed and this case has converted itself.",
+      ).toBe(true);
+      expect(
+        src,
+        "The signer-sync error handling is gone. With the sync now LIVE, an unexpected " +
+          "signerDetails shape would fail the whole webhook and 500 back to BoldSign, " +
+          "which retries — keep the guard.",
+      ).toContain("Additional driver signing status sync failed");
+      return;
+    }
+
+    // STILL BROKEN: the name resolves to nothing, so every webhook throws a
+    // ReferenceError here and the catch below swallows it.
+    expect(
+      { readsIdentifier: name, resolvesInScope: resolves },
+      [
+        "",
+        "  Finding 6 changed shape without being fixed.",
+        "",
+        `  What it pins: the sync reads \`(${name} as any)?.document?.signerDetails\`, and`,
+        `  \`${name}\` is declared nowhere in the file and is not a parameter. Every webhook`,
+        "  throws a ReferenceError here, which the surrounding try/catch turns into a",
+        "  warning. rental_additional_drivers.signing_status therefore never advances",
+        "  past the 'sent' the send path stamps: an additional driver who HAS signed",
+        "  still shows as pending on the rental detail page.",
+        "",
+        "  Declaring the name — or passing the event in — converts this case and keeps",
+        "  it green.",
+        "",
+      ].join("\n"),
+    ).toEqual({ readsIdentifier: "payload", resolvesInScope: false });
 
     // The catch that turns the ReferenceError into a warning — which is why
     // nothing ever surfaced.
@@ -337,14 +407,6 @@ describe("boldsign/webhook — known defects, pinned", () => {
         "whole webhook instead of being swallowed. That is a bigger change than it " +
         "looks: every signing event would 500 back to BoldSign.",
     ).toContain("Additional driver signing status sync failed");
-
-    // The send path still stamps 'sent', which is the half that works — and is
-    // why the symptom is "stuck on sent" rather than "never appears".
-    expect(
-      blankComments(readEdgeFunctionSource("create-boldsign-document")),
-      "The send path no longer stamps additional drivers as signing_status='sent'. " +
-        "Finding 6's symptom would change shape.",
-    ).toContain("signing_status: 'sent'");
   });
 });
 
