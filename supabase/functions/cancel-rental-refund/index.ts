@@ -305,6 +305,10 @@ serve(async (req) => {
       .in("status", ["active", "quoted", "payment_pending"]);
 
     let cancelledPolicies: typeof activePolicies = [];
+    // Policies Bonzah REFUSED to cancel. These stay `active` in our DB, because
+    // that is what they still are on the insurer's side, and they are reported
+    // back to the caller so somebody chases them.
+    const policyCancellationFailures: { policyNo: string | null; error: string }[] = [];
 
     if (activePolicies && activePolicies.length > 0) {
       // Try to cancel on Bonzah's side for active policies with a policy_id
@@ -327,6 +331,13 @@ serve(async (req) => {
       }
 
       for (const policy of activePolicies) {
+        // Whether this policy is safe to record as cancelled locally.
+        //
+        // A policy we never asked Bonzah about (no credentials, no policy_id, or
+        // it was never issued) has nothing live at the insurer, so marking it
+        // cancelled is honest. A policy Bonzah REFUSED to cancel is the opposite.
+        let bonzahAcceptedCancellation = true;
+
         // Call Bonzah cancellation API for issued policies
         if (bonzahCredentials && policy.policy_id && policy.status === "active") {
           try {
@@ -345,19 +356,37 @@ serve(async (req) => {
             );
             console.log(`Bonzah cancellation endorsement submitted for policy ${policy.policy_no}:`, cancelResult);
           } catch (bonzahErr: any) {
-            console.error(`Failed to cancel policy ${policy.policy_no} on Bonzah:`, bonzahErr.message);
+            // Do NOT swallow this. Writing `cancelled` after a failed call made
+            // our database state a lie: the operator reads "cancelled", while
+            // the renter is still insured and the premium still spent. Leaving
+            // the row `active` keeps our record true to the insurer's, and the
+            // failure is surfaced in the response so it gets chased.
+            bonzahAcceptedCancellation = false;
+            const msg = bonzahErr?.message || String(bonzahErr);
+            policyCancellationFailures.push({ policyNo: policy.policy_no ?? null, error: msg });
+            console.error(
+              `Bonzah REFUSED cancellation for policy ${policy.policy_no} — leaving it active in our DB:`,
+              msg
+            );
           }
         }
 
-        // Update status in our DB regardless
-        await supabase
-          .from("bonzah_insurance_policies")
-          .update({ status: "cancelled", updated_at: new Date().toISOString() })
-          .eq("id", policy.id);
+        // Only record what actually happened.
+        if (bonzahAcceptedCancellation) {
+          await supabase
+            .from("bonzah_insurance_policies")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", policy.id);
+          cancelledPolicies.push(policy);
+        }
       }
 
-      cancelledPolicies = activePolicies;
-      console.log(`Cancelled ${activePolicies.length} insurance policy(ies) for rental ${rentalId}`);
+      console.log(
+        `Cancelled ${cancelledPolicies.length} of ${activePolicies.length} insurance policy(ies) for rental ${rentalId}` +
+          (policyCancellationFailures.length
+            ? ` — ${policyCancellationFailures.length} still ACTIVE at Bonzah and needing manual cancellation`
+            : "")
+      );
     }
 
     // Cancel unpaid insurance ledger entries (write off outstanding insurance charges)
@@ -620,6 +649,13 @@ serve(async (req) => {
         refund: refundResult,
         cancelledPolicies: cancelledPolicies?.length || 0,
         insurancePremiumCancelled: insurancePremiumTotal,
+        // Policies Bonzah would not cancel. The rental IS cancelled either way —
+        // the vehicle is back and the unpaid charges are written off — but cover
+        // is still live at the insurer and only a human can close that out.
+        policyCancellationFailures,
+        policyCancellationWarning: policyCancellationFailures.length > 0
+          ? `${policyCancellationFailures.length} insurance polic${policyCancellationFailures.length === 1 ? "y" : "ies"} could not be cancelled at Bonzah and remain ACTIVE. Cancel ${policyCancellationFailures.length === 1 ? "it" : "them"} directly with Bonzah: ${policyCancellationFailures.map((f) => f.policyNo || "unknown policy").join(", ")}.`
+          : undefined,
         notificationData: notificationData,
         // Other Stripe payments on this rental that were NOT refunded by this
         // cancellation. Empty in the ordinary single-payment case. For a
