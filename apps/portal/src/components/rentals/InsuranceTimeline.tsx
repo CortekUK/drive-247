@@ -27,6 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency } from '@/lib/formatters';
 import { getActiveCoverageLabels } from '@/lib/coverage-labels';
 import { bonzahCanInsureThrough } from '@/lib/bonzah-dates';
+import { resolveCoverageGap, describeCoverageGap } from '@/lib/bonzah-coverage-gap';
 import type { InsurancePolicy } from '@/hooks/use-rental-insurance-policies';
 
 interface InsuranceTimelineProps {
@@ -356,6 +357,12 @@ export function InsuranceTimeline({
 
   const originalTotal = originalPolicies.reduce((sum, p) => sum + (p.premium_amount || 0), 0);
 
+  // Every policy below renders green "active", because each one IS active for
+  // its own dates. Nobody was adding the dates up, so a rental could run weeks
+  // past the end of its cover and look perfectly healthy on this card — 13
+  // rentals in production were doing exactly that, four with the car still out.
+  const coverageGap = resolveCoverageGap(policies, rental);
+
   return (
     <Card>
       <CardHeader>
@@ -382,6 +389,35 @@ export function InsuranceTimeline({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Placed above the policy list: the list is what makes the gap
+            invisible, so the correction has to be read first. */}
+        {coverageGap && (
+          <div
+            className={`rounded-lg border p-3 ${
+              coverageGap.severity === 'critical'
+                ? 'border-red-500/30 bg-red-500/5'
+                : 'border-amber-500/30 bg-amber-500/5'
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle
+                className={`h-4 w-4 mt-0.5 shrink-0 ${
+                  coverageGap.severity === 'critical' ? 'text-red-500' : 'text-amber-500'
+                }`}
+              />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">
+                  {coverageGap.kind === 'lapsed'
+                    ? `Cover lapsed ${coverageGap.daysUninsured} day${coverageGap.daysUninsured === 1 ? '' : 's'} before this rental ends`
+                    : `Cover ends before this rental does`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {describeCoverageGap(coverageGap)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Bonzah Balance */}
         {isBonzahConnected && bonzahCdBalance != null && (
           <div className={`flex items-center justify-between rounded-md px-4 py-2.5 border ${
