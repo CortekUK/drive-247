@@ -19,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2, CalendarPlus, Calendar, AlertCircle, AlertTriangle, CreditCard, ArrowLeft, Shield, ShieldCheck, Upload, Gauge, ExternalLink, Tag, ChevronsUpDown, Check, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { isBonzahSellable } from '@/lib/bonzah';
+import { isBonzahSellable, bonzahBlockedReason } from '@/lib/bonzah';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
@@ -107,6 +107,17 @@ export function AdminExtendRentalDialog({
   // WITH the premium before the quote runs, and the customer pays for a policy the
   // server then refuses to issue.
   const bonzahSellable = isBonzahSellable(tenant);
+  // Why Bonzah cannot be sold, in words, for the operator.
+  //
+  // Without this the dialog offered "Bonzah Insurance" as a normal choice to a
+  // tenant who can never buy it: the coverage selector opened and priced every
+  // coverage (bonzah-calculate-premium has no sellability gate), the operator
+  // ticked CDW, extended — and `hasBonzahCoverage` was false, so the purchase
+  // block was skipped and the extension completed with no policy and no message.
+  // Moore Luxe reported exactly that as "the collision damage waiver doesn't get
+  // extended with the rental". The reason string already existed and was already
+  // shown on three other screens; this dialog was the one that stayed silent.
+  const bonzahBlocked = bonzahSellable ? null : bonzahBlockedReason(tenant);
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
     rental.bonzah_policy_id && bonzahSellable ? 'bonzah' : 'own'
   );
@@ -1250,9 +1261,25 @@ export function AdminExtendRentalDialog({
                     </span>
                   </div>
 
+                  {/* Say it before the operator picks, not after they have
+                      extended and found nothing was covered. */}
+                  {bonzahBlocked && (
+                    <Alert>
+                      <Shield className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        <span className="font-medium">Bonzah insurance is unavailable for this extension.</span>{' '}
+                        {bonzahBlocked} You can still record the customer&rsquo;s own policy below.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <RadioGroup
                     value={extensionInsuranceType}
                     onValueChange={(v) => {
+                      // A blocked tenant cannot leave the "own insurance" path —
+                      // selecting Bonzah would open a selector that prices cover
+                      // the purchase step is guaranteed to refuse.
+                      if (v === 'bonzah' && bonzahBlocked) return;
                       setExtensionInsuranceType(v as 'bonzah' | 'own');
                       if (v === 'own') {
                         setOwnInsuranceFile(null);
@@ -1263,10 +1290,17 @@ export function AdminExtendRentalDialog({
                     className="space-y-2"
                   >
                     {/* Bonzah Option */}
-                    <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      extensionInsuranceType === 'bonzah' ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10' : 'border-border hover:bg-muted/20'
-                    }`}>
-                      <RadioGroupItem value="bonzah" />
+                    <label
+                      title={bonzahBlocked ?? undefined}
+                      className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                        bonzahBlocked
+                          ? 'border-border opacity-50 cursor-not-allowed'
+                          : extensionInsuranceType === 'bonzah'
+                            ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10 cursor-pointer'
+                            : 'border-border hover:bg-muted/20 cursor-pointer'
+                      }`}
+                    >
+                      <RadioGroupItem value="bonzah" disabled={!!bonzahBlocked} />
                       <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
                       <span className="text-sm font-medium flex-1">Bonzah Insurance</span>
                       {insurancePremium > 0 && (

@@ -121,6 +121,41 @@ describe("the sell-side gate is wired on every layer", () => {
     }
   });
 
+  // The gate above only proves the dialogs COMPUTE sellability. They did, and
+  // still said nothing: the Bonzah option rendered as a normal choice, the
+  // coverage selector opened and priced every coverage, the operator ticked CDW,
+  // and the extension completed with no policy and no message — because
+  // `hasBonzahCoverage` silently folded to false. Moore Luxe reported that as
+  // "the collision damage waiver doesn't get extended with the rental".
+  // Computing the reason is not the same as showing it.
+  it("portal: both extension dialogs TELL the operator why Bonzah is unavailable", () => {
+    for (const path of [
+      "components/rentals/AdminExtendRentalDialog.tsx",
+      "components/rentals/ExtensionRequestDialog.tsx",
+    ]) {
+      const src = readPortalSource(path);
+      // The reason is resolved...
+      expect(src).toMatch(/bonzahBlockedReason\(tenant\)/);
+      // ...and actually rendered, not just computed and dropped.
+      expect(src).toMatch(/\{bonzahBlocked\}/);
+      expect(src).toMatch(/Bonzah insurance is unavailable for this extension/);
+    }
+  });
+
+  it("portal: a blocked tenant cannot select the Bonzah option at all", () => {
+    // Leaving it selectable let an operator walk into a priced coverage selector
+    // whose purchase step is guaranteed to refuse.
+    for (const path of [
+      "components/rentals/AdminExtendRentalDialog.tsx",
+      "components/rentals/ExtensionRequestDialog.tsx",
+    ]) {
+      const src = readPortalSource(path);
+      expect(src).toMatch(/RadioGroupItem value="bonzah" disabled=\{!!bonzahBlocked\}/);
+      // and the change handler refuses the switch even if the radio is bypassed
+      expect(src).toMatch(/if \(v === 'bonzah' && bonzahBlocked\) return;/);
+    }
+  });
+
   it("booking: the customer is offered no purchase when it is not sellable", () => {
     const src = readRepoSource("apps/booking/src/components/MultiStepBookingWidget.tsx");
     expect(src).toMatch(/const bonzahSellable = isBonzahSellable\(tenant\)/);

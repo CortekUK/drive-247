@@ -17,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Loader2, CalendarPlus, Check, X, AlertCircle, AlertTriangle, Calendar, CreditCard, Shield, ShieldCheck, Upload, Gauge, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/contexts/TenantContext';
-import { isBonzahSellable } from '@/lib/bonzah';
+import { isBonzahSellable, bonzahBlockedReason } from '@/lib/bonzah';
 import { useToast } from '@/hooks/use-toast';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useExtensionConflicts } from '@/hooks/use-extension-conflicts';
@@ -68,6 +68,10 @@ export function ExtensionRequestDialog({
   // Bonzah can't issue real cover in test mode — default to the "own insurance"
   // path so no premium is quoted or charged for a policy that cannot be issued.
   const bonzahSellable = isBonzahSellable(tenant);
+  // See AdminExtendRentalDialog: offering Bonzah to a tenant who cannot buy it
+  // ends in an extension that silently carries no cover. Same fix, same reason
+  // string, so both extension paths explain themselves identically.
+  const bonzahBlocked = bonzahSellable ? null : bonzahBlockedReason(tenant);
   const [extensionInsuranceType, setExtensionInsuranceType] = useState<'bonzah' | 'own'>(
     rental.bonzah_policy_id && bonzahSellable ? 'bonzah' : 'own'
   );
@@ -955,9 +959,20 @@ export function ExtensionRequestDialog({
                   Extension Insurance
                 </span>
               </div>
+              {bonzahBlocked && (
+                <Alert>
+                  <Shield className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <span className="font-medium">Bonzah insurance is unavailable for this extension.</span>{' '}
+                    {bonzahBlocked} You can still record the customer&rsquo;s own policy below.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <RadioGroup
                 value={extensionInsuranceType}
                 onValueChange={(v) => {
+                  if (v === 'bonzah' && bonzahBlocked) return;
                   setExtensionInsuranceType(v as 'bonzah' | 'own');
                   if (v === 'own') {
                     setOwnInsuranceFile(null);
@@ -967,10 +982,17 @@ export function ExtensionRequestDialog({
                 }}
                 className="space-y-2"
               >
-                <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                  extensionInsuranceType === 'bonzah' ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10' : 'border-border hover:bg-muted/20'
-                }`}>
-                  <RadioGroupItem value="bonzah" />
+                <label
+                  title={bonzahBlocked ?? undefined}
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                    bonzahBlocked
+                      ? 'border-border opacity-50 cursor-not-allowed'
+                      : extensionInsuranceType === 'bonzah'
+                        ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/10 cursor-pointer'
+                        : 'border-border hover:bg-muted/20 cursor-pointer'
+                  }`}
+                >
+                  <RadioGroupItem value="bonzah" disabled={!!bonzahBlocked} />
                   <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
                   <span className="text-sm font-medium flex-1">Bonzah Insurance</span>
                   {insurancePremium > 0 && (
