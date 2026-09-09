@@ -178,6 +178,29 @@ export function portalHandoffUrl(slug: string = JOURNEY_TENANT_SLUG): string {
   // Kept alongside the hostname: inert, but it documents which workspace the
   // handoff is about for anything downstream that wants to read it.
   url.searchParams.set("tenant", tenant);
+
+  // ARM THE FIRST RUN ON ARRIVAL, rather than trusting that it was armed before
+  // we left.
+  //
+  // /dev clears the wizard and tour flags before sending the browser here, and
+  // for the documented route — open `northwind.portal.localhost:4002/dev`, run
+  // the journey, come back — that works, because the clear and the return
+  // happen on the same origin.
+  //
+  // It stops working the moment they do not. localStorage is per-ORIGIN, and
+  // `localhost:4002` and `northwind.portal.localhost:4002` are two different
+  // origins that look identical in the address bar. Start from the bare host —
+  // which is the natural thing to type — and the flags are cleared on an origin
+  // this handoff never returns to, so the operator lands on a dashboard that
+  // still believes it has shown the wizard and the tour. That is the
+  // "sometimes I get the form, sometimes I get the dashboard" the team lead
+  // reported, and it is why it looked like a heisenbug: it depends on which
+  // hostname you happened to start from.
+  //
+  // Carrying the intent in the URL makes the arriving page responsible for its
+  // own state, so the loop is repeatable from any origin and from a cold
+  // browser. See `first-run-handoff.ts` in the portal for the receiving half.
+  url.searchParams.set("firstrun", "1");
   return url.toString();
 }
 

@@ -255,4 +255,49 @@
       linear-gradient(180deg, hsl(var(--primary) / 0.04) 0%, transparent 45%);
     background-repeat: no-repeat;
   }
+
+  /* -----------------------------------------------------------------------
+   * Autofill, tamed. The one rule here that cannot be a utility class.
+   *
+   * Chrome paints an opaque blue slab behind an autofilled input straight from
+   * its UA stylesheet, and no `background-color` — arbitrary value, !important,
+   * anything — beats it. On the login screen that meant a password manager
+   * filling the form wiped out the field styling the instant it fired.
+   *
+   * Clipping the background to the glyphs is the fix: Chrome's slab then paints
+   * only behind the text, which `-webkit-text-fill-color` immediately covers,
+   * so the field's real surface shows through untouched. That surface has to be
+   * drawn on a WRAPPER, never on the input — `background-clip` applies to the
+   * element's own background too, so anything painted on the input itself would
+   * be clipped away along with Chrome's. Any field carrying this class must
+   * therefore be transparent; see the login page's field shell.
+   *
+   * Deliberately NOT the `box-shadow: 0 0 0 1000px … inset` version of this
+   * trick: Tailwind draws focus rings as box-shadows, so that variant silently
+   * deletes the focus ring on exactly the fields a keyboard user just filled.
+   *
+   * `-webkit-autofill` and the standard `:autofill` are separate rules on
+   * purpose — a browser that does not know one pseudo-class drops the entire
+   * selector list, so combining them would disable both in Firefox. The absurd
+   * transition delay parks Chrome's fill animation past the heat death of the
+   * tab, which is the long-standing idiom for killing the colour flash on load.
+   * --------------------------------------------------------------------- */
+  .autofill-tamed:-webkit-autofill,
+  .autofill-tamed:-webkit-autofill:hover,
+  .autofill-tamed:-webkit-autofill:focus,
+  .autofill-tamed:-webkit-autofill:active {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    transition: background-color 600000s 0s, color 600000s 0s;
+  }
+
+  /* Firefox tints autofilled fields with a `filter`, not a background. */
+  .autofill-tamed:autofill {
+    -webkit-text-fill-color: hsl(var(--foreground));
+    caret-color: hsl(var(--foreground));
+    background-image: none;
+    filter: none;
+  }
 }

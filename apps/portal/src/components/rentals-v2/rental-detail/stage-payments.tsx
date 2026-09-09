@@ -323,7 +323,10 @@ export function StagePayments({ detail, refetch }: StageProps) {
       toolbar={
         /* The demand, pinned — the figure stays in view whatever row you are
            reading. */
-        <div className="flex items-end justify-between gap-6 border-b border-foreground/10 pb-5">
+        <div
+          className="flex items-end justify-between gap-6 border-b border-foreground/10 pb-5"
+          data-tour="rental-outstanding"
+        >
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">Outstanding</p>
             <p className="mt-1 font-heading text-[40px] font-medium leading-none tracking-tight tabular-nums">

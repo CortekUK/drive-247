@@ -67,6 +67,7 @@ import {
   DialogTitle,
 } from '@/components/ui-v2/dialog';
 import { useAvailabilitySource } from './use-availability-source';
+import { TabTourButton } from '@/components/onboarding/tab-tour-button';
 import { useAvailabilitySave } from './use-availability-save';
 import {
   blocksForDate,
@@ -281,11 +282,15 @@ export function AvailabilityV2() {
           </p>
         </div>
 
-        {/* No actions here. Save, Reset and the week navigator moved into the
-            toolbar below, which is where the settings they act on already
-            live — a header carrying six controls made the title compete with
-            them. The unsaved marker stays beside the title because it is a
-            statement about the page, not a control. */}
+        {/* The only thing in the header now. Save, Reset and the week navigator
+            moved into the toolbar below, which is where the settings they act
+            on already live — a header carrying six controls made the title
+            compete with them. The unsaved marker stays beside the title because
+            it is a statement about the page, not a control.
+
+            The tour button stays HERE, matching the other four tab tours, and
+            because it acts on the whole screen rather than on the week. */}
+        <TabTourButton tour="availability" size="h-9" />
       </header>
 
       {/* ── the toolbar ──────────────────────────────────────────────────
@@ -294,7 +299,12 @@ export function AvailabilityV2() {
           page header, which put "what am I looking at" and "what can I do about
           it" in two places. `justify-between` on the row, with each side its own
           flex group, so the two halves stay apart without a fixed gap. */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-2.5">
+      <div
+        // The tour's fallback for every control step, so they survive the
+        // loading branch that replaces the calendar with a skeleton.
+        data-tour="availability-controls"
+        className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-2.5"
+      >
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           {/* The weekly pattern, as a sentence and a button. Seven editable
               rows lived here permanently and cost roughly 300px above the
@@ -302,6 +312,11 @@ export function AvailabilityV2() {
               rows are unchanged; they moved into the dialog. */}
           <button
             type="button"
+            // The tour's `availability.pattern` anchor. It pointed at the seven
+            // permanently-rendered cells this button replaced, so it moves here
+            // rather than being dropped: the step is about the weekly pattern,
+            // and this is now where the pattern is read and edited.
+            data-tour="availability-pattern"
             onClick={() => setHoursOpen(true)}
             className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-[13px] transition-colors hover:bg-accent"
           >
@@ -312,7 +327,11 @@ export function AvailabilityV2() {
 
           <span className="h-5 w-px bg-border" aria-hidden />
 
-        <label htmlFor="availability-always-open" className="flex cursor-pointer items-center gap-2.5">
+        <label
+          htmlFor="availability-always-open"
+          data-tour="availability-always-open"
+          className="flex cursor-pointer items-center gap-2.5"
+        >
           <Switch
             id="availability-always-open"
             checked={defaults.alwaysOpen}
@@ -329,7 +348,10 @@ export function AvailabilityV2() {
             setting "9 to 5" means 9 to 5 THERE — so it belongs beside the
             hours it qualifies, not buried in settings. Like every other edit
             here it is preview-only and not written back. */}
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label
+          data-tour="availability-timezone"
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+        >
           <span className="whitespace-nowrap">Times shown in</span>
           <Select
             value={defaults.timezone || ''}
@@ -359,6 +381,7 @@ export function AvailabilityV2() {
             without hunting for the marker by the title. */}
         <div className="flex flex-wrap items-center gap-2">
           <Button
+            data-tour="availability-reset"
             variant="ghost"
             size="icon-sm"
             aria-label="Reset unsaved changes"
@@ -369,6 +392,12 @@ export function AvailabilityV2() {
             <RotateCcw />
           </Button>
           <Button
+            // The tour's `availability.preview` anchor. That step used to point
+            // at a permanent "changes aren't saved" pill and told operators
+            // their edits were a sketch. Save writes for real now, so the step
+            // points at the button that does it — see `lib/tab-tours/
+            // availability.ts`, where the copy was corrected to match.
+            data-tour="availability-preview"
             size="sm"
             disabled={!touched || save.isPending || !editable}
             onClick={handleSave}
@@ -387,7 +416,10 @@ export function AvailabilityV2() {
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-[150px] text-center text-[13px] font-medium tabular-nums">
+          <span
+            data-tour="availability-week"
+            className="min-w-[150px] text-center text-[13px] font-medium tabular-nums"
+          >
             {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
           </span>
           <Button

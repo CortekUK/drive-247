@@ -258,14 +258,23 @@ export function JourneyPaymentStep({
           onSkip={() => carryOnWithoutCard("Stripe.js did not load")}
         />
       ) : stripeJs === "loading" ? (
-        <div
-          className="space-y-2"
-          role="status"
-          aria-label="Loading the secure payment form"
-        >
-          <div className="h-11 animate-pulse rounded-md bg-muted" />
-          <div className="h-11 animate-pulse rounded-md bg-muted" />
-          <div className="h-11 animate-pulse rounded-md bg-muted" />
+        // The bars used to be the whole of this state, with the only
+        // explanation in an `aria-label` nobody sighted ever reads. That is up
+        // to STRIPE_JS_TIMEOUT_MS — twelve seconds — of three grey rectangles
+        // pulsing under a heading that says "Confirm and pay", and it shows for
+        // longest on exactly the connection where reassurance matters. The line
+        // says what is being waited on; the bars stay because they hold the
+        // space the form is about to occupy.
+        <div className="space-y-3" role="status">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            Loading the secure card form…
+          </p>
+          <div className="space-y-2" aria-hidden="true">
+            <div className="h-11 animate-pulse rounded-md bg-muted" />
+            <div className="h-11 animate-pulse rounded-md bg-muted" />
+            <div className="h-11 animate-pulse rounded-md bg-muted" />
+          </div>
         </div>
       ) : (
         <ElementsBoundary
@@ -532,6 +541,21 @@ function JourneyCardForm({
             <>
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               Confirming…
+            </>
+          ) : !elementReady && !elementError ? (
+            /*
+              The other half of the `elementReady` gate above. Disabling the
+              button was right; leaving it reading "Pay $X and continue" while
+              it was dead was not — a greyed primary action with a live-sounding
+              label says the page is broken, not that it is still coming up. The
+              Element takes as long as it takes (its own iframe, its own script,
+              plus Link's block), and until now nothing on this step said so.
+              Says what it is waiting for, and turns into the real action the
+              moment `onReady` fires.
+            */
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Loading the card form…
             </>
           ) : (
             <>

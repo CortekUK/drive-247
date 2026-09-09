@@ -290,9 +290,44 @@ export function useSetupGuide(): SetupGuideState {
         id: "protect",
         title: "Protect your rentals",
         items: [
+          // BONZAH IS NAMED TWICE ON THIS DASHBOARD, ON PURPOSE — and the two
+          // rows must not read as one row printed twice. The split:
+          //
+          //   THIS GUIDE tracks TASKS. Every row is a thing to do with a tick
+          //   beside it, and the guide disappears entirely once they are all
+          //   done (`isVisible = isReady && !allComplete`). Bonzah's task is
+          //   the one-time account connection, and `hasOwnCredentials` —
+          //   `integration_bonzah && bonzah_username` — is a real answer to it.
+          //
+          //   THE CHECKLIST CARD (components/dashboard-v2/checklist-card.tsx)
+          //   tracks FEATURES TO LEARN — "ye wo cheezein hain jisko usko baith
+          //   ke ek martaba dekhna padega, samajhna padega". Its rows carry a
+          //   recording and a written guide, deliberately have NO completion
+          //   state, and it never goes away. Its Bonzah row is the sit-down:
+          //   what the quote actually covers, how the balance drains, what the
+          //   low-balance alerts do.
+          //
+          // Doing it once and understanding it are different jobs, so both keep
+          // their row. What changed is the LABEL. "Turn on Bonzah insurance"
+          // named the FEATURE, which is what the card's row is called, so the
+          // two read as the same row in two places. This names the ACTION this
+          // row can actually tick off — the credentials — which nothing else on
+          // the screen claims, and which is what `hasOwnCredentials` measures.
+          //
+          // The `explainerId` stays. The slot is a per-task invariant here
+          // (every row has one, and there is a test on it), and the clip it
+          // will hold is the 90-second "here is where the credentials go" at
+          // the moment the operator is stuck on that step — not the walkthrough
+          // the card exists to carry. Whoever records them should keep them
+          // that way round; one file with both scripts in it would collapse
+          // this distinction again.
+          //
+          // Both surfaces are canary-only — `SetupGuide` renders only inside
+          // DashboardV2, behind `useV2('dashboard')` — so this collision, and
+          // this fix, exist on one tenant's screen and nowhere else.
           {
             id: "bonzah",
-            label: "Turn on Bonzah insurance",
+            label: "Add your Bonzah credentials",
             isComplete: hasOwnCredentials,
             href: "/settings?tab=insurance",
             explainerId: "insurance.bonzah",

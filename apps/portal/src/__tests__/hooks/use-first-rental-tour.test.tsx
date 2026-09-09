@@ -95,7 +95,12 @@ function mount(html: string): () => void {
 }
 
 const SIDEBAR = '<div data-sidebar="sidebar"><div data-sidebar="content"><a href="/vehicles">Vehicles</a></div></div>';
-const SETUP_GUIDE = '<button data-tour="setup-guide">Setup guide</button>';
+/** The Vehicles stop's anchor: one fleet stat tile, inside the page shell. */
+const FLEET_TILE =
+  '<div data-slot="sidebar-inset"><h1>Fleet</h1><div data-tour="fleet-stat-total-vehicles"></div></div>';
+/** The Customers stop's anchor: the four counts, which render even at zero. */
+const CUSTOMER_STATS =
+  '<div data-slot="sidebar-inset"><h1>Customers</h1><div data-tour="customers-stats"></div></div>';
 
 function setup(suppressed = false) {
   return renderHook(({ s }: { s: boolean }) => useFirstRentalTour(s), {
@@ -154,7 +159,7 @@ describe('walkthrough hook — tenant gate (slug-keyed)', () => {
     autostart();
     expect(hook.result.current.phase).toBe('showing');
     expect(hook.result.current.current?.step.id).toBe('welcome');
-    expect(hook.result.current.steps.length).toBe(11);
+    expect(hook.result.current.steps.length).toBe(8);
     // Marked seen UP FRONT, so nothing can fire it twice.
     expect(hasSeenTour(USER)).toBe(true);
   });
@@ -236,7 +241,7 @@ describe('walkthrough hook — the other gates', () => {
 
 describe('walkthrough hook — crossing pages', () => {
   it('persists the step, asks the router, then waits for the anchor on arrival', () => {
-    mount(SIDEBAR + SETUP_GUIDE);
+    mount(SIDEBAR);
     const hook = setup();
     autostart();
     expect(hook.result.current.current?.step.id).toBe('welcome');
@@ -246,35 +251,32 @@ describe('walkthrough hook — crossing pages', () => {
     expect(hook.result.current.current?.step.id).toBe('sidebar');
     expect(hook.result.current.current?.element?.getAttribute('data-sidebar')).toBe('content');
 
-    act(() => hook.result.current.next());
-    act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
-    expect(hook.result.current.current?.step.id).toBe('setup-guide');
-
-    // Vehicles lives on another page. Progress FIRST, then the push.
+    // Vehicles lives on another page, and is the very next stop now that the
+    // dashboard's setup-guide step is gone. Progress FIRST, then the push.
     act(() => hook.result.current.next());
     expect(readTourProgress(USER)).toMatchObject({ stepId: 'vehicles', status: 'active' });
     expect(pushed).toEqual(['/vehicles']);
     expect(hook.result.current.phase).toBe('navigating');
     expect(hook.result.current.current).toBeNull();
 
-    // The page mounts its header a beat after arrival.
+    // The page mounts its stat tiles a beat after arrival.
     arrive(hook, '/vehicles');
     expect(hook.result.current.phase).toBe('waiting');
-    mount('<div data-add-vehicle-trigger><button>Add Vehicle</button></div>');
+    mount(FLEET_TILE);
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
     expect(hook.result.current.phase).toBe('showing');
     expect(hook.result.current.current?.step.id).toBe('vehicles');
   });
 
   it('SKIPS a step whose anchor never mounts, instead of stalling on it', () => {
-    mount(SIDEBAR + SETUP_GUIDE);
+    mount(SIDEBAR);
     const hook = setup();
     autostart();
     act(() => hook.result.current.next()); // sidebar
-    act(() => hook.result.current.next()); // setup guide
     act(() => hook.result.current.next()); // → /vehicles
     arrive(hook, '/vehicles');
-    // No Add Vehicle button ever appears (a viewer-ish page, a slow query…).
+    // Neither the stat tile nor even an <h1> ever appears (a hard failure, a
+    // query that never resolves…).
     waitOut(ANCHOR_WAIT_MS);
     // Moved on to Customers without ever rendering a card for Vehicles.
     expect(readTourProgress(USER)?.stepId).toBe('customers');
@@ -282,22 +284,26 @@ describe('walkthrough hook — crossing pages', () => {
     expect(hook.result.current.phase).toBe('navigating');
   });
 
-  it('steps sharing a route that already timed out wait LESS — three in-flow steps do not cost 18 seconds', () => {
+  it('steps sharing a route that already timed out wait LESS', () => {
+    // Was three in-flow steps on `/rentals/new`, which the orientation no
+    // longer visits at all. `/rentals` is now the only route carrying two
+    // stops — the Rentals stop and the tab-tour handoff — so it is where the
+    // cascade still has to hold: one timeout must not cost 12 seconds.
     writeTourProgress(USER, { stepId: 'rental', status: 'active' });
     markTourSeen(USER);
-    currentPath = '/rentals/new';
+    currentPath = '/rentals';
     const hook = setup();
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
     expect(hook.result.current.phase).toBe('waiting');
     expect(hook.result.current.current).toBeNull();
 
     waitOut(ANCHOR_WAIT_MS);
-    expect(readTourProgress(USER)?.stepId).toBe('insurance');
+    expect(readTourProgress(USER)?.stepId).toBe('tours');
+    // The second stop on this route gets the SHORT budget, not another six
+    // seconds, and then the tour moves on to a page that can show it something.
     waitOut(ANCHOR_WAIT_SHORT_MS);
-    expect(readTourProgress(USER)?.stepId).toBe('agreement');
-    waitOut(ANCHOR_WAIT_SHORT_MS);
-    expect(readTourProgress(USER)?.stepId).toBe('money');
-    expect(pushed).toEqual(['/payments']);
+    expect(readTourProgress(USER)?.stepId).toBe('booking-site');
+    expect(pushed).toEqual(['/settings?tab=branding']);
   });
 
   it('a settings step with a query pushes the full route even from /settings', () => {
@@ -322,8 +328,8 @@ describe('walkthrough hook — crossing pages', () => {
     act(() => hook.result.current.anchorLost());
     expect(hook.result.current.phase).toBe('waiting');
     waitOut(ANCHOR_WAIT_MS);
-    // Setup guide is also gone from the page, so it is skipped too, and the
-    // tour has moved on to Vehicles.
+    // Nothing else on the dashboard to point at, so the tour has moved on to
+    // Vehicles — which lives on another page.
     waitOut(ANCHOR_WAIT_SHORT_MS);
     expect(readTourProgress(USER)?.stepId).toBe('vehicles');
   });
@@ -335,7 +341,7 @@ describe('walkthrough hook — wandering off, and coming back', () => {
   it('a reload on the step’s own page resumes silently — no prompt, no push', () => {
     writeTourProgress(USER, { stepId: 'vehicles', status: 'active' });
     markTourSeen(USER);
-    mount('<div data-tour="add-vehicle"></div>');
+    mount(FLEET_TILE);
     currentPath = '/vehicles';
     const hook = setup();
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
@@ -357,10 +363,10 @@ describe('walkthrough hook — wandering off, and coming back', () => {
     expect(readTourProgress(USER)).toMatchObject({ stepId: 'sidebar', status: 'paused' });
   });
 
-  it('the do-this anchor click pauses, keeping their place', () => {
+  it('pausing keeps their place', () => {
     writeTourProgress(USER, { stepId: 'customers', status: 'active' });
     markTourSeen(USER);
-    mount('<button data-tour="add-customer"></button>');
+    mount(CUSTOMER_STATS);
     currentPath = '/customers';
     const hook = setup();
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));

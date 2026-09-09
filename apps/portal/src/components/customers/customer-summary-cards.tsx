@@ -47,7 +47,7 @@ export const CustomerSummaryCards = ({ customers }: CustomerSummaryCardsProps) =
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4" data-tour="customers-stats">
       {cards.map((card) => {
         const getCardClassName = () => {
           let baseClasses = "transition-all duration-200 cursor-pointer hover:shadow-md ";

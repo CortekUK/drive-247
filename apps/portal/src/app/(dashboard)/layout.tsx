@@ -47,6 +47,7 @@ import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { FeedbackForcePrompt } from "@/components/feedback/feedback-force-prompt";
 import { WelcomePackPrompt } from "@/components/welcome/welcome-pack-prompt";
 import { FirstRunWizard } from "@/components/onboarding/first-run-wizard";
+import { FirstRunHandoffGate } from "@/components/onboarding/first-run-handoff-gate";
 import { FirstRentalTour } from "@/components/onboarding/first-rental-tour";
 
 function LoadingSkeleton() {
@@ -576,6 +577,19 @@ export default function DashboardLayout({
             gate, the policy gate and the setup reminder before seeing a single
             screen, and two non-dismissible full-screen surfaces stacked on each
             other leave them unable to act on either. */}
+        {/* The demo signup journey's landing pad. Renders nothing; it exists to
+            catch `?firstrun=1` on arrival from apps/web, clear the wizard, tour
+            and checklist state for this tenant, and hard-reload onto the clean
+            URL so the sequence below runs exactly as it would for a genuinely
+            new operator.
+
+            ABOVE the wizard on purpose — it has to act before anything else has
+            decided what it is. See `lib/first-run-handoff.ts` for why the URL
+            carries the intent rather than /dev's reset being trusted to have
+            stuck: localStorage is per-origin, and the journey returns to a
+            different origin than the one /dev was usually opened on. */}
+        <FirstRunHandoffGate />
+
         <FirstRunWizard suppressed={showGate} />
 
         {/* First-rental walkthrough — step 7, immediately after the wizard

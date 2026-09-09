@@ -106,6 +106,7 @@ export function UpkeepTab({
       description="An expired inspection or registration takes the car off the booking site on its own."
     >
       <Section
+        tourId="vehicle-certificates"
         title="Certificates"
         action={
           blocked.length ? (

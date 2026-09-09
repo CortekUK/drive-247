@@ -82,7 +82,7 @@ export function RentalsFilterBar({
 
   return (
     <div className="space-y-4">
-      <div className="group relative w-full sm:max-w-md">
+      <div className="group relative w-full sm:max-w-md" data-tour="rentals-search">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
         <Input
           value={searchInput}

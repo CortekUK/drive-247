@@ -77,6 +77,7 @@ export function VehicleTab({
       description="What this car is and what it looks like. Everything applies as you type."
     >
       <Section
+        tourId="vehicle-photos"
         title="Photos"
         hint="The first one is the cover — on the booking site and everywhere in the portal."
         action={

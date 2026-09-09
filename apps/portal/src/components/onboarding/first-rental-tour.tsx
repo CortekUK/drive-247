@@ -103,6 +103,17 @@ interface Rect {
 const CARD_WIDTH = 400;
 const CENTERED_WIDTH = 468;
 /**
+ * How many times the card may change its mind about spotlight-vs-centred for
+ * one step at one window size before it is forced onto the centred wash.
+ *
+ * Two, because the honest cases need at most two: `cardH` starts at a guess, so
+ * the first real measurement legitimately moves it once, and a genuine layout
+ * shift underneath (a query settling, an image loading) can move it a second
+ * time. A third disagreement is not new information — it is the 400px height
+ * and the 468px height taking turns. See `placementLatch`.
+ */
+const MAX_PLACEMENT_FLIPS = 2;
+/**
  * The Welcome card only. It is the one card that is an introduction rather
  * than a label on something — Trax says who it is and what the next minute is
  * for — and at 408px that landed as a notification. Wide enough to carry a
@@ -419,6 +430,37 @@ function TourLayer({
   const [elevated, setElevated] = useState(false);
   const [cardH, setCardH] = useState(280);
   const cardRef = useRef<HTMLDivElement>(null);
+  /**
+   * Guards the ONE feedback loop in this component's layout.
+   *
+   * `cardH` decides `placement`, `placement` decides `centered`, and `centered`
+   * decides the card's WIDTH — 400px when it sits beside a spotlight, 468px on
+   * the centred wash. A different width wraps the text differently, which
+   * changes the height, which feeds straight back into `placement`.
+   *
+   * For most steps that settles in one pass. For a step whose two heights
+   * straddle the "does it fit beside the anchor" threshold it does not settle
+   * at all: the card is too tall at 400 so it centres, becomes short enough at
+   * 468 so it un-centres, and the layout effect below sets state on every
+   * render until React gives up with "Maximum update depth exceeded".
+   *
+   * The `h !== cardH` guard in that effect cannot help — both heights are
+   * genuinely different from the last one. The cycle has to be broken here.
+   *
+   * So: a couple of adjustments are allowed (the first measurement almost
+   * always needs one, since `cardH` starts at a guess), and after that the
+   * decision is frozen on the CENTRED wash. Centred is the right way to fail —
+   * it is already this component's documented fallback for "no side has room",
+   * it always fits, and it never covers the thing the step is describing.
+   *
+   * Keyed on the step AND the viewport, so a resize re-decides from scratch
+   * rather than inheriting a verdict reached at a different window size.
+   */
+  const placementLatch = useRef<{ key: string; centered: boolean; flips: number }>({
+    key: '',
+    centered: false,
+    flips: 0,
+  });
   const reduceMotion = useReducedMotion();
 
   const measure = useCallback(() => {
@@ -601,7 +643,36 @@ function TourLayer({
   // no anchor at all (Welcome, Done), an anchor too big to point at, or an
   // anchor with nowhere to stand the card. The last is what stops the tour ever
   // covering the thing it is describing.
-  const centered = !hasAnchor || oversized || placement === null;
+  const wouldCenter = !hasAnchor || oversized || placement === null;
+
+  // Break the width/height feedback loop. See `placementLatch` above for why
+  // this exists at all; without it a step whose card is a borderline fit
+  // re-renders forever.
+  //
+  // Written during render rather than in an effect on purpose: the value is
+  // needed by THIS render's layout, and deferring it to an effect would paint
+  // one frame at the wrong width — the exact flicker `measure`'s
+  // `useLayoutEffect` is careful to avoid. It is idempotent, so React's
+  // double-invoked render in StrictMode reaches the same answer.
+  const layoutKey = `${step.id}|${viewportW}x${viewportH}`;
+  const latch = placementLatch.current;
+  if (latch.key !== layoutKey) {
+    // New step, or the window changed size: decide fresh.
+    latch.key = layoutKey;
+    latch.centered = wouldCenter;
+    latch.flips = 0;
+  } else if (wouldCenter !== latch.centered) {
+    if (latch.flips < MAX_PLACEMENT_FLIPS) {
+      latch.centered = wouldCenter;
+      latch.flips += 1;
+    } else {
+      // Still disagreeing after two adjustments — this is the oscillation.
+      // Settle on the wash and stop; it always fits, so the height stops
+      // moving and the measuring effect goes quiet.
+      latch.centered = true;
+    }
+  }
+  const centered = latch.centered;
   const spot = centered ? null : rawSpot;
 
   const cardW = centered

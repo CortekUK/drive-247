@@ -88,7 +88,12 @@ export function WeekCalendar({ days, defaults, canEdit, onSet, now }: WeekCalend
     // drift, so the constant is exported rather than typed twice.
     <div className="flex">
       {/* ── hour axis ───────────────────────────────────────────────── */}
-      <div className={cn(AXIS_WIDTH, 'shrink-0 border-r border-border')}>
+      {/* The tab tour points HERE for "the week, drawn as hours" rather than at
+          the seven columns: the grid runs the full content width at ~584px
+          tall, which is past the point where a spotlight degrades to a wash.
+          The axis is 58px wide, so the card stands beside it and the whole
+          calendar stays visible. */}
+      <div data-tour="availability-hours" className={cn(AXIS_WIDTH, 'shrink-0 border-r border-border')}>
         <div style={{ height: HEADER_HEIGHT }} className="border-b border-border" />
         <div className="relative" style={{ height: GRID_HEIGHT }}>
           {axisHours.map((h) => (
@@ -186,6 +191,11 @@ function DayColumn({
       <PopoverTrigger asChild disabled={!canEdit}>
         <button
           type="button"
+          // Seven of these; `findAnchor` takes the first VISIBLE match, so the
+          // tab tour always lands on Monday's column and the spotlight is
+          // deterministic rather than dependent on what the week happens to
+          // hold. One column is ~200px wide, well inside the spotlight budget.
+          data-tour="availability-day"
           aria-label={`${format(day.date, 'EEEE d MMMM')} — ${label}. Edit this day.`}
           className={cn(
             'group relative flex flex-col bg-card text-left outline-none transition-colors',
@@ -211,6 +221,10 @@ function DayColumn({
 
           {/* ── day header ───────────────────────────────────────────── */}
           <span
+            // The tour's anchor for the status chip step. The header, not the
+            // chip itself: the chip is ~50px of text, and the step is about the
+            // three words in the context of the date above them.
+            data-tour="availability-day-header"
             className={cn(
               'flex flex-col items-center justify-center gap-1 border-b border-border px-1',
               isException && 'bg-warning/15',
@@ -284,6 +298,15 @@ function DayColumn({
               )
             ) : (
               <span
+                // Only a REAL tenant-wide block gets the tour's attribute, not
+                // every closed day: the step it anchors is specifically about
+                // red hatching, and a grey "Closed" column would make that
+                // sentence a lie. Absent, the step falls back to a plain column
+                // and its body still reads correctly.
+                data-tour={isRealBlock ? 'availability-blocked' : undefined}
+                // The hatch moved out of an inline `style` and into `closedFill`
+                // during the calendar redesign; it still draws the red hatching
+                // the tour step above describes.
                 className={cn(
                   'absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-1 text-center',
                   closedFill,
@@ -319,7 +342,10 @@ function DayColumn({
                 real data and it is NOT the same thing as being closed, so it gets
                 a footnote rather than a hatch. */}
             {day.vehicleBlocks.length > 0 && (
-              <span className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded-lg bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
+              <span
+                data-tour="availability-vehicles-out"
+                className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded-lg bg-muted px-1 py-0.5 text-[10px] text-muted-foreground"
+              >
                 <Clock className="size-2.5 shrink-0" />
                 <span className="truncate">
                   {day.vehicleBlocks.length} {day.vehicleBlocks.length === 1 ? 'vehicle' : 'vehicles'} out
@@ -330,6 +356,7 @@ function DayColumn({
             {showNowLine && (
               <span
                 aria-hidden
+                data-tour="availability-now"
                 className="pointer-events-none absolute inset-x-0 z-20 flex items-center"
                 style={{ top: ((nowMinutes as number) - startHour * 60) / 60 * pxPerHour }}
               >

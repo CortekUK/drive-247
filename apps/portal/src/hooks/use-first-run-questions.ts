@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/contexts/TenantContext';
+import { isLeanTenant } from '@/lib/lean-areas';
 import {
   FIRST_RUN_QUESTIONS,
   type FirstRunOption,
@@ -107,10 +109,34 @@ export interface FirstRunQuestionsState {
 }
 
 export function useFirstRunQuestions(): FirstRunQuestionsState {
+  const { tenant } = useTenant();
+
+  /**
+   * The canary gate, and the reason it is not optional.
+   *
+   * `first_run_questions` is authored copy for a v2 surface, and V2_PLAN §2 is
+   * explicit that "every v2 change — a screen, a QUERY, a column, a trigger, an
+   * edge function — is gated so that northwind sees it and nobody else does".
+   *
+   * Ungated, this fired on EVERY dashboard mount for ALL 57 tenants, against a
+   * table that exists only on staging — so 56 operators paid a failing round
+   * trip and a console warning on every load, for a wizard they never see. The
+   * fallback made it invisible, which is exactly why it survived review.
+   *
+   * Keyed on the SLUG, never the tenant id: the canary has a different primary
+   * key in every environment, so an id-keyed gate resolves the wrong way
+   * locally with no error and no failed build.
+   *
+   * Fails CLOSED — an unresolved tenant reads nothing and takes the compiled
+   * list, which is the same set the table is seeded with.
+   */
+  const isCanary = isLeanTenant(tenant?.slug);
+
   const { data, isLoading } = useQuery({
     // No tenant in the key: the set is platform-wide, so one cache entry serves
     // every tenant in this browser.
     queryKey: ['first-run-questions'],
+    enabled: isCanary,
     queryFn: async (): Promise<readonly FirstRunQuestion[] | null> => {
       const { data: rows, error } = await (supabase as any)
         .from('first_run_questions')
@@ -147,7 +173,23 @@ export function useFirstRunQuestions(): FirstRunQuestionsState {
 
   return {
     questions: data ?? FIRST_RUN_QUESTIONS,
-    isLoading,
+    /**
+     * `&& isCanary` is belt and braces, and it is here because the honest
+     * answer depends on a library version.
+     *
+     * Under React Query v5 (5.90.x here) `isLoading` is `isPending &&
+     * isFetching`, and a DISABLED query is pending but never fetching — so it
+     * already reports false and a non-canary tenant would fall straight through
+     * to the compiled list. Under v4 the same query reports `isLoading: true`
+     * FOREVER, because there `isLoading` is just `status === 'loading'`.
+     *
+     * The wizard's contract is "wait rather than flash the compiled list", so
+     * on a v4 upgrade that difference would hang the first screen for all 56
+     * non-canary tenants — a silent, total failure of the one surface a brand-
+     * new operator sees. Making the gate explicit costs nothing and does not
+     * depend on which of those two semantics is in force.
+     */
+    isLoading: isLoading && isCanary,
     isFallback: !data,
   };
 }

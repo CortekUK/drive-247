@@ -77,28 +77,58 @@ const autostartsFor = (slug: string | null | undefined): boolean =>
   shouldAutostartTour({ ...OPEN, isCanary: isLeanTenant(slug) });
 
 describe('first-rental walkthrough — the steps', () => {
-  it('walks eleven steps, in order, from welcome to done', () => {
+  it('walks eight shallow steps, in order, from welcome to done', () => {
+    // Was eleven, and deliberately is not any more: the lead ruled the deep
+    // walkthrough out for a first login ("woh abhi woh tour nahi hai"), naming
+    // the walk through payments. Depth moved to `lib/tab-tours/*`. Adding a
+    // step back here should mean asking whether it belongs in a tab tour.
     expect(ids(FIRST_RENTAL_TOUR)).toEqual([
       'welcome',
       'sidebar',
-      'setup-guide',
       'vehicles',
       'customers',
       'rental',
-      'insurance',
-      'agreement',
-      'money',
+      'tours',
       'booking-site',
       'done',
     ]);
   });
 
-  it('crosses pages — six routes, and the finale stays wherever you are', () => {
-    const routes = new Set(
-      FIRST_RENTAL_TOUR.filter((s) => s.route !== null).map((s) => routePathname(s.route!)),
+  it('never walks INTO the New Rental form — that is the whole ruling', () => {
+    for (const step of FIRST_RENTAL_TOUR) {
+      expect(step.route, step.id).not.toBe('/rentals/new');
+    }
+    expect(BLOCKED_RENTAL_STEP.route).not.toBe('/rentals/new');
+  });
+
+  it('hands off to the per-tab tours instead of going deep itself', () => {
+    const tours = FIRST_RENTAL_TOUR.find((s) => s.id === 'tours')!;
+    // The step that makes an eight-step orientation an honest one: the depth
+    // it no longer carries is reachable, and this says where.
+    expect(tours.anchors[0]).toBe('[data-tour="take-tab-tour"]');
+    // The button only renders on the tab pages, so this one must land on a tab
+    // page rather than the dashboard or settings.
+    expect(tours.route).toBe('/rentals');
+    // And it must not be the last word — a step that pauses the tour when
+    // clicked has to have somewhere to hand back to.
+    expect(ids(FIRST_RENTAL_TOUR).indexOf('tours')).toBeLessThan(FIRST_RENTAL_TOUR.length - 1);
+  });
+
+  it('crosses five pages, FORWARD ONLY, and the finale stays wherever you are', () => {
+    const routes = FIRST_RENTAL_TOUR.filter((s) => s.route !== null).map((s) =>
+      routePathname(s.route!),
     );
-    expect([...routes]).toEqual(['/', '/vehicles', '/customers', '/rentals/new', '/payments', '/settings']);
+    expect([...new Set(routes)]).toEqual(['/', '/vehicles', '/customers', '/rentals', '/settings']);
     expect(FIRST_RENTAL_TOUR.at(-1)!.route).toBeNull();
+
+    // Order matters as much as the set does. A tour that goes to Settings and
+    // then back to a tab reads as lost, and every extra push is another chance
+    // for an anchor to arrive late. Each route must be contiguous: once the
+    // list leaves a page it never returns to it.
+    const firstSeen = [...new Set(routes)];
+    expect(routes).toEqual(
+      firstSeen.flatMap((r) => routes.filter((x) => x === r)),
+    );
   });
 
   it('still gets them to a first rental — the spine survives', () => {
@@ -143,10 +173,21 @@ describe('first-rental walkthrough — the steps', () => {
     expect(sidebar.anchors.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('the do-this steps step aside when their anchor is clicked; look-at-this steps do not', () => {
+  it('every step that can be clicked THROUGH steps aside', () => {
+    // Was ['vehicles', 'customers'] — the two Add buttons the old walkthrough
+    // told you to press. The orientation presses nothing, so the rule is now
+    // about anchors that take the screen away: New Rental navigates to a form,
+    // and the tab-tour button launches a second tour that would otherwise draw
+    // its cards on top of this one.
     const pausing = FIRST_RENTAL_TOUR.filter((s) => s.pauseOnAnchorClick).map((s) => s.id);
-    expect(pausing).toEqual(['vehicles', 'customers']);
+    expect(pausing).toEqual(['rental', 'tours']);
     expect(BLOCKED_RENTAL_STEP.pauseOnAnchorClick).toBe(true);
+
+    // `rental` and `tours` share a page, and the renderer ADVANCES on a click
+    // when the next step is same-page. Without the pause, clicking New Rental
+    // would move the card to `tours` while the browser left for the form.
+    const order = ids(FIRST_RENTAL_TOUR);
+    expect(order[order.indexOf('rental') + 1]).toBe('tours');
   });
 
   it('the booking-site step shows the tenant’s real URL, host only', () => {
@@ -184,15 +225,15 @@ describe('first-rental walkthrough — building THIS user’s tour (gated steps 
     expect(ids(buildTour(ctx))).toContain('vehicles');
   });
 
-  it('drops a do-this step for a viewer who cannot press the button', () => {
+  it('a viewer who can press nothing still gets the WHOLE orientation', () => {
+    // The reverse of what this asserted while the tour was a walkthrough: it
+    // used to point at Add Vehicle and Add Customer, so `canEdit: false` cost a
+    // viewer three steps and could drop them under MIN_TOUR_STOPS. Knowing
+    // where the fleet is kept is a read, so no step here asks for an edit
+    // grant, and everyone who can open a page is shown it.
     const ctx = { ...FULL_CTX, canEdit: () => false };
-    const built = ids(buildTour(ctx));
-    for (const id of ['vehicles', 'customers', 'rental', 'insurance', 'agreement']) {
-      expect(built).not.toContain(id);
-    }
-    // Look-only steps survive: a viewer may still be shown where money lands.
-    expect(built).toContain('money');
-    expect(built).toContain('booking-site');
+    expect(ids(buildTour(ctx))).toEqual(ids(FIRST_RENTAL_TOUR));
+    for (const step of FIRST_RENTAL_TOUR) expect(step.requires?.edit, step.id).toBeFalsy();
   });
 
   it('drops the settings step when the branding sub-tab is not granted', () => {
@@ -208,21 +249,14 @@ describe('first-rental walkthrough — building THIS user’s tour (gated steps 
 
   it('reroutes the rental steps when the New Rental flow is gated on Stripe', () => {
     // A brand-new lean operator without Connect gets a "connect Stripe first"
-    // dialog INSTEAD of the form. Nothing in the flow can be pointed at, so the
-    // walkthrough points at the button, and folds insurance + agreement into
-    // one-line notes — exactly what the three-stop tour used to do.
+    // dialog when they press New Rental. The step stays on the same page and
+    // the same button; what changes is the sentence, which must not promise a
+    // rental the button will refuse. It carries insurance and the agreement as
+    // one-liners because that operator cannot go and see them for themselves.
     const built = buildTour({ ...FULL_CTX, rentalCreationBlocked: true });
-    expect(ids(built)).toEqual([
-      'welcome',
-      'sidebar',
-      'setup-guide',
-      'vehicles',
-      'customers',
-      'rental',
-      'money',
-      'booking-site',
-      'done',
-    ]);
+    // Nothing is DROPPED any more — the orientation never entered the form, so
+    // there is no in-flow step to lose. Same eight steps, one swapped body.
+    expect(ids(built)).toEqual(ids(FIRST_RENTAL_TOUR));
     const rental = built.find((s) => s.id === 'rental')!;
     expect(rental).toBe(BLOCKED_RENTAL_STEP);
     expect(rental.route).toBe('/rentals');
@@ -238,7 +272,7 @@ describe('first-rental walkthrough — building THIS user’s tour (gated steps 
       isMobile: true,
     };
     const built = buildTour(ctx);
-    // Welcome, setup guide, done — one anchored step. Not a walkthrough.
+    // Welcome and done, and nothing that points at anything. Not a tour.
     expect(countAnchoredSteps(built)).toBeLessThan(MIN_TOUR_STOPS);
     expect(isTourWorthRunning(built)).toBe(false);
     expect(isTourWorthRunning(buildTour(FULL_CTX))).toBe(true);
@@ -355,40 +389,62 @@ describe('first-rental walkthrough — anchor resolution', () => {
     expect(bare.element.getAttribute('data-sidebar')).toBe('sidebar');
   });
 
-  it('falls back to the pre-existing trigger attribute when the data-tour is gone', () => {
-    const r = resolveStep(step('vehicles'), domWith('<div data-add-vehicle-trigger></div>'), allVisible)!;
-    expect(r.element.hasAttribute('data-add-vehicle-trigger')).toBe(true);
+  it('EVERY step falls back to markup its page cannot render without', () => {
+    // The `data-tour` attributes live in large files under concurrent edit, and
+    // an attribute that goes missing does not fail loudly — the step just waits
+    // out its anchor budget and skips. So no anchored step may depend on a
+    // single selector, and the last one must be structural rather than a
+    // `data-tour` somebody could delete while tidying.
+    for (const s of FIRST_RENTAL_TOUR) {
+      if (s.anchors.length === 0) continue;
+      expect(s.anchors.length, s.id).toBeGreaterThanOrEqual(2);
+      expect(s.anchors.at(-1), s.id).not.toMatch(/^\[data-tour=/);
+    }
   });
 
-  it('walks the rental breadcrumb: steps nav → vehicle crumb → details crumb', () => {
+  it('falls back to the page title when a tab page has not drawn its tiles yet', () => {
+    // The Vehicles step points at ONE stat tile; a page still fetching has only
+    // its header. Spotlighting the title is a worse card than the tile, and a
+    // far better one than no card at all.
+    const r = resolveStep(
+      step('vehicles'),
+      domWith('<div data-slot="sidebar-inset"><h1>Fleet Management</h1></div>'),
+      allVisible,
+    )!;
+    expect(r.element.tagName).toBe('H1');
+    const withTile = resolveStep(
+      step('vehicles'),
+      domWith('<div data-slot="sidebar-inset"><h1>Fleet</h1><div data-tour="fleet-stat-total-vehicles"></div></div>'),
+      allVisible,
+    )!;
+    expect(withTile.element.getAttribute('data-tour')).toBe('fleet-stat-total-vehicles');
+  });
+
+  it('the handoff step prefers the real tab-tour button over the header', () => {
     const shell = domWith(`
-      <nav aria-label="Progress" data-tour="rental-steps">
-        <span data-tour="rental-step-booking-mode">Booking Mode</span>
-        <span data-tour="rental-step-customer">Customer</span>
-        <span data-tour="rental-step-vehicle">Vehicle</span>
-        <span data-tour="rental-step-rental-details">Rental Details</span>
-      </nav>
+      <div data-slot="sidebar-inset">
+        <div data-tour="rentals-header"><h1>Rentals</h1></div>
+        <button data-tour="take-tab-tour">Take the tour</button>
+      </div>
     `);
-    expect(resolveStep(step('rental'), shell, allVisible)!.element.getAttribute('data-tour')).toBe('rental-steps');
-    expect(resolveStep(step('insurance'), shell, allVisible)!.element.getAttribute('data-tour')).toBe('rental-step-vehicle');
-    expect(resolveStep(step('agreement'), shell, allVisible)!.element.getAttribute('data-tour')).toBe('rental-step-rental-details');
+    expect(resolveStep(step('tours'), shell, allVisible)!.element.getAttribute('data-tour')).toBe(
+      'take-tab-tour',
+    );
+    // Replay reaches pages where the canary-gated button is absent; the step
+    // must still draw a card rather than stall.
+    const noButton = domWith('<div data-slot="sidebar-inset"><div data-tour="rentals-header"><h1>Rentals</h1></div></div>');
+    expect(resolveStep(step('tours'), noButton, allVisible)!.element.getAttribute('data-tour')).toBe(
+      'rentals-header',
+    );
   });
 
-  it('prefers the live insurance box over the crumb once a vehicle is picked', () => {
-    const shell = domWith(`
-      <nav aria-label="Progress" data-tour="rental-steps"><span data-tour="rental-step-vehicle">Vehicle</span></nav>
-      <div data-tour="rental-insurance">Eligible</div>
-    `);
-    expect(resolveStep(step('insurance'), shell, allVisible)!.element.getAttribute('data-tour')).toBe('rental-insurance');
-  });
-
-  it('carries the invoices note only when the Finance group is on screen', () => {
-    const page = '<div data-tour="payments-overview"><h1>Payments</h1></div>';
-    const withFinance = resolveStep(step('money'), domWith(page + FULL_SIDEBAR), allVisible)!;
-    expect(withFinance.notes).toHaveLength(1);
-    const without = resolveStep(step('money'), domWith(page), allVisible)!;
-    // Telling a manager "invoices sit under Finance" when Finance is hidden
-    // from them is worse than saying nothing.
+  it('carries the settings note only when the settings rail is on screen', () => {
+    const panel = '<div data-tour="settings-tab-branding">Branding</div>';
+    const withRail = resolveStep(step('booking-site'), domWith(panel + FULL_SIDEBAR), allVisible)!;
+    expect(withRail.notes).toHaveLength(1);
+    const without = resolveStep(step('booking-site'), domWith(panel), allVisible)!;
+    // Pointing at "this list" when no list is drawn is worse than saying
+    // nothing — the same rule the Finance note used to carry.
     expect(without.notes).toHaveLength(0);
   });
 
@@ -420,9 +476,12 @@ describe('first-rental walkthrough — "seen" storage', () => {
     expect(tourSeenKey('user-a')).toContain(`v${FIRST_RENTAL_TOUR_VERSION}`);
   });
 
-  it('is version 2 — the walkthrough is a different tour from the three coach marks', () => {
-    expect(FIRST_RENTAL_TOUR_VERSION).toBe(2);
-    expect(tourSeenKey('u')).toBe('d247.tour.first-rental.v2.u');
+  it('is version 3 — the orientation is a different tour from the walkthrough', () => {
+    // v3 re-arms the tour for everyone who saw v2, and makes `isProgress`
+    // discard a v2 progress record rather than resuming somebody onto a step
+    // this list no longer has.
+    expect(FIRST_RENTAL_TOUR_VERSION).toBe(3);
+    expect(tourSeenKey('u')).toBe('d247.tour.first-rental.v3.u');
   });
 
   it('stays inside the d247.tour. namespace the developer reset clears', () => {
@@ -577,7 +636,10 @@ describe('first-rental walkthrough — resume (wandering off, closing the tab, r
 
   it('never nags on any other page', () => {
     expect(decideResume(progress('vehicles', 'active'), '/invoices', steps)).toEqual({ kind: 'none' });
-    expect(decideResume(progress('money', 'paused'), '/settings', steps)).toEqual({ kind: 'none' });
+    // A real id, deliberately: `money` used to sit here and is no longer a
+    // step, so this would have passed down the unknown-id path and proved
+    // nothing about the rule it is named for.
+    expect(decideResume(progress('rental', 'paused'), '/invoices', steps)).toEqual({ kind: 'none' });
   });
 
   it('a saved step this user no longer has lands on the next one they do', () => {

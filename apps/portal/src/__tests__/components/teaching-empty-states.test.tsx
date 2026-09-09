@@ -549,7 +549,11 @@ describe("setup guide", () => {
     // are the two features new operators most often never find, so the
     // checklist is where they get named — an unfinished row is an invitation.
     expect(hook).toContain('label: "Send your first agreement"');
-    expect(hook).toContain('label: "Turn on Bonzah insurance"');
+    // Renamed off the FEATURE's name and onto the ACTION it ticks off, because
+    // "Bonzah insurance" is what the checklist card's row is called and the two
+    // sit on one dashboard. What this test is guarding is that insurance is
+    // still NAMED here, not the wording — see the comment on the row itself.
+    expect(hook).toContain('label: "Add your Bonzah credentials"');
     expect(hook).toContain('label: "Connect your Stripe account"');
   });
 

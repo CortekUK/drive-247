@@ -25,10 +25,15 @@
  * to an empty form. The tenant draft was already lifted for the same reason.
  *
  * THE SOCIAL BUTTONS lead the screen because that is the order operators expect
- * — Google, Apple, then "or", then the form. They are presentational: neither
- * starts an OAuth round trip (`signup-begin-oauth` is never called), and neither
- * dead-ends. Pressing one says where it is up to and moves focus into the form,
- * which is the graceful behaviour and the honest one.
+ * — Google, then Apple, then the form. Neither starts an OAuth round trip here
+ * (`signup-begin-oauth` is never called from this route), but they are not the
+ * same kind of unfinished:
+ *
+ * - Google is implemented in the LIVE flow (`steps/account-step.tsx` →
+ *   `handleGoogle` → `signup-begin-oauth`) and is only waiting on a provider
+ *   being configured, so it stays enabled here and says where it is up to.
+ * - Apple exists NOWHERE in this codebase except this button. It is therefore
+ *   disabled and greyed rather than pretending — see the comment on it.
  */
 
 import * as React from "react";
@@ -183,11 +188,13 @@ export function JourneyAccountStep({
   };
 
   /**
-   * What a social button does today. It never leaves the page, never calls
+   * What the Google button does today. It never leaves the page, never calls
    * `signup-begin-oauth`, and never lands the operator on an error — it says
    * where that provider is up to and puts the cursor where they can carry on.
+   *
+   * Google only: Apple is disabled below, so it can never reach this.
    */
-  const handleSocial = (provider: "Google" | "Apple") => {
+  const handleSocial = (provider: "Google") => {
     setSocialNote(
       `${provider} sign-up is coming shortly. Use your email address below and I'll take it from there.`,
     );
@@ -218,18 +225,46 @@ export function JourneyAccountStep({
           Sign up with Google
         </Button>
 
+        {/*
+          "DISABLE hi rakho … disable, grey out kar do" — the team lead, pointing
+          at this button.
+
+          It was a solid black button that could not sign anyone up: pressing it
+          only put a line of grey text under the pair saying Apple was "coming
+          shortly". That is the worst of both — it is the loudest control on the
+          step, it invites a press, and the press is answered with an apology.
+
+          Apple is not merely unconfigured, it is unbuilt — and not only on this
+          route. `signup-begin-oauth` gates on
+          `ALLOWED_PROVIDERS = new Set(["google"])`, so an Apple identity is
+          REFUSED there with EMAIL_EXISTS_SIGN_IN even if a provider were turned
+          on; and the live account step renders no Apple button at all. Wiring
+          this one up is a server job, not a front-end one.
+
+          The live account step already applies exactly this
+          judgement to Google — it renders that button only when
+          `NEXT_PUBLIC_SIGNUP_GOOGLE_ENABLED` is on, because "a sign-in button
+          that answers with a Supabase 400 is worse than no button". Shown but
+          plainly out of service is the same call, and it keeps the row the
+          shape operators expect rather than leaving one lonely button.
+
+          `variant="outline"` so it matches Google's shape, and the base
+          `disabled:opacity-50` does the greying. The mark is
+          `fill="currentColor"`, so it fades with the label instead of staying a
+          hard black glyph on a faded button.
+        */}
         <Button
           type="button"
+          variant="outline"
           size="lg"
-          onClick={() => handleSocial("Apple")}
-          className={cn(
-            "h-11 w-full justify-center gap-3 text-[15px] font-medium",
-            "bg-black text-white hover:bg-black/85",
-            "dark:bg-white dark:text-black dark:hover:bg-white/90",
-          )}
+          disabled
+          className="h-11 w-full justify-center gap-3 text-[15px] font-medium"
         >
           <AppleMark />
           Sign up with Apple
+          {/* A disabled button takes no focus and shows no title, so the reason
+              travels in its accessible name instead. */}
+          <span className="sr-only"> — not available yet</span>
         </Button>
       </div>
 
@@ -552,8 +587,8 @@ function GoogleMark() {
  * Apple's mark, inline and monochrome.
  *
  * `fill="currentColor"` on purpose: Apple's guidelines require the logo to be a
- * single flat colour matching the button's text, which is white on the black
- * button and black on its dark-mode inverse.
+ * single flat colour matching the button's text — which is what also lets it
+ * grey out with the label now that the button is disabled.
  */
 function AppleMark() {
   return (

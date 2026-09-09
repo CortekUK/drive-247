@@ -59,6 +59,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { isLeanTenant } from "@/lib/lean-areas";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 
 /**
  * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
@@ -413,7 +414,7 @@ export function RentalsListV2() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
         <div className="min-w-0 shrink-0 flex items-start justify-between gap-3 sm:block">
-          <div className="min-w-0">
+          <div className="min-w-0" data-tour="rentals-header">
             <h1 className="text-2xl sm:text-3xl font-bold">Rentals</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               Manage rental agreements and contracts
@@ -449,6 +450,8 @@ export function RentalsListV2() {
               removed from this header at the user's request. Calendar view is
               still reachable — the overview's calendar card opens it — and
               /rentals/analytics still resolves if navigated to directly. */}
+          {/* h-9 here, not h-10: this header is v2 and its Buttons are h-9. */}
+          <TabTourButton tour="rentals" size="h-9" />
           {canEdit('rentals') && (
             <Button
               // Lean tenants without a usable Stripe Connect account get told
@@ -558,6 +561,15 @@ export function RentalsListV2() {
                     return (
                       <TableRow
                         key={rental.id}
+                        data-tour="rental-row"
+                        // Inert markers, read by `lib/tab-tours` so the Rentals
+                        // tour can walk from this list INTO a rental record.
+                        // This row navigates via onClick and emits no href, so
+                        // there is otherwise nothing on the page that names a
+                        // rental id — and without one the tour's seven record
+                        // steps drop silently and it looks merely short.
+                        data-record-kind="rentals"
+                        data-record-id={rental.id}
                         // The tint is halved and the rail thinned from 4px to
                         // 2px: with three columns gone there is far less on the
                         // row to compete with, so the flag no longer has to
