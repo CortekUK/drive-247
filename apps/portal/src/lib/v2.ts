@@ -47,8 +47,7 @@ export type V2Area =
   | 'cms'
   | 'vehicles'
   | 'insights'
-  | 'availability'
-  | 'site';
+  | 'availability';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -95,21 +94,6 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * untouched and still serve everyone else.
    */
   availability: [NORTHWIND],
-  /**
-   * The customer WEBSITE, not a portal screen — the only area here that gates
-   * something outside this app.
-   *
-   * It decides which site the portal points at: "Open website", the CMS
-   * overview's link, and the page the visual editor embeds. A tenant not on
-   * this list keeps `{slug}.drive-247.com`, which is the v1 booking app, and
-   * nothing about their site or their portal changes.
-   *
-   * Widening this entry is NOT sufficient on its own. The v2 host has to exist
-   * and be attached to the v2 Vercel project for that tenant — see
-   * `lib/site-v2-url.ts`. Adding a slug here without doing that gives them a
-   * link to a hostname that does not resolve.
-   */
-  site: [NORTHWIND],
 };
 
 /**
