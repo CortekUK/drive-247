@@ -34,6 +34,17 @@ import {
   type TourBuildContext,
   type TourStep,
 } from '@/lib/first-rental-tour';
+import {
+  RUN_TAB_TOUR_EVENT,
+  getTabTour,
+  markTabTourTaken,
+  readEmptyTabs,
+  readSampleIds,
+  tabTourVariant,
+  type RunTabTourDetail,
+  type TabTour,
+  type TabTourVariant,
+} from '@/lib/tab-tours';
 
 /**
  * The first-rental walkthrough's state machine.
@@ -218,11 +229,28 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   /** The route on which the last anchor wait timed out, for the short budget. */
   const timedOutRouteRef = useRef<string | null>(null);
 
+  /**
+   * The tab tour currently running, or null when this is the first-rental
+   * walkthrough.
+   *
+   * ONE machine runs both kinds. The alternative — a second
+   * `useFirstRentalTour` per tab — would arm a second autostart timer and a
+   * second replay listener, which the header comment on
+   * `useFirstRentalTourEligible` already warns about: three tab tours would
+   * mean three listeners on one event and three cards stacked on one screen.
+   *
+   * A ref rather than state on purpose. It is read inside callbacks that must
+   * not re-create themselves when it changes, and every place that reads it
+   * already re-renders for its own reasons.
+   */
+  const activeTabTourRef = useRef<{ tour: TabTour; variant: TabTourVariant } | null>(null);
+
   // --- Transitions -------------------------------------------------------
 
   const clearAll = useCallback(() => {
     navRef.current = null;
     timedOutRouteRef.current = null;
+    activeTabTourRef.current = null;
     setCurrent(null);
     setSteps([]);
     setIndex(0);
@@ -234,7 +262,14 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     (i: number, list: readonly TourStep[] = stepsRef.current) => {
       const step = list[i];
       if (!step) return;
-      writeTourProgress(appUserId, { stepId: step.id, status: 'active' });
+      // Tab tours keep no progress. Ten steps mostly on one route is not a
+      // journey worth restoring, and the resume path is what forces "home is
+      // the dashboard" into four separate places — a paused Customers tour
+      // would otherwise offer to resume itself on the dashboard. The launch
+      // button is always on screen, which is a better answer than a prompt.
+      if (!activeTabTourRef.current) {
+        writeTourProgress(appUserId, { stepId: step.id, status: 'active' });
+      }
       navRef.current = null;
       setCurrent(null);
       setIndex(i);
@@ -245,6 +280,20 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
 
   /** Finishing, skipping and dismissing are the same act: the run is over. */
   const finish = useCallback(() => {
+    const tabTour = activeTabTourRef.current;
+    if (tabTour) {
+      // Only dims the button. It never gates a run — the operator can take a
+      // tab tour as often as they like.
+      //
+      // The variant is the one captured at LAUNCH, not re-read here. By the
+      // time a run finishes the operator is often standing inside a record, so
+      // re-reading would report `full` for a tour that actually ran as the
+      // short empty version — and the button would dim on a tenant who has
+      // still never been shown the record half.
+      markTabTourTaken(tabTour.tour.id, appUserId, tabTour.variant);
+      clearAll();
+      return;
+    }
     clearTourProgress(appUserId);
     markTourSeen(appUserId);
     clearAll();
@@ -253,8 +302,12 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
   const end = finish;
 
   const finishToDashboard = useCallback(() => {
+    // A tab tour ends where it ran. Sending someone back to the dashboard after
+    // they asked to be shown around Vehicles would undo the thing they were
+    // doing — and the last step is usually pointing at something on that page.
+    const wasTabTour = activeTabTourRef.current !== null;
     finish();
-    if (pathnameRef.current !== '/') router.push('/');
+    if (!wasTabTour && pathnameRef.current !== '/') router.push('/');
   }, [finish, router]);
 
   /** Step aside, remembering where we were. The dashboard offers to resume. */
@@ -299,15 +352,35 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
    * two anchored steps — a walkthrough of an intro and a finale is not one.
    */
   const launch = useCallback(
-    (opts: { markSeen: boolean; fromIndex?: number }): boolean => {
+    (opts: { markSeen: boolean; fromIndex?: number; tour?: TabTour | null }): boolean => {
       if (typeof document === 'undefined') return false;
-      const built = buildTour(ctxRef.current);
+      const tabTour = opts.tour ?? null;
+      // `sampleIds` is read from the DOM, so it is resolved HERE — once, at
+      // launch — rather than in the per-render context. It costs three
+      // querySelectors, and it decides both which record steps survive and
+      // which VARIANT this run is.
+      const sampleIds = tabTour ? readSampleIds() : undefined;
+      const ctx: TourBuildContext = tabTour
+        ? { ...ctxRef.current, sampleIds, emptyTabs: readEmptyTabs() }
+        : ctxRef.current;
+      const built = buildTour(ctx, tabTour ? tabTour.steps : undefined);
       if (!isTourWorthRunning(built)) return false;
       // UP FRONT, before any state flips — so a re-render, a second effect pass
       // or another tab cannot fire this twice.
-      if (opts.markSeen) markTourSeen(appUserId);
+      if (opts.markSeen && !tabTour) markTourSeen(appUserId);
       const start = Math.min(Math.max(0, opts.fromIndex ?? 0), built.length - 1);
       timedOutRouteRef.current = null;
+      activeTabTourRef.current = tabTour
+        ? {
+            tour: tabTour,
+            // Which half of the tab exists TODAY. Delegated rather than
+            // recomputed here: the button reads the same function to decide how
+            // loud to be, and two copies of this rule would drift — Payments in
+            // particular has no record id, so an id-only test would mark every
+            // run of it "empty" and the button would never settle.
+            variant: tabTourVariant(tabTour.id),
+          }
+        : null;
       setSteps(built);
       goTo(start, built);
       return true;
@@ -544,6 +617,32 @@ export function useFirstRentalTour(suppressed: boolean): FirstRentalTourState {
     };
     window.addEventListener(REPLAY_TOUR_EVENT, onReplay);
     return () => window.removeEventListener(REPLAY_TOUR_EVENT, onReplay);
+  }, [isEligible, launch, appUserId]);
+
+  // --- Run a tab tour, from the button on that tab ------------------------
+  //
+  // One listener on one machine, told WHICH tour to run through the event's
+  // detail. Three per-tour events (or three mounted machines) would mean a
+  // single dispatch starting several tours at once.
+  useEffect(() => {
+    if (!isEligible) return;
+    const onRunTab = (event: Event) => {
+      const detail = (event as CustomEvent<RunTabTourDetail>).detail;
+      const tour = getTabTour(detail?.tourId);
+      if (!tour) return;
+      // An explicit request wins over whatever is on screen. The first-rental
+      // walkthrough may be mid-run or sitting on its resume prompt; leaving it
+      // in place would put two cards on one screen, both at z-[65].
+      clearTourProgress(appUserId);
+      if (!launch({ markSeen: false, tour })) {
+        toast({
+          title: 'Nothing to walk through just yet',
+          description: tour.emptyMessage,
+        });
+      }
+    };
+    window.addEventListener(RUN_TAB_TOUR_EVENT, onRunTab);
+    return () => window.removeEventListener(RUN_TAB_TOUR_EVENT, onRunTab);
   }, [isEligible, launch, appUserId]);
 
   // The paywall can come up mid-tour (a webhook lands, the gate latches). The

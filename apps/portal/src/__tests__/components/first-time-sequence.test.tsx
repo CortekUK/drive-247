@@ -305,7 +305,7 @@ async function finishWizard() {
     // and fires after its anchor poll.
     await wait(TOUR_WINDOW_MS);
     expect(tourIsActive(), 'the tour fired after the wizard').toBe(true);
-    // Non-empty rather than a literal: the walkthrough resolves its eleven
+    // Non-empty rather than a literal: the orientation resolves its eight
     // steps against the anchors actually on the page, and this harness mounts
     // a probe rather than the real dashboard. What matters here is that it
     // started with something to show, not how much of the house exists in a

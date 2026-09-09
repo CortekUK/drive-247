@@ -41,6 +41,7 @@ import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
 import { useFleetHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health";
 import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
 import type { VehicleHealthStatus } from "@/types/fleet-health";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -595,6 +596,10 @@ export default function VehiclesListEnhanced() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Renders only for the northwind canary — it self-gates on the
+              resolved tenant's slug — so the other 56 tenants see this shared
+              v1 header exactly as they do today. */}
+          <TabTourButton tour="vehicles" size="h-10" />
           {vehicles.length > 0 && (
             <Link href="/vehicles/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
@@ -815,6 +820,9 @@ export default function VehiclesListEnhanced() {
                   return (
                     <TableRow
                       key={`${vehicle.id}-${sortField || 'default'}-${sortDirection}`}
+                      // Anchor for the Vehicles tab tour (`lib/tab-tours/vehicles.ts`).
+                      // The FIRST row only — one row is the anchor, never the table.
+                      data-tour={index === 0 ? 'vehicle-row' : undefined}
                       className="cursor-pointer hover:bg-muted/50"
                        onClick={() => handleRowClick(vehicle.id)}
                      >

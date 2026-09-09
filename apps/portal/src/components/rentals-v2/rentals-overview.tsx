@@ -554,6 +554,7 @@ export function RentalsOverview({ stats, rentals, currencySymbol, onOpenCalendar
       <button
         type="button"
         onClick={onOpenCalendar}
+        data-tour="rentals-calendar"
         className="group relative flex cursor-pointer flex-col justify-end overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4 text-left text-foreground shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/15"
       >
         <span className="pointer-events-none absolute -right-8 -top-8 size-28 rounded-full bg-primary/15 blur-2xl transition-all duration-300 group-hover:bg-primary/25" />

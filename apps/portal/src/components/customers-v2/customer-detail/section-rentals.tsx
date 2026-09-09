@@ -68,7 +68,7 @@ export function SectionRentals({ c, onJump, currency }: SectionProps) {
         <EmptyHint>No rentals yet. This customer has an account but has never booked.</EmptyHint>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3" data-tour="customer-rentals">
             <Stat
               label="Rentals"
               value={String(c.rentals.length)}

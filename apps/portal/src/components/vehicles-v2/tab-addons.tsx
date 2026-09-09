@@ -188,6 +188,7 @@ export function AddonsTab({
 
       {/* ── weekends ────────────────────────────────────────────────────── */}
       <Section
+        tourId="vehicle-weekends"
         title="Weekends"
         hint={
           weekendPercent > 0

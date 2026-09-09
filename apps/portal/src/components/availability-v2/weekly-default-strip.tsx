@@ -54,7 +54,11 @@ export function WeeklyDefaultStrip({
   return (
     // `border-b`, not `border-t`: the strip now sits at the top of the card, so
     // the rule that separates it from the calendar belongs underneath it.
-    <div className="border-b border-border bg-muted/30">
+    //
+    // `data-tour` is the tab tour's anchor for the pattern step. The strip is
+    // the right size for a spotlight — full width but only ~110px tall — where
+    // the card around it is ~700px and would degrade to a centred wash.
+    <div data-tour="availability-pattern" className="border-b border-border bg-muted/30">
       <div className="flex">
         {/* Aligned with the hour axis above, so the seven cells line up with
             the seven columns rather than merely looking as though they do. */}

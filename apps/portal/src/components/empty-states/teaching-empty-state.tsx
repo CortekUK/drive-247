@@ -54,6 +54,17 @@ export interface TeachingEmptyStateProps {
   explainerId?: ExplainerId;
   /** One quiet line of reassurance, e.g. what is reversible. */
   footnote?: string;
+  /**
+   * Tour anchor. Attribute only — nothing about the layout changes.
+   *
+   * Rendered VERBATIM on the card and with a `-points` suffix on the payoff
+   * list, because a tab tour needs the second one. The card runs the full width
+   * of the content column and is around 450px tall, so a spotlight on it has
+   * nowhere to stand its own card and degrades to the centred wash the Welcome
+   * step uses — an even dim that points at nothing. The payoff list is compact,
+   * sits in the middle of the card, and carries the same words.
+   */
+  "data-tour"?: string;
   className?: string;
 }
 
@@ -66,6 +77,7 @@ export function TeachingEmptyState({
   secondaryAction,
   explainerId,
   footnote,
+  "data-tour": dataTour,
   className,
 }: TeachingEmptyStateProps) {
   const PrimaryIcon = primaryAction?.icon;
@@ -73,6 +85,7 @@ export function TeachingEmptyState({
 
   return (
     <div
+      data-tour={dataTour}
       className={cn(
         "rounded-2xl border border-border bg-card px-6 py-10 sm:px-10 sm:py-12",
         className
@@ -92,7 +105,10 @@ export function TeachingEmptyState({
         </p>
 
         {points && points.length > 0 && (
-          <ul className="mt-6 w-full space-y-2 text-left">
+          <ul
+            data-tour={dataTour ? `${dataTour}-points` : undefined}
+            className="mt-6 w-full space-y-2 text-left"
+          >
             {points.map((point) => (
               <li key={point} className="flex items-start gap-2.5">
                 <span className="mt-[3px] flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10">

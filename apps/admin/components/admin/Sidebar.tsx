@@ -21,6 +21,7 @@ import {
   ScrollText,
   Scale,
   ListChecks,
+  ClipboardCheck,
   ArrowUpCircle,
   Megaphone,
   MessageSquareText,
@@ -98,6 +99,12 @@ function useNavigation() {
         { name: 'Legal Pages', href: '/admin/legal', icon: Scale },
         // The first-run wizard's questions. Platform-wide, not per-tenant.
         { name: 'Onboarding Questions', href: '/admin/onboarding-questions', icon: ListChecks },
+        // The features an operator has to sit down with once — auto-extension,
+        // installments, pay-as-you-go, Bonzah — each with the video or the
+        // written guide that explains it. Platform-wide, not per-tenant, and
+        // NOT the Welcome Pack above: that is the full manual, this is the
+        // short list of things that cost a live walkthrough every time.
+        { name: 'Setup Checklist', href: '/admin/setup-checklist', icon: ClipboardCheck },
         ...(user?.is_primary_super_admin
           ? [{ name: 'Manage Admins', href: '/admin/admins', icon: Users }]
           : []),

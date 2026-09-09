@@ -232,17 +232,33 @@ export function Section({
   action,
   children,
   className,
+  tourId,
 }: {
   title?: string;
   hint?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /**
+   * Marks this section for the Vehicles tab tour (`lib/tab-tours/vehicles.ts`).
+   *
+   * Inert markup: one `data-tour` attribute, no styling and no behaviour, and
+   * nothing renders differently for a caller that omits it.
+   *
+   * It lands on the HEADING ROW rather than on the card, which is deliberate.
+   * The tour's spotlight degrades to a centred wash once the element it
+   * highlights passes roughly two thirds of the viewport, and a Section holding
+   * a photo grid or a long list goes past that on a laptop — the step would
+   * still "work" while pointing at nothing in particular. The heading row is
+   * small, carries the title, the hint and the status pill, and cannot render
+   * without the section it belongs to.
+   */
+  tourId?: string;
 }) {
   return (
     <div className={cn(cardCls, "p-6", className)}>
       {(title || action) && (
-        <div className="mb-5 flex items-start justify-between gap-4">
+        <div data-tour={tourId} className="mb-5 flex items-start justify-between gap-4">
           <div className="min-w-0">
             {title && <h3 className="font-heading text-sm font-semibold tracking-tight">{title}</h3>}
             {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}

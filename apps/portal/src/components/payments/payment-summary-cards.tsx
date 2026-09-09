@@ -69,7 +69,7 @@ export const PaymentSummaryCards = () => {
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-      <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
+      <Card data-tour="payments-stat-today" className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
           <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Today's Payments</CardTitle>
         </CardHeader>
@@ -78,7 +78,7 @@ export const PaymentSummaryCards = () => {
         </CardContent>
       </Card>
 
-      <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
+      <Card data-tour="payments-stat-month" className="bg-gradient-to-br from-success/10 to-success/5 border-success/20 hover:border-success/40 transition-all duration-200 cursor-pointer hover:shadow-md">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
           <CardTitle className="text-xs sm:text-sm font-medium leading-tight">This Month</CardTitle>
         </CardHeader>
@@ -87,7 +87,7 @@ export const PaymentSummaryCards = () => {
         </CardContent>
       </Card>
 
-      <Card className="bg-card hover:bg-accent/50 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md col-span-2 md:col-span-1">
+      <Card data-tour="payments-stat-count" className="bg-card hover:bg-accent/50 border shadow-sm transition-all duration-200 cursor-pointer hover:shadow-md col-span-2 md:col-span-1">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-6">
           <CardTitle className="text-xs sm:text-sm font-medium leading-tight">Payment Count</CardTitle>
         </CardHeader>

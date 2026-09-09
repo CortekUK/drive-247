@@ -110,6 +110,7 @@ export function PickupTab({
       </Section>
 
       <Section
+        tourId="vehicle-lockbox"
         title="Lockbox"
         hint="Lets a customer collect unattended — they are sent the code and where to find the box."
         action={lockboxOn ? <Pill tone="primary">Set up</Pill> : <Pill tone="neutral">Off</Pill>}

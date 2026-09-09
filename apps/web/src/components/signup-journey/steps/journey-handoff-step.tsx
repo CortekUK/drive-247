@@ -11,7 +11,8 @@
  *
  * What is different is only the clock. The live screen advances when the server
  * confirms a milestone — it never predicts and it never runs on a timer. There
- * is no server behind this route, so a timer walks the list.
+ * is no server behind this route, so elapsed time walks the list, against the
+ * per-milestone dwells below.
  *
  * The headline belongs to the DIALOG, and it changes when the list finishes —
  * "Setting up …" becomes "You're live." — so this step reports that moment
@@ -79,6 +80,34 @@ const MILESTONE_DWELL_MS: Record<ProvisionMilestone, number> = {
   site_published: 1800,
 };
 
+/**
+ * When each milestone finishes, in ms from the start of the run. Derived from
+ * the dwells above so the two can never disagree.
+ *
+ * This is what lets the progress figure be a measure of the run rather than a
+ * count of the list — see `percent` below.
+ */
+const MILESTONE_END_MS: readonly number[] = PROVISION_MILESTONES.reduce<
+  number[]
+>((ends, milestone) => {
+  ends.push((ends[ends.length - 1] ?? 0) + MILESTONE_DWELL_MS[milestone]);
+  return ends;
+}, []);
+
+/** The whole run, ~12.4s. */
+const RUN_MS = MILESTONE_END_MS[MILESTONE_END_MS.length - 1];
+
+/**
+ * How long the finished list holds before the success screen replaces it.
+ *
+ * Without it the last milestone completing and the success screen replacing it
+ * were the same render, so the eighth tick, the eighth line in its past tense
+ * and 100% were never drawn at all. A progress bar whose last visible value is
+ * 88% reads as a job that was abandoned, not finished — and this is the screen
+ * whose entire purpose is to show the setup completing.
+ */
+const SETTLE_MS = 700;
+
 interface JourneyHandoffStepProps {
   slug: string;
   payment: JourneyPaymentOutcome | null;
@@ -94,20 +123,60 @@ export function JourneyHandoffStep({
   onReady,
   onFinish,
 }: JourneyHandoffStepProps) {
-  const [completed, setCompleted] = React.useState(0);
-  const done = completed >= PROVISION_MILESTONES.length;
+  /**
+   * How far into the run we are, in ms.
+   *
+   * THE RUN IS DRIVEN BY ELAPSED TIME, not by a chain of per-milestone timers,
+   * and that is what fixed the progress figure. It used to be
+   * `completed / 8 * 100` — a count of finished lines — which meant the number
+   * and the bar were wrong in exactly the moments they were being looked at:
+   *
+   *   - the first 900ms showed 0%, an empty bar under a screen that had already
+   *     started working;
+   *   - every value was stale for as long as its milestone ran, and worst where
+   *     the wait was longest — `brand_ready` is 3.2s, so a quarter of the whole
+   *     run was spent frozen at 25% with nothing on screen moving;
+   *   - it never reached 100%: the eighth milestone landing was also the frame
+   *     that swapped in the success screen, so the last value anyone saw was
+   *     88% (7 of 8, rounded).
+   *
+   * Deriving both the bar and the completed count from one clock makes the
+   * figure the true fraction of the run — the dwells are constants here, so
+   * this is measured, not invented — and it advances continuously through the
+   * long milestone instead of standing still through it.
+   *
+   * (The LIVE screen must keep counting milestones: its steps are confirmed by
+   * a server and have no knowable duration, which is why `onboarding-types.ts`
+   * says not to invent sub-progress there. Here the durations ARE the truth.)
+   *
+   * Reading the clock each frame rather than accumulating deltas also means a
+   * backgrounded tab — where rAF stops entirely — resumes at the right value
+   * instead of however far it got before being parked.
+   */
+  const [elapsed, setElapsed] = React.useState(0);
+  const [done, setDone] = React.useState(false);
 
   React.useEffect(() => {
-    if (done) return;
-    // The dwell of the milestone CURRENTLY RUNNING — index `completed`, since
-    // that many are finished and this is the next one — not a fixed interval.
-    const running = PROVISION_MILESTONES[completed];
-    const timer = window.setTimeout(
-      () => setCompleted((n) => n + 1),
-      MILESTONE_DWELL_MS[running],
-    );
-    return () => window.clearTimeout(timer);
-  }, [completed, done]);
+    const startedAt = Date.now();
+    let frame = 0;
+    let settle = 0;
+
+    const tick = () => {
+      const ms = Math.min(Date.now() - startedAt, RUN_MS);
+      setElapsed(ms);
+      if (ms < RUN_MS) {
+        frame = window.requestAnimationFrame(tick);
+        return;
+      }
+      settle = window.setTimeout(() => setDone(true), SETTLE_MS);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
+    };
+  }, []);
 
   // Told once, in an effect rather than from the timer callback, so the parent's
   // headline swap is a commit-phase update and not a setState during render.
@@ -115,8 +184,33 @@ export function JourneyHandoffStep({
     if (done) onReady();
   }, [done, onReady]);
 
-  const portalHref = portalHandoffUrl(slug || JOURNEY_TENANT_SLUG);
-  const percent = (completed / PROVISION_MILESTONES.length) * 100;
+  /**
+   * ALWAYS NORTHWIND — never the slug they typed. This is the one line that
+   * makes the demo loop repeatable, and it was the bug the team lead reported.
+   *
+   * The journey creates NOTHING: no auth user, no tenant, no subscription (see
+   * the header of `lib/signup-journey.ts`). So handing the browser to
+   * `<their-slug>.portal.…` sends them to a workspace that does not exist and
+   * ends a signup that otherwise worked perfectly on "Tenant not found or
+   * inactive" — which is exactly what happened with "Gamma Dev".
+   *
+   * What he asked for instead, at [03:26] and [05:32]: "mujhe redirect karwa de
+   * Northwind pe… end pe mujhe Northwind pe land karwa de, kyunki hum teenon ke
+   * liye source of truth sirf Northwind hai."
+   *
+   * NOTE THE DELIBERATE SPLIT between this and `portalAddress` below. The
+   * addresses on screen keep THEIR chosen name, because the fiction is the
+   * point — "usko aise lagna chahiye ki main new tenant pe aa gaya hoon, lekin
+   * actually main Northwind pe hi hoon." What is displayed is the workspace
+   * they think they made; where the button goes is the one that exists.
+   *
+   * The URL also carries `firstrun=1`, which re-arms the wizard and the tour on
+   * arrival, so the landing is a genuine first run rather than whatever state
+   * Northwind was left in — see `lib/first-run-handoff.ts` in the portal.
+   */
+  const portalHref = portalHandoffUrl();
+  const completed = MILESTONE_END_MS.filter((end) => elapsed >= end).length;
+  const percent = (elapsed / RUN_MS) * 100;
   /** The address the operator's portal answers on. */
   const portalAddress = `${slug || JOURNEY_TENANT_SLUG}.portal.drive-247.com`;
   /** The public site customers book on — the other half of what they just bought. */
@@ -128,7 +222,13 @@ export function JourneyHandoffStep({
         <Progress
           value={percent}
           aria-label="Setup progress"
-          className="h-1.5"
+          // The shared indicator eases over 500ms, which is right when the value
+          // arrives in one big step per milestone. This one is re-targeted every
+          // frame, so that transition is pure lag: the bar trailed the printed
+          // percentage by several points for the whole run. Shortened rather
+          // than removed — it is what smooths the jump when a backgrounded tab
+          // comes back and the clock has moved on without any frames.
+          className="h-1.5 [&>[data-slot=progress-indicator]]:duration-150"
         />
         <div className="mt-2.5 flex justify-between text-xs text-muted-foreground">
           <span>

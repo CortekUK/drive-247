@@ -49,7 +49,7 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
         <EmptyHint>No charges or payments on this account yet.</EmptyHint>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-tour="customer-money-totals">
             <Stat label="Charged" value={money(totals.charges)} hint="Rentals, tolls, fines, fees" />
             <Stat
               label="Received"
@@ -119,7 +119,7 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
                 {totals.net > 0 ? "Owed to you after credit" : totals.net < 0 ? "In their favour" : "Square"}
               </p>
               {canEdit && totals.net > 0 && (
-                <Button size="sm" className="mt-4" onClick={() => setCollectOpen(true)}>
+                <Button size="sm" className="mt-4" data-tour="customer-money-collect" onClick={() => setCollectOpen(true)}>
                   Collect a payment
                 </Button>
               )}
@@ -191,7 +191,7 @@ export function SectionMoney({ c, onJump, canEdit, currency }: SectionProps) {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => setStatementOpen(true)}>
+              <Button variant="outline" data-tour="customer-money-statement" onClick={() => setStatementOpen(true)}>
                 <FileDown className="size-4" />
                 Statement of account
               </Button>

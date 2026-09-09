@@ -708,7 +708,10 @@ function HandoverCard({
 
   return (
     <Surface className={cn(locked && "opacity-60")}>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div
+        className="mb-5 flex flex-wrap items-center justify-between gap-3"
+        data-tour="rental-handover-half"
+      >
         <div className="flex items-center gap-2.5">
           <span
             className={cn(

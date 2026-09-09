@@ -106,7 +106,7 @@ export function RatesTab({
           </Field>
         </div>
 
-        <div className="mt-5">
+        <div data-tour="vehicle-hire-lengths" className="mt-5">
           <List>
             <SwitchRow
               checked={vehicle.available_daily}

@@ -56,6 +56,7 @@ import {
   SelectValue,
 } from '@/components/ui-v2/select';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { TabTourButton } from '@/components/onboarding/tab-tour-button';
 import { cn } from '@/lib/utils';
 import { WeekCalendar } from './week-calendar';
 import { WeeklyDefaultStrip } from './weekly-default-strip';
@@ -172,7 +173,13 @@ export function AvailabilityV2() {
               the foot of the page. An operator must never have to wonder
               whether they just edited live availability.
             */}
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-inset ring-warning/60">
+            <span
+              // The tab tour's second stop. Nothing on this screen matters more
+              // than an operator understanding that it does not save, so the
+              // tour points at this pill rather than asserting it in prose.
+              data-tour="availability-preview"
+              className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-inset ring-warning/60"
+            >
               <Eye className="size-3.5 text-warning" />
               Preview — changes aren&apos;t saved
             </span>
@@ -184,6 +191,12 @@ export function AvailabilityV2() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* First in the header's control cluster, which is where the other
+              four tab tours put theirs. `h-9` because this is a v2 header; the
+              week controls beside it are deliberately `sm` (h-8) so the four of
+              them read as one navigation unit, and the tour button is not part
+              of it. Canary-only — it self-gates on the resolved tenant slug. */}
+          <TabTourButton tour="availability" size="h-9" />
           <Button
             variant="outline"
             size="icon-sm"
@@ -192,7 +205,13 @@ export function AvailabilityV2() {
           >
             <ChevronLeft />
           </Button>
-          <span className="min-w-[176px] text-center text-sm font-medium tabular-nums">
+          {/* The tour anchors the WEEK on this label rather than on the cluster
+              around it: it is the thing the step is about, and a 176px label
+              leaves the card somewhere to stand. */}
+          <span
+            data-tour="availability-week"
+            className="min-w-[176px] text-center text-sm font-medium tabular-nums"
+          >
             {format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}
           </span>
           <Button
@@ -216,8 +235,18 @@ export function AvailabilityV2() {
       </header>
 
       {/* ── global controls ──────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-3.5">
-        <label htmlFor="availability-always-open" className="flex cursor-pointer items-center gap-2.5">
+      <div
+        // The tour's fallback for both control steps below. It is rendered
+        // unconditionally and outside the card, so it survives the loading
+        // branch that replaces the calendar with a skeleton.
+        data-tour="availability-controls"
+        className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-3xl border border-border bg-card px-5 py-3.5"
+      >
+        <label
+          htmlFor="availability-always-open"
+          data-tour="availability-always-open"
+          className="flex cursor-pointer items-center gap-2.5"
+        >
           <Switch
             id="availability-always-open"
             checked={defaults.alwaysOpen}
@@ -234,7 +263,10 @@ export function AvailabilityV2() {
             setting "9 to 5" means 9 to 5 THERE — so it belongs beside the
             hours it qualifies, not buried in settings. Like every other edit
             here it is preview-only and not written back. */}
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <label
+          data-tour="availability-timezone"
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+        >
           <span className="whitespace-nowrap">Times shown in</span>
           <Select
             value={defaults.timezone || ''}
@@ -255,7 +287,10 @@ export function AvailabilityV2() {
         </label>
 
         <div className="ml-auto flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span
+            data-tour="availability-counts"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
             <span>
               <span className="font-medium text-foreground">{openDays}</span> open ·{' '}
               <span className="font-medium text-foreground">{blockedDays}</span> closed
@@ -271,7 +306,13 @@ export function AvailabilityV2() {
               {exceptionCount} exception{exceptionCount === 1 ? '' : 's'}
             </span>
           </span>
-          <Button variant="outline" size="sm" disabled={!touched} onClick={resetPreview}>
+          <Button
+            data-tour="availability-reset"
+            variant="outline"
+            size="sm"
+            disabled={!touched}
+            onClick={resetPreview}
+          >
             <RotateCcw />
             Reset preview
           </Button>

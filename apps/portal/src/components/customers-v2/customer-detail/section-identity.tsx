@@ -45,7 +45,7 @@ export function SectionIdentity({ c, set, onJump, canEdit }: SectionProps) {
           </div>
         )}
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-5 sm:grid-cols-2" data-tour="customer-identity">
           <div className="sm:col-span-2">
             <Field label="Full name">
               <input
