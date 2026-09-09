@@ -52,6 +52,7 @@ import { formatCurrency } from "@/lib/format-utils";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 
 // Helper function to display user-friendly payment type names
 const getPaymentTypeDisplay = (paymentType: string): string => {
@@ -369,12 +370,15 @@ const PaymentsList = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Canary-only: self-gates on the resolved tenant slug, so this
+              shared v1 header is unchanged for the other 56 tenants. */}
+          <TabTourButton tour="payments" size="h-10" />
           <Link href="/payments/analytics" className="shrink-0">
-            <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+            <Button variant="outline" size="icon" data-tour="payments-analytics" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
               <BarChart3 className="h-4 w-4" />
             </Button>
           </Link>
-          <Button variant="outline" size="icon" onClick={handleExportCSV} className="shrink-0">
+          <Button variant="outline" size="icon" data-tour="payments-export" onClick={handleExportCSV} className="shrink-0">
             <Download className="h-4 w-4" />
           </Button>
           <AddPaymentDialog
@@ -382,7 +386,7 @@ const PaymentsList = () => {
             onOpenChange={setShowAddDialog}
           />
           {canEdit('payments') && (
-            <Button onClick={() => setShowAddDialog(true)} className="bg-gradient-primary flex-1 sm:flex-none">
+            <Button onClick={() => setShowAddDialog(true)} data-tour="payments-record" className="bg-gradient-primary flex-1 sm:flex-none">
               <Plus className="h-4 w-4 mr-2" />
               Record Payment
             </Button>
@@ -433,7 +437,7 @@ const PaymentsList = () => {
                       </TableHead>
                       <TableHead>Vehicle</TableHead>
                       <TableHead>Rental</TableHead>
-                      <TableHead>Type</TableHead>
+                      <TableHead data-tour="payments-type-column">Type</TableHead>
                       <TableHead>Method</TableHead>
                       <TableHead
                         className="text-left cursor-pointer hover:bg-muted/50"
@@ -442,13 +446,13 @@ const PaymentsList = () => {
                         Amount {sortBy === 'amount' && (sortOrder === 'asc' ? '↑' : '↓')}
                       </TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead data-tour="payments-actions-column">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.map((payment) => {
                       return (
-                        <TableRow key={payment.id} className="hover:bg-muted/50">
+                        <TableRow key={payment.id} data-tour="payment-row" className="hover:bg-muted/50">
                           <TableCell className="font-medium">
                             {formatInTimeZone(parseLocalDate(payment.payment_date), 'America/New_York', 'MM/dd/yyyy')}
                           </TableCell>
@@ -531,7 +535,7 @@ const PaymentsList = () => {
                                   ? Math.max(0, ((Number(rental.monthly_amount) || 0) - disc) / units)
                                   : unitRate;
                                 return (
-                                  <p className="text-xs text-muted-foreground font-normal">
+                                  <p data-tour="payments-rate" className="text-xs text-muted-foreground font-normal">
                                     {formatCurrency(shownRate, cc)}/{unitLabel} × {units}
                                     {disc > 0 ? ` (after ${formatCurrency(disc, cc)} discount)` : ''}
                                   </p>
@@ -611,7 +615,7 @@ const PaymentsList = () => {
                               )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <Button variant="ghost" size="sm" data-tour="payments-row-actions" className="h-8 w-8 p-0">
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>

@@ -50,6 +50,10 @@ export function VehiclesTeachingEmptyState({
 }) {
   return (
     <TeachingEmptyState
+      // Anchor for the Vehicles tab tour's empty-tab steps. The tour points at
+      // `vehicles-empty-points` and at the headline inside this card, never at
+      // the card itself — see the prop's note.
+      data-tour="vehicles-empty"
       icon={Car}
       headline="Your fleet lives here"
       body="Every car you rent out is a vehicle record. It carries the registration, the photos and the rates your booking site shows customers — and a rental is always booked against one, so nothing can be hired until a vehicle exists."
@@ -77,6 +81,9 @@ export function CustomersTeachingEmptyState({
 }) {
   return (
     <TeachingEmptyState
+      // Anchor for the Customers tab tour's empty-tab steps. The tour points at
+      // `customers-empty-points`, not the card — see the prop's note.
+      data-tour="customers-empty"
       icon={Users}
       headline="Everyone who rents from you, in one place"
       body="A customer record holds their contact details, driving licence and verification status, and it links to every rental, payment, agreement and message they have ever had with you. Anyone who books through your site is added here automatically."
@@ -103,6 +110,10 @@ export function RentalsTeachingEmptyState({
 }) {
   return (
     <TeachingEmptyState
+      // Anchor for the Rentals tab tour's empty-tab steps. The tour points at
+      // the headline, at `rentals-empty-points` and at this card's own button,
+      // never at the card itself — see the prop's note.
+      data-tour="rentals-empty"
       icon={CalendarPlus}
       headline="This is where the business actually runs"
       body="A rental ties one customer to one vehicle for a set of dates, and carries the money with it — the charge, the deposit hold, the signed agreement and the insurance. Every other screen in the portal is reporting on what happens here."
@@ -156,6 +167,10 @@ export function PaymentsTeachingEmptyState({
 }) {
   return (
     <TeachingEmptyState
+      // Anchor for the Payments tab tour, which has no record steps and so
+      // leans on this card whenever the table is not drawn. It points at
+      // `payments-empty-points`, never the card itself — see the prop's note.
+      data-tour="payments-empty"
       icon={CreditCard}
       headline="Every payment, in one ledger"
       body="Money lands here the moment a customer pays — card charges from your booking site, installments, pay-as-you-go accruals and released deposit holds all post themselves. You can also record a cash or bank transfer by hand so the ledger matches what is really in your account."

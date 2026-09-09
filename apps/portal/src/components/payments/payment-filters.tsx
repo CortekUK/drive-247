@@ -126,7 +126,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
     <div>
       <div className="flex flex-wrap gap-3 items-center">
         {/* Search */}
-        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
+        <div data-tour="payments-search" className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search customer or vehicle..."
@@ -143,6 +143,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
               <Button
                 variant="outline"
                 size="sm"
+                data-tour="payments-method"
                 className={cn("gap-1.5 rounded-r-none border-r-0", filters.method !== 'all' && "border-primary")}
               >
                 {filters.method !== 'all' ? (
@@ -182,6 +183,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
               <Button
                 variant="outline"
                 size="sm"
+                data-tour="payments-status"
                 className={cn("gap-1.5 rounded-none border-r-0", filters.verificationStatus !== 'all' && "border-primary")}
               >
                 {filters.verificationStatus !== 'all' ? (
@@ -221,6 +223,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
               <Button
                 variant="outline"
                 size="sm"
+                data-tour="payments-dates"
                 className={cn("rounded-l-none px-2", hasDateFilter && "border-primary text-primary")}
               >
                 <CalendarIcon className="h-4 w-4" />
@@ -266,7 +269,7 @@ export const PaymentFilters = ({ onFiltersChange }: PaymentFiltersProps) => {
         </div>
 
         {/* Quick Period filters grouped */}
-        <div className="flex items-center border rounded-md overflow-hidden sm:ml-auto">
+        <div data-tour="payments-period" className="flex items-center border rounded-md overflow-hidden sm:ml-auto">
           <span className="text-xs text-muted-foreground px-2.5 shrink-0">Period</span>
           <div className="h-5 w-px bg-border" />
           {([

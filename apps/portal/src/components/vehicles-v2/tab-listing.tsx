@@ -138,6 +138,7 @@ export function ListingTab<K extends string>({
       )}
 
       <Section
+        tourId="vehicle-listing"
         title={live ? "On the booking site" : "Not on the booking site"}
         hint="Exactly what a customer is shown, as of right now."
         action={

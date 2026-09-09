@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui-v2/button';
@@ -90,6 +90,63 @@ const SEVERITY_CLASS: Record<AnnouncementSeverity, string> = {
   info: 'border-white/25 bg-white/10 text-white/90',
 };
 
+/**
+ * The href we are willing to put in the DOM, or `null` to drop the button.
+ *
+ * `cta_url` is free text typed into the super-admin form and it lands in an
+ * `href` unmodified. A `javascript:` or `data:` href EXECUTES on click, so a
+ * paste accident — or anyone who ever gets a write on this table — becomes
+ * script running in an operator's authenticated portal session. Only an
+ * absolute http(s) URL or a same-origin path survives; anything else renders no
+ * button at all, because a missing CTA is better than that one.
+ *
+ * Note this is the href only. `body_html` still goes through
+ * `dangerouslySetInnerHTML` unsanitised — see the comment at that call site.
+ */
+function safeHref(url: string | null | undefined): string | null {
+  if (typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // Same-origin path. `//evil.com` is protocol-relative and NOT same-origin,
+  // so a second slash disqualifies it.
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
+  return null;
+}
+
+/**
+ * The slot when there is nothing to show.
+ *
+ * NOT `null`. `home-bands.tsx` lays this band out as
+ * `grid md:grid-cols-2 xl:grid-cols-3` and this card is its FIRST child, so
+ * returning nothing did not leave a gap — it removed a column and pulled
+ * "Attention required now" and the card after it one place left, on a band
+ * whose whole point is a fixed left-to-right rhythm. That happens on the two
+ * paths that matter most: the first paint of every dashboard load, and any
+ * production tenant whose `feature_announcements` read comes back empty or
+ * fails. An empty card is the sanctioned outcome for a missing table; a
+ * disappearing card that reflows its neighbours is not.
+ *
+ * `children` is the restore button when something was dismissed, and nothing at
+ * all while the first read is in flight — a spinner for product news would be
+ * louder than the news.
+ */
+function EmptySlot({ className, children }: { className?: string; children?: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        // The caller passes `border-0`, which beats `border` whatever order the
+        // classes are written in, so the slot is drawn with a fill rather than
+        // an outline. `--pv-*` are the dashboard's own tokens, scoped to the
+        // `.pv` wrapper this always renders inside.
+        'flex items-center justify-center rounded-xl bg-[var(--pv-wash)]',
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 function DetailDialog({
   announcement,
   onOpenChange,
@@ -100,7 +157,8 @@ function DetailDialog({
   onDismiss: (id: string) => void;
 }) {
   if (!announcement) return null;
-  const isExternal = !!announcement.cta_url?.startsWith('http');
+  const href = safeHref(announcement.cta_url);
+  const isExternal = !!href && /^https?:\/\//i.test(href);
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
@@ -120,9 +178,26 @@ function DetailDialog({
         </DialogHeader>
 
         {announcement.body_html && (
-          /* Only super admins can write this table (it is one of the tables
-             that DOES have RLS on), so the HTML comes from us rather than from
-             a tenant.
+          /* NOT SANITISED, and that is a standing risk rather than a settled
+             decision — recorded here because the audit that found it could not
+             close it.
+
+             The reasoning it shipped on is that only super admins can write
+             this table (it is one of the tables that DOES have RLS on), so the
+             HTML comes from us rather than from a tenant. That reasoning is
+             unverifiable from this repository: `feature_announcements` has no
+             DDL and no policy definition anywhere in the tree (the table was
+             created through the Management API), so nothing here pins the write
+             policy to `is_super_admin()`.
+
+             The booking app injects the SAME COLUMN through
+             `sanitizeHtml()` (apps/booking/src/lib/sanitize-html.ts, DOMPurify),
+             and the super-admin editor's own field label promises "HTML allowed
+             — sanitized on render". The portal is the one reader that does
+             neither. It is left alone here only because closing it means adding
+             `dompurify` to apps/portal/package.json, which this area explicitly
+             does not do (see the `PanInfo` note at the top of this file), and a
+             hand-rolled half-sanitiser is worse than none.
 
              Styled with explicit child selectors rather than `prose`:
              @tailwindcss/typography is in package.json but is NOT registered in
@@ -145,10 +220,10 @@ function DetailDialog({
           >
             Got it, hide this
           </Button>
-          {announcement.cta_url && (
+          {href && (
             <Button asChild>
               <a
-                href={announcement.cta_url}
+                href={href}
                 target={isExternal ? '_blank' : undefined}
                 rel={isExternal ? 'noreferrer noopener' : undefined}
               >
@@ -198,17 +273,14 @@ export function AnnouncementCarousel({ className }: { className?: string }) {
     if (count > 0 && index >= count) setIndex(0);
   }, [count, index]);
 
-  if (isLoading) return null;
+  // Both of these used to `return null`, which silently removed a column from
+  // the band's three-across grid. See `EmptySlot`.
+  if (isLoading) return <EmptySlot className={className} />;
 
   if (count === 0) {
-    if (!hasDismissed) return null;
+    if (!hasDismissed) return <EmptySlot className={className} />;
     return (
-      <div
-        className={cn(
-          'flex items-center justify-center rounded-xl border border-dashed',
-          className
-        )}
-      >
+      <EmptySlot className={className}>
         <Button
           variant="ghost"
           size="sm"
@@ -218,7 +290,7 @@ export function AnnouncementCarousel({ className }: { className?: string }) {
           <RotateCcw className="size-3.5" />
           Show announcements
         </Button>
-      </div>
+      </EmptySlot>
     );
   }
 

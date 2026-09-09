@@ -38,6 +38,7 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { CustomersTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { TabTourButton } from "@/components/onboarding/tab-tour-button";
 
 interface Customer {
   id: string;
@@ -704,8 +705,11 @@ const CustomersList = () => {
             manager without it loses the button here exactly as they lost the
             sidebar link before.
           */}
+          {/* Canary-only: self-gates on the resolved tenant slug, so this
+              shared v1 header is unchanged for the other 56 tenants. */}
+          <TabTourButton tour="customers" size="h-10" />
           {isLeanTenant(tenantSlug) && canView('blocked_customers') && (
-            <Link href="/blocked-customers" className="shrink-0">
+            <Link href="/blocked-customers" className="shrink-0" data-tour="customers-blocked">
               <Button variant="outline" className="flex-1 sm:flex-none">
                 <Ban className="h-4 w-4 mr-2" />
                 Blocked
@@ -720,7 +724,7 @@ const CustomersList = () => {
             </Link>
           )}
           {canEdit('customers') && (
-            <Button variant="outline" size="icon" onClick={() => setInviteDialogOpen(true)} className="shrink-0">
+            <Button variant="outline" size="icon" data-tour="customer-invite" onClick={() => setInviteDialogOpen(true)} className="shrink-0">
               <Link2 className="h-4 w-4" />
             </Button>
           )}
@@ -824,7 +828,7 @@ const CustomersList = () => {
                         <SortIcon field="type" />
                       </div>
                     </TableHead>
-                    <TableHead>Verified</TableHead>
+                    <TableHead data-tour="customers-verified-column">Verified</TableHead>
                     <TableHead>Gig Driver</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead
@@ -845,7 +849,18 @@ const CustomersList = () => {
                     const balanceData = customerBalances[customer.id];
 
                     return (
-                      <TableRow key={customer.id} className="table-row">
+                      <TableRow
+                        key={customer.id}
+                        className="table-row"
+                        data-tour="customer-row"
+                        // Inert markers, read by `lib/tab-tours` so the
+                        // Customers tour can walk from this list INTO a customer
+                        // record. The name cell navigates via a button's onClick
+                        // and emits no href, so nothing else on this page names
+                        // a customer id.
+                        data-record-kind="customers"
+                        data-record-id={customer.id}
+                      >
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <button

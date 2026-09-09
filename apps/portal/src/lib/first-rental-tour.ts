@@ -1,31 +1,48 @@
 /**
- * The first-rental walkthrough — its steps, its gate, its anchor resolver, and
- * the two things it remembers: that a user has seen it, and where they got to.
+ * The first-run ORIENTATION — its steps, its gate, its anchor resolver, and the
+ * two things it remembers: that a user has seen it, and where they got to.
  *
  * THE PRODUCT DECISION, restated here because the shape of this file follows
- * from it. The tour shipped as three coach marks on the sidebar; Ghulam then
- * asked for "a bit more like a walkthrough — a good amount of steps in it", the
- * standard of a big application's onboarding. So it is now eleven steps that
- * CROSS PAGES — dashboard, Vehicles, Customers, the New Rental flow, Payments,
- * Settings — and shows the operator the house on the way to the one thing it
- * has always been for: their first rental.
+ * from it, and because this file has already been the wrong size once.
  *
- *   1.  Welcome        (dashboard)   what this is, a minute, skip any time
- *   2.  Your sidebar   (dashboard)   ONE stop for the nav, not one per item
- *   3.  Setup guide    (dashboard)   tracks progress; each row has a video
- *   4.  Vehicles       → /vehicles   add your first vehicle — real, not demo
- *   5.  Customers      → /customers  add your first customer
- *   6.  New Rental     → /rentals/new  mode, customer, vehicle, dates, place
- *   7.  Insurance      (same flow)   Bonzah, offered where the car is picked
- *   8.  Agreement      (same flow)   drawn up and sent for signature from here
- *   9.  Payments       → /payments   where the money shows up
- *   10. Booking site   → /settings   "your customers book here"
- *   11. Done           (anywhere)    a finale, and a pointer to the checklist
+ * It shipped as three coach marks. It was then grown into an eleven-step
+ * WALKTHROUGH that crossed six pages — dashboard, Vehicles, Customers, the New
+ * Rental form (three steps deep, including insurance and the agreement),
+ * Payments, Settings — and marched a brand-new operator through making a first
+ * rental before they had a car or a customer to make one with.
  *
- * Insurance sits before Agreement, the reverse of the brief's numbering, on
- * purpose: in the flow the car (and its cover) is chosen first and the
- * agreement is the thing that goes out at the end, and the spotlight walks the
- * breadcrumb left to right instead of doubling back.
+ * Ghulam ruled that out in review: "woh abhi woh tour nahi hai" — that is not
+ * the tour — and named the walk through payments specifically. His design is
+ * four separate things, and this file is only the third of them:
+ *
+ *   questions answered → a first dialog where Trax introduces itself →
+ *   a SHORT general orientation → and inside every tab, a tour BUTTON the
+ *   operator takes at their own convenience.
+ *
+ * So this is now an ORIENTATION, not a walkthrough. Its whole job is to say
+ * WHERE THINGS LIVE and then get out of the way. Eight shallow steps, one
+ * stop per place, and nothing that walks into a form:
+ *
+ *   1. Welcome       (dashboard)   Trax introduces itself; a minute, skippable
+ *   2. Your sidebar  (dashboard)   ONE stop for the nav, not one per item
+ *   3. Vehicles      → /vehicles   this is your fleet — NOT the Add dialog
+ *   4. Customers     → /customers  this is everyone who rents from you
+ *   5. Rentals       → /rentals    where the business runs — NOT /rentals/new
+ *   6. Tab tours     (same page)   every tab has its own tour, take it later
+ *   7. Booking site  → /settings   "your customers book here", and settings
+ *   8. Done          (anywhere)    a finale, and a pointer to the tab tours
+ *
+ * WHY IT MAY NOT GROW BACK. The depth that used to be steps 6-9 has not been
+ * deleted — it MOVED, to `lib/tab-tours/{vehicles,customers,rentals,payments}.ts`,
+ * where roughly ten steps per tab are launched from a button on that tab rather
+ * than fired at somebody on their first login. Anything you are tempted to add
+ * here almost certainly belongs there instead. The `tours` step exists to hand
+ * the operator over to them, which is what makes this list allowed to be short.
+ *
+ * The old dashboard "setup guide" step went the other way: it is not a stop any
+ * more, because the panel it pointed at is already on the screen the operator
+ * lands on and needs no spotlight to be found. The finale names it instead, so
+ * they leave knowing what still tracks their remaining setup.
  *
  * Still skippable at every step, still replayable from the user menu, still NO
  * VIDEOS inside it — videos live in the setup checklist and the empty states.
@@ -59,11 +76,17 @@
  * from meeting it twice.
  *
  * v1 → v2: the three-stop tour became the eleven-step walkthrough. Different
- * shape, worth one more run. The v1 keys are not cleaned up here — the reset
- * path in `lib/dev-actions.ts` matches on the `d247.tour.` namespace, so it
- * clears every version at once.
+ * shape, worth one more run.
+ * v2 → v3: the walkthrough became the eight-step orientation. Half the stops
+ * are gone and the survivors say different things on different pages, so
+ * anyone who sat through v2 is being offered a genuinely different tour rather
+ * than a repeat — and anyone stranded mid-v2 has their saved step discarded by
+ * `isProgress` rather than resumed onto a route this list no longer visits.
+ *
+ * Older keys are not cleaned up here — the reset path in `lib/dev-actions.ts`
+ * matches on the `d247.tour.` namespace, so it clears every version at once.
  */
-export const FIRST_RENTAL_TOUR_VERSION = 2;
+export const FIRST_RENTAL_TOUR_VERSION = 3;
 
 /** Every key this module writes starts with this. */
 const KEY_PREFIX = 'd247.tour.first-rental';
@@ -129,6 +152,48 @@ export interface TourRequirement {
   settingsTab?: string;
   /** Not on a phone — the sidebar is an off-canvas Sheet there. */
   desktop?: boolean;
+  /**
+   * This step needs a real record to exist — a row to point at, or a record to
+   * walk into. Dropped when the tab is empty.
+   *
+   * THE PROBLEM THIS SOLVES, because it is the whole point of an onboarding
+   * tour and it is easy to get backwards. A brand-new operator has NO
+   * customers, NO vehicles and NO rentals — that is what "new" means. But the
+   * things worth teaching (what a record holds, weekend pricing, why a car
+   * cannot be booked) all live inside a record they do not have yet.
+   *
+   * Without this, a step pointing at "the first row" waits the full
+   * `ANCHOR_WAIT_MS` on a page whose table has been replaced by a teaching
+   * empty state, then skips — so the operator watches a six-second pause at
+   * nothing. Record steps at least drop cleanly via `routeFor`; a row step has
+   * a perfectly valid route and no way to know its anchor is never coming.
+   *
+   * Names the key in `TourBuildContext.sampleIds`.
+   */
+  record?: 'vehicleId' | 'customerId' | 'rentalId';
+  /**
+   * This step only applies when the named TAB has data — and, its mirror below,
+   * only when it is empty.
+   *
+   * The same job as `record`/`noRecord`, for a tab that has no record id to key
+   * on. Payments is the case: there is no `/payments/<id>` route, so nothing on
+   * the page names a payment, and a guard looking for an id would report an
+   * empty tab on a busy account. Emptiness is read instead from whether the
+   * page has swapped its table for a teaching empty state.
+   *
+   * Names a tab id ('payments'), not a field.
+   */
+  tabHasData?: string;
+  tabIsEmpty?: string;
+  /**
+   * The mirror image: this step is ONLY for the empty tab.
+   *
+   * It is how a tour still has something to say to the operator it was built
+   * for. When there is nothing to look at, the tour stops describing records
+   * and starts pointing at the way to make one — which is the honest thing to
+   * do, and the thing that tab is for that day.
+   */
+  noRecord?: 'vehicleId' | 'customerId' | 'rentalId';
 }
 
 /** What `buildTour` and the `detail` lines are given. All injectable. */
@@ -146,6 +211,38 @@ export interface TourBuildContext {
   rentalCreationBlocked: boolean;
   /** The tenant's public booking site, for the step that names it. */
   bookingUrl?: string | null;
+  /**
+   * One real record id per tab, for the tab tours that walk INTO a detail page.
+   *
+   * The brief for the tab tours is explicit that they must not stop at the
+   * "Add" button — the vehicle RECORD is where the things a first-time operator
+   * cannot guess actually live (rate tiers, weekend pricing, the availability
+   * blockers). But a detail route is `/vehicles/<uuid>`, and `TourStep.route`
+   * is a fixed string with nowhere to put the uuid.
+   *
+   * So the caller hands in one id it has already loaded, and a step with
+   * `routeFor` turns it into a real path at BUILD time (see `buildTour`).
+   *
+   * Every one of these is legitimately null on a tenant with an empty tab —
+   * which is the normal state of the brand-new tenant this whole feature is
+   * about. A step that needs an id it does not get is DROPPED, exactly like a
+   * step whose permission is missing, rather than navigating to `/vehicles/null`.
+   */
+  sampleIds?: {
+    vehicleId?: string | null;
+    customerId?: string | null;
+    rentalId?: string | null;
+  };
+  /**
+   * Tab ids whose teaching empty state is currently on screen — the tabs that
+   * genuinely have nothing in them.
+   *
+   * Read from the DOM at launch (see `readEmptyTabs`). Absent means "not
+   * known", which `stepAllowed` treats as "not empty": on a tour that never
+   * populates this, a `tabHasData` step is kept and a `tabIsEmpty` step is
+   * dropped, so the ordinary tour is what runs.
+   */
+  emptyTabs?: readonly string[];
 }
 
 export interface TourStep {
@@ -187,6 +284,19 @@ export interface TourStep {
   showOutline?: boolean;
   /** An optional extra line computed from context — the booking URL, say. */
   detail?: (ctx: TourBuildContext) => string | null;
+  /**
+   * A route computed from context, for steps that live inside a specific
+   * record — `/vehicles/<uuid>?section=addons`.
+   *
+   * Resolved ONCE, by `buildTour`, and written back over `route`, so every
+   * consumer downstream (the hook's navigation, `stepIsOnRoute`, the renderer)
+   * goes on seeing a plain string and needs no change. Returning null drops the
+   * step, which is the correct behaviour when the tenant has no such record yet.
+   *
+   * When present this WINS over `route`; set `route` to the list page anyway so
+   * the step still reads sensibly in the source.
+   */
+  routeFor?: (ctx: TourBuildContext) => string | null;
 }
 
 /**
@@ -214,6 +324,12 @@ export const AUTOSTART_DELAY_MS = 700;
 
 const SIDEBAR = '[data-sidebar="sidebar"]';
 
+/**
+ * The universal last resort. Every page in the v2 chrome renders a title
+ * inside the inset; a page that cannot render one is a page that failed.
+ */
+const PAGE_TITLE = '[data-slot="sidebar-inset"] h1';
+
 /** One line each. These ride the rerouted rental step when the flow is gated. */
 const INSURANCE_NOTE = 'Insurance is offered in the same flow, priced per rental.';
 const AGREEMENT_NOTE = 'The rental agreement is drawn up and sent for signature as part of this.';
@@ -221,6 +337,20 @@ const AGREEMENT_NOTE = 'The rental agreement is drawn up and sent for signature 
 /**
  * The canonical step list. `buildTour` filters and reroutes it per user; this
  * is what a head admin on a desktop with Stripe connected walks through.
+ *
+ * TWO PROPERTIES OF THIS LIST ARE LOAD-BEARING, and neither is obvious.
+ *
+ * ROUTES ONLY EVER MOVE FORWARD: `/` → `/vehicles` → `/customers` → `/rentals`
+ * → `/settings`, and the finale stays put. Five pushes for eight steps. A tour
+ * that doubles back — Settings, then a tab page again — reads as lost, and each
+ * extra navigation is another chance for an anchor to arrive late.
+ *
+ * NOTHING HERE REQUIRES AN EDIT GRANT. The old walkthrough pointed at Add
+ * Vehicle and Add Customer, so a viewer or a read-only manager lost those steps
+ * and could fall under `MIN_TOUR_STOPS` entirely. An orientation is about where
+ * things ARE, which is a read, so these steps point at what the page shows
+ * rather than at what it lets you press — and everyone who can open the page
+ * gets them.
  */
 export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
   {
@@ -231,7 +361,7 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     // Trax talking, so they stay short and practical rather than re-introducing
     // anybody. No emoji anywhere in this file: the voice carries the warmth.
     title: 'I am Trax. Let me show you around.',
-    body: 'I work alongside you in here — pricing, reminders, the small decisions that add up. Give me a minute and you will know where everything lives, so your first rental is a short job rather than a hunt. Skip whenever you like; you can replay this from your profile menu.',
+    body: 'I work alongside you in here. Give me a minute and you will know where everything lives. Skip whenever you like, or replay this from your profile menu.',
     route: '/',
     anchors: [],
     side: 'center',
@@ -248,85 +378,85 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     requires: { desktop: true },
   },
   {
-    id: 'setup-guide',
-    label: 'Setup guide',
-    title: 'Your setup guide',
-    body: 'It tracks what is left to set up. Each row has a short video when you want the detail.',
-    route: '/',
-    anchors: ['[data-tour="setup-guide-panel"]', '[data-tour="setup-guide"]'],
-    side: 'left',
-  },
-  {
     id: 'vehicles',
     label: 'Vehicles',
-    title: 'Add your first vehicle',
-    body: 'You need one car to rent. Add the real one you plan to put on the road — this is your live business, not a demo.',
+    // Was "Add your first vehicle", anchored on the Add button and pausing the
+    // tour so they went and did it. That is the tab tour's job now — and
+    // `lib/tab-tours/vehicles.ts` does it better, because it can then walk
+    // INTO the record. Here we only say what this page is.
+    //
+    // ONE stat tile, never the grid: the six-card row is most of the fold on a
+    // laptop, and a spotlight that big degrades to a wash that teaches nothing.
+    // The tile is rendered above the empty-state branch, so it is on the page
+    // for a brand-new tenant with no cars at all — reading zero, which is the
+    // honest thing for it to say to them.
+    title: 'Your fleet',
+    body: 'Every car you rent out lives here, with its rates, its photos and whether it is free to book right now.',
     route: '/vehicles',
-    anchors: ['[data-tour="add-vehicle"]', '[data-add-vehicle-trigger]'],
+    anchors: ['[data-tour="fleet-stat-total-vehicles"]', PAGE_TITLE],
     side: 'bottom',
-    requires: { tab: 'vehicles', edit: true },
-    pauseOnAnchorClick: true,
   },
   {
     id: 'customers',
     label: 'Customers',
-    title: 'Add your first customer',
-    body: 'And one person to rent it to. A real customer — name, email, licence — so the first agreement you send is a real one.',
+    title: 'Everyone who rents from you',
+    body: 'Anyone who books on your site lands here on their own. Their licence, their history and what they owe sit on one page.',
     route: '/customers',
-    anchors: ['[data-tour="add-customer"]'],
+    // The four counts render at zero rather than not at all, so this is as
+    // present on a brand-new tenant's empty tab as on a busy one.
+    anchors: ['[data-tour="customers-stats"]', PAGE_TITLE],
     side: 'bottom',
-    requires: { tab: 'customers', edit: true },
-    pauseOnAnchorClick: true,
   },
   {
     id: 'rental',
-    label: 'New rental',
-    title: 'Making a rental',
-    body: "Booking mode, customer, vehicle — then dates and a location. That's all a rental needs.",
-    route: '/rentals/new',
-    anchors: ['[data-tour="rental-steps"]', 'nav[aria-label="Progress"]'],
-    side: 'top',
-    requires: { tab: 'rentals', edit: true },
-  },
-  {
-    id: 'insurance',
-    label: 'Insurance',
-    title: 'Insurance, in the same place',
-    body: 'When you pick the vehicle, Bonzah cover is offered right there — priced per rental, no separate errand.',
-    route: '/rentals/new',
-    anchors: [
-      '[data-tour="rental-insurance"]',
-      '[data-tour="rental-step-vehicle"]',
-      '[data-tour="rental-steps"]',
-    ],
-    side: 'top',
-    requires: { tab: 'rentals', edit: true },
-  },
-  {
-    id: 'agreement',
-    label: 'Agreement',
-    title: 'The agreement sends itself',
-    body: 'Finish the last step and the rental agreement is drawn up and sent to the customer for signature.',
-    route: '/rentals/new',
-    anchors: ['[data-tour="rental-step-rental-details"]', '[data-tour="rental-steps"]'],
-    side: 'top',
-    requires: { tab: 'rentals', edit: true },
-  },
-  {
-    id: 'money',
-    label: 'Payments',
-    title: 'Where the money shows up',
-    body: 'Every payment a customer makes lands here, with its rental beside it.',
-    route: '/payments',
-    anchors: ['[data-tour="payments-overview"]'],
+    label: 'Rentals',
+    // The step the lead's ruling changed most. It used to be `/rentals/new`
+    // and drag the operator three steps into the form. It now stops at the
+    // door: this is the tab, that is the button, come back when you have a car
+    // and a customer.
+    //
+    // `pauseOnAnchorClick` is NOT optional here, and not for the usual reason.
+    // The next step (`tours`) is on this same page, and the renderer treats a
+    // click on a look-at-this step whose next step is same-page as "understood"
+    // and advances. So without this, clicking New Rental would advance the
+    // orientation to `tours` while the browser navigated away to the form, and
+    // the card would be left pointing at a page that is leaving.
+    title: 'Where the business runs',
+    body: 'Every booking lives here, from the first enquiry to the keys coming back. New Rental starts one whenever you are ready.',
+    route: '/rentals',
+    anchors: ['[data-tour="new-rental"]', '[data-tour="rentals-header"]', PAGE_TITLE],
     side: 'bottom',
-    requires: { tab: 'payments' },
-    notes: [
-      {
-        text: 'Invoices sit next door, under More → Finance.',
-        anchors: ['[data-tour="nav-group-finance"]'],
-      },
-    ],
+    pauseOnAnchorClick: true,
+  },
+  {
+    id: 'tours',
+    label: 'Tab tours',
+    // The handoff, and the reason this list is allowed to be eight steps.
+    //
+    // It lives HERE, on `/rentals`, rather than at the end after Settings —
+    // the button only exists on the tab pages, so a step for it after the
+    // Settings stop would mean navigating back to a tab and breaking the
+    // forward-only route order. This is the last tab the orientation visits,
+    // which also makes it the right moment to say it: they have just been
+    // shown three tabs, and this is how they go deeper into any of them.
+    //
+    // `pauseOnAnchorClick`, because clicking this launches a tab tour. Two
+    // tours drawing cards on one screen is the worst outcome available here,
+    // so the orientation steps aside the moment they reach for the other one.
+    title: 'Each tab has its own tour',
+    // FOUR tab tours, not three. Payments has one too, and it was the tab the
+    // original objection to the old walkthrough was actually about — omitting
+    // it here would send the operator away believing the one tour they most
+    // need does not exist. Keep this sentence in step with TAB_TOUR_IDS.
+    body: 'This button walks you through one tab properly, at whatever moment suits you. Vehicles, Customers, Rentals and Payments each have one.',
+    route: '/rentals',
+    // The button self-gates on the canary slug and the v2 chrome — the same
+    // two things this tour's own gate requires — so it is present whenever the
+    // orientation is running. The fallbacks are for the replay path, which
+    // bypasses that gate, and cost nothing when the button is there.
+    anchors: ['[data-tour="take-tab-tour"]', '[data-tour="rentals-header"]', PAGE_TITLE],
+    side: 'bottom',
+    pauseOnAnchorClick: true,
   },
   {
     id: 'booking-site',
@@ -351,20 +481,41 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     // settings page, which the v2 sidebar replaced — so it matched nothing, and
     // every run fell through to the oversized card. Kept last, still, for a
     // tenant rendering the v1 tab strip.
+    // The page's own <h1> is the genuine last resort, and it is last for a
+    // reason. `[id$="-trigger-branding"]` above it matches only the v1 Radix
+    // tab strip, which the v2 sidebar replaced — and this tour requires v2
+    // chrome, so under the chrome it actually runs in that selector resolves
+    // to NOTHING. Without a real fallback beneath it, the step's only
+    // remaining candidate was the oversized Branding card this step exists to
+    // avoid, and the suite's "every step ends on markup the page cannot render
+    // without" assertion was true of this step only on a technicality.
+    // /settings renders an h1 in every branch, so this makes the guarantee real.
     anchors: [
       '[data-tour="settings-tab-branding"]',
       '[data-tour="booking-site-branding"]',
       '[id$="-trigger-branding"]',
+      '[data-slot="sidebar-inset"] h1',
+      'main h1',
     ],
     side: 'right',
     requires: { settingsTab: 'branding' },
     detail: (ctx) => (ctx.bookingUrl ? ctx.bookingUrl.replace(/^https?:\/\//, '') : null),
+    notes: [
+      {
+        // The lead asked for settings to be named rather than merely visited.
+        // Anchored on the rail this step is already standing in front of, so a
+        // tenant whose settings sidebar is not drawn never reads about a list
+        // that is not there.
+        text: 'The rest of your setup is in this list — locations, deposits, fees and more.',
+        anchors: [`${SIDEBAR} [data-sidebar="content"]`],
+      },
+    ],
   },
   {
     id: 'done',
     label: 'Done',
     title: "That's the house",
-    body: 'Your setup guide on the dashboard tracks what is left. Add a car, add a customer, and your first rental is a few clicks away.',
+    body: 'Take a tab tour whenever you want the detail on one. Your setup guide on the dashboard tracks what is still to switch on.',
     route: null,
     anchors: [],
     side: 'center',
@@ -374,27 +525,35 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
 /**
  * The rental step as it reads when the New Rental flow is GATED — a lean
  * tenant without a usable Stripe Connect account gets a "connect Stripe"
- * dialog instead of the form, so there is no breadcrumb, no vehicle step and
- * no insurance box to point at. Point at the button instead, say what it
- * needs, and carry the two in-flow lessons as quiet one-liners — exactly what
- * the three-stop tour did before the walkthrough. Insurance and Agreement are
- * dropped as steps; nothing is lost, only depth that had nowhere to sit.
+ * dialog instead of the form when they press the button.
+ *
+ * The orientation stops at `/rentals` either way, so this no longer exists to
+ * rescue a step that had nowhere to stand; it exists because the sentence is
+ * different. Telling that operator "New Rental starts one whenever you are
+ * ready" would be false — the button will stop them — so this says what it
+ * will actually do and where the fix is.
+ *
+ * It also carries the two one-liners the healthy operator does not get, and
+ * that asymmetry is deliberate: someone who can open the rental flow will meet
+ * insurance and the agreement inside it, or in the Rentals tab tour. Someone
+ * who is blocked at the door will not meet them at all, so they are told.
  */
 export const BLOCKED_RENTAL_STEP: TourStep = {
   id: 'rental',
-  label: 'New rental',
-  title: 'Making a rental',
-  body: "Dates, location, vehicle, customer — that's all a rental needs. This button makes one once payments are connected; the setup guide gets you there.",
+  label: 'Rentals',
+  title: 'Where the business runs',
+  body: 'Every booking lives here. New Rental starts one once your payments are connected, and the setup guide gets you there.',
   route: '/rentals',
-  anchors: ['[data-tour="new-rental"]', '[data-tour="nav-rentals"]', `${SIDEBAR} a[href="/rentals"]`],
+  anchors: [
+    '[data-tour="new-rental"]',
+    '[data-tour="rentals-header"]',
+    '[data-tour="nav-rentals"]',
+    `${SIDEBAR} a[href="/rentals"]`,
+  ],
   side: 'bottom',
-  requires: { tab: 'rentals', edit: true },
   pauseOnAnchorClick: true,
   notes: [{ text: INSURANCE_NOTE }, { text: AGREEMENT_NOTE }],
 };
-
-/** Step ids that only exist inside the (ungated) rental form. */
-const IN_FLOW_ONLY = new Set(['insurance', 'agreement']);
 
 /** `/settings?tab=branding` → `/settings`. */
 export function routePathname(route: string): string {
@@ -427,6 +586,18 @@ export function stepAllowed(step: TourStep, ctx: TourBuildContext): boolean {
   if (req.desktop && ctx.isMobile) return false;
   if (req.edit && req.tab && !ctx.canEdit(req.tab)) return false;
   if (req.settingsTab && !ctx.canViewSettings(req.settingsTab)) return false;
+  // Data presence. `sampleIds` is only populated for tab tours, so a step
+  // carrying `record`/`noRecord` in a tour that never sets it is treated as
+  // "no record" — which is the safe direction: it drops the steps that would
+  // point at nothing rather than admitting steps that would stall.
+  if (req.record && !ctx.sampleIds?.[req.record]) return false;
+  if (req.noRecord && ctx.sampleIds?.[req.noRecord]) return false;
+  // Tab-level emptiness, for tabs with no record id to key on. An absent
+  // `emptyTabs` means "not known", which resolves to NOT empty — so a tour that
+  // never populates it behaves exactly as it did before these two existed.
+  const empty = ctx.emptyTabs ?? [];
+  if (req.tabHasData && empty.includes(req.tabHasData)) return false;
+  if (req.tabIsEmpty && !empty.includes(req.tabIsEmpty)) return false;
   return true;
 }
 
@@ -439,12 +610,37 @@ export function stepAllowed(step: TourStep, ctx: TourBuildContext): boolean {
  * settled by then, so the tour that starts is the tour that can finish.
  */
 export function buildTour(ctx: TourBuildContext, steps: readonly TourStep[] = FIRST_RENTAL_TOUR): TourStep[] {
+  // The Stripe reroute below REWRITES a step by id, and `rental` is generic
+  // enough that another tour could reasonably use it. If one did, a canary
+  // without a usable Connect account would silently get THIS tour's copy —
+  // different title, different body, different notes — with no error and no
+  // failed build, which on a project that ships with `ignoreBuildErrors: true`
+  // means nobody finds out.
+  //
+  // So the reroute is scoped to the list it was written for. Tab tours
+  // additionally namespace their ids (`rentals.new`), which makes a collision
+  // impossible rather than merely unlikely — belt and braces, because the cost
+  // of being wrong here is a wrong screen rather than a crash.
+  //
+  // The orientation no longer enters the New Rental form, so there is nothing
+  // left to DROP when the flow is gated — `insurance` and `agreement` were the
+  // only steps that lived in there, and they are now the Rentals tab tour's.
+  // What survives is a copy swap: same page, same button, honest sentence.
+  const canReroute = steps === FIRST_RENTAL_TOUR;
   const out: TourStep[] = [];
   for (const raw of steps) {
     let step = raw;
-    if (ctx.rentalCreationBlocked) {
-      if (IN_FLOW_ONLY.has(step.id)) continue;
-      if (step.id === 'rental') step = BLOCKED_RENTAL_STEP;
+    if (canReroute && ctx.rentalCreationBlocked && step.id === 'rental') {
+      step = BLOCKED_RENTAL_STEP;
+    }
+    // Resolve a record-scoped route into a real path, and drop the step if the
+    // tenant has no such record. This runs BEFORE `stepAllowed` so the route
+    // that gets permission-checked is the one the tour will actually navigate
+    // to, not the list page standing in for it.
+    if (step.routeFor) {
+      const resolved = step.routeFor(ctx);
+      if (!resolved) continue;
+      step = { ...step, route: resolved };
     }
     if (!stepAllowed(step, ctx)) continue;
     out.push(step);

@@ -77,7 +77,10 @@ const DEFAULT_TAB: TabId = SHOW_MULTI_PERIOD ? "extensions" : "messages";
  */
 function TabStrip({ tab, onTab }: { tab: TabId; onTab: (t: TabId) => void }) {
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 border-b border-foreground/10 px-2">
+    <div
+      className="flex h-11 shrink-0 items-center gap-1 border-b border-foreground/10 px-2"
+      data-tour="rental-right-rail"
+    >
       {TABS.map((t) => {
         const on = t.id === tab;
         return (

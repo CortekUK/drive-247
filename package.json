@@ -22,13 +22,16 @@
     "db:switch": "node scripts/db-switch.mjs",
     "v1:check": "node scripts/v1-check/check.mjs",
     "v1:snapshot": "node scripts/v1-check/snapshot.mjs",
+    "test:spine": "vitest run --config tests/vitest.config.ts",
+    "test:spine:watch": "vitest --config tests/vitest.config.ts",
     "dev:staging": "node scripts/db-switch.mjs staging && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal",
     "dev:prod": "node scripts/db-switch.mjs prod && node scripts/kill-dev-ports.mjs portal && turbo run dev --filter=portal"
   },
   "devDependencies": {
     "pg": "^8.16.3",
     "supabase": "^0.5.0",
-    "turbo": "^2.6.3"
+    "turbo": "^2.6.3",
+    "vitest": "^4.0.16"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.3",

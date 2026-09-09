@@ -104,7 +104,13 @@ export const FleetSummaryCards = ({ vehicles }: FleetSummaryCardsProps) => {
     <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {cards.map((card) => {
         return (
-          <Card key={card.title} className={`relative overflow-hidden transition-all duration-300 border-2 ${card.className}`}>
+          <Card
+            key={card.title}
+            // Anchor for the Vehicles tab tour (`lib/tab-tours/vehicles.ts`),
+            // which points at ONE tile rather than the grid. Inert markup.
+            data-tour={`fleet-stat-${card.title.toLowerCase().replace(/\s+/g, '-')}`}
+            className={`relative overflow-hidden transition-all duration-300 border-2 ${card.className}`}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 sm:pb-3 p-3 sm:p-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-foreground/80 leading-tight">
                 {card.title}

@@ -72,6 +72,7 @@ export function AvailabilityTab({
   return (
     <Panel title="Availability" description="Whether this car can be booked, and what is in the way.">
       <Section
+        tourId="vehicle-blockers"
         title={hard.length ? "Not bookable" : "Bookable"}
         action={
           hard.length ? (

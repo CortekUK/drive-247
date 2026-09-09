@@ -127,21 +127,28 @@ export function SectionAccount({ c, set, onJump, canEdit }: SectionProps) {
         title="Blocked with you"
         description="Stops new bookings on your account only. Rentals already out are unaffected, and you can lift it at any time."
       >
-        <Toggle
-          tone="destructive"
-          disabled={!canEdit || isLoading}
-          checked={!!c.account.blockedHere}
-          onChange={(v) =>
-            v
-              ? blockCustomer.mutate(
-                  { customerId: c.id, reason: "Blocked from the customer record" },
-                  { onSuccess: refreshBlocks }
-                )
-              : unblockCustomer.mutate(c.id, { onSuccess: refreshBlocks })
-          }
-          label="Block this customer with us"
-          hint="They stay visible in your records and can still be contacted."
-        />
+        {/* `Toggle` takes a fixed prop list and spreads nothing, so the tour's
+            anchor rides an inert wrapper rather than widening a primitive that
+            all eleven sections share. The div carries no classes — Toggle is
+            `w-full` and the Surface around it sets no gap — so it renders
+            exactly as it did before. */}
+        <div data-tour="customer-block">
+          <Toggle
+            tone="destructive"
+            disabled={!canEdit || isLoading}
+            checked={!!c.account.blockedHere}
+            onChange={(v) =>
+              v
+                ? blockCustomer.mutate(
+                    { customerId: c.id, reason: "Blocked from the customer record" },
+                    { onSuccess: refreshBlocks }
+                  )
+                : unblockCustomer.mutate(c.id, { onSuccess: refreshBlocks })
+            }
+            label="Block this customer with us"
+            hint="They stay visible in your records and can still be contacted."
+          />
+        </div>
 
         {c.account.blockedHere && (
           <div className="mt-5">

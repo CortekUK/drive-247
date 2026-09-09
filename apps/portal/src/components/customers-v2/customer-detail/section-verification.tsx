@@ -172,7 +172,7 @@ export function SectionVerification({ c, onJump, canEdit, drift }: SectionProps 
 
       {/* ── the headline verdict, above the provider split ─────────────── */}
       <Section>
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4" data-tour="customer-verification">
           <span className={cn("flex size-11 shrink-0 items-center justify-center rounded-3xl", ring[verdict.tone])}>
             <verdict.icon className="size-5" />
           </span>

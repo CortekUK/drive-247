@@ -38,14 +38,12 @@ import {
   RATIOS,
   REVENUE_SERIES,
   SOURCE_MIX,
-  TODOS,
   TOP_CUSTOMERS,
   TOP_VEHICLES,
   type Movement,
   type WorkItem,
 } from './mock';
 import {
-  AddNote,
   Band,
   Card,
   CardFooter,
@@ -58,9 +56,10 @@ import {
   NowDivider,
   Row,
   Spark,
-  TodoRow,
 } from './ui';
 import { AnnouncementCarousel } from '@/components/dashboard-v2/announcement-carousel';
+import { ChecklistCard } from '@/components/dashboard-v2/checklist-card';
+import { RemindersCard } from '@/components/dashboard-v2/reminders-card';
 
 /** "14:30:00" → 870. Null when the rental never had a time set. */
 function toMinutes(time: string | null): number | null {
@@ -263,7 +262,6 @@ export function HomeBands() {
   }
 
   const maxVehicleDays = Math.max(...TOP_VEHICLES.map((v) => v.days));
-  const openTodos = TODOS.filter((t) => !t.done).length;
   const fleetPct = kpis ? `${kpis.fleetUtilization.percentage}%` : '—';
 
   return (
@@ -271,9 +269,43 @@ export function HomeBands() {
       {/* ── Important ─────────────────────────────────────────────────────── */}
       {/* Rhythm: narrow · wide · narrow. The poster is a fixed shape; the list
           that can ruin your morning gets the width. */}
-      <Band title="On your desk" hint="What’s new, what’s urgent, and what you wrote down">
+      <Band title="On your desk" hint="What’s new, what to learn, and what you wrote down">
         <AnnouncementCarousel className="min-h-[288px] rounded-2xl border-0 shadow-none" />
 
+        {/* The middle slot is the CHECKLIST, per Ghulam's own assignment of these
+            three cards: "ye hamare paas hai what's new wala card... aur ye wala
+            jo hoga na, wo hoga hamare liye checklist wala", then notes third.
+
+            The live "Attention required now" card that used to sit here has NOT
+            been deleted — it moved to the Today band below. It surfaces late
+            cars, overdue money and waiting requests, and the decision about
+            which urgent items belong on this screen is explicitly parked, so
+            dropping it to satisfy a layout would have thrown away working
+            triage on the strength of a decision nobody has made yet. */}
+        <ChecklistCard />
+
+        {/* LIVE — was a hardcoded TODOS array until `tenant_notes` existed.
+            The operator's own notes and timed reminders, per V2_PLAN §5 scoped
+            by tenant_id in application code on every verb, not by RLS alone.
+
+            What it deliberately does NOT show: failed agreements, failed
+            payments or any other urgent system event. Ghulam described those
+            landing here and then parked exactly that decision — "abhi nahi,
+            baad mein faisla karenge ki yahan par humne kaunsi important
+            cheezein show karwani hai... abhi ke liye sirf notes add kare aur
+            apne reminder ke saath time laga ke yahan rakh sake. Bas aur kuch
+            nahi." Deferred, not forgotten; the card above is where urgent
+            items live until that call is made. */}
+        <RemindersCard />
+      </Band>
+
+      {/* ── Today ─────────────────────────────────────────────────────────── */}
+      {/* Rhythm: wide · narrow · narrow. The day queue leads — it is the only
+          card here about the next hour. */}
+      <Band
+        title="Today"
+        hint={flow.length ? `${doneCount} of ${flow.length} movements done` : 'Nothing scheduled'}
+      >
         {/* LIVE */}
         <Card title="Attention required now" count={attention.length || undefined} tall>
           {lead ? (
@@ -302,24 +334,6 @@ export function HomeBands() {
           )}
         </Card>
 
-        {/* MOCK — there is no reminders table yet. */}
-        <Card title="Reminders" count={`${openTodos} open`} tall>
-          <div className="divide-y divide-[var(--pv-line)]">
-            {TODOS.map((t) => (
-              <TodoRow key={t.id} todo={t} />
-            ))}
-          </div>
-          <AddNote />
-        </Card>
-      </Band>
-
-      {/* ── Today ─────────────────────────────────────────────────────────── */}
-      {/* Rhythm: wide · narrow · narrow. The day queue leads — it is the only
-          card here about the next hour. */}
-      <Band
-        title="Today"
-        hint={flow.length ? `${doneCount} of ${flow.length} movements done` : 'Nothing scheduled'}
-      >
         {/* LIVE */}
         <Card
           title="Coming and going"
