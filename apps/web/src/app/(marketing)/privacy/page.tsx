@@ -127,6 +127,55 @@ export default async function PrivacyPage() {
         <li>We do not sell your personal data to third parties.</li>
       </ul>
 
+      <h2>Browser extensions</h2>
+      <p>
+        We publish browser extensions that a rental operator may install to
+        connect Drive247 to another service they already use. Installing one is
+        optional, and the sections above apply to it in full — an extension is
+        another way to reach the same account, not a separate service with its
+        own rules.
+      </p>
+
+      <h3>Drive247 Turo Bridge</h3>
+      <p>
+        Imports a Turo host&rsquo;s own booking calendar into their Drive247
+        account, so their vehicle availability is accurate in one place.
+      </p>
+      <ul>
+        <li>
+          <strong>What it reads.</strong> When the operator starts a sync, it
+          reads their upcoming host bookings from the Turo page they already
+          have open — booking dates, the vehicle, and the renter name as Turo
+          displays it to them. It also reads the Drive247 sign-in session
+          already present in the browser, so it can write to the right account.
+        </li>
+        <li>
+          <strong>What it never does.</strong> It never asks for, sees or
+          stores a Turo password, and it never writes to or changes anything on
+          Turo. It reads no site other than Turo and Drive247, and it does not
+          track browsing.
+        </li>
+        <li>
+          <strong>Where the data goes.</strong> Imported bookings are written to
+          that operator&rsquo;s own Drive247 account and are visible only to
+          them and the staff they have granted access. We are a{" "}
+          <strong>processor</strong> for this information, on the same footing
+          as any other renter data the operator holds — see{" "}
+          <em>Who this policy covers</em> above.
+        </li>
+        <li>
+          <strong>Stored on the device.</strong> The extension keeps sync state
+          in the browser — when the last sync ran and which bookings were
+          already imported — so the same booking is not imported twice.
+          Removing the extension removes it.
+        </li>
+      </ul>
+      <p>
+        Imported bookings are retained for as long as they remain in the
+        operator&rsquo;s Drive247 account. To request deletion, contact the
+        operator, or us at the address below.
+      </p>
+
       <h2>Data retention</h2>
       <p>
         Lead data is retained for up to 24 months or until you request
