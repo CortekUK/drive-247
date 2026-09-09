@@ -1304,7 +1304,17 @@ async function handleInvoicePaid(supabase: any, invoice: any, stripe?: Stripe) {
       //    GRACE_DAYS, so an unusually late settlement (e.g. via the admin
       //    manual override) buys more free time than the 7 days the requirement
       //    describes.
-      if (wasLate && stripe && subscriptionId) {
+      // Per Ghulam (2026-09-10): DO NOT grant free trial days on a late payment.
+      // The late payer is ALREADY returned to 'active' on the paid period above
+      // (status + current_period mirrored from the settled invoice). The E7
+      // "fresh start" cycle-reset below deferred the next charge via `trial_end`
+      // and parked the subscription at Stripe status 'trialing' (dropping it out
+      // of the Active list + MRR tile even though it had just paid — the RBVS
+      // confusion). It is DISABLED so a late payer keeps billing on its original
+      // schedule with no free period and reads 'active'. Kept behind a flag
+      // rather than deleted so the perk can be restored if the policy changes.
+      const GRANT_LATE_PAYMENT_FRESH_START = false;
+      if (GRANT_LATE_PAYMENT_FRESH_START && wasLate && stripe && subscriptionId) {
         // Stripe Checkout/Subscriptions require trial_end >= 48h in the future.
         const MIN_TRIAL_END_MS = 48 * 60 * 60 * 1000;
         const intervalMs =
