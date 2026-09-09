@@ -33,6 +33,7 @@ import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
 // integration_bonzah controls Bonzah-specific features only; insurance document upload is always available
 import { useRentalTotals, useRentalCharges } from "@/hooks/use-rental-ledger-data";
+import { UnbilledTimeNotice } from "@/components/rentals/unbilled-time-notice";
 import { useRentalInvoice, useRentalPaymentBreakdown, useRentalRefundBreakdown } from "@/hooks/use-rental-invoice";
 import { useRentalManualPaidBreakdown } from "@/hooks/use-rental-manual-paid-breakdown";
 import { usePaygLedger } from "@/hooks/use-payg-ledger";
@@ -3121,6 +3122,30 @@ const RentalDetail = () => {
           </button>
         </Alert>
       )}
+
+      {/* Time the customer had the car that no charge was ever raised for.
+          Balance Due below can only report charges that EXIST, so when weekly
+          auto-extension stops the rental reads as settled while the car is still
+          out. Sits above the money tiles because it changes how they should be
+          read. Tax is derived from THIS rental's own charged ratio rather than a
+          tenant default, so it matches what the customer was actually billed. */}
+      <UnbilledTimeNotice
+        rentalStatus={rental?.status}
+        rentalEndDate={rental?.end_date}
+        weeklyRate={Number(rental?.monthly_amount) || 0}
+        taxPercent={(() => {
+          const live = (extensionTotals || []).filter(
+            (e: any) => !e?.cancelled_at && Number(e?.rental_amount) > 0
+          );
+          const last = live[live.length - 1];
+          if (!last) return 0;
+          return (Number(last.tax_amount) / Number(last.rental_amount)) * 100;
+        })()}
+        currency={tenant?.currency_code || "USD"}
+        extensions={extensionTotals as any}
+        returnedAt={keyReturnStatus?.handed_at as string | undefined}
+        tenantTimeZone={tenant?.timezone}
+      />
 
       {/* Rental Financial Summary */}
       {(() => {
