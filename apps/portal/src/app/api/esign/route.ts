@@ -7,6 +7,7 @@ import { computePaygDailyRate } from '@/lib/payg-rate';
 import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
+import { decodeHtmlEntities } from '@/lib/html-entities';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
 import {
     buildRentalTimeFacts,
@@ -527,15 +528,12 @@ interface PdfBlock {
     align?: TextAlign;
 }
 
+// Delegates to the shared decoder. The inline version handled seven entities and
+// missed &rsquo;, &mdash; and &ndash; — all three of which OUR OWN injected
+// deposit clause emits, so the raw markup printed into signed contracts
+// ("charged to the Renter&rsquo;s payment method"). See lib/html-entities.ts.
 function decodeEntities(str: string): string {
-    return str
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&')
-        .replace(/&lt;/gi, '<')
-        .replace(/&gt;/gi, '>')
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;/gi, "'")
-        .replace(/&middot;/gi, '\u00b7');
+    return decodeHtmlEntities(str);
 }
 
 function stripTags(html: string): string {

@@ -325,6 +325,18 @@ function htmlToText(html: string): string {
         .replace(/<li>/gi, '- ')
         .replace(/<[^>]+>/g, '')
         .replace(/&nbsp;/gi, ' ')
+        // Our OWN injected deposit clause emits these three, and without them the
+        // raw markup printed into signed contracts ("Renter&rsquo;s payment
+        // method"). Decoded BEFORE &amp; so a correctly-escaped "&amp;rsquo;"
+        // is not double-decoded into an apostrophe.
+        .replace(/&rsquo;/gi, '\u2019')
+        .replace(/&lsquo;/gi, '\u2018')
+        .replace(/&rdquo;/gi, '\u201d')
+        .replace(/&ldquo;/gi, '\u201c')
+        .replace(/&mdash;/gi, '\u2014')
+        .replace(/&ndash;/gi, '\u2013')
+        .replace(/&hellip;/gi, '\u2026')
+        .replace(/&middot;/gi, '\u00b7')
         .replace(/&amp;/gi, '&')
         .replace(/&lt;/gi, '<')
         .replace(/&gt;/gi, '>')

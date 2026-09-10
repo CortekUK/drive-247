@@ -460,12 +460,23 @@ function htmlToText(html: string): string {
     .replace(/<li>/gi, '\u2022 ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&middot;/gi, '\u00b7')
+    // Our OWN injected deposit clause emits these, and without them the raw
+    // markup printed into signed contracts ("Renter&rsquo;s payment method").
+    .replace(/&rsquo;/gi, '\u2019')
+    .replace(/&lsquo;/gi, '\u2018')
+    .replace(/&rdquo;/gi, '\u201d')
+    .replace(/&ldquo;/gi, '\u201c')
+    .replace(/&mdash;/gi, '\u2014')
+    .replace(/&ndash;/gi, '\u2013')
+    .replace(/&hellip;/gi, '\u2026')
+    // LAST: decoding &amp; earlier turns an escaped "&amp;rsquo;" into an
+    // apostrophe, corrupting text that was correctly escaped.
+    .replace(/&amp;/gi, '&')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]+/g, ' ')
     .trim();
