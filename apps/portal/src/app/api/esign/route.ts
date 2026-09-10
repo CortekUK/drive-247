@@ -365,6 +365,12 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             return formatCurrency(rate, currencyCode);
         })(),
         discount_amount: rental?.discount_applied ? formatCurrency(rental.discount_applied, currencyCode) : '',
+        // Same value under the name the TEMPLATE EDITOR offers. The variable
+        // picker lists `rental_discount` and the preview renders it, but no send
+        // engine supplied it — so an operator who picked it from the menu got the
+        // literal text "{{rental_discount}}" printed in the signed contract.
+        // Confirmed live in Moore Luxe's agreement R-798b28.
+        rental_discount: rental?.discount_applied ? formatCurrency(rental.discount_applied, currencyCode) : '',
         rental_period_type: rental?.rental_period_type || 'Monthly',
         rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',

@@ -277,6 +277,12 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
             const rate = type === 'Daily' ? vehicle?.daily_rent : type === 'Weekly' ? vehicle?.weekly_rent : vehicle?.monthly_rent;
             return formatCurrency(rate, cc);
         })(),
+        // This engine supplied NEITHER discount name, so a template using either
+        // printed the raw placeholder into a web-booked customer's signed
+        // contract. `rental_discount` is the name the editor's picker offers;
+        // `discount_amount` is the name the other two engines already used.
+        discount_amount: rental?.discount_applied ? formatCurrency(rental.discount_applied, cc) : '',
+        rental_discount: rental?.discount_applied ? formatCurrency(rental.discount_applied, cc) : '',
         rental_period_type: rental?.rental_period_type || 'Monthly',
         rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',

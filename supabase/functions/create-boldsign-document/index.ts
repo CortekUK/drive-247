@@ -389,6 +389,9 @@ function processTemplate(
       return formatCurrency(rate);
     })(),
     discount_amount: rental?.discount_applied ? formatCurrency(rental.discount_applied as number) : '',
+    // The name the template editor's variable picker actually offers. Without it
+    // a picked {{rental_discount}} printed literally into the signed PDF.
+    rental_discount: rental?.discount_applied ? formatCurrency(rental.discount_applied as number) : '',
     rental_period_type: (rental?.rental_period_type as string) || 'Monthly',
     rental_status: (rental?.status as string) || '',
     pickup_location: (rental?.pickup_location as string) || '',
