@@ -238,7 +238,13 @@ async function handleBoldSignWebhook(supabaseClient: ReturnType<typeof createCli
     // signers other than the primary customer (whose status is captured by
     // the rental-level document_status above).
     try {
-      const signerDetails = (payload as any)?.document?.signerDetails as Array<{
+      // `payload` is not a binding in this scope -- the handler's parameter is
+      // `event` (see handleBoldSignWebhook(supabaseClient, event) above). This
+      // threw ReferenceError on EVERY webhook callback, so the whole block was
+      // dead: additional drivers' signing_status has never been synced from
+      // BoldSign. The catch below swallowed it into a warning, which is why it
+      // ran unnoticed -- it appears in the logs after every agreement send.
+      const signerDetails = (event as any)?.document?.signerDetails as Array<{
         signerEmail?: string;
         signerName?: string;
         status?: string;
