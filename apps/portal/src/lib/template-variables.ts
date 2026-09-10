@@ -894,10 +894,12 @@ export function replaceVariables(
   );
 
   for (const variable of TEMPLATE_VARIABLES) {
-    const placeholder = `{{${variable.key}}}`;
     const value = data[variable.key];
+    // Same 2-3 brace tolerance as the three send engines. If the preview matched
+    // only the exact form, an operator who typed {{{name}}} would see stray
+    // braces here and be unable to tell whether the contract would carry them.
     result = result.replace(
-      new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'),
+      new RegExp(`\\{{2,3}\\s*${variable.key}\\s*\\}{2,3}`, 'g'),
       value?.toString() || ''
     );
   }

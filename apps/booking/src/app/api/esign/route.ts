@@ -310,7 +310,16 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
 
     let result = template;
     for (const [key, value] of Object.entries(variables)) {
-        result = result.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi'), value);
+        // Tolerate 2-3 braces on each side. `{{{customer_name}}}` is Mustache /
+        // Handlebars syntax for "insert unescaped", so operators type it by
+        // habit — and Moore Luxe's live template does, in two places. Matching
+        // exactly two braces substituted the inner pair and left the outer ones
+        // stranded, so their signed contract reads:
+        //   "between Moore Luxe LLC and {Ivita} (\"Renter\")"
+        //   "Date: {September 9, 2026"
+        // The counts are matched independently because `{{{rental_start_date}}`
+        // (three open, two close) is just as easy to type as the balanced form.
+        result = result.replace(new RegExp(`\\{{2,3}\\s*${key}\\s*\\}{2,3}`, 'gi'), value);
     }
     return result;
 }

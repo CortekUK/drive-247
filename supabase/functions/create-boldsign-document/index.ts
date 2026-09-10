@@ -443,7 +443,10 @@ function processTemplate(
   );
 
   for (const [key, value] of Object.entries(variables)) {
-    const placeholder = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+    // Tolerate 2-3 braces each side: `{{{customer_name}}}` is Mustache syntax
+    // operators type by habit, and matching exactly two left the outer braces
+    // stranded in signed contracts ("and {Ivita} (\"Renter\")").
+    const placeholder = new RegExp(`\\{{2,3}\\s*${key}\\s*\\}{2,3}`, 'gi');
     result = result.replace(placeholder, value);
   }
 
