@@ -392,6 +392,8 @@ function processTemplate(
     // The name the template editor's variable picker actually offers. Without it
     // a picked {{rental_discount}} printed literally into the signed PDF.
     rental_discount: rental?.discount_applied ? formatCurrency(rental.discount_applied as number) : '',
+    // Names real tenant templates reference that nothing supplied.
+    starting_odometer: _times.collectionMileage,
     rental_period_type: (rental?.rental_period_type as string) || 'Monthly',
     rental_status: (rental?.status as string) || '',
     pickup_location: (rental?.pickup_location as string) || '',
@@ -448,6 +450,21 @@ function processTemplate(
     // stranded in signed contracts ("and {Ivita} (\"Renter\")").
     const placeholder = new RegExp(`\\{{2,3}\\s*${key}\\s*\\}{2,3}`, 'gi');
     result = result.replace(placeholder, value);
+  }
+
+  // Anything still in {{...}} form resolved to nothing and would print verbatim
+  // into a signed contract. Five production templates do exactly that today
+  // ("Renter Signature: {{customer_signature}}"). Blank reads as an unfilled
+  // field; raw markup reads as broken software in a legal document.
+  // BoldSign's {{@sig1}}/{{@init1}}/{{@date1}} start with '@' and cannot match.
+  const unresolved = new Set<string>();
+  for (const m of result.matchAll(/\{{2,3}\s*([a-zA-Z_][\w]*)\s*\}{2,3}/g)) unresolved.add(m[1]);
+  if (unresolved.size > 0) {
+    console.warn(
+      '[create-boldsign-document] Template references variables no engine supplies; removed rather than printing them into the contract:',
+      [...unresolved].sort().join(', '),
+    );
+    result = result.replace(/\{{2,3}\s*[a-zA-Z_][\w]*\s*\}{2,3}/g, '');
   }
 
   return result;

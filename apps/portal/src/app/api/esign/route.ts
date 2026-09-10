@@ -8,6 +8,7 @@ import { resolveAgreementMileage } from '@/lib/agreement-mileage';
 import { fetchTenantTermsBlock, buildTermsPlainText } from '@/lib/agreement-terms';
 import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { decodeHtmlEntities } from '@/lib/html-entities';
+import { stripUnresolvedPlaceholders } from '@/lib/unresolved-placeholders';
 import { BONZAH_INSURANCE_ADDENDUM_HTML, BONZAH_INSURANCE_ADDENDUM_TEXT } from '@/lib/bonzah-addendum';
 import {
     buildRentalTimeFacts,
@@ -372,6 +373,13 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         // literal text "{{rental_discount}}" printed in the signed contract.
         // Confirmed live in Moore Luxe's agreement R-798b28.
         rental_discount: rental?.discount_applied ? formatCurrency(rental.discount_applied, currencyCode) : '',
+        // Names real tenant templates use that nothing supplied, so they printed
+        // raw into signed contracts. Found by sweeping all 62 active templates.
+        // `starting_odometer` (globalmotiontransport) is the collection reading,
+        // which we now have; `extension_start_date` (clutch-motors) is the date
+        // the extension runs from, i.e. the previous end date.
+        starting_odometer: _times.collectionMileage,
+        extension_start_date: extensionData?.previousEndDate ? formatDate(extensionData.previousEndDate) : '',
         rental_period_type: rental?.rental_period_type || 'Monthly',
         rental_status: rental?.status || '',
         pickup_location: rental?.pickup_location || '',
@@ -510,7 +518,21 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
     // Unwrap block-level elements that ended up inside <p> tags from variable substitution
     // e.g. <p><h2>...</h2><table>...</table></p> → <h2>...</h2><table>...</table>
     result = result.replace(/<p>(\s*<(?:h[1-6]|table|div|ul|ol|hr)[\s\S]*?)<\/p>/gi, (_, inner) => inner.trim());
-    return result;
+
+    // Anything still in {{...}} form resolved to nothing. Substitution is
+    // open-ended, so an unrecognised name survives all the way onto the page —
+    // five production templates print things like "Renter Signature:
+    // {{customer_signature}}" into contracts today. Blank reads as an unfilled
+    // field; raw markup reads as broken software in a legal document.
+    // BoldSign's {{@sig1}}/{{@init1}}/{{@date1}} tags cannot match this pattern.
+    const _stripped = stripUnresolvedPlaceholders(result);
+    if (_stripped.removed.length > 0) {
+        console.warn(
+            '[esign] Template references variables no engine supplies; removed rather than printing them into the contract:',
+            _stripped.removed.join(', ')
+        );
+    }
+    return _stripped.html;
 }
 
 function removeEmptyFields(html: string): string {

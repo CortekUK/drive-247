@@ -109,6 +109,24 @@ function formatCurrency(amount: number | null, currencyCode: string = 'USD'): st
 }
 
 // Process template variables
+
+// Remove placeholders nothing resolved, so raw template markup never reaches a
+// customer in a contract. Mirrors apps/portal/src/lib/unresolved-placeholders.ts
+// (cannot be imported here). BoldSign's {{@sig1}}/{{@init1}}/{{@date1}} tags
+// begin with '@' and cannot match, so they survive to place the real fields.
+const UNRESOLVED_PLACEHOLDER = /\{{2,3}\s*([a-zA-Z_][\w]*)\s*\}{2,3}/g;
+function stripUnresolvedPlaceholders(html: string): string {
+    if (!html) return html;
+    const names = new Set<string>();
+    for (const m of html.matchAll(UNRESOLVED_PLACEHOLDER)) names.add(m[1]);
+    if (names.size === 0) return html;
+    console.warn(
+        '[esign] Template references variables no engine supplies; removed rather than printing them into the contract:',
+        [...names].sort().join(', ')
+    );
+    return html.replace(UNRESOLVED_PLACEHOLDER, '');
+}
+
 function processTemplate(template: string, rental: any, customer: any, vehicle: any, tenant: any, verification?: any, termsBlock: string = '', timeFacts?: RentalTimeFacts): string {
     // Mirrors the portal engine: collection/return times resolved once, and every
     // "today" field stamped in the tenant's zone rather than the server's (UTC on
@@ -321,7 +339,7 @@ function processTemplate(template: string, rental: any, customer: any, vehicle: 
         // (three open, two close) is just as easy to type as the balanced form.
         result = result.replace(new RegExp(`\\{{2,3}\\s*${key}\\s*\\}{2,3}`, 'gi'), value);
     }
-    return result;
+    return stripUnresolvedPlaceholders(result);
 }
 
 // Convert HTML to plain text
