@@ -381,3 +381,116 @@ own.
   parser. `readEdgeFunction` throws on an unknown shape rather than returning an
   empty field set, on purpose: an empty set would make every assertion against
   that function pass for the wrong reason, which is worse than a red build.
+
+> **Correction to the bullet above, for a SECOND spine.** `SPINE_ORDER` in
+> `helpers/chain.ts` is one flat union, and `reasonToSkip()` requires *every*
+> earlier entry to have passed. So adding rental step ids to it would make the
+> rental spine skip whenever an **onboarding** step failed — two unrelated
+> journeys chained into one. `SpineChain` is also not exported, so a second
+> chain cannot be instantiated today. Until that is fixed, files under
+> `spine/rental/` are **standalone**: they share fixtures, not chain state.
+> Follow the bullet above only for new steps of the *onboarding* spine.
+
+## 10. Naming convention
+
+The team lead's rule: *"every test — I won't read it, but it should make sense."*
+Titles are also harvested into [TEST-CATALOGUE.md](./TEST-CATALOGUE.md), so a
+title is documentation, not a label. Three rules.
+
+**1. A test title is a lowercase sentence about BEHAVIOUR that reads correctly
+after the word "it".** Describe what the system does, from the system's point of
+view — not what the test does.
+
+```
+GOOD  it("refuses a refund larger than the remaining refundable balance")
+GOOD  it("falls back to Stripe when the tenant row cannot be read")
+GOOD  it("counts nights, not calendar days touched: Mar 1 -> Mar 4 is three days")
+BAD   it("test refund cap")                    <- not a sentence
+BAD   it("should work correctly")              <- says nothing
+BAD   it("handles edge case 3")                <- the reader must open the file
+BAD   it("calls sessions.create with the right args")  <- describes the test
+```
+
+Where a money figure is the point, put the arithmetic in the title. `"prices 7
+days on the weekly tier as 75.00 x 7 = 525.00"` is checkable on paper by someone
+who never opens the file, which is the whole objective.
+
+**2. A test that pins a KNOWN DEFECT is named for what the code actually does**,
+in the present tense, with no hedging — so the catalogue reads as an honest
+inventory:
+
+```
+it("silently bills a reversed date range as a single day instead of rejecting it")
+it("falls through to the DAILY rate at 30 days, making one extra day cost 495.00 more")
+```
+
+**3. A watchdog is named for what SHOULD be true**, and starts with "should" —
+the only place that word belongs:
+
+```
+it.fails("should fall back to the weekly rate, not the daily rate, at 30 days")
+it.fails("should never return a non-finite price, whatever monthly_tier_days holds")
+```
+
+`describe()` names the **subject** under test, never the file:
+`describe("rental pricing — the day count")`, not `describe("01-pricing-maths")`.
+
+Add `@usecase <one line>` to the comment immediately above a `describe` and the
+generator lifts it into the catalogue as that block's stated purpose.
+
+## 11. Known-defect watchdogs — `it.fails`
+
+When a test would have to assert something wrong to go green, **do not assert the
+wrong thing.** A test encoding a bug turns red the day someone fixes the bug, and
+whoever fixed it then "repairs" the test back to the broken expectation. That has
+happened on this repo and had to be undone.
+
+Write a pair instead:
+
+```ts
+it("falls through to the DAILY rate at 30 days, making one extra day cost 495.00 more", () => {
+  expect(priceFor(30, NO_MONTHLY).rentalPrice).toBe(2670.0); // 89.00 x 30 — the actual
+});
+
+it.fails("should fall back to the weekly rate, not the daily rate, at 30 days", () => {
+  // Remove the `.fails` marker once calculate-rental-price.ts:479-489 is fixed.
+  expect(priceFor(30, NO_MONTHLY).rentalPrice).toBe(2250.0); // 75.00 x 30 — correct
+});
+```
+
+The first records the size of the error. The second states the truth and, because
+`it.fails` inverts the result, is **green while the bug lives and red the moment
+it is fixed** — which forces the pair to be revisited rather than silently
+enshrining the defect.
+
+**A watchdog going red is good news.** It means someone fixed the bug. Delete the
+pinning test, remove the `.fails` marker, and keep the correct expectation.
+
+Every watchdog carries a `// Remove the .fails marker once … is fixed` comment
+naming the file and lines to change. The catalogue lists them all under
+**⚠ watchdog**.
+
+## 12. The generated catalogue
+
+```bash
+npm run test:docs
+```
+
+Runs the suite, harvests its own `--reporter=json` output, and rewrites
+[TEST-CATALOGUE.md](./TEST-CATALOGUE.md) plus `test-catalogue.json`. Both are
+generated — editing them by hand is discarded on the next run.
+
+The generator adds three things the raw report does not carry:
+
+- **Layer**, inferred from evidence in each file rather than a convention someone
+  has to remember: importing `live-call` means it has Layer 2 tests; reading
+  source text means Layer 1; importing a real module through `@fn` or an app path
+  and calling it means Layer 3. A file can be several. Unclassifiable is reported
+  as `unclassified`, never guessed.
+- **Watchdogs.** `it.fails` tests report as `passed` in the JSON when their inner
+  assertion fails — which is the watchdog working — so they are indistinguishable
+  in the report. They are recovered by parsing each source file for `it.fails(`
+  and matching titles.
+- **Use cases**, from `@usecase` lines. Absent means absent; nothing is invented.
+
+Run it after adding tests, and paste the summary line into the PR.
