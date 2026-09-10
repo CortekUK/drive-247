@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
     // telling them a photo they own belongs to someone else.
     let owningTenantId: string | null = photo.tenant_id ?? null;
     if (!owningTenantId && photo.vehicle_id) {
-      const { data: parentVehicle } = await admin
+      const { data: parentVehicle } = await supabaseAdmin
         .from("vehicles")
         .select("tenant_id")
         .eq("id", photo.vehicle_id)

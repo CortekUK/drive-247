@@ -450,8 +450,21 @@ serve(async (req) => {
       if (vehicle.warranty_end_date) {
         const warrantyDate = new Date(vehicle.warranty_end_date);
         
-        for (const rule of rules.filter(r => r.rule_code.startsWith('WARRANTY_'))) {
-          const diffDays = differenceInDays(warrantyDate, today);
+        // `rules` and `differenceInDays` were never declared or imported in this
+        // file -- this block threw ReferenceError on entry, so warranty reminders
+        // have never been generated. Latent rather than live: reminder_rules is
+        // empty in production, so the function returns early at "No enabled
+        // reminder rules found" and never reaches here. It becomes a live outage
+        // the moment anyone configures a rule -- and because the only enclosing
+        // try is at line ~188 with its catch at ~766, the throw would abort the
+        // WHOLE run, taking every other reminder type with it.
+        //
+        // Fixed to the file's own conventions: reminderRules is the raw array
+        // (rulesByType is built from it at ~line 267), and day-diffs are computed
+        // with Math.ceil over milliseconds exactly as the MOT and tax blocks do
+        // at lines ~303 and ~378.
+        for (const rule of reminderRules.filter(r => r.rule_code.startsWith('WARRANTY_'))) {
+          const diffDays = Math.ceil((warrantyDate.getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
           
           if (diffDays === rule.lead_days) {
             const remindDate = new Date(warrantyDate);
