@@ -217,6 +217,10 @@ serve(async (req) => {
     let customerSubject = `Rental Completed - Thank You! | DRIVE 247`;
     let customerHtml = getEmailHtml(data, currencyCode);
 
+    // Hoisted so the resolved recipient survives the try block below.
+    let resolvedCustomerEmail: string | undefined = data.customerEmail || undefined;
+    let resolvedCustomerPhone: string | undefined = data.customerPhone || undefined;
+
     if (data.tenantId) {
       try {
         const templateData = await resolveEmailData(supabase, {
@@ -229,6 +233,27 @@ serve(async (req) => {
           },
         });
 
+        // THE RECIPIENT. The only caller of this function
+        // (apps/portal/src/hooks/use-key-handover.ts:451) posts just
+        // { rentalId, tenantId, bookingRef } -- it never sends customerEmail,
+        // and this function never looked one up. So `to` was undefined on every
+        // call and Resend rejected it with 422 "The `to` field must be a
+        // `string`". The rental-completed email has therefore never reached a
+        // customer, for any tenant.
+        //
+        // resolveEmailData already fetches it from the database, and its merge
+        // skips undefined/null/'' overrides, so the DB value survives the
+        // undefined customer_email override above. Use it.
+        if (!resolvedCustomerEmail && templateData?.customer_email) {
+          resolvedCustomerEmail = templateData.customer_email;
+        }
+        // Same omission on the SMS side: customerPhone is never posted either, so
+        // the `if (data.customerPhone)` guard below was always false and the
+        // completion SMS silently never sent.
+        if (!resolvedCustomerPhone && templateData?.customer_phone) {
+          resolvedCustomerPhone = templateData.customer_phone;
+        }
+
         const rendered = await renderEmail(supabase, data.tenantId, 'rental_completed', templateData);
         customerSubject = rendered.subject;
         customerHtml = rendered.html;
@@ -238,18 +263,28 @@ serve(async (req) => {
       }
     }
 
-    // Send customer email
-    results.customerEmail = await sendEmail(
-      data.customerEmail,
-      customerSubject,
-      customerHtml
-    );
-    console.log('Customer email result:', results.customerEmail);
+    // Send customer email. Guarded: calling Resend with an empty `to` produces a
+    // 422 that reads like an outage, when the real cause is a missing address --
+    // say which, so the next person is not hunting a phantom mail problem.
+    if (resolvedCustomerEmail) {
+      results.customerEmail = await sendEmail(
+        resolvedCustomerEmail,
+        customerSubject,
+        customerHtml
+      );
+      console.log('Customer email result:', results.customerEmail);
+    } else {
+      results.customerEmail = {
+        success: false,
+        error: 'No customer email address could be resolved for this rental — nothing was sent.',
+      };
+      console.warn('Rental-completed email skipped: no recipient resolved for rental', data.rentalId);
+    }
 
     // Send customer SMS
-    if (data.customerPhone) {
+    if (resolvedCustomerPhone) {
       results.customerSMS = await sendSMS(
-        data.customerPhone,
+        resolvedCustomerPhone,
         `DRIVE 247: Thank you for returning your ${data.vehicleName}! We hope you enjoyed your rental. Book again at drive-247.com`,
         supabase,
         data.tenantId
