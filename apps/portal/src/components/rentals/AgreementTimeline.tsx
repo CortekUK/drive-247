@@ -293,6 +293,12 @@ function AgreementCard({
                 endpoint reported success unconditionally.
                 NULL status = agreement predates delivery tracking; show nothing
                 rather than implying a failure we have no evidence for. */}
+            {/* NOT extended to 'not_attempted_no_credits': those rows already get
+                the dedicated credit banner below, which says the actionable thing
+                (top up). Firing here too would stack two boxes on the same row and
+                advise "share the signing link directly" — impossible, since all 65
+                such rows have document_id IS NULL: the credit check returns 402
+                before BoldSign is ever called, so no document and no link exist. */}
             {(agreement.email_delivery_status === 'failed' ||
               agreement.email_delivery_status === 'skipped_no_email') && (
               <div className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2.5">

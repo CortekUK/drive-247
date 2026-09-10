@@ -817,6 +817,19 @@ export async function POST(request: NextRequest) {
                     tenant_id: tenantId,
                     agreement_type: agreementType,
                     document_status: 'credit_failed',
+                    // No email is attempted on this path at all -- the document was
+                    // never created, so there is nothing to sign. Recording this
+                    // explicitly instead of leaving NULL is what lets an operator
+                    // tell "we never sent it" apart from "we sent it and heard
+                    // nothing back". RevTek has 14 rows like this from June, and
+                    // for those renters "I never received the agreement" is
+                    // literally true and has nothing to do with deliverability.
+                    email_delivery_status: 'not_attempted_no_credits',
+                    // Kept free of internal billing language: rental_agreements is in the
+                    // supabase_realtime publication and customers hold an RLS SELECT policy on
+                    // their own rows, so this string reaches the renter's browser. The operator
+                    // still sees the credit-specific banner, which is where 'top up' belongs.
+                    email_delivery_error: 'The agreement was not created, so no email was sent.',
                     boldsign_mode: boldsignMode,
                     period_start_date: agreementType === 'extension' && body.extensionPreviousEndDate
                         ? body.extensionPreviousEndDate : rental?.start_date || null,
@@ -947,6 +960,9 @@ export async function POST(request: NextRequest) {
 
         // Send signing email (we handle emails ourselves since DisableEmails is true)
         let emailSent = false;
+        let emailStatus: 'sent' | 'failed' = 'failed';
+        let emailError: string | null = null;
+        let emailMessageId: string | null = null;
         try {
             const refId = body.rentalId.substring(0, 8).toUpperCase();
             const companyName = tenant?.company_name || FALLBACK_COMPANY_NAME;
@@ -996,11 +1012,55 @@ export async function POST(request: NextRequest) {
             });
             emailSent = signingEmailResponse.ok;
             if (!emailSent) {
-                console.warn('Signing email error:', await signingEmailResponse.text());
+                emailError = (await signingEmailResponse.text())?.slice(0, 500) || `HTTP ${signingEmailResponse.status}`;
+                console.warn('Signing email error:', emailError);
+            } else {
+                // Keep Resend's message id so a later "I never got the agreement"
+                // can be looked up rather than guessed at. `.ok` remains the sole
+                // authority on status -- a malformed body costs us the id only.
+                try {
+                    const payload = await signingEmailResponse.clone().json();
+                    emailMessageId = typeof payload?.messageId === 'string' ? payload.messageId : null;
+                } catch {
+                    emailMessageId = null;
+                }
             }
-            console.log('Signing email:', emailSent ? 'sent' : 'failed');
+            emailStatus = emailSent ? 'sent' : 'failed';
+
+            console.log('Signing email:', emailStatus, emailMessageId ?? '');
         } catch (e) {
-            console.warn('Signing email error:', e);
+            // A throw here -- DNS, timeout, abort -- is the case where the renter
+            // definitely received nothing, so it MUST be recorded. Set the status
+            // rather than only logging it.
+            emailError = String((e as Error)?.message ?? e).slice(0, 500);
+            emailStatus = 'failed';
+            console.warn('Signing email error:', emailError);
+        }
+
+        // Record the outcome. Deliberately OUTSIDE the try above, mirroring the
+        // portal: if the fetch itself throws, that is precisely when we most need
+        // the row to say 'failed'. Keeping this inside the try would reproduce
+        // the very NULL ambiguity this change exists to remove -- the branch
+        // previously wrote NOTHING at all, so every customer-originated agreement
+        // carried a permanently NULL status, indistinguishable from a row that
+        // predates the column.
+        //
+        // Best-effort: bookkeeping must never fail a send whose BoldSign document
+        // already exists and whose e-sign credits are already spent.
+        if (agreementId) {
+            try {
+                await supabase
+                    .from('rental_agreements')
+                    .update({
+                        email_delivery_status: emailStatus,
+                        email_delivery_error: emailError,
+                        email_delivered_at: emailStatus === 'sent' ? new Date().toISOString() : null,
+                        email_provider_message_id: emailMessageId,
+                    })
+                    .eq('id', agreementId);
+            } catch (persistErr) {
+                console.warn('Could not record signing-email outcome:', persistErr);
+            }
         }
 
         // Create in-app notification for the customer

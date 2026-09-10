@@ -766,7 +766,9 @@ export function StageAgreement({ detail, onStage, refetch }: StageProps) {
                   <p className="text-xs font-medium text-destructive">
                     {current.email_delivery_status === "skipped_no_email"
                       ? "No email address, so nothing was sent"
-                      : "The signing email did not get through"}
+                      : current.email_delivery_status === "not_attempted_no_credits"
+                        ? "E-sign credits had run out, so no agreement was created and no email was sent"
+                        : "The signing email did not get through"}
                   </p>
                   {current.email_delivery_error && (
                     <p className="mt-0.5 text-[11px] text-muted-foreground">{current.email_delivery_error}</p>

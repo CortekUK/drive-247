@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _backfill_iv_link_20260817: {
@@ -12953,6 +12928,7 @@ export type Database = {
           email_delivered_at: string | null
           email_delivery_error: string | null
           email_delivery_status: string | null
+          email_provider_message_id: string | null
           envelope_completed_at: string | null
           envelope_created_at: string | null
           envelope_sent_at: string | null
@@ -12973,6 +12949,7 @@ export type Database = {
           email_delivered_at?: string | null
           email_delivery_error?: string | null
           email_delivery_status?: string | null
+          email_provider_message_id?: string | null
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
@@ -12993,6 +12970,7 @@ export type Database = {
           email_delivered_at?: string | null
           email_delivery_error?: string | null
           email_delivery_status?: string | null
+          email_provider_message_id?: string | null
           envelope_completed_at?: string | null
           envelope_created_at?: string | null
           envelope_sent_at?: string | null
@@ -15496,6 +15474,45 @@ export type Database = {
           },
         ]
       }
+      setup_checklist_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          guide_url: string | null
+          id: string
+          is_published: boolean
+          item_key: string
+          sort_order: number
+          title: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          guide_url?: string | null
+          id?: string
+          is_published?: boolean
+          item_key: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          guide_url?: string | null
+          id?: string
+          is_published?: boolean
+          item_key?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       signup_attempts: {
         Row: {
           auth_user_id: string | null
@@ -17344,6 +17361,78 @@ export type Database = {
           },
           {
             foreignKeyName: "tenant_holidays_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_readiness"
+            referencedColumns: ["tenant_id"]
+          },
+        ]
+      }
+      tenant_notes: {
+        Row: {
+          body: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_done: boolean
+          remind_at: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_done?: boolean
+          remind_at?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_done?: boolean
+          remind_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "v_welcome_pack_readership"
+            referencedColumns: ["app_user_id"]
+          },
+          {
+            foreignKeyName: "tenant_notes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_notes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "v_tenant_onboarding_status"
+            referencedColumns: ["tenant_id"]
+          },
+          {
+            foreignKeyName: "tenant_notes_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "v_tenant_readiness"
@@ -24000,6 +24089,7 @@ export type Database = {
           is_blocked: boolean
         }[]
       }
+      is_portal_staff: { Args: never; Returns: boolean }
       is_portal_user: { Args: never; Returns: boolean }
       is_primary_super_admin: { Args: never; Returns: boolean }
       is_sales_agent: { Args: never; Returns: boolean }
@@ -24625,9 +24715,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       accounting_connection_status: ["active", "expired", "revoked", "error"],

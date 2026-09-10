@@ -1143,6 +1143,12 @@ async function recordSendFailure(
             agreement_type: agreementType,
             document_status: 'send_failed',
             boldsign_mode: boldsignMode,
+            // Same gap as credit_failed: the document never reached BoldSign, so no
+            // email was attempted -- but this wrote only the error and left
+            // email_delivery_status NULL, which is indistinguishable from a row
+            // predating delivery tracking. The operator could not tell "we never
+            // tried" from "we tried and heard nothing".
+            email_delivery_status: 'not_attempted_send_failed',
             email_delivery_error: [reason, detail].filter(Boolean).join(' — ').slice(0, 500),
             period_start_date: agreementType === 'extension' && body?.extensionPreviousEndDate
                 ? body.extensionPreviousEndDate : rental?.start_date || null,
@@ -1733,6 +1739,19 @@ export async function POST(request: NextRequest) {
                     tenant_id: body.tenantId,
                     agreement_type: agreementType,
                     document_status: 'credit_failed',
+                    // No email is attempted on this path at all -- the document was
+                    // never created, so there is nothing to sign. Recording this
+                    // explicitly instead of leaving NULL is what lets an operator
+                    // tell "we never sent it" apart from "we sent it and heard
+                    // nothing back". RevTek has 14 rows like this from June, and
+                    // for those renters "I never received the agreement" is
+                    // literally true and has nothing to do with deliverability.
+                    email_delivery_status: 'not_attempted_no_credits',
+                    // Kept free of internal billing language: rental_agreements is in the
+                    // supabase_realtime publication and customers hold an RLS SELECT policy on
+                    // their own rows, so this string reaches the renter's browser. The operator
+                    // still sees the credit-specific banner, which is where 'top up' belongs.
+                    email_delivery_error: 'The agreement was not created, so no email was sent.',
                     boldsign_mode: boldsignMode,
                     period_start_date: agreementType === 'extension' && body.extensionPreviousEndDate
                         ? body.extensionPreviousEndDate : rental?.start_date || null,
@@ -1951,6 +1970,7 @@ export async function POST(request: NextRequest) {
         let emailSent = false;
         let emailStatus: 'sent' | 'failed' | 'skipped_no_email' = 'failed';
         let emailError: string | null = null;
+        let emailMessageId: string | null = null;
 
         if (!body.customerEmail) {
             emailStatus = 'skipped_no_email';
@@ -1985,9 +2005,25 @@ export async function POST(request: NextRequest) {
             if (!emailSent) {
                 emailError = (await signingEmailResponse.text())?.slice(0, 500) || `HTTP ${signingEmailResponse.status}`;
                 console.warn('Signing email error:', emailError);
+            } else {
+                // Keep Resend's message id. send-signing-email returns it and we
+                // used to drop it on the floor, which is why "my renter says he
+                // never got the agreement" was unanswerable: with no id there is
+                // nothing to look up in Resend, and we consume no delivery
+                // webhook, so 'sent' is the last thing we ever learn.
+                //
+                // Parsing must never downgrade a send that actually succeeded --
+                // `.ok` stays the sole authority on status. A malformed body
+                // costs us the id, not the truth.
+                try {
+                    const payload = await signingEmailResponse.clone().json();
+                    emailMessageId = typeof payload?.messageId === 'string' ? payload.messageId : null;
+                } catch {
+                    emailMessageId = null;
+                }
             }
             emailStatus = emailSent ? 'sent' : 'failed';
-            console.log('Signing email:', emailStatus);
+            console.log('Signing email:', emailStatus, emailMessageId ?? '');
         } catch (e: any) {
             emailError = String(e?.message ?? e).slice(0, 500);
             emailStatus = 'failed';
@@ -2005,6 +2041,7 @@ export async function POST(request: NextRequest) {
                         email_delivery_status: emailStatus,
                         email_delivery_error: emailError,
                         email_delivered_at: emailStatus === 'sent' ? new Date().toISOString() : null,
+                        email_provider_message_id: emailMessageId,
                     })
                     .eq('id', agreementId);
             } catch (persistErr) {
