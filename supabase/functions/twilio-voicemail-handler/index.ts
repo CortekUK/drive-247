@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { isValidTwilioRecordingUrl } from '../_shared/twilio-recording-url.ts';
 import { handleCors } from '../_shared/cors.ts';
 
 /**
@@ -92,6 +93,15 @@ Deno.serve(async (req) => {
     if ((explicitAction === 'save' || recordingUrl) && recordingUrl) {
       console.log(`[twilio-voicemail-handler] Saving voicemail: ${recordingSid} (${recordingDuration}s)`);
 
+      // RecordingUrl arrives in the POST body of a verify_jwt=false endpoint, and the
+      // download below sends the tenant's Twilio auth token as a Basic header. Refuse
+      // anything that is not a Twilio Recordings URL BEFORE any credentialed work, so a
+      // forged callback cannot name its own host and be handed those credentials.
+      if (!isValidTwilioRecordingUrl(recordingUrl)) {
+        console.error(`[twilio-voicemail-handler] Refusing non-Twilio RecordingUrl: ${recordingUrl}`);
+        return twimlResponse('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for your message. Goodbye.</Say></Response>');
+      }
+
       const durationSec = recordingDuration ? parseInt(recordingDuration, 10) : 0;
       const twilioMp3Url = `${recordingUrl}.mp3`;
 
@@ -100,6 +110,13 @@ Deno.serve(async (req) => {
       try {
         const { data: tenantCreds } = await supabase.from('tenants')
           .select('twilio_account_sid, twilio_auth_token').eq('id', tenantId).single();
+
+        // Second gate, now that the account is known: the recording must belong to the
+        // SAME Twilio account as the credentials. tenantId comes from the query string,
+        // so without this an attacker could pair one tenant's id with another's URL.
+        if (!isValidTwilioRecordingUrl(recordingUrl, tenantCreds?.twilio_account_sid)) {
+          throw new Error('RecordingUrl does not belong to this tenant\'s Twilio account');
+        }
 
         const authHeader = tenantCreds?.twilio_account_sid && tenantCreds?.twilio_auth_token
           ? `Basic ${btoa(`${tenantCreds.twilio_account_sid}:${tenantCreds.twilio_auth_token}`)}`

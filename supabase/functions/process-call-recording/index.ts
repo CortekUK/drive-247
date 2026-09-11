@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { isValidTwilioRecordingUrl } from '../_shared/twilio-recording-url.ts';
 import { handleCors } from '../_shared/cors.ts';
 import { chatCompletion, logExternalUsage } from '../_shared/openai.ts';
 
@@ -67,6 +68,14 @@ Deno.serve(async (req) => {
       .select('twilio_account_sid, twilio_auth_token')
       .eq('id', callLog.tenant_id)
       .single();
+
+    // RecordingUrl is attacker-controllable on this verify_jwt=false endpoint and the
+    // download below carries the tenant's Twilio auth token. Pin it to a Twilio
+    // Recordings URL on that tenant's own account before sending any credential.
+    if (!isValidTwilioRecordingUrl(recordingUrl, tenantCreds?.twilio_account_sid)) {
+      console.error(`[process-call-recording] Refusing non-Twilio RecordingUrl: ${recordingUrl}`);
+      return new Response('OK', { status: 200 });
+    }
 
     // Step 2: Download the recording (with Twilio auth)
     let audioBlob: Blob;
