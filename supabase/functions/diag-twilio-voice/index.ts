@@ -212,6 +212,37 @@ Deno.serve(async (req) => {
     });
   }
 
+
+  // 10. Does the STORED API key pair actually authenticate? ensureLiveApiKey only
+  //     probes that the key SID exists (using the account auth token), so a wrong or
+  //     rotated secret would pass that check, mint a token signed with a bad key, and
+  //     fail only in the browser. Authenticate AS the key to prove the pair is live.
+  const { data: keyRow } = await supabase
+    .from('tenants')
+    .select('twilio_api_key_sid, twilio_api_key_secret, twilio_twiml_app_sid, twilio_voice_enabled')
+    .eq('slug', slug)
+    .single();
+  let apiKeyCheck: Record<string, unknown> = { checked: false };
+  const kSid = (keyRow as any)?.twilio_api_key_sid;
+  const kSec = (keyRow as any)?.twilio_api_key_secret;
+  if (kSid && kSec) {
+    const r = await fetch(`${API}/Accounts/${acct}/IncomingPhoneNumbers.json?PageSize=1`, {
+      headers: { Authorization: `Basic ${btoa(`${kSid}:${kSec}`)}` },
+    });
+    apiKeyCheck = {
+      checked: true,
+      key_sid: kSid,
+      secret_length: String(kSec).length,
+      authenticates: r.ok,
+      http: r.status,
+      note: r.ok
+        ? 'key pair is valid — browser access tokens will be signed correctly'
+        : 'STORED SECRET DOES NOT AUTHENTICATE — browser calling will fail at connect time',
+    };
+  } else {
+    apiKeyCheck = { checked: true, missing: true, has_sid: !!kSid, has_secret: !!kSec };
+  }
+
   return jsonResponse({
     tenant: {
       slug: (t as any).slug,
@@ -229,6 +260,7 @@ Deno.serve(async (req) => {
     tally_by_destination: tally,
     forwarding_monthly: monthly,
     forwarding_samples: samples,
+    api_key_check: apiKeyCheck,
     lookups,
     alerts: alertList,
     alert_detail: alertDetail,
