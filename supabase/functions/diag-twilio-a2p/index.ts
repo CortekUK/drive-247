@@ -72,9 +72,17 @@ Deno.serve(async (req) => {
   for (const s of services) {
     const nums = await get(`${MSG}/Services/${s.sid}/PhoneNumbers?PageSize=20`);
     const camp = await get(`${MSG}/Services/${s.sid}/Compliance/Usa2p`);
+    // Decisive for inbound routing: when use_inbound_webhook_on_number is FALSE the
+    // SERVICE's inbound_request_url handles inbound messages and the number's own
+    // sms_url is ignored entirely.
+    const full = await get(`${MSG}/Services/${s.sid}`);
     serviceDetail.push({
       service_sid: s.sid,
       name: s.friendly_name,
+      use_inbound_webhook_on_number: full.body?.use_inbound_webhook_on_number,
+      inbound_request_url: full.body?.inbound_request_url,
+      inbound_method: full.body?.inbound_method,
+      fallback_url: full.body?.fallback_url,
       numbers: (nums.body?.phone_numbers ?? []).map((n: any) => n.phone_number),
       campaign_http: camp.status,
       campaign_raw: camp.ok ? camp.body : (camp.raw ?? camp.body),

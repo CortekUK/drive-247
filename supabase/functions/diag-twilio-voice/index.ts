@@ -192,6 +192,26 @@ Deno.serve(async (req) => {
     text: String(a.alert_text ?? '').slice(0, 200),
   }));
 
+
+  // 9. Lookup: line type and carrier for the forwarding target. A VoIP or otherwise
+  //    unusual line explains an instant 486/busy with no alerting far better than a
+  //    handset that is genuinely in use 48% of the time.
+  const lookups: unknown[] = [];
+  for (const n of [fwd, (t as any).twilio_phone_number]) {
+    if (!n) continue;
+    const r = await get(`https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(n)}?Fields=line_type_intelligence,caller_name`);
+    lookups.push({
+      number: n, http: r.status,
+      valid: r.body?.valid,
+      country: r.body?.country_code,
+      line_type: r.body?.line_type_intelligence?.type,
+      carrier: r.body?.line_type_intelligence?.carrier_name,
+      mobile_network_code: r.body?.line_type_intelligence?.mobile_network_code,
+      caller_name: r.body?.caller_name,
+      err: r.ok ? undefined : (r.raw ?? null),
+    });
+  }
+
   return jsonResponse({
     tenant: {
       slug: (t as any).slug,
@@ -209,6 +229,7 @@ Deno.serve(async (req) => {
     tally_by_destination: tally,
     forwarding_monthly: monthly,
     forwarding_samples: samples,
+    lookups,
     alerts: alertList,
     alert_detail: alertDetail,
     pages_scanned: pages,
