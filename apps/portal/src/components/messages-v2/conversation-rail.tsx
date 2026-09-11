@@ -25,11 +25,12 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowLeft, Mail, MessageCircle, MessageSquare, Phone, Search, Send } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, MessageSquare, Phone, Search, Send, Smartphone } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui-v2/avatar";
 import { Input } from "@/components/ui-v2/input";
 import { Button } from "@/components/ui-v2/button";
-import { useChatChannels, type ChatChannel } from "@/hooks/use-chat-channels";
+import { useChatChannels, type ChatChannel, type UnknownSmsThread } from "@/hooks/use-chat-channels";
+import { LinkUnknownThreadDialog } from "@/components/chat/LinkUnknownThreadDialog";
 import type { MessageChannel } from "@/contexts/RealtimeChatContext";
 import { mockChannelDecoration, type MockChannelDecoration } from "@/components/messages-v2/mock-conversation";
 import { readMessagesScenario, subscribeDevOverrides } from "@/lib/dev-overrides";
@@ -115,8 +116,14 @@ export function ConversationRail({
   selectedId: string | null;
   onBulkMessage?: () => void;
 }) {
-  const { channels, isLoading } = useChatChannels();
+  // unknownThreads was already being fetched here and thrown away: the only component
+  // that rendered it, components/chat/ChannelList, has no importers, and this rail —
+  // the one actually mounted by the Messages layout — never read it. So texts and
+  // voicemails from anyone not already on a customer record reached the database and
+  // were invisible to the operator.
+  const { channels, unknownThreads, isLoading } = useChatChannels();
   const [query, setQuery] = useState("");
+  const [linkThread, setLinkThread] = useState<UnknownSmsThread | null>(null);
 
   const scenario = useSyncExternalStore(
     subscribeDevOverrides,
@@ -221,7 +228,60 @@ export function ConversationRail({
             ))}
           </div>
         )}
+
+        {/* Rendered outside the empty/loaded branch above, so an operator whose only
+            contact is from unrecognised numbers still sees something. */}
+        {!query && unknownThreads.length > 0 && (
+          <div className="border-t border-border/30">
+            <div className="px-4 pb-1 pt-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Unknown numbers
+              </p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                Not matched to a customer. Link one to reply and keep the history.
+              </p>
+            </div>
+            <div className="divide-y divide-border/30">
+              {unknownThreads.map((t) => (
+                <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                    {/* One icon for both texts and voicemails: sms_unknown_threads has
+                        no last_channel column, and adding one purely to pick an icon is
+                        not worth a schema change — the content is visible once linked. */}
+                    <Smartphone className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-[13px]">{t.phone_number}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {t.message_count} message{t.message_count === 1 ? "" : "s"}
+                      {t.last_message_at
+                        ? ` · ${formatDistanceToNow(new Date(t.last_message_at), { addSuffix: true })}`
+                        : ""}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 text-[11px]"
+                    onClick={() => setLinkThread(t)}
+                  >
+                    Link
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {linkThread && (
+        <LinkUnknownThreadDialog
+          open={!!linkThread}
+          onOpenChange={(open) => !open && setLinkThread(null)}
+          threadId={linkThread.id}
+          phoneNumber={linkThread.phone_number}
+        />
+      )}
     </div>
   );
 }

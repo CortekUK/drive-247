@@ -15692,32 +15692,38 @@ export type Database = {
       }
       sms_unknown_messages: {
         Row: {
+          channel: string
           content: string
           created_at: string | null
           direction: string
           external_id: string | null
           external_status: string | null
           id: number
+          metadata: Json | null
           sender_id: string | null
           thread_id: string
         }
         Insert: {
+          channel?: string
           content: string
           created_at?: string | null
           direction: string
           external_id?: string | null
           external_status?: string | null
           id?: number
+          metadata?: Json | null
           sender_id?: string | null
           thread_id: string
         }
         Update: {
+          channel?: string
           content?: string
           created_at?: string | null
           direction?: string
           external_id?: string | null
           external_status?: string | null
           id?: number
+          metadata?: Json | null
           sender_id?: string | null
           thread_id?: string
         }

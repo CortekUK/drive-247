@@ -225,6 +225,72 @@ Deno.serve(async (req) => {
 
           console.log(`[twilio-voicemail-handler] Logged voicemail in channel ${channelId}`);
         }
+      } else {
+        // No chat channel means the caller is not on a customer record. Until now that
+        // was the end of the line: the recording was written to voicemail_recordings and
+        // surfaced nowhere, because the only voicemail UI hangs off a customer's thread.
+        // Route it to the same unknown-number inbox inbound SMS already uses, so it is
+        // visible and can be linked to a customer like any other unknown thread.
+        const vmFrom = from || 'unknown';
+        const { data: existingThread } = await supabase
+          .from('sms_unknown_threads')
+          .select('id, message_count')
+          .eq('tenant_id', tenantId)
+          .eq('phone_number', vmFrom)
+          .maybeSingle();
+
+        let threadId: string | null = existingThread?.id ?? null;
+        if (threadId) {
+          await supabase
+            .from('sms_unknown_threads')
+            .update({
+              last_message_at: new Date().toISOString(),
+              message_count: (existingThread?.message_count || 0) + 1,
+            })
+            .eq('id', threadId);
+        } else {
+          const { data: newThread, error: threadErr } = await supabase
+            .from('sms_unknown_threads')
+            .insert({
+              tenant_id: tenantId,
+              phone_number: vmFrom,
+              last_message_at: new Date().toISOString(),
+              message_count: 1,
+            })
+            .select('id')
+            .single();
+          if (threadErr) {
+            console.error('[twilio-voicemail-handler] Failed to create unknown thread:', threadErr);
+          } else {
+            threadId = newThread.id;
+          }
+        }
+
+        if (threadId) {
+          const { error: umErr } = await supabase
+            .from('sms_unknown_messages')
+            .insert({
+              thread_id: threadId,
+              direction: 'inbound',
+              channel: 'voice',
+              content: `Voicemail received (${formatDuration(durationSec)})`,
+              external_id: recordingSid,
+              external_status: 'delivered',
+              metadata: {
+                type: 'voicemail',
+                recording_url: finalRecordingUrl,
+                recording_sid: recordingSid,
+                duration_seconds: durationSec,
+                call_sid: callSid,
+                from_number: vmFrom,
+              },
+            });
+          if (umErr) {
+            console.error('[twilio-voicemail-handler] Failed to log unknown voicemail:', umErr);
+          } else {
+            console.log(`[twilio-voicemail-handler] Unknown-number voicemail saved to thread ${threadId}`);
+          }
+        }
       }
 
       // Respond with a thank-you

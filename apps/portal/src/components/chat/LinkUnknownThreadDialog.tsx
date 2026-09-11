@@ -121,7 +121,11 @@ export function LinkUnknownThreadDialog({
           sender_type: msg.direction === 'inbound' ? 'customer' : 'tenant',
           sender_id: msg.direction === 'inbound' ? customerId : (msg.sender_id || customerId),
           content: msg.content,
-          channel: 'sms' as const,
+          // Carry the arrival channel and payload across. Hardcoding 'sms' here
+          // relabelled a voicemail as a text and dropped its recording_url, so the
+          // player in ChatMessageBubble had nothing to render once it was linked.
+          channel: msg.channel ?? 'sms',
+          metadata: msg.metadata ?? null,
           external_id: msg.external_id,
           external_status: msg.external_status,
           from_number: msg.direction === 'inbound' ? phoneNumber : null,
