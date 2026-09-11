@@ -148,7 +148,22 @@ export function useVoiceCall() {
 
       // Handle incoming calls
       device.on('incoming', (call: any) => {
-        const from = call.parameters?.From || 'Unknown';
+        // In business-line caller-ID mode the <Dial> presents the tenant's own Twilio
+        // number to every leg, this one included, so parameters.From is the business
+        // line rather than the customer. twilio-voice-inbound therefore sends the real
+        // caller as a <Parameter>; prefer it, and fall back to From for tenants in
+        // caller mode (and for any call placed before that change shipped).
+        // The parameter is sent as bare digits; re-apply the '+'. Its PRESENCE is also
+        // the signal that From was rewritten: when it was sent but is empty (a withheld
+        // caller), From holds the business line, so fall through to Unknown rather than
+        // showing the operator their own number as the caller.
+        const params = call.customParameters;
+        const sentCaller = params?.has?.('CallerNumber');
+        const rawCaller = params?.get?.('CallerNumber')?.trim();
+        const digits = rawCaller && /\d/.test(rawCaller)
+          ? (rawCaller.startsWith('+') ? rawCaller : `+${rawCaller}`)
+          : '';
+        const from = digits || (sentCaller ? 'Unknown' : call.parameters?.From) || 'Unknown';
         setCallState((prev) => ({
           ...prev,
           incomingCall: { from, callInstance: call },

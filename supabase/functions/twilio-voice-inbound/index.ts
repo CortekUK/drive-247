@@ -197,13 +197,22 @@ Deno.serve(async (req) => {
     }
 
     // Step 5: Build TwiML to ring all tenant users
-    // Browser clients via <Client> elements
-    const clientElements = appUsers
-      .map((u: any) => `    <Client>tenant_${u.id}</Client>`)
-      .join('\n');
-
     // Phone forwarding via <Number> elements (if enabled)
     let numberElements = '';
+
+    // callerId is an attribute of <Dial>, NOT of <Number>. Twilio rejects
+    // `<Number callerId="...">` with error 12200 ("Attribute 'callerId' is not allowed
+    // to appear in element 'Number'"), drops the attribute, and falls back to passing
+    // the original caller through — which is why business_line mode never actually
+    // reached a staff phone, on any tenant, since the mode shipped.
+    let dialCallerIdAttr = '';
+
+    // <Dial callerId> applies to EVERY child leg, browser <Client>s included. The portal
+    // identifies an incoming caller solely from call.parameters.From, so presenting the
+    // business line there would break the customer lookup. The customer's number is
+    // therefore handed to the Voice SDK out-of-band, as a <Parameter> the portal prefers.
+    let businessLineActive = false;
+
     if (tenant.call_forwarding_enabled) {
       const allNumbers: string[] = [];
       // Normalize the Twilio number for comparison to prevent call loops
@@ -233,8 +242,17 @@ Deno.serve(async (req) => {
         // If the tenant wants forwarded calls to display the business line on staff
         // phones (so they know it's a business call before answering), set callerId
         // to the Twilio number. Otherwise let Twilio pass through the original caller.
+        // Gated on there actually being a number to ring: with no <Number> children a
+        // Dial-level callerId would only rewrite the browser legs, which is a regression.
         const useBusinessLine = tenant.forwarding_caller_id_mode === 'business_line';
-        const callerIdAttr = useBusinessLine ? ` callerId="${to}"` : '';
+        if (useBusinessLine) {
+          businessLineActive = true;
+          // `to` comes from the Twilio webhook and is matched against a stored
+          // tenants.twilio_phone_number, but it is interpolated raw. As a <Dial>
+          // attribute a stray quote would now break the entire Dial rather than a
+          // single leg, so strip it to E.164 characters.
+          dialCallerIdAttr = ` callerId="${to.replace(/[^+\d]/g, '')}"`;
+        }
 
         // In business_line mode the staff phone shows the BUSINESS number, not the
         // customer's — so it can't resolve a contact name. Attach a "whisper" leg
@@ -247,11 +265,25 @@ Deno.serve(async (req) => {
           : '';
 
         numberElements = '\n' + allNumbers
-          .map((num) => `    <Number${callerIdAttr}${whisperUrlAttr} statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
+          .map((num) => `    <Number${whisperUrlAttr} statusCallback="${supabaseUrl}/functions/v1/twilio-voice-status">${num}</Number>`)
           .join('\n');
         console.log(`[twilio-voice-inbound] Forwarding to ${allNumbers.length} phone numbers (callerIdMode=${tenant.forwarding_caller_id_mode || 'caller'}, whisper=${useBusinessLine})`);
       }
     }
+
+    // Browser clients via <Client> elements. The <Identity>+<Parameter> form is used
+    // ONLY when the business line is actually being presented — nesting <Parameter>
+    // requires <Identity> — so every other tenant's TwiML stays byte-for-byte as shipped.
+    // fromDigitsOnly is bare digits, so it needs no attribute escaping — and, unlike
+    // normalizedFrom, carries no leading '+'. The Voice SDK decodes Params with
+    // `+`->space BEFORE decodeURIComponent, so a literal '+' on the wire would reach
+    // the browser as a space; sending digits removes that failure mode entirely.
+    // The portal re-applies the '+' when it reads the parameter.
+    const clientElements = appUsers
+      .map((u: any) => businessLineActive
+        ? `    <Client>\n      <Identity>tenant_${u.id}</Identity>\n      <Parameter name="CallerNumber" value="${fromDigitsOnly}"/>\n    </Client>`
+        : `    <Client>tenant_${u.id}</Client>`)
+      .join('\n');
 
     // Build the TwiML
     const statusCallbackUrl = `${supabaseUrl}/functions/v1/twilio-voice-status`;
@@ -272,9 +304,7 @@ Deno.serve(async (req) => {
     // customer isn't sitting in dead air during the "press any key" announcement.
     // Only added when the whisper is active (business_line + forwarding), to keep
     // default-mode behaviour unchanged.
-    const dialAnswerAttr = tenant.call_forwarding_enabled && tenant.forwarding_caller_id_mode === 'business_line'
-      ? ' answerOnBridge="true"'
-      : '';
+    const dialAnswerAttr = businessLineActive ? ' answerOnBridge="true"' : '';
 
     let fallbackTwiml: string;
 
@@ -284,7 +314,7 @@ Deno.serve(async (req) => {
       fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${consentSay}
-  <Dial${dialAnswerAttr} timeout="30" action="${voicemailAction}"${recordAttrs}>
+  <Dial${dialAnswerAttr}${dialCallerIdAttr} timeout="30" action="${voicemailAction}"${recordAttrs}>
 ${clientElements}${numberElements}
   </Dial>
 </Response>`;
@@ -292,7 +322,7 @@ ${clientElements}${numberElements}
       fallbackTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   ${consentSay}
-  <Dial${dialAnswerAttr} timeout="30" action="${statusCallbackUrl}"${recordAttrs}>
+  <Dial${dialAnswerAttr}${dialCallerIdAttr} timeout="30" action="${statusCallbackUrl}"${recordAttrs}>
 ${clientElements}${numberElements}
   </Dial>
   <Say>Sorry, no one is available to take your call right now. Please try again later.</Say>
