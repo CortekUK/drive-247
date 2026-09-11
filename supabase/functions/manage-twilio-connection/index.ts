@@ -95,11 +95,13 @@ Deno.serve(async (req) => {
           return errorResponse(`Phone number ${number.phoneNumber} does not support SMS`);
         }
 
-        // Step 3: Auto-configure inbound SMS + status callback webhooks
+        // Step 3: Auto-configure the inbound SMS webhook. Deliberately does NOT touch
+        // the number's StatusCallback: that field is the VOICE status callback, and
+        // writing an SMS URL into it clobbered whatever manage-twilio-voice `setup`
+        // had installed. SMS delivery status rides on the per-message StatusCallback.
         const smsUrl = `${supabaseUrl}/functions/v1/twilio-inbound-sms`;
-        const statusUrl = `${supabaseUrl}/functions/v1/twilio-sms-status`;
         try {
-          await configureNumberWebhooks(accountSid, authToken, number.sid, smsUrl, statusUrl);
+          await configureNumberWebhooks(accountSid, authToken, number.sid, smsUrl);
         } catch (webhookErr: any) {
           // Don't fail the whole connection — tenant can retry webhook config later
           console.warn('[Twilio] Failed to auto-configure webhooks:', webhookErr.message);
@@ -158,18 +160,35 @@ Deno.serve(async (req) => {
         if (tErr) throw tErr;
         const t = tenantData as any;
 
-        // Fetch number capabilities from Twilio if we have creds
+        // Fetch number capabilities AND the live webhook config from Twilio if we
+        // have creds. Both come from the same GET, so this costs nothing extra.
         let capabilities: { sms: boolean; voice: boolean; mms: boolean } | null = null;
+        let liveWebhooks: {
+          smsUrl: string | null;
+          smsMethod: string | null;
+          smsFallbackUrl: string | null;
+          voiceUrl: string | null;
+          statusCallback: string | null;
+        } | null = null;
         if (t?.twilio_account_sid && t?.twilio_phone_number_sid) {
           const creds = await getTenantTwilioCredentials(supabase, tenantId);
           const number = await findTenantPhoneNumber(creds.sid, creds.authToken, t.twilio_phone_number);
-          if (number) capabilities = number.capabilities;
+          if (number) {
+            capabilities = number.capabilities;
+            liveWebhooks = number.webhooks;
+          }
         }
 
         // Return masked account SID — never leak auth token to the client
         const maskedSid = t?.twilio_account_sid
           ? `${t.twilio_account_sid.substring(0, 6)}…${t.twilio_account_sid.slice(-4)}`
           : null;
+
+        // What Twilio ACTUALLY has on the number right now, plus whether it matches
+        // what we expect. The settings panel used to render hard-coded constants under
+        // the heading "we configured these on your Twilio number", so a number that had
+        // been repointed elsewhere still displayed as correctly wired.
+        const expectedSmsUrl = `${supabaseUrl}/functions/v1/twilio-inbound-sms`;
 
         return jsonResponse({
           success: true,
@@ -179,6 +198,11 @@ Deno.serve(async (req) => {
           phoneNumber: t?.twilio_phone_number || null,
           connectedAt: t?.twilio_connection_verified_at || null,
           capabilities,
+          webhooks: liveWebhooks,
+          expectedSmsUrl,
+          // null when we could not read Twilio (no creds / API error) — the UI must
+          // distinguish "mismatched" from "unknown" and not cry wolf on a network blip.
+          smsWebhookMatches: liveWebhooks ? liveWebhooks.smsUrl === expectedSmsUrl : null,
           // Legacy fields kept for frontend compatibility during migration
           hasSubaccount: !!t?.twilio_account_sid,
           hasPhoneNumber: !!t?.twilio_phone_number,

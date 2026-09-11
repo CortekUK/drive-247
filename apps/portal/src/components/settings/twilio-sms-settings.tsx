@@ -29,6 +29,7 @@ import {
   Sparkles,
   Info,
   Lightbulb,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -214,24 +215,61 @@ export function TwilioSmsSettings() {
               Webhook URLs
             </CardTitle>
             <CardDescription>
-              We configured these automatically on your Twilio number when you connected.
-              If you ever need to re-apply them manually, here they are.
+              Read live from your Twilio number. If it ever stops matching, re-apply the
+              expected URL in the Twilio console.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-2">
               <Label className="text-xs text-[#404040]">Inbound SMS (A MESSAGE COMES IN)</Label>
               <div className="flex gap-2">
-                <Input value={INBOUND_WEBHOOK_URL} readOnly className="font-mono text-xs" />
-                <CopyButton value={INBOUND_WEBHOOK_URL} />
+                {/* The live value, not the one we intended. This panel used to render a
+                    constant, so a number repointed in the Twilio console still read as
+                    correctly wired while every inbound message failed. */}
+                <Input
+                  value={status?.webhooks?.smsUrl ?? INBOUND_WEBHOOK_URL}
+                  readOnly
+                  className="font-mono text-xs"
+                />
+                <CopyButton value={status?.webhooks?.smsUrl ?? INBOUND_WEBHOOK_URL} />
               </div>
+              {status?.smsWebhookMatches === false && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/10">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="space-y-1 text-xs">
+                    <p className="font-medium text-amber-900 dark:text-amber-200">
+                      Incoming texts are not reaching this portal
+                    </p>
+                    <p className="text-amber-800 dark:text-amber-300">
+                      Your Twilio number sends incoming messages somewhere else, so they will
+                      not appear in Messages. Set &quot;A MESSAGE COMES IN&quot; to the URL below
+                      on your number in the Twilio console.
+                    </p>
+                    <p className="font-mono break-all text-amber-900 dark:text-amber-200">
+                      {status?.expectedSmsUrl ?? INBOUND_WEBHOOK_URL}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {status?.smsWebhookMatches === null && (
+                <p className="text-xs text-[#737373]">
+                  Could not reach Twilio to verify this just now — showing the expected URL.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-[#404040]">Status callback</Label>
+              <Label className="text-xs text-[#404040]">Delivery status callback</Label>
               <div className="flex gap-2">
                 <Input value={STATUS_WEBHOOK_URL} readOnly className="font-mono text-xs" />
                 <CopyButton value={STATUS_WEBHOOK_URL} />
               </div>
+              {/* Deliberately not compared against the number: an IncomingPhoneNumber has
+                  a single StatusCallback field and it belongs to VOICE. Delivery status is
+                  attached to each outgoing message instead, so there is nothing on the
+                  number to check this against. */}
+              <p className="text-xs text-[#737373]">
+                Sent with each outgoing message — not stored on your number.
+              </p>
             </div>
           </CardContent>
         </Card>

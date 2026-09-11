@@ -15,6 +15,17 @@ export interface TwilioStatus {
   phoneNumber: string | null;
   connectedAt: string | null;
   capabilities: { sms: boolean; voice: boolean; mms: boolean } | null;
+  // What Twilio ACTUALLY has on the number, read live by the edge function.
+  // null when Twilio could not be reached — that is "unknown", not "mismatched".
+  webhooks: {
+    smsUrl: string | null;
+    smsMethod: string | null;
+    smsFallbackUrl: string | null;
+    voiceUrl: string | null;
+    statusCallback: string | null;
+  } | null;
+  expectedSmsUrl?: string;
+  smsWebhookMatches: boolean | null;
   // Legacy aliases kept for other components that still read these
   hasSubaccount: boolean;
   hasPhoneNumber: boolean;

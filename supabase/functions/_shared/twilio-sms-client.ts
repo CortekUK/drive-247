@@ -125,7 +125,18 @@ export async function findTenantPhoneNumber(
   accountSid: string,
   authToken: string,
   phoneNumber: string
-): Promise<{ sid: string; phoneNumber: string; capabilities: { sms: boolean; voice: boolean; mms: boolean } } | null> {
+): Promise<{
+  sid: string;
+  phoneNumber: string;
+  capabilities: { sms: boolean; voice: boolean; mms: boolean };
+  webhooks: {
+    smsUrl: string | null;
+    smsMethod: string | null;
+    smsFallbackUrl: string | null;
+    voiceUrl: string | null;
+    statusCallback: string | null;
+  };
+} | null> {
   try {
     const normalized = normalizePhoneNumber(phoneNumber);
     const url = `${TWILIO_API_BASE}/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(normalized)}`;
@@ -139,6 +150,16 @@ export async function findTenantPhoneNumber(
         sms: first.capabilities?.sms ?? false,
         voice: first.capabilities?.voice ?? false,
         mms: first.capabilities?.mms ?? false,
+      },
+      // What Twilio actually has right now — the portal previously displayed the
+      // URLs it MEANT to set, under the heading "we configured these on your
+      // number", so a number repointed in the Twilio console still read as healthy.
+      webhooks: {
+        smsUrl: first.sms_url || null,
+        smsMethod: first.sms_method || null,
+        smsFallbackUrl: first.sms_fallback_url || null,
+        voiceUrl: first.voice_url || null,
+        statusCallback: first.status_callback || null,
       },
     };
   } catch (err: any) {
@@ -155,16 +176,22 @@ export async function configureNumberWebhooks(
   accountSid: string,
   authToken: string,
   phoneNumberSid: string,
-  smsUrl: string,
-  statusCallbackUrl: string
+  smsUrl: string
 ): Promise<void> {
   const url = `${TWILIO_API_BASE}/Accounts/${accountSid}/IncomingPhoneNumbers/${phoneNumberSid}.json`;
 
+  // Only SMS fields. An IncomingPhoneNumber has exactly ONE `StatusCallback`, and it
+  // is the VOICE one — there is no per-number SMS status callback. This used to write
+  // the twilio-sms-status URL into it, which silently clobbered the voice status
+  // callback that manage-twilio-voice `setup` installs. The damage was invisible:
+  // voice status events would POST to the SMS handler, so call_logs rows would never
+  // leave 'ringing' and the operator's call history would quietly stop updating.
+  // Whether a tenant was broken came down to whether they ran `connect` or voice
+  // `setup` last. SMS delivery status is already reported per-message via the
+  // StatusCallback set in sendSms below, which is the correct mechanism.
   await twilioFetch(url, accountSid, authToken, 'POST', {
     SmsUrl: smsUrl,
     SmsMethod: 'POST',
-    StatusCallback: statusCallbackUrl,
-    StatusCallbackMethod: 'POST',
   });
 }
 
