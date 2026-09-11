@@ -1324,7 +1324,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/types.ts": {
-    "sha": "d7fbe08c6e3556028229ddbcc43d2370c066819297866a84cb372039880069fd",
+    "sha": "5727790b0e961dd755486c47f3afc2190bcc8b682d180e2072639457269316ef",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/integrations/supabase/client.ts": {
@@ -3352,7 +3352,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/LinkUnknownThreadDialog.tsx": {
-    "sha": "f33de20cb5fc6114f7f12dd9b51cc9c60c59cd709a522e0b327f82fe275d5946",
+    "sha": "008df006471ff5c0b396d2377ed74c7ab299e456ca6ae05ff5a8c75443b1763f",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/chat/CustomerChatInput.tsx": {
@@ -3820,7 +3820,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/messages-v2/conversation-rail.tsx": {
-    "sha": "72e6a33b13c87e5d98e8904145ca336866f3b2e51c657b907d8f42dbda7237e2",
+    "sha": "f3f887bf0fab11399585d974a794b3198853757c5a16b307777c1c61faca97ee",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/automations/automation-flow-canvas.tsx": {
@@ -5700,7 +5700,7 @@
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/types.ts": {
-    "sha": "d7fbe08c6e3556028229ddbcc43d2370c066819297866a84cb372039880069fd",
+    "sha": "5727790b0e961dd755486c47f3afc2190bcc8b682d180e2072639457269316ef",
     "unit": "booking"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/booking/src/integrations/supabase/client.ts": {
@@ -6852,7 +6852,7 @@
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/admin/src/integrations/supabase/types.ts": {
-    "sha": "d7fbe08c6e3556028229ddbcc43d2370c066819297866a84cb372039880069fd",
+    "sha": "5727790b0e961dd755486c47f3afc2190bcc8b682d180e2072639457269316ef",
     "unit": "admin"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/web/eslint.config.mjs": {
@@ -7412,7 +7412,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-inbound-sms/index.ts": {
-    "sha": "5c977d84d66d3441935d0527376458403bf746996514ff35424ac7a85a963df1",
+    "sha": "746e693bdec09c09cd06fecf47fc73a0ce3e7ce860fe98964a0d3d004f37df00",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-connect-webhook/index.ts": {
@@ -7460,7 +7460,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts": {
-    "sha": "736e56a1dfffc3db51349d1b0e3f45c763e99245508a22e694a7e845366e679b",
+    "sha": "02aaecd7c7d80226b75b0884056dc0a91204cecb620d309d6ba20f2ddf344cab",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts": {
@@ -7616,7 +7616,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-whisper/index.ts": {
-    "sha": "b7ef119ec19ec9724e7388275fb78be55764fc249698d6ab5e4caa1458f4af98",
+    "sha": "9068e7937988777a3ead1a2acd7afb2daa5cc82f9dabc7fa9b648a078fcc7c65",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-boldsign-document/index.ts": {
@@ -7956,7 +7956,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-inbound/index.ts": {
-    "sha": "b5c7e9f2d875dad52c7c13229086cc2724bcacd1b5bb0bc12d69939371c76991",
+    "sha": "86d6127f5bf783e0c95013db35e31515054427e094b766ed5433d7da0a6dc22a",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/admin-create-user/index.ts": {
@@ -8104,7 +8104,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-connect/index.ts": {
-    "sha": "e834dd36bfac0335ad520f83f3a8b71c966b39be6dca0868d4143cf03438f8b1",
+    "sha": "8f42353685816eae16da57e5e1a990c52db3887a9adfd589cbd0b95d591a86a1",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/create-additional-drivers/index.ts": {
@@ -8201,6 +8201,10 @@
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/resolve-tenant.ts": {
     "sha": "6bcf3247287094dc10ebef6c8f788fa99f4883ab536f1fe4fb9e37f5929362b4",
+    "unit": "edge-functions"
+  },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-signature.ts": {
+    "sha": "731f952a3ce30c859468296f687aceabb3e7d83ecd32a01649f1735d38a1b092",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts": {
@@ -8488,7 +8492,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-sms-status/index.ts": {
-    "sha": "5973b13f2459bcefc03eb7e67f2fdb36e84b0c7bfd31b5dcca7e128a4d3db0cc",
+    "sha": "f7852497a3e169f25f6cd935c8a9ef9800d255624a42c623c388eae00b54c839",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/stripe-oauth-callback/index.ts": {
@@ -8792,7 +8796,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-call-recording/index.ts": {
-    "sha": "04b4bbe35fd95461d0d3bffa3dd812d10acf82b24861b1f8dfe01bfa3aa0640d",
+    "sha": "0c5c12fa04f9f3af3aa3fc3e9f3a7b3d8ae4617aa72ded2986f33fdf1d4b2671",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-accrue-payg-charges/index.ts": {
@@ -8876,7 +8880,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-voice/index.ts": {
-    "sha": "20d9394136ddcf71824b533862dcae9a95d76f41d1b2ff744792c27b49297c05",
+    "sha": "0bf98d8ca6cee26de9da2062f27afcf1d3df4d88a1c4922019bc81f387edd013",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/validate-customer-invite/index.ts": {
@@ -8988,7 +8992,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-status/index.ts": {
-    "sha": "a50fb5648b159b11642c139e91f9a7feddb762240a9b49cc5feeedef5471a475",
+    "sha": "d4bc5296a58dd24fde81f32dd42732b1d91cc4b9625c931a0467acaed6b95900",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/inshur-sync-billing/index.ts": {

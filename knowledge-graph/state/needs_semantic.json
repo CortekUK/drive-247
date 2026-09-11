@@ -1,8 +1,6 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-recording-url.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-call-recording/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-voice/index.ts"
   ],
   "specs": [
     "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"

@@ -1331,7 +1331,7 @@
       "video": []
     },
     "total_files": 1322,
-    "total_words": 1529702,
+    "total_words": 1530030,
     "counts": {
       "code": 1322
     },
@@ -2964,7 +2964,7 @@
       "video": []
     },
     "total_files": 292,
-    "total_words": 295095,
+    "total_words": 295113,
     "counts": {
       "code": 292
     },
@@ -3375,7 +3375,7 @@
       "video": []
     },
     "total_files": 100,
-    "total_words": 160733,
+    "total_words": 160751,
     "counts": {
       "code": 100
     },
@@ -4005,6 +4005,7 @@
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-amount.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/resolve-tenant.ts",
+        "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-signature.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-stripe.ts",
         "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/signup-plans.ts",
@@ -4224,10 +4225,10 @@
       "image": [],
       "video": []
     },
-    "total_files": 412,
-    "total_words": 592427,
+    "total_files": 413,
+    "total_words": 594753,
     "counts": {
-      "code": 410,
+      "code": 411,
       "document": 2
     },
     "semantic_candidates": [
@@ -4431,6 +4432,7 @@
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-amount.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/deposit-hold-notify.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/resolve-tenant.ts",
+      "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-signature.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/tesla-sync-engine.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/subscription-stripe.ts",
       "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/signup-plans.ts",
