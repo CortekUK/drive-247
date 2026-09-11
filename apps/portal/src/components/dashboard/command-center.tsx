@@ -139,6 +139,9 @@ const brandMarks: Record<string, React.ReactNode> = {
   bonzah: <BonzahMark />,
   boldsign: <BoldSignMark />,
   credits: <Coins className="h-3.5 w-3.5 text-amber-400/60" />,
+  // Keyed by item id (unlike comingSoonBrands, which is keyed by icon), so a
+  // connected Twilio tenant needs an entry here or its row renders logo-less.
+  "sms-notifications": <TwilioMark />,
 };
 
 const comingSoonBrands: Record<string, React.ReactNode> = {

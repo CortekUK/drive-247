@@ -144,7 +144,10 @@ export function usePlatformStatus(): PlatformStatus {
     !!td?.boldsign_test_brand_id || !!td?.boldsign_live_brand_id;
   const hasVehicle = (extraData?.vehicleCount ?? 0) > 0;
   const hasLogo = !!td?.logo_url;
+  // Both halves matter: the flag can be true on a tenant whose number was never
+  // provisioned, and a stored number does not by itself mean SMS was switched on.
   const hasNotifications = !!td?.integration_twilio_sms;
+  const twilioConnected = hasNotifications && !!td?.twilio_phone_number;
 
   const stripeMode = td?.stripe_mode ?? "test";
   const stripeComplete = !!stripeItem?.isComplete;
@@ -383,13 +386,23 @@ export function usePlatformStatus(): PlatformStatus {
     {
       id: "sms-notifications",
       label: "Twilio SMS",
-      description: "Automated SMS alerts for your customers",
-      isComplete: false,
-      actionLabel: "Learn more",
+      // This row was hardcoded to comingSoon/isComplete:false, so a tenant with a
+      // connected number, an approved A2P campaign and SMS actually sending still
+      // read "COMING SOON" on their own dashboard. `hasNotifications` was already
+      // being computed one screen up for exactly this, and never read anywhere.
+      description: twilioConnected
+        ? `Connected · ${td?.twilio_phone_number}`
+        : "Automated SMS alerts for your customers",
+      isComplete: twilioConnected,
+      actionLabel: twilioConnected ? "Manage" : "Learn more",
+      // Same destination either way: /settings?tab=messaging renders
+      // CommunicationSettings, which owns the Twilio SMS and voice panels, and
+      // maps to the same `settings.integrations` permission key as /integrations.
       actionPath: "/settings?tab=messaging",
       priority: 20,
-      comingSoon: true,
+      comingSoon: !twilioConnected,
       icon: "twilio",
+      ...(twilioConnected ? { integrationStatus: "live" as const } : {}),
     },
     ...(cmdHidden
       ? []
