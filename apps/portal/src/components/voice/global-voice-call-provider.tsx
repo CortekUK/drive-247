@@ -38,6 +38,16 @@ export function GlobalVoiceCallProvider() {
     const normalized = (phone.startsWith('+') ? phone : `+${phone}`).replace(/[^+\d]/g, '');
     const digitsOnly = normalized.replace('+', '');
 
+    // A withheld caller ('Unknown', 'anonymous') normalizes to zero digits, and the
+    // fuzzy pass below tests stored.endsWith(digitsOnly) — which is TRUE for every
+    // customer when digitsOnly is ''. Without this guard the first row in the table
+    // wins and the call is labelled with an arbitrary real person's name. Seven is
+    // the shortest subscriber number that can identify anyone; below that, don't guess.
+    if (digitsOnly.length < 7) {
+      setCallerName(null);
+      return;
+    }
+
     async function lookupCustomer() {
       // Try exact match first
       const { data: customers } = await supabase
