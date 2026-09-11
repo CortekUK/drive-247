@@ -401,11 +401,40 @@ Deno.serve(async (req) => {
           .in('role', ['head_admin', 'admin', 'manager', 'ops'])
           .eq('is_active', true);
 
+        // twilio_voice_webhook_configured is a stored boolean written at setup time. It
+        // records what we once did, not what Twilio has now, so a number repointed in
+        // the Twilio console kept showing a green "Webhook Configured" tick while every
+        // call failed — which is exactly how the SMS webhook broke unnoticed for three
+        // months. Check the live value instead, and fall back to the stored flag only
+        // when Twilio cannot be reached, so a transient blip is not shown as a fault.
+        const expectedVoiceUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-voice-inbound`;
+        let liveVoiceUrl: string | null = null;
+        let voiceWebhookMatches: boolean | null = null;
+        if (tenant.twilio_phone_number) {
+          try {
+            const creds = await getTenantTwilioCredentials(supabase, tenantId);
+            const numData = await twilioFetch(
+              `${TWILIO_API_BASE}/Accounts/${creds.sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(tenant.twilio_phone_number)}`,
+              creds.sid, creds.authToken, 'GET',
+            );
+            const n = numData?.incoming_phone_numbers?.[0];
+            if (n) {
+              liveVoiceUrl = n.voice_url || null;
+              voiceWebhookMatches = liveVoiceUrl === expectedVoiceUrl;
+            }
+          } catch (err: any) {
+            console.warn('[manage-twilio-voice] Could not read live voice webhook:', err?.message);
+          }
+        }
+
         return jsonResponse({
           voiceEnabled: tenant.twilio_voice_enabled || false,
           twimlAppSid: tenant.twilio_twiml_app_sid || null,
           apiKeyConfigured: !!tenant.twilio_api_key_sid,
-          webhookConfigured: tenant.twilio_voice_webhook_configured || false,
+          webhookConfigured: voiceWebhookMatches ?? (tenant.twilio_voice_webhook_configured || false),
+          voiceWebhookMatches,
+          liveVoiceUrl,
+          expectedVoiceUrl,
           phoneNumber: tenant.twilio_phone_number || null,
           callForwardingEnabled: tenant.call_forwarding_enabled || false,
           voicemailEnabled: tenant.voicemail_enabled || false,
