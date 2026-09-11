@@ -2620,7 +2620,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/twilio-sms-settings.tsx": {
-    "sha": "f423cd6a4f10b72be009a43e2deb32bc5f30d9b6b2d5670aeabeb3ccd8567b84",
+    "sha": "6d76decd9ced2606519db6c87043b0384063993f2525d57147a56bc8b012e208",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/settings/accounting-backfill-wizard.tsx": {
@@ -3196,7 +3196,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/command-center.tsx": {
-    "sha": "234986cb99485bf204fb7fd34058e6306798eaf9fa76d7caa75d12cfebf78028",
+    "sha": "b3cd38320ac0cb74c88e9e7ab376d1a3467fea762dc2054d6987b835c2c8155a",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/dashboard/bonzah-balance-widget.tsx": {
@@ -3248,7 +3248,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/voice/global-voice-call-provider.tsx": {
-    "sha": "7b00dac8e35739b767a955ce60e89ab3a5afa1e5de10dc907d03821f5951030d",
+    "sha": "0312910e796740b62aac9153e1e631ff0fdb3b3d14e9cc77e7ad107233f3bda4",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/components/insurance/ai-scan-progress.tsx": {
@@ -4292,7 +4292,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-twilio-sms.ts": {
-    "sha": "6b709258cf4a59bd310cfe22ce5ea0deb2c3bdc455d30a0a258d682521025e5b",
+    "sha": "7ea3c1dab3d1fc8ae317b3397fb791f9ab8595ca9f0fe4dd7851119b706399a9",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-whatsapp-meta.ts": {
@@ -4796,7 +4796,7 @@
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-platform-status.ts": {
-    "sha": "6a616ae8f9b5ad39e9a0ab25eba48176d739557e0786d61f6120b464c04a1c68",
+    "sha": "cf1c099ef34a0c33f55303d85d341fbae9fe5484444f5c23e9883a2984aaec27",
     "unit": "portal"
   },
   "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/migration-view.ts": {
@@ -7460,7 +7460,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts": {
-    "sha": "a2b5736704f5f538b5096d2c37b6a822b39269d4789bacb5e2304568bfedb624",
+    "sha": "736e56a1dfffc3db51349d1b0e3f45c763e99245508a22e694a7e845366e679b",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/audit-uk-connect-balances/index.ts": {
@@ -8028,7 +8028,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/diag-twilio-voice/index.ts": {
-    "sha": "555c476b6e5e68b50325da2e4c63580961a1c8cc53b2a9714f414226635cb37b",
+    "sha": "3693cb070e1556dd4d6e32a65b95bb5a4642be3ade14cf0040238ad30507ed15",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/boldsign-webhook/index.ts": {
@@ -8235,6 +8235,10 @@
     "sha": "c438d34a75a89ef39d58726fb5f891f943f0de665e19f051b6e1fbeb64246439",
     "unit": "edge-functions"
   },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-recording-url.ts": {
+    "sha": "cd766eb5477f58c1e20613c1416b3c879f98136898d750d6cceb12c531b22f67",
+    "unit": "edge-functions"
+  },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/lean-tenants.ts": {
     "sha": "40d15fead8b866f4086ed834b6de19c7fcf33b4ede668360b68e431eb5ccf515",
     "unit": "edge-functions"
@@ -8288,7 +8292,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-sms-client.ts": {
-    "sha": "071f23bf817cd47ea1230d1f01bffdb9862181300eb024eda4c9cccd0474e220",
+    "sha": "e5c881c4db2d6ad9da9ba75b75bd61f4667fc88bd280f15fdc89e0824360ccca",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/inshur-client.ts": {
@@ -8547,6 +8551,10 @@
     "sha": "fa6e0aa86f5d776775882cb56264bc91d54f40d4dc1f3ea79b9181b6e1dfda32",
     "unit": "edge-functions"
   },
+  "/home/haseeb-raza/Desktop/drive-247/supabase/functions/ops-twilio-repoint-sms/index.ts": {
+    "sha": "0f7a0f60ae958049856a05a3837021d8fe42420441c8f457a4f37803b1e3956e",
+    "unit": "edge-functions"
+  },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/send-sms-message/index.ts": {
     "sha": "a34dbcfd75019ddad7a339136628c218eda97372ad671b4d0fafe7aeecff51b6",
     "unit": "edge-functions"
@@ -8784,7 +8792,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-call-recording/index.ts": {
-    "sha": "ea12b9d8b1b71f4f2a066544dea1f0f0ef26f430945104fc2f210242aa67f4f6",
+    "sha": "04b4bbe35fd95461d0d3bffa3dd812d10acf82b24861b1f8dfe01bfa3aa0640d",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/sandbox-accrue-payg-charges/index.ts": {
@@ -8884,7 +8892,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/diag-twilio-a2p/index.ts": {
-    "sha": "f4b8f7b4b4315dadcd7ead5ec8637883a0c79728749bb4b41204df23c8104078",
+    "sha": "a0c5a6585e45055c8d266287418f45cfd39237e2b75ce75f2df531b46bc6cd67",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/simulate-payg-days/index.ts": {
@@ -8952,7 +8960,7 @@
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/manage-twilio-connection/index.ts": {
-    "sha": "da71f7c432e20e9dc69b9dd2e700eefb2f827c9fcea1593ae9c4f13a784bce0e",
+    "sha": "a6bca0778b0e3cf3ed527be75e56bb6b0f57aed8877ae750c166ad162ae7ee9e",
     "unit": "edge-functions"
   },
   "/home/haseeb-raza/Desktop/drive-247/supabase/functions/get-square-payment-request/index.ts": {

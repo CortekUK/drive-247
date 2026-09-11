@@ -1,14 +1,11 @@
 {
   "files": [
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/diag-twilio-voice/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/diag-resend-delivery/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/diag-twilio-a2p/index.ts",
-    "/home/haseeb-raza/Desktop/drive-247/apps/portal/src/hooks/use-voice-call.ts",
-    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voice-inbound/index.ts"
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/_shared/twilio-recording-url.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/twilio-voicemail-handler/index.ts",
+    "/home/haseeb-raza/Desktop/drive-247/supabase/functions/process-call-recording/index.ts"
   ],
   "specs": [
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json",
-    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/portal-inc-001.json"
+    "/home/haseeb-raza/Desktop/drive-247/knowledge-graph/state/chunks_incremental/edge-functions-inc-001.json"
   ],
   "note": "Run the semantic agent stage over these specs, then `kg assemble && kg merge`."
 }
