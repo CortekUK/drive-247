@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByAccountSid } from '../_shared/twilio-signature.ts';
 
 Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -20,6 +21,17 @@ Deno.serve(async (req) => {
     const messageStatus = formData.get('MessageStatus') as string;
     const errorCode = formData.get('ErrorCode') as string | null;
     const errorMessage = formData.get('ErrorMessage') as string | null;
+
+    // Forged status callbacks could mark failed messages delivered (or the reverse),
+    // which is what the operator trusts when deciding whether a customer was reached.
+    if (await twilioSignatureGate(
+      req,
+      await tenantTokenByAccountSid(supabase, formData.get('AccountSid') as string | null),
+      formDataToParams(formData),
+      'twilio-sms-status',
+    )) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     if (!messageSid || !messageStatus) {
       return new Response('OK', { status: 200 });

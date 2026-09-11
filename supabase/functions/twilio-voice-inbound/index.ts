@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams } from '../_shared/twilio-signature.ts';
 
 /**
  * twilio-voice-inbound
@@ -44,7 +45,20 @@ Deno.serve(async (req) => {
 
     // Preview mode: dev-panel "Test Call Forwarding" tool posts Preview=1 to render the
     // exact TwiML this function would return WITHOUT logging a call or ringing anyone.
-    const isPreview = formData.get('Preview') === '1';
+    // Preview renders the TwiML without logging or ringing, for the portal's
+    // "test call forwarding" tool. It carries no Twilio signature, so it is gated on
+    // the service-role key instead — which only another edge function has. Before
+    // this, an unauthenticated Preview=1 naming a tenant's PUBLIC business number
+    // returned that tenant's forwarding number (an owner's personal mobile), its
+    // tenant UUID and every staff user id.
+    const previewRequested = formData.get('Preview') === '1';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const bearer = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const isPreview = previewRequested && !!serviceRoleKey && bearer === serviceRoleKey;
+    if (previewRequested && !isPreview) {
+      console.error('[twilio-voice-inbound] Preview requested without the service-role key — refusing');
+      return new Response('Forbidden', { status: 403 });
+    }
     const previewCallerName = (formData.get('PreviewCallerName') as string) || '';
 
     console.log(`[twilio-voice-inbound] CallSid=${callSid} From=${from} To=${to}${isPreview ? ' (PREVIEW)' : ''}`);
@@ -61,7 +75,7 @@ Deno.serve(async (req) => {
 
     const { data: directMatch } = await supabase
       .from('tenants')
-      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode')
+      .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode, twilio_auth_token')
       .eq('twilio_phone_number', to)
       .eq('twilio_voice_enabled', true)
       .single();
@@ -73,7 +87,7 @@ Deno.serve(async (req) => {
       const altTo = to.startsWith('+') ? to.substring(1) : `+${to}`;
       const { data: altMatch } = await supabase
         .from('tenants')
-        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode')
+        .select('id, company_name, call_forwarding_enabled, voicemail_enabled, voicemail_greeting_url, forwarding_number, call_recording_enabled, forwarding_caller_id_mode, twilio_auth_token')
         .eq('twilio_phone_number', altTo)
         .eq('twilio_voice_enabled', true)
         .single();
@@ -86,6 +100,19 @@ Deno.serve(async (req) => {
       return twimlResponse(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>This number is not configured to receive calls.</Say></Response>'
       );
+    }
+
+    // Verify the request really came from Twilio before acting on it. Done after the
+    // tenant lookup because the signing key is that tenant's own auth token. Preview
+    // is already proven by the service-role key above and carries no signature.
+    if (!isPreview) {
+      const reject = await twilioSignatureGate(
+        req,
+        (tenant as any).twilio_auth_token,
+        formDataToParams(formData),
+        'twilio-voice-inbound',
+      );
+      if (reject) return new Response('Forbidden', { status: 403 });
     }
 
     // Step 2: Match customer by From number

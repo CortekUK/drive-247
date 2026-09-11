@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors, jsonResponse } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByAccountSid } from '../_shared/twilio-signature.ts';
 
 // TwiML empty response to acknowledge receipt
 const twimlResponse = () =>
@@ -30,6 +31,18 @@ Deno.serve(async (req) => {
     const body = formData.get('Body') as string;
     const messageSid = formData.get('MessageSid') as string;
     const accountSid = formData.get('AccountSid') as string;
+
+    // Verify the callback is genuinely Twilio's before writing a customer message.
+    // Without this anyone who knows the URL could fabricate inbound texts in an
+    // operator's inbox, from any number they choose.
+    if (await twilioSignatureGate(
+      req,
+      await tenantTokenByAccountSid(supabase, accountSid),
+      formDataToParams(formData),
+      'twilio-inbound-sms',
+    )) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     if (!from || !to || !messageSid) {
       console.error('[twilio-inbound-sms] Missing required fields:', { from, to, messageSid });

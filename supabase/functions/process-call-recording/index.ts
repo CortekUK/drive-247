@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { isValidTwilioRecordingUrl } from '../_shared/twilio-recording-url.ts';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByTenantId } from '../_shared/twilio-signature.ts';
 import { chatCompletion, logExternalUsage } from '../_shared/openai.ts';
 
 /**
@@ -68,6 +69,18 @@ Deno.serve(async (req) => {
       .select('twilio_account_sid, twilio_auth_token')
       .eq('id', callLog.tenant_id)
       .single();
+
+    // Signature first: proves Twilio sent this at all. The URL pin below stays as a
+    // second layer, because a valid signature still does not make an arbitrary
+    // RecordingUrl safe to fetch with credentials attached.
+    if (await twilioSignatureGate(
+      req,
+      await tenantTokenByTenantId(supabase, callLog.tenant_id),
+      formDataToParams(formData),
+      'process-call-recording',
+    )) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     // RecordingUrl is attacker-controllable on this verify_jwt=false endpoint and the
     // download below carries the tenant's Twilio auth token. Pin it to a Twilio

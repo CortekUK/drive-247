@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByAccountSid, tenantTokenByCallSid } from '../_shared/twilio-signature.ts';
 
 /**
  * twilio-voice-status
@@ -44,6 +45,17 @@ Deno.serve(async (req) => {
     const timestamp = formData.get('Timestamp') as string;
 
     console.log(`[twilio-voice-status] CallSid=${callSid} Status=${callStatus} Duration=${callDuration || 'n/a'}`);
+
+    // Child <Number>/<Client> legs of a <Dial> are signed with the same account
+    // token; AccountSid is on every voice callback, with CallSid as the fallback.
+    if (await twilioSignatureGate(
+      req,
+      (await tenantTokenByAccountSid(supabase, accountSid)) ?? (await tenantTokenByCallSid(supabase, callSid)),
+      formDataToParams(formData),
+      'twilio-voice-status',
+    )) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     if (!callSid || !callStatus) {
       console.error('[twilio-voice-status] Missing CallSid or CallStatus');

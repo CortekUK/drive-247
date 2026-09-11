@@ -1,4 +1,6 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByAccountSid } from '../_shared/twilio-signature.ts';
 
 /**
  * twilio-voice-whisper
@@ -55,6 +57,26 @@ Deno.serve(async (req) => {
 
   try {
     const url = new URL(req.url);
+
+    // Twilio fetches this as the `url` on <Number> when the staff phone answers, and
+    // as the Url of the dev-panel test call — both are POSTs it signs. Verify before
+    // speaking, so the announcement cannot be driven by anyone with the link.
+    if (req.method === 'POST') {
+      const formData = await req.formData();
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      );
+      if (await twilioSignatureGate(
+        req,
+        await tenantTokenByAccountSid(supabase, formData.get('AccountSid') as string | null),
+        formDataToParams(formData),
+        'twilio-voice-whisper',
+      )) {
+        return new Response('Forbidden', { status: 403 });
+      }
+    }
+
     const rawName = (url.searchParams.get('name') || '').trim();
     const isTest = url.searchParams.get('test') === '1';
     const spokenName = rawName ? escapeXml(rawName) : 'an unknown number';

@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByAccountSid } from '../_shared/twilio-signature.ts';
 
 /**
  * twilio-voice-connect
@@ -50,6 +51,15 @@ Deno.serve(async (req) => {
     if (!to) {
       console.error('[twilio-voice-connect] Missing To parameter');
       return twimlError('No phone number specified.');
+    }
+
+    if (await twilioSignatureGate(
+      req,
+      await tenantTokenByAccountSid(supabase, accountSid),
+      formDataToParams(formData),
+      'twilio-voice-connect',
+    )) {
+      return new Response('Forbidden', { status: 403 });
     }
 
     if (!accountSid) {

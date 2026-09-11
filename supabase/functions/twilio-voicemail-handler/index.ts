@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { isValidTwilioRecordingUrl } from '../_shared/twilio-recording-url.ts';
 import { handleCors } from '../_shared/cors.ts';
+import { twilioSignatureGate, formDataToParams, tenantTokenByTenantId } from '../_shared/twilio-signature.ts';
 
 /**
  * twilio-voicemail-handler
@@ -53,6 +54,19 @@ Deno.serve(async (req) => {
     const recordingUrl = formData.get('RecordingUrl') as string | null;
     const recordingSid = formData.get('RecordingSid') as string | null;
     const recordingDuration = formData.get('RecordingDuration') as string | null;
+
+    // tenantId arrives in the QUERY STRING, so it is attacker-chosen. The signature
+    // covers the full URL including that query string, so a valid signature proves
+    // Twilio itself built this URL for this tenant — which is what makes the
+    // tenantId trustworthy enough to look credentials up with.
+    if (await twilioSignatureGate(
+      req,
+      await tenantTokenByTenantId(supabase, tenantId),
+      formDataToParams(formData),
+      'twilio-voicemail-handler',
+    )) {
+      return new Response('Forbidden', { status: 403 });
+    }
 
     console.log(`[twilio-voicemail-handler] tenantId=${tenantId} callSid=${callSid} dialStatus=${dialCallStatus} recordingUrl=${recordingUrl} action=${explicitAction}`);
 

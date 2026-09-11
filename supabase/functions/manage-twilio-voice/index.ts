@@ -630,9 +630,15 @@ Deno.serve(async (req) => {
           PreviewCallerName: callerName,
         });
 
+        // Preview is gated on the service-role key in twilio-voice-inbound, because it
+        // carries no Twilio signature and would otherwise let anyone read a tenant's
+        // forwarding number and staff ids from its public business number alone.
         const resp = await fetch(`${supabaseUrl}/functions/v1/twilio-voice-inbound`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+          },
           body: form.toString(),
         });
         // twilio-voice-inbound always self-returns 200 (even its error TwiML), so a
