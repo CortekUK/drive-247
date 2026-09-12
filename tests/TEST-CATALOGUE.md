@@ -10,12 +10,12 @@ document — see the naming convention in [README.md](./README.md#naming-convent
 
 | | |
 |---|---|
-| Test files | 41 |
-| Tests | 956 |
-| Passing | 878 |
+| Test files | 47 |
+| Tests | 1087 |
+| Passing | 1009 |
 | Skipped (opt-in Layer 2) | 78 |
 | Failing | 0 |
-| Known-defect watchdogs | 75 |
+| Known-defect watchdogs | 80 |
 
 ## How to read this
 
@@ -1052,6 +1052,188 @@ SQUARE — refund idempotency, the provider seam's fail-safe direction, and the 
 - it freezes both manifests so no request handler can mutate a capability at runtime
 
 
+## `tests/integrations/square/seam-correlation.test.ts`
+
+**Layer:** L3 executable · **40 tests** (40 passing)
+
+SQUARE ADAPTER AND CLIENT — correlation, idempotency, timeouts, versioning.
+
+### correlating a Square payment back to a rental
+
+- it quick_pay carries ONLY the three fields Square documents
+- it the FULL reference reaches payment_note — no 40-char truncation
+- it order_id is returned as the column the caller must persist
+- it the returned referenceId is the full value, never a truncation
+- it buildSquarePaymentNote clamps to 500, not to 40
+
+### Square idempotency key derivation
+
+- it a TRUE retry of the same money de-duplicates
+- it a CORRECTED amount mints a new key
+- it a different currency mints a new key
+- it currency CASE is not a difference
+- it idempotencyScope separates two charges that share reference AND amount
+- it an EMPTY reference never collapses two charges into one link
+- it the key respects Square's length ceiling
+
+### Square currency handling
+
+- it checkout sends the LOCATION's currency, not the caller's casing
+- it a MISMATCH fails pre-flight, before any Square call
+- it an unknown location currency FAILS on checkout
+- it an unknown location currency FAILS on refund too — one policy
+- it refund sends the location currency and the real MAJOR-unit amount
+- it checkout and refund agree by construction on the same connection
+
+### Square client — which requests may carry an idempotency key
+
+- it /oauth2/token never receives an injected idempotency_key
+- it the whole /oauth2 namespace is idempotency-incapable
+- it money writes DO still get the idempotency_key
+- it a GET cannot express a body at all (compile-time)
+- it a cast-in GET body is dropped rather than crashing fetch
+
+### Square idempotency seed precedence
+
+- it the request-level idempotency key beats a body key
+- it a write with a key and no body still sends the key
+- it a non-object body with a key throws instead of dropping it
+
+### Square client — webhook verification fails closed
+
+- it an empty signature key returns false, it does not throw
+- it an unset/undefined key and an empty URL also fail closed
+- it a genuine signature still verifies
+
+### Square client — timeouts, rate limits and retryability
+
+- it a hung Square call is aborted at its deadline
+- it a timeout is classed retryable
+- it a 429 surfaces as a distinct retryable error honouring Retry-After
+- it a 429 with no Retry-After backs off conservatively
+- it retry-After accepts both delta-seconds and an HTTP-date
+- it a 4xx that is NOT a rate limit stays a plain SquareError
+
+### Square client — the API version pin
+
+- it a malformed version falls back instead of poisoning every call
+- it an impossible calendar date is rejected
+- it an unpublished future version warns but is NOT hard-failed
+- it a long-stale version warns
+- it the shipped pin is clean and unset falls back silently
+
+
+## `tests/integrations/square/seam-dispatch.test.ts`
+
+**Layer:** L3 executable · **25 tests** (25 passing)
+
+SQUARE SEAM — routing, guards, capabilities and dispatch.
+
+### the checkout seam — a Stripe tenant passes straight through
+
+- it a Stripe tenant is never handled by the seam
+
+### provider resolution from the tenant row
+
+- it absent provider column degrades to stripe, never square
+- it squareMode is null for stripe tenants
+
+### the Stripe guard — which tenants it refuses
+
+- it fails OPEN on an unselected column (protects Stripe at runtime)
+- it blocks only an explicit square value
+
+### query predicates that scope a read to one provider
+
+- it applyStripeOnly emits .eq(payment_provider,'stripe')
+
+### the capability manifest
+
+- it square cannot store a credential, stripe can
+- it square's tight correlation limits are recorded
+- it country gate refuses unknown country for a constrained provider
+
+### Square idempotency key derivation
+
+- it long keys sharing a prefix do NOT collide after clamping
+- it short keys pass through unchanged
+
+### Square webhook signature verification
+
+- it valid signature verifies; tampering fails
+
+### Square status mapping
+
+- it aPPROVED (authorised, uncaptured) must NOT read as Completed
+- it a Square refund starts Pending, not Completed
+
+### the checkout seam — skip results
+
+- it is handled, is a skip, and carries a machine-readable reason
+
+### adapter results served by Square
+
+- it handled with a body and no skip flag
+
+### the provider registry
+
+- it exactly one native rail, and it is stripe
+
+### Square OAuth scopes
+
+- it scope list omits the app-fee scope and never relies on the default
+
+### the checkout seam — routing and skip reasons
+
+- it a STRIPE tenant passes through, untouched
+- it a tenant-read ERROR degrades to Stripe, it does not throw
+- it a MISSING tenant row degrades to Stripe
+- it an UNKNOWN provider value degrades to Stripe, never to Square
+- it a SQUARE tenant needing a stored credential SKIPS, and does not throw
+
+### the refund seam — routing
+
+- it a STRIPE payment record passes through regardless of tenant
+- it a tenant-read error FAILS rather than silently using sandbox
+
+
+## `tests/integrations/square/seam-refund-math.test.ts`
+
+**Layer:** L3 executable · **18 tests** (18 passing)
+
+SQUARE REFUND MATHS AND RESULT SHAPE.
+
+### refund maths — the event sequence that produced a wrong total
+
+- it the real 7-event sequence yields £20, not £50
+
+### assorted seam behaviour
+
+- it matches Square's own refunded_money for that payment
+- it the £120 payment (two refunds, £40 + £80) totals £120
+- it rEJECTED and FAILED refunds are excluded — no money moved
+- it a refund that goes PENDING then REJECTED unwinds to zero
+- it events for OTHER payments are never counted
+- it returns null when nothing countable exists — caller must not guess
+- it status and remaining are derived from the corrected total, never stale
+- it over-refund cannot drive remaining negative
+- it payments row has no amount_cents and no currency — guard against regression
+- it majorToMinorUnits converts dollars to cents
+- it majorToMinorUnits rounds — a bare multiply produces a non-integer Square rejects
+- it majorToMinorUnits accepts numeric strings (PostgREST returns numeric as string)
+- it majorToMinorUnits returns null rather than NaN for junk
+- it reading the OLD column name yields null — the exact bug, now pinned
+- it a full refund resolves an amount from the real row (no silent skip)
+
+### refund maths — order independence
+
+- it any permutation gives the same total
+
+### refund maths — replay safety
+
+- it replaying the same event 50 times does not inflate
+
+
 ## `tests/integrations/stripe/charge-capture.test.ts`
 
 **Layer:** L2 live, L1 contract, L3 executable · **83 tests** (80 passing, 3 skipped, 19 watchdog)
@@ -1402,6 +1584,55 @@ SQUARE — refund idempotency, the provider seam's fail-safe direction, and the 
 - it live: a full refund against a test-mode charge returns 200 and records one ledger row — skipped
 
 
+## `tests/integrations/stripe/subscription-and-credits.test.ts`
+
+**Layer:** L1 contract · **22 tests** (22 passing, 1 watchdog)
+
+STRIPE — SUBSCRIPTIONS AND CREDITS. Layer 1, offline.
+
+### subscription webhook — the lifecycle events it handles
+
+*Use case: A subscription lifecycle event that is silently dropped leaves the tenant's access state wrong in one direction or the other — either a paying tenant is locked out, or a cancelled one keeps full access indefinitely.*
+
+- it acts on checkout.session.completed rather than ignoring it
+- it acts on customer.subscription.created rather than ignoring it
+- it acts on customer.subscription.updated rather than ignoring it
+- it acts on customer.subscription.deleted rather than ignoring it
+- it acts on invoice.paid rather than ignoring it
+- it acts on invoice.payment_failed rather than ignoring it
+- it acts on invoice.voided rather than ignoring it
+- it acts on invoice.marked_uncollectible rather than ignoring it
+- it acts on invoice.deleted rather than ignoring it
+- it covers both directions of failure, not just the happy path
+- it runs with verify_jwt off, so its signature check is the only gate
+
+### subscription trials
+
+*Use case: A trial that is set wrong either bills a tenant on day one of a free trial, or gives away a month. Stripe rejects trial_period_days:0 with a 400, so the zero case is a real branch and not a hypothetical.*
+
+- it passes Stripe an exact trial_end timestamp rather than a day count
+- it sends neither trial key when the plan has no trial, because Stripe rejects zero
+
+### subscription plans — where the price comes from
+
+*Use case: Plan amounts must come from the plan record, never from the caller. This is the same class of hole found on the rental checkout rail, and here it is closed — worth pinning so it stays closed.*
+
+- it creates a real Stripe Product and Price when a plan is configured
+- it creates a replacement Price rather than mutating one, because Prices are immutable
+
+### credits — which do involve Stripe Products, contrary to my earlier report
+
+*Use case: The team lead named credits explicitly. Every purchase mints new Stripe objects, and a retry mints another set plus another payable session — the same missing-idempotency shape found across the rental checkout rail.*
+
+- it creates a one-time Stripe Price for the exact credit amount
+- it names the product after the credit quantity so it is identifiable in Stripe
+- it buys credits as a one-time payment, never as a recurring subscription
+- it carries the credit quantity in session metadata so the webhook can grant it
+- it mints a brand-new Price and Product on every single purchase, reusing nothing
+- it passes no idempotency key, so a retried purchase mints a second payable session
+- it should make a repeated credit purchase idempotent — ⚠ watchdog
+
+
 ## `tests/integrations/stripe/webhook.test.ts`
 
 **Layer:** L2 live, L1 contract, L3 executable · **69 tests** (68 passing, 1 skipped, 16 watchdog)
@@ -1516,6 +1747,44 @@ SQUARE — refund idempotency, the provider seam's fail-safe direction, and the 
 - it abandons its deposit-hold sync well inside Stripe's acknowledgement budget
 - it PINS TODAY'S BEHAVIOUR: that budget is a hand-typed literal, where the Square rail derives its own from the manifest
 - it derives the Stripe hold-sync budget from the capability manifest rather than typing it twice — ⚠ watchdog
+
+
+## `tests/integrations/webhooks/health.test.ts`
+
+**Layer:** L1 contract · **16 tests** (16 passing, 3 watchdog)
+
+WEBHOOK HEALTH AND SENDER VERIFICATION — every platform we receive from. Layer 1, offline.
+
+### sender verification — every money webhook authenticates who sent it
+
+*Use case: A webhook that believes an unsigned request is a write primitive for anyone who learns the URL — and every one of these runs with verify_jwt off, so the signature is the ONLY thing standing between a stranger and the database.*
+
+- it verifies the sender's signature before trusting anything in stripe-webhook-test
+- it verifies the sender's signature before trusting anything in stripe-webhook-live
+- it verifies the sender's signature before trusting anything in stripe-connect-webhook
+- it verifies the sender's signature before trusting anything in square-webhook
+- it verifies the sender's signature before trusting anything in subscription-webhook
+- it runs every one of them with verify_jwt off, which is why the signature is load-bearing
+- it accepts anything at all on the BoldSign webhook, which holds the service-role key
+- it should verify the BoldSign sender before writing agreement state — ⚠ watchdog
+
+### observability — whether a platform's webhook health can be seen at all
+
+*Use case: This is the gap the team lead named. If Stripe stops delivering, or we start 500ing on every event, nothing anywhere goes red — the rentals simply stop being marked paid and the first person to notice is a customer.*
+
+- it records received events for Square, which is the one platform that does
+- it records nothing for any Stripe webhook, including the ones carrying rental money
+- it records nothing for BoldSign or the subscription webhook either
+- it should track delivery health separately for every platform we receive from — ⚠ watchdog
+- it has no CREATE TABLE for square_webhook_events in the migrations at all
+
+### the documented unauthenticated surface versus the real one
+
+*Use case: CLAUDE.md is what a new engineer threat-models from. Understating the unauthenticated surface by a factor of seven means the endpoints that most need scrutiny are the ones nobody knows to look at.*
+
+- it registers dozens of functions as verify_jwt = false, not the handful documented
+- it still tells the reader there are ten of them
+- it should state the real count of unauthenticated functions — ⚠ watchdog
 
 
 ## `tests/spine/onboarding/01-plan-select.test.ts`
@@ -1858,4 +2127,36 @@ THE SPINE'S EMAIL AND NOTIFICATION STEP — Layer 1, offline, source-of-record.
 
 - it dispatches the operator email fire-and-forget, so a dead function cannot block the insert
 - it reports success from aws-ses-email even when no message was sent
+
+
+## `tests/spine/rental/06-agreement.test.ts`
+
+**Layer:** L1 contract · **10 tests** (10 passing, 1 watchdog)
+
+THE SPINE'S AGREEMENT STEP, and the sync back from the processor. Layer 1, offline.
+
+### the agreement records which mode it was created under
+
+*Use case: A document created in test mode but fetched with the live API key returns nothing, so the signed agreement silently never arrives. The mode must travel with the record, not be re-derived from whatever the tenant is set to now.*
+
+- it reads the tenant's BoldSign mode and brand when the document is created
+- it resolves the mode from the agreement first, then the rental, then the tenant
+- it defaults to test rather than live when nothing records a mode
+- it selects boldsign_mode on every rental and agreement read in the webhook
+
+### the automation send path reports email delivery it never measured
+
+*Use case: The operator sees a green "sent" for an email nobody received, so nobody chases the signature and the rental stalls with an unsigned agreement.*
+
+- it tells BoldSign not to email the signer, because we send that mail ourselves
+- it returns a hardcoded emailSent:true without invoking send-signing-email
+- it should measure the signing email like the other two send paths do — ⚠ watchdog
+
+### the sync back — what the rental may believe before the processor confirms
+
+*Use case: The rental's payment state must come from the processor confirming settlement, never from us having asked for it. Anything that writes "paid" before the webhook lands turns an abandoned checkout into a free rental.*
+
+- it promotes the payment to Completed only when the settlement event arrives
+- it treats the expiry event as a distinct outcome from a completed one
+- it never lets a Square submission response stand in for settlement
 

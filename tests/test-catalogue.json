@@ -1,10 +1,10 @@
 {
   "totals": {
-    "total": 956,
-    "passed": 878,
+    "total": 1087,
+    "passed": 1009,
     "skipped": 78,
     "failed": 0,
-    "watchdogs": 75
+    "watchdogs": 80
   },
   "files": [
     {
@@ -3770,6 +3770,625 @@
       }
     },
     {
+      "file": "tests/integrations/square/seam-correlation.test.ts",
+      "purpose": "SQUARE ADAPTER AND CLIENT — correlation, idempotency, timeouts, versioning.",
+      "layers": [
+        "L3 executable"
+      ],
+      "blocks": [
+        {
+          "describe": "correlating a Square payment back to a rental",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "quick_pay carries ONLY the three fields Square documents",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "the FULL reference reaches payment_note — no 40-char truncation",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "order_id is returned as the column the caller must persist",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "the returned referenceId is the full value, never a truncation",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "buildSquarePaymentNote clamps to 500, not to 40",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square idempotency key derivation",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "a TRUE retry of the same money de-duplicates",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a CORRECTED amount mints a new key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a different currency mints a new key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "currency CASE is not a difference",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "idempotencyScope separates two charges that share reference AND amount",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an EMPTY reference never collapses two charges into one link",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "the key respects Square's length ceiling",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square currency handling",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "checkout sends the LOCATION's currency, not the caller's casing",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a MISMATCH fails pre-flight, before any Square call",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an unknown location currency FAILS on checkout",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an unknown location currency FAILS on refund too — one policy",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "refund sends the location currency and the real MAJOR-unit amount",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "checkout and refund agree by construction on the same connection",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square client — which requests may carry an idempotency key",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "/oauth2/token never receives an injected idempotency_key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "the whole /oauth2 namespace is idempotency-incapable",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "money writes DO still get the idempotency_key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a GET cannot express a body at all (compile-time)",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a cast-in GET body is dropped rather than crashing fetch",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square idempotency seed precedence",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "the request-level idempotency key beats a body key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a write with a key and no body still sends the key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a non-object body with a key throws instead of dropping it",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square client — webhook verification fails closed",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "an empty signature key returns false, it does not throw",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an unset/undefined key and an empty URL also fail closed",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a genuine signature still verifies",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square client — timeouts, rate limits and retryability",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "a hung Square call is aborted at its deadline",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a timeout is classed retryable",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a 429 surfaces as a distinct retryable error honouring Retry-After",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a 429 with no Retry-After backs off conservatively",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "retry-After accepts both delta-seconds and an HTTP-date",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a 4xx that is NOT a rate limit stays a plain SquareError",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square client — the API version pin",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "a malformed version falls back instead of poisoning every call",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an impossible calendar date is rejected",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an unpublished future version warns but is NOT hard-failed",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a long-stale version warns",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "the shipped pin is clean and unset falls back silently",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 40,
+        "passed": 40,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 0
+      }
+    },
+    {
+      "file": "tests/integrations/square/seam-dispatch.test.ts",
+      "purpose": "SQUARE SEAM — routing, guards, capabilities and dispatch.",
+      "layers": [
+        "L3 executable"
+      ],
+      "blocks": [
+        {
+          "describe": "the checkout seam — a Stripe tenant passes straight through",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "a Stripe tenant is never handled by the seam",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "provider resolution from the tenant row",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "absent provider column degrades to stripe, never square",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "squareMode is null for stripe tenants",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the Stripe guard — which tenants it refuses",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "fails OPEN on an unselected column (protects Stripe at runtime)",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "blocks only an explicit square value",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "query predicates that scope a read to one provider",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "applyStripeOnly emits .eq(payment_provider,'stripe')",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the capability manifest",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "square cannot store a credential, stripe can",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "square's tight correlation limits are recorded",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "country gate refuses unknown country for a constrained provider",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square idempotency key derivation",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "long keys sharing a prefix do NOT collide after clamping",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "short keys pass through unchanged",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square webhook signature verification",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "valid signature verifies; tampering fails",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square status mapping",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "aPPROVED (authorised, uncaptured) must NOT read as Completed",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a Square refund starts Pending, not Completed",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the checkout seam — skip results",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "is handled, is a skip, and carries a machine-readable reason",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "adapter results served by Square",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "handled with a body and no skip flag",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the provider registry",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "exactly one native rail, and it is stripe",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "Square OAuth scopes",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "scope list omits the app-fee scope and never relies on the default",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the checkout seam — routing and skip reasons",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "a STRIPE tenant passes through, untouched",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a tenant-read ERROR degrades to Stripe, it does not throw",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a MISSING tenant row degrades to Stripe",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "an UNKNOWN provider value degrades to Stripe, never to Square",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a SQUARE tenant needing a stored credential SKIPS, and does not throw",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the refund seam — routing",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "a STRIPE payment record passes through regardless of tenant",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a tenant-read error FAILS rather than silently using sandbox",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 25,
+        "passed": 25,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 0
+      }
+    },
+    {
+      "file": "tests/integrations/square/seam-refund-math.test.ts",
+      "purpose": "SQUARE REFUND MATHS AND RESULT SHAPE.",
+      "layers": [
+        "L3 executable"
+      ],
+      "blocks": [
+        {
+          "describe": "refund maths — the event sequence that produced a wrong total",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "the real 7-event sequence yields £20, not £50",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "assorted seam behaviour",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "matches Square's own refunded_money for that payment",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "the £120 payment (two refunds, £40 + £80) totals £120",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "rEJECTED and FAILED refunds are excluded — no money moved",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a refund that goes PENDING then REJECTED unwinds to zero",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "events for OTHER payments are never counted",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "returns null when nothing countable exists — caller must not guess",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "status and remaining are derived from the corrected total, never stale",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "over-refund cannot drive remaining negative",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "payments row has no amount_cents and no currency — guard against regression",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "majorToMinorUnits converts dollars to cents",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "majorToMinorUnits rounds — a bare multiply produces a non-integer Square rejects",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "majorToMinorUnits accepts numeric strings (PostgREST returns numeric as string)",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "majorToMinorUnits returns null rather than NaN for junk",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "reading the OLD column name yields null — the exact bug, now pinned",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "a full refund resolves an amount from the real row (no silent skip)",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "refund maths — order independence",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "any permutation gives the same total",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "refund maths — replay safety",
+          "useCase": null,
+          "tests": [
+            {
+              "title": "replaying the same event 50 times does not inflate",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 18,
+        "passed": 18,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 0
+      }
+    },
+    {
       "file": "tests/integrations/stripe/charge-capture.test.ts",
       "purpose": null,
       "layers": [
@@ -5188,6 +5807,156 @@
       }
     },
     {
+      "file": "tests/integrations/stripe/subscription-and-credits.test.ts",
+      "purpose": "STRIPE — SUBSCRIPTIONS AND CREDITS. Layer 1, offline.",
+      "layers": [
+        "L1 contract"
+      ],
+      "blocks": [
+        {
+          "describe": "subscription webhook — the lifecycle events it handles",
+          "useCase": "A subscription lifecycle event that is silently dropped leaves the tenant's access state wrong in one direction or the other — either a paying tenant is locked out, or a cancelled one keeps full access indefinitely.",
+          "tests": [
+            {
+              "title": "acts on checkout.session.completed rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on customer.subscription.created rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on customer.subscription.updated rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on customer.subscription.deleted rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on invoice.paid rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on invoice.payment_failed rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on invoice.voided rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on invoice.marked_uncollectible rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "acts on invoice.deleted rather than ignoring it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "covers both directions of failure, not just the happy path",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "runs with verify_jwt off, so its signature check is the only gate",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "subscription trials",
+          "useCase": "A trial that is set wrong either bills a tenant on day one of a free trial, or gives away a month. Stripe rejects trial_period_days:0 with a 400, so the zero case is a real branch and not a hypothetical.",
+          "tests": [
+            {
+              "title": "passes Stripe an exact trial_end timestamp rather than a day count",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "sends neither trial key when the plan has no trial, because Stripe rejects zero",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "subscription plans — where the price comes from",
+          "useCase": "Plan amounts must come from the plan record, never from the caller. This is the same class of hole found on the rental checkout rail, and here it is closed — worth pinning so it stays closed.",
+          "tests": [
+            {
+              "title": "creates a real Stripe Product and Price when a plan is configured",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "creates a replacement Price rather than mutating one, because Prices are immutable",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "credits — which do involve Stripe Products, contrary to my earlier report",
+          "useCase": "The team lead named credits explicitly. Every purchase mints new Stripe objects, and a retry mints another set plus another payable session — the same missing-idempotency shape found across the rental checkout rail.",
+          "tests": [
+            {
+              "title": "creates a one-time Stripe Price for the exact credit amount",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "names the product after the credit quantity so it is identifiable in Stripe",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "buys credits as a one-time payment, never as a recurring subscription",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "carries the credit quantity in session metadata so the webhook can grant it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "mints a brand-new Price and Product on every single purchase, reusing nothing",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "passes no idempotency key, so a retried purchase mints a second payable session",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "should make a repeated credit purchase idempotent",
+              "status": "passed",
+              "watchdog": true
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 22,
+        "passed": 22,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 1
+      }
+    },
+    {
       "file": "tests/integrations/stripe/webhook.test.ts",
       "purpose": null,
       "layers": [
@@ -5632,6 +6401,120 @@
         "skipped": 1,
         "failed": 0,
         "watchdogs": 16
+      }
+    },
+    {
+      "file": "tests/integrations/webhooks/health.test.ts",
+      "purpose": "WEBHOOK HEALTH AND SENDER VERIFICATION — every platform we receive from. Layer 1, offline.",
+      "layers": [
+        "L1 contract"
+      ],
+      "blocks": [
+        {
+          "describe": "sender verification — every money webhook authenticates who sent it",
+          "useCase": "A webhook that believes an unsigned request is a write primitive for anyone who learns the URL — and every one of these runs with verify_jwt off, so the signature is the ONLY thing standing between a stranger and the database.",
+          "tests": [
+            {
+              "title": "verifies the sender's signature before trusting anything in stripe-webhook-test",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "verifies the sender's signature before trusting anything in stripe-webhook-live",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "verifies the sender's signature before trusting anything in stripe-connect-webhook",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "verifies the sender's signature before trusting anything in square-webhook",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "verifies the sender's signature before trusting anything in subscription-webhook",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "runs every one of them with verify_jwt off, which is why the signature is load-bearing",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "accepts anything at all on the BoldSign webhook, which holds the service-role key",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "should verify the BoldSign sender before writing agreement state",
+              "status": "passed",
+              "watchdog": true
+            }
+          ]
+        },
+        {
+          "describe": "observability — whether a platform's webhook health can be seen at all",
+          "useCase": "This is the gap the team lead named. If Stripe stops delivering, or we start 500ing on every event, nothing anywhere goes red — the rentals simply stop being marked paid and the first person to notice is a customer.",
+          "tests": [
+            {
+              "title": "records received events for Square, which is the one platform that does",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "records nothing for any Stripe webhook, including the ones carrying rental money",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "records nothing for BoldSign or the subscription webhook either",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "should track delivery health separately for every platform we receive from",
+              "status": "passed",
+              "watchdog": true
+            },
+            {
+              "title": "has no CREATE TABLE for square_webhook_events in the migrations at all",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the documented unauthenticated surface versus the real one",
+          "useCase": "CLAUDE.md is what a new engineer threat-models from. Understating the unauthenticated surface by a factor of seven means the endpoints that most need scrutiny are the ones nobody knows to look at.",
+          "tests": [
+            {
+              "title": "registers dozens of functions as verify_jwt = false, not the handful documented",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "still tells the reader there are ten of them",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "should state the real count of unauthenticated functions",
+              "status": "passed",
+              "watchdog": true
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 16,
+        "passed": 16,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 3
       }
     },
     {
@@ -6632,6 +7515,90 @@
         "skipped": 0,
         "failed": 0,
         "watchdogs": 2
+      }
+    },
+    {
+      "file": "tests/spine/rental/06-agreement.test.ts",
+      "purpose": "THE SPINE'S AGREEMENT STEP, and the sync back from the processor. Layer 1, offline.",
+      "layers": [
+        "L1 contract"
+      ],
+      "blocks": [
+        {
+          "describe": "the agreement records which mode it was created under",
+          "useCase": "A document created in test mode but fetched with the live API key returns nothing, so the signed agreement silently never arrives. The mode must travel with the record, not be re-derived from whatever the tenant is set to now.",
+          "tests": [
+            {
+              "title": "reads the tenant's BoldSign mode and brand when the document is created",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "resolves the mode from the agreement first, then the rental, then the tenant",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "defaults to test rather than live when nothing records a mode",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "selects boldsign_mode on every rental and agreement read in the webhook",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the automation send path reports email delivery it never measured",
+          "useCase": "The operator sees a green \"sent\" for an email nobody received, so nobody chases the signature and the rental stalls with an unsigned agreement.",
+          "tests": [
+            {
+              "title": "tells BoldSign not to email the signer, because we send that mail ourselves",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "returns a hardcoded emailSent:true without invoking send-signing-email",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "should measure the signing email like the other two send paths do",
+              "status": "passed",
+              "watchdog": true
+            }
+          ]
+        },
+        {
+          "describe": "the sync back — what the rental may believe before the processor confirms",
+          "useCase": "The rental's payment state must come from the processor confirming settlement, never from us having asked for it. Anything that writes \"paid\" before the webhook lands turns an abandoned checkout into a free rental.",
+          "tests": [
+            {
+              "title": "promotes the payment to Completed only when the settlement event arrives",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "treats the expiry event as a distinct outcome from a completed one",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "never lets a Square submission response stand in for settlement",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 10,
+        "passed": 10,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 1
       }
     }
   ]
