@@ -382,6 +382,32 @@ own.
   empty field set, on purpose: an empty set would make every assertion against
   that function pass for the wrong reason, which is worse than a red build.
 
+  It currently understands four shapes:
+
+  ```ts
+  let body: BeginRequest;   body = (await req.json()) as BeginRequest;  // 1
+  let body: { slug?: string }; body = await req.json();                 // 2
+  const { rentalId, reason }: RefundRequest = await req.json();         // 3
+  const anyName = await req.json();   // or `let`, or bare, or `: T`    // 4
+  ```
+
+  Shape 4 also follows `const { a, b } = anyName` — a destructure taken off the
+  variable rather than off the call — which is how the
+  `let body; body = await req.json(); const { … } = body` family reads its
+  fields.
+
+  **26 of 275 body-reading functions still throw**, and
+  `integrations/harness/edge-contract.test.ts` holds that as a CEILING: fixing
+  more is always welcome, but a new function with an unknown shape pushing it to
+  27 fails the build. That is deliberate — the alternative is a function nobody
+  can write a contract test for and nobody notices.
+
+  Two rules when you extend it. The field list must never come back **empty**
+  for a function the parser claims to have parsed (it refuses instead), and a
+  pattern must never span a statement boundary: a lazy `[\s\S]*?` once began at
+  an earlier `const { data: { user } } = await supabaseUser.auth.getUser()` and
+  ran into the real destructure, inventing a field and dropping a real one.
+
 > **Correction to the bullet above, for a SECOND spine.** `SPINE_ORDER` in
 > `helpers/chain.ts` is one flat union, and `reasonToSkip()` requires *every*
 > earlier entry to have passed. So adding rental step ids to it would make the

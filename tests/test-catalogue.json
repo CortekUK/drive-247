@@ -1,10 +1,10 @@
 {
   "totals": {
-    "total": 1087,
-    "passed": 1009,
+    "total": 1121,
+    "passed": 1043,
     "skipped": 78,
     "failed": 0,
-    "watchdogs": 80
+    "watchdogs": 79
   },
   "files": [
     {
@@ -3404,6 +3404,79 @@
       }
     },
     {
+      "file": "tests/integrations/harness/edge-contract.test.ts",
+      "purpose": "THE CONTRACT PARSER ITSELF — tests/helpers/edge-contract.ts. Layer 3, executed.",
+      "layers": [
+        "L1 contract"
+      ],
+      "blocks": [
+        {
+          "describe": "the parser reports the fields a function actually reads",
+          "useCase": "A wrong field list is invisible: every contract assertion built on it passes regardless of what the function really reads. This block is the reason the whole L1 layer can be trusted.",
+          "tests": [
+            {
+              "title": "reads a plain destructure without picking up an adjacent statement's fields",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "follows a body assigned to a hoisted variable and destructured afterwards",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "follows a body held in a differently-named, type-annotated local",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "still reads the annotated `body` shapes it always understood",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the parser sweep across every body-reading edge function",
+          "useCase": "The ceiling is the point. A new edge function using an unknown body shape pushes this over and fails the build, which forces the parser to be taught rather than the function to be silently uncoverable.",
+          "tests": [
+            {
+              "title": "never returns an empty field set for a function it claims to have parsed",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "parses the large majority of body-reading functions",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "holds the unparseable count to a ceiling that can only come down",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "throws with a message naming the function and what to do about it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "caches a parsed shape rather than re-reading the file each time",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "total": 9,
+        "passed": 9,
+        "skipped": 0,
+        "failed": 0,
+        "watchdogs": 0
+      }
+    },
+    {
       "file": "tests/integrations/square/card-payment.test.ts",
       "purpose": "SQUARE — the card payment path and the adapter's failure handling. Layer 3 (executable, through the `@fn` alias) plus Layer 1 where the behaviour is structural.",
       "layers": [
@@ -6407,7 +6480,8 @@
       "file": "tests/integrations/webhooks/health.test.ts",
       "purpose": "WEBHOOK HEALTH AND SENDER VERIFICATION — every platform we receive from. Layer 1, offline.",
       "layers": [
-        "L1 contract"
+        "L1 contract",
+        "L3 executable"
       ],
       "blocks": [
         {
@@ -6457,31 +6531,128 @@
           ]
         },
         {
-          "describe": "observability — whether a platform's webhook health can be seen at all",
-          "useCase": "This is the gap the team lead named. If Stripe stops delivering, or we start 500ing on every event, nothing anywhere goes red — the rentals simply stop being marked paid and the first person to notice is a customer.",
+          "describe": "observability — every platform records its deliveries",
+          "useCase": "This is the gap the team lead named, and it is now closed. If a platform stops delivering, or we start rejecting it, webhook_deliveries is what makes that visible — these tests keep the recorder wired in.",
           "tests": [
             {
-              "title": "records received events for Square, which is the one platform that does",
+              "title": "records delivery health for stripe-webhook-test",
               "status": "passed",
               "watchdog": false
             },
             {
-              "title": "records nothing for any Stripe webhook, including the ones carrying rental money",
+              "title": "records delivery health for stripe-webhook-live",
               "status": "passed",
               "watchdog": false
             },
             {
-              "title": "records nothing for BoldSign or the subscription webhook either",
+              "title": "records delivery health for stripe-connect-webhook",
               "status": "passed",
               "watchdog": false
             },
             {
-              "title": "should track delivery health separately for every platform we receive from",
+              "title": "records delivery health for square-webhook",
               "status": "passed",
-              "watchdog": true
+              "watchdog": false
             },
             {
-              "title": "has no CREATE TABLE for square_webhook_events in the migrations at all",
+              "title": "records delivery health for subscription-webhook",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "records delivery health for the BoldSign webhook too, which verifies nothing",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "records an outcome on every terminal path, not only the happy one",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "builds its own client in the catch, where the handler's is out of scope",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "keeps Square's own event table, because that is its only replay defence",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the health recorder is fail-open by construction",
+          "useCase": "Observability must never cost a payment. If the recorder can throw, a full table or an unmigrated database turns a monitoring gap into an outage, because a 500 makes the processor retry.",
+          "tests": [
+            {
+              "title": "returns void rather than a success flag, so no caller can branch on it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "swallows a rejected insert instead of propagating it",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "bounds the insert with a short deadline so it cannot eat a handler budget",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "never echoes a raw provider error, which can carry request fields",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "truncates over-long ids rather than letting the insert fail",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
+        },
+        {
+          "describe": "the health table migration",
+          "useCase": "The table is the thing an alert queries. If anon could read it, the public booking bundle's key would expose which processors we use and how often they fail; if it were unique on event_id, a genuine redelivery would be lost.",
+          "tests": [
+            {
+              "title": "is drafted as PENDING and not applied, so nothing reaches production unreviewed",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "is additive — one new table and one new view, altering nothing that exists",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "revokes the public and signed-in roles, because this is platform-ops data",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "creates no permissive policy, so a restored grant still reads nothing",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "does not make event_id unique, because a redelivery is a fact worth recording",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "allows a null event_id, because a rejected delivery is the most worth recording",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "answers 'when did this platform last reach us' as one query",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "ships a rollback that leaves the webhooks working, only unobservable",
               "status": "passed",
               "watchdog": false
             }
@@ -6507,14 +6678,60 @@
               "watchdog": true
             }
           ]
+        },
+        {
+          "describe": "the health recorder, executed against clients that misbehave",
+          "useCase": "The fail-open guarantee is the whole safety argument for adding a database write to six money handlers. Asserting it from source text only proves the words are there; these EXECUTE the recorder against clients that misbehave in each of the ways a real one can.",
+          "tests": [
+            {
+              "title": "resolves without throwing when the insert returns an error",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "resolves without throwing when the insert REJECTS rather than returning an error",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "resolves without throwing when the client itself is missing or malformed",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "resolves without throwing when .from() throws synchronously",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "writes the delivery as one row with the fields an alert needs",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "truncates an over-long event id instead of letting the insert fail",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "normalises absent optional fields to null rather than undefined",
+              "status": "passed",
+              "watchdog": false
+            },
+            {
+              "title": "refuses a non-finite duration rather than sending NaN to an integer column",
+              "status": "passed",
+              "watchdog": false
+            }
+          ]
         }
       ],
       "counts": {
-        "total": 16,
-        "passed": 16,
+        "total": 41,
+        "passed": 41,
         "skipped": 0,
         "failed": 0,
-        "watchdogs": 3
+        "watchdogs": 2
       }
     },
     {

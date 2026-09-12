@@ -217,10 +217,21 @@ export function readEdgeFunction(fn: string): EdgeFunctionShape {
   let typeBlock: string | null = null;
   let parseIndex = -1;
   let destructured: string[] = [];
+  // The local the parsed body lands in. Historically hardcoded to `body`, which
+  // is why shape 4 below existed as a throw: half the edge functions name it
+  // something else, or declare it without a type annotation.
+  let bodyVar = "body";
 
   // --- shape 3: `const { a, b }: T = await req.json()` ----------------------
+  // `[^;{}]*?` and NOT `[\s\S]*?`: the lazy any-character version happily spans
+  // statement boundaries. In create-credit-checkout it started at the earlier
+  // `const { data: { user } } = await supabaseUser.auth.getUser()` and ran all the
+  // way to the real destructure's closing brace, which invented a field `data`
+  // and DROPPED the real first field `credits` — a silently wrong field list,
+  // which is the one outcome this file's header says is worse than a throw.
+  // Excluding `;` `{` `}` keeps the match inside a single flat destructure.
   const destructure =
-    /(?:const|let)\s*\{([\s\S]*?)\}\s*(?::\s*([^=]+?))?=\s*await\s+req\.json\(\)/.exec(handler);
+    /(?:const|let)\s*\{([^;{}]*?)\}\s*(?::\s*([^=]+?))?=\s*await\s+req\.json\(\)/.exec(handler);
 
   // --- shapes 1 & 2: a `body` variable with a type annotation --------------
   const declared = /(?:let|const)\s+body\s*:\s*(\{|[A-Za-z_$][\w$]*)/.exec(handler);
@@ -266,6 +277,51 @@ export function readEdgeFunction(fn: string): EdgeFunctionShape {
       typeName = typeName ?? "(inline)";
     }
   } else {
+    // --- shape 4: ANY other local taking the parsed body --------------------
+    // `const body = await req.json()` (no annotation), `body = await req.json()`
+    // (assignment to a hoisted `let`), and `const request: EmailRequest =
+    // await req.json()` (a different name) are all common here and were all a
+    // hard throw before. Together they account for 135 of the 271 body-reading
+    // functions — essentially the whole notify-*/send-* family.
+    const call = /await\s+req\s*\.\s*json\s*\(\s*\)/.exec(handler);
+    if (call) {
+      const before = handler.slice(0, call.index);
+      // Walk back to the start of the statement so a previous line's `=` cannot
+      // be mistaken for this one's.
+      const stmtStart = Math.max(
+        before.lastIndexOf(";"), before.lastIndexOf("\n"), before.lastIndexOf("{"),
+      );
+      const stmt = before.slice(stmtStart + 1);
+      // `<const|let|var>? name <: Type>? = (`
+      const lhs = /(?:const|let|var)?\s*([A-Za-z_$][\w$]*)\s*(?::\s*([^=]+?))?\s*=\s*\(?\s*$/.exec(stmt);
+      if (lhs) {
+        bodyVar = lhs[1];
+        parseIndex = call.index;
+
+        // A type can arrive either as the annotation on the left or an `as` cast
+        // on the right; prefer the annotation, which is the stronger statement.
+        const annotated = (lhs[2] ?? "").trim();
+        const named = /^([A-Za-z_$][\w$]*)$/.exec(annotated);
+        if (named) {
+          typeName = named[1];
+          typeBlock = findNamedType(src, typeName);
+        } else if (annotated.startsWith("{")) {
+          typeName = "(inline)";
+          typeBlock = balancedBlock(annotated, annotated.indexOf("{"));
+        }
+        if (!typeName) {
+          const after = handler.slice(call.index + call[0].length);
+          const asCast = /^\s*\)?\s*as\s+([A-Za-z_$][\w$]*)/.exec(after);
+          if (asCast) {
+            typeName = asCast[1];
+            typeBlock = findNamedType(src, typeName);
+          }
+        }
+      }
+    }
+  }
+
+  if (parseIndex < 0) {
     throw new Error(
       `${fn}: could not find where the request body is parsed in ` +
         `${relative(REPO_ROOT, file)}.\n` +
@@ -289,7 +345,7 @@ export function readEdgeFunction(fn: string): EdgeFunctionShape {
   // handler; everything past that point belongs to a different object.
   let region = handler;
   if (parseIndex >= 0) {
-    const redecl = /(?:const|let|var)\s+body\s*[:=]/g;
+    const redecl = new RegExp(`(?:const|let|var)\\s+${bodyVar}\\s*[:=]`, "g");
     redecl.lastIndex = parseIndex + 1;
     let m: RegExpExecArray | null;
     while ((m = redecl.exec(handler))) {
@@ -299,8 +355,26 @@ export function readEdgeFunction(fn: string): EdgeFunctionShape {
       break;
     }
   }
-  for (const m of region.matchAll(/\bbody\s*\??\s*\.\s*([A-Za-z_$][\w$]*)/g)) {
+  for (const m of region.matchAll(
+    new RegExp(`\\b${bodyVar}\\s*\\??\\s*\\.\\s*([A-Za-z_$][\\w$]*)`, "g"),
+  )) {
     add(m[1], "member-access");
+  }
+
+  // `const { a, b } = body` — a destructure taken OFF the body variable rather
+  // than off the `await req.json()` call. This is how the whole
+  // `let body; body = await req.json(); const { … } = body` family reads its
+  // fields (apply-payment is the canonical example), and missing it left those
+  // functions with an EMPTY field set — the silent-pass outcome this file's
+  // header calls worse than a red build.
+  for (const m of region.matchAll(
+    new RegExp(`(?:const|let|var)\\s*\\{([^{}]*)\\}\\s*=\\s*${bodyVar}\\s*[;\\n]`, "g"),
+  )) {
+    for (const part of m[1].split(",")) {
+      // The KEY crosses the wire; an alias after `:` is local only.
+      const key = /^\s*([A-Za-z_$][\w$]*)/.exec(part)?.[1];
+      if (key) add(key, "destructured");
+    }
   }
 
   // Fields the function will 400 on by name. `signupError(..., { field: "x" })`
@@ -308,6 +382,22 @@ export function readEdgeFunction(fn: string): EdgeFunctionShape {
   const validated = [...new Set(
     [...handler.matchAll(/\bfield:\s*["']([A-Za-z_$][\w$]*)["']/g)].map((m) => m[1]),
   )].sort();
+
+  // A body we located but could read NO fields from is the dangerous outcome,
+  // not a benign one: every assertion made against that empty set would pass for
+  // the wrong reason. This file's header argues a loud throw beats that, so an
+  // empty result is treated as an unrecognised shape rather than a valid answer.
+  if (Object.keys(origin).length === 0) {
+    throw new Error(
+      `${fn}: found where the request body is parsed, but could read NO fields ` +
+        `from it in ${relative(REPO_ROOT, file)}.\n` +
+        `An empty field set would make every assertion against this function pass ` +
+        `for the wrong reason, so it is refused. Either the way this function ` +
+        `reads its fields is a shape the parser does not know yet — teach it, see ` +
+        `tests/README.md section 9 — or the function genuinely reads no body ` +
+        `fields, in which case assert on its source directly.`,
+    );
+  }
 
   const shape: EdgeFunctionShape = {
     fn,

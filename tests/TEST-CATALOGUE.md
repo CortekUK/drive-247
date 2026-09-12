@@ -10,12 +10,12 @@ document — see the naming convention in [README.md](./README.md#naming-convent
 
 | | |
 |---|---|
-| Test files | 47 |
-| Tests | 1087 |
-| Passing | 1009 |
+| Test files | 48 |
+| Tests | 1121 |
+| Passing | 1043 |
 | Skipped (opt-in Layer 2) | 78 |
 | Failing | 0 |
-| Known-defect watchdogs | 80 |
+| Known-defect watchdogs | 79 |
 
 ## How to read this
 
@@ -926,6 +926,32 @@ document — see the naming convention in [README.md](./README.md#naming-convent
 - it live: a missing policy_id is refused before Bonzah is contacted — skipped
 
 
+## `tests/integrations/harness/edge-contract.test.ts`
+
+**Layer:** L1 contract · **9 tests** (9 passing)
+
+THE CONTRACT PARSER ITSELF — tests/helpers/edge-contract.ts. Layer 3, executed.
+
+### the parser reports the fields a function actually reads
+
+*Use case: A wrong field list is invisible: every contract assertion built on it passes regardless of what the function really reads. This block is the reason the whole L1 layer can be trusted.*
+
+- it reads a plain destructure without picking up an adjacent statement's fields
+- it follows a body assigned to a hoisted variable and destructured afterwards
+- it follows a body held in a differently-named, type-annotated local
+- it still reads the annotated `body` shapes it always understood
+
+### the parser sweep across every body-reading edge function
+
+*Use case: The ceiling is the point. A new edge function using an unknown body shape pushes this over and fails the build, which forces the parser to be taught rather than the function to be silently uncoverable.*
+
+- it never returns an empty field set for a function it claims to have parsed
+- it parses the large majority of body-reading functions
+- it holds the unparseable count to a ceiling that can only come down
+- it throws with a message naming the function and what to do about it
+- it caches a parsed shape rather than re-reading the file each time
+
+
 ## `tests/integrations/square/card-payment.test.ts`
 
 **Layer:** L1 contract, L3 executable · **13 tests** (13 passing, 2 watchdog)
@@ -1751,7 +1777,7 @@ STRIPE — SUBSCRIPTIONS AND CREDITS. Layer 1, offline.
 
 ## `tests/integrations/webhooks/health.test.ts`
 
-**Layer:** L1 contract · **16 tests** (16 passing, 3 watchdog)
+**Layer:** L1 contract, L3 executable · **41 tests** (41 passing, 2 watchdog)
 
 WEBHOOK HEALTH AND SENDER VERIFICATION — every platform we receive from. Layer 1, offline.
 
@@ -1768,15 +1794,42 @@ WEBHOOK HEALTH AND SENDER VERIFICATION — every platform we receive from. Layer
 - it accepts anything at all on the BoldSign webhook, which holds the service-role key
 - it should verify the BoldSign sender before writing agreement state — ⚠ watchdog
 
-### observability — whether a platform's webhook health can be seen at all
+### observability — every platform records its deliveries
 
-*Use case: This is the gap the team lead named. If Stripe stops delivering, or we start 500ing on every event, nothing anywhere goes red — the rentals simply stop being marked paid and the first person to notice is a customer.*
+*Use case: This is the gap the team lead named, and it is now closed. If a platform stops delivering, or we start rejecting it, webhook_deliveries is what makes that visible — these tests keep the recorder wired in.*
 
-- it records received events for Square, which is the one platform that does
-- it records nothing for any Stripe webhook, including the ones carrying rental money
-- it records nothing for BoldSign or the subscription webhook either
-- it should track delivery health separately for every platform we receive from — ⚠ watchdog
-- it has no CREATE TABLE for square_webhook_events in the migrations at all
+- it records delivery health for stripe-webhook-test
+- it records delivery health for stripe-webhook-live
+- it records delivery health for stripe-connect-webhook
+- it records delivery health for square-webhook
+- it records delivery health for subscription-webhook
+- it records delivery health for the BoldSign webhook too, which verifies nothing
+- it records an outcome on every terminal path, not only the happy one
+- it builds its own client in the catch, where the handler's is out of scope
+- it keeps Square's own event table, because that is its only replay defence
+
+### the health recorder is fail-open by construction
+
+*Use case: Observability must never cost a payment. If the recorder can throw, a full table or an unmigrated database turns a monitoring gap into an outage, because a 500 makes the processor retry.*
+
+- it returns void rather than a success flag, so no caller can branch on it
+- it swallows a rejected insert instead of propagating it
+- it bounds the insert with a short deadline so it cannot eat a handler budget
+- it never echoes a raw provider error, which can carry request fields
+- it truncates over-long ids rather than letting the insert fail
+
+### the health table migration
+
+*Use case: The table is the thing an alert queries. If anon could read it, the public booking bundle's key would expose which processors we use and how often they fail; if it were unique on event_id, a genuine redelivery would be lost.*
+
+- it is drafted as PENDING and not applied, so nothing reaches production unreviewed
+- it is additive — one new table and one new view, altering nothing that exists
+- it revokes the public and signed-in roles, because this is platform-ops data
+- it creates no permissive policy, so a restored grant still reads nothing
+- it does not make event_id unique, because a redelivery is a fact worth recording
+- it allows a null event_id, because a rejected delivery is the most worth recording
+- it answers 'when did this platform last reach us' as one query
+- it ships a rollback that leaves the webhooks working, only unobservable
 
 ### the documented unauthenticated surface versus the real one
 
@@ -1785,6 +1838,19 @@ WEBHOOK HEALTH AND SENDER VERIFICATION — every platform we receive from. Layer
 - it registers dozens of functions as verify_jwt = false, not the handful documented
 - it still tells the reader there are ten of them
 - it should state the real count of unauthenticated functions — ⚠ watchdog
+
+### the health recorder, executed against clients that misbehave
+
+*Use case: The fail-open guarantee is the whole safety argument for adding a database write to six money handlers. Asserting it from source text only proves the words are there; these EXECUTE the recorder against clients that misbehave in each of the ways a real one can.*
+
+- it resolves without throwing when the insert returns an error
+- it resolves without throwing when the insert REJECTS rather than returning an error
+- it resolves without throwing when the client itself is missing or malformed
+- it resolves without throwing when .from() throws synchronously
+- it writes the delivery as one row with the fields an alert needs
+- it truncates an over-long event id instead of letting the insert fail
+- it normalises absent optional fields to null rather than undefined
+- it refuses a non-finite duration rather than sending NaN to an integer column
 
 
 ## `tests/spine/onboarding/01-plan-select.test.ts`
