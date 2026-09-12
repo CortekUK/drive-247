@@ -471,3 +471,34 @@ verify_jwt = false
 # editable by anyone who opened the marketing site.
 [functions.manage-signup-plans]
 verify_jwt = true
+
+# ── Turo Bridge (PoC) ───────────────────────────────────────────────────────
+# Grafted from feat/turo-extension. These four functions were already DEPLOYED
+# to production; only their source was missing from this repo. The verify_jwt
+# values below are the ones production is running today — changing them would
+# change live behaviour, so they are recorded here rather than chosen here.
+
+# The Chrome extension runs in a browser signed into turo.com, not into
+# Drive247 — there is no Supabase JWT to present, and shipping an anon key
+# inside an unpacked extension would publish it to anyone who installs it. The
+# pairing token in the request body is the credential, and the function
+# resolves tenant_id from it server-side.
+[functions.turo-bridge-ingest]
+verify_jwt = false
+
+# turo-bridge-reconcile accepts EITHER door: the extension's pairing token in
+# the body (the operator is signed into turo.com, not Drive247) or a portal JWT
+# for the operator-facing actions. It therefore has to run with
+# verify_jwt = false and do its own auth — which it does, refusing outright
+# when neither credential is present, and 403ing when a token and a JWT name
+# different tenants.
+[functions.turo-bridge-reconcile]
+verify_jwt = false
+
+# turo-bridge-promote and turo-bridge-confirm-vehicle-map deliberately have NO
+# entry here, and that is load-bearing: with no entry the gateway applies the
+# default verify_jwt = true, so both refuse without a real portal session.
+# Promotion creates rentals and customers; a vehicle mapping writes
+# turo_vehicle_map.confirmed_by, which is NOT NULL by design. Neither decision
+# may be made by a bearer of a pairing token, because a token proves which
+# tenant and never which person. Do not add them.

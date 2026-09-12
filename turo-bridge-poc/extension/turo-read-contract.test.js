@@ -1,0 +1,316 @@
+/**
+ * turo-read-contract.test.js — behavioural tests for the Turo read contract.
+ *
+ * No framework and no build step, deliberately: the extension is plain script
+ * loaded unpacked, and these must be runnable by anyone with node and no setup.
+ *
+ *     node turo-bridge-poc/extension/turo-read-contract.test.js
+ *
+ * The assertions that matter most are the ones about what must NOT happen:
+ * a display-string date must not become a booking, a full page with no
+ * next-link must not read as complete, an empty body must not read as "no
+ * trips", and an absence must not release a block.
+ */
+
+/* Resolved relative to THIS file. These were absolute paths into one
+   developer's home directory, so the suite could not run anywhere else —
+   including in this repository's own checkout. */
+require('./turo-read-contract.js');
+require('./fixture.js');
+const R=globalThis.__d247TuroRead, O=R.OUTCOME;
+let fails=0;
+const ok=(n,c,x)=>{ if(!c){fails++;console.log('FAIL',n,JSON.stringify(x));} else console.log('ok  ',n); };
+
+// --- 1. fixture normalises
+const nz = R.normalizeRecord(globalThis.D247_TURO_FIXTURE.raw);
+ok('fixture -> record', !!nz.record, nz.rejected);
+ok('fixture id', nz.record && nz.record.reservationId==='R-900000001', nz.record&&nz.record.reservationId);
+ok('fixture dates', nz.record && nz.record.startsAt==='2026-09-12T15:00:00.000Z', nz.record&&nz.record.startsAt);
+ok('fixture holdUntil = end+48h', nz.record && nz.record.holdUntil==='2026-09-18T11:00:00.000Z', nz.record&&nz.record.holdUntil);
+ok('fixture vehicle plate', nz.record && nz.record.vehicle.plateNormalised==='SAMPLE001', nz.record&&nz.record.vehicle);
+ok('fixture vehicle bound by turo id', nz.record && nz.record.vehicle.evidence==='turo_vehicle_id', nz.record&&nz.record.vehicle.evidence);
+ok('fixture overflow keeps unmapped keys', nz.record && '__drive247_fixture' in nz.record.rawOverflow, nz.record&&Object.keys(nz.record.rawOverflow));
+ok('fixture reports missing tz as unknown', nz.record && nz.record.unknowns.some(u=>u.field==='timezone'), nz.record&&nz.record.unknowns);
+ok('lifecycle BOOKED -> upcoming', nz.record && nz.record.lifecycle==='upcoming', nz.record&&nz.record.lifecycle);
+
+// --- 2. renamed date field -> REJECTED, not guessed
+const renamed = JSON.parse(JSON.stringify(globalThis.D247_TURO_FIXTURE.raw));
+renamed.tripEndTs = renamed.return.dateTime; delete renamed.return;
+const rn = R.normalizeRecord(renamed);
+ok('renamed end field -> rejected', rn.record===null && rn.rejected.reason==='missing_dates', rn.rejected);
+ok('rejection lists observed keys', rn.rejected.observedKeys.includes('tripEndTs'), rn.rejected.observedKeys);
+
+// --- 3. display-string date REFUSED
+const disp = JSON.parse(JSON.stringify(globalThis.D247_TURO_FIXTURE.raw));
+disp.pickup={dateTime:'Sep 14'}; disp.return={dateTime:'Sep 18'};
+ok('display date refused', R.normalizeRecord(disp).record===null, R.normalizeRecord(disp).record);
+
+// --- 4. extractItems: empty container vs unknown envelope
+ok('empty named container is FOUND', R.extractItems({trips:[]}).found===true);
+ok('unknown envelope NOT found', R.extractItems({foo:1,bar:'x'}).found===false);
+ok('root array found', R.extractItems([]).found===true);
+
+// --- 5. classifyBody
+const cb=(o)=>R.classifyBody(Object.assign({status:200,contentType:'application/json',body:'{}',finalUrl:'/api/v2/feeds/upcoming-trips'},o));
+ok('401 -> NOT_LOGGED_IN', cb({status:401}).outcome===O.NOT_LOGGED_IN);
+ok('429 -> RATE_LIMITED', cb({status:429}).outcome===O.RATE_LIMITED);
+ok('200 HTML challenge -> BOT_BLOCKED', cb({contentType:'text/html',body:'<html>Just a moment... cf-chl</html>'}).outcome===O.BOT_BLOCKED);
+ok('200 JSON challenge -> BOT_BLOCKED', cb({body:'{"_pxCaptcha":"x"}'}).outcome===O.BOT_BLOCKED);
+ok('login redirect -> NOT_LOGGED_IN', cb({finalUrl:'https://turo.com/login'}).outcome===O.NOT_LOGGED_IN);
+ok('cut JSON -> TRUNCATED', cb({body:'{"trips":[{"id":1'}).outcome===O.TRUNCATED);
+ok('clean JSON -> OK', cb({body:'{"trips":[]}'}).outcome===O.OK);
+
+// --- 6. pagination detection
+const items200=Array.from({length:200},(_,i)=>({reservationId:'r'+i,startsAt:'2026-01-01T00:00:00Z',endsAt:'2026-01-02T00:00:00Z'}));
+let d=R.detectPagination({trips:items200,nextCursor:'abc'},items200,null);
+ok('cursor style', d.plan.style==='cursor' && d.nextToken==='abc', d.plan);
+d=R.detectPagination({trips:items200,offset:0,limit:200,total:450},items200,null);
+ok('offset style', d.plan.style==='offset' && d.nextToken.offset===200, d);
+ok('declaredTotal captured', d.plan.declaredTotal===450, d.plan);
+d=R.detectPagination({trips:items200,page:1,totalPages:3},items200,null);
+ok('page style', d.plan.style==='page' && d.nextToken.page===2, d);
+d=R.detectPagination({trips:items200,links:{next:'https://turo.com/api/v2/feeds/upcoming-trips?appMode=HOST&cursor=z'}},items200,null);
+ok('next-url style', d.nextUrl==='/api/v2/feeds/upcoming-trips?appMode=HOST&cursor=z', d.nextUrl);
+ok('off-origin next-url refused', R.detectPagination({trips:items200,links:{next:'https://evil.example/x'}},items200,null).nextUrl===null);
+// THE BIG ONE: full page, no affordance -> "unknown", never "none"
+d=R.detectPagination({trips:items200},items200,null);
+ok('FULL page no affordance -> unknown', d.plan.style==='unknown', d.plan);
+const items3=items200.slice(0,3);
+d=R.detectPagination({trips:items3},items3,null);
+ok('short page no affordance -> none', d.plan.style==='none', d.plan);
+ok('hasMore:false -> explicitEnd', R.detectPagination({trips:items3,hasMore:false},items3,null).explicitEnd===true);
+ok('isLastPage:true -> explicitEnd', R.detectPagination({trips:items3,isLastPage:true},items3,null).explicitEnd===true);
+
+// --- 7. buildNextRequest
+const nr=R.buildNextRequest('/api/v2/feeds/upcoming-trips?appMode=HOST',R.detectPagination({trips:items200,offset:0,limit:200},items200,null),0);
+ok('offset next path', nr.path==='/api/v2/feeds/upcoming-trips?appMode=HOST&offset=200&limit=200', nr.path);
+
+// --- 8. coverage
+const cv=(s)=>R.coverageVerdict(Object.assign({pagesRead:1,recordsSeen:8,maxPages:60,plan:{style:'none',declaredTotal:null},lastPageShort:true,explicitEnd:false,pageFailed:false,stalled:false},s));
+ok('single short page -> complete', cv({}).complete===true, cv({}));
+ok('explicit terminator -> complete', cv({explicitEnd:true}).complete===true);
+ok('full page no affordance -> INCOMPLETE', cv({plan:{style:'unknown',declaredTotal:null},lastPageShort:false}).complete===false);
+ok('page failed -> INCOMPLETE', cv({pageFailed:true}).complete===false);
+ok('declaredTotal match alone -> INCOMPLETE', cv({lastPageShort:false,plan:{style:'cursor',declaredTotal:8}}).complete===false, cv({lastPageShort:false,plan:{style:'cursor',declaredTotal:8}}));
+ok('incomplete display never says N of N', cv({pageFailed:true}).display.indexOf(' of ')===-1, cv({pageFailed:true}).display);
+console.log('   display(complete)  :', cv({}).display);
+console.log('   display(incomplete):', cv({pageFailed:true}).display);
+
+// --- 9. session probe
+ok('vehicles nonempty -> live', R.buildSessionProbe({outcome:O.OK,items:[{}]},false).liveSession===true);
+ok('vehicles EMPTY -> NOT live', R.buildSessionProbe({outcome:O.OK,items:[]},false).liveSession===false);
+ok('vehicles blocked -> NOT live', R.buildSessionProbe({outcome:O.BOT_BLOCKED,items:[]},false).liveSession===false);
+ok('trips seen -> live', R.buildSessionProbe(null,true).liveSession===true);
+
+// --- 10. the gates
+const mk=(o,c,s)=>R.finaliseRun({outcome:o,coverage:{complete:c,evidence:'short_final_page'},session:{liveSession:s}});
+ok('OK+complete+live -> mayRelease', mk(O.OK,true,true).mayRelease===true);
+ok('OK+truncated -> NO release', mk(O.OK,false,true).mayRelease===false);
+ok('OK+uncorroborated -> NO release', mk(O.OK,true,false).mayRelease===false);
+ok('OK+truncated STILL writes', mk(O.OK,false,true).mayWrite===true);
+ok('EMPTY_UNCONFIRMED -> no write, no release', mk(O.EMPTY_UNCONFIRMED,true,true).mayWrite===false && mk(O.EMPTY_UNCONFIRMED,true,true).mayRelease===false);
+ok('NO_TRIPS_CONFIRMED+complete+live -> release', mk(O.NO_TRIPS_CONFIRMED,true,true).mayRelease===true);
+ok('legacy NO_TRIPS never releases', mk(O.NO_TRIPS,true,true).mayRelease===false);
+ok('BOT_BLOCKED -> no write', mk(O.BOT_BLOCKED,true,true).mayWrite===false);
+console.log('   gateReason(truncated):', mk(O.OK,false,true).gateReason);
+
+// --- 11. absence ledger
+const prev={seenReservationIds:['a','b','c'],finishedAt:'2026-09-01T00:00:00Z',absentRunCounts:{b:2}};
+let dis=R.diffAbsences(prev,{reservations:[{reservationId:'a',lifecycle:'upcoming',supersedesReservationId:null}],mayRelease:true});
+ok('absent_only never releases', dis.every(d=>d.evidence!=='absent_only'||d.releaseAllowed===false), dis);
+ok('absent count increments', dis.find(d=>d.reservationId==='b').consecutiveAbsentRuns===3, dis);
+dis=R.diffAbsences(prev,{reservations:[{reservationId:'b',lifecycle:'cancelled',supersedesReservationId:null}],mayRelease:true});
+ok('explicit cancel releases', dis.find(d=>d.reservationId==='b').releaseAllowed===true, dis);
+dis=R.diffAbsences(prev,{reservations:[{reservationId:'b',lifecycle:'cancelled',supersedesReservationId:null}],mayRelease:false});
+ok('cancel does NOT release when run gate is shut', dis.find(d=>d.reservationId==='b').releaseAllowed===false);
+dis=R.diffAbsences(prev,{reservations:[{reservationId:'zz',lifecycle:'upcoming',supersedesReservationId:'c'}],mayRelease:true});
+ok('superseded -> not a release', dis.find(d=>d.reservationId==='c').evidence==='superseded' && dis.find(d=>d.reservationId==='c').releaseAllowed===false);
+
+// --- 12. resumability / tenant guard
+const cur=R.newCursor('run1','TENANT_A',{pageKey:'p0',path:'/x',index:0});
+ok('same tenant -> resume', R.resumeDecision(cur,{tokenFingerprint:'TENANT_A'}).resume===true);
+const bad=R.resumeDecision(cur,{tokenFingerprint:'TENANT_B'});
+ok('DIFFERENT tenant -> abandon', bad.resume===false && bad.restart===true && bad.reason==='tenant_changed', bad);
+const withTuro=R.advanceCursor(cur,{turoAccountFingerprint:'HOST1'});
+ok('different turo account -> abandon', R.resumeDecision(withTuro,{tokenFingerprint:'TENANT_A',turoAccountFingerprint:'HOST2'}).reason==='turo_account_changed');
+const stale=R.advanceCursor(cur,{startedAt:new Date(Date.now()-30*3600*1000).toISOString()});
+ok('stale cursor -> restart', R.resumeDecision(stale,{tokenFingerprint:'TENANT_A'}).reason==='stale');
+const cooling=R.advanceCursor(cur,{nextAllowedAt:new Date(Date.now()+60000).toISOString()});
+ok('cooling down -> wait', R.resumeDecision(cooling,{tokenFingerprint:'TENANT_A'}).wait===true);
+const c2=R.commitReceipt(cur,{pageKey:'p0',index:0},['a','b']);
+ok('receipt bumps seq + clears pending', c2.seq===cur.seq+1 && c2.pending===null && c2.receipts.length===1);
+ok('flushedIds accumulate', c2.flushedIds.join()==='a,b');
+
+// --- 13. rate discipline
+ok('bot challenge -> park immediately', R.throttleDecision(O.BOT_BLOCKED,0,null).action==='park');
+ok('429 -> retry with backoff', R.throttleDecision(O.RATE_LIMITED,0,null).action==='retry');
+ok('Retry-After wins when larger', R.throttleDecision(O.RATE_LIMITED,0,120).waitMs===120000);
+ok('429 x4 -> park', R.throttleDecision(O.RATE_LIMITED,3,null).action==='park');
+
+// --- 14. worst-outcome reduction
+ok('worst of [OK,TRUNCATED] = TRUNCATED', R.worstOutcome([O.OK,O.TRUNCATED])===O.TRUNCATED);
+ok('worst of [OK,BOT_BLOCKED,TRUNCATED] = BOT_BLOCKED', R.worstOutcome([O.OK,O.BOT_BLOCKED,O.TRUNCATED])===O.BOT_BLOCKED);
+
+// --- 15. legacy display-string vehicle
+const legacy=R.readVehicle({label:'Owner 1 Wagoneer (Jon) (CA #9DUC203)'},null);
+ok('legacy label -> plate parsed', legacy.plateNormalised==='9DUC203' && legacy.evidence==='label_plate_parsed', legacy);
+ok('legacy label requires review', legacy.requiresReview===true);
+const vinOnly=R.readVehicle({vin:'1HGCM82633A004352'},null);
+ok('vin never high confidence', vinOnly.confidence==='medium' && vinOnly.requiresReview===true, vinOnly);
+
+
+// --- 16. pagination stall + merge -----------------------------------------
+ok('repeat cursor -> stall', R.detectStall({pageKey:'cursor:abc'},['cursor:abc'],['x'],[]).stalled===true);
+ok('all-dup page -> stall', R.detectStall({pageKey:'cursor:z'},['cursor:abc'],['a','b'],['a','b','c']).stalled===true);
+ok('some fresh -> no stall', R.detectStall({pageKey:'cursor:z'},['cursor:abc'],['a','d'],['a','b']).stalled===false);
+ok('first page -> no stall', R.detectStall({pageKey:'cursor:z'},[],['a','b'],[]).stalled===false);
+const into=[{reservationId:'a',v:1}];
+let m=R.mergeRecords(into,[{reservationId:'a',v:2},{reservationId:'b',v:1}]);
+ok('dedupe on id', into.length===2 && m.duplicates===1 && m.added.join()==='b', {into,m});
+ok('last write wins', into[0].v===2);
+
+
+// --- the session probe must count vehicles from EITHER side of the tab -------
+// collectVehicles() returns { vehicles, itemCount } and drops `items` crossing
+// chrome.scripting, so a probe that only reads `items` tells a host with a full
+// fleet that they have none. Measured on a real account: 5 vehicles, reported
+// as zero. It hid because the fixture's vehicles carry an `owner` key and the
+// probe fell through to host_id_in_envelope; real Turo vehicles have no owner.
+(function () {
+  var live = [
+    ['items only',              { outcome: O.OK, items: [1,2,3], turoHostId: null }],
+    ['vehicles + itemCount',    { outcome: O.OK, vehicles: [1,2,3], itemCount: 3, turoHostId: null }],
+    ['itemCount alone',         { outcome: O.OK, itemCount: 3, turoHostId: null }],
+  ];
+  for (var i = 0; i < live.length; i++) {
+    var p = R.buildSessionProbe(live[i][1], false);
+    ok('session probe counts ' + live[i][0], p.liveSession === true && p.evidence === 'vehicles_nonempty', p);
+  }
+  var empty = R.buildSessionProbe({ outcome: O.OK, vehicles: [], itemCount: 0, turoHostId: null }, false);
+  ok('a genuinely empty fleet is still not live', empty.liveSession === false && empty.evidence === 'vehicles_empty', empty);
+  var hostOnly = R.buildSessionProbe({ outcome: O.OK, itemCount: 0, turoHostId: 'h-1' }, false);
+  ok('a host id alone still corroborates', hostOnly.liveSession === true && hostOnly.evidence === 'host_id_in_envelope', hostOnly);
+})();
+
+// --- the real container names, measured 2026-09-05 ---------------------------
+(function () {
+  var trips = R._internals ? null : null;
+  var got = R.OUTCOME; // keep the linter honest
+  ok('upcomingTripItems is a recognised container',
+     JSON.stringify(R.CONTAINER_KEYS || []).indexOf('upcomingTripItems') !== -1 ||
+     /upcomingTripItems/.test(require('fs').readFileSync(__dirname + '/turo-read-contract.js', 'utf8')));
+  // hostedAndCoHostedVehicles rides along inside the TRIPS feed. Listing it as a
+  // container would make a trips read return the fleet instead of the bookings.
+  var src = require('fs').readFileSync(__dirname + '/turo-read-contract.js', 'utf8');
+  var block = src.slice(src.indexOf('var CONTAINER_KEYS'), src.indexOf('var CONTAINER_KEYS') + 700);
+  ok('the fleet key never hijacks the trips container',
+     block.indexOf('"hostedAndCoHostedVehicles"') === -1, block.slice(0, 120));
+  // `owner` is the HOST on a real trip item and must never be read as the guest.
+  var gblock = src.slice(src.indexOf('var GUEST_KEYS'), src.indexOf('var GUEST_KEYS') + 400);
+  ok('owner is never treated as the guest', gblock.indexOf('"owner"') === -1, gblock.slice(0, 120));
+})();
+
+
+
+// --- the plate can arrive wrapped in an object ------------------------------
+// Measured on a real host feed: vehicle.registration is
+//   { insuranceCardUrl, licensePlate: "DNKP44", regionRequired, state: "CO" }
+// `registration` is in PLATE_KEYS and matched first, so the plate resolved to an
+// object and 41 real bookings landed with no plate at all. vehicles.reg is
+// unique 461/461 and is the only safe join key to a Drive247 car, so losing it
+// pushes every booking into the review queue.
+(function () {
+  var nested = R.readVehicle({ id: 'v1', make: 'Toyota', model: 'Venza',
+    registration: { insuranceCardUrl: null, licensePlate: 'DNKP44',
+                    regionRequired: false, state: 'CO' } }, null);
+  ok('plate unwrapped from registration object', nested.plateRaw === 'DNKP44', nested);
+  ok('...and normalised', nested.plateNormalised === 'DNKP44', nested);
+
+  var flat = R.readVehicle({ id: 'v2', licensePlate: 'AB12 CDE' }, null);
+  ok('a flat plate still works', flat.plateRaw === 'AB12 CDE' && flat.plateNormalised === 'AB12CDE', flat);
+
+  var none = R.readVehicle({ id: 'v3', make: 'VW' }, null);
+  ok('no plate stays null rather than guessed', none.plateRaw === null && none.plateNormalised === null, none);
+})();
+
+
+// --- the import must always SAY something ----------------------------------
+// The first version of this note had a branch for "imported" and a branch for
+// "waiting for you", and none for "refused". On the first real sync all 41
+// bookings were refused -- every plate belonged to a different operator, i.e.
+// the extension was signed in to the wrong Drive247 account -- and the panel
+// printed an empty string. A refusal is a result; silence reads as a broken
+// feature and hides the one sentence that explains the whole run.
+(function () {
+  var blocked = R.importOutcomeNote({
+    ok: true, imported: 0,
+    counts: { ready: 0, need_a_vehicle: 0, need_your_confirmation: 0, already_imported: 0, cannot_import: 41 },
+    topBlocker: 'That number plate is registered to another operator on this platform.'
+  });
+  ok('a fully-refused run is never silent', !!blocked, blocked);
+  ok('...it counts the refusals', blocked.indexOf('41 bookings could not be imported') === 0, blocked);
+  ok('...and gives the planner reason verbatim',
+    blocked.indexOf('registered to another operator') > -1, blocked);
+
+  var mixed = R.importOutcomeNote({
+    ok: true, imported: 3,
+    counts: { ready: 3, need_a_vehicle: 1, need_your_confirmation: 1, already_imported: 0, cannot_import: 2 },
+    topBlocker: 'Turo did not give us usable start and end times for this trip.'
+  });
+  ok('the happy half leads', mixed.indexOf('3 bookings were imported') === 0, mixed);
+  ok('...the waiting half is counted across both buckets', mixed.indexOf('2 bookings are waiting') > -1, mixed);
+  ok('...and the refused half still appears', mixed.indexOf('2 bookings could not be imported') > -1, mixed);
+
+  var one = R.importOutcomeNote({ ok: true, imported: 1, counts: { ready: 1 } });
+  ok('singular reads as English', one === '1 booking was imported and its car is now booked out in Drive247.', one);
+
+  var already = R.importOutcomeNote({
+    ok: true, imported: 0, counts: { ready: 0, already_imported: 12 } });
+  ok('"nothing new" is a sentence too', already.indexOf('already in your Drive247 calendar') > -1, already);
+
+  var busy = R.importOutcomeNote({
+    ok: true, imported: 2, counts: { ready: 2, already_imported: 12 } });
+  ok('...but is dropped once there is real news', busy.indexOf('already in your') === -1, busy);
+
+  ok('a fixture run says nothing', R.importOutcomeNote({ ok: true, imported: 0, skipped: 'fixture' }) === null);
+  ok('a token-only install says nothing', R.importOutcomeNote({ ok: true, imported: 0, skipped: 'no_session' }) === null);
+
+  var failed = R.importOutcomeNote({ ok: false, imported: 0, detail: 'HTTP 503' });
+  ok('a failed import never claims the sync failed', failed.indexOf('The bookings were saved') === 0, failed);
+  ok('...and carries the detail for whoever reports it', failed.indexOf('HTTP 503') > -1, failed);
+
+  ok('nothing at all stays null', R.importOutcomeNote({ ok: true, imported: 0, counts: {} }) === null);
+  ok('a missing result stays null', R.importOutcomeNote(null) === null);
+})();
+
+
+// --- ready, but nothing created -------------------------------------------
+// This shipped silent. A real import on a live account returned HTTP 200 with
+// counts {ready: 42, imported: 0}: every rental insert had failed against a
+// column that does not exist, so 41 customers and 11 vehicle mappings were
+// written and not one booking. No count said "error", so every branch was
+// false and the panel printed nothing at all.
+(function () {
+  var stuck = R.importOutcomeNote({
+    ok: true, imported: 0,
+    counts: { ready: 42, need_a_vehicle: 0, need_your_confirmation: 0, already_imported: 0, cannot_import: 0 }
+  });
+  ok('a plan that created nothing is never silent', !!stuck, stuck);
+  ok('...it says how many should have landed', stuck.indexOf('42 bookings were ready') === 0, stuck);
+  // The phrase appears as a DENIAL ("Nothing is booked out yet"); what must
+  // never appear is the claim that cars ARE now booked out.
+  ok('...it does not claim any car is booked out', stuck.indexOf('now booked out') === -1, stuck);
+  ok('...and it does not blame the operator', /fault on the Drive247 side/.test(stuck), stuck);
+
+  var one = R.importOutcomeNote({ ok: true, imported: 0, counts: { ready: 1 } });
+  ok('singular reads as English', one.indexOf('1 booking was ready to import but was not created') === 0, one);
+
+  // A run with nothing ready is a different thing and still says nothing.
+  ok('nothing ready stays quiet', R.importOutcomeNote({ ok: true, imported: 0, counts: { ready: 0 } }) === null);
+  // And a partial success reports the half that worked, not the half that did not.
+  var half = R.importOutcomeNote({ ok: true, imported: 3, counts: { ready: 3 } });
+  ok('a successful import is unaffected', half.indexOf('3 bookings were imported') === 0, half);
+})();
+
+console.log(fails? ('\n'+fails+' FAILURES') : '\nALL PASS');
+process.exit(fails?1:0);

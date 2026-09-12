@@ -1,0 +1,823 @@
+/* ===========================================================================
+   Drive247 Turo Bridge — popup
+   ===========================================================================
+
+   DESIGN SYSTEM: Northwind v2 (NORTHWIND_UI_GUIDE.md) — the same one the
+   Drive247 Turo Sync page uses. The popup and that page are one product seen
+   through two runtimes, and they are meant to be indistinguishable in
+   typography, colour, radius and state language.
+
+   Manrope throughout. Cards and buttons at 26px, inputs and pills at 22px, so a
+   standard-height button reads as very nearly a lozenge. Surfaces are separated
+   by a translucent ring and a soft shadow rather than a grey line. One
+   saturated colour, a deep violet-indigo (#442DD7), and it is spent only on
+   primary actions and active state — status keeps its own green / amber / red.
+
+   LIGHT-FIRST, and that is a change. This file was dark-first. The portal is
+   white, and a popup that opens dark beside a white page reads as a different
+   product, which is the one thing this redesign exists to stop. Dark is still
+   here and still follows the guide's rule that primary gets DARKER rather than
+   lighter.
+
+   TWO COPIES OF ONE DESIGN. apps/portal/src/global.css holds the other set of
+   tokens; a Chrome popup cannot import a Next.js stylesheet. Change one, change
+   both.
+   =========================================================================== */
+
+/* ── THE TYPEFACES, ACTUALLY PRESENT ────────────────────────────────────────
+   This file named "DM Sans" and Inter for months and neither ever rendered:
+   the MV3 content security policy blocks remote stylesheets and font files
+   outright, so every declaration silently fell through to the system sans.
+   Bundling the woff2 is the only way to load them, which is why the portal
+   ships its own copies too. font-display: swap so a cold profile paints text
+   immediately rather than showing an empty popup. */
+/* MANROPE, BUNDLED — not fetched. A Chrome extension popup runs under a CSP
+   that blocks remote stylesheets and font files outright, so the portal's
+   next/font trick is not available here and the file ships in the crx. One
+   variable face covers 200-800, which is why there is a single 24KB file where
+   the two it replaces needed 85KB between them. */
+@font-face {
+  font-family: "Manrope";
+  src: url("assets/fonts/manrope.woff2") format("woff2");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NORTHWIND v2 — the same design as the Turo Sync page, in a second runtime.
+
+   A Chrome popup cannot share a stylesheet with a Next.js app, so these values
+   are the portal's tokens transcribed by hand. THEY ARE ONE DESIGN IN TWO
+   FILES: apps/portal/src/global.css holds the other copy, and a change to
+   either belongs in both.
+
+   The variable NAMES are the extension's own and deliberately unchanged —
+   --ink, --raised, --line and the rest are referenced by ~700 lines of rules
+   below, and renaming them to match the portal's --foreground/--card would have
+   been a diff nobody could review. Only the VALUES moved.
+
+   LIGHT IS NOW THE DEFAULT. It was dark-first; the portal is white, and a popup
+   that opens dark next to a white page reads as a different product. Dark is
+   kept, and follows the guide's rule that primary gets DARKER rather than
+   lighter — a detail an inverted palette would have got backwards.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  --indigo: #442dd7;       /* hsl(248 68% 51%) — the one saturated colour */
+  --indigo-soft: #f0edfd;  /* primary-light, for tinted fills */
+  --indigo-bright: #3520ac; /* primary-hover */
+
+  --ink: #0a0a0a;          /* headings */
+  --body: #262626;         /* body copy */
+  --muted: #737373;        /* captions, helper text */
+
+  --surface: #ffffff;      /* the popup ground */
+  --raised: #ffffff;       /* cards */
+  --sunken: #f5f5f5;       /* inputs, quiet fills */
+
+  /* SURFACES ARE RINGED, NOT BORDERED. These are the ring colours; where a rule
+     below still says "border", it is drawing a hairline at 5% rather than the
+     grey line this design does not have. */
+  --line: rgba(10, 10, 10, 0.05);
+  --line-strong: rgba(10, 10, 10, 0.1);
+
+  --green: #16a249;
+  --amber: #eba40a;
+  --red: #e6000b;
+  --blue: #442dd7;         /* no second accent: blue resolves to primary */
+
+  /* §3 — the signature. 26px on cards and buttons, 22px on inputs and pills. */
+  --radius: 26px;
+  --radius-sm: 22px;
+  --radius-xs: 14px;       /* small panels and notes */
+
+  /* §5 — soft shadows, and the hover one is indigo-tinted on purpose. */
+  --shadow-sm: 0 1px 2px 0 rgba(41, 53, 48, 0.08);
+  --shadow-card: 0 4px 6px -1px rgba(41, 53, 48, 0.1), 0 2px 4px -1px rgba(41, 53, 48, 0.06);
+  --shadow-hover: 0 10px 15px -3px rgba(68, 45, 215, 0.15), 0 4px 6px -2px rgba(68, 45, 215, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Primary gets DARKER here, per §2.2. Do not "fix" this to a lighter
+       indigo: the guide is explicit that dark is not an inversion. */
+    --indigo: #2b21a8;     /* hsl(246 61% 42%) */
+    --indigo-soft: #241c5c;
+    --indigo-bright: #3a2ecf;
+
+    --ink: #fafafa;
+    --body: #e5e5e5;
+    --muted: #a1a1a1;
+
+    --surface: #0a0a0a;
+    --raised: #171717;
+    --sunken: #262626;
+
+    /* Translucent white rather than a grey token — also §2.2. */
+    --line: rgba(255, 255, 255, 0.1);
+    --line-strong: rgba(255, 255, 255, 0.15);
+
+    --green: #4ade80;
+    --amber: #f5c451;
+    --red: #ff6670;
+    --blue: #6b5ce7;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+    --shadow-hover: 0 10px 15px -3px rgba(43, 33, 168, 0.4), 0 4px 6px -2px rgba(43, 33, 168, 0.3);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  width: 396px;
+  background: var(--surface);
+  color: var(--body);
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------ head -- */
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--line);
+  background: var(--sunken);
+}
+
+.mark {
+  width: 34px; height: 34px; flex: none;
+  border-radius: var(--radius-xs);
+  background: var(--indigo);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.head-text { min-width: 0; flex: 1; }
+
+.head-text h1 {
+  margin: 0;
+  font-size: 15px; font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.head-text p {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.icon-btn {
+  width: 30px; height: 30px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: var(--radius-xs);
+  background: transparent; color: var(--muted);
+  cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+}
+.icon-btn:hover { color: var(--ink); background: var(--line); }
+.icon-btn:focus-visible {
+  outline: none; color: var(--indigo);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--indigo) 45%, transparent);
+}
+
+/* WHO IS SIGNED IN. Pushed right so it reads as chrome, not content. */
+.acct {
+  margin-left: auto;
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 0; min-width: 0;
+  /* NOT A CARD. An earlier pass gave this a card shadow along with the real
+     surfaces; it is three lines of text in the header and a shadow under it
+     read as a floating panel jammed against the settings button. */
+}
+.acct-name {
+  margin: 0; font-size: 12px; font-weight: 500; color: var(--ink);
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.acct-sub {
+  margin: 0; font-size: 10px; color: var(--muted);
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* The account block sits between the title and the settings button, so every
+   line in it is capped. Without this the longest label -- "Use a different
+   account", which only appears on an adopted portal session -- pushed past both
+   neighbours and overlapped them. */
+.acct .linkish {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------ body -- */
+
+.body { padding: 15px; display: flex; flex-direction: column; gap: 13px; }
+
+#viewMain, #viewAuth, #viewSettings {
+  display: flex; flex-direction: column; gap: 13px;
+}
+
+.view-title {
+  margin: 2px 0 0; font-size: 20px; font-weight: 600;
+  letter-spacing: -0.02em; color: var(--ink);
+}
+/* A HINT IS NOT AN ERROR and must not look like one. Nothing has gone wrong
+   when this shows — there is simply a shorter way in than the form below. */
+.view-hint {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.view-sub { margin: -8px 0 2px; font-size: 12.5px; color: var(--muted); }
+
+.section-label {
+  margin: 2px 0 -4px;
+  font-family: "Manrope", -apple-system, sans-serif;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--muted);
+}
+.section-label.tight { margin: 0 0 1px; }
+
+/* ------------------------------------------------------------------ hero -- */
+
+.hero {
+  position: relative;
+  padding: 16px 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(120% 90% at 80% 0%, color-mix(in srgb, var(--indigo) 22%, transparent), transparent 62%),
+    var(--raised);
+  overflow: hidden;
+}
+
+.hero-art {
+  position: relative; height: 92px; margin: -2px -4px 10px;
+  color: var(--indigo-bright);
+}
+
+.hero-glow {
+  position: absolute; inset: -30% 20% 30% -10%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--indigo) 40%, transparent), transparent);
+  filter: blur(6px);
+}
+
+/* A drawn grid rather than a photograph: no asset to ship, no network fetch to
+   be blocked, and it survives both themes without a second file. */
+.hero-grid {
+  position: absolute; inset: 42% 0 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--indigo) 26%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--indigo) 18%, transparent) 1px, transparent 1px);
+  background-size: 100% 14px, 34px 100%;
+  mask-image: linear-gradient(#000, transparent);
+  -webkit-mask-image: linear-gradient(#000, transparent);
+}
+
+.hero-car { position: absolute; inset: auto 0 2px; display: block; }
+.hero-car svg { width: 100%; height: auto; display: block; }
+
+.hero-title {
+  position: relative;
+  margin: 0 0 6px; font-size: 22px; font-weight: 600;
+  line-height: 1.18; letter-spacing: -0.025em; color: var(--ink);
+}
+.hero-title .accent { color: var(--indigo-bright); }
+.hero-sub { position: relative; margin: 0; font-size: 12.5px; color: var(--muted); }
+
+/* --------------------------------------------------------------- banners -- */
+
+.banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 13px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--green) 40%, transparent);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+.banner-icon {
+  width: 24px; height: 24px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--green); color: var(--surface);
+}
+.banner-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.banner-sub { margin: 0; font-size: 11.5px; color: var(--muted); }
+
+/* ----------------------------------------------------------- connections -- */
+
+/* TWO CARDS, NEVER ONE. "Turo" and "Drive247" are different accounts with
+   different fixes, so they get equal weight and separate verdicts rather than a
+   single merged "not connected". */
+.conns { display: flex; flex-direction: column; gap: 9px; }
+
+.conn {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--raised);
+  transition: border-color .14s ease;
+  box-shadow: var(--shadow-card);
+}
+.conn[data-state="on"] { border-color: color-mix(in srgb, var(--green) 32%, var(--line)); }
+
+.brand {
+  width: 40px; height: 40px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-xs);
+  font-family: "Manrope", -apple-system, sans-serif;
+  font-weight: 700; letter-spacing: -0.02em;
+}
+.brand.turo {
+  background: #111; color: #fff; font-size: 9px; letter-spacing: 0.04em;
+  border: 1px solid var(--line-strong);
+}
+.brand.d247 {
+  background: linear-gradient(140deg, var(--indigo), #a855f7);
+  color: #fff; font-size: 17px;
+}
+
+.conn-text { min-width: 0; flex: 1; }
+.conn-name { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.conn-status { margin: 1px 0 0; display: flex; align-items: center; gap: 6px; font-size: 11.5px; line-height: 1.35; }
+
+/* The dot carries the state at a glance; the text carries what to do about it.
+   Colour is never the only signal — the detail line always says it in words,
+   which is what makes this readable to someone who cannot tell the green from
+   the amber. */
+.conn-dot {
+  width: 7px; height: 7px; flex: none; border-radius: 50%;
+  background: var(--muted);
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.conn[data-state="on"] .conn-dot {
+  background: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent);
+}
+.conn[data-state="on"] .conn-status { color: var(--green); }
+.conn[data-state="off"] .conn-dot {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 20%, transparent);
+}
+.conn[data-state="off"] .conn-status { color: var(--amber); }
+.conn[data-state="checking"] .conn-dot { animation: pulse 1.1s ease-in-out infinite; }
+
+@keyframes pulse { 0%,100% { opacity:.3 } 50% { opacity:1 } }
+
+/* Motion is decoration here: the word "Checking…" already says it. */
+@media (prefers-reduced-motion: reduce) {
+  .conn[data-state="checking"] .conn-dot { animation: none; opacity: .6; }
+}
+
+.chip {
+  flex: none; padding: 7px 13px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-xs);
+  background: var(--sunken); color: var(--ink);
+  font-family: "Manrope", -apple-system, sans-serif; font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.chip:hover { background: var(--line); }
+.chip.solid { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+.chip.solid:hover { background: var(--indigo-bright); }
+.chip:focus-visible {
+  outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--indigo) 45%, transparent);
+}
+
+/* --------------------------------------------------------- quick actions -- */
+
+.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+.quick-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 13px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--raised); color: var(--body);
+  text-align: left; cursor: pointer;
+  font-family: inherit;
+  transition: border-color .12s ease, background .12s ease;
+}
+.quick-card:hover:not(:disabled) { border-color: var(--indigo); background: var(--sunken); }
+.quick-card:focus-visible {
+  outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--indigo) 45%, transparent);
+}
+
+.quick-icon {
+  width: 32px; height: 32px; margin-bottom: 4px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--indigo) 18%, transparent);
+  color: var(--indigo-bright);
+}
+.quick-title {
+  font-family: "Manrope", -apple-system, sans-serif;
+  font-size: 12.5px; font-weight: 600; color: var(--ink);
+}
+.quick-sub { font-size: 11px; color: var(--muted); line-height: 1.3; }
+
+/* DISABLED MUST NOT LOOK LIKE A DIMMED PRIMARY. A half-opacity indigo card
+   still reads as "the main action", so people keep clicking it and nothing
+   happens. Dropping the accent entirely says unavailable in the shape of the
+   control, not just its brightness. */
+.quick-card:disabled { cursor: not-allowed; background: var(--sunken); border-color: var(--line); }
+.quick-card:disabled .quick-icon { background: var(--line); color: var(--muted); }
+.quick-card:disabled .quick-title { color: var(--muted); }
+
+.gate-note {
+  margin: -4px 0 0;
+  padding: 9px 11px;
+  font-size: 11.5px; line-height: 1.4; color: var(--body);
+  background: var(--sunken);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+
+.lastsync-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--raised);
+}
+.lastsync { margin: 0; font-size: 12px; color: var(--body); }
+
+/* --------------------------------------------------------------- fields -- */
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+label { font-size: 12px; font-weight: 500; color: var(--ink); }
+
+.input-wrap { position: relative; display: flex; align-items: center; }
+
+.input-icon {
+  position: absolute; left: 11px;
+  display: flex; align-items: center; color: var(--muted);
+  pointer-events: none;
+}
+
+input[type="password"], input[type="email"], input[type="text"] {
+  width: 100%;
+  padding: 11px 12px 11px 34px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--sunken); color: var(--ink);
+  font-family: inherit; font-size: 13px;
+  outline: none;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+#password { padding-right: 40px; }
+
+input::placeholder { color: var(--muted); }
+input:focus {
+  border-color: var(--indigo);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 20%, transparent);
+}
+input:disabled { opacity: .6; cursor: not-allowed; }
+
+.eye {
+  position: absolute; right: 5px;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: var(--radius-xs);
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: color .12s ease, background .12s ease;
+}
+.eye:hover { color: var(--ink); background: var(--line); }
+.eye:focus-visible {
+  outline: none; color: var(--indigo);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--indigo) 45%, transparent);
+}
+
+.rowline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+
+/* RESERVED SPACE FOR THE ERROR. The slot is always in the layout, so the Sign
+   in button does not jump down the instant an error appears — which is the
+   exact moment a tenant is moving their cursor toward it. */
+.auth-error-slot { min-height: 36px; display: flex; align-items: stretch; }
+
+.auth-error {
+  margin: 0; width: 100%;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red);
+  font-size: 12px; line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------- steps -- */
+
+.steps {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0; padding: 0; list-style: none;
+}
+.step { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--muted); }
+.step + .step::before {
+  content: ""; width: 26px; height: 1px; background: var(--line-strong); margin-right: 1px;
+}
+.step-n {
+  width: 21px; height: 21px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1px solid var(--line-strong);
+  font-family: "Manrope", sans-serif; font-size: 11px; font-weight: 600;
+}
+.step.current { color: var(--indigo-bright); }
+.step.current .step-n { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+
+/* -------------------------------------------------------------- buttons -- */
+
+.primary, .secondary, .danger {
+  width: 100%; padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.primary { border: 0; background: var(--indigo); color: #fff; }
+.primary:hover:not(:disabled) { background: var(--indigo-bright); }
+
+.secondary {
+  border: 1px solid var(--line-strong);
+  background: var(--sunken); color: var(--ink);
+}
+.secondary:hover:not(:disabled) { background: var(--line); }
+
+.danger {
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+  background: transparent; color: var(--red);
+}
+.danger:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
+
+.primary:focus-visible, .secondary:focus-visible, .danger:focus-visible {
+  outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 40%, transparent);
+}
+
+.primary:disabled, .secondary:disabled {
+  background: var(--sunken); border: 1px solid var(--line);
+  color: var(--muted); cursor: not-allowed;
+}
+
+.btn-arrow { opacity: .85; }
+
+.linkish {
+  border: 0; background: none; padding: 0;
+  color: var(--indigo-bright); font-family: inherit; font-size: 11.5px;
+  cursor: pointer; text-decoration: none;
+}
+.linkish:hover { text-decoration: underline; }
+.linkish.subtle { color: var(--muted); }
+.linkish.subtle:hover { color: var(--ink); }
+
+.spinner {
+  width: 13px; height: 13px; flex: none;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+/* ------------------------------------------------------------- settings -- */
+
+.setting-group {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--raised); overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.setting {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px;
+}
+.setting + .setting { border-top: 1px solid var(--line); }
+.setting-icon {
+  width: 32px; height: 32px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--indigo) 16%, transparent);
+  color: var(--indigo-bright);
+}
+.setting-text { min-width: 0; flex: 1; }
+.setting-title { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.setting-sub {
+  margin: 0; font-size: 11.5px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.note {
+  padding: 12px 13px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--sunken);
+}
+.note-title { margin: 0 0 3px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.note-body { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+.setting-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* ------------------------------------------------------------ run panel -- */
+
+.run, .status {
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--raised);
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+
+.run-head, .status-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+
+.dot {
+  width: 8px; height: 8px; flex: none; border-radius: 50%;
+  background: var(--muted);
+}
+[data-phase="running"] .dot { background: var(--indigo); animation: pulse 1.1s ease-in-out infinite; }
+[data-phase="done"] .dot { background: var(--green); }
+[data-phase="parked"] .dot { background: var(--amber); }
+[data-phase="error"] .dot { background: var(--red); }
+
+.batch { margin: 0; font-size: 11.5px; color: var(--muted); }
+
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.tile {
+  padding: 9px 6px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--sunken);
+  text-align: center;
+}
+.tile strong {
+  display: block;
+  font-family: "Manrope", sans-serif; font-size: 16px; font-weight: 600; color: var(--ink);
+}
+.tile span { display: block; font-size: 9.5px; color: var(--muted); line-height: 1.25; margin-top: 1px; }
+.tile.good strong { color: var(--green); }
+.tile.warn strong { color: var(--amber); }
+.tile.bad strong { color: var(--red); }
+
+.coverage { margin: 0; font-size: 12px; line-height: 1.4; }
+.coverage.good { color: var(--green); }
+.coverage.warn { color: var(--amber); }
+
+.gates {
+  margin: 0; display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.gates .grow {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 9px 11px; background: var(--sunken);
+}
+.gates .grow + .grow { border-top: 1px solid var(--line); }
+.gates dt { font-size: 12px; color: var(--body); }
+.gates dd {
+  margin: 0;
+  font-family: "Manrope", sans-serif; font-size: 12px; font-weight: 600;
+  text-align: right;
+}
+.gates dd.good { color: var(--green); }
+.gates dd.warn { color: var(--amber); }
+
+.gate-reason { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+.alert {
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  display: flex; flex-direction: column; gap: 5px;
+}
+.alert[data-tone="bad"] {
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+.alert-kind { margin: 0; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.alert-advice { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--body); }
+.alert-detail {
+  margin: 0; font-size: 10.5px; line-height: 1.4; color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.alert-actions { display: flex; align-items: center; gap: 9px; margin-top: 3px; }
+.alert-actions .secondary { width: auto; padding: 7px 13px; font-size: 12px; }
+
+.drawer {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--sunken); padding: 9px 11px;
+}
+.drawer summary {
+  cursor: pointer; font-size: 12px; font-weight: 500; color: var(--ink);
+  list-style: none;
+}
+.drawer summary::-webkit-details-marker { display: none; }
+.drawer summary::before { content: "▸ "; color: var(--muted); }
+.drawer[open] summary::before { content: "▾ "; }
+.drawer .hint { margin: 8px 0 0; }
+
+/* One fact about the feed, said once, above the rows it applies to. */
+.trip-shared {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.kv, .trips { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.kv li, .trips li { font-size: 11.5px; line-height: 1.4; color: var(--body); }
+.kv strong, .trips strong { display: block; color: var(--ink); font-weight: 600; }
+
+.badge {
+  align-self: flex-start;
+  font-family: "Manrope", -apple-system, sans-serif;
+  font-size: 9.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 999px;
+}
+.badge[data-source="turo"] { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+.badge[data-source="fixture"] { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+
+.status-detail { margin: 0; font-size: 12px; color: var(--body); }
+
+.result { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.result .row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+.result dt { color: var(--muted); }
+.result dd { margin: 0; color: var(--ink); text-align: right; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+
+.rule { border: 0; border-top: 1px solid var(--line); margin: 2px 0; }
+
+/* ----------------------------------------------------------------- misc -- */
+
+.hint { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.45; }
+.hint.centred { text-align: center; }
+.hint.warn { color: var(--amber); }
+.hint.good { color: var(--green); }
+
+.foot {
+  padding: 11px 15px;
+  border-top: 1px solid var(--line);
+  background: var(--sunken);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NORTHWIND INTERACTION — appended so it wins over the rules above without
+   editing each of them, and so the whole behaviour reads in one place.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* §6.1 — a button physically presses down 1px. It is a small thing and it is
+   most of why this design feels responsive rather than flat. */
+button:active:not(:disabled):not([aria-haspopup]) {
+  transform: translateY(1px);
+}
+
+button, .quick-card, input, select {
+  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* §5 — focus is loud ON PURPOSE: 3px, not the 2px most component kits ship.
+   A popup is keyboard-driven more often than a page is, and the ring is the
+   only thing telling somebody where they are. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--indigo) 30%, transparent);
+}
+
+/* §6.3 — inputs are FILLED, not outlined: the border only appears on focus. */
+input:not([type="checkbox"]):not([type="radio"]) {
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--sunken);
+}
+input:not([type="checkbox"]):not([type="radio"]):focus-visible {
+  border-color: var(--indigo);
+}
+
+/* An interactive card lifts and warms rather than changing a border colour —
+   this system has no border to change. */
+.quick-card:hover:not(:disabled) {
+  box-shadow: var(--shadow-hover);
+}
+.quick-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

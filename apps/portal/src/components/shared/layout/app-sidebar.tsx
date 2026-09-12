@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Wallet, AlertTriangle, BookOpen, Wrench } from "lucide-react";
+import { Clock, ChevronRight, CircleDollarSign, Layers, Timer, Zap, ShieldCheck, FileSignature, ArrowLeft, Building2, MapPin, Palette, Car, TrendingUp, Package, CreditCard, Bell, BellRing, FileText, Shield, Crown, Lock, Receipt, Banknote, MessageSquare, MessageSquarePlus, ShieldX, Bolt, Search, X, Wallet, AlertTriangle, BookOpen, Wrench , DownloadCloud } from "lucide-react";
 import { EarthIcon } from "@/components/ui/earth";
 import { CarIcon } from "@/components/ui/car";
 import { BlocksIcon } from "@/components/ui/blocks";
@@ -33,6 +33,7 @@ import { useFleetHealthStats } from "@/hooks/use-fleet-health";
 import { BrandLogo } from "@/components/shared/layout/brand-logo";
 import { useTenant } from "@/contexts/TenantContext";
 import { isAreaHidden } from "@/lib/lean-areas";
+import { isV2 } from "@/lib/v2";
 import { UserPlus, Workflow } from "lucide-react";
 import { usePendingBookingsCount } from "@/hooks/use-pending-bookings";
 import { useUnreadCount } from "@/hooks/use-unread-count";
@@ -166,6 +167,20 @@ export function AppSidebar() {
   const { data: reminderStats } = useReminderStats();
   const { settings } = useOrgSettings();
   const { tenant, tenantSlug } = useTenant();
+  // Turo Sync. BOTH gates, and in this order.
+  //
+  // `tenants.turo_bridge_enabled` is already true for five tenants in
+  // production, two of them live operators from the PoC, so it alone would put
+  // the entry in their sidebar the moment this deploys. `isV2("turo", …)` is
+  // what keeps it to the canary until the rollout widens.
+  //
+  // `=== true` is deliberate: the column arrives via TENANT_OPTIONAL_COLUMNS,
+  // not the core list, so a missing anon GRANT sheds it to undefined instead of
+  // 42501-ing the whole tenant row. The column keeps its internal
+  // `turo_bridge` name; only what the operator reads says "Turo Sync".
+  const turoSyncEnabled =
+    isV2("turo", tenantSlug) &&
+    (tenant as { turo_bridge_enabled?: boolean } | null)?.turo_bridge_enabled === true;
   const leadManagementEnabled = (tenant as { lead_management_enabled?: boolean } | null)?.lead_management_enabled === true;
   const automationsEnabled = (tenant as { automations_enabled?: boolean } | null)?.automations_enabled === true;
   const vehicleOwnersEnabled = (tenant as { vehicle_owners_enabled?: boolean } | null)?.vehicle_owners_enabled === true;
@@ -296,6 +311,7 @@ export function AppSidebar() {
           { name: "Owner Payouts", href: "/owner-payouts", icon: Banknote },
         ] : []),
         { name: "Rentals", href: "/rentals", icon: AnimatedFileText },
+        ...(turoSyncEnabled ? [{ name: "Turo Sync", href: "/turo-bridge", icon: DownloadCloud }] : []),
         ...(isAreaHidden("quotes", tenantSlug)
           ? []
           : [{ name: "Fleet Quotes", href: "/quotes", icon: CircleDollarSign }]),

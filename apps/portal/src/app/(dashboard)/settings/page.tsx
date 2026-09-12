@@ -25,6 +25,7 @@ import { Calendar as CalendarIcon, Settings as SettingsIcon, Building2, Bell, Be
 import { toast } from '@/hooks/use-toast';
 import { useOrgSettings } from '@/hooks/use-org-settings';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { isV2 } from "@/lib/v2";
 import { useTenant } from '@/contexts/TenantContext';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 import { LogoUploadWithResize } from '@/components/settings/logo-upload-with-resize';
@@ -618,6 +619,66 @@ const Settings = () => {
   // the rental-settings row rather than TenantContext because TenantContext selects
   // an explicit column list that does not include `fleet_health_enabled`, and the
   // sidebar reads the same cache — so refetchTenant() would move nothing here.
+  // Turo Sync feature toggle.
+  //
+  // `turo_bridge_enabled` drives BOTH the sidebar entry and the /turo-bridge
+  // route guard, and TenantContext is the single reader of it — which is why
+  // this handler calls refetchTenant() rather than patching a query cache: the
+  // sidebar and the route both read the tenant object, not a settings cache.
+  //
+  // The switch is rendered only for a tenant on the canary (V2_AREAS.turo), so
+  // this state is inert for everyone else.
+  const [pendingTuroSync, setPendingTuroSync] = useState<boolean | null>(null);
+  const persistedTuroSync =
+    (tenant as { turo_bridge_enabled?: boolean } | null)?.turo_bridge_enabled === true;
+  const turoSyncEnabled = pendingTuroSync ?? persistedTuroSync;
+  const [savingTuroSync, setSavingTuroSync] = useState(false);
+  const handleToggleTuroSync = async (next: boolean) => {
+    if (!tenant?.id) {
+      toast({
+        title: "Tenant not loaded",
+        description: "Reload the page and try again — the portal could not resolve your tenant.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const previous = turoSyncEnabled;
+    setPendingTuroSync(next);
+    setSavingTuroSync(true);
+    try {
+      // supabaseUntyped: `turo_bridge_enabled` postdates the last typegen, and
+      // the typed client rejects an unknown column inside a .select() literal.
+      // .select() is not optional — without it an RLS-blocked zero-row write
+      // returns error:null and would read as success.
+      const { data, error } = await supabaseUntyped
+        .from("tenants")
+        .update({ turo_bridge_enabled: next })
+        .eq("id", tenant.id)
+        .select("turo_bridge_enabled");
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("You do not have permission to change this setting.");
+      }
+      setPendingTuroSync(null);
+      await refetchTenant();
+      toast({
+        title: next ? "Turo Sync enabled" : "Turo Sync disabled",
+        description: next
+          ? "\u201CTuro Sync\u201D has been added to your Fleet & Bookings sidebar. Install the browser extension and run a sync to fill it."
+          : "The Turo Sync entry is hidden and the page is no longer reachable. Nothing was deleted — trips already synced and bookings already imported are kept. This does not stop the sync: remove the Chrome extension if you want that.",
+      });
+    } catch (e: any) {
+      setPendingTuroSync(previous === persistedTuroSync ? null : previous);
+      toast({
+        title: "Could not change Turo Sync",
+        description: e?.message ?? "Unknown error.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingTuroSync(false);
+    }
+  };
+
   const [pendingFleetHealth, setPendingFleetHealth] = useState<boolean | null>(null);
   const persistedFleetHealth =
     (rentalSettings as unknown as { fleet_health_enabled?: boolean }).fleet_health_enabled === true;
@@ -2221,6 +2282,43 @@ const Settings = () => {
                   aria-label="Toggle Fleet Health feature"
                 />
               </div>
+
+              {/* Turo Sync — canary only. V2_AREAS.turo keeps this switch off the
+                  screen for tenants who are not on the rollout, so nobody can
+                  turn on a page they cannot reach. Five tenants already carry
+                  turo_bridge_enabled = true from the PoC; this gate is what
+                  stops the toggle appearing for them before the widening. */}
+              {isV2("turo", tenantSlug) && (
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <h4 className="font-medium">Turo Sync</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Adds a &quot;Turo Sync&quot; entry to your Fleet &amp; Bookings sidebar. It lists
+                    every trip the Drive247 browser extension has read from your Turo host
+                    account, lets you match each Turo listing to one of your cars, and lets you
+                    import a Turo trip as a Drive247 booking.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    You also need the Drive247 Turo Bridge extension installed in Chrome and a
+                    Turo host session signed in. The extension reads the Turo page already open
+                    in your browser — it never asks for your Turo password.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Switching this off hides the page. It does not stop the sync and deletes
+                    nothing: trips already read and bookings already imported are kept, and the
+                    extension carries on reading in the background until it is removed from
+                    Chrome.
+                  </p>
+                </div>
+                <Switch
+                  checked={turoSyncEnabled}
+                  onCheckedChange={handleToggleTuroSync}
+                  disabled={savingTuroSync || !canEditSettings('general')}
+                  className="flex-shrink-0"
+                  aria-label="Toggle Turo Sync feature"
+                />
+              </div>
+              )}
               <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">
                   <h4 className="font-medium">Gig Driver Option</h4>

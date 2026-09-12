@@ -47,7 +47,8 @@ export type V2Area =
   | 'cms'
   | 'vehicles'
   | 'insights'
-  | 'availability';
+  | 'availability'
+  | 'turo';
 
 /**
  * One entry per v2 area. Today every list is just the canary.
@@ -94,6 +95,22 @@ const V2_AREAS: Record<V2Area, readonly string[]> = {
    * untouched and still serve everyone else.
    */
   availability: [NORTHWIND],
+  /**
+   * `/turo-bridge` — Turo Sync. Grafted from feat/turo-extension, where it had
+   * been built, deployed and left unmerged.
+   *
+   * THIS GATE IS NOT THE SAME THING AS `tenants.turo_bridge_enabled`, and the
+   * difference is the whole reason it exists. That column is the OPERATOR's own
+   * switch and it is already `true` for five tenants in production — two of
+   * them live operators (jangramrentals, nealcorentals) who were part of the
+   * PoC. Landing this screen gated only on the column would have put it in
+   * front of them the moment it deployed.
+   *
+   * So the column stays the operator's opt-in and this entry decides who may
+   * reach the screen at all. Both must agree. Widening is deleting nothing and
+   * adding a slug here, once the canary has run it long enough to have failed.
+   */
+  turo: [NORTHWIND],
 };
 
 /**
