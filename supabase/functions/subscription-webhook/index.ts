@@ -19,13 +19,26 @@ Deno.serve(async (req) => {
 
   const body = await req.text();
   const signature = req.headers.get("stripe-signature");
-  if (!signature) return errorResponse("Missing stripe-signature header", 400);
+  if (!signature) {
+    // Recorded, not just refused. Sibling handlers record this exit and this one
+    // did not, so a probe that never reaches signature verification left no
+    // trace at all — the gap is invisible precisely because nothing is written.
+    await recordWebhookDelivery(supabase, {
+      platform: "stripe_subscription", outcome: "rejected_signature",
+      httpStatus: 400, failureCode: "missing_signature_header",
+    });
+    return errorResponse("Missing stripe-signature header", 400);
+  }
 
   // Determine mode from Stripe's livemode flag, then verify signature with correct secret
   let payload: any;
   try {
     payload = JSON.parse(body);
   } catch {
+    await recordWebhookDelivery(supabase, {
+      platform: "stripe_subscription", outcome: "rejected_malformed",
+      httpStatus: 400, failureCode: "invalid_json",
+    });
     return errorResponse("Invalid JSON body", 400);
   }
   const mode: "test" | "live" = payload.livemode ? "live" : "test";
@@ -36,6 +49,16 @@ Deno.serve(async (req) => {
   const candidates = getSubscriptionWebhookSecretCandidates(mode);
   if (candidates.length === 0) {
     console.error(`Missing webhook secret for mode: ${mode}`);
+    // THE EXIT THIS FEATURE EXISTS FOR. With no signing secret configured,
+    // EVERY subscription event is refused with a 500 and Stripe eventually
+    // stops retrying — tenant billing silently stops syncing, and until this
+    // record existed there was nothing anywhere to say so. A 500 here is a
+    // platform misconfiguration, never the caller's fault, so it is recorded
+    // as `failed` rather than as a rejection.
+    await recordWebhookDelivery(supabase, {
+      platform: "stripe_subscription", outcome: "failed", mode,
+      httpStatus: 500, failureCode: "webhook_secret_not_configured",
+    });
     return errorResponse("Webhook not configured", 500);
   }
 
