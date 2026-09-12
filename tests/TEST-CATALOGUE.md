@@ -11,8 +11,8 @@ document — see the naming convention in [README.md](./README.md#naming-convent
 | | |
 |---|---|
 | Test files | 56 |
-| Tests | 1518 |
-| Passing | 1440 |
+| Tests | 1520 |
+| Passing | 1442 |
 | Skipped (opt-in Layer 2) | 78 |
 | Failing | 0 |
 | Known-defect watchdogs | 165 |
@@ -2508,7 +2508,7 @@ THE MOST IMPORTANT TEST IN THIS SUITE — Layer 3, pure maths, no network.
 
 ## `tests/spine/rental/02-invoice-maths.test.ts`
 
-**Layer:** L1 contract, L3 executable · **25 tests** (25 passing)
+**Layer:** L1 contract, L3 executable · **26 tests** (26 passing)
 
 THE SIMPLE-RENTAL INVOICE — Layer 3 maths plus a Layer 1 contract on the composition. No network.
 
@@ -2530,6 +2530,7 @@ THE SIMPLE-RENTAL INVOICE — Layer 3 maths plus a Layer 1 contract on the compo
 - it skips a zero or negative quantity rather than billing it
 - it skips a selected id that is not in the catalogue instead of throwing
 - it multiplies by quantity: two seats for three days is 15.00 x 2 x 3 = 90.00
+- it never bills a negative number of days, whatever day count it is handed
 - it floors a fractional day count and never bills fewer than one day
 - it returns extras unrounded, leaving rounding entirely to the caller
 
@@ -2565,7 +2566,7 @@ THE SIMPLE-RENTAL INVOICE — Layer 3 maths plus a Layer 1 contract on the compo
 
 ## `tests/spine/rental/03-rental-create.test.ts`
 
-**Layer:** L1 contract · **18 tests** (18 passing, 2 watchdog)
+**Layer:** L1 contract · **19 tests** (19 passing, 2 watchdog)
 
 RENTAL CREATION — the first step of the team lead's spine. Layer 1, offline.
 
@@ -2586,6 +2587,7 @@ RENTAL CREATION — the first step of the team lead's spine. Layer 1, offline.
 *Use case: RLS is off on the core tables, so tenant isolation and correct dates are entirely the application's job at insert time. A row written wrong here is wrong forever.*
 
 - it stamps tenant_id on the portal insert, because RLS is off on this table
+- it never writes a null tenant_id on any insert in the rental-creation path
 - it sets an explicit status on both insert paths rather than leaving it NULL
 - it stores an open-ended pay-as-you-go rental with a null end_date
 - it formats the picker date with format(), never toISOString(), on the portal path

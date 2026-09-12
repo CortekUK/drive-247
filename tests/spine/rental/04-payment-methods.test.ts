@@ -70,10 +70,35 @@ describe("method 1 — auto charge on a stored card", () => {
 // an unpaid link as settled.
 describe("method 2 — the on-screen checkout, and what it writes before payment", () => {
   it("records a not-yet-paid checkout as requiring capture and pending verification", () => {
-    // create-checkout-session:271,529,572 — the honest pair. The money has not
-    // moved yet; only the webhook may say otherwise.
-    expect(CHECKOUT).toMatch(/verification_status:\s*['"]pending['"]/);
-    expect(CHECKOUT).toMatch(/capture_status:\s*['"]requires_capture['"]/);
+    /**
+     * create-checkout-session:271,529,572 — the honest pair. The money has not
+     * moved yet; only the webhook may say otherwise.
+     *
+     * Asserted as "EVERY status this file writes is the honest one", not "the
+     * honest one appears somewhere". The values occur three and two times
+     * respectively, so a `toMatch` stays green while one of them is flipped —
+     * mutation testing proved it: changing the first `verification_status` to
+     * 'approved' and the first `capture_status` to 'captured' each failed to
+     * turn a single test red.
+     *
+     * Enumerating every written value also states the real property: this
+     * creator NEVER claims a payment is verified or captured before the
+     * customer has paid.
+     */
+    const verifications = [...CHECKOUT.matchAll(/verification_status:\s*['"]([a-z_]+)['"]/g)].map((m) => m[1]);
+    const captures = [...CHECKOUT.matchAll(/capture_status:\s*['"]([a-z_]+)['"]/g)].map((m) => m[1]);
+
+    expect(verifications.length, "create-checkout-session no longer writes verification_status").toBeGreaterThan(0);
+    expect(captures.length, "create-checkout-session no longer writes capture_status").toBeGreaterThan(0);
+
+    expect(
+      [...new Set(verifications)],
+      "a checkout that has not been paid may only be written as 'pending'",
+    ).toEqual(["pending"]);
+    expect(
+      [...new Set(captures)],
+      "a checkout that has not been paid may only be written as 'requires_capture'",
+    ).toEqual(["requires_capture"]);
   });
 
   it("explains in source why capture_status is requires_capture on the Stripe path", () => {

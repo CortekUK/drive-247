@@ -152,6 +152,24 @@ describe("invoice — extras", () => {
     expect(calcExtrasTotal({ seat: 2 }, EXTRAS, DAYS)).toBe(90.0);
   });
 
+  it("never bills a negative number of days, whatever day count it is handed", () => {
+    /**
+     * The `Math.max(1, …)` floor at calculate-extras-total.ts:28 is what stops a
+     * negative day count producing a NEGATIVE extras line — money owed TO the
+     * renter for a child seat.
+     *
+     * Added after mutation testing: changing that floor to `Math.max(0, …)` did
+     * not turn a single test red, because every case covered was non-negative and
+     * the two forms are identical there. A negative day count is reachable — the
+     * pricing engine tolerates a reversed date range (see 01-pricing-maths) and
+     * callers compute day counts independently of it.
+     */
+    expect(extraLineTotal(15.0, 1, "per_day", -5)).toBe(15.0);
+    expect(extraLineTotal(15.0, 1, "per_day", -1)).toBe(15.0);
+    expect(calcExtrasTotal({ seat: 1 }, EXTRAS, -5)).toBe(15.0);
+    expect(extraLineTotal(15.0, 1, "per_day", -5)).toBeGreaterThan(0);
+  });
+
   it("floors a fractional day count and never bills fewer than one day", () => {
     // days = max(1, floor(Number(rentalDays)) || 1) at calculate-extras-total.ts:28
     expect(extraLineTotal(15.0, 1, "per_day", 2.9)).toBe(30.0); // floor(2.9) = 2

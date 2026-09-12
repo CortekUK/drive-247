@@ -117,10 +117,32 @@ describe("rental create — the vehicle double-booking guard", () => {
 // here is wrong forever.
 describe("rental create — the row both paths write", () => {
   it("stamps tenant_id on the portal insert, because RLS is off on this table", () => {
-    // RLS is disabled on the core tables, so tenant isolation is entirely the
-    // application's job. A rental inserted without tenant_id is unreachable by
-    // its own tenant and visible to queries that forget to filter.
-    expect(PORTAL_NEW).toContain("tenant_id: tenant?.id");
+    /**
+     * RLS is disabled on the core tables, so tenant isolation is entirely the
+     * application's job. A rental inserted without tenant_id is unreachable by
+     * its own tenant and visible to queries that forget to filter.
+     *
+     * Asserted against the RENTAL payload specifically, not the file as a whole.
+     * `tenant_id: tenant?.id` appears SEVEN times in this file — for the rental,
+     * a P&L entry, a reminder and an invoice among others — so a bare
+     * `toContain` stays green while the rental's own stamp is removed. Mutation
+     * testing caught exactly that: replacing the rental's with `tenant_id: null`
+     * failed to turn a single test red.
+     *
+     * The rental payload is identified by `source: "portal"`, which is unique to
+     * it, and the window is the object literal around that marker.
+     */
+    const marker = PORTAL_NEW.indexOf('source: "portal"');
+    expect(marker, 'the rental payload marker source: "portal" has moved').toBeGreaterThan(-1);
+    const payload = PORTAL_NEW.slice(marker - 1200, marker + 1200);
+    expect(payload, "the RENTAL insert itself must carry tenant_id").toContain("tenant_id: tenant?.id");
+  });
+
+  it("never writes a null tenant_id on any insert in the rental-creation path", () => {
+    // The broader form of the same guard: nothing on this path may opt out of
+    // tenant scoping, however the value is spelled.
+    expect(PORTAL_NEW).not.toMatch(/tenant_id:\s*null/);
+    expect(PORTAL_NEW).not.toMatch(/tenant_id:\s*undefined/);
   });
 
   it("sets an explicit status on both insert paths rather than leaving it NULL", () => {
