@@ -1,0 +1,10 @@
+-- PENDING — NOT APPLIED. Rollback for PENDING_20260912_webhook_delivery_health.sql.txt
+--
+-- Safe to run at any time: the recorder in _shared/webhook-health.ts is fail-open,
+-- so dropping this table degrades the webhooks to their previous behaviour
+-- (working, but unobservable) rather than breaking them.
+
+DROP VIEW  IF EXISTS public.v_webhook_health;
+DROP INDEX IF EXISTS public.idx_webhook_deliveries_failures;
+DROP INDEX IF EXISTS public.idx_webhook_deliveries_platform_time;
+DROP TABLE IF EXISTS public.webhook_deliveries;

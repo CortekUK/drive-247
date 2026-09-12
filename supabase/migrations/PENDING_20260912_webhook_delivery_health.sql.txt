@@ -1,0 +1,115 @@
+-- PENDING — NOT APPLIED. Draft only. Do not run without Ghulam's explicit go-ahead.
+--
+-- The database half of the webhook health checker. The code half is:
+--   supabase/functions/_shared/webhook-health.ts   (the recorder)
+--   plus one fail-open call in each money/document webhook.
+--
+-- Rollback: supabase/migrations/PENDING_20260912_webhook_delivery_health.rollback.sql.txt
+--
+-- WHY
+-- ---
+-- Of the six webhooks that move money or bind a signed document, exactly one
+-- recorded anything before this: square-webhook. The Stripe handlers settle every
+-- rental payment, refund and deposit and kept no trace of the delivery, so
+-- "Stripe has gone quiet" was unanswerable and unalertable. ~3,900 stale Pending
+-- payment rows already exist platform-wide from expiry events never completed.
+--
+-- WHAT THIS IS NOT
+-- ----------------
+-- It is NOT a replay guard, and it must never be used as one.
+-- public.square_webhook_events stays exactly as it is: its event_id PRIMARY KEY,
+-- inserted before any mutation, is the ONLY replay defence Square has, because
+-- Square's signature carries no timestamp the way Stripe's does. This table is
+-- observability sitting alongside that, and is deliberately NOT unique on
+-- event_id — a genuine redelivery is a fact worth recording, not an error.
+--
+-- ADDITIVE ONLY: one new table, one new view, no column added to any existing
+-- table and no existing object altered.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.webhook_deliveries (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  platform     text NOT NULL
+               CHECK (platform IN ('stripe','stripe_connect','stripe_subscription','square','boldsign')),
+
+  -- 'test' | 'live' where the platform has modes; NULL where it does not.
+  mode         text CHECK (mode IS NULL OR mode IN ('test','live')),
+
+  -- The provider's own event id. NULLABLE on purpose: a delivery we rejected for
+  -- a bad signature is exactly the kind we most want recorded, and we will not
+  -- have parsed an id from it.
+  event_id     text CHECK (event_id IS NULL OR char_length(event_id) BETWEEN 1 AND 255),
+  event_type   text CHECK (event_type IS NULL OR char_length(event_type) BETWEEN 1 AND 128),
+
+  outcome      text NOT NULL
+               CHECK (outcome IN ('accepted','rejected_signature','rejected_malformed',
+                                  'handled','ignored','failed')),
+
+  http_status  integer CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599),
+
+  -- A short stable code, never a raw provider error: those can echo request fields.
+  failure_code text CHECK (failure_code IS NULL OR char_length(failure_code) <= 128),
+
+  -- No FK to tenants. This row must survive a tenant delete, and the recorder is
+  -- fail-open: an FK violation would turn a logging miss into a silent gap.
+  tenant_id    uuid,
+
+  duration_ms  integer CHECK (duration_ms IS NULL OR duration_ms >= 0),
+
+  received_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- The health question is always "what has this platform done lately", so the
+-- index leads on platform and orders by time.
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_platform_time
+  ON public.webhook_deliveries (platform, received_at DESC);
+
+-- Failures are rare and are what gets alerted on, so they get their own partial
+-- index rather than making the main one carry the filter.
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_failures
+  ON public.webhook_deliveries (platform, received_at DESC)
+  WHERE outcome IN ('failed','rejected_signature','rejected_malformed');
+
+-- ----------------------------------------------------------------------------
+-- ACCESS. This is platform-operations data, not tenant data: it records which
+-- processors are reaching us and how often they fail. No tenant has any business
+-- reading it, and the anon key is public (it ships in the booking bundle), so
+-- both roles are revoked outright. Only service_role — i.e. the edge functions —
+-- touches this table.
+-- ----------------------------------------------------------------------------
+REVOKE ALL ON public.webhook_deliveries FROM anon, authenticated;
+
+ALTER TABLE public.webhook_deliveries ENABLE ROW LEVEL SECURITY;
+
+-- No permissive policy is created deliberately: with RLS on and no policy, anon
+-- and authenticated can read nothing even if a grant is restored by accident.
+-- service_role bypasses RLS, which is the only access path this table needs.
+
+-- ----------------------------------------------------------------------------
+-- THE HEALTH ANSWER, as one query.
+--
+-- `last_seen_at` is the column that matters: a platform whose last delivery is
+-- hours old when it should be minutes old is the failure that was previously
+-- invisible. The 24h counters give the alerting signal a rate to compare.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW public.v_webhook_health AS
+SELECT
+  platform,
+  max(received_at)                                                   AS last_seen_at,
+  max(received_at) FILTER (WHERE outcome = 'handled')                AS last_handled_at,
+  count(*) FILTER (WHERE received_at > now() - interval '24 hours')  AS deliveries_24h,
+  count(*) FILTER (WHERE received_at > now() - interval '24 hours'
+                     AND outcome = 'handled')                        AS handled_24h,
+  count(*) FILTER (WHERE received_at > now() - interval '24 hours'
+                     AND outcome IN ('failed','rejected_signature','rejected_malformed'))
+                                                                     AS failures_24h,
+  count(*) FILTER (WHERE received_at > now() - interval '1 hour')    AS deliveries_1h
+FROM public.webhook_deliveries
+GROUP BY platform;
+
+REVOKE ALL ON public.v_webhook_health FROM anon, authenticated;
+
+COMMENT ON TABLE public.webhook_deliveries IS
+  'Per-platform webhook delivery health. Observability only — NOT a replay guard. '
+  'square_webhook_events.event_id remains Square''s only replay defence.';

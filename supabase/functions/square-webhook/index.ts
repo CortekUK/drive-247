@@ -88,6 +88,7 @@ import {
   mapSquareRefundStatus,
 } from "../_shared/payments/square-status-map.ts";
 import { capabilitiesFor } from "../_shared/payments/capabilities.ts";
+import { recordWebhookDelivery } from "../_shared/webhook-health.ts";
 import { PROVIDER_COLUMN, SQUARE } from "../_shared/payments/predicates.ts";
 import { SquareMode } from "../_shared/payments/types.ts";
 
@@ -917,6 +918,19 @@ Deno.serve(async (req: Request) => {
   const verified = await verifyEvent(rawBody, req.headers.get(SIGNATURE_HEADER));
   if (!verified) {
     console.error("[square-webhook] signature verification FAILED — rejecting");
+    // Fail-open health record. The Supabase client is deliberately not built
+    // until after this guard ("No DB is touched before this passes"), so the
+    // recorder gets its own — it inserts into an ops table, not a tenant one.
+    try {
+      const healthClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      );
+      await recordWebhookDelivery(healthClient, {
+        platform: "square", outcome: "rejected_signature",
+        httpStatus: 401, failureCode: "signature_mismatch",
+      });
+    } catch { /* never let observability change the response */ }
     return errorResponse("Invalid signature", 401);
   }
 
@@ -1079,6 +1093,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    await recordWebhookDelivery(supabase, {
+      platform: "square",
+      outcome: result.matched ? "handled" : "ignored",
+      eventId, eventType, tenantId, httpStatus: 200,
+      durationMs: Date.now() - startedAt,
+    });
     return jsonResponse({
       received: true,
       processed: result.matched,
@@ -1091,6 +1111,11 @@ Deno.serve(async (req: Request) => {
     const tooOld = Number.isFinite(ageMs) && ageMs > MAX_RETRY_AGE_MS;
 
     console.error("[square-webhook] processing failed:", eventType, eventId, message);
+    await recordWebhookDelivery(supabase, {
+      platform: "square", outcome: "failed",
+      eventId, eventType, failureCode: "handler_threw",
+      durationMs: Date.now() - startedAt,
+    });
 
     if (tooOld) {
       // Give up asking for redelivery, but KEEP the claim so the endpoint stops

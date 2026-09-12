@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { recordWebhookDelivery } from '../_shared/webhook-health.ts';
 import { handleCors, jsonResponse, errorResponse } from '../_shared/cors.ts';
 import { getBoldSignApiKey, getBoldSignBaseUrl, getTenantBoldSignMode } from '../_shared/boldsign-client.ts';
 import type { BoldSignMode } from '../_shared/boldsign-client.ts';
@@ -412,6 +413,13 @@ Deno.serve(async (req) => {
       event = JSON.parse(rawBody) as BoldSignEvent;
     } catch {
       console.error('Failed to parse webhook body as JSON. Body starts with:', rawBody.substring(0, 200));
+      // Fail-open health record — see _shared/webhook-health.ts. This endpoint
+      // performs NO sender verification, so unparseable bodies are expected
+      // traffic from scanners and the rate is itself the signal worth watching.
+      await recordWebhookDelivery(supabaseClient, {
+        platform: 'boldsign', outcome: 'rejected_malformed',
+        httpStatus: 200, failureCode: 'invalid_json',
+      });
       return jsonResponse({ ok: false, error: 'Invalid JSON payload' });
     }
 
@@ -423,14 +431,38 @@ Deno.serve(async (req) => {
 
     if (!event.document?.documentId) {
       console.error('No document ID in webhook payload');
+      await recordWebhookDelivery(supabaseClient, {
+        platform: 'boldsign', outcome: 'rejected_malformed',
+        eventType: event.event?.eventType, httpStatus: 200,
+        failureCode: 'no_document_id',
+      });
       return jsonResponse({ ok: false, error: 'No document ID in payload' });
     }
 
     const result = await handleBoldSignWebhook(supabaseClient, event);
 
+    await recordWebhookDelivery(supabaseClient, {
+      platform: 'boldsign',
+      outcome: result.ok ? 'handled' : 'failed',
+      eventId: event.document?.documentId,
+      eventType: event.event?.eventType,
+      httpStatus: result.ok ? 200 : 400,
+      failureCode: result.ok ? null : 'handler_reported_failure',
+    });
     return jsonResponse(result, result.ok ? 200 : 400);
   } catch (error) {
     console.error('Webhook function error:', error);
+    // `supabaseClient` is block-scoped to the try above, so build one here.
+    try {
+      const healthClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      );
+      await recordWebhookDelivery(healthClient, {
+        platform: 'boldsign', outcome: 'failed',
+        httpStatus: 500, failureCode: 'handler_threw',
+      });
+    } catch { /* never let observability change the response */ }
     return errorResponse(
       error instanceof Error ? error.message : 'Internal server error',
       500

@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { recordWebhookDelivery } from "../_shared/webhook-health.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { formatCurrency } from '../_shared/format-utils.ts';
 import { getStripeClientForAccount, getWebhookSecretCandidates, readHoldCaptureFacts } from '../_shared/stripe-client.ts';
@@ -307,6 +308,11 @@ serve(async (req) => {
 
       if (!verified) {
         console.error("[LIVE MODE] Webhook signature verification failed with all secrets:", lastErr?.message);
+        // Fail-open health record — see _shared/webhook-health.ts.
+        await recordWebhookDelivery(supabase, {
+          platform: "stripe", mode: "live", outcome: "rejected_signature",
+          httpStatus: 400, failureCode: "signature_mismatch",
+        });
         return new Response(
           JSON.stringify({ error: "Invalid signature" }),
           {
@@ -332,6 +338,11 @@ serve(async (req) => {
       console.error(
         `[LIVE MODE] Rejected unverified webhook: ${missingSignature ? "missing stripe-signature header" : "no webhook secret configured"}`
       );
+      await recordWebhookDelivery(supabase, {
+        platform: "stripe", mode: "live", outcome: "rejected_signature",
+        httpStatus: missingSignature ? 400 : 500,
+        failureCode: missingSignature ? "missing_signature_header" : "no_webhook_secret",
+      });
       return new Response(
         JSON.stringify({ error: missingSignature ? "Missing stripe-signature header" : "Webhook not configured" }),
         {
@@ -1994,6 +2005,10 @@ serve(async (req) => {
         console.log("Unhandled event type:", event.type);
     }
 
+    await recordWebhookDelivery(supabase, {
+      platform: "stripe", mode: "live", outcome: "handled",
+      eventId: event?.id, eventType: event?.type, httpStatus: 200,
+    });
     return new Response(
       JSON.stringify({ received: true }),
       {
@@ -2003,6 +2018,17 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Webhook error:", error);
+    // `supabase` is block-scoped to the try above, so build a client here.
+    try {
+      const healthClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      );
+      await recordWebhookDelivery(healthClient, {
+        platform: "stripe", mode: "live", outcome: "failed",
+        httpStatus: 500, failureCode: "handler_threw",
+      });
+    } catch { /* never let observability change the response */ }
     return new Response(
       JSON.stringify({ error: error.message }),
       {

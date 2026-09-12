@@ -1,6 +1,7 @@
 import { jsonResponse, errorResponse } from "../_shared/cors.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { recordWebhookDelivery } from "../_shared/webhook-health.ts";
 import { onMigrationTaskComplete } from "../_shared/migration-progress.ts";
 import {
   getSubscriptionStripeClientForAccount,
@@ -55,6 +56,11 @@ Deno.serve(async (req) => {
 
   if (!event || !stripe) {
     console.error("Webhook signature verification failed for all configured accounts");
+    // Fail-open health record — see _shared/webhook-health.ts.
+    await recordWebhookDelivery(supabase, {
+      platform: "stripe_subscription", outcome: "rejected_signature",
+      httpStatus: 400, failureCode: "signature_mismatch",
+    });
     return errorResponse("Invalid signature", 400);
   }
 
@@ -125,9 +131,18 @@ Deno.serve(async (req) => {
     // replay), so a retried event is safe — and a transient DB/Stripe error
     // during a migration no longer silently loses the whole event.
     console.error(`Error handling ${event.type}:`, error);
+    await recordWebhookDelivery(supabase, {
+      platform: "stripe_subscription", outcome: "failed",
+      eventId: event?.id, eventType: event?.type,
+      httpStatus: 500, failureCode: "handler_threw",
+    });
     return errorResponse(`Handler error for ${event.type}: ${error?.message ?? error}`, 500);
   }
 
+  await recordWebhookDelivery(supabase, {
+    platform: "stripe_subscription", outcome: "handled",
+    eventId: event?.id, eventType: event?.type, httpStatus: 200,
+  });
   return jsonResponse({ received: true });
 });
 
