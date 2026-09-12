@@ -1,5 +1,6 @@
 "use client";
 
+import { LegacyDetailTimeline } from "@/components/timeline-v2/legacy-detail-timeline";
 import { useState, useEffect, useMemo, Fragment, Children, type ReactNode } from "react";
 import { differenceInDays, format } from "date-fns";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -8123,22 +8124,12 @@ const RentalDetail = () => {
   );
 };
 
-/**
- * The v2 gate, wrapped AROUND `RentalDetail` rather than placed inside it.
- *
- * An early `return` at the top of `RentalDetail` would have been shorter and
- * would have been wrong: everything above it — several dozen `useQuery`s,
- * `useState`s and `useEffect`s — would become conditional hooks, which React
- * forbids and which breaks the moment a tenant navigates between a v1 and a v2
- * rental in one session.
- *
- * Wrapping instead means v1's hooks never run at all for the canary, and v1 is
- * byte-identical for the other tenants: this file's only change is two imports
- * and this component. Retiring the area is deleting the `if` and this block.
- */
+/** Preserve each tenant's existing detail screen. The shared calendar is
+ * available in its context tabs on V2, and an adjacent right rail on legacy. */
 const RentalDetailPage = () => {
   const v2 = useV2("rentals");
-  return v2 ? <RentalDetailV2 /> : <RentalDetail />;
+  const params = useParams();
+  return v2 ? <RentalDetailV2 /> : <LegacyDetailTimeline kind="rental" id={params.id as string}><RentalDetail /></LegacyDetailTimeline>;
 };
 
 export default RentalDetailPage;

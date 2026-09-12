@@ -50,6 +50,8 @@ import type { Drift } from "./kit";
 import { ledgerTotals, moneyIn, readinessOf, reviewAverage } from "./derive";
 import type { CustomerRecord } from "./types";
 import type { SectionId } from "./sections";
+import { ContextTabs } from "@/components/timeline-v2/context-rail";
+import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
 
 /**
  * Tints for the moment a value changes, then fades out.
@@ -147,7 +149,14 @@ const MARK = {
   blocked: { icon: X, cls: "bg-destructive/15 text-destructive" },
 } as const;
 
-export function OverviewRail({
+export function OverviewRail(props: React.ComponentProps<typeof CustomerOverview>) {
+  return <ContextTabs label="Customer context" defaultValue="overview" tabs={[
+    { id: "overview", label: "At a glance", scroll: false, padded: false, content: <CustomerOverview {...props} /> },
+    { id: "timeline", label: "Timeline", content: <ConnectedTimeline scope={{ kind: "customer", id: props.c.id }} compact heading="Customer timeline" /> },
+  ]} />;
+}
+
+function CustomerOverview({
   c,
   verifyDrift,
   reviewDrift,

@@ -1,5 +1,6 @@
 "use client";
 
+import { LegacyDetailTimeline } from "@/components/timeline-v2/legacy-detail-timeline";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -315,22 +316,13 @@ function CompleteJobDialog({
   );
 }
 
-/**
- * The vehicle detail route.
- *
- * The ONLY edit v2 makes to this file: one branch, resolved from the gate the
- * root layout already worked out on the server, above a v1 component that is
- * otherwise untouched (V2_PLAN §3). `northwind` gets the new screen; the other
- * 56 tenants render exactly the code they rendered yesterday.
- *
- * Retiring this is three deletions: the entry in `V2_AREAS`, this wrapper, and
- * `VehicleDetail` below it.
- */
+/** Preserve each tenant's existing detail screen. The shared calendar is
+ * available in its context tabs on V2, and an adjacent right rail on legacy. */
 export default function VehicleDetailRoute() {
   const v2 = useV2("vehicles");
   const params = useParams();
   const id = params.id as string;
-  return v2 ? <VehicleDetailV2 vehicleId={id} /> : <VehicleDetail />;
+  return v2 ? <VehicleDetailV2 vehicleId={id} /> : <LegacyDetailTimeline kind="vehicle" id={id}><VehicleDetail /></LegacyDetailTimeline>;
 }
 
 function VehicleDetail() {

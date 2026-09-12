@@ -69,6 +69,7 @@ import { SectionFines } from "./section-fines";
 import { SectionReviews } from "./section-reviews";
 import { SectionActivity } from "./section-activity";
 import { OverviewRail } from "./overview-rail";
+import { ResponsiveContextRail } from "@/components/timeline-v2/context-rail";
 import { EmptyHint, Panel, expiryOf, fmtDate } from "./kit";
 import type { Drift } from "./kit";
 import type { CustomerRecord } from "./types";
@@ -228,7 +229,7 @@ export function CustomerDetailV2() {
           about 450px wide, and its field grids are viewport-keyed: they would
           stay two-up in a column too narrow to hold them. Below 1400 the rail
           drops out and the middle takes the space instead. */}
-      <aside className="hidden w-[344px] shrink-0 border-l border-foreground/10 min-[1400px]:block">
+      <ResponsiveContextRail label="Timeline & at a glance" breakpoint={1400} width={344}>
         <OverviewRail
           c={record}
           verifyDrift={verifyDrift}
@@ -237,7 +238,7 @@ export function CustomerDetailV2() {
           currency={currency}
           saving={saving}
         />
-      </aside>
+      </ResponsiveContextRail>
     </Frame>
   );
 }

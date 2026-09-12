@@ -1,5 +1,6 @@
 "use client";
 
+import { LegacyDetailTimeline } from "@/components/timeline-v2/legacy-detail-timeline";
 import { useState, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -1943,25 +1944,12 @@ function AiVerificationGrid({
   );
 }
 
-/**
- * The v2 gate for the customer record. ONE branch, at the route, per V2_PLAN §3
- * — everything above it is v1, untouched, and still what the other 56 tenants
- * render.
- *
- * It is a wrapper rather than an early return inside `CustomerDetail`, because
- * `CustomerDetail` opens ~30 hooks before the point the branch used to sit at.
- * Returning early from there ran every one of them on the v2 path too — a page
- * of queries whose results nothing read — and made the branch itself the only
- * thing standing between the two paths and a conditional-hook violation the
- * moment anyone added a hook below it. Here the two screens are siblings and
- * neither can see the other's hooks at all.
- *
- * Same shape as `/rentals/[id]`, deliberately: the two scoped screens are read
- * together, so they should not need to be understood twice.
- */
+/** Preserve each tenant's existing detail screen. The shared calendar is
+ * available in its context tabs on V2, and an adjacent right rail on legacy. */
 const CustomerDetailPage = () => {
   const v2 = useV2("customers");
-  return v2 ? <CustomerDetailV2 /> : <CustomerDetail />;
+  const params = useParams();
+  return v2 ? <CustomerDetailV2 /> : <LegacyDetailTimeline kind="customer" id={params.id as string}><CustomerDetail /></LegacyDetailTimeline>;
 };
 
 export default CustomerDetailPage;

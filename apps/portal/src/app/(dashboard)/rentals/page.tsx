@@ -55,7 +55,7 @@ import { useV2 } from "@/lib/v2-context";
 import { ExtensionRequestDialog } from "@/components/rentals/ExtensionRequestDialog";
 import { ReviewStatusBadge } from "@/components/reviews/review-status-badge";
 import { RentalReviewDialog } from "@/components/reviews/rental-review-dialog";
-import { CalendarView } from "@/components/rentals/calendar/calendar-view";
+import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
 import { formatDuration, formatRentalDuration } from "@/lib/rental-utils";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
@@ -365,7 +365,7 @@ const RentalsList = () => {
 
       {/* Calendar View */}
       {currentView === "calendar" ? (
-        <CalendarView filters={filters} />
+        <ConnectedTimeline scope={{ kind: "all" }} initialFilters={filters} />
       ) : /* Rentals Table */
       rentals.length > 0 ? (
         <>

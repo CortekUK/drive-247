@@ -58,6 +58,7 @@ import { StageAgreement } from "./stage-agreement";
 import { StageInsurance } from "./stage-insurance";
 import { StageHandover } from "./stage-handover";
 import { RightRail } from "./right-rail";
+import { ResponsiveContextRail } from "@/components/timeline-v2/context-rail";
 import { EmptyHint, Panel } from "./_kit";
 
 /**
@@ -170,29 +171,10 @@ export function RentalDetailV2() {
         )}
       </div>
 
-      {/* ── right rail ───────────────────────────────────────────────────
-          A matched pair with the stage rail on the far side of the screen —
-          same 360px the prototype used, the border flipped to `border-l` so the
-          two frame the content between them.
-
-          `RightRail` draws its tabs — messages and activity, with extensions
-          gated off by `multi-period.ts` — and supplies its own column: an
-          `h-11` tab strip that lines up with the stage rail's back-link row,
-          then a `min-h-0 flex-1` body. Each tab scrolls its own middle and pins
-          its own controls (the composer, the activity filter), so a long list
-          can never push a control off the bottom of the screen. The aside stays
-          the frame.
-
-          Hidden below `xl`: at 360px it would take more from the panel than it
-          gives back, and both of its tabs have a full page of their own to fall
-          back on.
-
-          The `pr-12` gutter that clears the v2 chrome's fixed QuickDock (see
-          `(dashboard)/layout.tsx`) moved INTO `RightRail`, because it belongs
-          on the scrolling body and not on the tab strip above it. */}
-      <aside className="hidden w-[360px] shrink-0 flex-col border-l border-foreground/10 xl:flex">
+      {/* Context tabs stay in the right rail; smaller screens open the same tabs in a panel. */}
+      <ResponsiveContextRail label="Payment Plan & activity">
         <RightRail detail={detail} refetch={onRefetch} />
-      </aside>
+      </ResponsiveContextRail>
     </Frame>
   );
 }

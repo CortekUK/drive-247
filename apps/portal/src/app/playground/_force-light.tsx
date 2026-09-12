@@ -16,6 +16,8 @@ import { useEffect } from "react";
  */
 export function ForceLight() {
   useEffect(() => {
+    // This isolated review route exercises the production timeline in both themes.
+    if (window.location.pathname === "/playground/timeline") return;
     const root = document.documentElement;
     const wasDark = root.classList.contains("dark");
     root.classList.remove("dark");

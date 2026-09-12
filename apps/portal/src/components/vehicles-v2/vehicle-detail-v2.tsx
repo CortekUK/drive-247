@@ -69,6 +69,8 @@ import type { DistanceUnit } from "@/lib/format-utils";
 import { FormatProvider, daysBetween, daysUntil, todayISO } from "./kit";
 import { readSection, sectionHref, type SectionId } from "./sections";
 import { OverviewRail, type Attention, type Vital } from "./overview-rail";
+import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
+import { ResponsiveContextRail } from "@/components/timeline-v2/context-rail";
 import { VehicleTab } from "./tab-vehicle";
 import { RatesTab } from "./tab-rates";
 import { AddonsTab } from "./tab-addons";
@@ -883,7 +885,7 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
         {/* ── right rail — THE READOUT ────────────────────────────────────
             A matched pair with the left rail: same h-11 header row, the border
             flipped to `border-l` so the two frame the content between them. */}
-        <aside className="hidden w-[336px] shrink-0 flex-col border-l border-foreground/10 xl:flex">
+        <ResponsiveContextRail label="Timeline & vehicle overview" width={336}>
           <OverviewRail<SectionId>
             name={vehicleName}
             plate={hidePlate ? "" : vehicle.reg}
@@ -896,8 +898,9 @@ export function VehicleDetailV2({ vehicleId }: { vehicleId: string }) {
             events={events}
             eventsLoading={eventsLoading}
             onJump={goToSection}
+            timeline={<ConnectedTimeline scope={{ kind: "vehicle", id: vehicleId }} compact heading="Vehicle timeline" />}
           />
-        </aside>
+        </ResponsiveContextRail>
       </div>
     </FormatProvider>
   );

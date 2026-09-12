@@ -50,7 +50,7 @@ import { RentalsFilterBar } from "@/components/rentals-v2/rentals-filter-bar";
 import { RentalsFilterPanel } from "@/components/rentals-v2/rentals-filter-panel";
 import { RentalsOverview } from "@/components/rentals-v2/rentals-overview";
 import { RentalsOverviewFlip } from "@/components/rentals-v2/rentals-overview-flip";
-import { CalendarView } from "@/components/rentals/calendar/calendar-view";
+import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
 import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
@@ -499,7 +499,7 @@ export function RentalsListV2() {
 
       {/* Calendar View */}
       {currentView === "calendar" ? (
-        <CalendarView filters={filters} />
+            <ConnectedTimeline scope={{ kind: "all" }} />
       ) : /* Rentals Table */
       allRentals.length > 0 && !devForceEmptyRentals ? (
         <>

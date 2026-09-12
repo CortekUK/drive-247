@@ -25,7 +25,6 @@
  * put a vehicle's own history on.
  */
 
-import { useState } from "react";
 import {
   Banknote,
   Car,
@@ -43,8 +42,8 @@ import {
 import { cn } from "@/lib/utils";
 import { HeroChip, fmtDateTime } from "./kit";
 import type { VehicleEvent } from "@/hooks/use-vehicle-events";
+import { ContextTabs } from "@/components/timeline-v2/context-rail";
 
-type TabId = "overview" | "activity";
 
 /** One thing that wants dealing with, and the tab that owns it. */
 export type Attention<K extends string = string> = {
@@ -61,11 +60,6 @@ export type Vital = {
   hint?: string;
   tone?: "default" | "warning" | "success";
 };
-
-const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "activity", label: "Activity", icon: History },
-];
 
 /** Each event kind gets the icon of the thing it happened to. */
 const EVENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -97,6 +91,7 @@ export function OverviewRail<K extends string>({
   events,
   eventsLoading,
   onJump,
+  timeline,
 }: {
   name: string;
   plate: string;
@@ -110,67 +105,13 @@ export function OverviewRail<K extends string>({
   events: VehicleEvent[];
   eventsLoading: boolean;
   onJump: (target: K) => void;
+  timeline?: React.ReactNode;
 }) {
-  const [tab, setTab] = useState<TabId>("overview");
-
-  return (
-    <>
-      {/* Tab strip — h-11 to line up with the left rail's back-link row. */}
-      <div className="flex h-11 shrink-0 items-center gap-0.5 pl-2 pr-11">
-        {TABS.map((t) => {
-          const active = tab === t.id;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              title={t.label}
-              aria-label={t.label}
-              aria-pressed={active}
-              className={cn(
-                "flex size-8 cursor-pointer items-center justify-center rounded-md transition-colors",
-                active
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-            >
-              <t.icon className="size-4" />
-            </button>
-          );
-        })}
-
-        {tab === "overview" && attention.length > 0 && (
-          <span className="ml-auto pr-1.5">
-            <HeroChip tone="warning" dot={false}>
-              {attention.length}
-            </HeroChip>
-          </span>
-        )}
-      </div>
-
-      {/* `pr-11` clears the right-edge QuickDock, which is `fixed right-0` and
-          floats over whatever is under it — without the gap it sits on top of
-          the "at a glance" figures, which is the one thing in this rail that
-          has to be readable at a glance. */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4 pl-3 pr-11">
-        {tab === "overview" ? (
-          <Overview
-            name={name}
-            plate={plate}
-            coverSrc={coverSrc}
-            statusLabel={statusLabel}
-            statusTone={statusTone}
-            listingLine={listingLine}
-            attention={attention}
-            vitals={vitals}
-            onJump={onJump}
-          />
-        ) : (
-          <Activity events={events} loading={eventsLoading} />
-        )}
-      </div>
-    </>
-  );
+  return <ContextTabs label="Vehicle context" defaultValue="overview" tabs={[
+    { id: "overview", label: "Overview", content: <Overview name={name} plate={plate} coverSrc={coverSrc} statusLabel={statusLabel} statusTone={statusTone} listingLine={listingLine} attention={attention} vitals={vitals} onJump={onJump} /> },
+    { id: "activity", label: "Activity", content: <Activity events={events} loading={eventsLoading} /> },
+    ...(timeline ? [{ id: "timeline", label: "Timeline", content: timeline }] : []),
+  ]} />;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
