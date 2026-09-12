@@ -1,0 +1,113 @@
+-- ============================================================================
+-- ROLLBACK for 20260904120000_secure_app_users_read_access.sql
+--
+-- READ THIS BEFORE RUNNING ANY OF IT.
+--
+-- Section A is the rollback you almost certainly want: it keeps the table
+-- private and widens only the one thing that regressed.
+--
+-- Section B restores the exact pre-migration state, which means RESTORING
+-- ANONYMOUS PUBLIC READ AND WRITE ACCESS to every staff record in the
+-- platform. It is an emergency lever for a controlled environment, not a
+-- rollback plan. Running it in production re-opens the vulnerability.
+--
+-- Neither section touches a single row of data. No INSERT, UPDATE or DELETE
+-- against app_users appears anywhere in this file, by design.
+--
+-- The pre-migration snapshot this file restores to:
+--   RLS:      DISABLED
+--   Grants:   ALL -> anon, authenticated, service_role
+--   Policies: users_read_self, super_admin_read_all, p_update_own_password_flag,
+--             super_admin_manage_all, super_admin_manage_all_update,
+--             super_admin_manage_all_delete
+--             (unchanged by the migration, so nothing to restore)
+-- ============================================================================
+
+
+-- ============================================================================
+-- SECTION A — PREFERRED. Fix a regression without reopening public access.
+--
+-- Symptom-driven. Apply only the block that matches what actually broke, and
+-- leave RLS on. Each is a narrow authenticated policy, which is what the
+-- migration's own reasoning says to reach for first.
+-- ============================================================================
+
+-- A1. A screen that lists staff came back empty for a legitimate user whose
+--     access the same-tenant policy did not anticipate — for example a role
+--     that reads staff through a path the audit missed.
+--     Diagnose first: SELECT public.get_user_tenant_id(); as that user. If it
+--     returns NULL their app_users row is missing or their tenant_id is NULL,
+--     and the policy is not the bug.
+
+-- A2. A platform-staff screen in apps/admin came back empty for a SALES AGENT
+--     (is_sales_agent = true, is_super_admin = false). The audit found sales
+--     agents are confined to the Sales group and never read other rows; if that
+--     changes, this is the narrow fix rather than a broad one.
+--
+-- BEGIN;
+-- CREATE POLICY app_users_read_sales_agent
+--   ON public.app_users
+--   FOR SELECT
+--   TO authenticated
+--   USING (public.is_sales_agent());
+-- COMMENT ON POLICY app_users_read_sales_agent ON public.app_users IS
+--   'Added during rollback of 20260904120000. Sales agents read platform staff.';
+-- COMMIT;
+
+-- A3. The same-tenant policy itself is implicated and you need it gone while
+--     keeping the table private. Own-row and super-admin reads survive; the
+--     portal Users pages will be empty until it is restored.
+--
+-- BEGIN;
+-- DROP POLICY IF EXISTS app_users_read_same_tenant ON public.app_users;
+-- COMMIT;
+
+-- A4. Something that is NOT PostgREST needs a grant the migration narrowed
+--     (TRUNCATE, REFERENCES or TRIGGER on app_users as `authenticated`).
+--     Nothing in this codebase does, so treat this as evidence of an unknown
+--     consumer before running it.
+--
+-- BEGIN;
+-- GRANT ALL ON TABLE public.app_users TO authenticated;
+-- COMMIT;
+
+
+-- ============================================================================
+-- SECTION B — EMERGENCY ONLY. Full restore of the pre-migration state.
+--
+-- ⚠ This re-exposes every staff email, tenant_id, auth_user_id, role and
+--   account status to anyone holding the public anon key, and re-permits
+--   anonymous UPDATE and DELETE. Both were verified as reachable before the
+--   migration.
+--
+-- Use it only when ALL of the following are true:
+--   - a production incident is active and traced to this migration,
+--   - Section A cannot resolve it in the time available,
+--   - someone with authority to accept the exposure has said so, and
+--   - a fix-forward is already being written.
+--
+-- Everything below is commented out. Uncommenting it is the decision.
+-- ============================================================================
+
+-- BEGIN;
+--
+-- -- Remove what the migration added.
+-- DROP POLICY IF EXISTS app_users_read_same_tenant ON public.app_users;
+--
+-- -- Restore the pre-migration grants, exactly as
+-- -- 20251219083413_remote_schema.sql:9101-9103 left them.
+-- GRANT ALL ON TABLE public.app_users TO anon;
+-- GRANT ALL ON TABLE public.app_users TO authenticated;
+-- GRANT ALL ON TABLE public.app_users TO service_role;
+--
+-- -- The line that reopens the hole. It is last so that anyone reading this
+-- -- file top to bottom meets every warning before reaching it.
+-- ALTER TABLE public.app_users DISABLE ROW LEVEL SECURITY;
+--
+-- COMMIT;
+
+-- After ANY use of Section B, re-run the exposure check so the state is on the
+-- record rather than assumed:
+--   curl -s -o /dev/null -w '%{http_code}\n' -H "apikey: $ANON" \
+--     "$URL/rest/v1/app_users?select=email"
+-- A 200 means the platform is exposed again. Track it as an open incident.
