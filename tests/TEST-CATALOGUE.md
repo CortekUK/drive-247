@@ -10,12 +10,12 @@ document — see the naming convention in [README.md](./README.md#naming-convent
 
 | | |
 |---|---|
-| Test files | 48 |
-| Tests | 1121 |
-| Passing | 1043 |
+| Test files | 56 |
+| Tests | 1518 |
+| Passing | 1440 |
 | Skipped (opt-in Layer 2) | 78 |
 | Failing | 0 |
-| Known-defect watchdogs | 79 |
+| Known-defect watchdogs | 165 |
 
 ## How to read this
 
@@ -952,6 +952,125 @@ THE CONTRACT PARSER ITSELF — tests/helpers/edge-contract.ts. Layer 3, executed
 - it caches a parsed shape rather than re-reading the file each time
 
 
+## `tests/integrations/square/adapter-depth.test.ts`
+
+**Layer:** L1 contract, L3 executable · **52 tests** (52 passing, 10 watchdog)
+
+SQUARE — depth pass over the seam's EDGES: the callers around the adapter, the two cron sweeps, and the capability manifest that is supposed to make all of them provider-agnostic.
+
+### square void — what a skipped revoke is reported as
+
+*Use case: An operator voids an unpaid Square payment request while the tenant's Square connection is inactive. The UI reports the link revoked and the payments row goes terminal, but the emailed URL is still payable — Square links have no expiry — so the money later arrives against a cancelled row.*
+
+- it returns a skip with no error flag when the tenant has no active Square connection
+- it PINS TODAY'S BEHAVIOUR: the Square branch tests only routed.error, so a skip falls through to the soft-cancel
+- it PINS TODAY'S BEHAVIOUR: a credential/mode mismatch throws into a catch that calls the failure non-fatal
+- it shows five sibling callers spelling the check the Square branch omits
+- it should refuse the void when the adapter skipped, the way process-refund and cancel-rental-refund do — ⚠ watchdog
+
+### square card payment — where the charged amount comes from
+
+*Use case: A renter holding an emailed Square pay link (which carries the payments-row uuid in the URL) posts the same uuid with totalAmount:1. £1 is charged, the row is stamped Completed with a paid_at, and a £500 debt reads as settled on the rental.*
+
+- it PINS TODAY'S BEHAVIOUR: the amount is the browser's totalAmount, validated only for positivity
+- it PINS TODAY'S BEHAVIOUR: the adapter's existing-row pre-flight reads settled-ness and never the amount
+- it PINS TODAY'S BEHAVIOUR: the post-charge update writes handles and status, never an amount or a remainder
+- it has no config.toml entry, so it runs at the default verify_jwt an anon key satisfies
+- it should derive the charged amount from the payments row whenever paymentId is supplied — ⚠ watchdog
+
+### square card payment — the idempotencyScope both forms transmit
+
+*Use case: A caller separates two charges by passing idempotencyScope, as the prop's own doc-comment invites. The server never reads it, so the separation the caller believes it bought does not exist — and the next engineer to "wire the field through" silently changes the idempotency identity of a live money path.*
+
+- it PINS TODAY'S BEHAVIOUR: both card forms put idempotencyScope in the request body
+- it PINS TODAY'S BEHAVIOUR: the edge function destructures ten body fields and idempotencyScope is not one
+- it PINS TODAY'S BEHAVIOUR: the field exists on the LINK spec, so its absence here reads as an oversight
+- it PINS TODAY'S BEHAVIOUR: the card path keys on the single-use token instead, and says why
+- it should either read the scope it is sent or record in source that the card path ignores it — ⚠ watchdog
+
+### square recovery — the clock that stamps a recovered payment
+
+*Use case: A Square payment taken at 23:55 whose webhook is missed is recovered by the sweep after midnight and booked into the next day's revenue. The same collection lands on a different date depending on which of the two settlers won the race — a divergence no reconciliation can explain afterwards.*
+
+- it PINS TODAY'S BEHAVIOUR: the sweep writes paid_at as its own now(), and discards Square's timestamp
+- it shows both siblings preferring Square's own clock, and one of them saying why
+- it runs every minute, so the race between the two settlers is continuous
+- it should stamp paid_at from the Square payment's own updated_at or created_at — ⚠ watchdog
+
+### square recovery — orders whose tender has no payment id
+
+*Use case: A recovered Square order whose tender carries no payment_id is banked as Completed with square_payment_id NULL. The documented payment-level cross-check never runs for it, and it is permanently unrefundable through the seam — process-refund can only record a manual ledger-only refund and an operator must find the money by hand in Square's dashboard.*
+
+- it PINS TODAY'S BEHAVIOUR: the payment-level cross-check is skipped entirely when the tender id is null
+- it PINS TODAY'S BEHAVIOUR: the handle is written only when a tender id existed, so the row can settle with it NULL
+- it is then unrefundable through the seam, which answers with a success-shaped skip
+- it leaves process-refund recording a ledger-only refund an operator must chase by hand
+- it should refuse to settle a row it cannot stamp a square_payment_id onto — ⚠ watchdog
+
+### square recovery — the 24-hour window borrowed from the Stripe twin
+
+*Use case: A renter pays a three-day-old Square link — which is still payable, because Square links never expire — and that one webhook delivery is missed. Square offers no manual resend, and the only recovery sweep in the system stopped looking at that row 48 hours ago. Customer charged, rental shows Balance Due, nothing notices.*
+
+- it PINS TODAY'S BEHAVIOUR: the sweep bounds itself to 24h, citing the Stripe recovery's reason
+- it PINS TODAY'S BEHAVIOUR: the same file's header states the premise that makes the window wrong
+- it shows the Stripe twin using the identical literal, where it IS sound
+- it should not bound the Square sweep by the Stripe session lifetime — ⚠ watchdog
+
+### the capability manifest's binding rule, measured
+
+*Use case: capabilities.ts promises that provider #3 "fills in this table and every existing gate is already correct". If these censuses drift upward, that promise is being eroded one money function at a time — and a new provider becomes a re-audit of every file that spells the word "square".*
+
+- it states the rule it is measured against
+- it names the five production modules that actually read the manifest
+- it PINS TODAY'S BEHAVIOUR: at most 24 edge functions outside the seam gate on the provider NAME
+- it PINS TODAY'S BEHAVIOUR: at most 18 of the 25 manifest fields have no production reader at all
+- it shows one gate done the right way, so the census is a gap and not a style preference
+
+### the square guardrail script a comment claims enforces the binding rule
+
+*Use case: A reviewer reads the portal's Square hook — the file most likely to be copied as the pattern for new Square-aware UI — sees that raw provider-name comparisons are "banned by a script", and stops checking by hand. Nothing is enforcing the rule; section 7 counts what that has cost.*
+
+- it PINS TODAY'S BEHAVIOUR: the comment names a script path that does not exist
+- it PINS TODAY'S BEHAVIOUR: nothing else in the repository mentions it either
+- it should ship the guardrail script the comment promises, or stop promising it — ⚠ watchdog
+
+### square installments — the creation-time invariant nothing reinforces
+
+*Use case: An operator on a Square tenant flips Installments on in portal settings. It saves instantly, no guard fires, and the plan is created. Every instalment after the first is an off-session charge against a card Square never vaulted: process-installment-payment `continue`s past it silently, so the plan simply never charges and the only trace is a console.error in a cron log.*
+
+- it PINS TODAY'S BEHAVIOUR: tenant creation forces four flags off and claims that prevents re-enabling them
+- it PINS TODAY'S BEHAVIOUR: the portal toggle that writes installments_enabled has no provider condition
+- it PINS TODAY'S BEHAVIOUR: the money-time guards exist, and one of them is silent
+- it should refuse the settings toggle for a Square tenant, since creation-time forcing does not hold it — ⚠ watchdog
+
+### send-auto-extension-reminder — a Square gate on only one of two entry points
+
+*Use case: An operator presses "send extension reminder" on a Square tenant's rental. The gate that refuses Square lives in the cron loop below, so this path builds a Stripe Checkout session instead: unpayable if the tenant is in test mode (the shared test Connect account), and settling into the Drive247 platform balance rather than the operator's if it is live and not onboarded.*
+
+- it PINS TODAY'S BEHAVIOUR: the manual branch returns before the sweep the gate lives in
+- it PINS TODAY'S BEHAVIOUR: the shared worker both entry points use knows nothing about providers
+- it PINS TODAY'S BEHAVIOUR: getConnectAccountId has no Square answer, only two wrong Stripe ones
+- it should refuse a Square tenant above sendForRental, so both entry points inherit it — ⚠ watchdog
+
+### square token lifetime — the manifest value and the cron's hand-typed twin
+
+*Use case: The two copies of Square's 30-day token lifetime drift. The refresh cron's fallback writes a too-distant token_expires_at, its own selection window (`now + SQUARE_REFRESH_WINDOW_DAYS`) stops matching the row, and the tenant goes hard-offline at the real expiry — the launch-blocking failure the cron migration says this job exists to prevent.*
+
+- it PINS TODAY'S BEHAVIOUR: the refresh cron hard-codes 30 days and never imports the manifest
+- it PINS TODAY'S BEHAVIOUR: the manifest states the same number, and no production file reads it
+- it locks the two copies together so a change to either goes red
+
+### the square pay page — which currency the renter is shown
+
+*Use case: A Square tenant's operator edits currency_code in settings after connecting. The pay page then renders "$120.00" for a GBP location, the renter enters a card, and the adapter refuses with square_currency_mismatch — an error about a currency the renter never chose and cannot change.*
+
+- it PINS TODAY'S BEHAVIOUR: get-square-payment-request reads the tenant column, not the connected location
+- it shows its sibling get-square-config preferring the location, and saying why
+- it PINS TODAY'S BEHAVIOUR: the adapter refuses the charge on exactly this drift, and documents it as reachable
+- it PINS TODAY'S BEHAVIOUR: the pay page renders the drifted figure as the price
+- it should serve the connected location's currency, the way get-square-config does — ⚠ watchdog
+
+
 ## `tests/integrations/square/card-payment.test.ts`
 
 **Layer:** L1 contract, L3 executable · **13 tests** (13 passing, 2 watchdog)
@@ -1372,6 +1491,63 @@ SQUARE REFUND MATHS AND RESULT SHAPE.
 - it live: capture-deposit-hold refuses to capture more than the authorisation, before Stripe is called — skipped
 
 
+## `tests/integrations/stripe/checkout-depth.test.ts`
+
+**Layer:** L1 contract · **22 tests** (22 passing, 6 watchdog)
+
+### stripe/checkout — the row a new session adopts
+
+*Use case: One successful Stripe payment must settle exactly one payments row; if this goes red the adoption UPDATE has stopped being row-scoped and a single paid session can strand every other Pending row on the rental as permanently un-voidable.*
+
+- it PINS TODAY'S BEHAVIOUR: the adoption UPDATE is scoped to the rental, not to one row
+- it PINS TODAY'S BEHAVIOUR: the live webhook resolves that session id with .single(), which a multi-row stamp cannot satisfy
+- it should narrow the adoption UPDATE to exactly one payments row — ⚠ watchdog
+- it PINS TODAY'S BEHAVIOUR: adopting a row copies no money — neither the UPDATE nor the webhook's settle writes an amount
+- it the ledger allocates from the payments row's own amount column, which is the figure nobody reconciled
+- it should reconcile the adopted row's amount with the session total — ⚠ watchdog
+
+### stripe/checkout — create-installment-checkout writes its plan before it has a session
+
+*Use case: A Stripe failure mid-request must not brick instalments for a rental; if this goes red the write ordering in create-installment-checkout has changed and a stranded 'pending' plan may no longer be the outcome (check the pins before celebrating).*
+
+- it PINS TODAY'S BEHAVIOUR: the plan and its whole schedule are inserted before the Stripe session is created
+- it PINS TODAY'S BEHAVIOUR: nothing unwinds those rows when the request fails
+- it PINS TODAY'S BEHAVIOUR: the duplicate guard then rejects every later attempt on that rental
+- it the sibling creator wrote the same hazard down and fixed it, which is why this one is not a matter of taste
+- it the stranded plan is at least visible and clearable from the portal, so this is a blockage rather than data loss
+- it should not leave an installment plan behind when the Stripe session cannot be created — ⚠ watchdog
+
+### stripe/checkout — the unpaid instalment row that claims to be captured
+
+*Use case: void-payment-link reads capture_status === 'captured' as proof of real money; while create-installment-checkout writes it at link-creation time, an instalment link nobody has opened can never be cancelled from the portal.*
+
+- it PINS TODAY'S BEHAVIOUR: create-installment-checkout marks its upfront row captured and auto-approved before the link is opened
+- it should not write capture_status 'captured' in create-installment-checkout before the customer has paid — ⚠ watchdog
+
+### stripe/checkout — the excess-mileage redirect
+
+*Use case: A customer who has just paid an excess-mileage charge must land somewhere that exists on the operator's own domain; if this goes red the redirect target has moved and the 404 pin below needs re-deriving before anyone celebrates.*
+
+- it PINS TODAY'S BEHAVIOUR: both redirect targets point at a booking-app route that does not exist
+- it PINS TODAY'S BEHAVIOUR: neither redirect carries the session id or the rental, so the landing page could reconcile nothing anyway
+- it should send the excess-mileage payer to a route the booking portal actually serves — ⚠ watchdog
+
+### stripe/checkout — void-payment-link's Square rail and the unresolved tenant
+
+*Use case: A row marked voided must mean the provider-side link is dead; if this goes red the Square fail-closed 409 has moved and an unresolvable tenant may again be reported as a successful void while the (never-expiring) Square link stays payable.*
+
+- it PINS TODAY'S BEHAVIOUR: the Square fail-closed 409 lives inside `if (tenant && ...)`, so no tenant means no guard
+- it PINS TODAY'S BEHAVIOUR: the file's header promises the opposite of what that path does
+- it should refuse the void when the payment's tenant row cannot be resolved — ⚠ watchdog
+
+### stripe/checkout — Stripe setup vs the provider seam, across the three dispatching creators
+
+*Use case: Every creator that dispatches to the provider seam should settle Stripe configuration on the same side of that dispatch; if this goes red the ordering has changed in one of the three and the reason needs writing down.*
+
+- it PINS TODAY'S BEHAVIOUR: two creators dispatch to the seam first, and the excess-mileage link resolves Stripe first
+- it the Stripe setup that runs first on that one path contains a throw, which the other two reach only after the seam has had its say
+
+
 ## `tests/integrations/stripe/checkout-health.test.ts`
 
 **Layer:** L2 live, L1 contract, L3 executable · **72 tests** (71 passing, 1 skipped, 16 watchdog)
@@ -1495,6 +1671,84 @@ SQUARE REFUND MATHS AND RESULT SHAPE.
 - it live: a test-mode PaymentIntent confirms and the subscription becomes active — skipped
 
 
+## `tests/integrations/stripe/deposit-holds.test.ts`
+
+**Layer:** L1 contract, L3 executable · **33 tests** (33 passing, 10 watchdog)
+
+### stripe/deposit-holds — the quoted deposit and the authorised deposit are resolved by different rules
+
+*Use case: A renter signs an agreement naming a deposit that is never ringfenced, because the screens and the money path resolve it by different rules.*
+
+- it today resolves the tenant global for a per_vehicle tenant that is not on the allowlist, whatever the vehicle says
+- it reads the vehicle only for the one allow-listed tenant id, which deposit-amount.ts:26-30 records as inert today
+- it today lets all five quoting screens branch on deposit_mode alone, with no tenant allowlist anywhere in them
+- it should quote the renter the same deposit that the hold path will actually authorise — ⚠ watchdog
+- it should not sign an agreement naming a deposit when the hold path will ringfence nothing at all — ⚠ watchdog
+- it pins both zero-skips, which are spelled differently and so cannot be found with one grep
+
+### stripe/deposit-holds — the resolver asks for a column it never reads
+
+*Use case: A third caller trusts the resolver's own column list to mean "the master switch is handled here", and starts authorising holds on the cards of tenants who turned deposits off.*
+
+- it asks every caller to select security_deposit_enabled
+- it today returns a full deposit for a tenant with security_deposit_enabled false, because the body never reads it
+- it is latent rather than live only because both current callers guard separately, ABOVE the call
+- it should resolve the master switch inside the resolver it is advertised on — ⚠ watchdog
+
+### stripe/deposit-holds — the second copy of the resolver dropped its finite-number guard
+
+*Use case: A non-numeric deposit override walks past the zero-skip in place-deposit-hold and reaches Stripe's PaymentIntent create as a NaN amount.*
+
+- it normalises a non-finite override away in the canonical resolver, falling back to the tenant default
+- it today omits that guard in place-deposit-hold's own copy, which announces itself as a copy
+- it today lets a NaN override walk through the zero-skip and reach the PaymentIntent, by hand
+- it should apply the same finite-number guard in both copies of the deposit resolution — ⚠ watchdog
+
+### stripe/deposit-holds — a deposit capture that could not be recorded still answers success
+
+*Use case: The renter's card is debited, the operator is told "captured", and payments / ledger_entries / payment_applications hold nothing — so the deposit still reads as outstanding and the obvious next move is to capture again.*
+
+- it today handles all three record-keeping failures with a console.error and no return
+- it keeps the money-moved half honest, which is why the answer cannot simply become a 500
+- it should tell the operator when a captured deposit could not be recorded, instead of reporting plain success — ⚠ watchdog
+
+### stripe/deposit-holds — a multicaptured deposit is invisible to the refund webhook
+
+*Use case: A deposit captured in two chunks is refunded, `charge.refunded` resolves nothing, and Stripe has returned the money with no refund_status, no Refunded state and no operator notification written anywhere.*
+
+- it today stamps every capture's payments row with the hold's PaymentIntent id
+- it today re-arms the capture guard on a multicapture, leaving the same PI capturable again
+- it today resolves the refunded PaymentIntent with .single() in both webhooks, and drops the error
+- it should resolve a refunded PaymentIntent with a read that tolerates more than one payments row — ⚠ watchdog
+
+### stripe/deposit-holds — an open-ended rental passes the overlap pre-check and fails the trigger after capture
+
+*Use case: The customer's money is captured, the database trigger rejects the rental going Active, the vehicle is still stamped Rented, and the caller is told the booking was approved.*
+
+- it today skips the overlap pre-check entirely when the rental has no end date
+- it is checked in the database by a trigger that COALESCEs a null end date to the end of time
+- it today logs the rejected rental update, stamps the vehicle Rented anyway, and reports success
+- it should ask the overlap pre-check the same question the trigger asks, including open-ended rentals — ⚠ watchdog
+- it should not report a booking as approved when the rental could not be made Active — ⚠ watchdog
+
+### stripe/deposit-holds — minor units are hardcoded at the two places a hold is authorised
+
+*Use case: A JPY tenant's 15,000 deposit is authorised as 1,500,000 JPY on the renter's card, because both hold-placement sites assume every currency has two decimal places.*
+
+- it today converts with a hardcoded hundred on the PaymentIntent path and the Checkout path
+- it costs a JPY tenant a hundred times the deposit, by hand
+- it should convert a deposit to minor units in a currency-aware way where the hold is AUTHORISED, not only where it is captured — ⚠ watchdog
+
+### stripe/deposit-holds — the booking capture's state gate is a read, and the write does not re-check it
+
+*Use case: Two approve clicks (or an approve racing a cancel) both pass the read-time capture_status gate, because nothing re-checks it at the moment of the write.*
+
+- it today refuses on a read at the top and writes captured filtered on the row id alone
+- it puts the whole Stripe round trip between the refusal and the write that enforces it
+- it is not how the sibling capture path does it: capture-deposit-hold compare-and-sets
+- it should enforce the capture_status refusal at the write, not only at the read — ⚠ watchdog
+
+
 ## `tests/integrations/stripe/partial-payment.test.ts`
 
 **Layer:** L2 live, L1 contract · **9 tests** (6 passing, 3 skipped)
@@ -1588,6 +1842,148 @@ SQUARE REFUND MATHS AND RESULT SHAPE.
 ### stripe/refund-edge-cases — live (Layer 2)
 
 - it live: a refund of zero is refused outright rather than being treated as a full refund — skipped
+
+
+## `tests/integrations/stripe/refund-ledger.test.ts`
+
+**Layer:** L1 contract · **72 tests** (72 passing, 13 watchdog)
+
+### reverse-payment — the offsetting row the ledger type CHECK has never allowed
+
+*Use case: A reversed manual payment leaves its original 'Payment' ledger row standing with nothing to offset it, while the charges it paid have already been re-opened — so the customer's statement double-counts the reversal and the operator is told it worked.*
+
+- it admits exactly Charge, Payment and Refund as ledger entry types, in the only migration that has ever defined that constraint
+- it writes the reversal with type 'Adjustment', which is not one of the three the constraint admits
+- it logs the rejected insert and carries on to report the reversal as a success
+- it should write the offsetting row with a ledger type the CHECK constraint accepts — ⚠ watchdog
+- it is not the only place writing type 'Adjustment' — the portal's fine-appeal dialog does it twice
+
+### reverse-payment — the P&L revenue it clears by a key the allocators do not write
+
+*Use case: Reversing a wrongly-recorded payment leaves its Revenue rows in pnl_entries forever, so the operator's P&L overstates earnings by the full reversed amount with no correcting entry and nothing on screen to show it.*
+
+- it deletes P&L rows by payment_id, immediately under a comment naming source_ref
+- it is deleting by a column neither allocator populates: both key the revenue row on source_ref
+- it is measurably the wrong key, because the sibling undo path deletes by source_ref and keeps payment_id only as a sweep
+- it catches only the legacy Initial Fees row, which is the one place payment_id IS written
+- it should delete the P&L rows by the source_ref key its own comment names — ⚠ watchdog
+
+### schedule-refund — the Square payment the nightly batch can never see
+
+*Use case: An operator schedules a refund for a Square payment, is told it succeeded, and the money never leaves: the nightly batch's query can never see that row, and there is no retry, alert or queue anyone inspects.*
+
+- it requires a Stripe payment intent on every row the batch picks up
+- it is querying for a handle the database forbids a Square payment to carry
+- it accepts the schedule anyway: it never reads payment_provider and never refuses a Square row
+- it drops a payment with no rental_id on the same clause, through the INNER JOIN on rentals
+- it makes the gap invisible, because the IMMEDIATE sibling path does route Square correctly
+- it should refuse to schedule a refund for a payment it cannot later process — ⚠ watchdog
+
+### refund amounts — zero coerced to the whole payment (L3, executed)
+
+*Use case: An operator clears the amount field and the form sends 0. On schedule-refund that silently books a FULL refund for a future date; on process-scheduled-refund's immediate path it refunds the whole payment to Stripe on the spot. Neither echoes the amount back before acting.*
+
+- it is the same `\|\|` coercion on both paths, at schedule-refund:61 and process-scheduled-refund:151
+- it turns a requested refund of 0 on a 250.00 payment into a refund of 250.00
+- it lets a refund of -50.00 past the only guard there is, because -50 > 250 is false
+- it sends the coerced figure straight to Stripe on the immediate path, with no cap of any kind
+- it should refuse a zero or negative refund amount before any row is written or any Stripe call is built — ⚠ watchdog
+
+### schedule-refund — the ceiling it validates against
+
+*Use case: A card payment that has already been refunded in full can be scheduled for a second full refund: nothing reads what was refunded, and the schedule overwrites refund_status='completed' with 'scheduled', which is the only status the batch filters on.*
+
+- it validates only against the payment's gross amount, having read nothing about prior refunds
+- it overwrites refund_status with 'scheduled' unconditionally, including over a 'completed'
+- it is the only status filter the batch applies, so the re-scheduled row is picked up again
+- it has a sibling in the same tree that computes the real ceiling
+- it should cap a scheduled refund at what is still refundable, the way process-refund does — ⚠ watchdog
+
+### process-scheduled-refund — the Square branch that records no ledger row
+
+*Use case: A Square refund issued through the scheduled-refund path leaves no ledger Refund row anywhere, so process-refund still reads the money as fully refundable and the same money can be returned a second time from the rental page.*
+
+- it writes only square_refund_id and refund_processed_at, and returns success
+- it touches ledger_entries nowhere in that branch, where the Stripe branch inserts one row per category
+- it leaves the missing refund_status and status to square-webhook, exactly as its comment says
+- it gets no ledger row from square-webhook either — that function writes none at all
+- it re-opens the ceiling, because process-refund derives it from ledger Refund rows alone
+- it should record a Square refund in the ledger, the way the Stripe branch beside it does — ⚠ watchdog
+
+### process-scheduled-refund — the proportional smear across invoice categories (L3, hand-derived)
+
+*Use case: A refunded deposit is booked mostly against rental revenue: the deposit still reads as ~2/3 refundable and can be paid out a second time, while the ledger carries negative Rental revenue that was never refunded and flows into the operator's reporting.*
+
+- it splits the refund by each category's share of the invoice, with no category on the request at all
+- it books a 200.00 deposit refund as Rental 100.00, Tax 20.00, Service Fee 13.33, Security Deposit 66.67
+- it leaves 133.33 of the deposit reading as still refundable after the whole 200.00 was returned
+- it puts -100.00 of Rental revenue on the ledger that was never refunded
+- it should attribute a refund to the category it actually settled, not smear it across the invoice — ⚠ watchdog
+
+### refund-installment-payments — the invoice fallback killed by one nonexistent column
+
+*Use case: A refunded security deposit is recorded as a Rental refund, so deduct-from-deposit and process-refund both read the deposit as fully available and it can be refunded or deducted a second time.*
+
+- it asks the invoices table for rental_amount, which the invoices table does not have
+- it names delivery_fee legitimately: that column exists in production even though no migration adds it
+- it swallows the resulting 42703 by not destructuring the error, so invoice reads as null
+- it then books the entire refund as a single Rental entry, deposit and all
+- it is read as 'no deposit was refunded' by both ceilings that matter
+- it should select only columns the invoices table actually has — ⚠ watchdog
+
+### refund-installment-payments — the upfront counted whether or not this run refunded it
+
+*Use case: Cancelling an installment rental whose upfront payment was already refunded books the upfront's categories a second time as negative ledger rows, so every availableForRefund ceiling derived from them is wrong by the upfront amount in the direction that blocks a legitimate later refund.*
+
+- it filters the installments on action === 'refunded' and the upfront on nothing but existence
+- it only actually refunds the upfront behind a three-way guard, and only then adds to totalRefunded
+- it never reconciles the category split against totalRefunded before writing the rows
+- it should include the upfront in the category split only when this run actually refunded it — ⚠ watchdog
+
+### cancel-rental-refund — the merge lookup that ignores the extension slot it writes
+
+*Use case: A cancellation refund silently records nothing in the ledger, so the money still reads as fully refundable and can be handed back a second time from the rental page — the precise failure the surrounding comment block says this code was written to prevent.*
+
+- it looks the row up on rental, type, category and due_date, and not on extension_id
+- it writes extension_id on the insert two lines below, so the two halves disagree
+- it is the inverse of an index that DOES carry the extension slot, with no type predicate to exempt refunds
+- it discards the maybeSingle error, so a two-row match reads as 'nothing to merge'
+- it is the odd one out: process-refund pins the slot in both directions
+- it needs a pre-existing same-day row to collide, because one call writes at most one row per category
+- it should discriminate the extension slot on the merge lookup, the way process-refund does — ⚠ watchdog
+
+### deduct-from-deposit — the guard that turns away a live deposit hold
+
+*Use case: Excess-mileage deduction against a live deposit authorisation cannot work at all: the operator is told the customer has no deposit while the hold sits on their card, and several hundred lines of multicapture handling below the guard are unreachable in that configuration.*
+
+- it measures the deposit from a ledger Security Deposit CHARGE and nothing else
+- it refuses on that figure at index.ts:173, before the hold-capture branch at index.ts:246 is reachable
+- it is a figure a hold tenant cannot have, because the two deposit models are mutually exclusive
+- it bites a CHARGED tenant too, because the FIFO allocator does not rank Security Deposit at all
+- it lets a LATER deduction through once a capture has written the charge itself
+- it should let a rental whose deposit is a live authorisation reach the hold-capture path — ⚠ watchdog
+
+### every refund path — the P&L revenue nothing reverses
+
+*Use case: Every refunded rental leaves its full revenue in the operator's P&L. The team already reasoned about exactly this for security deposits and carved that one category out; the other ranked categories still have the hole.*
+
+- it mentions pnl_entries in none of the five functions that move money back to a customer
+- it books that revenue on the way in from both allocators, as side 'Revenue'
+- it has the hole written down in the codebase already, in the one carve-out that was made
+- it should write a negative Revenue correction to pnl_entries when a refund is recorded — ⚠ watchdog
+
+### auto-extend-rentals — the ledger category three separate lists have never admitted
+
+*Use case: Any auto-extension carrying an occurrence extra fails outright after the renewal has already been decided — not one missing add-on row, but the entire extension's Rental, Tax, Service Fee and Insurance charges, because they go in as one multi-row insert that throws.*
+
+- it writes five Extension* categories, one of which is 'Extension Add-on'
+- it is absent from the latest ledger category CHECK, which does list the other four
+- it is absent from the latest P&L category CHECK as well
+- it is unranked by the FIFO allocator, so even a widened CHECK would leave the charge unsettleable
+- it takes the whole extension down with it, because all five rows go in as one insert that throws
+- it is a live value everywhere else: five functions name it as a payment target category
+- it carries the identical line in the sandbox twin, so a fix must land in both
+- it should keep the ledger CHECK admitting every category auto-extend-rentals writes — ⚠ watchdog
 
 
 ## `tests/integrations/stripe/refund.test.ts`
@@ -1773,6 +2169,114 @@ STRIPE — SUBSCRIPTIONS AND CREDITS. Layer 1, offline.
 - it abandons its deposit-hold sync well inside Stripe's acknowledgement budget
 - it PINS TODAY'S BEHAVIOUR: that budget is a hand-typed literal, where the Square rail derives its own from the manifest
 - it derives the Stripe hold-sync budget from the capability manifest rather than typing it twice — ⚠ watchdog
+
+
+## `tests/integrations/webhooks/event-depth.test.ts`
+
+**Layer:** L1 contract, L3 executable · **48 tests** (48 passing, 11 watchdog)
+
+### stripe/webhook — what the word 'Applied' claims about a row
+
+*Use case: A payment left deliberately 'Partial' or 'Credit' by the allocator — money still sitting unallocated — is rewritten to 'Applied' by the next payment_intent.succeeded delivery, so the row claims to be fully allocated while the balance is still owed. It is then unrecoverable: the every-minute recovery cron selects only 'Pending' and 'Credit', and the FIFO trigger fires only on the transition into 'Completed'.*
+
+- it PINS TODAY'S BEHAVIOUR: payment_intent.succeeded writes status 'Applied' without touching remaining_amount
+- it shows the allocator itself treating 'Applied' and remaining_amount = 0 as one fact
+- it finds the schema saying in as many words what 'Applied' is supposed to mean
+- it a webhook that declares a payment fully allocated either allocates it or zeroes its remainder — ⚠ watchdog
+
+### stripe/webhook — a declined card on the main booking checkout
+
+*Use case: A customer's card is declined on the primary booking checkout and the operator's bell never rings — no notification, no log line naming the rental, nothing — because the whole handler is gated on PaymentIntent metadata that `create-checkout-session` does not set. The booking simply never becomes paid and the first report comes from the customer.*
+
+- it gates the entire failure handler on the PaymentIntent's own metadata, in all three booking forks
+- it rings the operator bell only from inside that gate, in the two moded forks
+- it PINS TODAY'S BEHAVIOUR: create-checkout-session puts nothing but setup_future_usage on the PaymentIntent
+- it PINS TODAY'S BEHAVIOUR: five of the nine rental checkout creators leave the PaymentIntent unlabelled
+- it shows the house pattern in the two that get it right, so the fix is a copy and not a redesign
+- it every checkout creator whose failures should alert copies rental_id onto payment_intent_data.metadata — ⚠ watchdog
+
+### stripe/webhook — closing an invoice that recorded no payment
+
+*Use case: An emailed invoice payment link whose session metadata carries no rental_id — or whose fallback insert fails — captures the customer's money at Stripe, marks the invoice paid so it stops chasing, and leaves zero payments rows and zero ledger entries. The revenue is invisible to the ledger, to owner payouts and to the operator, and the webhook returns 200 so Stripe never retries.*
+
+- it PINS TODAY'S BEHAVIOUR: the fallback payments insert is nested inside a rental_id check, the invoice update is not
+- it PINS TODAY'S BEHAVIOUR: the fallback insert's own error is destructured away and its null result silently skipped
+- it shows the sibling branch in the same block doing it properly, so the shape is available
+- it an invoice is marked paid only once a payments row exists for that session — ⚠ watchdog
+
+### stripe/webhook — the extension self-heal, present in the live fork only
+
+*Use case: The test fork's entire purpose is to rehearse the live one. A tenant validating auto-extend in test mode watches the money strand exactly as RevTek's $294.25 did; then they go live and it silently works. Divergence in a rehearsal rail is the hardest class of bug to see, because every rehearsal passes — and here the rehearsal is the broken one.*
+
+- it PINS TODAY'S BEHAVIOUR: only the live fork reconstructs a missing auto-extend payments row
+- it PINS TODAY'S BEHAVIOUR: the declaration keyword is the structural tell — live reassigns, test cannot
+- it finds both forks still claiming, in their own prose, to behave identically
+- it the extension branch is the same in both moded forks once the mode strings are normalised — ⚠ watchdog
+
+### stripe/webhook — the extension lookup's discarded read error
+
+*Use case: A transient read failure on the extension lookup takes the same branch as "there is no row", and that branch INSERTS. A second payments row is created for a session that already has one, completed and allocated — double-counted extension revenue.*
+
+- it PINS TODAY'S BEHAVIOUR: the live fork captures extPaymentError and uses it only in a log line 170 lines later
+- it PINS TODAY'S BEHAVIOUR: the branch it guards ends in an INSERT, not a re-read
+- it the extension self-heal refuses to insert when its lookup returned an error rather than an empty result — ⚠ watchdog
+
+### stripe/webhook — the outcome recorded for an event nobody handled
+
+*Use case: Once the delivery-health dashboard exists, a silently discarded dispute counts as a successful handle, identically to a settled payment. The alert built on this data cannot distinguish "we took the money" from "we threw away a chargeback notice" — and the distinction already has a name in the vocabulary and a working precedent on the Square rail.*
+
+- it PINS TODAY'S BEHAVIOUR: the success recorder sits after the switch and always says 'handled'
+- it shows the Square rail choosing between the two outcomes on exactly this distinction
+- it finds 'ignored' already in the shared vocabulary, documented for exactly this case
+- it proves by execution that 'ignored' round-trips into the row unchanged, so nothing else has to change (Layer 3)
+- it an event that fell through to default is recorded as ignored rather than handled — ⚠ watchdog
+
+### stripe/webhook — the failure record, and what it omits
+
+*Use case: Stripe retries roughly fifteen times over three days and then stops. After that the only record of what was lost is an event id nobody wrote down: the Stripe rail's "failed" record says something threw, not which event, not for which tenant, not how long it ran.*
+
+- it PINS TODAY'S BEHAVIOUR: the handler_threw record carries no event id, type, tenant or duration
+- it PINS TODAY'S BEHAVIOUR: no 'accepted' checkpoint is written before dispatch, so a killed invocation records nothing at all
+- it shows the Square rail naming the event on exactly this path
+- it proves by execution that omitting eventId writes a NULL, not a placeholder (Layer 3)
+- it a Stripe delivery that threw AFTER the event was constructed names that event in its failure record — ⚠ watchdog
+
+### webhooks/health — the Stripe fork that records nothing
+
+*Use case: Three of the four Stripe endpoints record their deliveries and one does not — and the silent one is the fork the suite already pins as mode-agnostic, keyed on a test secret, and never allocating a rental payment. On the dashboard it will read as silent whether it is dead or busy, which is the precise failure the health feature was built to remove.*
+
+- it finds four Stripe webhook forks declared open at the gateway
+- it PINS TODAY'S BEHAVIOUR: the legacy fork imports the health recorder nowhere and calls it never
+- it finds the gateway declaration that makes its silence matter
+- it every Stripe fork declared open at the gateway records its deliveries — ⚠ watchdog
+
+### recover-pending-stripe-payments — the auto-approval it never writes
+
+*Use case: The cron exists precisely for when the webhook misses, so its rows must be indistinguishable from the webhook's. Every payment it recovers stays verification_status='pending' with real captured money behind it — the exact state the GMT incident comment says hides revenue from owner payouts — and the portal then offers Approve/Reject on it.*
+
+- it PINS TODAY'S BEHAVIOUR: the Stripe recovery cron never mentions verification_status at all
+- it shows the live webhook writing auto_approved at every completion site, with the incident named beside it
+- it shows the row starting life as 'pending', so nothing flips it if the cron does not
+- it shows the portal treating the resulting row as an actionable approval queue item
+- it the Stripe recovery cron commits a payment with the same verification_status the webhook would have written — ⚠ watchdog
+
+### recover-pending-stripe-payments — the update with no status fence
+
+*Use case: This job runs every minute against rows up to 24h old while the webhook is writing the same rows — that concurrency is the entire premise of the file. If the webhook commits and allocates between the SELECT and the UPDATE, the cron rewrites paid_at to now, losing the real settlement time, and drags a row FIFO had moved to 'Credit', 'Partial' or 'Refunded' back to 'Completed', re-firing auto_fifo_on_payment_completed.*
+
+- it PINS TODAY'S BEHAVIOUR: the SELECT fences on status 'Pending' and the UPDATE that follows does not
+- it PINS TODAY'S BEHAVIOUR: the Square recovery's own comment claims the Stripe one has this guard, and it does not
+- it the Stripe recovery cron re-commits only a row that is still the Pending one it selected — ⚠ watchdog
+
+### audit-stripe-payment — what 'net at Stripe' is measured against
+
+*Use case: This is the tool you reach for when a money figure is disputed — its own header says "the numbers look right on screen is not the same claim as Stripe agrees with us". Measured against pi.amount, an uncaptured pre-auth or deposit hold reconciles clean and reports its full nominal as net at Stripe.*
+
+- it PINS TODAY'S BEHAVIOUR: net_at_stripe is derived from the authorised amount, never from what was captured
+- it leaves amount_matches alone, because comparing the row's amount to pi.amount is a fair like-for-like
+- it PINS TODAY'S BEHAVIOUR: orphan mode hardcodes the UAE platform account and an 'own' payment model
+- it computes what the tool would report for an uncaptured $250 deposit hold (Layer 3)
+- it net_at_stripe reports money Stripe has actually captured, not an authorisation's nominal — ⚠ watchdog
 
 
 ## `tests/integrations/webhooks/health.test.ts`
@@ -2225,4 +2729,385 @@ THE SPINE'S AGREEMENT STEP, and the sync back from the processor. Layer 1, offli
 - it promotes the payment to Completed only when the settlement event arrives
 - it treats the expiry event as a distinct outcome from a completed one
 - it never lets a Square submission response stand in for settlement
+
+
+## `tests/spine/rental/07-surcharge-maths.test.ts`
+
+**Layer:** L3 executable · **48 tests** (48 passing, 12 watchdog)
+
+SURCHARGE MATHS — the weekend/holiday/override/stacking/manual-price half of the pricing engine. Layer 3 only: every test here imports apps/portal/src/lib/calculate-rental-price.ts and EXECUTES it. No network, no Supabase, no edge functions.
+
+### surcharge maths — the calendar these fixtures rest on
+
+*Use case: Every dated expectation below assumes 2026-03-07 is a Saturday and 2026-03-01 a Sunday. If the calendar assumption is wrong, every weekend-day count in this file is wrong and the figures mean nothing.*
+
+- it treats 2026-03-07 as a Saturday, JS day number 6
+- it treats 2026-03-01 as a Sunday, JS day number 0
+
+### surcharge maths — a holiday whose surcharge is zero
+
+*Use case: An operator marks a company holiday, a blackout date or any purely informational day and leaves the surcharge at its default 0. If this block goes red the weekend surcharge is silently cancelled on every weekend day that holiday covers — 20.00 a day a vehicle, with no line item explaining it.*
+
+- it charges 100.00 x 1.20 = 120.00 on a Saturday when no holiday is configured
+- it drops the weekend surcharge entirely, charging the bare 100.00, when a 0%-surcharge holiday covers the same Saturday
+- it should still charge the weekend surcharge when the holiday contributes 0%, giving 100.00 x 1.20 = 120.00 — ⚠ watchdog
+
+### surcharge maths — the two ways to take a vehicle out of a holiday
+
+*Use case: The operator has one intent — "this car is not in this holiday" — and two UI affordances for it. If this block goes red, two identical cars on the same Saturday are billed 20.00 apart depending on which affordance the operator happened to use, and the override route also waives a weekend surcharge nobody asked to waive.*
+
+- it charges the weekend rate of 100.00 x 1.20 = 120.00 when the vehicle is listed in the holiday's excluded_vehicle_ids
+- it charges the bare 100.00 when the same vehicle is taken out of the same holiday by an 'excluded' pricing override instead
+- it should price the two exclusion mechanisms identically, both at 100.00 x 1.20 = 120.00 — ⚠ watchdog
+
+### surcharge maths — two holidays covering the same day, with stacking on
+
+*Use case: Overlapping holiday rows are the normal shape of this data — a "Peak Season" range with "Christmas Day" inside it — and nothing in tenant_holidays forbids the overlap. If this block goes red the operator configured 20% + 30% + 20%, is billing 40%, and the rendered breakdown omits the missing holiday so it looks internally consistent.*
+
+- it sums only the first matching holiday and the weekend, charging 100.00 x 1.40 = 140.00 rather than all three surcharges
+- it should apply every matching holiday under stacking, giving 100.00 x (1 + (20+30+20)/100) = 170.00 — ⚠ watchdog
+
+### surcharge maths — a weekend fixed-price override on a holiday day
+
+*Use case: Stacking is sold to the operator as "apply everything" — strictly additive. If this block goes red, an operator with a quiet-Saturday flat rate and a separate Christmas markup bills Christmas Saturday at the quiet rate, and the breakdown row just says "weekend" so nothing shows why.*
+
+- it charges the holiday surcharge of 100.00 x 1.50 = 150.00 on the default priority path, ignoring the weekend flat rate
+- it charges the weekend flat 60.00 once stacking is on, making the identical day 90.00 cheaper
+- it should never price a day below the priority-path result for the same inputs — stacking must be at least 150.00 here — ⚠ watchdog
+
+### surcharge maths — per-day rounding under stacking on a rental with no surcharges
+
+*Use case: The tenant's stack_surcharges column changes the price of rentals that carry no surcharge at all. If this block goes red, a quote the customer already saw — or a deposit already authorised — differs from the charge by cents, and the drift grows with rental length.*
+
+- it returns exactly the monthly rent of 2000.00 on the default path, rounding the accumulated fraction once at the end
+- it returns 2000.10 for the same rental under stacking, because every surcharge-free day is rounded up to 66.67 first
+- it should leave the total untouched when stacking is on but no surcharge applies — 2000.00, not 2000.10 — ⚠ watchdog
+
+### surcharge maths — skipSurcharges on a tenant who has stacking switched on
+
+*Use case: skipSurcharges is the auto-extend / "set price" path, which runs unattended on cron job 54. If this block goes red, a stacking tenant's extensions are over-billed to the cent against the flat rate the operator advertised, and nobody is watching when it happens.*
+
+- it returns the flat 2000.00 when the tenant's weekend config does not set stack_surcharges
+- it returns 2000.10 for the same skipSurcharges call when the tenant's weekend config sets stack_surcharges
+- it should make the tenant's stacking flag irrelevant under skipSurcharges — 2000.00 either way — ⚠ watchdog
+
+### surcharge maths — a manual per-day price that is not a number
+
+*Use case: 01 names NaN reaching the invoice as the headline risk, and this is the one live path that produces it. If this block goes red a single bad per-day price row does not just misprice its own day — it destroys the rental total, which renders as "$NaN" and reaches Stripe as a non-number.*
+
+- it charges 100.00 x 3 = 300.00 when no manual prices are set
+- it returns NaN as the whole rental price when one day's manual price is the string 'abc'
+- it should ignore a manual price that is not a finite number and fall back to the tier rate, giving 100.00 x 3 = 300.00 — ⚠ watchdog
+- it prices a day at 0.00 when its manual price is null, silently dropping a third of a three-day rental
+- it does honour a numeric string, so the Number() coercion at :444 is doing its intended job
+- it should ignore a null manual price rather than pricing the day free, giving 100.00 x 3 = 300.00 — ⚠ watchdog
+
+### surcharge maths — an override belonging to a different vehicle
+
+*Use case: Override filtering is left entirely to each caller and the callers do it inconsistently. If this block goes red, one caller fetching overrides tenant-wide instead of per-vehicle — the natural thing to do on a fleet screen — prices every car in the fleet at the first car's override.*
+
+- it applies a 5.00 fixed price from an override whose vehicle_id is 'OTHER' to vehicle 'v1'
+- it should ignore an override whose vehicle_id does not match the vehicleId argument, giving 100.00 x 1.20 = 120.00 — ⚠ watchdog
+
+### surcharge maths — two weekend overrides on the same vehicle
+
+*Use case: PostgREST returns rows in planner order without an explicit ORDER BY. If this block goes red the same vehicle on the same Saturday prices at 110.00 or 180.00 run to run, and "quoted X, charged Y" has no explanation anyone can reconstruct.*
+
+- it charges 100.00 x 1.10 = 110.00 when the 10% override is first in the array
+- it charges 100.00 x 1.80 = 180.00 for the same two rows in the opposite order
+- it should not let array order decide the price — the two orderings should agree — ⚠ watchdog
+
+### surcharge maths — the reported tier versus the price when manual per-day prices are set
+
+*Use case: rentals.monthly_amount is written from this path and the auto-extend job re-bills from it. If this block goes red someone has changed either the label or the number — and the two currently contradict each other, so whoever touches it must decide which one they meant.*
+
+- it charges the monthly rent of 2000.00 with no manual prices set
+- it reports pricingTier 'monthly' while charging 100.00 x 30 = 3000.00, 50% above the monthly rate itself
+- it still charges the unrounded tier rate on the 29 days a manual price does not cover
+
+### surcharge maths — the vehicle-list call site versus the checkout call site
+
+*Use case: The customer browses, sees a price, clicks through and is charged a different one. If this block goes red a caller has dropped a pricing input again — nothing else in the suite compares two call sites' argument lists.*
+
+- it shows 100.00 x 1.20 = 120.00 on the vehicle list, because the list page passes an empty override array
+- it charges the override's flat 60.00 at checkout for the same vehicle and the same dates
+- it should quote the same price on the list page as at checkout — ⚠ watchdog
+
+### surcharge maths — the tenant stacking flag when the weekend surcharge is zero
+
+*Use case: A tenant who runs holiday surcharges but no weekend surcharge can switch stacking on, see it saved, and get no change at all. If this block goes red, the setting has either started working or stopped — and the day it starts working is also the day the rounding regime changes for every rental (see the stacking-rounding block above).*
+
+- it builds a null weekend config, discarding the stacking flag with it, when weekend_surcharge_percent is zero
+- it prices the holiday day on the priority path with no appliedSurcharges, even though the tenant has stacking switched on
+- it does engage stacking for the same tenant the moment a weekend percentage above zero is saved
+- it should honour stack_surcharges independently of weekend_surcharge_percent — ⚠ watchdog
+
+### surcharge maths — weekend surcharges on the weekly and monthly tiers
+
+*Use case: REGRESSION GUARD on behaviour that is correct today and entirely unprotected. The migration that created the feature says "Only applies to daily tier (<7 days)" (20260218120000_add_dynamic_pricing.sql:3); the engine as shipped applies surcharges on all three tiers (:385-391, :474-480). Every test in 01 passes null/[] for the surcharge inputs, so the suite would stay fully green if someone read that comment and "restored" the restriction — quietly removing 240.00 from the weekly rental below and 1080.00 from the monthly one. If this block goes red, that is what happened.*
+
+- it charges 5 x 100.00 + 2 x 120.00 = 740.00 for a seven-day weekly-tier rental spanning two weekend days
+- it charges 21 x 100.00 + 9 x 120.00 = 3180.00 for a thirty-day monthly-tier rental spanning nine weekend days
+
+### surcharge maths — a recurring holiday whose range crosses December into January
+
+*Use case: REGRESSION GUARD on the highest-revenue week of the year. The match is a hand-rolled month*100+day integer comparison with an inverted branch for wrapping ranges (:133-140) — exactly the shape someone "simplifies" into a plain range check, which would stop charging the Christmas surcharge from Dec 20 to Dec 31 while still charging it Jan 1 to Jan 5. Nothing else in the suite executes findMatchingHoliday at all.*
+
+- it leaves 2027-12-19 at the bare 100.00, one day before the range opens
+- it charges 100.00 x 1.50 = 150.00 on 2027-12-20, the inclusive opening edge
+- it charges 100.00 x 1.50 = 150.00 on 2027-12-25, mid-range and before the year rolls over
+- it charges 100.00 x 1.50 = 150.00 on 2028-01-05, the inclusive closing edge on the far side of the new year
+- it leaves 2028-01-06 at the bare 100.00, one day after the range closes
+- it still matches a recurring range that does not wrap, proving the month*100+day key stays monotonic within a year
+
+
+## `tests/spine/rental/08-tenant-isolation.test.ts`
+
+**Layer:** L1 contract · **48 tests** (48 passing, 11 watchdog)
+
+TENANT ISOLATION AROUND RENTAL CREATION — Layer 1 (source-of-record) with two small Layer 3 islands. Offline; no database, no network, no keys.
+
+### tenant isolation — global search runs unscoped when the tenant has not resolved
+
+*Use case: A portal search typed before the tenant resolves returns, and caches, another operator's customers, vehicles, rentals, fines, payments, plates and policies — the boundary is the `if (tenantId)` and nothing else.*
+
+- it fires the global search on query length alone, with no tenant term in its enabled condition
+- it guards the same call on the sidebar path, with a comment saying the guard is load-bearing
+- it leaves seven of the search's table reads conditionally scoped, so an absent tenant drops the filter
+- it compares the uuid column against an empty string on the other two reads, which errors instead of leaking
+- it should not run the global search before the tenant has resolved — ⚠ watchdog
+- it should scope every one of the search's table reads unconditionally — ⚠ watchdog
+
+### tenant isolation — portal invoice numbers come from one platform-wide sequence
+
+*Use case: Each operator's invoice book is numbered by the whole platform's volume, so an auditor sees INV-202609-0001 followed by INV-202609-0047 in a document customers are told is sequential.*
+
+- it accepts a tenant id and never uses it when choosing the next number
+- it picks the highest number for the month by prefix alone, across every tenant
+- it passes the tenant id in from the rental-create caller regardless
+- it holds invoice_number unique across the whole platform, not per tenant
+- it should number each tenant's invoices from that tenant's own sequence — ⚠ watchdog
+
+### tenant isolation — the invoice sequence jams at 9999 because it is compared as text
+
+*Use case: Invoice creation — and therefore rental creation, which has already committed the rental row by then — throws permanently once the platform issues its 10,000th invoice in a calendar month, and never recovers by itself.*
+
+- it orders a text column as text and pads without truncating
+- it allocates the next number correctly while the month's count is under four digits
+- it sorts INV-202609-9999 above INV-202609-10000, because '9' beats '1' at the twelfth character
+- it re-proposes the already-issued 10000 forever once the platform passes 9999 in a month
+- it retries once and re-derives the identical number, so the second attempt throws too
+- it should allocate 10001 once 10000 has been issued — ⚠ watchdog
+
+### tenant isolation — the booking-site rental writes no tenant when the context has not resolved
+
+*Use case: A paid, committed, car-reserving rental that carries no tenant is invisible to its own operator's rentals list, calendar and reminders — the vehicle is out and nobody knows.*
+
+- it adds tenant_id to the payload only inside a nullish tenant check
+- it inserts the rental unconditionally, outside that check
+- it declares rentals.tenant_id nullable with no default, so the database accepts the ownerless row
+- it should refuse to write a rental that has no tenant — ⚠ watchdog
+
+### tenant isolation — one nullish-tenant test also disables the pre-insert guards
+
+*Use case: The same nullish-tenant test that loses the tenant stamp also switches off the pre-insert guards, so failures arrive in a cluster instead of one at a time — and the duplicate-submit guard has no database backstop.*
+
+- it gates the booking overlap guard on the tenant, then inserts whether or not it ran
+- it still refuses the overlapping rental at the database when that guard is skipped
+- it gates the portal's duplicate-submit guard on the tenant as well
+- it has no database constraint behind that duplicate guard, unlike the overlap one
+- it should not make the accidental-double-submit guard conditional on the tenant resolving — ⚠ watchdog
+
+### tenant isolation — the overlap trigger compares dates while the quote engine compares times
+
+*Use case: Same-day turnaround — one renter returns at 10:00, the next collects at 14:00 — is offered by the quote engine and then refused by the database. That is the normal rental business, structurally impossible.*
+
+- it names no time column at all in the overlap predicate
+- it reads both handover times and a turnaround buffer on the quote side
+- it treats a 10:00 return and a 14:00 collection on one day as a clash, by date alone
+- it should allow a same-day handover the quote engine has already offered — ⚠ watchdog
+
+### tenant isolation — the booking site adopts unowned customer rows by email, and manufactures them
+
+*Use case: A customer row is the hub for documents, payments, invoices and rental history. Moving one between operators by email match hands a tenant another operator's customer and everything joined to them.*
+
+- it falls back to any customer row with the same email and no tenant
+- it stamps the current tenant onto the row it found
+- it creates the very rows that fallback later adopts, because the create-side stamp is optional too
+- it does the tenant-scoped lookup first, which is what keeps this to unowned rows only
+- it should not treat a tenantless customer row as free to claim by email — ⚠ watchdog
+
+### tenant isolation — the 23505 customer recovery filters the uuid tenant column with an empty string
+
+*Use case: The duplicate-customer recovery exists for exactly the race it cannot survive: with no tenant it queries a uuid column with an empty string, throws the error away, and reports "Customer create failed" with no cause.*
+
+- it recovers by re-selecting on email and an empty-string tenant
+- it discards the error from that re-select, so the cause never reaches the operator
+- it should surface why the duplicate-customer recovery failed — ⚠ watchdog
+
+### tenant isolation — the weekend pricing override inserts a duplicate on every save
+
+*Use case: An operator corrects a vehicle's weekend price, the old row stays, and the quote engine may keep selling the car at the superseded rate while the settings screen shows the new one.*
+
+- it targets a conflict triple whose third column is always NULL for a weekend row
+- it declares that uniqueness with NULLs distinct, so the conflict is never detected
+- it resolves the weekend override with the first row that comes back, in unspecified order
+- it should update the existing weekend override instead of adding another — ⚠ watchdog
+
+### tenant isolation — the portal create path fetches the tier toggles and never reads them
+
+*Use case: An operator who turns weekly hire off for a car can still be walked through creating a weekly rental for it from the portal — and the toggle that says no is already sitting in the component's own state.*
+
+- it selects all three tier toggles when loading vehicles on both portal create screens
+- it mentions each toggle exactly once per file — in that SELECT and nowhere else
+- it should check the tier toggles on the portal path before writing the rental — ⚠ watchdog
+
+### tenant isolation — the overlap-trigger tests are pinned to a migration the repo says is behind production
+
+*Use case: Five existing overlap tests assert against SQL that provably is not what runs in production. If nobody records that, the next person reads a green suite as proof the trigger behaves as written.*
+
+- it records in its own header that production's overlap trigger is ahead of this repo
+- it has that extra rejection path in no migration body anywhere
+- it leaves 20260418120000 as the newest committed definition, which is the one under test
+
+
+## `tests/spine/rental/09-money-notifications.test.ts`
+
+**Layer:** L1 contract, L3 executable · **74 tests** (74 passing, 13 watchdog)
+
+THE SPINE'S "MONEY MOVED BACKWARDS — WHO WAS TOLD?" STEP.
+
+### a cancellation refund that failed at Stripe — the ledger knows, the notification does not
+
+*Use case: A cancellation refund throws at Stripe, the ledger correctly records that no money moved — and the customer is still emailed and SMS'd "a full refund of $X has been initiated". They wait ten business days for money that was never sent, and the operator's bell says it was handled.*
+
+- it decides the payment's refunded status from stripeRefundId, the one proof money actually moved
+- it builds the customer notification from the request parameters instead, with no reference to whether money moved
+- it renders all three cancellation messages — customer email, customer SMS and operator bell — off data.refundType alone
+- it promises the money in 5-10 business days, which is the window the customer will wait before calling
+- it should tell the customer a refund was initiated only when a refund actually happened — ⚠ watchdog
+
+### the cancellation notification that only a browser tab can send
+
+*Use case: The refund is already at Stripe when cancel-rental-refund returns. The email and SMS that tell the customer are then sent by the operator's BROWSER. Close the tab, lose the network, and the money moved with nobody told and no server-side record that a notification was owed.*
+
+- it sends nothing itself: cancel-rental-refund invokes no function anywhere in its source
+- it returns the notification payload in the HTTP response instead of acting on it
+- it leaves the send to the portal hook, in a try/catch that deliberately swallows the failure
+- it gates the whole send on customerEmail, so a customer with only a phone number gets no SMS either
+- it should send the cancellation notification from the server, where the refund was issued — ⚠ watchdog
+
+### repeat partial refunds on the webhook path — the bell that fires exactly once, forever
+
+*Use case: A second partial refund — or any refund issued from the Stripe Dashboard — produces zero operator bells and, because the operator email fires off the bell's INSERT, zero operator emails. Money leaves the account and nothing on either side of the screen says so.*
+
+- it fires the payments trigger only on the FIRST transition into a refunded state
+- it then dedupes on the PAYMENT id with no time window, so it can never fire for that payment again
+- it keys the webhook's own refund bell on the same payment id, in both test and live
+- it short-circuits on any existing broadcast row carrying that key, with no age bound
+- it reaches the customer from neither webhook: neither one mentions notify-refund-processed at all
+- it takes the operator EMAIL down with the bell, because that email fires on the notification INSERT
+- it was compensated for on the process-refund path only, which says the problem out loud
+- it should dedupe the webhook's refund bell per refund, so a second partial refund is announced too — ⚠ watchdog
+- it should tell the customer about a refund that arrives as a webhook, the way process-refund does — ⚠ watchdog
+
+### process-scheduled-refund — the immediate branch that notifies nobody
+
+*Use case: process-scheduled-refund has two paths that both return money. The nightly batch emails the customer; the immediate path returns success and tells nobody. The renter's card is credited with no message on either channel.*
+
+- it refunds at Stripe and writes the refunded payment status on the immediate branch
+- it touches no notifier between the Stripe call and the success response
+- it is the only branch that stays silent: the nightly batch beside it does email the customer
+- it also loses the operator bell whenever the payment was already partially refunded
+- it should tell the customer about an immediate refund, the same as a scheduled one — ⚠ watchdog
+
+### process-scheduled-refund — the four-key payload behind a wrong refund receipt
+
+*Use case: The nightly refund batch emails the renter a receipt that says "Booking Reference: undefined" and "Partial Refund" on a full refund — and quotes a GBP or AED refund in dollars, because four fields are missing from a four-line payload.*
+
+- it sends exactly customerEmail, customerName, refundAmount and reason
+- it names the reason field 'reason' while the receiving interface declares refundReason
+- it interpolates the absent bookingRef straight into the email body
+- it prints 'Partial Refund' for a full refund, because the ternary has no third arm
+- it skips the tenant template branch entirely and falls back to the hardcoded Drive 247 body
+- it quotes a GBP tenant's £120.00 refund to the customer as $120.00, because currency needs the tenantId
+- it should hand the refund notifier the tenant, booking and refund type it declares — ⚠ watchdog
+
+### deduct-from-deposit — a deposit deduction told to nobody
+
+*Use case: Money is taken out of a renter's security deposit — the single most disputed movement in the product — and 829 lines later nobody has been told. No email saying what was taken or what is still held, and after the first deduction no operator bell either.*
+
+- it contains no notifier reference of any kind: no notify, no email, no sms, no invoke
+- it imports Stripe, cors, the refund seam and a currency formatter, and no sender
+- it nonetheless writes a refunded payment status, so the only possible bell is the payments trigger
+- it loses even that bell on a second deduction, which is exactly when the deposit is contested
+- it is the gap notify-refund-processed was extended to close everywhere else
+- it should tell the renter what was deducted from their deposit and what is still held — ⚠ watchdog
+
+### notify-refund-processed — the refund email that is not from the tenant
+
+*Use case: On a white-label platform the renter has never heard of "Drive 247". The refund email is the one money email that arrives from that unrecognised sender, with the platform — not the operator who can answer — as reply-to. It is the email most likely to be reported as phishing and deleted.*
+
+- it calls sendEmail with three arguments, omitting the client and tenant id that set the sender
+- it is a real omission, not a shorthand: parameters four and five are what rewrite the From header
+- it is the odd one out — every sibling money notifier passes all five
+- it hardcodes DRIVE 247 into the subject line as well, so even the subject is unbranded
+- it should send the refund email from the tenant, the way every other money notifier does — ⚠ watchdog
+
+### notify-refund-processed — success reported for an email that never left
+
+*Use case: process-refund fires this notifier and logs only a thrown error. A success:true that hides a Resend rejection — or no customer email at all — is indistinguishable from a delivered refund receipt, so a refund the renter never heard about looks fully handled.*
+
+- it returns success:true on every non-throwing path
+- it warns and carries on to that same return when no email address could be resolved
+- it stores the EmailResult and never inspects its success flag
+- it is receiving a real failure object in that case, not an exception
+- it disagrees with its own sibling, which throws on exactly that flag
+- it is invoked fire-and-forget by process-refund, which only logs a thrown error
+- it should not report success when no refund email was sent — ⚠ watchdog
+
+### aws-sns-sms — simulated success with none of the guard the email service got
+
+*Use case: An AWS credential rotation makes every SNS text report success:true and deliver nothing — verification links and lead replies silently stop. The email service was given a guard for precisely this failure mode; the SMS service never was.*
+
+- it returns success:true and simulated:true whenever AWS credentials are absent
+- it is keyed purely on the presence of two env vars, with no idea where it is running
+- it carries no local-dev discrimination at all, unlike the email service beside it
+- it carries the reasoning for that guard in the email service's own comment
+- it is reached by five real callers, so the blast radius is verification links and lead messaging
+- it should report an unconfigured SMS service as a failure, the way the email service does — ⚠ watchdog
+
+### notify-preauth-expiring — an orphan carrying a platform-wide phone number
+
+*Use case: A pre-authorisation hold reaches expiry with nobody told, which means an unsecured rental. And the day somebody wires this function up, every tenant's customer name, booking reference and deposit amount is texted to one shared platform phone number.*
+
+- it is invoked by no edge function in the repository
+- it is excluded from the operator-email dispatcher too, on the grounds that it sends its own
+- it texts a single platform-wide ADMIN_PHONE env var, not a per-tenant number
+- it puts the tenant's customer name, booking reference and deposit amount in that message
+- it does resolve a per-tenant recipient two blocks above, for the email — so the SMS half is the outlier
+- it should send the pre-auth SMS to the tenant's own number, not one platform-wide ADMIN_PHONE — ⚠ watchdog
+
+### send-installment-failed — a warning recorded whether or not it was sent
+
+*Use case: A failed installment charge is the moment the renter must act to keep the car. The installment_notifications row is the only durable record that they were warned, it is written whether or not the warning was delivered, and mark_overdue_installments then escalates off that possibly fictional trail.*
+
+- it stores the customer EmailResult and never reads its success flag
+- it records the notification unconditionally, outside any delivery check
+- it writes that record as an upsert, so a re-run restamps sent_at with no delivery evidence
+- it then returns success:true whatever the send returned
+- it is the half of the installment flow that does not check, while its receipt sibling throws
+- it feeds an escalation that assumes the warning trail is real
+- it should record an installment warning only when it was delivered — ⚠ watchdog
+
+### notify-operator-email — sent:true regardless of what the send returned
+
+*Use case: This is the single funnel for EVERY operator email in the product — payment_received, payment_failed, refund_processed, fine_new and eight more types route through it. It reports sent:true whatever the email service returned, so the day anyone adds delivery logging or a retry sweep on top of this response, every undelivered operator email is marked delivered.*
+
+- it is careful about every reason to skip, and careless about the only reason to fail
+- it never inspects the result it is reporting on
+- it is reporting on a call that can return success:false without throwing
+- it does at least echo the full result object, which is why this is survivable today
+- it is the funnel for a dozen notification types, including all three money ones
+- it should report sent:true only when the operator email was actually accepted — ⚠ watchdog
 
