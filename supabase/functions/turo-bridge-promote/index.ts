@@ -355,6 +355,14 @@ Deno.serve(async (req) => {
     return await revertBatch(supabase, tenantId, actorId, asText(body.batch_id, 64), nowIso);
   }
 
+  if (action === "resync" || action === "resync_apply") {
+    return await resync(
+      supabase, tenantId, actorId, nowIso,
+      action === "resync_apply",
+      asText(body.plan_hash, 128),
+    );
+  }
+
   // =========================================================================
   // PLAN  (and APPLY, which re-runs the plan first)
   // =========================================================================
@@ -585,7 +593,7 @@ Deno.serve(async (req) => {
   };
 
   if (action === "plan") return jsonResponse(planPayload);
-  if (action !== "apply") return errorResponse("`action` must be one of: preflight, plan, apply, revert.", 400);
+  if (action !== "apply") return errorResponse("`action` must be one of: preflight, plan, apply, revert, resync, resync_apply.", 400);
 
   // =========================================================================
   // APPLY
@@ -1562,5 +1570,446 @@ async function revertBatch(
           "are back, so those cars are held exactly as they were before. "
         : "Those cars are free again. ") +
       "The record of the import itself is kept.",
+  });
+}
+
+
+/**
+ * resync — re-reads what Turo now says about trips we already promoted, and
+ * proposes the corrections.
+ *
+ * ═══ WHY THIS EXISTS ════════════════════════════════════════════════════════
+ *
+ * promote writes a trip into `rentals` once and never looks at it again — the
+ * rental IS the block (constraint 2 above). That is fine while the trip is
+ * unchanged, and wrong in two ways the moment it is not:
+ *
+ *   SHORTENED. Turo's feed carries the new, earlier end date and ingest
+ *   faithfully upserts it into turo_bridge_reservations. Nothing carries it to
+ *   rentals.end_date, so the calendar keeps blocking the days that were given
+ *   back. Observed live: reservation 60821187 ends 2026-09-30 in the feed while
+ *   rental R-4b0ef3 still runs to 2026-10-31 — a month of a real car's
+ *   availability, invisible.
+ *
+ *   ENDED. The trip runs its course and the rental stays 'Active' with an end
+ *   date in the past. The calendar copes (it is date-ranged, so past days stop
+ *   mattering) but fleet-quote does not: apps/portal/src/lib/fleet-quote.ts:230
+ *   treats a physically-out rental with a stale end date as holding the car
+ *   until staff close it, and sets rentalEnd = POSITIVE_INFINITY. The car then
+ *   fails EVERY future quote window, permanently and silently. Observed live:
+ *   10 of Jangram's 19 vehicles were in exactly that state, 1-7 days overdue.
+ *
+ * That quote rule is correct for a rental our own staff handed over — a car
+ * that has not come back must not be sold again. It is wrong for an imported
+ * one, because there is no staff handover pending: Turo ran the handover and
+ * our row is a mirror of its record. resync makes the mirror true again.
+ *
+ * ═══ WHY IT IS PLAN-THEN-APPLY AND NOT AUTOMATIC ════════════════════════════
+ *
+ * Constraint 4 above: "nothing here reads absence, so a staged row vanishing
+ * from a later degraded read can never un-promote a rental." That is load
+ * bearing and it stays. resync does not read absence either — it acts only on
+ * what a read POSITIVELY carried: this trip's own dates. But shortening a
+ * rental gives availability back, and turo-bridge-reconcile's header sets out
+ * why that direction is the expensive one ("releasing a block sells the same
+ * car twice"). So a human sees the list and says yes. One review replaces ten
+ * manual edits; it does not replace the human.
+ *
+ * ═══ WHAT IT WILL NOT DO ════════════════════════════════════════════════════
+ *
+ *   - It never touches a rental it did not create: `source = 'turo_import'`
+ *     AND a promoted_rental_id link are both required. (R-1)
+ *   - It never acts on a `fixture` row, in line with the rest of the feature.
+ *   - It never EXTENDS a rental into a range it cannot have. prevent_rental_overlap
+ *     stays armed; a 23P01 is caught per row and surfaced as a conflict rather
+ *     than swallowed. (R-2)
+ *   - It never cancels or deletes a rental. A trip that DISAPPEARED from the
+ *     feed is absence, not evidence, and remains reconcile's problem — the
+ *     documented default there is deliberately to keep over-blocking. (R-3)
+ *   - It never writes blocked_dates, for the same reasons promote does not.
+ *
+ * ═══ ON `edited_since_import` ═══════════════════════════════════════════════
+ *
+ * revertBatch refuses a rental whose updated_at moved more than 2s past
+ * turo_promoted_at, on the grounds that staff may have edited it. That check
+ * cannot be reused here: measured against live data it is true for ALL 51 of
+ * Jangram's promoted rows, in-sync ones included, because the row's own
+ * triggers stamp updated_at afterwards. Reusing it would refuse everything and
+ * look like a feature that does nothing. It is reported per row as information
+ * for the operator instead of being treated as a veto.
+ */
+async function resync(
+  supabase: SupabaseClient,
+  tenantId: string,
+  actorId: string,
+  nowIso: string,
+  apply: boolean,
+  suppliedPlanHash: string | null,
+): Promise<Response> {
+  // Date-only comparison against the feed's own date-only values. A rental is
+  // stored as a DATE, so an hour of timezone skew cannot change the verdict by
+  // more than a day, and a day's delay in closing an ended trip is harmless.
+  const today = nowIso.slice(0, 10);
+
+  const { data: staged, error: stagedErr } = await supabase
+    .from("turo_bridge_reservations")
+    .select("id, reservation_id, source, starts_at, ends_at, hold_until, promoted_rental_id, promoted_at, presence_state")
+    .eq("tenant_id", tenantId)
+    .not("promoted_rental_id", "is", null)
+    .order("reservation_id", { ascending: true })
+    .limit(MAX_ROWS + 1);
+
+  if (stagedErr) {
+    console.error("[TURO-RESYNC] staged read failed", stagedErr);
+    return errorResponse("Could not read the imported Turo bookings.", 500);
+  }
+
+  const allRows = (staged ?? []) as {
+    id: string; reservation_id: string; source: string | null;
+    starts_at: string | null; ends_at: string | null; hold_until: string | null;
+    promoted_rental_id: string; promoted_at: string | null; presence_state: string | null;
+  }[];
+  // MAX_ROWS + 1 above so truncation is DETECTED rather than rendered as "all
+  // clear". The plan path treats a silently truncated read as a real defect
+  // (see the note on the promote plan) and this is the same hazard: an operator
+  // told "everything matches Turo" while unread rows drift.
+  const truncated = allRows.length > MAX_ROWS;
+  const rows = truncated ? allRows.slice(0, MAX_ROWS) : allRows;
+
+  const rentalIds = rows.map((r) => r.promoted_rental_id);
+  const { data: rentalsData, error: rentalsErr } = rentalIds.length
+    ? await supabase
+        .from("rentals")
+        .select("id, rental_number, status, start_date, end_date, source, tenant_id, updated_at, vehicle_id")
+        .eq("tenant_id", tenantId)
+        .in("id", rentalIds)
+    : { data: [], error: null };
+
+  if (rentalsErr) {
+    console.error("[TURO-RESYNC] rentals read failed", rentalsErr);
+    return errorResponse("Could not read the linked rentals.", 500);
+  }
+
+  const byId = new Map<string, {
+    id: string; rental_number: string | null; status: string | null;
+    start_date: string | null; end_date: string | null; source: string | null;
+    tenant_id: string; updated_at: string | null; vehicle_id: string | null;
+  }>();
+  for (const r of (rentalsData ?? []) as never[]) {
+    const rr = r as unknown as { id: string } & Record<string, unknown>;
+    byId.set(rr.id, rr as never);
+  }
+
+  // NO edited_since_import FIELD. The 2s updated_at check revertBatch uses was
+  // measured against live data and is true for 54 of 54 promoted rows, minimum
+  // 2.24s: it times how long the import loop ran (promoted_at is the request's
+  // timestamp, the rental's updated_at is now() at its own insert), not staff
+  // activity. Shipping it would have printed "N of N edited since import" on
+  // every plan, which is precisely how the one row that WAS edited becomes
+  // invisible. The pre-state hash (below) is the real protection.
+  const items: {
+    reservation_id: string; rental_id: string; rental_number: string | null;
+    vehicle_id: string | null;
+    actions: string[]; from: Record<string, unknown>; to: Record<string, unknown>;
+  }[] = [];
+  const skipped: { reservation_id: string; reason: string }[] = [];
+
+  for (const row of rows) {
+    if ((row.source ?? "") === "fixture") {
+      skipped.push({ reservation_id: row.reservation_id, reason: "demo row" });
+      continue;
+    }
+    const rental = byId.get(row.promoted_rental_id);
+    if (!rental) {
+      skipped.push({ reservation_id: row.reservation_id, reason: "linked rental no longer exists" });
+      continue;
+    }
+    // R-1: only rentals this integration created, and only inside this tenant.
+    if (rental.tenant_id !== tenantId) {
+      skipped.push({ reservation_id: row.reservation_id, reason: "rental belongs to another account" });
+      continue;
+    }
+    if ((rental.source ?? "") !== "turo_import") {
+      skipped.push({ reservation_id: row.reservation_id, reason: "rental was not created by the Turo import" });
+      continue;
+    }
+    // Symmetry with promote, which refuses anything outside these states because
+    // "importing it would block a car for a trip that may not be happening". The
+    // same doubt has to apply when GIVING availability back — reconcile's header
+    // is explicit that releasing is the expensive direction, so being strict when
+    // taking and lax when returning would have the asymmetry backwards.
+    const presence = (row.presence_state ?? "").toUpperCase();
+    if (presence && presence !== "OBSERVED" && presence !== "COMPLETED_HOLD") {
+      skipped.push({ reservation_id: row.reservation_id, reason: `trip is in state ${presence}; not acting on it` });
+      continue;
+    }
+
+    const feedStart = row.starts_at ? row.starts_at.slice(0, 10) : null;
+    const feedEnd = row.ends_at ? row.ends_at.slice(0, 10) : null;
+    if (!feedStart || !feedEnd) {
+      skipped.push({ reservation_id: row.reservation_id, reason: "the feed has no dates for this trip" });
+      continue;
+    }
+
+    const actions: string[] = [];
+    const from: Record<string, unknown> = {};
+    const to: Record<string, unknown> = {};
+    const status = (rental.status ?? "").toLowerCase();
+    const finished = status === "closed" || status === "cancelled" || status === "rejected";
+
+    // A finished rental is not ours to rewrite. Without this a booking staff
+    // cancelled keeps its promoted_rental_id, so the next Turo date correction
+    // re-dates a cancelled rental — and re-proposes it on every run, forever.
+    if (!finished && (rental.start_date !== feedStart || rental.end_date !== feedEnd)) {
+      actions.push("redate");
+      from.start_date = rental.start_date; from.end_date = rental.end_date;
+      to.start_date = feedStart; to.end_date = feedEnd;
+    }
+
+    // Closing keys off the feed's end date, not the rental's — if both moved,
+    // the feed is the one that is current.
+    //
+    // AND it waits for hold_until. rentalStatusFor above keeps a promoted trip
+    // Active for 48h past its end because a guest can extend up to 24h AFTER a
+    // trip ends and Turo auto-accepts; hold_until is that hold materialised
+    // (verified live: hold_until - ends_at = 2 days on every row). Closing
+    // inside it removes the row from check_rental_overlap — whose first
+    // statement returns early for Closed — and from fleet-quote's infinity
+    // rule, so a car the guest can still extend onto becomes bookable. That is
+    // the one outcome this whole feature is built to avoid.
+    const holdMs = ms(row.hold_until);
+    const nowMs = ms(nowIso) ?? 0;
+    const holdActive = holdMs !== null && holdMs > nowMs;
+    // 'pending' is included alongside the physically-out states on purpose.
+    // rentalStatusFor inserts a FUTURE trip as Pending, and nothing in this
+    // repo ever transitions a turo_import rental to Active — measured, 34 of
+    // Jangram's 49 promoted rentals are Pending. Left out, every imported trip
+    // that runs its course stays Pending with an end date in the past, forever,
+    // and the fleet board keeps reporting trips that finished weeks ago.
+    // It is not the quote bug (that needs fleet-quote's PHYSICALLY_OUT_STATUSES,
+    // which is {active, started}) — it is the mirror being wrong, which is the
+    // thing this action exists to fix. Pending -> Closed matches none of
+    // notify_customer_rental_status_change's three branches, so it is silent.
+    const closeable = status === "active" || status === "started" || status === "pending";
+    if (feedEnd < today && closeable) {
+      if (holdActive) {
+        // The WHOLE row stands down, dates included — note the `continue`.
+        //
+        // Deferring only the close was a bug with teeth. The redate gate above
+        // carries no hold term, so without this the row kept its "redate" and
+        // the apply wrote end_date = a PAST date while leaving status 'Active'.
+        // That is exactly fleet-quote's isOverdueAndOut condition
+        // (PHYSICALLY_OUT_STATUSES = {active, started} and end_date < today),
+        // which sets rentalEnd = POSITIVE_INFINITY — so the car would fail
+        // every future quote window. Strictly worse than never running resync,
+        // whose pre-state at least had a future end_date that only blocked up
+        // to itself.
+        //
+        // It also shrank the rental's range BELOW hold_until, freeing at the DB
+        // level the very days the guest can still extend onto with Turo
+        // auto-accepting — reopening the hazard the hold gate was added to
+        // close, through the other gate.
+        //
+        // `continue` also keeps the row out of BOTH arrays: every other skip
+        // path here returns early, and a row present in `items` and `skipped`
+        // at once double-counts in `counts` and tells the operator it was left
+        // held while it was in fact rewritten.
+        skipped.push({
+          reservation_id: row.reservation_id,
+          reason: `trip ended but its extension window is open until ${row.hold_until}; left untouched until it lapses`,
+        });
+        continue;
+      }
+      actions.push("close");
+      from.status = rental.status;
+      to.status = "Closed";
+    }
+
+    if (!actions.length) continue;
+
+    items.push({
+      reservation_id: row.reservation_id,
+      rental_id: rental.id,
+      rental_number: rental.rental_number,
+      vehicle_id: rental.vehicle_id,
+      actions, from, to,
+    });
+  }
+
+  items.sort((a, b) => a.reservation_id.localeCompare(b.reservation_id));
+
+  // `from` is in the hash deliberately. Hashing only the target state meant a
+  // concurrent staff edit re-hashed IDENTICALLY — the operator would approve
+  // "31 Oct -> 30 Sep", staff would move it to 15 Nov, and apply would still
+  // write 30 Sep against a "from" that was never true. Including the pre-state
+  // turns that into a clean 409 instead of a silent overwrite.
+  const planHash = await sha256Hex(canonical({
+    v: 2, kind: "resync", tenant: tenantId,
+    items: items.map((i) => ({ r: i.reservation_id, id: i.rental_id, a: i.actions, from: i.from, to: i.to })),
+  }));
+
+  const counts = {
+    total: items.length,
+    redate: items.filter((i) => i.actions.includes("redate")).length,
+    close: items.filter((i) => i.actions.includes("close")).length,
+    skipped: skipped.length,
+    truncated,
+  };
+
+  if (!apply) {
+    return jsonResponse({
+      ok: true,
+      action: "resync",
+      plan_hash: planHash,
+      counts,
+      items,
+      skipped,
+      truncated,
+      message: (truncated ? `Only the first ${MAX_ROWS} imported bookings were checked. ` : "") +
+        (items.length === 0
+          ? "Every imported Turo booking already matches what Turo says. Nothing to change."
+          : `${items.length} imported booking${items.length === 1 ? "" : "s"} no longer match${items.length === 1 ? "es" : ""} Turo. ` +
+            `Review the list, then send the same plan_hash with action "resync_apply".`),
+    });
+  }
+
+  // ---- APPLY -------------------------------------------------------------
+  if (!suppliedPlanHash) {
+    return errorResponse("Send the plan_hash from the resync you reviewed.", 400);
+  }
+  if (suppliedPlanHash !== planHash) {
+    // Structured like the promote apply path's refusal rather than a bare error,
+    // so a UI can show WHAT moved instead of only that something did.
+    return jsonResponse({
+      ok: false,
+      refused: true,
+      reason: "plan_changed",
+      approved_plan_hash: suppliedPlanHash,
+      current_plan_hash: planHash,
+      counts,
+      message: "Turo has changed since you reviewed that list. Run the check again so you are approving what is true now.",
+    }, 409);
+  }
+  if (!items.length) {
+    return jsonResponse({ ok: true, action: "resync_apply", counts, applied: [], failed: [], vehicle_corrections: [] });
+  }
+
+  const applied: Record<string, unknown>[] = [];
+  const failed: { rental_number: string | null; code: string | null; conflict: boolean; reason: string }[] = [];
+  const closedVehicleIds = new Set<string>();
+
+  for (const item of items) {
+    const patch: Record<string, unknown> = {};
+    if (item.actions.includes("redate")) {
+      patch.start_date = item.to.start_date;
+      patch.end_date = item.to.end_date;
+    }
+    if (item.actions.includes("close")) patch.status = "Closed";
+
+    const { error } = await supabase.from("rentals").update(patch).eq("id", item.rental_id).eq("tenant_id", tenantId);
+    if (error) {
+      // prevent_rental_overlap stays armed and raises THREE codes on the update
+      // path, not one — the same set insertRental already handles above:
+      //   23P01  another active or pending rental covers these dates
+      //   23P02  the vehicle is off the road for maintenance
+      //   23P05  the operator has blocked these dates
+      // 23P05's message contains no word an /overlap/i test would catch, which
+      // is why the code list is explicit and the regex is only a fallback.
+      const code = (error as { code?: string }).code ?? null;
+      const conflict = code === "23P01" || code === "23P02" || code === "23P05" ||
+        /overlap/i.test(error.message ?? "");
+      // Logged, not just returned. A real double-booking found here used to
+      // exist solely in one HTTP response body; this file already carries a
+      // note about 41 consecutive failures producing zero log lines.
+      console.error(
+        `[TURO-RESYNC] ${item.rental_number ?? item.rental_id} refused (${code ?? "no code"}): ${error.message}`,
+      );
+      failed.push({
+        rental_number: item.rental_number,
+        code,
+        conflict,
+        reason: conflict
+          ? (code === "23P02"
+              ? "that car is off the road for maintenance across these dates"
+              : code === "23P05"
+                ? "the operator has blocked these dates on that car"
+                : "these dates now clash with another booking on that car")
+          : (error.message ?? "the update was refused"),
+      });
+      continue;
+    }
+    applied.push({
+      rental_number: item.rental_number, rental_id: item.rental_id,
+      actions: item.actions, from: item.from, to: item.to,
+    });
+    if (item.actions.includes("close") && item.vehicle_id) closedVehicleIds.add(item.vehicle_id);
+  }
+
+  // update_vehicle_status_on_rental_change sets vehicles.status = 'Available' on
+  // ANY Active->Closed, with none of the "is another rental still live?" guard
+  // its DELETE branch carries. Verified live: closing R-ca61a1 would have marked
+  // DNKP44 Available while R-5e167f — a PORTAL booking, covering today — was
+  // still on that car. Closing a finished Turo trip must not relabel a car that
+  // is genuinely out, so the claim is re-checked and corrected here.
+  const vehicleCorrections: { vehicle_id: string; set_to: string }[] = [];
+  for (const vehicleId of closedVehicleIds) {
+    const { data: stillOut, error: stillOutErr } = await supabase
+      .from("rentals")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("vehicle_id", vehicleId)
+      .in("status", ["Active", "Started", "Pending"])
+      .lte("start_date", today)
+      .gte("end_date", today)
+      .limit(1);
+    if (stillOutErr) {
+      console.error(`[TURO-RESYNC] could not re-check vehicle ${vehicleId}`, stillOutErr);
+      continue;
+    }
+    if ((stillOut ?? []).length > 0) {
+      const { error: vErr } = await supabase
+        .from("vehicles").update({ status: "Rented" })
+        .eq("id", vehicleId).eq("tenant_id", tenantId);
+      if (vErr) console.error(`[TURO-RESYNC] could not restore vehicle ${vehicleId}`, vErr);
+      else vehicleCorrections.push({ vehicle_id: vehicleId, set_to: "Rented" });
+    }
+  }
+
+  // Audited through the same table promotion uses: actor, tenant, hash, time.
+  // `counts.kind` distinguishes it; no schema change and nothing to keep in step.
+  // plan_hash is namespaced AND stamped. turo_promotion_batches_plan_uniq is
+  // UNIQUE (tenant_id, plan_hash), and an unchanged resync plan re-hashes
+  // identically — so a retry after a genuine conflict would 23505 into a log
+  // line and be recorded nowhere, which is exactly when the record matters.
+  // The plan's own hash is kept inside counts so the attempt is still traceable
+  // to what was approved.
+  const { error: batchErr } = await supabase.from("turo_promotion_batches").insert({
+    tenant_id: tenantId,
+    actor_app_user_id: actorId,
+    plan_hash: `resync:${planHash}:${nowIso}`,
+    counts: { ...counts, kind: "resync", plan_hash: planHash, applied: applied.length, failed: failed.length },
+    // The before/after of every row, written AT APPLY TIME. promote's own
+    // precedent: revert_report.superseded_blocks is persisted then because "the
+    // undo needs the rows as they were". Without this, nothing in the database
+    // would record that R-4b0ef3 used to end on 2026-10-31.
+    acknowledgements: {
+      resync_at: nowIso,
+      applied,
+      failed,
+      vehicle_corrections: vehicleCorrections,
+    },
+  });
+  if (batchErr) console.error("[TURO-RESYNC] audit row failed (changes already applied)", batchErr);
+
+  return jsonResponse({
+    ok: failed.length === 0,
+    action: "resync_apply",
+    plan_hash: planHash,
+    counts,
+    applied,
+    failed,
+    vehicle_corrections: vehicleCorrections,
+    message: `${applied.length} booking${applied.length === 1 ? "" : "s"} brought back in line with Turo.` +
+      (failed.length ? ` ${failed.length} could not be changed and need a look.` : ""),
   });
 }
