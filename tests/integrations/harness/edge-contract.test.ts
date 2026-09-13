@@ -122,14 +122,20 @@ describe("the parser sweep across every body-reading edge function", () => {
 
   it("holds the unparseable count to a ceiling that can only come down", () => {
     /**
-     * 26 at the time of writing, down from 135. The remainder are genuinely
-     * different shapes — several sandbox-* twins, the push-notification pair, and
-     * a few that read the body through a helper rather than directly.
+     * 8 at the time of writing, down from 26, down from 135.
+     *
+     * The 26 -> 8 step came from teaching the parser the open-bag annotation
+     * `let body: Record<string, unknown>` (and `Record<string, any>`), which had
+     * been sent down the named-type branch to look for `interface Record`, not
+     * find it, and throw. Grafting Turo Bridge onto main added four more
+     * functions using that shape and took the count to 30, which is what
+     * surfaced it. The remaining 8 are genuinely different shapes.
      *
      * This assertion is deliberately a CEILING, not an equality: fixing more is
      * always welcome and must not fail the build, but a NEW function with an
-     * unknown shape pushing it to 27 should fail, because the alternative is a
-     * function nobody can write a contract test for and nobody notices.
+     * unknown shape pushing it to 9 should fail, because the alternative is a
+     * function nobody can write a contract test for and nobody notices. Lower it
+     * when you fix more — leaving it high is how 18 regressions get in unseen.
      */
     const { threw } = sweep();
     expect(
@@ -137,14 +143,25 @@ describe("the parser sweep across every body-reading edge function", () => {
       `Unparseable body shapes rose to ${threw.length}. Teach the parser the new ` +
         `shape (tests/README.md section 9) rather than raising this ceiling.\n` +
         `  currently unparseable: ${threw.join(", ")}`,
-    ).toBeLessThanOrEqual(26);
+    ).toBeLessThanOrEqual(8);
   });
 
   it("throws with a message naming the function and what to do about it", () => {
     // A parser that throws is only acceptable if the throw is actionable.
+    //
+    // The subject is taken from the sweep rather than hardcoded. This test named
+    // `save-push-subscription` until the parser learned its shape
+    // (`let body: Record<string, any>`) and it started parsing — 11 real fields,
+    // not an empty set — at which point a test asserting it still throws was
+    // failing for the best possible reason. Reading the subject from the sweep
+    // means fixing the next one cannot break this.
+    const { threw } = sweep();
+    if (threw.length === 0) return; // nothing left to throw on; nothing to assert
+
+    const subject = threw[0];
     let message = "";
-    try { readEdgeFunction("save-push-subscription"); } catch (e) { message = String((e as Error).message); }
-    expect(message).toContain("save-push-subscription");
+    try { readEdgeFunction(subject); } catch (e) { message = String((e as Error).message); }
+    expect(message, `${subject} was expected to throw but did not`).toContain(subject);
     expect(message.toLowerCase()).toMatch(/parser|shape|body/);
   });
 

@@ -234,7 +234,24 @@ export function readEdgeFunction(fn: string): EdgeFunctionShape {
     /(?:const|let)\s*\{([^;{}]*?)\}\s*(?::\s*([^=]+?))?=\s*await\s+req\.json\(\)/.exec(handler);
 
   // --- shapes 1 & 2: a `body` variable with a type annotation --------------
-  const declared = /(?:let|const)\s+body\s*:\s*(\{|[A-Za-z_$][\w$]*)/.exec(handler);
+  // The annotation has to be a shape we can READ. `let body: Record<string,
+  // unknown>` is not: it is a deliberately open bag, so there is no interface to
+  // find and no field list to derive from it — the fields only exist at the
+  // `body.x` use sites. Sent down this branch it looked for `interface Record`,
+  // threw, and the four turo-bridge-* functions grafted onto main in 3d73efd5
+  // pushed the unparseable count from 26 to exactly 30.
+  //
+  // Treated as "no declared field set" it falls through to shape 4 below, which
+  // already reads fields off the variable and already handles the bare
+  // `body = await req.json()` assignment these functions use inside a try/catch.
+  // Anything generic (`Foo<Bar>`) gets the same treatment: the args are where the
+  // real shape lives, and guessing at it is how you get a silently wrong field
+  // list, which this file's header calls worse than a throw.
+  const OPEN_BAG_TYPES = new Set(["Record", "object", "unknown", "any"]);
+  const declaredRaw = /(?:let|const)\s+body\s*:\s*(\{|[A-Za-z_$][\w$]*)(\s*<)?/.exec(handler);
+  const declaredIsOpenBag = !!declaredRaw && declaredRaw[1] !== "{" &&
+    (!!declaredRaw[2] || OPEN_BAG_TYPES.has(declaredRaw[1]));
+  const declared = declaredIsOpenBag ? null : declaredRaw;
 
   if (declared) {
     parseIndex = declared.index;
