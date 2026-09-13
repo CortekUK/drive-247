@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "rentals",
+      "label": "Open Rentals",
+      "href": "/rentals",
+      "permission": "rentals",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "rental",
+      "label": "Open rental",
+      "href": "/rentals/{id}",
+      "permission": "rentals",
+      "entity": "rental",
+      "source": "apps/portal/src/components/rentals-v2/rental-detail/stages.ts"
+    },
+    {
+      "id": "rental_return",
+      "label": "Open return workflow",
+      "href": "/rentals/{id}",
+      "permission": "rentals",
+      "entity": "rental",
+      "editPermission": "rentals",
+      "v2Stage": "handover",
+      "source": "apps/portal/src/components/rentals-v2/rental-detail/stages.ts"
+    },
+    {
+      "id": "vehicles",
+      "label": "Open Vehicles",
+      "href": "/vehicles",
+      "permission": "vehicles",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "vehicle",
+      "label": "Open vehicle",
+      "href": "/vehicles/{id}",
+      "permission": "vehicles",
+      "entity": "vehicle",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "customers",
+      "label": "Open Customers",
+      "href": "/customers",
+      "permission": "customers",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "customer",
+      "label": "Open customer",
+      "href": "/customers/{id}",
+      "permission": "customers",
+      "entity": "customer",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "availability",
+      "label": "Open Availability",
+      "href": "/blocked-dates",
+      "permission": "availability",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "messages",
+      "label": "Open Messages",
+      "href": "/messages",
+      "permission": "messages",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "reminders",
+      "label": "Open Reminders",
+      "href": "/reminders",
+      "permission": "reminders",
+      "hiddenArea": "reminders",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "website",
+      "label": "Open Website Content",
+      "href": "/cms",
+      "permission": "cms",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "settings_general",
+      "label": "Open General settings",
+      "href": "/settings?tab=general",
+      "permission": "settings.general",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "settings_templates",
+      "label": "Open Templates",
+      "href": "/settings?tab=templates",
+      "permission": "settings.templates",
+      "source": "apps/portal/src/lib/permissions.ts"
+    }
+  ]
+}
+

@@ -1,0 +1,13 @@
+{
+  "sourceCommit": "13f9ea8679fbc6e35940b7d5824efa77b9da4b2d",
+  "files": {
+    "apps/portal/src/hooks/use-chat.ts": "3e6619401e40e4f4d56b385159371083c4b6d7b3fad1fe7d7c6f26823d35d79a",
+    "apps/portal/src/types/chat.ts": "5199d60f3e6d3b445c22c6697bc1ae25911837d747139e66f09b8f292fdb360e",
+    "apps/portal/src/components/chat/ChatMessage.tsx": "97199ac2c96a76276fb793cc9ce3d38cd73dabf0aec56e92fd515d62b0d7e7ab",
+    "apps/portal/src/components/chat/ChatSidebar.tsx": "448ae42f53dad683a45d2693c649fcbab177bf600d0ad5c51b7bfd4fdf6fd946",
+    "apps/portal/src/components/chat/TraxAIDialog.tsx": "e3039658cb4270406c8e1cb2984ac8a5053cb656eb476cb0de94eaf4e6b579b0",
+    "supabase/functions/chat/index.ts": "948a3f2226b481548e6ac1415af6f314785b8d60fc980f2614548328ea7d6a0a",
+    "supabase/functions/rag-init/index.ts": "120ec0fb0b9c0b029dd1d634142b769c72e9e684c611ff8590588d693e7f9a20",
+    "supabase/functions/rag-sync/index.ts": "508255b286821e7f002142f9eb280ae31f44117e657cb1748237821d023cd64d"
+  }
+}

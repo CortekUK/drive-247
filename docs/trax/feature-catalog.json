@@ -1,0 +1,1041 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "rentals",
+      "title": "Rentals",
+      "status": "verified",
+      "scope": "Fixed-rental navigation and workflow dimensions; money and state-changing actions excluded.",
+      "routePrefixes": [
+        "/rentals"
+      ],
+      "permissionKeys": [
+        "rentals"
+      ],
+      "document": "docs/trax/workflows/rentals-and-returns.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/components/rentals-v2/rental-detail/stages.ts",
+          "symbols": [
+            "STAGES",
+            "stageHref"
+          ]
+        },
+        {
+          "path": "apps/portal/src/hooks/use-key-handover.ts",
+          "symbols": [
+            "useKeyHandover",
+            "markKeyHanded"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "rentals",
+          "verification": "repository_verified",
+          "keywords": [
+            "rentals",
+            "rental",
+            "booking",
+            "bookings",
+            "kiraya",
+            "rental workflow"
+          ],
+          "navigation": [
+            "rentals",
+            "rental"
+          ]
+        }
+      ],
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "returns",
+      "title": "Returns and key handover",
+      "status": "verified",
+      "scope": "Existing handover workflow guidance; no live return diagnosis or execution.",
+      "routePrefixes": [],
+      "permissionKeys": [
+        "rentals"
+      ],
+      "document": "docs/trax/workflows/rentals-and-returns.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/hooks/use-key-handover.ts",
+          "symbols": [
+            "markKeyHanded"
+          ]
+        },
+        {
+          "path": "supabase/functions/finalize-payg-rental/index.ts",
+          "symbols": []
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "returns",
+          "verification": "repository_verified",
+          "keywords": [
+            "return",
+            "returned",
+            "handover",
+            "keys",
+            "wapis",
+            "wapas",
+            "chabi",
+            "chaabi",
+            "chabiyan"
+          ],
+          "navigation": [
+            "rental_return",
+            "rentals"
+          ]
+        }
+      ],
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "availability",
+      "title": "Vehicle availability",
+      "status": "partially_documented",
+      "scope": "Booking predicates traced; channel differences and deployed trigger remain unresolved.",
+      "routePrefixes": [
+        "/blocked-dates"
+      ],
+      "permissionKeys": [
+        "availability"
+      ],
+      "document": "docs/trax/workflows/vehicle-availability.md",
+      "sources": [
+        {
+          "path": "apps/booking/src/lib/vehicle-availability.ts",
+          "symbols": [
+            "rentalOccupiesWindow"
+          ]
+        },
+        {
+          "path": "apps/portal/src/lib/fleet-quote.ts",
+          "symbols": [
+            "buildFleetQuote",
+            "rentalBlocksQuoteWindow"
+          ]
+        },
+        {
+          "path": "supabase/migrations/20260823130000_fleet_health_defect_fixes.sql",
+          "symbols": [
+            "check_rental_overlap"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "availability",
+          "verification": "repository_verified",
+          "keywords": [
+            "availability",
+            "unavailable",
+            "available",
+            "bookable",
+            "blocked",
+            "block",
+            "gaari book",
+            "car",
+            "nahi book"
+          ],
+          "navigation": [
+            "availability",
+            "vehicle",
+            "vehicles"
+          ]
+        }
+      ],
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "customers",
+      "title": "Customers",
+      "status": "verified",
+      "scope": "Customer navigation and rental relationship guidance; identity verification excluded.",
+      "routePrefixes": [
+        "/customers"
+      ],
+      "permissionKeys": [
+        "customers"
+      ],
+      "document": "docs/trax/workflows/customers-and-vehicles.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/components/customers-v2/customer-detail/sections.ts",
+          "symbols": [
+            "sectionHref"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "customers",
+          "verification": "repository_verified",
+          "keywords": [
+            "customer",
+            "customers",
+            "profile",
+            "renter",
+            "driver",
+            "customer profile"
+          ],
+          "navigation": [
+            "customer",
+            "customers"
+          ]
+        }
+      ],
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "vehicles",
+      "title": "Vehicles",
+      "status": "verified",
+      "scope": "Vehicle navigation and publication prerequisites; live eligibility excluded.",
+      "routePrefixes": [
+        "/vehicles"
+      ],
+      "permissionKeys": [
+        "vehicles"
+      ],
+      "document": "docs/trax/workflows/customers-and-vehicles.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/components/vehicles-v2/sections.ts",
+          "symbols": [
+            "sectionHref"
+          ]
+        },
+        {
+          "path": "apps/booking/src/app/booking/vehicles/page.tsx",
+          "symbols": [
+            "show_on_website"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "vehicles",
+          "verification": "repository_verified",
+          "keywords": [
+            "vehicle",
+            "vehicles",
+            "fleet",
+            "gaari",
+            "gari",
+            "car configuration"
+          ],
+          "navigation": [
+            "vehicle",
+            "vehicles"
+          ]
+        }
+      ],
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "messages",
+      "title": "Messages",
+      "status": "partially_documented",
+      "scope": "Navigation verified; channel delivery, consent and full messaging workflow unverified.",
+      "routePrefixes": [
+        "/messages"
+      ],
+      "permissionKeys": [
+        "messages"
+      ],
+      "document": "docs/trax/workflows/operator-tools.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/hooks/use-chat-channels.ts",
+          "symbols": []
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "messages",
+          "verification": "repository_verified",
+          "keywords": [
+            "message",
+            "messages",
+            "messaging",
+            "conversation",
+            "paigham"
+          ],
+          "navigation": [
+            "messages"
+          ]
+        }
+      ],
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "reminders",
+      "title": "Reminders",
+      "status": "verified",
+      "scope": "Navigation and reminder list states; TRAX reminder mutations excluded.",
+      "routePrefixes": [
+        "/reminders"
+      ],
+      "permissionKeys": [
+        "reminders"
+      ],
+      "document": "docs/trax/workflows/operator-tools.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/hooks/use-reminders.ts",
+          "symbols": [
+            "useReminders"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "reminders",
+          "verification": "repository_verified",
+          "keywords": [
+            "reminder",
+            "reminders",
+            "remind",
+            "follow up",
+            "yaad"
+          ],
+          "navigation": [
+            "reminders"
+          ]
+        }
+      ],
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "website",
+      "title": "Website content",
+      "status": "partially_documented",
+      "scope": "Navigation and publication code traced; full publishing rollback unverified.",
+      "routePrefixes": [
+        "/cms",
+        "/promotions",
+        "/testimonials"
+      ],
+      "permissionKeys": [
+        "cms"
+      ],
+      "document": "docs/trax/workflows/operator-tools.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/hooks/use-cms-pages.ts",
+          "symbols": [
+            "useCMSPages"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "website",
+          "verification": "repository_verified",
+          "keywords": [
+            "website",
+            "cms",
+            "publish",
+            "website content",
+            "site content"
+          ],
+          "navigation": [
+            "website"
+          ]
+        }
+      ],
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "status": "partially_documented",
+      "scope": "General and Templates navigation verified; other configuration workflows unverified.",
+      "routePrefixes": [
+        "/settings"
+      ],
+      "permissionKeys": [
+        "settings",
+        "settings.general"
+      ],
+      "document": "docs/trax/workflows/settings.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/lib/permissions.ts",
+          "symbols": [
+            "SETTINGS_VALUE_TO_KEY"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "settings",
+          "verification": "repository_verified",
+          "keywords": [
+            "settings",
+            "configuration",
+            "business details",
+            "setting",
+            "kahan"
+          ],
+          "navigation": [
+            "settings_general"
+          ]
+        }
+      ],
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "templates",
+      "title": "Communication templates",
+      "status": "verified",
+      "scope": "Templates tab navigation only; delivery and provider configuration excluded.",
+      "routePrefixes": [],
+      "permissionKeys": [
+        "settings",
+        "settings.templates"
+      ],
+      "document": "docs/trax/workflows/settings.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/components/shared/layout/app-sidebar-v2.tsx",
+          "symbols": [
+            "settingsTabGroups"
+          ]
+        }
+      ],
+      "tests": [
+        "apps/portal/src/__tests__/lib/trax-support.test.ts"
+      ],
+      "guides": [
+        {
+          "id": "templates",
+          "verification": "repository_verified",
+          "keywords": [
+            "template",
+            "templates",
+            "email templates",
+            "sms template"
+          ],
+          "navigation": [
+            "settings_templates"
+          ]
+        }
+      ],
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "pending_bookings",
+      "title": "Pending bookings",
+      "status": "requiring_confirmation",
+      "scope": "Rental requests awaiting the existing review workflow.",
+      "routePrefixes": [
+        "/pending-bookings"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/pending-bookings/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "vehicle_owners",
+      "title": "Vehicle owners",
+      "status": "requiring_confirmation",
+      "scope": "Fleet ownership relationships; enabled per tenant.",
+      "routePrefixes": [
+        "/vehicle-owners"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/vehicle-owners/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "owner_payouts",
+      "title": "Owner payouts",
+      "status": "requiring_confirmation",
+      "scope": "Owner financial settlements; finance policy unresolved.",
+      "routePrefixes": [
+        "/owner-payouts"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/owner-payouts/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "blocked_customers",
+      "title": "Blocked customers",
+      "status": "requiring_confirmation",
+      "scope": "Customer booking restrictions; detailed rules require confirmation.",
+      "routePrefixes": [
+        "/blocked-customers"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/blocked-customers/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "enquiries",
+      "title": "Enquiries",
+      "status": "requiring_confirmation",
+      "scope": "Customer enquiries and follow-up; tenant feature flag applies.",
+      "routePrefixes": [
+        "/enquiries"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/enquiries/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "leads",
+      "title": "Leads",
+      "status": "requiring_confirmation",
+      "scope": "Lead management and customer acquisition; tenant feature flag applies.",
+      "routePrefixes": [
+        "/leads"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/leads/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "automations",
+      "title": "Automations",
+      "status": "requiring_confirmation",
+      "scope": "Configured automated workflows; side effects unverified.",
+      "routePrefixes": [
+        "/automations"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/automations/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "payments",
+      "title": "Payments",
+      "status": "requiring_confirmation",
+      "scope": "Payments, allocation and processor links; finance permission unresolved.",
+      "routePrefixes": [
+        "/payments"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/payments/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "invoices",
+      "title": "Invoices",
+      "status": "requiring_confirmation",
+      "scope": "Issued rental billing documents; totals and delivery unverified.",
+      "routePrefixes": [
+        "/invoices"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/invoices/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "fines",
+      "title": "Fines",
+      "status": "requiring_confirmation",
+      "scope": "Vehicle/customer fine records; financial liability rules unverified.",
+      "routePrefixes": [
+        "/fines"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/fines/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "expenses",
+      "title": "Expenses",
+      "status": "requiring_confirmation",
+      "scope": "Operator cost records; financial access unresolved.",
+      "routePrefixes": [
+        "/expenses"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/expenses/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "insurances",
+      "title": "Insurance",
+      "status": "requiring_confirmation",
+      "scope": "Insurance records and provider workflows; coverage not inferred.",
+      "routePrefixes": [
+        "/insurances"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/insurances/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "agreements",
+      "title": "Agreements",
+      "status": "requiring_confirmation",
+      "scope": "Rental agreement and signature workflow; provider completion requires verification.",
+      "routePrefixes": [
+        "/agreements"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/agreements/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "reports",
+      "title": "Reports",
+      "status": "requiring_confirmation",
+      "scope": "Operational/financial reporting and exports; completeness and permissions unverified.",
+      "routePrefixes": [
+        "/reports"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/reports/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "pl_dashboard",
+      "title": "Profit and loss",
+      "status": "requiring_confirmation",
+      "scope": "Financial reporting; do not infer permission from rental access.",
+      "routePrefixes": [
+        "/pl-dashboard"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "audit_logs",
+      "title": "Audit logs",
+      "status": "requiring_confirmation",
+      "scope": "Recorded application activity; retention and access need confirmation.",
+      "routePrefixes": [
+        "/audit-logs"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/audit-logs/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "dashboard",
+      "title": "Dashboard",
+      "status": "requiring_confirmation",
+      "scope": "Tenant overview; no live metrics in Phase 1.",
+      "routePrefixes": [
+        "/"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "quotes",
+      "title": "Fleet Quotes",
+      "status": "requiring_confirmation",
+      "scope": "Existing date/rate quotation rules, distinct from booking eligibility.",
+      "routePrefixes": [
+        "/quotes"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/quotes/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "fleet_health",
+      "title": "Fleet health",
+      "status": "requiring_confirmation",
+      "scope": "Vehicle maintenance and service state; some evaluations mutate records.",
+      "routePrefixes": [
+        "/fleet-health"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/fleet-health/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "integrations",
+      "title": "Integrations",
+      "status": "requiring_confirmation",
+      "scope": "Provider configuration; secret-bearing records excluded.",
+      "routePrefixes": [
+        "/integrations"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/integrations/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "subscription",
+      "title": "Subscription",
+      "status": "requiring_confirmation",
+      "scope": "Operator platform subscription; distinct from renter payments.",
+      "routePrefixes": [
+        "/subscription"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/subscription/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "users",
+      "title": "Staff administration",
+      "status": "requiring_confirmation",
+      "scope": "Staff activation, roles and manager grants; admin-only mutation behavior.",
+      "routePrefixes": [
+        "/users"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/users/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "documents",
+      "title": "Documents",
+      "status": "requiring_confirmation",
+      "scope": "Document records; identity and credential exposure must be reviewed.",
+      "routePrefixes": [
+        "/documents"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/documents/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "plates",
+      "title": "Plates",
+      "status": "requiring_confirmation",
+      "scope": "Vehicle registration-related records; tenant scoping unverified.",
+      "routePrefixes": [
+        "/plates"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/plates/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "credits",
+      "title": "Credits",
+      "status": "requiring_confirmation",
+      "scope": "Customer credit information; financial entitlement unresolved.",
+      "routePrefixes": [
+        "/credits"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "welcome",
+      "title": "Welcome pack",
+      "status": "requiring_confirmation",
+      "scope": "Published onboarding sections and progress; live content not audited.",
+      "routePrefixes": [
+        "/welcome"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/welcome/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "insights",
+      "title": "Insights",
+      "status": "requiring_confirmation",
+      "scope": "V2 financial reporting; tenant and finance permissions apply.",
+      "routePrefixes": [
+        "/insights"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/insights/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "developer",
+      "title": "Developer tools",
+      "status": "unsupported",
+      "scope": "Developer-only interface; excluded from operator support.",
+      "routePrefixes": [
+        "/dev"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/dev/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "insurance_legacy",
+      "title": "Legacy insurance entry",
+      "status": "requiring_confirmation",
+      "scope": "Legacy insurance route; role/provider behavior requires confirmation.",
+      "routePrefixes": [
+        "/insurance"
+      ],
+      "permissionKeys": [],
+      "document": "docs/trax/unverified-modules.md",
+      "sources": [
+        {
+          "path": "apps/portal/src/app/(dashboard)/insurance/page.tsx",
+          "symbols": []
+        }
+      ],
+      "tests": [],
+      "guides": [],
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    }
+  ]
+}
+

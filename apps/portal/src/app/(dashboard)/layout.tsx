@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,8 @@ import {
 } from "@/components/ui-v2/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
+import { TraxLauncher, type TraxLauncherHandle } from "@/components/trax/trax-launcher";
+import { isV2 } from "@/lib/v2";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { AppBannerStack } from "@/components/banners/app-banner-stack";
 import { GlobalVoiceCallProvider } from "@/components/voice/global-voice-call-provider";
@@ -94,6 +96,7 @@ export default function DashboardLayout({
   // v2 chrome gate, resolved on the server in the root layout (V2_PLAN §3).
   // A plain context read: no query, no effect, no flash. Falls back to v1.
   const v2Chrome = useV2("chrome");
+  const traxRef = useRef<TraxLauncherHandle>(null);
   // The v2 page tint. Separate from `chrome` on purpose: the wash is a THEME
   // surface, not navigation furniture, and `.v2-theme` on <body> is what
   // actually defines `.bg-app-gradient` (styles/v2-theme.css). Reading the
@@ -109,6 +112,7 @@ export default function DashboardLayout({
   const Inset = v2Chrome ? SidebarInsetV2 : SidebarInset;
   const Trigger = v2Chrome ? SidebarTriggerV2 : SidebarTrigger;
   const { tenant, loading: tenantLoading } = useTenant();
+  const v2Trax = v2Chrome && isV2('chrome',tenant?.slug);
   const {
     isSubscribed,
     hasExpiredSubscription,
@@ -410,7 +414,7 @@ export default function DashboardLayout({
             .join(" ") || undefined
         }
       >
-        {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
+        {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 onAskAI={v2Trax ? () => traxRef.current?.open() : undefined} /> : <AppSidebar />}
 
         {/* v2 has no top bar — and the SidebarTrigger lived in it. On desktop
             the sidebar still collapses the way the source does: the
@@ -492,12 +496,11 @@ export default function DashboardLayout({
           </main>
         </Inset>
 
-        {/* v2 right-edge quick dock — Ask AI · Messages · Enquiries ·
-            Notifications. Replaces the header row above. It owns the v2
-            tenant's single Trax instance (v1's still comes from
-            `<TraxAIDialog />` in the header), so the two never coexist.
-            v2 chrome only — v1 tenants never mount it. */}
+        {/* V2 dock: Messages and Notifications. V2's separate TRAX
+            launcher is opened by the existing sidebar Ask AI action or Cmd/Ctrl+J.
+            V1 keeps its original header dialog. Only one assistant mounts. */}
         {v2Chrome && <QuickDock />}
+        {v2Trax && <TraxLauncher ref={traxRef} />}
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />

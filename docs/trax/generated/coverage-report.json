@@ -1,0 +1,850 @@
+{
+  "knowledgeVersion": "0.1.0",
+  "sourceCommit": "13f9ea8679fbc6e35940b7d5824efa77b9da4b2d",
+  "verifiedAt": "2026-09-12",
+  "productionReleaseVerified": false,
+  "completeApplicationCoverage": false,
+  "features": [
+    {
+      "id": "rentals",
+      "title": "Rentals",
+      "status": "verified",
+      "scope": "Fixed-rental navigation and workflow dimensions; money and state-changing actions excluded.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "returns",
+      "title": "Returns and key handover",
+      "status": "verified",
+      "scope": "Existing handover workflow guidance; no live return diagnosis or execution.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "availability",
+      "title": "Vehicle availability",
+      "status": "partially_documented",
+      "scope": "Booking predicates traced; channel differences and deployed trigger remain unresolved.",
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "customers",
+      "title": "Customers",
+      "status": "verified",
+      "scope": "Customer navigation and rental relationship guidance; identity verification excluded.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "vehicles",
+      "title": "Vehicles",
+      "status": "verified",
+      "scope": "Vehicle navigation and publication prerequisites; live eligibility excluded.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "messages",
+      "title": "Messages",
+      "status": "partially_documented",
+      "scope": "Navigation verified; channel delivery, consent and full messaging workflow unverified.",
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "reminders",
+      "title": "Reminders",
+      "status": "verified",
+      "scope": "Navigation and reminder list states; TRAX reminder mutations excluded.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "website",
+      "title": "Website content",
+      "status": "partially_documented",
+      "scope": "Navigation and publication code traced; full publishing rollback unverified.",
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "status": "partially_documented",
+      "scope": "General and Templates navigation verified; other configuration workflows unverified.",
+      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+    },
+    {
+      "id": "templates",
+      "title": "Communication templates",
+      "status": "verified",
+      "scope": "Templates tab navigation only; delivery and provider configuration excluded.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
+      "id": "pending_bookings",
+      "title": "Pending bookings",
+      "status": "requiring_confirmation",
+      "scope": "Rental requests awaiting the existing review workflow.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "vehicle_owners",
+      "title": "Vehicle owners",
+      "status": "requiring_confirmation",
+      "scope": "Fleet ownership relationships; enabled per tenant.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "owner_payouts",
+      "title": "Owner payouts",
+      "status": "requiring_confirmation",
+      "scope": "Owner financial settlements; finance policy unresolved.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "blocked_customers",
+      "title": "Blocked customers",
+      "status": "requiring_confirmation",
+      "scope": "Customer booking restrictions; detailed rules require confirmation.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "enquiries",
+      "title": "Enquiries",
+      "status": "requiring_confirmation",
+      "scope": "Customer enquiries and follow-up; tenant feature flag applies.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "leads",
+      "title": "Leads",
+      "status": "requiring_confirmation",
+      "scope": "Lead management and customer acquisition; tenant feature flag applies.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "automations",
+      "title": "Automations",
+      "status": "requiring_confirmation",
+      "scope": "Configured automated workflows; side effects unverified.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "payments",
+      "title": "Payments",
+      "status": "requiring_confirmation",
+      "scope": "Payments, allocation and processor links; finance permission unresolved.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "invoices",
+      "title": "Invoices",
+      "status": "requiring_confirmation",
+      "scope": "Issued rental billing documents; totals and delivery unverified.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "fines",
+      "title": "Fines",
+      "status": "requiring_confirmation",
+      "scope": "Vehicle/customer fine records; financial liability rules unverified.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "expenses",
+      "title": "Expenses",
+      "status": "requiring_confirmation",
+      "scope": "Operator cost records; financial access unresolved.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "insurances",
+      "title": "Insurance",
+      "status": "requiring_confirmation",
+      "scope": "Insurance records and provider workflows; coverage not inferred.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "agreements",
+      "title": "Agreements",
+      "status": "requiring_confirmation",
+      "scope": "Rental agreement and signature workflow; provider completion requires verification.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "reports",
+      "title": "Reports",
+      "status": "requiring_confirmation",
+      "scope": "Operational/financial reporting and exports; completeness and permissions unverified.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "pl_dashboard",
+      "title": "Profit and loss",
+      "status": "requiring_confirmation",
+      "scope": "Financial reporting; do not infer permission from rental access.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "audit_logs",
+      "title": "Audit logs",
+      "status": "requiring_confirmation",
+      "scope": "Recorded application activity; retention and access need confirmation.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "dashboard",
+      "title": "Dashboard",
+      "status": "requiring_confirmation",
+      "scope": "Tenant overview; no live metrics in Phase 1.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "quotes",
+      "title": "Fleet Quotes",
+      "status": "requiring_confirmation",
+      "scope": "Existing date/rate quotation rules, distinct from booking eligibility.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "fleet_health",
+      "title": "Fleet health",
+      "status": "requiring_confirmation",
+      "scope": "Vehicle maintenance and service state; some evaluations mutate records.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "integrations",
+      "title": "Integrations",
+      "status": "requiring_confirmation",
+      "scope": "Provider configuration; secret-bearing records excluded.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "subscription",
+      "title": "Subscription",
+      "status": "requiring_confirmation",
+      "scope": "Operator platform subscription; distinct from renter payments.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "users",
+      "title": "Staff administration",
+      "status": "requiring_confirmation",
+      "scope": "Staff activation, roles and manager grants; admin-only mutation behavior.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "documents",
+      "title": "Documents",
+      "status": "requiring_confirmation",
+      "scope": "Document records; identity and credential exposure must be reviewed.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "plates",
+      "title": "Plates",
+      "status": "requiring_confirmation",
+      "scope": "Vehicle registration-related records; tenant scoping unverified.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "credits",
+      "title": "Credits",
+      "status": "requiring_confirmation",
+      "scope": "Customer credit information; financial entitlement unresolved.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "welcome",
+      "title": "Welcome pack",
+      "status": "requiring_confirmation",
+      "scope": "Published onboarding sections and progress; live content not audited.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "insights",
+      "title": "Insights",
+      "status": "requiring_confirmation",
+      "scope": "V2 financial reporting; tenant and finance permissions apply.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "developer",
+      "title": "Developer tools",
+      "status": "unsupported",
+      "scope": "Developer-only interface; excluded from operator support.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "insurance_legacy",
+      "title": "Legacy insurance entry",
+      "status": "requiring_confirmation",
+      "scope": "Legacy insurance route; role/provider behavior requires confirmation.",
+      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    }
+  ],
+  "counts": {
+    "verified": 6,
+    "partially_documented": 4,
+    "unsupported": 1,
+    "requiring_confirmation": 28
+  },
+  "permissionKeys": [
+    "vehicles",
+    "rentals",
+    "pending_bookings",
+    "availability",
+    "vehicle_owners",
+    "owner_payouts",
+    "customers",
+    "blocked_customers",
+    "enquiries",
+    "leads",
+    "automations",
+    "messages",
+    "payments",
+    "invoices",
+    "fines",
+    "expenses",
+    "insurances",
+    "agreements",
+    "reminders",
+    "reports",
+    "pl_dashboard",
+    "cms",
+    "audit_logs",
+    "settings"
+  ],
+  "portalRoutes": [
+    {
+      "route": "/agreements/analytics",
+      "source": "apps/portal/src/app/(dashboard)/agreements/analytics/page.tsx",
+      "feature": "agreements",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/agreements",
+      "source": "apps/portal/src/app/(dashboard)/agreements/page.tsx",
+      "feature": "agreements",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/audit-logs",
+      "source": "apps/portal/src/app/(dashboard)/audit-logs/page.tsx",
+      "feature": "audit_logs",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/automations/[id]",
+      "source": "apps/portal/src/app/(dashboard)/automations/[id]/page.tsx",
+      "feature": "automations",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/automations",
+      "source": "apps/portal/src/app/(dashboard)/automations/page.tsx",
+      "feature": "automations",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/blocked-customers",
+      "source": "apps/portal/src/app/(dashboard)/blocked-customers/page.tsx",
+      "feature": "blocked_customers",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/blocked-dates",
+      "source": "apps/portal/src/app/(dashboard)/blocked-dates/page.tsx",
+      "feature": "availability",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/about",
+      "source": "apps/portal/src/app/(dashboard)/cms/about/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/blog/[id]",
+      "source": "apps/portal/src/app/(dashboard)/cms/blog/[id]/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/blog/categories",
+      "source": "apps/portal/src/app/(dashboard)/cms/blog/categories/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/blog",
+      "source": "apps/portal/src/app/(dashboard)/cms/blog/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/blog/settings",
+      "source": "apps/portal/src/app/(dashboard)/cms/blog/settings/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/contact",
+      "source": "apps/portal/src/app/(dashboard)/cms/contact/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/fleet",
+      "source": "apps/portal/src/app/(dashboard)/cms/fleet/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/home",
+      "source": "apps/portal/src/app/(dashboard)/cms/home/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms",
+      "source": "apps/portal/src/app/(dashboard)/cms/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/privacy",
+      "source": "apps/portal/src/app/(dashboard)/cms/privacy/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/promotions",
+      "source": "apps/portal/src/app/(dashboard)/cms/promotions/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/reviews",
+      "source": "apps/portal/src/app/(dashboard)/cms/reviews/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/site-settings",
+      "source": "apps/portal/src/app/(dashboard)/cms/site-settings/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/cms/terms",
+      "source": "apps/portal/src/app/(dashboard)/cms/terms/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/credits/analytics",
+      "source": "apps/portal/src/app/(dashboard)/credits/analytics/page.tsx",
+      "feature": "credits",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/credits",
+      "source": "apps/portal/src/app/(dashboard)/credits/page.tsx",
+      "feature": "credits",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/customers/[id]",
+      "source": "apps/portal/src/app/(dashboard)/customers/[id]/page.tsx",
+      "feature": "customers",
+      "status": "verified"
+    },
+    {
+      "route": "/customers/analytics",
+      "source": "apps/portal/src/app/(dashboard)/customers/analytics/page.tsx",
+      "feature": "customers",
+      "status": "verified"
+    },
+    {
+      "route": "/customers",
+      "source": "apps/portal/src/app/(dashboard)/customers/page.tsx",
+      "feature": "customers",
+      "status": "verified"
+    },
+    {
+      "route": "/dev",
+      "source": "apps/portal/src/app/(dashboard)/dev/page.tsx",
+      "feature": "developer",
+      "status": "unsupported"
+    },
+    {
+      "route": "/documents/analytics",
+      "source": "apps/portal/src/app/(dashboard)/documents/analytics/page.tsx",
+      "feature": "documents",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/documents",
+      "source": "apps/portal/src/app/(dashboard)/documents/page.tsx",
+      "feature": "documents",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/enquiries",
+      "source": "apps/portal/src/app/(dashboard)/enquiries/page.tsx",
+      "feature": "enquiries",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/expenses",
+      "source": "apps/portal/src/app/(dashboard)/expenses/page.tsx",
+      "feature": "expenses",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/fines/[id]",
+      "source": "apps/portal/src/app/(dashboard)/fines/[id]/page.tsx",
+      "feature": "fines",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/fines/analytics",
+      "source": "apps/portal/src/app/(dashboard)/fines/analytics/page.tsx",
+      "feature": "fines",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/fines/new",
+      "source": "apps/portal/src/app/(dashboard)/fines/new/page.tsx",
+      "feature": "fines",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/fines",
+      "source": "apps/portal/src/app/(dashboard)/fines/page.tsx",
+      "feature": "fines",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/fleet-health",
+      "source": "apps/portal/src/app/(dashboard)/fleet-health/page.tsx",
+      "feature": "fleet_health",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/insights",
+      "source": "apps/portal/src/app/(dashboard)/insights/page.tsx",
+      "feature": "insights",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/insurance",
+      "source": "apps/portal/src/app/(dashboard)/insurance/page.tsx",
+      "feature": "insurance_legacy",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/insurances/analytics",
+      "source": "apps/portal/src/app/(dashboard)/insurances/analytics/page.tsx",
+      "feature": "insurances",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/insurances",
+      "source": "apps/portal/src/app/(dashboard)/insurances/page.tsx",
+      "feature": "insurances",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/integrations",
+      "source": "apps/portal/src/app/(dashboard)/integrations/page.tsx",
+      "feature": "integrations",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/invoices",
+      "source": "apps/portal/src/app/(dashboard)/invoices/page.tsx",
+      "feature": "invoices",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/leads/[id]",
+      "source": "apps/portal/src/app/(dashboard)/leads/[id]/page.tsx",
+      "feature": "leads",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/leads",
+      "source": "apps/portal/src/app/(dashboard)/leads/page.tsx",
+      "feature": "leads",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/messages/[channelId]",
+      "source": "apps/portal/src/app/(dashboard)/messages/[channelId]/page.tsx",
+      "feature": "messages",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/messages",
+      "source": "apps/portal/src/app/(dashboard)/messages/page.tsx",
+      "feature": "messages",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/owner-payouts",
+      "source": "apps/portal/src/app/(dashboard)/owner-payouts/page.tsx",
+      "feature": "owner_payouts",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/",
+      "source": "apps/portal/src/app/(dashboard)/page.tsx",
+      "feature": "dashboard",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/payments/[id]",
+      "source": "apps/portal/src/app/(dashboard)/payments/[id]/page.tsx",
+      "feature": "payments",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/payments/analytics",
+      "source": "apps/portal/src/app/(dashboard)/payments/analytics/page.tsx",
+      "feature": "payments",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/payments",
+      "source": "apps/portal/src/app/(dashboard)/payments/page.tsx",
+      "feature": "payments",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/pending-bookings",
+      "source": "apps/portal/src/app/(dashboard)/pending-bookings/page.tsx",
+      "feature": "pending_bookings",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/pl-dashboard/monthly/[month]",
+      "source": "apps/portal/src/app/(dashboard)/pl-dashboard/monthly/[month]/page.tsx",
+      "feature": "pl_dashboard",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/pl-dashboard",
+      "source": "apps/portal/src/app/(dashboard)/pl-dashboard/page.tsx",
+      "feature": "pl_dashboard",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/plates/[id]",
+      "source": "apps/portal/src/app/(dashboard)/plates/[id]/page.tsx",
+      "feature": "plates",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/plates",
+      "source": "apps/portal/src/app/(dashboard)/plates/page.tsx",
+      "feature": "plates",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/promotions",
+      "source": "apps/portal/src/app/(dashboard)/promotions/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/quotes",
+      "source": "apps/portal/src/app/(dashboard)/quotes/page.tsx",
+      "feature": "quotes",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/reminders/analytics",
+      "source": "apps/portal/src/app/(dashboard)/reminders/analytics/page.tsx",
+      "feature": "reminders",
+      "status": "verified"
+    },
+    {
+      "route": "/reminders",
+      "source": "apps/portal/src/app/(dashboard)/reminders/page.tsx",
+      "feature": "reminders",
+      "status": "verified"
+    },
+    {
+      "route": "/rentals/[id]",
+      "source": "apps/portal/src/app/(dashboard)/rentals/[id]/page.tsx",
+      "feature": "rentals",
+      "status": "verified"
+    },
+    {
+      "route": "/rentals/analytics",
+      "source": "apps/portal/src/app/(dashboard)/rentals/analytics/page.tsx",
+      "feature": "rentals",
+      "status": "verified"
+    },
+    {
+      "route": "/rentals/new",
+      "source": "apps/portal/src/app/(dashboard)/rentals/new/page.tsx",
+      "feature": "rentals",
+      "status": "verified"
+    },
+    {
+      "route": "/rentals",
+      "source": "apps/portal/src/app/(dashboard)/rentals/page.tsx",
+      "feature": "rentals",
+      "status": "verified"
+    },
+    {
+      "route": "/reports",
+      "source": "apps/portal/src/app/(dashboard)/reports/page.tsx",
+      "feature": "reports",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/reports/vehicle-profitability",
+      "source": "apps/portal/src/app/(dashboard)/reports/vehicle-profitability/page.tsx",
+      "feature": "reports",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/settings/agreement-templates/edit",
+      "source": "apps/portal/src/app/(dashboard)/settings/agreement-templates/edit/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/agreement-templates",
+      "source": "apps/portal/src/app/(dashboard)/settings/agreement-templates/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/appearance",
+      "source": "apps/portal/src/app/(dashboard)/settings/appearance/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/apply-form",
+      "source": "apps/portal/src/app/(dashboard)/settings/apply-form/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/blacklist",
+      "source": "apps/portal/src/app/(dashboard)/settings/blacklist/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/email-templates/[key]",
+      "source": "apps/portal/src/app/(dashboard)/settings/email-templates/[key]/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/email-templates",
+      "source": "apps/portal/src/app/(dashboard)/settings/email-templates/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/lead-management",
+      "source": "apps/portal/src/app/(dashboard)/settings/lead-management/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings",
+      "source": "apps/portal/src/app/(dashboard)/settings/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/reminders",
+      "source": "apps/portal/src/app/(dashboard)/settings/reminders/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/settings/users",
+      "source": "apps/portal/src/app/(dashboard)/settings/users/page.tsx",
+      "feature": "settings",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/subscription",
+      "source": "apps/portal/src/app/(dashboard)/subscription/page.tsx",
+      "feature": "subscription",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/testimonials",
+      "source": "apps/portal/src/app/(dashboard)/testimonials/page.tsx",
+      "feature": "website",
+      "status": "partially_documented"
+    },
+    {
+      "route": "/users",
+      "source": "apps/portal/src/app/(dashboard)/users/page.tsx",
+      "feature": "users",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/vehicle-owners/[id]",
+      "source": "apps/portal/src/app/(dashboard)/vehicle-owners/[id]/page.tsx",
+      "feature": "vehicle_owners",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/vehicle-owners",
+      "source": "apps/portal/src/app/(dashboard)/vehicle-owners/page.tsx",
+      "feature": "vehicle_owners",
+      "status": "requiring_confirmation"
+    },
+    {
+      "route": "/vehicles/[id]",
+      "source": "apps/portal/src/app/(dashboard)/vehicles/[id]/page.tsx",
+      "feature": "vehicles",
+      "status": "verified"
+    },
+    {
+      "route": "/vehicles/analytics",
+      "source": "apps/portal/src/app/(dashboard)/vehicles/analytics/page.tsx",
+      "feature": "vehicles",
+      "status": "verified"
+    },
+    {
+      "route": "/vehicles",
+      "source": "apps/portal/src/app/(dashboard)/vehicles/page.tsx",
+      "feature": "vehicles",
+      "status": "verified"
+    },
+    {
+      "route": "/welcome",
+      "source": "apps/portal/src/app/(dashboard)/welcome/page.tsx",
+      "feature": "welcome",
+      "status": "requiring_confirmation"
+    }
+  ],
+  "otherSurfaces": [
+    {
+      "path": "apps/booking",
+      "status": "requiring_confirmation"
+    },
+    {
+      "path": "apps/admin",
+      "status": "requiring_confirmation"
+    },
+    {
+      "path": "apps/web",
+      "status": "requiring_confirmation"
+    },
+    {
+      "path": "v2/apps/web",
+      "status": "requiring_confirmation"
+    }
+  ]
+}
