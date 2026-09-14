@@ -42,7 +42,12 @@ export const metadata: Metadata = {
     images: ["/og.png"],
   },
   icons: {
-    icon: "/favicon.ico",
+    // Light/dark pair, as in booking/portal/admin: the mark's near-black D disappears on a dark tab strip.
+    icon: [
+      { url: "/favicon-light.png", media: "(prefers-color-scheme: light)", type: "image/png" },
+      { url: "/favicon-dark.png", media: "(prefers-color-scheme: dark)", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
     apple: "/apple-touch-icon.png",
   },
   verification: {
