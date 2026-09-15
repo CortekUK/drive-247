@@ -107,7 +107,13 @@ export function FilterShell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+    // Plain `border-border`, never a slash modifier on it. Tailwind compiles
+    // `border-border/70` to `hsl(var(--border) / 0.7)`, but the v2 dark token
+    // already carries its own alpha (`0 0% 100% / 10%`). Two slashes make the
+    // declaration invalid, `border-color` falls back to `currentcolor`, and the
+    // panel gets a bright text-coloured outline. Every consumer of this shell is
+    // a v2 filter panel: rentals, vehicles, customers.
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div className="flex shrink-0 items-center justify-end gap-1.5 px-3 pt-2">
         {activeCount > 0 && (
           <Button

@@ -209,6 +209,24 @@ export function useChat(): UseChatReturn {
     setError(null);
   }, []);
 
+  /**
+   * Reopen a stored conversation.
+   *
+   * The edge function persists every exchange to `chat_messages` keyed on
+   * `conversation_id` (chat/index.ts:587-612), but nothing here ever read it
+   * back — so a refresh emptied the thread on screen while the rows stayed in
+   * the database. This is the read half.
+   *
+   * The id is set alongside the messages deliberately: `sendMessage` passes
+   * `conversationId` to the function, so loading messages WITHOUT it would make
+   * the next reply start a second conversation that looks like a continuation.
+   */
+  const loadConversation = useCallback((id: string, loaded: ChatMessage[]) => {
+    setMessages(loaded);
+    setConversationId(id);
+    setError(null);
+  }, []);
+
   return {
     messages,
     isLoading,
@@ -218,5 +236,6 @@ export function useChat(): UseChatReturn {
     confirmAction,
     rejectAction,
     clearChat,
+    loadConversation,
   };
 }

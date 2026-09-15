@@ -129,6 +129,12 @@ export function RentalsOverviewFlip({ front, back, flipped, onFlipBack }: Props)
     if (!flipped) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // Something else already took this Escape. Every Radix layer (Dialog,
+      // Sheet, AlertDialog, Popover, Select, DropdownMenu) handles Escape in a
+      // capture-phase document listener and calls `preventDefault()` before it
+      // closes, so it arrives here already marked. Without this, Escape in the
+      // add/edit customer modal closed the modal AND turned the card back.
+      if (e.defaultPrevented) return;
       if (document.querySelector("[data-radix-popper-content-wrapper]")) return;
       onFlipBack();
     };
@@ -144,9 +150,13 @@ export function RentalsOverviewFlip({ front, back, flipped, onFlipBack }: Props)
    */
   const [settled, setSettled] = useState(true);
   const [lastFlipped, setLastFlipped] = useState(flipped);
+  // Until the first turn, height changes snap rather than animate; see the
+  // wrapper below for why the first height must not be animated at all.
+  const [hasFlipped, setHasFlipped] = useState(false);
   if (flipped !== lastFlipped) {
     setLastFlipped(flipped);
     setSettled(false);
+    setHasFlipped(true);
   }
 
   // A backstop for `onAnimationComplete`, which does not fire when there is no
@@ -184,12 +194,21 @@ export function RentalsOverviewFlip({ front, back, flipped, onFlipBack }: Props)
     // during the frames in which the height is still catching up, and the near
     // edge's perspective fan — so it can never paint over the header above or
     // the table below.
+    //
+    // `animate` is ALWAYS an object. Motion creates a component's animation
+    // state only once `animate` is set, and with `initial={false}` it swallows
+    // the first animation that state is given. The old
+    // `animate={target == null ? undefined : { height: target }}` made that
+    // first animation the real measured height, so it was thrown away: the box
+    // was left with no height and grew to the TALLER face. On /vehicles that was
+    // a filter panel's worth of empty space under the stat cards until the first
+    // flip. Starting from "auto" gives motion something harmless to swallow.
     <motion.div
       className="relative overflow-hidden"
-      style={{ perspective: 1100, height: target == null ? "auto" : undefined }}
+      style={{ perspective: 1100 }}
       initial={false}
-      animate={target == null ? undefined : { height: target }}
-      transition={reduceMotion ? FADE : FLIP}
+      animate={{ height: target ?? "auto" }}
+      transition={hasFlipped ? (reduceMotion ? FADE : FLIP) : { duration: 0 }}
     >
       <motion.div
         className="grid h-full items-start"

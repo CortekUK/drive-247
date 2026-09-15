@@ -412,7 +412,7 @@ export function ConversationView({ channel }: { channel: ChatChannel }) {
       <div
         ref={scrollRef}
         onScroll={onScroll}
-        className={`relative min-h-0 flex-1 overflow-y-auto px-6 py-8 lg:px-10 ${NO_SCROLLBAR}`}
+        className={`relative min-h-0 flex-1 overflow-y-auto no-scrollbar px-6 py-8 lg:px-10 ${NO_SCROLLBAR}`}
       >
         {isLoading ? (
           <div className="space-y-4">

@@ -44,6 +44,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Check, Clock, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card } from './home/ui';
+import { DateTimePicker } from '@/components/ui-v2/date-time-picker';
 import {
   MAX_NOTE_LENGTH,
   useTenantNotes,
@@ -177,7 +178,8 @@ function NoteRow({
 /* ── The composer ──────────────────────────────────────────────────────────── */
 
 /**
- * `datetime-local` gives a wall-clock string with no zone ("2026-09-08T14:30").
+ * The date-time picker gives a wall-clock string with no zone ("2026-09-08T14:30"),
+ * the same shape a native `datetime-local` input does.
  * `new Date()` reads that in the browser's zone, which is the operator's, and
  * `toISOString()` stores the instant. Returns null on anything unparseable, so a
  * half-typed date is dropped rather than saved as a wrong time.
@@ -308,18 +310,21 @@ function Composer({
       {/* The time is opt-in, because most rows are notes. A note with no time is
           still a note — that is why `remind_at` is nullable. */}
       {wantsTime && (
-        <input
-          type="datetime-local"
+        // The shadcn picker in place of the native `datetime-local` popup. It
+        // opens as soon as the clock is pressed: asking for a time and then
+        // clicking again to start choosing one is a wasted step. Enter still
+        // saves from the note box; on this trigger Enter opens the picker, as a
+        // button's Enter should. The popover is portalled out of the `.pv` scope,
+        // so only the trigger paints with `--pv-*` tokens.
+        <DateTimePicker
           value={when}
-          onChange={(e) => setWhen(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void submit();
-            }
+          onChange={setWhen}
+          defaultOpen
+          aria-label="Reminder date and time"
+          onTriggerKeyDown={(e) => {
             if (e.key === 'Escape') close();
           }}
-          className="mt-2.5 w-full rounded-md border border-[var(--pv-line)] bg-[var(--pv-wash)] px-2 py-1 text-[11.5px] tabular-nums text-[var(--pv-ink-2)] outline-none focus:border-[var(--pv-accent)]"
+          triggerClassName="mt-2.5 flex w-full items-center gap-2 rounded-md border border-[var(--pv-line)] bg-[var(--pv-wash)] px-2.5 py-1.5 text-left text-[11.5px] tabular-nums text-[var(--pv-ink-2)] outline-none transition-colors hover:border-[var(--pv-line-2)] focus-visible:border-[var(--pv-accent)] data-[state=open]:border-[var(--pv-accent)] data-[empty=true]:text-[var(--pv-ink-3)] [&_svg]:text-[var(--pv-accent)]"
         />
       )}
 

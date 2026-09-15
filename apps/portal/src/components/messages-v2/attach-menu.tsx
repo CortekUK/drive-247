@@ -176,7 +176,7 @@ export function AttachMenu({
                 </div>
               </div>
 
-              <div className="max-h-[280px] overflow-y-auto p-1.5">
+              <div className="max-h-[280px] overflow-y-auto no-scrollbar p-1.5">
                 {isLoading ? (
                   <div className="space-y-2 p-2">
                     {[0, 1, 2].map((i) => (

@@ -89,4 +89,16 @@ export interface UseChatReturn {
   confirmAction: (messageId: string) => Promise<void>;
   rejectAction: (messageId: string) => void;
   clearChat: () => void;
+  /**
+   * Replace the live thread with a conversation read back from the database.
+   *
+   * Added for the v2 Trax surfaces, which can list past conversations and reopen
+   * one. Purely ADDITIVE: every existing consumer destructures named fields
+   * (TraxAIDialog:356, ChatSidebar:24), so neither sees a change.
+   *
+   * Passing the id matters as much as the messages — `sendMessage` threads
+   * `conversationId` back to the edge function, so without it a reopened
+   * conversation would fork into a new one on the next reply.
+   */
+  loadConversation: (conversationId: string, messages: ChatMessage[]) => void;
 }

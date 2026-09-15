@@ -402,22 +402,57 @@ describe('first-rental walkthrough — anchor resolution', () => {
     }
   });
 
-  it('falls back to the page title when a tab page has not drawn its tiles yet', () => {
-    // The Vehicles step points at ONE stat tile; a page still fetching has only
-    // its header. Spotlighting the title is a worse card than the tile, and a
-    // far better one than no card at all.
+  it('falls back to the page title when a tab page has not drawn its graph yet', () => {
+    // The Vehicles step points at the graph's label and headline number; a page
+    // that has not drawn its overview has only its header. Spotlighting the
+    // title is a worse card than the graph, and a far better one than no card
+    // at all.
     const r = resolveStep(
       step('vehicles'),
       domWith('<div data-slot="sidebar-inset"><h1>Fleet Management</h1></div>'),
       allVisible,
     )!;
     expect(r.element.tagName).toBe('H1');
-    const withTile = resolveStep(
+    const withChart = resolveStep(
       step('vehicles'),
-      domWith('<div data-slot="sidebar-inset"><h1>Fleet</h1><div data-tour="fleet-stat-total-vehicles"></div></div>'),
+      domWith(
+        '<div data-slot="sidebar-inset"><h1>Fleet</h1><div data-tour="fleet-overview"><div data-tour="vehicles-chart"></div></div></div>',
+      ),
       allVisible,
     )!;
-    expect(withTile.element.getAttribute('data-tour')).toBe('fleet-stat-total-vehicles');
+    expect(withChart.element.getAttribute('data-tour')).toBe('vehicles-chart');
+  });
+
+  it('the Vehicles and Customers stops fall back graph, overview, old tiles, title — in that order', () => {
+    // Every candidate is on the page at once, and each pass hides the one that
+    // just won, so this walks the whole fallback chain in the order the step
+    // lists it. The old tiles are v1's; the orientation only runs on v2, where
+    // the graph is always drawn, but a fallback is only worth keeping if it
+    // resolves when it is reached.
+    const cases = [
+      {
+        id: 'vehicles',
+        html: `<div data-slot="sidebar-inset"><h1>Fleet</h1>
+          <div data-tour="fleet-overview"><div data-tour="vehicles-chart"></div></div>
+          <div data-tour="fleet-stat-total-vehicles"></div></div>`,
+        order: ['vehicles-chart', 'fleet-overview', 'fleet-stat-total-vehicles', 'H1'],
+      },
+      {
+        id: 'customers',
+        html: `<div data-slot="sidebar-inset"><h1>Customers</h1>
+          <div data-tour="customers-stats"><div data-tour="customers-chart"></div></div></div>`,
+        order: ['customers-chart', 'customers-stats', 'H1'],
+      },
+    ];
+    for (const { id, html, order } of cases) {
+      const root = domWith(html);
+      const hidden = new Set<Element>();
+      for (const expected of order) {
+        const r = resolveStep(step(id), root, (el) => !hidden.has(el))!;
+        expect(r.element.getAttribute('data-tour') ?? r.element.tagName, id).toBe(expected);
+        hidden.add(r.element);
+      }
+    }
   });
 
   it('the handoff step prefers the real tab-tour button over the header', () => {

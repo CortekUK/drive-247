@@ -468,7 +468,7 @@ export function AvailabilityV2() {
           pattern is deliberate and occasional; it does not need to occupy a
           third of the workspace while somebody looks at next week. */}
       <Dialog open={hoursOpen} onOpenChange={setHoursOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[520px]">
+        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>Weekly hours</DialogTitle>
           </DialogHeader>

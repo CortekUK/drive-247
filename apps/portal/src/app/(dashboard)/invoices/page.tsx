@@ -39,6 +39,8 @@ import { cn } from "@/lib/utils";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PaymentRequestsTab } from "@/components/invoices/payment-requests-tab";
+import { useV2 } from "@/lib/v2-context";
+import { InvoicesTableV2 } from "@/components/invoices-v2/invoices-table-v2";
 
 interface Invoice {
   id: string;
@@ -149,6 +151,10 @@ const InvoicesList = () => {
   // outside development, and INSIDE the slug gate so it reaches nobody else.
   const devForceEmpty = useForcedEmptyState("invoices");
   const teachEmptyInvoices = isLeanTenant(tenantSlug) && (!invoices?.length || devForceEmpty);
+
+  // v2 (northwind) swaps only the populated table for the rentals list's table,
+  // with no pager. Loading, teaching and "no results" states stay shared.
+  const v2Chrome = useV2("chrome");
 
   // Filtered invoices
   const filteredInvoices = useMemo(() => {
@@ -386,6 +392,25 @@ const InvoicesList = () => {
         />
         )
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). No
+          // pager, rows arrive as it scrolls. Rows open nothing, as in v1; the
+          // actions menu is the same menu with the same handlers.
+          <InvoicesTableV2
+            invoices={filteredInvoices}
+            resetKey={`${tenant?.id ?? ""}|${filters.search}|${filters.status}|${filters.dateFrom?.toISOString() ?? ""}|${filters.dateTo?.toISOString() ?? ""}`}
+            currencyCode={tenant?.currency_code || 'USD'}
+            canEdit={canEdit}
+            onSendEmail={(invoice) => {
+              setSelectedInvoiceForAction(invoice);
+              setSendEmailDialogOpen(true);
+            }}
+            onDelete={(invoice) => {
+              setSelectedInvoiceForAction(invoice);
+              setDeleteDialogOpen(true);
+            }}
+          />
+        ) : (
         <>
           <Card>
             <CardContent className="p-0">
@@ -492,6 +517,7 @@ const InvoicesList = () => {
             </div>
           </div>
         </>
+        )
       )}
         </TabsContent>
 

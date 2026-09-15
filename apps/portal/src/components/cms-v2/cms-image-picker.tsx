@@ -104,7 +104,7 @@ export function CmsImagePicker({
           onChange={(e) => void upload(e.target.files?.[0])}
         />
 
-        <div className="max-h-[46vh] overflow-y-auto">
+        <div className="max-h-[46vh] overflow-y-auto no-scrollbar">
           {isLoading ? (
             <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Loading your images

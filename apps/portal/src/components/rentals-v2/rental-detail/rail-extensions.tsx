@@ -883,7 +883,7 @@ export function RailExtensions({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
         {/* ── the whole rental, in two or three lines ──────────────────── */}
         <div className="px-1">
           <p className="text-[13px] font-medium">
@@ -962,7 +962,7 @@ export function RailExtensions({
         {/* Wider than the ui-v2 default of 448px on purpose: four sections of
             real facts in one 448px column is where the unreadable nine-row
             stack came from. 768px is two columns of ~340px. */}
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto no-scrollbar sm:max-w-3xl">
           {open && (
             <PeriodDetail
               period={open.period}

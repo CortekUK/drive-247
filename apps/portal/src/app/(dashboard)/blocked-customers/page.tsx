@@ -33,6 +33,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useAuditLogOnOpen } from "@/hooks/use-audit-log-on-open";
+import { useV2 } from "@/lib/v2-context";
+import { BlockedCustomersTableV2, BlockedIdentitiesTableV2 } from "@/components/customers-v2/blocked-customers-tables-v2";
 
 interface BlockedCustomer {
   id: string;
@@ -69,6 +71,8 @@ const BlockedCustomers = () => {
 
   const { unblockCustomer, addBlockedIdentity, removeBlockedIdentity, isLoading } = useCustomerBlockingActions();
   const { canEdit } = useManagerPermissions();
+  // v2 (northwind) draws both lists as the rentals list's table; every other tenant keeps v1.
+  const v2Chrome = useV2("chrome");
 
   useAuditLogOnOpen({
     open: !!unblockCustomerDialog,
@@ -323,6 +327,18 @@ const BlockedCustomers = () => {
               <Ban className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
               <p className="text-muted-foreground">No blocked customers found</p>
             </div>
+          ) : v2Chrome ? (
+            // v2: the rentals list's table (components/shared/list-table-v2). Every
+            // filtered row, no page slice and no pager: rows arrive as it scrolls.
+            // The row opens the customer, where the View button went.
+            <BlockedCustomersTableV2
+              customers={filteredCustomers}
+              resetKey={`${tenant?.id}|${searchTerm}`}
+              canUnblock={canEdit('blocked_customers')}
+              isLoading={isLoading}
+              onOpen={(customer) => router.push(`/customers/${customer.id}`)}
+              onUnblock={(customer) => setUnblockCustomerDialog({ open: true, id: customer.id, name: customer.name })}
+            />
           ) : (
             <>
               {/* Mobile Card View */}
@@ -519,6 +535,17 @@ const BlockedCustomers = () => {
                 </Button>
               )}
             </div>
+          ) : v2Chrome ? (
+            // v2: the rentals list's table (components/shared/list-table-v2). Every
+            // filtered row, no page slice and no pager. Rows open nothing: there
+            // is no identity record route.
+            <BlockedIdentitiesTableV2
+              identities={filteredIdentities}
+              resetKey={`${tenant?.id}|${searchTerm}`}
+              canRemove={canEdit('blocked_customers')}
+              isLoading={isLoading}
+              onRemove={(identity) => setRemoveIdentityDialog({ open: true, id: identity.id, number: identity.identity_number })}
+            />
           ) : (
             <>
               {/* Mobile Card View */}

@@ -281,7 +281,7 @@ export function NeedsYouNow({ className }: { className?: string }) {
           /* Centred rather than top-aligned: two items in a tall card looked
              like the card had failed to finish loading. Centring makes a short
              list read as deliberate, and a long one still fills and scrolls. */
-          <div className="-mx-1 flex min-h-0 flex-1 flex-col justify-center gap-0.5 overflow-y-auto px-1">
+          <div className="-mx-1 flex min-h-0 flex-1 flex-col justify-center gap-0.5 overflow-y-auto no-scrollbar px-1">
             {items.map((item) => (
               <ItemRow key={item.id} item={item} onClick={() => router.push(item.href)} />
             ))}

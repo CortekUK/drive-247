@@ -142,8 +142,9 @@
  *  - The rentals calendar and `/rentals/analytics`. The calendar rides as a
  *    note on the search step; analytics was removed from the list header on
  *    purpose and is not somewhere to send anybody.
- *  - The overview stat strip. It returns null when `stats` is null and holds no
- *    single addressable element worth a rim.
+ *  - The overview graph. Its label and number carry `rentals-chart`, but no
+ *    step stops on it: a first pass needs the Calendar View card beside it
+ *    more, and that card already rides as the note named above.
  */
 
 import type { TourBuildContext, TourStep } from '@/lib/first-rental-tour';
@@ -276,14 +277,15 @@ const STEPS: readonly TourStep[] = [
     anchors: ['[data-tour="rentals-search"]', ...LIST_HEADING],
     side: 'bottom',
     // Searching nothing teaches nothing, and the calendar note below points at
-    // a tile inside an overview that returns null when there are no stats. Both
-    // are worth a stop only once there is a list to narrow.
+    // the Calendar View card beside the overview graph, which is not drawn while
+    // the rentals are still loading. Both are worth a stop only once there is a
+    // list to narrow.
     requires: { record: 'rentalId' },
     notes: [
       {
         // Removed from the header on purpose, so this card is the only way an
         // operator finds it. Anchored, so it is not promised in calendar view
-        // where the tile is not drawn.
+        // where the card is not drawn.
         text: 'Calendar view lays the same rentals on a timeline, one row per car.',
         anchors: ['[data-tour="rentals-calendar"]'],
       },

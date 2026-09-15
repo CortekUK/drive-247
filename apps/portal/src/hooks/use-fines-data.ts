@@ -209,6 +209,10 @@ export const useFinesData = ({
         currentPage: page,
         hasNextPage: page * pageSize < filteredCount,
         hasPreviousPage: page > 1,
+        // Rows matching the server-side filters, counted before the range and
+        // before the client-side search. Added for the v2 fines list, which
+        // reads it to tell a capped fetch from a complete one; v1 ignores it.
+        serverCount: count ?? 0,
       };
     },
     enabled: !!tenant,

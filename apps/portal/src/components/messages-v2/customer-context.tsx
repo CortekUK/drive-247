@@ -125,7 +125,7 @@ export function CustomerContext({ channel }: { channel: ChatChannel }) {
 
       {/* One scroll region, and it only scrolls when the content genuinely
           overflows — a customer with a single rental never does. */}
-      <div className={`min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4 ${NO_SCROLLBAR}`}>
+      <div className={`min-h-0 flex-1 space-y-5 overflow-y-auto no-scrollbar px-5 py-4 ${NO_SCROLLBAR}`}>
         <Section title="Contact">
           <div className="rounded-2xl bg-muted/40 px-3.5 py-2">
             {email && (

@@ -452,7 +452,7 @@ export function RailActivity({ detail }: { detail: RentalDetailV2 }) {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
         {isLoading ? (
           <p className="px-0.5 pt-2 text-[11px] text-muted-foreground">Reading what happened…</p>
         ) : events.length === 0 ? (

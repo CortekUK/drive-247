@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/shared/data-display/empty-state";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantPaymentRequests } from "@/hooks/use-payment-links";
 import { StatusBadge, describeLink } from "@/components/payments/payment-links-panel";
+import { useV2 } from "@/lib/v2-context";
+import { PaymentRequestsTableV2 } from "@/components/invoices-v2/payment-requests-table-v2";
 
 // Tenant-wide list of every payment link / charge the operator has SENT (a `payments`
 // row with a Stripe checkout session). This is Jeuan's "invoices I sent" — they write
@@ -23,6 +25,8 @@ export function PaymentRequestsTab() {
   const { tenant } = useTenant();
   const { data: requests, isLoading } = useTenantPaymentRequests();
   const [search, setSearch] = useState("");
+  // v2 (northwind) swaps only the populated table for the rentals list's table.
+  const v2Chrome = useV2("chrome");
 
   const filtered = useMemo(() => {
     const rows = requests ?? [];
@@ -60,6 +64,16 @@ export function PaymentRequestsTab() {
           }
         />
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). No
+          // pager, rows arrive as it scrolls. Rows open nothing, as in v1.
+          <PaymentRequestsTableV2
+            requests={filtered}
+            loadedCount={requests?.length ?? 0}
+            resetKey={`${tenant?.id ?? ""}|${search.trim().toLowerCase()}`}
+            currencyCode={tenant?.currency_code || "USD"}
+          />
+        ) : (
         <Card>
           <CardContent className="p-0">
             <div className="max-h-[calc(100vh-340px)] min-h-[300px] overflow-auto relative">
@@ -94,6 +108,7 @@ export function PaymentRequestsTab() {
             </div>
           </CardContent>
         </Card>
+        )
       )}
     </div>
   );

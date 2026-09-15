@@ -368,7 +368,7 @@ export function SetupGuide() {
           </div>
         </div>
 
-        <div className="max-h-[min(60vh,520px)] divide-y divide-border overflow-y-auto border-t border-border">
+        <div className="max-h-[min(60vh,520px)] divide-y divide-border overflow-y-auto no-scrollbar border-t border-border">
           {groups.map((group) => (
             <Group
               key={group.id}
