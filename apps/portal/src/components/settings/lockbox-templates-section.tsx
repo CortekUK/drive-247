@@ -13,7 +13,9 @@ import { toast } from '@/hooks/use-toast';
 import { useLockboxTemplates } from '@/hooks/use-lockbox-templates';
 import { useRentalSettings } from '@/hooks/use-rental-settings';
 
-const DEFAULT_LOCKBOX_INSTRUCTIONS = `1. Go to the vehicle location
+// Exported for components/settings-v2/lockbox-templates-v2.tsx, which reuses
+// these defaults so both versions reset to exactly the same text.
+export const DEFAULT_LOCKBOX_INSTRUCTIONS = `1. Go to the vehicle location
 2. Locate the lockbox (check the vehicle-specific instructions if provided)
 3. Enter the lockbox code to unlock
 4. Retrieve the vehicle keys from inside
@@ -22,7 +24,7 @@ const DEFAULT_LOCKBOX_INSTRUCTIONS = `1. Go to the vehicle location
 
 If you have any issues accessing the lockbox, please contact us immediately.`;
 
-const DEFAULT_LOCKBOX_EMAIL = {
+export const DEFAULT_LOCKBOX_EMAIL = {
   subject: 'Your Vehicle Keys - Lockbox Code',
   body: `Hi {{customer_name}},
 
@@ -37,11 +39,11 @@ Booking Reference: {{booking_ref}}
 If you have any questions, please don't hesitate to contact us.`,
 };
 
-const DEFAULT_LOCKBOX_SMS = {
+export const DEFAULT_LOCKBOX_SMS = {
   body: `Your vehicle {{vehicle_reg}} has been delivered. Lockbox code: {{lockbox_code}}. Ref: {{booking_ref}}`,
 };
 
-const AVAILABLE_VARIABLES = [
+export const AVAILABLE_VARIABLES = [
   { key: '{{customer_name}}', desc: 'Customer full name' },
   { key: '{{vehicle_name}}', desc: 'Vehicle make & model' },
   { key: '{{vehicle_reg}}', desc: 'Vehicle registration' },

@@ -39,6 +39,10 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { useTenant } from '@/contexts/TenantContext';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useV2 } from '@/lib/v2-context';
+import { SettingsSectionSkeleton } from '@/components/settings-v2/section-states';
 
 
 export default function UsersManagement() {
@@ -48,6 +52,16 @@ export default function UsersManagement() {
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [resetPassword, setResetPassword] = useState('');
+
+  // v2 (northwind): this route is an orphan (nothing links to it) and its row
+  // actions demote or deactivate with one unconfirmed click, including the
+  // operator's own account. /users is the maintained Team page, with confirm
+  // dialogs and a v2 table, so a typed or bookmarked URL goes there instead.
+  const v2Chrome = useV2('chrome');
+  const router = useRouter();
+  useEffect(() => {
+    if (v2Chrome) router.replace('/users');
+  }, [v2Chrome, router]);
 
   // Fetch users for this tenant
   const { data: users, isLoading } = useQuery({
@@ -204,6 +218,16 @@ export default function UsersManagement() {
       description: "Copied to clipboard",
     });
   };
+
+  // v2: a placeholder the size of the Team table while the redirect above runs.
+  // After every hook, so the hook order never changes.
+  if (v2Chrome) {
+    return (
+      <div className="mx-auto w-full max-w-[1160px] pb-16 md:pt-7">
+        <SettingsSectionSkeleton variant="table" rows={5} columns={5} label="Opening Users" />
+      </div>
+    );
+  }
 
   // Only head_admin can access this page
   if (!appUser || appUser.role !== 'head_admin') {

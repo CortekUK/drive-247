@@ -11,6 +11,23 @@ import { useRentalSettings } from "@/hooks/use-rental-settings";
 import { useToast } from "@/hooks/use-toast";
 import { InstallmentCalendar, type InstallmentCalendarItem } from "@/components/installments/InstallmentCalendar";
 import { cn } from "@/lib/utils";
+import { useV2 } from "@/lib/v2-context";
+import {
+  SettingsDependencyNotice,
+  SettingsLoadError,
+  SettingsReadOnlyFieldset,
+  SettingsSaveState,
+  SettingsSectionSkeleton,
+  useSettingsAccess,
+  useSettingsSaveStatus,
+  useWarnOnUnsavedChanges,
+} from "@/components/settings-v2/section-states";
+import {
+  installmentDraftFromConfig,
+  isInstallmentDraftDirty,
+  paymentProviderState,
+  planMinimumDays,
+} from "@/lib/settings-money-states";
 
 interface InstallmentConfig {
   weekly_enabled: boolean;
@@ -46,6 +63,16 @@ export function InstallmentSettings() {
   const { tenant } = useTenant();
   const { toast } = useToast();
   const { settings, updateSettings, isUpdating } = useRentalSettings();
+
+  // v2 (northwind): read state for the loading / failed-read gate below, who
+  // may edit, and the inline save state. The hooks run for every tenant; only
+  // the v2 branch renders anything from them.
+  const v2Chrome = useV2("chrome");
+  const rentalSettingsReadV2 = useRentalSettings();
+  const { canEdit: canEditV2 } = useSettingsAccess("installments");
+  const [savingPlansV2, setSavingPlansV2] = useState(false);
+  const [plansErrorV2, setPlansErrorV2] = useState<unknown>(null);
+  const [masterErrorV2, setMasterErrorV2] = useState<null | "on" | "off">(null);
 
   // The portal's TenantContext does NOT include installment_config in its
   // SELECT list, so we read from useRentalSettings() (which does SELECT *).
@@ -94,8 +121,18 @@ export function InstallmentSettings() {
     setInstallmentsEnabled(settings?.installments_enabled ?? false);
   }, [settings?.installments_enabled]);
 
+  // v2: the plan toggles are local until Save, so say when they differ from
+  // what is saved, and warn before the page is closed with them unsaved.
+  const plansDirtyV2 = v2Chrome && isInstallmentDraftDirty(config, tenantCfg);
+  const plansStatusV2 = useSettingsSaveStatus({ isDirty: plansDirtyV2, isPending: savingPlansV2, error: plansErrorV2 });
+  useWarnOnUnsavedChanges(plansDirtyV2);
+
   async function save() {
     if (!tenant?.id) return;
+    if (v2Chrome) {
+      setPlansErrorV2(null);
+      setSavingPlansV2(true);
+    }
     try {
       // Merge with the existing config so fields owned by the broader settings
       // page (charge_first_upfront, what_gets_split, minimum_days_*,
@@ -106,15 +143,44 @@ export function InstallmentSettings() {
       const merged = { ...(tenantCfg ?? {}), ...config };
       await updateSettings({ installment_config: merged as any });
       toast({ title: "Saved", description: "Installment settings updated." });
+      if (v2Chrome) setSavingPlansV2(false);
     } catch (error) {
       // useRentalSettings already shows an error toast — nothing to do here.
+      if (v2Chrome) {
+        setSavingPlansV2(false);
+        setPlansErrorV2(error);
+      }
     }
   }
 
   const saving = isUpdating;
 
+  // v2: no switch that writes may render over placeholder defaults. Until a
+  // real row arrives, a skeleton; if it never does, the error with a retry.
+  if (v2Chrome && !rentalSettingsReadV2.hasLoaded) {
+    return rentalSettingsReadV2.error ? (
+      <SettingsLoadError
+        thing="installment settings"
+        error={rentalSettingsReadV2.error}
+        onRetry={() => rentalSettingsReadV2.refetch()}
+        retrying={rentalSettingsReadV2.isFetching}
+      />
+    ) : (
+      <SettingsSectionSkeleton variant="form" rows={3} label="Loading installment settings" />
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {v2Chrome && rentalSettingsReadV2.error ? (
+        <SettingsLoadError
+          variant="inline"
+          thing="installment settings"
+          error={rentalSettingsReadV2.error}
+          onRetry={() => rentalSettingsReadV2.refetch()}
+          retrying={rentalSettingsReadV2.isFetching}
+        />
+      ) : null}
       <div className="bg-card border border-border/60 rounded-lg p-6">
         <h2 className="text-lg font-medium text-foreground mb-1">Installments</h2>
         <p className="text-sm text-muted-foreground mb-4">Configure how customers can split their rental payments.</p>
@@ -124,6 +190,7 @@ export function InstallmentSettings() {
         </div>
       </div>
 
+      <V2ReadOnly active={v2Chrome} readOnly={!canEditV2}>
       {/* Master enable — this is the flag the CHECKOUT reads (tenants.installments_enabled).
           Instant-save, mirroring the Pay As You Go toggle. Passing ONLY installments_enabled
           leaves installment_config (the plans below) untouched. */}
@@ -139,16 +206,25 @@ export function InstallmentSettings() {
           className="shrink-0 mt-0.5"
           checked={installmentsEnabled}
           onCheckedChange={async (checked) => {
+            if (v2Chrome) setMasterErrorV2(null);
             setInstallmentsEnabled(checked);
             try {
               await updateSettings({ installments_enabled: checked });
               toast({ title: checked ? "Installments enabled" : "Installments disabled" });
             } catch {
               setInstallmentsEnabled(!checked);
+              if (v2Chrome) setMasterErrorV2(checked ? "on" : "off");
             }
           }}
+          disabled={v2Chrome ? isUpdating || !canEditV2 : undefined}
         />
       </div>
+
+      {v2Chrome && masterErrorV2 && (
+        <p role="alert" className="-mt-2 px-1 text-sm text-destructive">
+          Couldn&apos;t turn installments {masterErrorV2}. Nothing was changed.
+        </p>
+      )}
 
       {!installmentsEnabled && (
         <p className="-mt-2 px-1 text-xs text-muted-foreground">
@@ -156,9 +232,25 @@ export function InstallmentSettings() {
         </p>
       )}
 
+      {v2Chrome && installmentsEnabled && !tenantCfg?.weekly_enabled && !tenantCfg?.monthly_enabled && (
+        <SettingsDependencyNotice
+          tone="warning"
+          title="Installments is on, but no plan is enabled"
+          body="Customers will still pay in full. Turn on the weekly or monthly plan below, then save."
+        />
+      )}
+      {v2Chrome && installmentsEnabled && paymentProviderState(settings as never) === "missing" && (
+        <SettingsDependencyNotice
+          tone="warning"
+          title="No payment provider is connected"
+          body="Installment payments are charged to the customer's card through your payment provider, and none is connected yet."
+          action={{ label: "Open Integrations", href: "/integrations" }}
+        />
+      )}
+
       <SectionRow
         label="Weekly Plan"
-        sublabel={`Available for rentals ${WEEKLY_MIN_DAYS}+ days`}
+        sublabel={`Available for rentals ${v2Chrome ? planMinimumDays(tenantCfg, "weekly") : WEEKLY_MIN_DAYS}+ days`}
         disabled={!installmentsEnabled}
       >
         <div className="space-y-4">
@@ -174,7 +266,7 @@ export function InstallmentSettings() {
           {config.weekly_enabled && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments per week</div>
-              <div className="flex items-center gap-2">
+              <div className={cn("flex items-center gap-2", v2Chrome && "flex-wrap gap-y-2")}>
                 <PillButton active={config.weekly_payments_per_unit === 1} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 1 })}>1×</PillButton>
                 <PillButton active={config.weekly_payments_per_unit === 2} onClick={() => setConfig({ ...config, weekly_payments_per_unit: 2 })}>2× (twice weekly)</PillButton>
                 <button
@@ -192,7 +284,7 @@ export function InstallmentSettings() {
 
       <SectionRow
         label="Monthly Plan"
-        sublabel={`Available for rentals ${MONTHLY_MIN_DAYS}+ days`}
+        sublabel={`Available for rentals ${v2Chrome ? planMinimumDays(tenantCfg, "monthly") : MONTHLY_MIN_DAYS}+ days`}
         disabled={!installmentsEnabled}
       >
         <div className="space-y-4">
@@ -208,7 +300,7 @@ export function InstallmentSettings() {
           {config.monthly_enabled && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Payments per month</div>
-              <div className="flex items-center gap-2">
+              <div className={cn("flex items-center gap-2", v2Chrome && "flex-wrap gap-y-2")}>
                 <PillButton active={config.monthly_payments_per_unit === 1} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 1 })}>1×</PillButton>
                 <PillButton active={config.monthly_payments_per_unit === 2} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 2 })}>2×</PillButton>
                 <PillButton active={config.monthly_payments_per_unit === 4} onClick={() => setConfig({ ...config, monthly_payments_per_unit: 4 })}>4×</PillButton>
@@ -225,12 +317,37 @@ export function InstallmentSettings() {
         </div>
       </SectionRow>
 
+      {v2Chrome ? (
+        canEditV2 ? (
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+            <SettingsSaveState
+              status={plansStatusV2}
+              error={plansErrorV2}
+              onRetry={save}
+              onDiscard={() => {
+                setPlansErrorV2(null);
+                setConfig(installmentDraftFromConfig(tenantCfg));
+              }}
+            />
+            <Button
+              onClick={save}
+              disabled={saving || !plansDirtyV2}
+              className="bg-foreground text-background hover:bg-foreground/90"
+            >
+              {savingPlansV2 ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save changes
+            </Button>
+          </div>
+        ) : null
+      ) : (
       <div className="flex justify-end pt-2">
         <Button onClick={save} disabled={saving} className="bg-foreground text-background hover:bg-foreground/90">
           {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           Save changes
         </Button>
       </div>
+      )}
+      </V2ReadOnly>
 
       {previewOpen && (
         <ExampleDialog
@@ -242,6 +359,20 @@ export function InstallmentSettings() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * v2: a native disabled fieldset around the controls for a read-only user, so
+ * the keyboard cannot flip what the mouse cannot. v1 renders its children bare,
+ * with no extra element.
+ */
+function V2ReadOnly({ active, readOnly, children }: { active: boolean; readOnly: boolean; children: React.ReactNode }) {
+  if (!active) return <>{children}</>;
+  return (
+    <SettingsReadOnlyFieldset readOnly={readOnly} className="space-y-6">
+      {children}
+    </SettingsReadOnlyFieldset>
   );
 }
 

@@ -180,6 +180,8 @@ export const useRentalSettings = () => {
     data: settings,
     isLoading,
     error,
+    isPlaceholderData,
+    isFetching,
     refetch
   } = useQuery({
     queryKey: ['rental-settings', tenant?.id],
@@ -286,6 +288,14 @@ export const useRentalSettings = () => {
     isLoading,
     error,
     refetch,
+    /** True while a read is in flight (first load, retry or refetch). */
+    isFetching,
+    /**
+     * False until a real row has arrived. `settings` falls back to defaults
+     * while loading (placeholderData) and after a failed first read, so a v2
+     * section must check this before rendering controls that write.
+     */
+    hasLoaded: settings !== undefined && !isPlaceholderData,
     updateSettings: updateSettingsMutation.mutateAsync,
     isUpdating: updateSettingsMutation.isPending,
     tenantId: tenant?.id,

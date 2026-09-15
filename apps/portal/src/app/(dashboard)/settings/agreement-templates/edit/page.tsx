@@ -46,6 +46,7 @@ import { injectAgreementClauses } from '@/lib/agreement-injection';
 import { BONZAH_INSURANCE_ADDENDUM_HTML } from '@/lib/bonzah-addendum';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+import { AgreementTemplateEditorV2 } from '@/components/settings-v2/agreement-templates-v2';
 const DEPOSIT_CLAUSE_SAMPLE = "<h2>Security deposit</h2><p>A refundable security deposit of <strong>$200.00</strong> is charged to the Renter&rsquo;s payment method at the start of the rental period. This is a charge, not a temporary authorisation hold. It is refunded after the vehicle is returned and inspected, less any deductions.</p>";
 
 
@@ -136,7 +137,7 @@ export default function EditAgreementTemplatePage() {
     saveAndLeave,
     cancelLeave,
     isSaving: isSavingNav,
-  } = useUnsavedChangesWarning({ hasChanges, onSave: saveContent });
+  } = useUnsavedChangesWarning({ hasChanges: hasChanges && !v2Chrome, onSave: saveContent });
 
   const handleSave = async () => {
     const success = await saveContent();
@@ -199,6 +200,11 @@ export default function EditAgreementTemplatePage() {
       '<span style="display:inline-block;border:2px dashed #d97706;border-radius:6px;padding:4px 16px;color:#d97706;font-size:12px;font-weight:600;background:#fffbeb;">Initials</span>'
     );
   const isSaving = isUpdating;
+
+  // v2 (northwind): the editor rebuilt on the state kit. After every hook above.
+  if (v2Chrome) {
+    return <AgreementTemplateEditorV2 disclaimerHtml={PLATFORM_DISCLAIMER_HTML} depositClauseSample={DEPOSIT_CLAUSE_SAMPLE} />;
+  }
 
   if (isLoading) {
     return (

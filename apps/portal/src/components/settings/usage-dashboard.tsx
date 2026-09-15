@@ -9,6 +9,7 @@ import { TenantSubscriptionInvoice } from "@/hooks/use-tenant-subscription";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUsageData } from "@/hooks/use-usage-data";
 import { USAGE_CATEGORIES } from "@/lib/usage-categories";
+import { useV2 } from "@/lib/v2-context";
 
 /** How many invoices to show before the tenant asks for more. */
 const RECENT_INVOICE_COUNT = 3;
@@ -48,6 +49,9 @@ function InvoiceHistoryTable({
   onViewInvoice: (invoice: TenantSubscriptionInvoice) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
+  // v2 chrome (northwind only): pages of 25 rather than one "show all" dump.
+  const v2Chrome = useV2("chrome");
+  const [v2Visible, setV2Visible] = useState(RECENT_INVOICE_COUNT);
 
   if (invoices.length === 0) {
     return (
@@ -58,7 +62,7 @@ function InvoiceHistoryTable({
   // Show the three most recent transactions by default. Older invoices stay
   // reachable behind "Show all" rather than being discarded — a tenant may
   // legitimately need to pull an older receipt for their accountant.
-  const visibleInvoices = showAll
+  const visibleInvoices = v2Chrome ? invoices.slice(0, v2Visible) : showAll
     ? invoices
     : invoices.slice(0, RECENT_INVOICE_COUNT);
   const hiddenCount = invoices.length - visibleInvoices.length;
@@ -283,7 +287,7 @@ function InvoiceHistoryTable({
           })}
         </tbody>
       </table>
-      {(hiddenCount > 0 || showAll) && (
+      {!v2Chrome && (hiddenCount > 0 || showAll) && (
         <button
           onClick={() => setShowAll((v) => !v)}
           className="mt-3 px-3 text-sm font-medium text-primary hover:underline"
@@ -292,6 +296,21 @@ function InvoiceHistoryTable({
             ? "Show less"
             : `Show all ${invoices.length} invoices`}
         </button>
+      )}
+      {v2Chrome && (hiddenCount > 0 || v2Visible > RECENT_INVOICE_COUNT) && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 text-sm">
+          {hiddenCount > 0 && (
+            <button type="button" onClick={() => setV2Visible((n) => n + 25)} className="font-medium text-primary hover:underline">
+              {`Show ${Math.min(25, hiddenCount)} more`}
+            </button>
+          )}
+          {v2Visible > RECENT_INVOICE_COUNT && (
+            <button type="button" onClick={() => setV2Visible(RECENT_INVOICE_COUNT)} className="font-medium text-muted-foreground hover:underline">
+              Show less
+            </button>
+          )}
+          <span className="text-muted-foreground">{`Showing ${visibleInvoices.length} of ${invoices.length}`}</span>
+        </div>
       )}
     </div>
   );
@@ -324,6 +343,7 @@ function formatMonth(month: string) {
 function UsageSummary() {
   const usage = useUsageData();
   const [expanded, setExpanded] = useState(false);
+  const v2Chrome = useV2("chrome");
 
   const categories = USAGE_CATEGORIES.map((config) => ({
     config,
@@ -348,6 +368,17 @@ function UsageSummary() {
     );
   }
 
+  // v2: a failed usage read is not "no usage". Say so, with a retry.
+  if (v2Chrome && !hasAnyHistory && categories.some((c) => c.data.isError)) {
+    return (
+      <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-destructive/10 px-4 py-2 text-sm">
+        <span className="min-w-0 flex-1">Couldn&apos;t load your metered usage.</span>
+        <button type="button" onClick={() => categories.forEach((c) => c.data.refetch?.())} className="font-medium text-primary hover:underline">
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (!hasAnyHistory) return null;
 
   return (
@@ -435,7 +466,7 @@ function UsageSummary() {
                       <span className="flex shrink-0 items-center gap-3 text-muted-foreground">
                         <span>{formatDate(e.createdAt)}</span>
                         <span className="tabular-nums">
-                          {formatCurrency(e.unitCost, e.currency)}
+                          {formatCurrency(e.unitCost, v2Chrome ? e.currency || "usd" : e.currency)}
                         </span>
                       </span>
                     </li>

@@ -161,6 +161,8 @@ export const useTenantBranding = () => {
   // Fetch branding from tenants table
   const {
     data: branding,
+    isPlaceholderData: isBrandingPlaceholder,
+    isFetching: isFetchingBranding,
     isLoading,
     error,
     refetch
@@ -402,6 +404,10 @@ export const useTenantBranding = () => {
     isLoading,
     error,
     refetch,
+    // v2 settings states: true only once the real row has arrived (not the
+    // tenant-context placeholder), so a form can wait instead of hydrating defaults.
+    hasBrandingData: !!branding && !isBrandingPlaceholder,
+    isFetchingBranding,
     updateBranding: updateBrandingMutation.mutateAsync,
     isUpdating: updateBrandingMutation.isPending,
     tenantId: tenant?.id,

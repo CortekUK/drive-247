@@ -198,112 +198,6 @@ interface NavGroup {
 }
 
 /**
- * Settings sidebar tab definitions.
- *
- * Taken from the v1 sidebar, NOT from the source worktree — the source's copy
- * predates Push Notifications and Accounting and still calls `payments`
- * "Stripe Connect". Shipping the source's list would have quietly removed two
- * settings tabs from the canary and mislabelled a third.
- */
-const settingsTabGroups = [
-  {
-    label: "Business",
-    items: [
-      { value: 'general', icon: Building2, label: 'General' },
-      { value: 'locations', icon: MapPin, label: 'Locations' },
-      { value: 'branding', icon: Palette, label: 'Branding' },
-    ],
-  },
-  {
-    label: "Booking Rules",
-    items: [
-      { value: 'requirements', icon: Shield, label: 'Requirements' },
-      { value: 'duration', icon: Clock, label: 'Duration & Timing' },
-      { value: 'lockbox', icon: Lock, label: 'Delivery & Lockbox' },
-    ],
-  },
-  {
-    label: "Pricing & Money",
-    items: [
-      { value: 'pricing', icon: TrendingUp, label: 'Pricing Rules' },
-      { value: 'fees', icon: Receipt, label: 'Fees & Tax' },
-      { value: 'preauth', icon: CreditCard, label: 'Deposit' },
-      { value: 'installments', icon: Banknote, label: 'Installments' },
-      { value: 'payg', icon: Clock, label: 'Pay As You Go' },
-      { value: 'promos', icon: Zap, label: 'Promo Codes' },
-      { value: 'extras', icon: Package, label: 'Extras' },
-      // Provider-neutral: this tab holds whichever processor the tenant settled
-      // on, and they now choose that themselves. A hard-coded "Stripe Connect"
-      // sent a Square operator hunting for a menu item that does not describe
-      // what they would find behind it.
-      { value: 'payments', icon: CreditCard, label: 'Payments' },
-    ],
-  },
-  {
-    label: "Communication",
-    items: [
-      { value: 'reminders', icon: Bell, label: 'Notifications' },
-      { value: 'push', icon: BellRing, label: 'Push Notifications' },
-      { value: 'templates', icon: FileText, label: 'Templates' },
-    ],
-  },
-  {
-    label: "Integrations",
-    items: [
-      { value: 'accounting', icon: Banknote, label: 'Accounting' },
-      { value: 'messaging', icon: MessageSquare, label: 'Messaging' },
-      { value: 'insurance', icon: Shield, label: 'Insurance' },
-      { value: 'esign', icon: FileSignature, label: 'E-Signatures' },
-      { value: 'tesla', icon: Bolt, label: 'Tesla Fleet' },
-      { value: 'blacklist', icon: ShieldX, label: 'Blacklist' },
-    ],
-  },
-  {
-    label: "Account",
-    items: [
-      { value: 'subscription', icon: Crown, label: 'Subscription' },
-    ],
-  },
-];
-
-/**
- * The settings groups this tenant sees.
- *
- * Returns the module constant BY REFERENCE for every non-lean tenant, so the
- * other 56 get a byte-identical list and this function cannot cost them a
- * re-render or a reordering.
- *
- * For a lean tenant it moves ONE item. Once Payments, Messaging, Insurance,
- * E-Signatures, Accounting and Tesla Fleet are filtered out by
- * `isSettingsTabHidden`, the "Integrations" group holds only Blacklist — and a
- * settings group called "Integrations" containing one unrelated row, sitting in
- * the same sidebar as a real Integrations page, reads as a bug. The Global
- * Blacklist is not an integration in the first place: it is a booking/risk rule
- * (block a customer that three or more operators have blocked), it connects to
- * no third party and it has no card on the board. So it joins Booking Rules
- * next to Requirements, and the emptied group disappears through the
- * `.filter(group => group.items.length > 0)` that is already there.
- *
- * The tab itself is untouched — same `value`, same `?tab=blacklist` URL, same
- * body, same `permissions.ts` mapping. Only which heading it sits under moves.
- */
-function settingsGroupsFor(tenantSlug: string | null | undefined) {
-  if (!isLeanTenant(tenantSlug)) return settingsTabGroups;
-  return settingsTabGroups.map(group => {
-    if (group.label === "Booking Rules") {
-      const blacklist = settingsTabGroups
-        .find(g => g.label === "Integrations")
-        ?.items.find(i => i.value === 'blacklist');
-      return blacklist ? { ...group, items: [...group.items, blacklist] } : group;
-    }
-    if (group.label === "Integrations") {
-      return { ...group, items: group.items.filter(i => i.value !== 'blacklist') };
-    }
-    return group;
-  });
-}
-
-/**
  * v2 sidebar. A NEW file beside `app-sidebar.tsx` — the v1 sidebar keeps
  * serving the other 56 tenants byte for byte (V2_PLAN §3). The only edit to v1
  * is the single branch in `(dashboard)/layout.tsx`.
@@ -467,17 +361,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // here would therefore open two dialogs at once. The ⌘K badge on the field
   // still tells the truth — the header answers it.
 
-  // Settings mode: when on /settings path, show settings sidebar
-  const isSettingsPage = pathname?.startsWith("/settings") || false;
-
   // Trax mode: on the full Trax page the sidebar becomes the conversation rail
   // (Back, New conversation, history) — the Claude layout. A plain derivation,
   // not a hook; the branch that uses it sits below the last hook call. No area
   // flag is needed: this component and the Trax provider both exist only under
   // the v2 chrome gate.
   const isTraxPage = pathname === "/trax" || !!pathname?.startsWith("/trax/");
-  const activeSettingsTab = searchParams.get('tab') || 'general';
-  const [settingsSearch, setSettingsSearch] = useState("");
 
   /* ── rental control centre mode ────────────────────────────────────────
    *
@@ -485,7 +374,7 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
    * this sidebar. The prototype drew its own rail because it was a full-screen
    * page with no app chrome; inside `(dashboard)/layout.tsx` that would stack
    * two sidebars side by side. So the sidebar BECOMES the stage rail while a
-   * rental is open, exactly as it becomes the Settings rail on /settings.
+   * rental is open.
    *
    * Matched on a UUID rather than "anything after /rentals/", because
    * `/rentals`, `/rentals/new` and `/rentals/analytics` are all real routes and
@@ -569,11 +458,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   // the two read one request — and it reads the ROW, not the assembled record,
   // because a rail needs a name and a line of contact, not twelve subscriptions.
   const customerRail = useCustomerRailHeader(isCustomerDetailPage ? customerDetailId : null);
-
-  // Clear the search when leaving settings so it doesn't linger on return.
-  useEffect(() => {
-    if (!isSettingsPage && settingsSearch) setSettingsSearch("");
-  }, [isSettingsPage, settingsSearch]);
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -1250,226 +1134,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           )}
         </SidebarFooter>
         <SidebarRail />
-      </Sidebar>
-    );
-  }
-
-  // --- Settings Sidebar Mode ---
-  if (isSettingsPage) {
-    return (
-      <Sidebar collapsible="icon" className="transition-all duration-300 ease-in-out">
-        {/* Settings Header with Back Button */}
-        <SidebarHeader className="h-16">
-          <div className="flex items-center w-full h-full px-2 transition-all duration-300 ease-in-out">
-            {collapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href="/" className="flex items-center justify-center w-full h-8 rounded-md hover:bg-muted/50 transition-colors">
-                    <ArrowLeft className="h-4 w-4 shrink-0" />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">Back to Dashboard</TooltipContent>
-              </Tooltip>
-            ) : (
-              <Link href="/" className="flex items-center gap-2 h-8 px-1 rounded-md hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-4 w-4 shrink-0" />
-                <span className="text-[13px]">Back</span>
-              </Link>
-            )}
-          </div>
-        </SidebarHeader>
-
-        {/* Settings Title */}
-        {!collapsed && (
-          <div className="px-4 pt-4 pb-1">
-            <h2 className="text-sm font-semibold text-foreground">Settings</h2>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Configure your system</p>
-          </div>
-        )}
-
-        {/* Search — hidden when sidebar is collapsed */}
-        {!collapsed && (
-          <div className="px-3 pt-2 pb-1.5">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input
-                value={settingsSearch}
-                onChange={(e) => setSettingsSearch(e.target.value)}
-                placeholder="Search settings..."
-                className="h-8 pl-8 pr-7 text-[12px]"
-              />
-              {settingsSearch && (
-                <button
-                  type="button"
-                  onClick={() => setSettingsSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Settings Navigation */}
-        <SidebarContent className="transition-all duration-300 ease-in-out gap-0">
-          {(() => {
-            const query = settingsSearch.trim().toLowerCase();
-            const groupsWithMatches = settingsGroupsFor(tenantSlug)
-              .map(group => ({
-                ...group,
-                items: group.items.filter(item =>
-                  canViewSettings(item.value) &&
-                  // Every settings tab the Integrations board now owns leaves
-                  // this nav for the lean canary and that tenant alone —
-                  // Payments, Messaging, Insurance, E-Signatures, Accounting,
-                  // Tesla Fleet and INSHUR. Presentation only. Each of those
-                  // tabs stays on main and stays the ONLY route by which the
-                  // other 56 tenants can connect the thing behind it, because
-                  // `/integrations` is notFound() for all of them.
-                  //
-                  // One shared predicate with the settings page's own mobile
-                  // trigger row, on purpose: this list and that one drifting
-                  // apart is what left E-Signatures clickable here while its
-                  // body was already blanked.
-                  !isSettingsTabHidden(item.value, tenantSlug) &&
-                  (query === "" || item.label.toLowerCase().includes(query))
-                ),
-              }))
-              .filter(group => group.items.length > 0);
-
-            if (!collapsed && query !== "" && groupsWithMatches.length === 0) {
-              return (
-                <div className="px-4 py-6 text-center text-[12px] text-muted-foreground">
-                  No settings match “{settingsSearch}”.
-                </div>
-              );
-            }
-
-            return groupsWithMatches.map((group, groupIndex) => {
-              const visibleItems = group.items;
-              const GroupIcon = visibleItems[0].icon;
-
-              return (
-                <SidebarGroup key={group.label} className={`p-1.5 pb-0 ${groupIndex === settingsTabGroups.length - 1 ? 'pb-16' : ''}`}>
-                  {collapsed ? (
-                    <Popover>
-                      <SidebarMenu>
-                        <SidebarMenuItem>
-                          <PopoverTrigger asChild>
-                            <SidebarMenuButton className="h-8 w-full transition-all duration-200 ease-in-out">
-                              <GroupIcon className="h-4 w-4 shrink-0" />
-                            </SidebarMenuButton>
-                          </PopoverTrigger>
-                        </SidebarMenuItem>
-                      </SidebarMenu>
-                      <PopoverContent side="right" align="start" sideOffset={8} className="w-52 p-1.5">
-                        <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.label}</p>
-                        <div className="space-y-0.5">
-                          {visibleItems.map(item => (
-                            <Link
-                              key={item.value}
-                              href={`/settings?tab=${item.value}`}
-                              replace
-                              scroll={false}
-                              prefetch={false}
-                              onClick={closeMobileOnNav}
-                              className={`flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors hover:bg-accent ${
-                                activeSettingsTab === item.value ? "bg-accent text-accent-foreground font-medium" : "text-foreground"
-                              }`}
-                            >
-                              <item.icon className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{item.label}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  ) : (
-                    <SidebarGroupContent>
-                      {groupIndex > 0 && (
-                        <div className="mx-2.5 mb-1.5 border-t" />
-                      )}
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 px-2.5 pt-0.5 pb-1">{group.label}</p>
-                      <SidebarMenu>
-                        {visibleItems.map(item => (
-                          <SidebarMenuItem key={item.value}>
-                            <SidebarMenuButton
-                              asChild
-                              isActive={activeSettingsTab === item.value}
-                              className="h-8 transition-all duration-200 ease-in-out"
-                            >
-                              <Link
-                                href={`/settings?tab=${item.value}`}
-                                replace
-                                scroll={false}
-                                prefetch={false}
-                                onClick={closeMobileOnNav}
-                                // A stable, tour-addressable handle on every
-                                // settings nav row. The walkthrough needs to
-                                // point at ONE row — "this is Branding" — and
-                                // the only alternative was Radix's generated
-                                // `[id$="-trigger-branding"]`, which belongs to
-                                // the v1 TabsList this sidebar replaced and so
-                                // matches nothing here. That dead selector is
-                                // why the Booking-site step fell through to its
-                                // other anchor: the whole Brand Identity card.
-                                data-tour={`settings-tab-${item.value}`}
-                                className="flex items-center gap-2.5"
-                              >
-                                <item.icon className="h-4 w-4 shrink-0" />
-                                <span className="text-[13px]">{item.label}</span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  )}
-                </SidebarGroup>
-              );
-            });
-          })()}
-        </SidebarContent>
-
-        {/* Footer — dunning only */}
-        <SidebarFooter className="p-1.5">
-          <SidebarMenu>
-            {/* The "Setup Mode · Nd left" and "Live" chips are gone by request.
-                What stays is the dunning warning that shared the same slot: it
-                is the only place a tenant inside the grace window is told their
-                payment is due, and grace expiry is a pure clock event nothing
-                else announces. Removing this branch would stop chasing tenants
-                who owe money, and no visual review would catch it. */}
-            {paymentDue && (
-              <SidebarMenuItem>
-                {collapsed ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center justify-center h-8">
-                        <AlertTriangle
-                          className={`h-4 w-4 ${paymentDueCritical ? "text-red-500" : "text-amber-500"}`}
-                        />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      {`${paymentDueLabel} ${paymentDueDetail}`}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium ${paymentDueClass}`}
-                  >
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>{paymentDueLabel}</span>
-                    <span className="opacity-70">{paymentDueDetail}</span>
-                  </div>
-                )}
-              </SidebarMenuItem>
-            )}
-          </SidebarMenu>
-        </SidebarFooter>
       </Sidebar>
     );
   }

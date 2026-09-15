@@ -39,6 +39,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useV2 } from '@/lib/v2-context';
 import { useUnsavedChangesWarning } from '@/hooks/use-unsaved-changes-warning';
 import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
+import { EmailTemplateEditorV2 } from '@/components/settings-v2/email-templates-v2';
 
 export default function EditEmailTemplatePage() {
   const router = useRouter();
@@ -168,6 +169,9 @@ export default function EditEmailTemplatePage() {
 
   const previewContent = replaceEmailVariables(templateContent, sampleData);
   const previewSubject = replaceEmailVariables(subject, sampleData);
+
+  // v2 (northwind): the editor rebuilt on the state kit. After every hook above.
+  if (v2Chrome) return <EmailTemplateEditorV2 templateKey={templateKey} />;
 
   if (isLoading) {
     return (

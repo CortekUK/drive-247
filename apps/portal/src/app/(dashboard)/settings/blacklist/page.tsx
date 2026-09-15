@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { useV2 } from '@/lib/v2-context';
 import { GlobalBlacklistTableV2 } from '@/components/blacklist-v2/global-blacklist-table-v2';
+import { GlobalBlacklistPageV2 } from '@/components/blacklist-v2/global-blacklist-page-v2';
 
 interface BlockingTenant {
   tenant_id: string;
@@ -55,7 +56,7 @@ export default function GlobalBlacklistPage() {
   const v2Chrome = useV2('chrome');
 
   // Fetch global blacklist with tenant details
-  const { data: blacklist, isLoading, error } = useQuery({
+  const { data: blacklist, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['global-blacklist'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -67,6 +68,35 @@ export default function GlobalBlacklistPage() {
       return data as GlobalBlacklistEntry[];
     },
   });
+
+  // v2 (northwind): the whole page is the v2 component, with a state for
+  // loading, a failed read, an empty list and a search with no match. It
+  // returns before the v1 filter below, which calls `entry.email.toLowerCase()`
+  // and would throw on a row with no email; every hook above has already run.
+  // Its Back goes to /settings: v1's `?tab=blacklist` is forwarded straight
+  // back here on v2, so it would loop.
+  if (v2Chrome) {
+    return (
+      <GlobalBlacklistPageV2
+        blacklist={blacklist}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        error={error}
+        refetch={refetch}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        expandedIds={expandedRows}
+        onToggle={(id) =>
+          setExpandedRows((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })
+        }
+      />
+    );
+  }
 
   // Filter blacklist by search term
   const filteredBlacklist = blacklist?.filter(entry =>

@@ -305,17 +305,18 @@ describe('walkthrough hook — crossing pages', () => {
     // seconds, and then the tour moves on to a page that can show it something.
     waitOut(ANCHOR_WAIT_SHORT_MS);
     expect(readTourProgress(USER)?.stepId).toBe('booking-site');
-    expect(pushed).toEqual(['/settings?tab=branding']);
+    expect(pushed).toEqual(['/settings']);
   });
 
-  it('a settings step with a query pushes the full route even from /settings', () => {
+  it('the settings step stays put when the settings index is already open', () => {
+    // The step points at the Branding entry on the v2 settings index, which is
+    // `/settings` with no tab — so standing on it must not push anything.
     writeTourProgress(USER, { stepId: 'booking-site', status: 'active' });
     markTourSeen(USER);
     currentPath = '/settings';
     setup();
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
-    // Same pathname, wrong tab: the page reads the tab from the URL.
-    expect(pushed).toEqual(['/settings?tab=branding']);
+    expect(pushed).toEqual([]);
   });
 
   it('re-resolves when the card reports its anchor gone, then skips', () => {

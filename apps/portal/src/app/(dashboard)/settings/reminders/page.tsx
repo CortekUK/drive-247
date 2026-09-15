@@ -11,15 +11,28 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Bell, Clock, Shield } from "lucide-react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useV2 } from "@/lib/v2-context";
+import { SettingsSectionSkeleton } from "@/components/settings-v2/section-states";
 
 export default function ReminderSettings() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // v2 (northwind): nothing links here, it edits settings the Notifications
+  // page does not show, and it skips the per-tab permission check. v2 goes to
+  // the real Notifications page instead; v1 is unchanged.
+  const v2Chrome = useV2("chrome");
+  const router = useRouter();
+  useEffect(() => {
+    if (v2Chrome) router.replace("/settings?tab=reminders");
+  }, [v2Chrome, router]);
 
   // Fetch current settings
   const { data: settings = {}, refetch } = useQuery({
     queryKey: ["reminder-settings"],
+    enabled: !v2Chrome,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("reminder_settings")
@@ -71,6 +84,8 @@ export default function ReminderSettings() {
   const handleToggle = (key: string, currentValue: boolean) => {
     handleSave(key, !currentValue);
   };
+
+  if (v2Chrome) return <SettingsSectionSkeleton variant="form" rows={3} label="Opening notification settings" />;
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">

@@ -72,6 +72,34 @@ import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
 import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
+import { SettingsIndexV2 } from '@/components/settings-v2/settings-index';
+import * as BusinessV2 from '@/components/settings-v2/business-settings-states';
+import { BusinessRentalGate, DurationPageV2, LockboxPageV2, RequirementsPageV2, ReturnReminderPanelV2, makeBusinessSave } from '@/components/settings-v2/business-rules-pages';
+import { businessPageDirty } from '@/components/settings-v2/business-rules-logic';
+import { SettingsField, SettingsPageHeader, SettingsPanel, SettingsRow, Unit } from '@/components/settings-v2/settings-kit';
+import { AgreementTemplateStatusV2, EmailTemplatesStatusV2 } from '@/components/settings-v2/templates-status-v2';
+import { PricingRulesV2 } from '@/components/settings-v2/pricing-rules-v2';
+import { DepositSettingsV2, FeesSettingsV2 } from '@/components/settings-v2/fees-deposit-v2';
+import { useSettingsReadState, type RegisterSectionSave } from '@/components/settings-v2/pricing-money-parts';
+import { AutoExtendSettingsV2, PayAsYouGoSettingsV2 } from '@/components/settings-v2/payment-modes-v2';
+import { PromoCodesSectionV2 } from '@/components/settings-v2/promo-codes-section-v2';
+import { validatePromoDraft, visiblePromoIssues } from '@/lib/settings-money-states';
+import { parseLocalDate } from '@/lib/date-utils';
+import { useIsFetching } from '@tanstack/react-query';
+import {
+  SettingsDependencyNotice,
+  SettingsLoadError,
+  SettingsReadOnlyFieldset,
+  SettingsReadOnlyNotice,
+  SettingsSaveState,
+  SettingsSectionSkeleton,
+} from '@/components/settings-v2/section-states';
+import {
+  canSaveAllDirty,
+  resolveSettingsPageData,
+  resolveSettingsTabNotice,
+  settingsTabNoticeCopy,
+} from '@/components/settings-v2/settings-shell-state';
 
 /**
  * The pointer left behind by a control that now lives in the Website section.
@@ -111,6 +139,54 @@ const MovedToWebsite = ({
       </CardContent>
     </Card>
   );
+};
+
+/**
+ * v2 (northwind) settings pages, keyed by the `?tab=` they answer to.
+ *
+ * `/settings` with no tab is the index. Each entry is one compact page; several
+ * v1 tabs' cards now share a page where they belong together (Booking rules
+ * holds notice, duration and buffer; Customer messages holds the return
+ * reminder and the template links). `permTab` is the v1 tab whose manager
+ * permission the page follows, so access is unchanged.
+ *
+ * Tabs an Integrations card owns are absent on purpose — the effect that sends
+ * them to /integrations still runs — and `insurance` is here only because the
+ * Bonzah card deep-links to its application wizard.
+ */
+const SETTINGS_INDEX = '__settings_index__';
+
+const V2_SETTINGS_PAGES: Record<string, { section: string; title: string; description: string; permTab: string }> = {
+  general: { section: 'Business', title: 'General', description: 'Currency, distance units and optional modules.', permTab: 'general' },
+  locations: { section: 'Business', title: 'Locations', description: 'Where customers pick up and return cars, and where you deliver.', permTab: 'locations' },
+  requirements: { section: 'Bookings', title: 'Driver requirements', description: 'Who can rent from you, and the ID they must verify.', permTab: 'requirements' },
+  duration: { section: 'Bookings', title: 'Booking rules', description: 'How far ahead customers book, how long a rental can be, and the gap between rentals.', permTab: 'duration' },
+  lockbox: { section: 'Bookings', title: 'Key handover', description: 'Leave the keys in a lockbox and send the code to the customer.', permTab: 'lockbox' },
+  'booking-site': { section: 'Bookings', title: 'Booking site', description: 'What customers see when they book on your website.', permTab: 'general' },
+  pricing: { section: 'Pricing and payments', title: 'Pricing rules', description: 'Surcharges for weekends and holidays, and when monthly pricing starts.', permTab: 'pricing' },
+  fees: { section: 'Pricing and payments', title: 'Tax and fees', description: 'Charges added on top of the rental price.', permTab: 'fees' },
+  preauth: { section: 'Pricing and payments', title: 'Security deposit', description: 'A refundable amount taken on online bookings.', permTab: 'preauth' },
+  installments: { section: 'Pricing and payments', title: 'Installments', description: 'Let customers pay for a rental in weekly or monthly parts.', permTab: 'installments' },
+  payg: { section: 'Pricing and payments', title: 'Pay as you go', description: 'Bill long rentals day by day instead of all upfront.', permTab: 'payg' },
+  'auto-extend': { section: 'Pricing and payments', title: 'Auto-extension', description: 'Rentals that renew each week or month and are billed in advance.', permTab: 'auto-extend' },
+  promos: { section: 'Pricing and payments', title: 'Promo codes', description: 'Codes customers type at checkout, or discounts that apply by themselves on long rentals.', permTab: 'promos' },
+  extras: { section: 'Pricing and payments', title: 'Extras', description: 'Add-ons customers can buy with a rental.', permTab: 'extras' },
+  reminders: { section: 'Notifications', title: 'Team emails', description: 'Which emails your team receives.', permTab: 'reminders' },
+  push: { section: 'Notifications', title: 'Push notifications', description: "Alerts on your team's phones and browsers.", permTab: 'push' },
+  templates: { section: 'Notifications', title: 'Customer messages', description: 'Reminders and documents your customers receive.', permTab: 'templates' },
+  insurance: { section: 'Bonzah', title: 'Bonzah application', description: 'Apply for Bonzah insurance. Everything else about Bonzah is in its Integrations card.', permTab: 'insurance' },
+};
+
+/**
+ * v2 tabs whose home is another screen: Branding is the Appearance page (the
+ * same name, logo, favicon and colours), the blacklist has its own route, and
+ * Subscription is the sidebar's Billing page. Query strings are carried across,
+ * so a Stripe checkout returning `&status=success` still lands with it.
+ */
+const V2_SETTINGS_REDIRECTS: Record<string, string> = {
+  branding: '/settings/appearance',
+  blacklist: '/settings/blacklist',
+  subscription: '/subscription',
 };
 
 /**
@@ -216,6 +292,9 @@ const Settings = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isManager, canViewSettings, canEditSettings } = useManagerPermissions();
+  // v2: a manager's grants arrive after first paint. Until they do, a deep link
+  // to a page they may open waits on a skeleton instead of bouncing to the index.
+  const { isLoading: v2PermissionsLoading } = useManagerPermissions();
   const { appUser } = useAuth();
   const { logAction } = useAuditLog();
 
@@ -290,6 +369,7 @@ const Settings = () => {
     settings,
     isLoading,
     error,
+    refetch: refetchOrgSettings,
     updateCompanyProfile,
     updateSettingsAsync,
     toggleReminder,
@@ -616,9 +696,14 @@ const Settings = () => {
   // Use rental settings hook for rental configuration
   const {
     settings: rentalSettings,
+    error: rentalSettingsError,
+    refetch: refetchRentalSettings,
     updateSettings: updateRentalSettings,
     isUpdating: isUpdatingRentalSettings
   } = useRentalSettings();
+  // v2: the spinner on a settings page's "Try again" (see resolveSettingsPageData).
+  const v2SettingsFetching =
+    useIsFetching({ predicate: (q) => q.queryKey[0] === 'org-settings' || q.queryKey[0] === 'rental-settings' }) > 0;
 
   // Fleet Health feature toggle.
   //
@@ -995,6 +1080,21 @@ const Settings = () => {
     router.replace(`${SETTINGS_TAB_BOARD_ROUTE}${qs ? `?${qs}` : ''}`);
   }, [searchParams, tenantSlug, router]);
 
+  // v2: which compact page `?tab=` opens (null = the index), and the tabs whose
+  // v2 home is another screen. v1 never reads either.
+  const v2TabParam = searchParams.get('tab');
+  const v2Page = v2Chrome && v2TabParam && V2_SETTINGS_PAGES[v2TabParam] ? v2TabParam : null;
+  useEffect(() => {
+    if (!v2Chrome) return;
+    const tabParam = searchParams.get('tab');
+    const target = tabParam ? V2_SETTINGS_REDIRECTS[tabParam] : undefined;
+    if (!target) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('tab');
+    const qs = params.toString();
+    router.replace(`${target}${qs ? `?${qs}` : ''}`);
+  }, [v2Chrome, searchParams, router]);
+
   // Sync general form with loaded settings and tenant context
   useEffect(() => {
     setGeneralForm({
@@ -1094,6 +1194,20 @@ const Settings = () => {
   // --- Dirty tracking for unsaved changes warning ---
   const [locationsDirty, setLocationsDirty] = useState(false);
   const [pricingDirty, setPricingDirty] = useState(false);
+
+  // v2 (northwind): a settings section with its own Save (Pricing rules, Tax and
+  // fees, Security deposit) registers it here while it holds unsaved edits, so
+  // "Save & Leave" saves it instead of reporting success over dropped edits, and
+  // leaving the page warns. Always empty for every other tenant.
+  const v2SectionSaves = React.useRef<Record<string, () => Promise<unknown>>>({});
+  const [v2DirtySections, setV2DirtySections] = useState<string[]>([]);
+  const registerV2SectionSave = useCallback<RegisterSectionSave>((key, save) => {
+    if (save) v2SectionSaves.current[key] = save;
+    else delete v2SectionSaves.current[key];
+    setV2DirtySections(prev =>
+      prev.includes(key) === !!save ? prev : save ? [...prev, key] : prev.filter(k => k !== key)
+    );
+  }, []);
 
   const generalFormDirty = useMemo(() => {
     if (!settings && !tenant) return false;
@@ -1217,7 +1331,7 @@ const Settings = () => {
     );
   }, [rentalForm, rentalSettings]);
 
-  const hasUnsavedChanges = generalFormDirty || brandingFormDirty || rentalFormDirty || locationsDirty || pricingDirty;
+  const hasUnsavedChanges = generalFormDirty || brandingFormDirty || rentalFormDirty || locationsDirty || pricingDirty || v2DirtySections.length > 0;
 
   // Per-tab dirty mapping for tab switch guard
   const tabDirtyMap: Record<string, boolean> = useMemo(() => ({
@@ -1251,7 +1365,11 @@ const Settings = () => {
 
   const handleTabDiscardAndSwitch = useCallback(() => {
     setShowTabWarning(false);
-    if (pendingTab) {
+    if (pendingTab === SETTINGS_INDEX) {
+      // v2 only: leaving a settings page for the index.
+      router.replace('/settings', { scroll: false });
+      setPendingTab(null);
+    } else if (pendingTab) {
       setActiveTab(pendingTab);
       router.replace(`/settings?tab=${pendingTab}`, { scroll: false });
       setPendingTab(null);
@@ -1280,7 +1398,7 @@ const Settings = () => {
               const policyVersionChanged =
                 generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
                 generalForm.terms_version !== (tenant?.terms_version || '1.0');
-              await supabase
+              const { error: generalTenantError } = await supabase
                 .from('tenants')
                 .update({
                   distance_unit: generalForm.distance_unit,
@@ -1290,6 +1408,9 @@ const Settings = () => {
                   ...(policyVersionChanged ? { policies_accepted_at: null } : {}),
                 })
                 .eq('id', tenant.id);
+              // v2: supabase-js reports a refused update in `error` and never throws,
+              // so without this "Save & Leave" reported success and left the page.
+              if (v2Chrome && generalTenantError) throw generalTenantError;
               await refetchTenant();
             }
           } finally {
@@ -1349,6 +1470,10 @@ const Settings = () => {
         })());
       }
 
+      // v2 (northwind) sections registered above; always empty for other tenants.
+      Object.values(v2SectionSaves.current).forEach((save) => {
+        saves.push(Promise.resolve(save()).then(() => undefined));
+      });
       await Promise.all(saves);
       return true;
     } catch {
@@ -1375,7 +1500,11 @@ const Settings = () => {
     setIsSavingForTab(true);
     try {
       const success = await saveAllDirtyForms();
-      if (success && pendingTab) {
+      if (success && pendingTab === SETTINGS_INDEX) {
+        router.replace('/settings', { scroll: false });
+        setPendingTab(null);
+        setShowTabWarning(false);
+      } else if (success && pendingTab) {
         setActiveTab(pendingTab);
         router.replace(`/settings?tab=${pendingTab}`, { scroll: false });
         setPendingTab(null);
@@ -1386,7 +1515,7 @@ const Settings = () => {
     } finally {
       setIsSavingForTab(false);
     }
-  }, [pendingTab, saveAllDirtyForms]);
+  }, [pendingTab, saveAllDirtyForms, router]);
 
   // Live authorisation holds, for the charge-vs-hold switch below.
   //
@@ -1407,6 +1536,12 @@ const Settings = () => {
       return count ?? 0;
     },
   });
+
+  // v2 (northwind): whether the rental settings row and the live-holds count have
+  // really loaded, so the v2 Pricing rules, Tax and fees and Security deposit
+  // pages never show defaults as saved values. Inert for every other tenant.
+  const v2RentalRead = useSettingsReadState(['rental-settings', tenant?.id], v2Chrome);
+  const v2HoldsRead = useSettingsReadState(['deposit-live-holds', tenant?.id], v2Chrome);
 
   const [showChargeConfirm, setShowChargeConfirm] = useState(false);
 
@@ -1439,9 +1574,11 @@ const Settings = () => {
   });
   const [promoCodeError, setPromoCodeError] = useState('');
   const [editPromoCodeError, setEditPromoCodeError] = useState('');
+  // v2: the new-promo form has been submitted once, so "missing" errors show.
+  const [promoSubmittedV2, setPromoSubmittedV2] = useState(false);
 
   // Fetch Promo Codes (moved up for use in generator)
-  const { data: promoCodes, isLoading: isLoadingPromos, refetch: refetchPromos } = useQuery({
+  const { data: promoCodes, isLoading: isLoadingPromos, refetch: refetchPromos, error: promoCodesErrorV2, isFetching: isFetchingPromosV2 } = useQuery({
     queryKey: ['promocodes', tenant?.id],
     queryFn: async () => {
       if (!tenant?.id) return [];
@@ -1454,6 +1591,8 @@ const Settings = () => {
 
       if (error) {
         console.error('Error fetching promocodes:', error);
+        // v2 (northwind): a failed read is an error, not "no promo codes".
+        if (v2Chrome) throw error;
         return [];
       }
       return data || [];
@@ -1650,6 +1789,12 @@ const Settings = () => {
 
   // Effect to trigger regeneration on edit field changes
   useEffect(() => {
+    // v2 (northwind): opening Edit must not rewrite a code customers already
+    // hold. The code is regenerated only once the name or discount changes.
+    if (v2Chrome && editingPromo) {
+      const savedPromo: any = promoCodes?.find((p: any) => p.id === editingPromo.id);
+      if (savedPromo && savedPromo.name === editingPromo.name && String(savedPromo.value) === String(editingPromo.value)) return;
+    }
     if (editingPromo) {
       // Debounce or just check strict equality? 
       // We need to avoid infinite loop where setEditingPromo triggers this effect again.
@@ -1950,7 +2095,9 @@ const Settings = () => {
   };
 
   // Show error state with fallback
-  if (error && !settings) {
+  // v2 skips both early returns: its index needs neither query, and each page
+  // that does shows its own skeleton or load error (resolveSettingsPageData).
+  if (!v2Chrome && error && !settings) {
     // v2 (switch row alignment): at md <main> starts at y=50. This state's title
     // is a bare <h1>, 48px tall (the base h1 style), so 18px of top padding
     // centres it at 50 + 18 + 24 = 92, on the sidebar switch's row, and keeps it
@@ -1990,7 +2137,7 @@ const Settings = () => {
     );
   }
 
-  if (isLoading && !settings) {
+  if (!v2Chrome && isLoading && !settings) {
     // v2 (switch row alignment): at md <main> starts at y=50. This state's title
     // is a bare <h1>, 48px tall (the base h1 style), so 18px of top padding
     // centres it at 50 + 18 + 24 = 92, on the sidebar switch's row, and keeps it
@@ -2015,15 +2162,1059 @@ const Settings = () => {
     );
   }
 
+  // Shared by the v1 tabs and the v2 pages, so both render the same dialogs.
+  const promoDialogs = (
+    <>
+          {/* Edit Promo Dialog */}
+          <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Promo Code</DialogTitle>
+                <DialogDescription>
+                  Update the details of your promo code.
+                </DialogDescription>
+              </DialogHeader>
+              {editingPromo && (
+                <div className="space-y-6 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_name">Name</Label>
+                    <Input
+                      id="edit_name"
+                      value={editingPromo.name}
+                      onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="space-y-2 w-1/2">
+                      <Label>Expiration Date</Label>
+                      <Popover modal={true}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={"outline"}
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {editingPromo.expires_at ? format(editingPromo.expires_at, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={editingPromo.expires_at}
+                            onSelect={(date) => date && setEditingPromo({ ...editingPromo, expires_at: date })}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2 w-1/2">
+                      <Label htmlFor="edit_max_users">Max Users</Label>
+                      <Input
+                        id="edit_max_users"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={editingPromo.max_users}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                          setEditingPromo({ ...editingPromo, max_users: rawValue });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <div className="space-y-2 w-1/2">
+                      <Label htmlFor="edit_type">Type</Label>
+                      <Select
+                        value={editingPromo.type}
+                        onValueChange={(val) => setEditingPromo({ ...editingPromo, type: val })}
+                      >
+                        <SelectTrigger id="edit_type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">Percentage</SelectItem>
+                          <SelectItem value="value">Value</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 w-1/2">
+                      <Label htmlFor="edit_value">Value</Label>
+                      <Input
+                        id="edit_value"
+                        type="text"
+                        inputMode="decimal"
+                        value={editingPromo.value}
+                        onChange={(e) => {
+                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+                          setEditingPromo({ ...editingPromo, value: rawValue });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Input
+                      id="edit_min_duration"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="e.g. 14 — leave blank for a code customers type"
+                      value={editingPromo.min_duration_days ?? ''}
+                      onChange={(e) => {
+                        const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                        setEditingPromo({ ...editingPromo, min_duration_days: rawValue });
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Auto duration discounts apply to fixed rentals paid in full only — never to installment, pay-as-you-go, or auto-extension bookings.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Promo Code</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={editingPromo.code}
+                        onChange={(e) => setEditingPromo({ ...editingPromo, code: e.target.value.toUpperCase().replace(/\s/g, '') })}
+                        placeholder="e.g. SUMMER20"
+                        className={editPromoCodeError ? "border-destructive" : ""}
+                      />
+                      <Button variant="outline" size="icon" onClick={regenerateEditCode} title="Auto-generate Code">
+                        <Zap className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {editPromoCodeError && (
+                      <p className="text-sm text-destructive">{editPromoCodeError}</p>
+                    )}
+                    {v2Chrome && (() => {
+                      const savedPromo: any = promoCodes?.find((p: any) => p.id === editingPromo.id);
+                      return savedPromo?.code && savedPromo.code !== editingPromo.code ? (
+                        <p className="text-sm text-amber-600 dark:text-amber-400">
+                          Customers using {savedPromo.code} will no longer get this discount.
+                        </p>
+                      ) : null;
+                    })()}
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
+                <Button onClick={handleUpdatePromo} disabled={updatePromoMutation.isPending || !!editPromoCodeError}>
+                  {updatePromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Dialog */}
+          <AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Delete Promo Code?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete the promo code <strong>{deletingPromo?.name}</strong>?
+                  This action cannot be undone and may affect active users trying to use this code.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive hover:bg-destructive/90"
+                  onClick={() => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}
+                >
+                  {deletePromoMutation.isPending ? "Deleting..." : "Delete Promo Code"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+    </>
+  );
+
+  // Switching to charges is a change to real money on real cards.
+  const depositChargeConfirmDialog = (
+              <AlertDialog open={showChargeConfirm} onOpenChange={setShowChargeConfirm}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Start charging the deposit?</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-2">
+                        <p>
+                          New rentals will take the deposit as a real charge instead of an
+                          authorisation hold. The money leaves the customer&rsquo;s card and
+                          arrives in your account.
+                        </p>
+                        <p>
+                          Two things change for you: the deposit is <strong>not returned
+                          automatically</strong> when a rental closes &mdash; you refund it from
+                          the rental page &mdash; and past rentals will start describing their
+                          deposit as a charge rather than a hold.
+                        </p>
+                        <p>Rentals already on the road keep whatever they have today.</p>
+                      </div>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep using holds</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        setRentalForm(prev => ({ ...prev, deposit_charge_enabled: true }));
+                        setShowChargeConfirm(false);
+                      }}
+                    >
+                      Switch to charges
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+  );
+
+  // ── v2 (northwind): a Stripe-style index, and one compact page per topic ──
+  //
+  // Every other tenant falls through to the v1 <Tabs> below, untouched. The
+  // state, save handlers and validation are the ones above — only the layout is
+  // new. Settings an Integrations card manages have no page here at all, and
+  // the tabs that moved elsewhere (Branding → Appearance, Blacklist, and
+  // Subscription → Billing) are forwarded by the effect near the top.
+  if (v2Chrome) {
+    const pageMeta =
+      v2Page && canViewSettings(V2_SETTINGS_PAGES[v2Page].permTab) ? V2_SETTINGS_PAGES[v2Page] : null;
+    const canEditPage = pageMeta ? canEditSettings(pageMeta.permTab) : false;
+
+    // Why a `?tab=` link opened the index instead of a page: no access, a tab
+    // this workspace hides, or a value that never existed. Until the slug
+    // resolves every known tab counts as hidden, so a board hand-off never
+    // flashes an "isn't part of your workspace" notice before it redirects.
+    const v2TabNotice = resolveSettingsTabNotice({
+      tabParam: v2TabParam,
+      pages: V2_SETTINGS_PAGES,
+      redirects: V2_SETTINGS_REDIRECTS,
+      allTabs: allSettingsTabs,
+      canView: canViewSettings,
+      isHidden: (t) => !tenantSlug || isSettingsTabHidden(t, tenantSlug),
+      boardCard: settingsTabBoardCard,
+      permissionsLoading: isManager && v2PermissionsLoading,
+    });
+    const v2TabNoticeCopy = settingsTabNoticeCopy(v2TabNotice);
+
+    // Never a form filled with placeholder defaults: a page that reads the org
+    // or rental settings waits for the real row, or shows the failed read.
+    const v2PageData = resolveSettingsPageData({
+      page: pageMeta ? v2Page : null,
+      org: { settings, error },
+      rental: { settings: rentalSettings, error: rentalSettingsError },
+    });
+
+    // "Save & Leave" only saves General and Branding; see canSaveAllDirty.
+    const v2CanSaveAll = canSaveAllDirty({ rental: rentalFormDirty, locations: locationsDirty, pricing: pricingDirty });
+
+    const v2PageDirty: Record<string, boolean> = {
+      general: generalFormDirty,
+      'booking-site': brandingFormDirty,
+      locations: locationsDirty,
+      pricing: pricingDirty || rentalFormDirty,
+      requirements: rentalFormDirty,
+      duration: rentalFormDirty || businessPageDirty('duration', rentalForm, rentalSettings),
+      lockbox: rentalFormDirty || businessPageDirty('lockbox', rentalForm, rentalSettings),
+      fees: rentalFormDirty,
+      preauth: rentalFormDirty,
+      templates: rentalFormDirty,
+    };
+    // v2 sections that track their own unsaved edits (deposit switches, weekend pricing).
+    if (v2Page && v2DirtySections.length > 0) v2PageDirty[v2Page] = true;
+
+    // Back to the index, through the same unsaved-changes dialog a tab switch uses.
+    const openSettingsIndex = () => {
+      if (v2Page && v2PageDirty[v2Page]) {
+        setPendingTab(SETTINGS_INDEX);
+        setShowTabWarning(true);
+        return;
+      }
+      router.push('/settings');
+    };
+
+    const saveRental = async (values: Record<string, unknown>, refetch = false) => {
+      try {
+        await updateRentalSettings(values as any);
+        if (refetch) await refetchTenant();
+      } catch (error) {
+        console.error('Failed to update settings:', error);
+      }
+    };
+
+    const saveButton = (onClick: () => void, disabled = false, busy = isUpdatingRentalSettings) =>
+      canEditPage ? (
+        <Button size="sm" onClick={onClick} disabled={busy || disabled} className="min-w-[88px]">
+          {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save
+        </Button>
+      ) : undefined;
+
+    const digitsOnly = (value: string) => value.replace(/[^0-9]/g, '');
+    const warnText = 'text-amber-600 dark:text-amber-400';
+
+    const renderBody = (page: string): React.ReactNode => {
+      switch (page) {
+        case 'general': {
+          // v2 states: nothing editable until the real org settings and tenant are
+          // in (the placeholder is USD / miles), a relabel confirm, an inline save
+          // error, and a Fleet Health switch that stays locked if its read failed.
+          const v2SavedCurrency = settings?.currency_code || tenant?.currency_code || 'USD';
+          const v2FleetHealthReady = BusinessV2.hasRealRentalSettings(rentalSettings);
+          const v2FleetHealthFailed =
+            !v2FleetHealthReady && queryClient.getQueryState(['rental-settings', tenant?.id])?.status === 'error';
+          return (
+            <div className="space-y-6">
+              <BusinessV2.BusinessRegionalPanel
+                form={generalForm}
+                onFormChange={(patch) => setGeneralForm(prev => ({ ...prev, ...patch }))}
+                savedCurrency={v2SavedCurrency}
+                isDirty={generalFormDirty}
+                canEdit={canEditPage}
+                ready={BusinessV2.hasRealOrgSettings(settings) && !!tenant}
+                loadError={error}
+                onRetryLoad={() => queryClient.refetchQueries({ queryKey: ['org-settings'] })}
+                onSave={async () => {
+                  await BusinessV2.saveGeneralSettingsV2({
+                    tenantId: tenant?.id,
+                    values: generalForm,
+                    policyVersionChanged:
+                      generalForm.privacy_policy_version !== (tenant?.privacy_policy_version || '1.0') ||
+                      generalForm.terms_version !== (tenant?.terms_version || '1.0'),
+                    writeTenant: async (patch) =>
+                      await supabase.from('tenants').update(patch as never).eq('id', tenant?.id as string).select('id'),
+                    writeOrg: (patch) => updateSettingsAsync(patch),
+                  });
+                  await refetchTenant();
+                  logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "general" } });
+                }}
+                onDiscard={() =>
+                  setGeneralForm({
+                    currency_code: v2SavedCurrency,
+                    distance_unit: (settings?.distance_unit as 'km' | 'miles') || (tenant?.distance_unit as 'km' | 'miles') || 'miles',
+                    privacy_policy_version: tenant?.privacy_policy_version || '1.0',
+                    terms_version: tenant?.terms_version || '1.0',
+                  })
+                }
+              />
+
+              {(isV2("turo", tenantSlug) || !hideVehicleOwnersToggle || !isAreaHidden('fleet-health', tenantSlug)) && (
+                !tenant ? (
+                  <SettingsSectionSkeleton variant="form" rows={2} header label="Loading optional modules" />
+                ) : (
+                <SettingsPanel
+                  title="Optional modules"
+                  description="Each one adds a page to your sidebar and saves as soon as you flip it. Switching one off hides the page and deletes nothing."
+                >
+                  {isV2("turo", tenantSlug) && (
+                    <SettingsRow
+                      label="Turo Sync"
+                      description="See your Turo trips here and import them as bookings. Needs the Drive247 Chrome extension and your Turo host account signed in."
+                    >
+                      <Switch
+                        checked={turoSyncEnabled}
+                        onCheckedChange={handleToggleTuroSync}
+                        disabled={savingTuroSync || !canEditSettings('general')}
+                        aria-label="Toggle Turo Sync feature"
+                      />
+                    </SettingsRow>
+                  )}
+                  {!hideVehicleOwnersToggle && (
+                    <SettingsRow
+                      label="Vehicle owners and payouts"
+                      description="Track who owns each car and pay them their share."
+                    >
+                      <Switch
+                        checked={vehicleOwnersEnabled}
+                        onCheckedChange={handleToggleVehicleOwners}
+                        disabled={savingVehicleOwners || !canEditSettings('general')}
+                        aria-label="Toggle Vehicle Owners feature"
+                      />
+                    </SettingsRow>
+                  )}
+                  {!isAreaHidden('fleet-health', tenantSlug) && (
+                    <SettingsRow
+                      label="Fleet health"
+                      description="Checks your cars every night for services and documents that are due soon or overdue."
+                      note={
+                        v2FleetHealthFailed ? (
+                          <SettingsDependencyNotice
+                            tone="warning"
+                            title="Couldn't load this setting"
+                            body="The switch stays locked until it loads, so it can't be flipped by mistake."
+                            action={{
+                              label: 'Try again',
+                              onClick: () => void queryClient.refetchQueries({ queryKey: ['rental-settings', tenant?.id] }),
+                            }}
+                          />
+                        ) : undefined
+                      }
+                    >
+                      <Switch
+                        checked={fleetHealthEnabled}
+                        onCheckedChange={handleToggleFleetHealth}
+                        aria-busy={!v2FleetHealthReady && !v2FleetHealthFailed}
+                        disabled={savingFleetHealth || !canEditSettings('general') || !v2FleetHealthReady}
+                        aria-label="Toggle Fleet Health feature"
+                      />
+                    </SettingsRow>
+                  )}
+                </SettingsPanel>
+                )
+              )}
+            </div>
+          );
+        }
+
+        case 'locations':
+          return (
+            <div className="settings-v2-body">
+              <LocationSettings onDirtyChangeV2={setLocationsDirty} />
+            </div>
+          );
+
+        case 'requirements':
+          return (
+            <BusinessRentalGate thing="your driver requirements" rows={3}>
+              <RequirementsPageV2
+                form={rentalForm}
+                setForm={setRentalForm}
+                saved={rentalSettings}
+                canEdit={canEditPage}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                idWaiver={{
+                  enabled: idWaiverEnabled,
+                  canChange: isHeadAdmin,
+                  saving: savingIdWaiver,
+                  onToggle: (next) =>
+                    savePricingFlag(
+                      'allow_rental_without_id_verification',
+                      next,
+                      idWaiverEnabled,
+                      persistedIdWaiver,
+                      setPendingIdWaiver,
+                      setSavingIdWaiver,
+                      next
+                        ? 'Staff can now create rentals without ID verification'
+                        : 'ID verification is required again',
+                    ),
+                }}
+              />
+            </BusinessRentalGate>
+          );
+
+        case 'duration':
+          return (
+            <BusinessRentalGate thing="your booking rules" rows={4}>
+              <DurationPageV2
+                form={rentalForm}
+                setForm={setRentalForm}
+                saved={rentalSettings}
+                canEdit={canEditPage}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+              />
+            </BusinessRentalGate>
+          );
+
+        case 'lockbox':
+          return (
+            <BusinessRentalGate thing="your key handover settings" rows={4}>
+              <LockboxPageV2
+                form={rentalForm}
+                setForm={setRentalForm}
+                saved={rentalSettings}
+                canEdit={canEditPage}
+                onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                smsReady={!!tenant?.integration_twilio_sms}
+                integrationsHref="/integrations?open=Twilio%20Messages"
+                vehiclesHref="/vehicles"
+              />
+            </BusinessRentalGate>
+          );
+
+        case 'booking-site': {
+          const v2BrandingState = queryClient.getQueryState(['tenant-branding', tenant?.id]);
+          const v2BrandingReady = v2BrandingState?.data !== undefined;
+          const v2BrandingFailed = !v2BrandingReady && v2BrandingState?.status === 'error';
+          const headerFooterDirty =
+            !!tenantBranding &&
+            (brandingForm.light_header_footer_color !== (tenantBranding.light_header_footer_color || '') ||
+              brandingForm.dark_header_footer_color !== (tenantBranding.dark_header_footer_color || ''));
+          const saveHeaderFooter = async () => {
+            setIsSavingBranding(true);
+            try {
+              const colours = {
+                light_header_footer_color: brandingForm.light_header_footer_color || null,
+                dark_header_footer_color: brandingForm.dark_header_footer_color || null,
+              };
+              await updateTenantBranding(colours as any);
+              await updateOrgBranding(colours as any);
+              logAction({ action: "settings_updated", entityType: "settings", entityId: tenant?.id || "unknown", details: { section: "branding" } });
+            } catch (error: any) {
+              toast({ title: "Error", description: error.message || "Failed to save colours", variant: "destructive" });
+            } finally {
+              setIsSavingBranding(false);
+            }
+          };
+          return (
+            <div className="space-y-6">
+              {!tenant ? (
+                <SettingsSectionSkeleton variant="form" rows={4} label="Loading booking site options" />
+              ) : (
+              <SettingsPanel>
+                <SettingsRow
+                  label="Ask about gig driving"
+                  description="Customers who drive for Uber, Lyft or DoorDash can say so and upload proof."
+                >
+                  <Switch
+                    checked={gigDriverEnabled}
+                    onCheckedChange={handleToggleGigDriver}
+                    disabled={savingGigDriver || !canEditPage}
+                    aria-label="Toggle Gig Driver booking option"
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  label="Show the average daily price"
+                  description="Vehicle cards show the price per day for the chosen dates, instead of the base rate."
+                >
+                  <Switch
+                    checked={avgDailyEnabled}
+                    onCheckedChange={(next) => savePricingFlag('show_effective_daily_rate', next, avgDailyEnabled, persistedAvgDaily, setPendingAvgDaily, setSavingAvgDaily, next ? 'Showing effective average daily price' : 'Showing base rate on vehicle cards')}
+                    disabled={savingAvgDaily || !canEditPage}
+                    aria-label="Toggle effective daily price on vehicle cards"
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  label="Hide the price breakdown at checkout"
+                  description="Checkout shows only the rental total, tax and grand total."
+                >
+                  <Switch
+                    checked={hideBreakdownEnabled}
+                    onCheckedChange={(next) => savePricingFlag('hide_checkout_price_breakdown', next, hideBreakdownEnabled, persistedHideBreakdown, setPendingHideBreakdown, setSavingHideBreakdown, next ? 'Checkout price breakdown hidden' : 'Checkout price breakdown shown')}
+                    disabled={savingHideBreakdown || !canEditPage}
+                    aria-label="Toggle checkout price breakdown"
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  label="Hide plate and VIN numbers"
+                  description="Kept off your booking site, invoices and customer emails. Your staff still see them here."
+                  note={
+                    hideRegEnabled ? (
+                      <p className={warnText}>
+                        Photos are not changed. Open each vehicle and use Trax to hide the number plate on its photos.
+                      </p>
+                    ) : undefined
+                  }
+                >
+                  <Switch
+                    checked={hideRegEnabled}
+                    onCheckedChange={(next) =>
+                      savePricingFlag(
+                        'hide_vehicle_registration',
+                        next,
+                        hideRegEnabled,
+                        persistedHideReg,
+                        setPendingHideReg,
+                        setSavingHideReg,
+                        next ? 'Registration numbers hidden from customers' : 'Registration numbers visible to customers',
+                      )
+                    }
+                    disabled={savingHideReg || !canEditPage}
+                    aria-label="Toggle vehicle registration visibility"
+                  />
+                </SettingsRow>
+              </SettingsPanel>
+              )}
+
+              {!v2BrandingReady ? (
+                v2BrandingFailed ? (
+                  <SettingsLoadError
+                    thing="your header and footer colours"
+                    error={v2BrandingState?.error}
+                    onRetry={() => queryClient.refetchQueries({ queryKey: ['tenant-branding', tenant?.id] })}
+                  />
+                ) : (
+                  <SettingsSectionSkeleton variant="form" rows={2} header label="Loading header and footer colours" />
+                )
+              ) : (
+              <SettingsPanel
+                title="Header and footer colour"
+                description="The top bar and footer of your booking site, and the sidebar of your customers' account area."
+                footer={
+                  canEditPage ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mr-auto text-muted-foreground"
+                        onClick={() => setBrandingForm(prev => ({ ...prev, light_header_footer_color: '', dark_header_footer_color: '' }))}
+                      >
+                        Use default
+                      </Button>
+                      <SettingsSaveState status={isSavingBranding ? 'saving' : headerFooterDirty ? 'dirty' : 'idle'} />
+                      <Button size="sm" onClick={saveHeaderFooter} disabled={isSavingBranding || !headerFooterDirty} className="min-w-[88px]">
+                        {isSavingBranding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save
+                      </Button>
+                    </>
+                  ) : undefined
+                }
+              >
+                <SettingsReadOnlyFieldset readOnly={!canEditPage}>
+                <div className="grid gap-6 px-5 py-4 md:grid-cols-2">
+                  <ColorPicker
+                    label="Light mode"
+                    value={brandingForm.light_header_footer_color || '#1A2B25'}
+                    onChange={(color) => setBrandingForm(prev => ({ ...prev, light_header_footer_color: color }))}
+                    description="When a visitor's site is in light mode."
+                  />
+                  <ColorPicker
+                    label="Dark mode"
+                    value={brandingForm.dark_header_footer_color || '#1A2B25'}
+                    onChange={(color) => setBrandingForm(prev => ({ ...prev, dark_header_footer_color: color }))}
+                    description="When a visitor's site is in dark mode — what most visitors see."
+                  />
+                </div>
+                </SettingsReadOnlyFieldset>
+              </SettingsPanel>
+              )}
+            </div>
+          );
+        }
+
+        case 'pricing':
+          return (
+            <PricingRulesV2
+              canEdit={canEditPage}
+              registerSave={registerV2SectionSave}
+              onDirtyChange={setPricingDirty}
+              monthlyTier={{
+                value: rentalForm.monthly_tier_days,
+                savedValue: (rentalSettings as any)?.monthly_tier_days,
+                onChange: (days) => setRentalForm(prev => ({ ...prev, monthly_tier_days: days })),
+                // The same payload and tenant refresh as before; it rejects now so
+                // a failure shows inline instead of only in the console.
+                onSave: async () => {
+                  await updateRentalSettings({ monthly_tier_days: rentalForm.monthly_tier_days } as any);
+                  await refetchTenant();
+                },
+                read: v2RentalRead,
+              }}
+            />
+          );
+
+        case 'fees':
+          return (
+            <FeesSettingsV2
+              form={rentalForm}
+              setForm={setRentalForm}
+              saved={rentalSettings as any}
+              read={v2RentalRead}
+              canEdit={canEditPage}
+              currencyCode={tenant?.currency_code || 'USD'}
+              onSave={(values) => updateRentalSettings(values as any)}
+              registerSave={registerV2SectionSave}
+            />
+          );
+
+        case 'preauth':
+          return (
+            <DepositSettingsV2
+              form={rentalForm}
+              setForm={setRentalForm}
+              saved={rentalSettings as any}
+              read={v2RentalRead}
+              holds={v2HoldsRead}
+              liveHoldCount={liveHoldCount}
+              canEdit={canEditPage}
+              currencyCode={tenant?.currency_code || 'USD'}
+              paymentProvider={tenant?.payment_provider}
+              connectHref={SETTINGS_TAB_BOARD_ROUTE}
+              onRequestCharge={() => setShowChargeConfirm(true)}
+              onSave={(values) => updateRentalSettings(values as any)}
+              registerSave={registerV2SectionSave}
+            />
+          );
+
+        case 'installments':
+          return (
+            <div className="settings-v2-body">
+              <InstallmentSettings />
+            </div>
+          );
+
+        case 'payg':
+          return <PayAsYouGoSettingsV2 canEdit={canEditPage} />;
+
+        case 'auto-extend':
+          return <AutoExtendSettingsV2 canEdit={canEditPage} />;
+
+        case 'promos': {
+          const promoIssuesV2 = visiblePromoIssues(validatePromoDraft(promoForm), promoSubmittedV2);
+          // A failed list read means the code can't be checked for duplicates.
+          const promoCheckUnavailableV2 = !promoCodes && !!promoCodesErrorV2;
+          const handleCreatePromoV2 = () => {
+            if (Object.keys(validatePromoDraft(promoForm)).length > 0) {
+              setPromoSubmittedV2(true);
+              return;
+            }
+            setPromoSubmittedV2(false);
+            handleCreatePromo();
+          };
+          const promoFieldError = (message?: string) =>
+            message ? <span role="alert" className="text-destructive">{message}</span> : undefined;
+          return (
+            <div className="space-y-6">
+              {canEditPage && (
+                <SettingsPanel
+                  title="New promo code"
+                  footer={
+                    <>
+                    <SettingsSaveState
+                      status={createPromoMutation.isPending ? 'saving' : createPromoMutation.isError ? 'error' : 'idle'}
+                      error={createPromoMutation.error}
+                    />
+                    <Button size="sm" onClick={handleCreatePromoV2} disabled={createPromoMutation.isPending || !!promoCodeError || promoCheckUnavailableV2}>
+                      {createPromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Add promo code
+                    </Button>
+                    </>
+                  }
+                >
+                  <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <SettingsField label="Name" htmlFor="v2_promo_name" hint={promoFieldError(promoIssuesV2.name)}>
+                      <Input
+                        id="v2_promo_name"
+                        placeholder="Winter sale"
+                        value={promoForm.name}
+                        onChange={(e) => setPromoForm(prev => ({ ...prev, name: e.target.value }))}
+                      />
+                    </SettingsField>
+                    <SettingsField label="Discount" htmlFor="v2_promo_value" hint={promoFieldError(promoIssuesV2.value)}>
+                      <div className="flex gap-2">
+                        <Select value={promoForm.type} onValueChange={(val) => setPromoForm(prev => ({ ...prev, type: val }))}>
+                          <SelectTrigger className="w-32" aria-label="Discount type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">Percent</SelectItem>
+                            <SelectItem value="value">Amount</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          id="v2_promo_value"
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={promoForm.type === 'percentage' ? '10' : '20.00'}
+                          value={promoForm.value}
+                          onChange={(e) => setPromoForm(prev => ({ ...prev, value: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        />
+                      </div>
+                    </SettingsField>
+                    <SettingsField
+                      label="Code"
+                      htmlFor="v2_promo_code"
+                      hint={promoCheckUnavailableV2 ? <span className="text-destructive">Couldn&apos;t check existing codes. Load the list below, then add.</span> : promoCodeError ? <span className="text-destructive">{promoCodeError}</span> : 'Made from the name and discount. You can change it.'}
+                    >
+                      <div className="flex gap-2">
+                        <Input
+                          id="v2_promo_code"
+                          value={promoForm.code}
+                          onChange={(e) => setPromoForm(prev => ({ ...prev, code: e.target.value.toUpperCase().replace(/\s/g, '') }))}
+                          placeholder="SUMMER20"
+                          className={promoCodeError ? 'border-destructive' : ''}
+                        />
+                        <Button variant="outline" size="sm" className="h-10" onClick={generatePromoCode}>
+                          Generate
+                        </Button>
+                      </div>
+                    </SettingsField>
+                    <SettingsField label="Starts" >
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start font-normal">
+                            {promoForm.created_at ? format(promoForm.created_at, "PPP") : <span className="text-muted-foreground">Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={promoForm.created_at}
+                            onSelect={(date) => date && setPromoForm(prev => ({ ...prev, created_at: date }))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </SettingsField>
+                    <SettingsField label="Expires" hint={promoFieldError(promoIssuesV2.expires_at)}>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start font-normal">
+                            {promoForm.expires_at ? format(promoForm.expires_at, "PPP") : <span className="text-muted-foreground">Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={promoForm.expires_at}
+                            onSelect={(date) => date && setPromoForm(prev => ({ ...prev, expires_at: date }))}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </SettingsField>
+                    <SettingsField label="Max uses" htmlFor="v2_promo_max_users" hint={promoFieldError(promoIssuesV2.max_users)}>
+                      <Input
+                        id="v2_promo_max_users"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="100"
+                        value={promoForm.max_users}
+                        onChange={(e) => setPromoForm(prev => ({ ...prev, max_users: digitsOnly(e.target.value) }))}
+                      />
+                    </SettingsField>
+                    <SettingsField
+                      label="Apply by itself on rentals of"
+                      htmlFor="v2_promo_min_duration"
+                      hint="Optional. Leave empty for a code customers type. Only for rentals paid in full."
+                      className="sm:col-span-2 lg:col-span-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="v2_promo_min_duration"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="14"
+                          value={promoForm.min_duration_days}
+                          onChange={(e) => setPromoForm(prev => ({ ...prev, min_duration_days: digitsOnly(e.target.value) }))}
+                          className="w-24"
+                        />
+                        <Unit>days or more</Unit>
+                      </div>
+                    </SettingsField>
+                  </div>
+                </SettingsPanel>
+              )}
+
+              {/* `pointer-events-auto`: a view-only manager can still scroll the list. */}
+              <div className="pointer-events-auto">
+                <PromoCodesSectionV2
+                  promos={promoCodes}
+                  isLoading={isLoadingPromos}
+                  error={promoCodesErrorV2}
+                  isFetching={isFetchingPromosV2}
+                  onRetry={() => refetchPromos()}
+                  canEdit={canEditSettings('promos')}
+                  currencyCode={tenant?.currency_code || 'USD'}
+                  resetKey={tenant?.id ?? ''}
+                  // parseLocalDate: `new Date('yyyy-MM-dd')` is UTC midnight, the day before west of Greenwich.
+                  onEdit={(promo) => setEditingPromo({ ...promo, expires_at: parseLocalDate(promo.expires_at) })}
+                  onDelete={(promo) => setDeletingPromo(promo)}
+                />
+              </div>
+            </div>
+          );
+        }
+
+        case 'extras':
+          return (
+            <div className="settings-v2-body">
+              <ExtrasSettings />
+            </div>
+          );
+
+        case 'reminders':
+          return (
+            <div className="space-y-6">
+              <div className="settings-v2-body">
+                <EmailNotificationSettings canEdit={canEditSettings('reminders')} />
+              </div>
+              {/* Both of these only feed the reminders list, which the lean
+                  product does not carry — so a lean tenant is not asked to
+                  configure a list it cannot open. */}
+              {!isAreaHidden('reminders', tenantSlug) && (
+                <>
+                  <SettingsPanel title="In-app payment reminders" description="Shown in your reminders list. Nothing is sent to customers.">
+                    {([
+                      ['reminder_due_soon_2d', 'Payment due in 2 days', false],
+                      ['reminder_due_today', 'Payment due today', true],
+                      ['reminder_overdue_1d', 'Payment 1 day overdue', true],
+                      ['reminder_overdue_multi', 'Payment several days overdue', true],
+                    ] as const).map(([key, label, fallback]) => (
+                      <SettingsRow key={key} label={label}>
+                        <Switch
+                          checked={(settings as any)?.[key] ?? fallback}
+                          onCheckedChange={() => toggleReminder(key)}
+                          disabled={isUpdating}
+                          aria-label={label}
+                        />
+                      </SettingsRow>
+                    ))}
+                  </SettingsPanel>
+                  <div className="settings-v2-body">
+                    <ReminderRulesConfig />
+                  </div>
+                </>
+              )}
+            </div>
+          );
+
+        case 'push':
+          return (
+            <div className="settings-v2-body">
+              <PushNotificationSettings canEdit={canEditSettings('push')} />
+            </div>
+          );
+
+        case 'templates': {
+          const hours = rentalForm.return_reminder_hours;
+          const when =
+            hours >= 24
+              ? `${Math.floor(hours / 24)} day${Math.floor(hours / 24) !== 1 ? 's' : ''}${hours % 24 > 0 ? ` ${hours % 24}h` : ''}`
+              : `${hours} hours`;
+          return (
+            <div className="space-y-6">
+              <BusinessRentalGate thing="your return reminder" rows={1}>
+                <ReturnReminderPanelV2
+                  form={rentalForm}
+                  setForm={setRentalForm}
+                  saved={rentalSettings}
+                  canEdit={canEditPage}
+                  onSave={makeBusinessSave(updateRentalSettings, refetchTenant)}
+                  smsReady={!!tenant?.integration_twilio_sms}
+                  emailTemplateHref="/settings/email-templates/rental_reminder"
+                  integrationsHref="/integrations?open=Twilio%20Messages"
+                />
+              </BusinessRentalGate>
+
+              <SettingsPanel>
+                {/* Opening a template is reading, not changing: `pointer-events-auto`
+                    lets a view-only user through this page's pointer-events-none
+                    wrapper, and both editors are read-only for them. */}
+                <SettingsRow
+                  label="Email templates"
+                  description={<>Booking confirmations, receipts and the other emails customers receive.<EmailTemplatesStatusV2 /></>}
+                >
+                  <Button variant="outline" size="sm" className="pointer-events-auto" onClick={() => router.push('/settings/email-templates')}>
+                    {canEditPage ? 'Edit emails' : 'View emails'}
+                  </Button>
+                </SettingsRow>
+                <SettingsRow
+                  label="Rental agreement"
+                  description={<>The contract customers sign before they drive.<AgreementTemplateStatusV2 /></>}
+                >
+                  <Button variant="outline" size="sm" className="pointer-events-auto" onClick={() => router.push('/settings/agreement-templates')}>
+                    {canEditPage ? 'Edit agreement' : 'View agreement'}
+                  </Button>
+                </SettingsRow>
+              </SettingsPanel>
+            </div>
+          );
+        }
+
+        case 'insurance':
+          return <BonzahOnboardingForm />;
+
+        default:
+          return null;
+      }
+    };
+
+    return (
+      <>
+        {!pageMeta && v2TabNotice.kind === 'wait' ? (
+          <div className="w-full max-w-[1160px] pb-16 md:pt-7">
+            <SettingsSectionSkeleton variant="form" rows={4} label="Loading settings" />
+          </div>
+        ) : !pageMeta ? (
+          <SettingsIndexV2
+            canView={canViewSettings}
+            tenantSlug={tenantSlug}
+            notice={
+              v2TabNoticeCopy ? (
+                <SettingsDependencyNotice
+                  title={v2TabNoticeCopy.title}
+                  body={v2TabNoticeCopy.body}
+                  action={{ label: 'Dismiss', onClick: () => router.replace('/settings', { scroll: false }) }}
+                />
+              ) : null
+            }
+          />
+        ) : (
+          <div className="w-full max-w-[1160px] space-y-6 pb-16 md:pt-7">
+            <SettingsPageHeader
+              section={pageMeta.section}
+              title={pageMeta.title}
+              description={pageMeta.description}
+              rootLabel={v2Page === 'insurance' ? 'Integrations' : undefined}
+              onBack={v2Page === 'insurance' ? () => router.push('/integrations?open=Bonzah') : openSettingsIndex}
+            />
+            {canEditPage && v2Page && v2PageDirty[v2Page] && (
+              <SettingsSaveState status={isSavingNav || isSavingForTab ? 'saving' : 'dirty'} />
+            )}
+            {v2PageData.kind === 'loading' ? (
+              <SettingsSectionSkeleton variant="form" rows={4} label={`Loading ${pageMeta.title}`} />
+            ) : v2PageData.kind === 'error' ? (
+              <SettingsLoadError
+                thing={v2PageData.source === 'org' ? 'your settings' : 'your booking and pricing settings'}
+                error={v2PageData.error}
+                onRetry={v2PageData.source === 'org' ? refetchOrgSettings : refetchRentalSettings}
+                retrying={v2SettingsFetching}
+              />
+            ) : (
+              <>
+                {!canEditPage && <SettingsReadOnlyNotice />}
+                {/* A native disabled fieldset: keyboard-safe, unlike the old
+                    pointer-events wrapper, and values stay selectable. */}
+                <SettingsReadOnlyFieldset readOnly={!canEditPage}>
+                  {renderBody(v2Page as string)}
+                </SettingsReadOnlyFieldset>
+              </>
+            )}
+          </div>
+        )}
+
+        {promoDialogs}
+        {depositChargeConfirmDialog}
+
+        <UnsavedChangesDialog
+          open={unsavedDialogOpen}
+          onCancel={cancelLeave}
+          onDiscard={confirmLeave}
+          onSave={v2CanSaveAll ? saveAndLeave : undefined}
+          isSaving={isSavingNav}
+        />
+        <UnsavedChangesDialog
+          open={showTabWarning}
+          onCancel={handleTabCancel}
+          onDiscard={handleTabDiscardAndSwitch}
+          onSave={v2CanSaveAll ? handleTabSaveAndSwitch : undefined}
+          isSaving={isSavingForTab}
+        />
+      </>
+    );
+  }
+
   return (
-    <div className="container mx-auto p-4 sm:p-6 space-y-6">
-      {/* Header */}
+    <div className={`container mx-auto p-4 sm:p-6 space-y-6${v2Chrome ? " md:pt-[26px]" : ""}`}>
+      {/* Header. v2 (switch row alignment): at md+ <main> starts at y=50 and the
+          title is text-2xl, a 32px line, so 26px of top padding centres it at
+          50 + 26 + 16 = 92 on the sidebar switch's row (p-6 left it at 90). Below
+          lg the 36px Back button shares the row; -2px keeps it at 74-110, centre
+          92, as it was. v1 keeps both class strings byte for byte. */}
       <div className="flex items-start gap-2 sm:gap-4">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => window.history.back()}
-          className="lg:hidden shrink-0 h-9 px-2 -ml-2"
+          className={`lg:hidden shrink-0 h-9 px-2 -ml-2${v2Chrome ? " md:-mt-0.5" : ""}`}
         >
           <ArrowLeft className="h-4 w-4" />
           <span className="sr-only">Back</span>
@@ -4409,41 +5600,7 @@ const Settings = () => {
               )}
 
 
-              {/* Switching to charges is a change to real money on real cards. */}
-              <AlertDialog open={showChargeConfirm} onOpenChange={setShowChargeConfirm}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Start charging the deposit?</AlertDialogTitle>
-                    <AlertDialogDescription asChild>
-                      <div className="space-y-2">
-                        <p>
-                          New rentals will take the deposit as a real charge instead of an
-                          authorisation hold. The money leaves the customer&rsquo;s card and
-                          arrives in your account.
-                        </p>
-                        <p>
-                          Two things change for you: the deposit is <strong>not returned
-                          automatically</strong> when a rental closes &mdash; you refund it from
-                          the rental page &mdash; and past rentals will start describing their
-                          deposit as a charge rather than a hold.
-                        </p>
-                        <p>Rentals already on the road keep whatever they have today.</p>
-                      </div>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Keep using holds</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => {
-                        setRentalForm(prev => ({ ...prev, deposit_charge_enabled: true }));
-                        setShowChargeConfirm(false);
-                      }}
-                    >
-                      Switch to charges
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {depositChargeConfirmDialog}
 
               {canEditSettings('preauth') && (
                 <Button
@@ -5093,168 +6250,7 @@ const Settings = () => {
             </div>
           )}
 
-          {/* Edit Promo Dialog */}
-          <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Promo Code</DialogTitle>
-                <DialogDescription>
-                  Update the details of your promo code.
-                </DialogDescription>
-              </DialogHeader>
-              {editingPromo && (
-                <div className="space-y-6 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_name">Name</Label>
-                    <Input
-                      id="edit_name"
-                      value={editingPromo.name}
-                      onChange={(e) => setEditingPromo({ ...editingPromo, name: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="flex gap-4">
-                    <div className="space-y-2 w-1/2">
-                      <Label>Expiration Date</Label>
-                      <Popover modal={true}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className="w-full justify-start text-left font-normal"
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {editingPromo.expires_at ? format(editingPromo.expires_at, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={editingPromo.expires_at}
-                            onSelect={(date) => date && setEditingPromo({ ...editingPromo, expires_at: date })}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="space-y-2 w-1/2">
-                      <Label htmlFor="edit_max_users">Max Users</Label>
-                      <Input
-                        id="edit_max_users"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={editingPromo.max_users}
-                        onChange={(e) => {
-                          const rawValue = e.target.value.replace(/[^0-9]/g, '');
-                          setEditingPromo({ ...editingPromo, max_users: rawValue });
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-4">
-                    <div className="space-y-2 w-1/2">
-                      <Label htmlFor="edit_type">Type</Label>
-                      <Select
-                        value={editingPromo.type}
-                        onValueChange={(val) => setEditingPromo({ ...editingPromo, type: val })}
-                      >
-                        <SelectTrigger id="edit_type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">Percentage</SelectItem>
-                          <SelectItem value="value">Value</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2 w-1/2">
-                      <Label htmlFor="edit_value">Value</Label>
-                      <Input
-                        id="edit_value"
-                        type="text"
-                        inputMode="decimal"
-                        value={editingPromo.value}
-                        onChange={(e) => {
-                          const rawValue = e.target.value.replace(/[^0-9.]/g, '');
-                          setEditingPromo({ ...editingPromo, value: rawValue });
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="edit_min_duration">Auto-apply for rentals of N+ days <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
-                      id="edit_min_duration"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="e.g. 14 — leave blank for a code customers type"
-                      value={editingPromo.min_duration_days ?? ''}
-                      onChange={(e) => {
-                        const rawValue = e.target.value.replace(/[^0-9]/g, '');
-                        setEditingPromo({ ...editingPromo, min_duration_days: rawValue });
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Auto duration discounts apply to fixed rentals paid in full only — never to installment, pay-as-you-go, or auto-extension bookings.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Promo Code</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={editingPromo.code}
-                        onChange={(e) => setEditingPromo({ ...editingPromo, code: e.target.value.toUpperCase().replace(/\s/g, '') })}
-                        placeholder="e.g. SUMMER20"
-                        className={editPromoCodeError ? "border-destructive" : ""}
-                      />
-                      <Button variant="outline" size="icon" onClick={regenerateEditCode} title="Auto-generate Code">
-                        <Zap className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {editPromoCodeError && (
-                      <p className="text-sm text-destructive">{editPromoCodeError}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
-                <Button onClick={handleUpdatePromo} disabled={updatePromoMutation.isPending || !!editPromoCodeError}>
-                  {updatePromoMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Delete Confirmation Dialog */}
-          <AlertDialog open={!!deletingPromo} onOpenChange={(open) => !open && setDeletingPromo(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Delete Promo Code?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete the promo code <strong>{deletingPromo?.name}</strong>?
-                  This action cannot be undone and may affect active users trying to use this code.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive hover:bg-destructive/90"
-                  onClick={() => deletingPromo && deletePromoMutation.mutate(deletingPromo.id)}
-                >
-                  {deletePromoMutation.isPending ? "Deleting..." : "Delete Promo Code"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {promoDialogs}
 
         </TabsContent>
 

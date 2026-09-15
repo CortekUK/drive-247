@@ -473,10 +473,10 @@ describe('first-rental walkthrough — anchor resolution', () => {
     );
   });
 
-  it('carries the settings note only when the settings rail is on screen', () => {
+  it('carries the settings note only when the settings index is on screen', () => {
     const panel = '<div data-tour="settings-tab-branding">Branding</div>';
-    const withRail = resolveStep(step('booking-site'), domWith(panel + FULL_SIDEBAR), allVisible)!;
-    expect(withRail.notes).toHaveLength(1);
+    const withIndex = resolveStep(step('booking-site'), domWith(`<div data-tour="settings-index">${panel}</div>`), allVisible)!;
+    expect(withIndex.notes).toHaveLength(1);
     const without = resolveStep(step('booking-site'), domWith(panel), allVisible)!;
     // Pointing at "this list" when no list is drawn is worse than saying
     // nothing — the same rule the Finance note used to carry.

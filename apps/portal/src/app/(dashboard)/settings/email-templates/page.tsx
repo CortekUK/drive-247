@@ -28,6 +28,8 @@ import {
 import { useEmailTemplates } from '@/hooks/use-email-templates';
 import { EMAIL_TEMPLATE_TYPES } from '@/lib/email-template-variables';
 import { toast } from '@/hooks/use-toast';
+import { useV2 } from '@/lib/v2-context';
+import { EmailTemplatesListV2 } from '@/components/settings-v2/email-templates-v2';
 
 export default function EmailTemplatesPage() {
   const router = useRouter();
@@ -35,6 +37,8 @@ export default function EmailTemplatesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showResetAllDialog, setShowResetAllDialog] = useState(false);
   const [isResettingAll, setIsResettingAll] = useState(false);
+  // v2 chrome (northwind only; fails closed to v1). Above the early returns.
+  const v2Chrome = useV2('chrome');
 
   const customizedCount = useMemo(() => {
     return EMAIL_TEMPLATE_TYPES.filter(t => isCustomized(t.key)).length;
@@ -70,6 +74,8 @@ export default function EmailTemplatesPage() {
         t.key.toLowerCase().includes(query)
     );
   }, [searchQuery]);
+
+  if (v2Chrome) return <EmailTemplatesListV2 />;
 
   if (isLoading) {
     return (

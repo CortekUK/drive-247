@@ -42,6 +42,8 @@ import {
   DEFAULT_TEMPLATE_NAME,
   CUSTOM_TEMPLATE_NAME,
 } from '@/hooks/use-agreement-templates';
+import { useV2 } from '@/lib/v2-context';
+import { AgreementTemplatesPageV2 } from '@/components/settings-v2/agreement-templates-v2';
 
 function TemplateCategorySection({ category }: { category: TemplateCategory }) {
   const router = useRouter();
@@ -377,6 +379,9 @@ export default function AgreementTemplatesPage() {
   const initialCategory = (searchParams.get('category') as TemplateCategory) || 'standard';
   const [activeCategory, setActiveCategory] = useState<TemplateCategory>(initialCategory);
   const paygEnabled = rentalSettings?.pay_as_you_go_enabled;
+  // v2 chrome (northwind only; fails closed to v1). After every hook above.
+  const v2Chrome = useV2('chrome');
+  if (v2Chrome) return <AgreementTemplatesPageV2 />;
 
   return (
     <div className="container mx-auto p-6 space-y-6">

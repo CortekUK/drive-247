@@ -934,3 +934,27 @@ html[data-trax-panel] {
     --trax-offset: var(--trax-width);
   }
 }
+
+/* ── Settings v2 bodies ───────────────────────────────────────────────────────
+ * The v2 settings pages still mount a few shared settings components (locations,
+ * pricing rules, installments, extras, email and push notifications, lockbox
+ * templates). Their markup serves every tenant, so it is not edited. Inside
+ * `.settings-v2-body` only, the decorative title icons go — the icon beside a
+ * card title and the tinted icon box beside a section heading — and card titles
+ * drop to the v2 heading size. (No selector here may name a Tailwind utility
+ * class such as `.rounded-lg` or `.border`: this file also @applies them, and
+ * Tailwind rejects that as a circular dependency, which 500s every page.)
+ */
+.v2-theme .settings-v2-body h3 > svg,
+.v2-theme .settings-v2-body h2 > svg,
+.v2-theme .settings-v2-body h3 > span:has(> svg:only-child),
+.v2-theme .settings-v2-body div:has(> svg:only-child):has(+ div > h2) {
+  display: none;
+}
+
+.v2-theme .settings-v2-body h3 {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+  letter-spacing: normal;
+}

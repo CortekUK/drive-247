@@ -123,6 +123,9 @@ export const usePickupLocations = () => {
     data: locationSettings,
     isLoading: isLoadingSettings,
     error: settingsError,
+    refetch: refetchSettings,
+    isPlaceholderData: isSettingsPlaceholder,
+    isFetching: isFetchingSettings,
   } = useQuery({
     queryKey: ['location-settings', tenant?.id],
     queryFn: async (): Promise<LocationSettings> => {
@@ -202,6 +205,7 @@ export const usePickupLocations = () => {
     isLoading: isLoadingLocations,
     error: locationsError,
     refetch: refetchLocations,
+    isFetching: isFetchingLocations,
   } = useQuery({
     queryKey: ['pickup-locations', tenant?.id],
     queryFn: async (): Promise<PickupLocation[]> => {
@@ -499,6 +503,13 @@ export const usePickupLocations = () => {
     locationSettings: locationSettings || DEFAULT_LOCATION_SETTINGS,
     isLoadingSettings,
     settingsError,
+    // v2 settings states: whether a real read has come back (not the placeholder
+    // defaults), a retry, and the last save error, so a section never renders
+    // defaults as the tenant's configuration or loses a failed save.
+    hasSettingsData: !!locationSettings && !isSettingsPlaceholder,
+    refetchSettings,
+    isFetchingSettings,
+    settingsUpdateError: updateSettingsMutation.error,
     updateSettings: updateSettingsMutation.mutateAsync,
     isUpdatingSettings: updateSettingsMutation.isPending,
 
@@ -507,6 +518,7 @@ export const usePickupLocations = () => {
     isLoadingLocations,
     locationsError,
     refetchLocations,
+    isFetchingLocations,
 
     // CRUD operations
     createLocation: createLocationMutation.mutateAsync,
