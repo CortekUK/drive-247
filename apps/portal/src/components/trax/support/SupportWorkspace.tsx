@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import type { ChatApiResponse, TraxCapabilities, TraxIssue, TraxRetentionPolicy } from '@/types/trax-support';
 
 type Request=(type:string,payload?:Record<string,unknown>)=>Promise<ChatApiResponse|null>;
-interface Props {children:ReactNode;request?:Request;capabilities?:TraxCapabilities;issues?:TraxIssue[];activeIssueId?:string;recent?:ChatApiResponse['recentConversations'];busy:boolean}
+interface Props {children:ReactNode;request?:Request;capabilities?:TraxCapabilities;issues?:TraxIssue[];activeIssueId?:string;recent?:ChatApiResponse['recentConversations'];busy:boolean;/** Narrow surface (the docked panel): single-column tickets. */compact?:boolean}
 const reasons:Record<string,string>={missing_context:'More context needed',guidance_missing:'Verified guidance is missing',evidence_conflict:'The records conflict',tool_failure:'A required check failed',persistent_tool_failure:'A required service is unavailable',diagnostics_exhausted:'No reliable next check remains',unsupported_finance:'Payment investigation is not enabled',human_requested:'Human support requested',verified_progress:'Verified progress',user_resolved:'You marked this issue resolved'};
-export function SupportWorkspace({children,request,capabilities,issues=[],activeIssueId,recent=[],busy}:Props){
+export function SupportWorkspace({children,request,capabilities,issues=[],activeIssueId,recent=[],busy,compact=false}:Props){
   const [view,setView]=useState<'conversation'|'human'|'retention'>('conversation');
   const human=useSupportMessaging();
   const [humanId,setHumanId]=useState<string|undefined>();
@@ -35,7 +35,7 @@ export function SupportWorkspace({children,request,capabilities,issues=[],active
       <Button size="sm" variant={view==='human'?'secondary':'ghost'} onClick={()=>openHuman()}>My Tickets {human.count?`(${human.count})`:''}</Button>
       {capabilities?.managePolicy&&<Button size="sm" variant={view==='retention'?'secondary':'ghost'} disabled={busy} onClick={()=>void inspectPolicy()}>Retention</Button>}
     </div>
-    {view==='human'?<SupportInbox key={human.scope+String(humanId)+String(!!compose)} call={human.call} scope={human.scope} initialId={humanId} compose={compose} onCancel={()=>setView('conversation')}/>:view==='retention'&&policy?<div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5"><div className="max-w-lg space-y-4">
+    {view==='human'?<SupportInbox key={human.scope+String(humanId)+String(!!compose)} call={human.call} scope={human.scope} initialId={humanId} compose={compose} compact={compact} onCancel={()=>setView('conversation')}/>:view==='retention'&&policy?<div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5"><div className="max-w-lg space-y-4">
         <div><h3 className="text-base font-semibold">Support retention</h3><p className="mt-1 text-sm text-muted-foreground">Only TRAX conversations and support tickets are affected. Open tickets remain stored; ticket handoffs survive ordinary conversation cleanup.</p></div>
         {([['conversation_days','Conversation days after last activity'],['closed_ticket_days','Ticket days after latest closure'],['inactive_open_days','Flag open tickets after inactive days']] as const).map(([key,label])=><div className="space-y-1.5" key={key}><Label htmlFor={'trax-'+key}>{label}</Label><Input id={'trax-'+key} type="number" min={1} max={3650} value={policy[key]} onChange={e=>{setPolicySaved(false);setPolicy({...policy,[key]:Number(e.target.value)});}}/></div>)}
         <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={async()=>{const {conversation_days,closed_ticket_days,inactive_open_days}=policy;const result=await request?.('retention_policy',{policy:{conversation_days,closed_ticket_days,inactive_open_days}});if(result?.retentionPolicy){setPolicy(result.retentionPolicy);setPolicySaved(true);}}}>Save retention periods</Button><Button variant="outline" disabled={busy} onClick={async()=>{const result=await request?.('retention_preview');if(result?.retentionPreview)setPreview(result.retentionPreview);}}>Preview cleanup</Button></div>

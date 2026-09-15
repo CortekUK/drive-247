@@ -170,8 +170,32 @@ describe('useTraxSupport Phase 1',()=>{
   });
   it('clears evidence when server permission scope changes on focus',async()=>{
     const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));await act(()=>result.current.sendMessage('rentals'));
-    mocks.fetch.mockResolvedValue(reply('new-server-permissions'));act(()=>{window.dispatchEvent(new Event('focus'));});
-    expect(result.current.messages).toEqual([]);await waitFor(()=>expect(result.current.isLoading).toBe(false));expect(result.current.messages).toEqual([]);
+    mocks.fetch.mockImplementation(async()=>reply('new-server-permissions'));act(()=>{window.dispatchEvent(new Event('focus'));});
+    await waitFor(()=>expect(result.current.messages).toEqual([]));await waitFor(()=>expect(result.current.isLoading).toBe(false));expect(result.current.messages).toEqual([]);
+  });
+  it('keeps the thread on screen when focus revalidation confirms the same access',async()=>{
+    const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));await act(()=>result.current.sendMessage('rentals'));
+    const before=result.current.messages.length;expect(before).toBe(2);
+    act(()=>{window.dispatchEvent(new Event('focus'));});expect(result.current.messages).toHaveLength(before);
+    await act(async()=>{await new Promise((resolve)=>setTimeout(resolve,20));});expect(result.current.messages).toHaveLength(before);
+  });
+  it('keeps a pending reply when the window regains focus',async()=>{
+    const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));
+    let resolveAnswer!:(response:Response)=>void;
+    mocks.fetch.mockImplementationOnce(()=>new Promise<Response>((resolve)=>{resolveAnswer=resolve;}));
+    let sending!:Promise<void>;act(()=>{sending=result.current.sendMessage('rentals');});
+    await waitFor(()=>expect(resolveAnswer).toBeDefined());const calls=mocks.fetch.mock.calls.length;
+    act(()=>{window.dispatchEvent(new Event('focus'));});expect(mocks.fetch).toHaveBeenCalledTimes(calls);
+    await act(async()=>{resolveAnswer(reply('scope-a',{response:'PENDING_ANSWER'}));await sending;});
+    expect(result.current.messages.at(-1)?.content).toBe('PENDING_ANSWER');
+  });
+  it('reopens a stored conversation with a fresh token and a clear note when nothing is stored',async()=>{
+    const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));await act(()=>result.current.sendMessage('rentals'));
+    mocks.fetch.mockImplementation(async()=>reply('scope-a',{resumedMessages:[]}));
+    await act(async()=>{await result.current.supportRequest!('resume',{resumeId:'00000000-0000-4000-8000-000000000001'});});
+    const body=JSON.parse(mocks.fetch.mock.calls.at(-1)![1].body);
+    expect(body.type).toBe('resume');expect(body.conversationId).toBeNull();
+    expect(result.current.messages).toHaveLength(1);expect(result.current.messages[0].content).toContain('open again');
   });
   it('does not allow a legacy RAG response to bypass the boundary',async()=>{
     const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));

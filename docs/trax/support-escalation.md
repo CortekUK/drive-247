@@ -6,7 +6,7 @@ Review date: 2026-09-15. Knowledge candidate 0.3.1. Source base commit and worki
 
 ## Implemented package
 
-TRAX remains the V2 **Ask AI** entry, using `TraxSupportDialog`, `useTraxSupport`, the development route and the dedicated `trax-support` edge endpoint. Both ends enforce the existing V2 chrome rollout; Northwind is a canary, not a hardcoded authorization exception. No V1 chat, calendar, rental/payment operation or unrelated page is changed by this package.
+TRAX opens from the V2 top bar **Trax** button (and Ctrl+J) in the docked Trax panel and the `/trax` page (`TraxSupportThread` inside `TraxSupportProvider`), using `SupportWorkspace`, `useTraxSupport`, the development route and the dedicated `trax-support` edge endpoint. Both ends enforce the existing V2 chrome rollout; Northwind is a canary, not a hardcoded authorization exception. No V1 chat, calendar, rental/payment operation or unrelated page is changed by this package.
 
 `model.ts:configuredModel` now calls OpenAI Responses with a server-configured model, strict function schemas, structured answers and `store:false`. `orchestrator.ts:modelConversation` accepts one tool call at a time, at most seven tools/eight model turns, with a 65-second request deadline, 18-second provider calls and 8-second database fetch deadlines. Provider errors become an honest fallback. Private provider reasoning is never copied to chat history, tickets or logs. The function-call protocol follows the [OpenAI function-calling documentation](https://developers.openai.com/api/docs/guides/function-calling).
 

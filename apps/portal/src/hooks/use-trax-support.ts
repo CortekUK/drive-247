@@ -13,7 +13,7 @@ class ChatFailure extends Error { constructor(message:string,public code:string)
 interface ChatState { key:string; scope:string|null; ready:boolean; messages:ChatMessage[]; conversationId:string|null; error:string|null; capabilities?:TraxCapabilities; issues?:ChatApiResponse['issues'];activeIssueId?:string;recentConversations?:ChatApiResponse['recentConversations'] }
 const empty=(key:string):ChatState=>({key,scope:null,ready:false,messages:[],conversationId:null,error:null});
 
-export function useTraxSupport(enabled = true): UseChatReturn {
+export function useTraxSupport(enabled = true, surfaceVisible = true): UseChatReturn {
   const { appUser, user } = useAuthStore();
   const { tenant } = useTenant();
   const chromeEnabled=useV2('chrome');
@@ -88,17 +88,26 @@ export function useTraxSupport(enabled = true): UseChatReturn {
     gate.current.invalidate();busy.current=false;setLoading(false);setChat(empty(key));
     if(!enabled)return;
     void checkContext();
-    const timer=setInterval(()=>void checkContext(),30_000);
-    const revalidate=()=>{setChat((old)=>({...old,ready:false}));gate.current.invalidate();busy.current=false;setLoading(false);void checkContext();};
-    window.addEventListener('focus',revalidate);
-    const visibility=()=>{if(document.visibilityState==='visible')revalidate();};
-    document.addEventListener('visibilitychange',visibility);
     // Payloads are not trusted as permissions; only invalidate and refetch server context.
     const channel=appUser?.id?supabase.channel(`trax-access-${appUser.id}`)
       .on('postgres_changes',{event:'*',schema:'public',table:'manager_permissions',filter:`app_user_id=eq.${appUser.id}`},()=>{reset();void checkContext();})
       .on('postgres_changes',{event:'*',schema:'public',table:'app_users',filter:`id=eq.${appUser.id}`},()=>{reset();void checkContext();}).subscribe():null;
-    return()=>{clearInterval(timer);window.removeEventListener('focus',revalidate);document.removeEventListener('visibilitychange',visibility);gate.current.invalidate();if(channel)void supabase.removeChannel(channel);};
+    return()=>{gate.current.invalidate();if(channel)void supabase.removeChannel(channel);};
   },[enabled,key,checkContext,appUser?.id,reset]);
+
+  // Recheck access while a surface shows the conversation. Returning to the window no longer
+  // aborts a reply in flight or blanks the thread: checkContext resets only when the server
+  // scope or support access actually changed. Nothing polls while Trax is closed.
+  useEffect(()=>{
+    if(!enabled||!surfaceVisible)return;
+    const revalidate=()=>{if(!busy.current&&state.current.ready&&state.current.key===key)void checkContext();};
+    revalidate();
+    const timer=setInterval(revalidate,30_000);
+    window.addEventListener('focus',revalidate);
+    const visibility=()=>{if(document.visibilityState==='visible')revalidate();};
+    document.addEventListener('visibilitychange',visibility);
+    return()=>{clearInterval(timer);window.removeEventListener('focus',revalidate);document.removeEventListener('visibilitychange',visibility);};
+  },[enabled,surfaceVisible,key,checkContext]);
 
   const sendMessage=useCallback(async(content:string,recheck=false)=>{
     if(!enabled||!content.trim()||busy.current)return;
@@ -108,18 +117,22 @@ export function useTraxSupport(enabled = true): UseChatReturn {
     const lease=gate.current.begin();busy.current=true;setLoading(true);
     const previous=state.current.key===key&&state.current.scope===scope?state.current.conversationId:null;
     const message:ChatMessage={id:crypto.randomUUID(),role:'user',content:content.trim(),timestamp:new Date()};
+    let refreshRecent=false;
     setChat((old)=>({...old,messages:[...old.messages,message],error:null}));
     try{
       const data=await call({type:recheck?'recheck':'message',message:content.trim(),contextScope:scope,conversationId:previous,pageContext:traxPageContext(pathname)},lease.signal);
       if(!lease.current())return;
       if(data.contextScope!==scope){reset('Your access changed. Start a new conversation.');return;}
       setChat((old)=>({...old,conversationId:data.conversationId,capabilities:data.capabilities,issues:data.issues,activeIssueId:data.activeIssueId,messages:[...old.messages,{id:crypto.randomUUID(),role:'assistant',content:data.response,sources:data.sources,provenance:data.provenance,navigation:data.navigation,evidence:data.evidence,canRecheck:data.canRecheck,timestamp:new Date()}]}));
+      refreshRecent=!previous&&data.capabilities?.supportStorage===true;
     }catch(error){
       if(!lease.current())return;
       const text=error instanceof Error?error.message:'Unable to load application guidance.';
       // Discard context after every failed access/service response; never reuse uncertain evidence.
       reset(text);
     }finally{if(lease.current()){busy.current=false;setLoading(false);}lease.finish();}
+    // A newly stored conversation appears in the recent list on the next context read.
+    if(refreshRecent)void checkContext();
   },[enabled,key,checkContext,call,pathname,reset]);
 
   const navigate=useCallback(async(action:TraxNavigation)=>{
@@ -140,21 +153,24 @@ export function useTraxSupport(enabled = true): UseChatReturn {
     if(!enabled||current.key!==key||!current.ready||!current.scope||busy.current)return null;
     const lease=gate.current.begin();busy.current=true;setLoading(true);
     try{
-      const data=await call({type,contextScope:current.scope,conversationId:current.conversationId,...payload},lease.signal);
+      // Resume starts from a fresh token (the current one may have expired); the server loads the
+      // stored conversation by resumeId after checking access.
+      const data=await call({type,contextScope:current.scope,conversationId:type==='resume'?null:current.conversationId,...payload},lease.signal);
       if(!lease.current())return null;
       if(data.contextScope!==current.scope){reset('Your access changed. Reload this conversation.');return null;}
       setChat(old=>({...old,error:null,conversationId:data.conversationId,issues:data.issues,activeIssueId:data.activeIssueId,capabilities:data.capabilities,
-        messages:type==='new_issue'?[]:data.resumedMessages?data.resumedMessages.map(e=>({id:crypto.randomUUID(),role:e.role,content:e.content,timestamp:new Date(e.at)})):old.messages}));
+        messages:type==='new_issue'?[]:data.resumedMessages?(data.resumedMessages.length?data.resumedMessages.map(e=>({id:crypto.randomUUID(),role:e.role,content:e.content,timestamp:new Date(e.at)}))
+          :[{id:crypto.randomUUID(),role:'assistant' as const,content:'This earlier conversation is open again. Its previous messages are not stored for display; ask your next question to continue.',timestamp:new Date()}]):old.messages}));
       return data;
     }catch(error){
       if(lease.current()){
         const text=error instanceof Error?error.message:'Support request failed. Your issue is preserved for retry.';
-        if(error instanceof ChatFailure&&['unauthorized','forbidden','context_changed','conversation_invalid'].includes(error.code))reset(text);
+        if(error instanceof ChatFailure&&['unauthorized','forbidden','context_changed','conversation_invalid'].includes(error.code)){reset(text);void checkContext();}
         else setChat(old=>({...old,error:text}));
       }
       return null;
     }finally{if(lease.current()){busy.current=false;setLoading(false);}lease.finish();}
-  },[enabled,key,call,reset]);
+  },[enabled,key,call,reset,checkContext]);
 
   const clearChat=useCallback(()=>{reset();void checkContext();},[reset,checkContext]);
   const checkAgain=useCallback(()=>sendMessage('Check again',true),[sendMessage]);

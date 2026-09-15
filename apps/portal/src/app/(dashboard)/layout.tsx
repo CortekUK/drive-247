@@ -23,7 +23,7 @@ import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { useV2 } from "@/lib/v2-context";
 import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
 import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
-import { TraxProvider } from "@/components/trax/trax-provider";
+import { TraxV2Provider } from "@/components/trax/support/trax-support-context";
 import { TraxPanel } from "@/components/trax/trax-panel";
 import { PageSearchProvider } from "@/components/shared/layout/page-search-slot";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
@@ -190,7 +190,7 @@ export default function DashboardLayout({
      Fragment, so the other 56 tenants do not mount a chat hook and fire a
      conversations query for a surface they cannot reach. A context provider
      emits no DOM either way, so the flex row above is unaffected. */
-  const TraxWrap = v2Chrome ? TraxProvider : Fragment;
+  const TraxWrap = v2Chrome ? TraxV2Provider : Fragment;
 
   /* Lets a LIST page lend the top bar its own search field and filter button —
      the one part of the bar that changes per page. Must sit above BOTH the bar

@@ -4,7 +4,8 @@ import { Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui-v2/button";
 import { SidebarTrigger } from "@/components/ui-v2/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui-v2/tooltip";
-import { TraxThread } from "@/components/trax/trax-thread";
+import { TraxSupportThread } from "@/components/trax/support/TraxSupportThread";
+import { useTraxSupportChat } from "@/components/trax/support/trax-support-context";
 import { useTrax } from "@/components/trax/trax-provider";
 
 /**
@@ -27,31 +28,22 @@ import { useTrax } from "@/components/trax/trax-provider";
  * is mounted in the dashboard layout — above the route — and Next keeps a layout
  * mounted across navigations inside its own group. So "full screen" from the
  * panel continues the conversation rather than starting a second one, and
- * minimising back to the panel keeps it too. Neither surface calls `useChat()`
- * itself; doing so is what would fork the thread.
+ * minimising back to the panel keeps it too. Neither surface calls
+ * `useTraxSupport()` itself; doing so is what would fork the thread.
  *
  * ---------------------------------------------------------------------------
- * WHERE THE HISTORY COMES FROM, AND WHAT IT CANNOT DO YET
+ * WHERE THE HISTORY COMES FROM
  *
- * The edge function has always written every exchange to `chat_messages`;
- * `useTraxConversations` is the read. Two honest limits, both surfaced in the
- * rail rather than hidden: the list folds a bounded page of recent messages
- * client-side (PostgREST cannot GROUP BY, and a view would be a production
- * schema change), and there is no rename or delete, because both need endpoints
- * that do not exist and a delete that only cleared local state would be a lie.
+ * The conversation is the TRAX support conversation (TraxSupportProvider). The
+ * rail lists stored support conversations when support storage is enabled and
+ * reopens one through the server, which re-checks access first.
  */
 export default function TraxPage() {
-  const { chat, history, minimiseToPanel } = useTrax();
+  const { minimiseToPanel } = useTrax();
+  const support = useTraxSupportChat();
 
-  /* The stored title (the first question) once the list knows the thread; the
-     first question on screen before it does — a new conversation only reaches
-     the list after its first reply lands. Empty for a fresh thread. */
-  const title =
-    (chat.conversationId
-      ? history.conversations.find((c) => c.conversationId === chat.conversationId)?.title
-      : undefined) ??
-    chat.messages.find((m) => m.role === "user")?.content ??
-    "";
+  /* The conversation's first question, as its title. Empty for a fresh thread. */
+  const title = support.messages.find((m) => m.role === "user")?.content ?? "";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -80,7 +72,7 @@ export default function TraxPage() {
         </Tooltip>
       </header>
 
-      <TraxThread density="page" autoFocus />
+      <TraxSupportThread density="page" autoFocus />
     </div>
   );
 }

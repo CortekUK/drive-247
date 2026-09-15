@@ -1,6 +1,6 @@
 # Test TRAX locally in the V2 portal
 
-The normal local entry point is `http://northwind.portal.localhost:4002`. Open **Ask AI** in the V2 sidebar or press **Ctrl+J** (Cmd+J on macOS). No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
+The normal local entry point is `http://northwind.portal.localhost:4002`. Click **Trax** in the V2 top bar or press **Ctrl+J** (Cmd+J on macOS). No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
 
 ## What this test can establish
 
@@ -37,15 +37,15 @@ cd C:\Users\User\Documents\Drive_247\drive-247
 npm.cmd run dev:portal
 ```
 
-Visit the Northwind URL, sign in with an existing authorized staff account, hard-refresh with **Ctrl+Shift+R**, then open **Ask AI**. The header says **AI support · Read-only operational checks** when model/key/policy are configured, or **Prepared guidance · Model not configured** otherwise. The configured header is a capability report, not proof of a successful provider call. Configuration/access errors appear directly above the input.
+Visit the Northwind URL, sign in with an existing authorized staff account, hard-refresh with **Ctrl+Shift+R**, then click **Trax** in the top bar. The header says **AI support · Read-only operational checks** when model/key/policy are configured, or **Prepared guidance · Model not configured** otherwise. The configured header is a capability report, not proof of a successful provider call. Configuration/access errors appear directly above the input.
 
 In browser developer tools, filter **Network** by `trax-support`. Development requests should go to **`/api/trax-support` on the local portal**, not the hosted edge function. Opening the dialog first sends a `context` request. A configured, authorized request should return HTTP 200. Responses processed by the local handler carry `X-TRAX-Runtime: local-development`. Do not copy Authorization headers or conversation tokens into a report.
 
 ## Signed-in manual checks, one at a time
 
-1. Open the existing Northwind V2 local portal, sign in normally, then open Ask AI. In Network, verify the `context` response is HTTP 200, with `capabilities.modelReady=true` and `finance=false` for model mode. Do not copy session headers or encrypted conversation tokens.
+1. Open the existing Northwind V2 local portal, sign in normally, then click Trax in the top bar. In Network, verify the `context` response is HTTP 200, with `capabilities.modelReady=true` and `finance=false` for model mode. Do not copy session headers or encrypted conversation tokens.
 2. Ask **Where can I find Rentals?** Expect an AI answer grounded in the Rentals section and a server-verified Open Rentals action. Verify `provenance.engine=model`; `prepared_fallback` means the model path did not succeed. Click Open Rentals to verify navigation only.
-3. Open an existing authorized vehicle record. Reopen Ask AI and explain the actual problem: missing from the **V2 website**, unavailable for **specific dates**, or **checkout rejection**. TRAX should use the page's vehicle after server validation. A vague report should cause a material clarification, not an invented window.
+3. Open an existing authorized vehicle record. Reopen Trax and explain the actual problem: missing from the **V2 website**, unavailable for **specific dates**, or **checkout rejection**. TRAX should use the page's vehicle after server validation. A vague report should cause a material clarification, not an invented window.
 4. For date availability, provide the customer's actual pickup/return dates, browser timezone and selected pickup location if any. Expected answer: current canonical checks, record references, observation time and honest limits. A restricted account should see a generic rental/block blocker without private IDs or receiving details.
 5. Ask **Which rental is blocking it?** and **Where do I complete the return?** Expect new evidence checks for current facts and permitted existing navigation. If receiving is already recorded while status is open, it should report the conflict and offer review, not repeat-return guidance.
 6. Click **Check Again**. The backend should rerun the same diagnostic on fresh reads. Do not complete a real return just for testing; if staff independently complete a legitimate return through the existing workflow, recheck afterwards. Other bookings, blocks or buffers may remain. A negative website check is not a checkout guarantee.
