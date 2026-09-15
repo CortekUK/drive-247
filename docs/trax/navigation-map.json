@@ -98,7 +98,55 @@
       "href": "/settings?tab=templates",
       "permission": "settings.templates",
       "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "rental_create",
+      "label": "Open New Rental",
+      "href": "/rentals/new",
+      "permission": "rentals",
+      "editPermission": "rentals",
+      "v2Area": "rentals",
+      "source": "apps/portal/src/components/rentals-v2/rental-create-v2.tsx"
+    },
+    {
+      "id": "integrations",
+      "label": "Open Integrations",
+      "href": "/integrations",
+      "permission": "settings.integrations",
+      "v2Area": "appearance",
+      "source": "apps/portal/src/app/(dashboard)/integrations/page.tsx"
+    },
+    {
+      "id": "settings_branding",
+      "label": "Open Branding settings",
+      "href": "/settings?tab=branding",
+      "permission": "settings.branding",
+      "source": "apps/portal/src/lib/permissions.ts"
+    },
+    {
+      "id": "audit_logs",
+      "label": "Open Audit Logs",
+      "href": "/audit-logs",
+      "permission": "audit_logs",
+      "source": "apps/portal/src/lib/permissions.ts"
+    }
+  ],
+  "humanSupportDestinations": [
+    {
+      "id": "my_tickets",
+      "app": "V2 portal",
+      "entry": "TRAX > My Tickets",
+      "source": "apps/portal/src/components/trax/support/SupportWorkspace.tsx",
+      "permission": "Active V2 staff; requester-owned tickets only",
+      "modelNavigation": false
+    },
+    {
+      "id": "platform_support",
+      "app": "admin",
+      "href": "/admin/support",
+      "source": "apps/admin/app/admin/(protected)/support/page.tsx",
+      "permission": "Active app_users.is_super_admin AND trax_support_agents grant",
+      "modelNavigation": false
     }
   ]
 }
-

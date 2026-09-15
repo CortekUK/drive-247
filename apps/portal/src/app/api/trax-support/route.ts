@@ -1,6 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { handleSupportRequest } from '../../../../../../supabase/functions/trax-support/support/handler';
 import { createSupportReads, type SupportDatabase } from '../../../../../../supabase/functions/trax-support/support/reads';
+import { createOperationalReads, type OperationalDatabase } from '../../../../../../supabase/functions/trax-support/support/operational-reads';
+import { configuredModel } from '../../../../../../supabase/functions/trax-support/support/model';
+import { createFleetReads, type FleetDatabase } from '../../../../../../supabase/functions/trax-support/support/fleet-tools';
+import { createTicketStore, type TicketDatabase } from '../../../../../../supabase/functions/trax-support/support/support-store';
+import { configuredEscalationPolicy } from '../../../../../../supabase/functions/trax-support/support/issues';
+import { configuredFinance } from '../../../../../../supabase/functions/trax-support/support/finance-tools';
+import type { FinanceDatabase } from '../../../../../../supabase/functions/trax-support/support/finance-reads';
+import { calendarClock } from '../../../../../../supabase/functions/trax-support/support/calendar-clock';
+import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { traxTestTenantSlugs } from '@/lib/trax-test-tenants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,14 +34,27 @@ export async function POST(request: Request): Promise<Response> {
     return fail('local_configuration_required', 'Local TRAX needs server configuration. Follow docs/trax/local-testing.md, then restart the portal.', 503);
   }
   try {
-    const signal = AbortSignal.timeout(8_000);
+    const requestDeadline=AbortSignal.any([request.signal,AbortSignal.timeout(65_000)]);
     const db = createClient(url, secret, {
       auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: (input, init) => fetch(input, { ...init, signal }) },
+      global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.any([requestDeadline,AbortSignal.timeout(8_000)]) }) },
     });
     // Narrow the SDK at the adapter boundary; recursively comparing its generic
     // query builders exceeds TypeScript's depth limit. No client reaches a tool.
-    const response = await handleSupportRequest(request, { reads: createSupportReads(db as unknown as SupportDatabase), signingSecret: secret });
+    const requestId=crypto.randomUUID(),started=Date.now();let modelCalls=0,toolCalls=0;
+    const response = await handleSupportRequest(request, { reads: createSupportReads(db as unknown as SupportDatabase), signingSecret: secret,
+      model:configuredModel(key=>process.env[key]),operational:createOperationalReads(db as unknown as OperationalDatabase),clock:calendarClock(fromZonedTime,formatInTimeZone),
+      fleet:createFleetReads(db as unknown as FleetDatabase),
+      finance:configuredFinance(db as unknown as FinanceDatabase,key=>process.env[key]),
+      store:process.env.TRAX_SUPPORT_STORAGE==='enabled'?createTicketStore(db as unknown as TicketDatabase):undefined,
+      escalationPolicy:configuredEscalationPolicy(process.env.TRAX_ESCALATION_POLICY),
+      // Local manual testing: NEXT_PUBLIC_TRAX_TEST_TENANTS (development only, see the helper).
+      testTenantSlugs:traxTestTenantSlugs(),
+      audit:event=>{if(event.kind==='model')modelCalls++;else toolCalls++;},
+    });
+    // Dev execution evidence contains counters only, never account or record data.
+    console.info(JSON.stringify({event:'trax_support',requestId,status:response.status,modelCalls,toolCalls,durationMs:Date.now()-started}));
+    response.headers.set('X-TRAX-Request-ID',requestId);
     response.headers.set('X-TRAX-Runtime', 'local-development');
     return response;
   } catch {

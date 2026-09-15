@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
+import { applyWebsiteVisibility, durationTierForDays } from '@/lib/vehicles/availability-rules';
 import { useQuery } from '@tanstack/react-query';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -180,9 +181,7 @@ export function resolveDurationTier(
 ): DurationTier | null {
   if (!startDate || !endDate) return null;
   const days = calendarDaysBetween(startDate, endDate);
-  if (days >= monthlyTierDays) return 'monthly';
-  if (days >= 7) return 'weekly';
-  return 'daily';
+  return durationTierForDays(days, monthlyTierDays);
 }
 
 /* ────────────────────────────── the hook ───────────────────────────────── */
@@ -307,23 +306,10 @@ export function useVehicles(options: UseVehiclesOptions = {}): UseVehiclesResult
     queryFn: async (): Promise<Vehicle[]> => {
       if (!tenant?.id) return [];
 
-      let request = supabase
+      let request = applyWebsiteVisibility(supabase
         .from('vehicles')
-        // Allowlist, never `select('*')`. Verified live: `*` on this table
-        // returns lockbox_code, purchase_price, security_notes, owner_id and vin
-        // to anyone holding the public anon key.
         .select(vehiclePublicColumns(tenant, VEHICLE_PHOTO_COLUMNS))
-        .eq('tenant_id', tenant.id)
-        .or('status.ilike.available,status.ilike.rented')
-        .eq('is_paused', false)
-        // Website visibility, set per vehicle in the portal's
-        // Website Content -> Our Fleet. Browse-only, and deliberately NOT applied
-        // to a lookup of one vehicle by id: a customer who already started a
-        // booking, or holds a link to a car the operator has since hidden, must
-        // still reach that page. `NOT FALSE` rather than `= true` because the
-        // column is nullable on rows written before it existed.
-        .not('show_on_website', 'is', false)
-        .not('is_disposed', 'is', true);
+        .eq('tenant_id', tenant.id));
 
       if (durationTier) {
         request = request.eq(TIER_COLUMN[durationTier], true);

@@ -7,8 +7,12 @@ export async function digest(value: string): Promise<string> {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+export interface AuthorizeOptions {
+  /** Local development routes only: tenant slugs that may use TRAX without V2 enrollment. */
+  testTenantSlugs?: readonly string[];
+}
 /** The selected tenant is a hint; ordinary staff always use their membership. */
-export async function authorize(reads: SupportReads, bearer: string, tenantHint: unknown): Promise<SupportContext> {
+export async function authorize(reads: SupportReads, bearer: string, tenantHint: unknown, options: AuthorizeOptions = {}): Promise<SupportContext> {
   const user = await reads.authenticate(bearer);
   if (!user) throw new SupportError('unauthorized', 'Sign in again to use TRAX.', 401);
   const staff = await reads.staff(user.id);
@@ -28,8 +32,9 @@ export async function authorize(reads: SupportReads, bearer: string, tenantHint:
   }
   // Scope comes from the authenticated membership and server-loaded tenant.
   // A client slug, V2 flag or super-admin role cannot enroll a V1 tenant.
-  // Use the same rollout policy as the portal, including future V2 tenants.
-  if (!isV2('chrome',tenant.slug)) {
+  // Use the same rollout policy as the portal, including future V2 tenants. Only the local
+  // development routes may add server-configured test tenants; the edge function never does.
+  if (!isV2('chrome',tenant.slug) && !options.testTenantSlugs?.includes(tenant.slug)) {
     throw new SupportError('feature_unavailable','This TRAX experience is available only for tenants enabled for V2.',403);
   }
   const role = (staff.is_super_admin ? 'head_admin' : staff.role) as StaffRole;
@@ -47,6 +52,14 @@ const withheld = new Set(['payments', 'invoices', 'fines', 'expenses', 'reports'
 export function canView(ctx: SupportContext, key: string): boolean {
   if (withheld.has(key)) return false;
   return ctx.role !== 'manager' || ctx.permissions.some((p) => p.tab_key === key);
+}
+/** Reviewed how-to text is not financial data. Guidance for withheld finance areas follows the
+ * finance staff policy (head admins, admins, managers holding the tab grant; never ops or viewers)
+ * and never adds navigation, records or tools: canView stays false for those keys. */
+export function canReadGuidance(ctx: SupportContext, key: string): boolean {
+  if (!withheld.has(key)) return canView(ctx, key);
+  if (ctx.role === 'manager') return ctx.permissions.some((p) => p.tab_key === key);
+  return ctx.role === 'head_admin' || ctx.role === 'admin';
 }
 export function canEdit(ctx: SupportContext, key: string): boolean {
   return canView(ctx, key) && ctx.role !== 'viewer'

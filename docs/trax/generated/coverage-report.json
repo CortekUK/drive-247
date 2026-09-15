@@ -1,7 +1,7 @@
 {
-  "knowledgeVersion": "0.1.0",
-  "sourceCommit": "13f9ea8679fbc6e35940b7d5824efa77b9da4b2d",
-  "verifiedAt": "2026-09-12",
+  "knowledgeVersion": "0.4.0",
+  "sourceCommit": "7cddd05e1989581fc02d54d68f4c161e7b947245",
+  "verifiedAt": "2026-09-15",
   "productionReleaseVerified": false,
   "completeApplicationCoverage": false,
   "features": [
@@ -9,7 +9,7 @@
       "id": "rentals",
       "title": "Rentals",
       "status": "verified",
-      "scope": "Fixed-rental navigation and workflow dimensions; money and state-changing actions excluded.",
+      "scope": "V2 guided rental intake, contextual stages and general payment-method guidance; financial facts and mutations excluded.",
       "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
     },
     {
@@ -23,8 +23,8 @@
       "id": "availability",
       "title": "Vehicle availability",
       "status": "partially_documented",
-      "scope": "Booking predicates traced; channel differences and deployed trigger remain unresolved.",
-      "limits": "Only the prepared section is verified for runtime. Remaining workflow coverage is incomplete."
+      "scope": "V2 website visibility, date occupancy, blocks and buffer predicates traced and reused; checkout precheck only, deployed trigger and other channels remain partial.",
+      "limits": "Repository-level V2 rule reuse verified. No complete checkout, production deployment or real-model integration verification is claimed."
     },
     {
       "id": "customers",
@@ -76,10 +76,17 @@
       "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
     },
     {
+      "id": "branding",
+      "title": "Branding and appearance",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the Branding settings tab and portal Appearance page verified against portal source.",
+      "limits": "Verification applies only to the stated scope, not all record states or deployed policies."
+    },
+    {
       "id": "pending_bookings",
       "title": "Pending bookings",
-      "status": "requiring_confirmation",
-      "scope": "Rental requests awaiting the existing review workflow.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for approving or rejecting held website bookings verified against portal source. Guidance only; the sidebar entry depends on manual payment mode, so no navigation is offered.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
@@ -99,8 +106,8 @@
     {
       "id": "blocked_customers",
       "title": "Blocked customers",
-      "status": "requiring_confirmation",
-      "scope": "Customer booking restrictions; detailed rules require confirmation.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for blocking and unblocking customers and identities verified against portal source. Guidance only; blocklist enforcement and cross-tenant scope are not certified.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
@@ -127,43 +134,43 @@
     {
       "id": "payments",
       "title": "Payments",
-      "status": "requiring_confirmation",
-      "scope": "Payments, allocation and processor links; finance permission unresolved.",
-      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+      "status": "partially_documented",
+      "scope": "V2 read-only rental-linked payment checks and exclusive connected-account funds behind explicit server grants. Full rental financial totals and deployed finance permissions remain unverified.",
+      "limits": "Default disabled. No historical currency/account guesses, automatic reconciliation, native payment mutations or complete rental balance. Explicit staff policy and live integration verification still required."
     },
     {
       "id": "invoices",
       "title": "Invoices",
-      "status": "requiring_confirmation",
-      "scope": "Issued rental billing documents; totals and delivery unverified.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the Invoices page verified against portal source. Guidance only: invoice records, payment state and navigation are not exposed to TRAX.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "fines",
       "title": "Fines",
-      "status": "requiring_confirmation",
-      "scope": "Vehicle/customer fine records; financial liability rules unverified.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for adding and managing fines verified against portal source. Guidance only: no fine records, charging outcome or navigation are exposed to TRAX.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "expenses",
       "title": "Expenses",
-      "status": "requiring_confirmation",
-      "scope": "Operator cost records; financial access unresolved.",
+      "status": "partially_documented",
+      "scope": "Verified that the Expenses area is hidden for lean tenants including northwind. Guidance only.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "insurances",
       "title": "Insurance",
-      "status": "requiring_confirmation",
-      "scope": "Insurance records and provider workflows; coverage not inferred.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the Insurances page verified against portal source. Guidance only; the page is intentionally absent from the V2 sidebar, so no navigation is offered.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "agreements",
       "title": "Agreements",
-      "status": "requiring_confirmation",
-      "scope": "Rental agreement and signature workflow; provider completion requires verification.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the Agreements list verified against portal source. Guidance only; the page is intentionally absent from the V2 sidebar, so no navigation is offered.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
@@ -183,15 +190,15 @@
     {
       "id": "audit_logs",
       "title": "Audit logs",
-      "status": "requiring_confirmation",
-      "scope": "Recorded application activity; retention and access need confirmation.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the Audit Logs page verified against portal source. Guidance only: TRAX does not read audit entries.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "dashboard",
       "title": "Dashboard",
-      "status": "requiring_confirmation",
-      "scope": "Tenant overview; no live metrics in Phase 1.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the V2 home dashboard layout verified against portal source. KPI figures from the dashboard-kpis function are deliberately not described.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
@@ -211,22 +218,22 @@
     {
       "id": "integrations",
       "title": "Integrations",
-      "status": "requiring_confirmation",
-      "scope": "Provider configuration; secret-bearing records excluded.",
-      "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+      "status": "partially_documented",
+      "scope": "V2 Bonzah setup guidance and permitted integration navigation only; provider credentials, state and financial data excluded.",
+      "limits": "Only Bonzah setup labels and prerequisites are reviewed. Other providers and live/provider mutations remain unverified."
     },
     {
       "id": "subscription",
       "title": "Subscription",
-      "status": "requiring_confirmation",
-      "scope": "Operator platform subscription; distinct from renter payments.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for the Billing page verified against portal source. Guidance only: no plan, card, invoice or navigation is exposed to TRAX.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "users",
       "title": "Staff administration",
-      "status": "requiring_confirmation",
-      "scope": "Staff activation, roles and manager grants; admin-only mutation behavior.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for staff administration (add, roles, deactivate) verified against portal source. The Users route has no tab key; guidance requires settings view and offers no navigation.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
@@ -239,15 +246,15 @@
     {
       "id": "plates",
       "title": "Plates",
-      "status": "requiring_confirmation",
-      "scope": "Vehicle registration-related records; tenant scoping unverified.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for Plates Management verified against portal source. The route has no dedicated permission key; guidance requires vehicles view and offers no navigation.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
       "id": "credits",
       "title": "Credits",
-      "status": "requiring_confirmation",
-      "scope": "Customer credit information; financial entitlement unresolved.",
+      "status": "partially_documented",
+      "scope": "Operator guidance for buying platform credits under Billing verified against portal source. Guidance only: no balance, purchase or navigation is exposed to TRAX.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
     },
     {
@@ -277,13 +284,20 @@
       "status": "requiring_confirmation",
       "scope": "Legacy insurance route; role/provider behavior requires confirmation.",
       "limits": "Not eligible for Phase 1 retrieval or navigation until workflow and authorization are reviewed."
+    },
+    {
+      "id": "human_support",
+      "title": "Human support conversations",
+      "status": "partially_documented",
+      "scope": "V2 tenant support messaging and the dedicated platform support inbox; local tests only, rollout and email delivery unverified.",
+      "limits": "Requires reviewed migrations and configuration. Platform flag AND dedicated active support grant; no tenant-admin cross-tenant access. Email inbox receipt and hosted multi-user operation remain unverified."
     }
   ],
   "counts": {
     "verified": 6,
-    "partially_documented": 4,
+    "partially_documented": 21,
     "unsupported": 1,
-    "requiring_confirmation": 28
+    "requiring_confirmation": 13
   },
   "permissionKeys": [
     "vehicles",
@@ -316,19 +330,19 @@
       "route": "/agreements/analytics",
       "source": "apps/portal/src/app/(dashboard)/agreements/analytics/page.tsx",
       "feature": "agreements",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/agreements",
       "source": "apps/portal/src/app/(dashboard)/agreements/page.tsx",
       "feature": "agreements",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/audit-logs",
       "source": "apps/portal/src/app/(dashboard)/audit-logs/page.tsx",
       "feature": "audit_logs",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/automations/[id]",
@@ -346,7 +360,7 @@
       "route": "/blocked-customers",
       "source": "apps/portal/src/app/(dashboard)/blocked-customers/page.tsx",
       "feature": "blocked_customers",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/blocked-dates",
@@ -442,13 +456,13 @@
       "route": "/credits/analytics",
       "source": "apps/portal/src/app/(dashboard)/credits/analytics/page.tsx",
       "feature": "credits",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/credits",
       "source": "apps/portal/src/app/(dashboard)/credits/page.tsx",
       "feature": "credits",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/customers/[id]",
@@ -496,31 +510,31 @@
       "route": "/expenses",
       "source": "apps/portal/src/app/(dashboard)/expenses/page.tsx",
       "feature": "expenses",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/fines/[id]",
       "source": "apps/portal/src/app/(dashboard)/fines/[id]/page.tsx",
       "feature": "fines",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/fines/analytics",
       "source": "apps/portal/src/app/(dashboard)/fines/analytics/page.tsx",
       "feature": "fines",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/fines/new",
       "source": "apps/portal/src/app/(dashboard)/fines/new/page.tsx",
       "feature": "fines",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/fines",
       "source": "apps/portal/src/app/(dashboard)/fines/page.tsx",
       "feature": "fines",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/fleet-health",
@@ -544,25 +558,25 @@
       "route": "/insurances/analytics",
       "source": "apps/portal/src/app/(dashboard)/insurances/analytics/page.tsx",
       "feature": "insurances",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/insurances",
       "source": "apps/portal/src/app/(dashboard)/insurances/page.tsx",
       "feature": "insurances",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/integrations",
       "source": "apps/portal/src/app/(dashboard)/integrations/page.tsx",
       "feature": "integrations",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/invoices",
       "source": "apps/portal/src/app/(dashboard)/invoices/page.tsx",
       "feature": "invoices",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/leads/[id]",
@@ -598,31 +612,31 @@
       "route": "/",
       "source": "apps/portal/src/app/(dashboard)/page.tsx",
       "feature": "dashboard",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/payments/[id]",
       "source": "apps/portal/src/app/(dashboard)/payments/[id]/page.tsx",
       "feature": "payments",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/payments/analytics",
       "source": "apps/portal/src/app/(dashboard)/payments/analytics/page.tsx",
       "feature": "payments",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/payments",
       "source": "apps/portal/src/app/(dashboard)/payments/page.tsx",
       "feature": "payments",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/pending-bookings",
       "source": "apps/portal/src/app/(dashboard)/pending-bookings/page.tsx",
       "feature": "pending_bookings",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/pl-dashboard/monthly/[month]",
@@ -640,13 +654,13 @@
       "route": "/plates/[id]",
       "source": "apps/portal/src/app/(dashboard)/plates/[id]/page.tsx",
       "feature": "plates",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/plates",
       "source": "apps/portal/src/app/(dashboard)/plates/page.tsx",
       "feature": "plates",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/promotions",
@@ -778,7 +792,7 @@
       "route": "/subscription",
       "source": "apps/portal/src/app/(dashboard)/subscription/page.tsx",
       "feature": "subscription",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/testimonials",
@@ -790,7 +804,7 @@
       "route": "/users",
       "source": "apps/portal/src/app/(dashboard)/users/page.tsx",
       "feature": "users",
-      "status": "requiring_confirmation"
+      "status": "partially_documented"
     },
     {
       "route": "/vehicle-owners/[id]",

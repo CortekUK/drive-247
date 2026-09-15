@@ -48,6 +48,57 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.unstubAllEnvs();});
 
 describe('useTraxSupport Phase 1',()=>{
+  it('accepts only the new operational protocol and sends a server-held recheck',async()=>{
+    mocks.fetch.mockImplementation(async(_url,init)=>{
+      const body=JSON.parse(init.body);
+      return body.type==='context'?reply('scope-a',{capabilities:{modelReady:true,operationalChecks:true,finance:false}}):reply('scope-a',{response:'Verified operational check.',provenance:{...provenance,kind:'operational_support',protocolVersion:2,engine:'model',liveDataChecked:true},sources:[{table:'vehicles',id:'vehicle-ref'}],evidence:[{status:'verified',observedAt:'2026-09-15T00:00:00Z',findings:[],checks:['website_visibility'],limitations:[]}],canRecheck:true});
+    });
+    const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));
+    expect(result.current.capabilities?.modelReady).toBe(true);
+    await act(()=>result.current.sendMessage('Check this vehicle'));
+    expect(result.current.messages.at(-1)?.canRecheck).toBe(true);
+    await act(()=>result.current.checkAgain!());
+    const body=JSON.parse(mocks.fetch.mock.calls.at(-1)![1].body);
+    expect(body).toMatchObject({type:'recheck',conversationId:'signed-context'});expect(body.diagnostic).toBeUndefined();
+  });
+  it('rejects financial sources even when an endpoint claims the operational protocol',async()=>{
+    mocks.fetch.mockImplementation(async()=>reply('scope-a',{provenance:{...provenance,kind:'operational_support',protocolVersion:2,engine:'model',liveDataChecked:true},sources:[{table:'payments',id:'private'}],evidence:[]}));
+    const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.error).toContain('not available'));expect(result.current.messages).toEqual([]);
+  });
+  describe('payment evidence cards',()=>{
+    const operational={...provenance,kind:'operational_support',protocolVersion:2,engine:'model',liveDataChecked:true};
+    const card=(actions:unknown[],stripe='pi_Verified1')=>({paymentId:'00000000-0000-4000-8000-000000000003',reference:{internal:'00000000',stripe},amount:{display:'USD 250.00 captured',basis:'stripe'},date:null,drive247Status:'Applied · captured',stripeStatus:'Succeeded (captured)',account:{label:'your Stripe account ending 1234',mode:'live'},verification:{result:'verified',reason:'stripe_confirmed',detail:'Verified.'},actions,limitation:null});
+    const evidenceReply=(finance:boolean,actions:unknown[],stripe?:string)=>async(_url:unknown,init:any)=>{
+      const body=JSON.parse(init.body);
+      if(body.type==='context')return reply('scope-a',{capabilities:{modelReady:true,operationalChecks:true,finance}});
+      return reply('scope-a',{response:'Here are the rental payments.',provenance:operational,capabilities:{modelReady:true,operationalChecks:true,finance},sources:[{table:'payment_evidence',id:'payment_evidence:rental'}],evidence:[{status:'verified',observedAt:'2026-09-15T00:00:00Z',findings:[],checks:['stripe_linked_transactions'],limitations:[],data:{paymentCards:[card(actions,stripe)]}}]});
+    };
+    it('accepts a dashboard link for the card’s own verified PaymentIntent and a Stripe receipt',async()=>{
+      mocks.fetch.mockImplementation(evidenceReply(true,[{kind:'stripe_dashboard',label:'Open in Stripe',href:'https://dashboard.stripe.com/payments/pi_Verified1',note:'Sign in.'},{kind:'receipt',label:'View receipt',href:'https://pay.stripe.com/receipts/payment/abc',note:'Receipt.'}]));
+      const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));
+      await act(()=>result.current.sendMessage('Show me the payments for rental R-1234X'));
+      expect(result.current.error).toBeNull();
+      expect(result.current.messages.at(-1)?.evidence?.[0].data?.paymentCards?.[0].actions).toHaveLength(2);
+    });
+    it.each([
+      ['a dashboard link to a different payment',[{kind:'stripe_dashboard',label:'Open in Stripe',href:'https://dashboard.stripe.com/payments/pi_Other',note:''}]],
+      ['a non-Stripe destination',[{kind:'stripe_dashboard',label:'Open in Stripe',href:'https://evil.invalid/payments/pi_Verified1',note:''}]],
+      ['a platform connected-account page',[{kind:'stripe_dashboard',label:'Open in Stripe',href:'https://dashboard.stripe.com/connect/accounts/acct_1/payments/pi_Verified1',note:''}]],
+      ['a receipt mislabeled as a dashboard page',[{kind:'receipt',label:'Open in Stripe',href:'https://pay.stripe.com/receipts/payment/abc',note:''}]],
+      ['a newly created checkout page',[{kind:'stripe_dashboard',label:'Open in Stripe',href:'https://checkout.stripe.com/c/pay/cs_live_new',note:''}]],
+    ])('rejects %s',async(_name,actions)=>{
+      mocks.fetch.mockImplementation(evidenceReply(true,actions));
+      const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));
+      await act(()=>result.current.sendMessage('Give me the Stripe link'));
+      expect(result.current.error).toContain('could not be verified');expect(result.current.messages).toEqual([]);
+    });
+    it('rejects payment cards when the account has no finance capability',async()=>{
+      mocks.fetch.mockImplementation(evidenceReply(false,[]));
+      const {result}=renderHook(()=>useTraxSupport());await waitFor(()=>expect(result.current.isLoading).toBe(false));
+      await act(()=>result.current.sendMessage('Show payments'));
+      expect(result.current.messages).toEqual([]);
+    });
+  });
   it('uses the same-origin backend in local development',async()=>{
     vi.stubEnv('NODE_ENV','development');
     const {result}=renderHook(()=>useTraxSupport());
@@ -78,6 +129,22 @@ describe('useTraxSupport Phase 1',()=>{
     await act(()=>result.current.navigate({target:'rentals',label:'Open Rentals'}));
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(result.current.messages).toEqual([]);
+  });
+  it('lets a named local test tenant use TRAX from the V1 layout, only in development',async()=>{
+    mocks.v2=false;mocks.tenant={id:'tenant-a',slug:'jangramrentals'};
+    vi.stubEnv('NEXT_PUBLIC_TRAX_TEST_TENANTS','test,jangramrentals');vi.stubEnv('NODE_ENV','development');
+    const {result}=renderHook(()=>useTraxSupport());
+    await waitFor(()=>expect(result.current.isLoading).toBe(false));
+    await act(()=>result.current.sendMessage('rentals'));
+    expect(mocks.fetch).toHaveBeenCalled();
+    expect(mocks.fetch.mock.calls.every(([url])=>url==='/api/trax-support')).toBe(true);
+  });
+  it('ignores the local test tenant list outside development',async()=>{
+    mocks.v2=false;mocks.tenant={id:'tenant-a',slug:'jangramrentals'};
+    vi.stubEnv('NEXT_PUBLIC_TRAX_TEST_TENANTS','jangramrentals');vi.stubEnv('NODE_ENV','production');
+    const {result}=renderHook(()=>useTraxSupport());
+    await act(()=>result.current.sendMessage('rentals'));
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it('never contacts support from a V1 layout, even with a Northwind tenant',async()=>{
     mocks.v2=false;

@@ -1,15 +1,16 @@
 import { KNOWLEDGE } from './knowledge.generated.ts';
-import { canView, canEdit, routeAllowed } from './auth.ts';
+import { canView, canEdit, canReadGuidance, routeAllowed } from './auth.ts';
 import { isAreaHidden, isSettingsTabHidden } from './portal-lean.generated.js';
 import { isV2 } from './portal-v2.generated.js';
 import { stageHref } from './rental-navigation.generated.js';
 import { object, onlyKeys, SupportError, UUID, type NavigationAction, type PageContext, type SupportContext, type SupportReads } from './types.ts';
 
 export type Guide = typeof KNOWLEDGE.guides[number];
-type Navigation = { id:string; label:string; href:string; permission:string; entity?:'rental'|'vehicle'|'customer'; editPermission?:string; v2Stage?:string; hiddenArea?:string };
+type Navigation = { id:string; label:string; href:string; permission:string; entity?:'rental'|'vehicle'|'customer'; editPermission?:string; v2Stage?:string; hiddenArea?:string; v2Area?:string };
 export interface ToolContext { auth:SupportContext; reads:SupportReads }
 export function targetAvailable(auth:SupportContext, target:Navigation):boolean {
   if (!canView(auth,target.permission) || (target.editPermission && !canEdit(auth,target.editPermission))) return false;
+  if (target.v2Area && !isV2(target.v2Area,auth.tenant.slug)) return false;
   if (target.hiddenArea && isAreaHidden(target.hiddenArea,auth.tenant.slug)) return false;
   const tab = new URL(target.href.replace('{id}','record'), 'https://portal.invalid').searchParams.get('tab');
   if (tab && isSettingsTabHidden(tab,auth.tenant.slug)) return false;
@@ -23,12 +24,26 @@ export async function validateEntity(env:ToolContext, page:PageContext):Promise<
   if (!record || record.id !== page.id || record.tenant_id !== env.auth.tenant.id) throw new SupportError('record_unavailable','This record is unavailable.',403);
 }
 export function guideAvailable(auth:SupportContext,guide:Guide):boolean {
-  return guide.permissions.every((key)=>canView(auth,key)) && guide.navigation.some((id)=>{
+  if (!guide.permissions.every((key)=>canReadGuidance(auth,key))) return false;
+  // Guidance-only sections (withheld finance areas) carry their own permission keys and no destinations.
+  if (!guide.navigation.length) return guide.permissions.length>0;
+  return guide.navigation.some((id)=>{
     const target=KNOWLEDGE.navigation.find((n)=>n.id===id) as Navigation|undefined;
     return target && targetAvailable(auth,target);
   });
 }
 export function isFinanceQuestion(query: string): boolean {
+  // General interface guidance is safe to retrieve; this exemption adds no
+  // financial data tool or finance navigation permission. Mixed/live questions
+  // still fail closed, including claimed balances and missing money.
+  const general=/\b(?:what|which) payment methods\b|\bpayment method (?:options|types)\b|\b(?:how (?:do i |to )?(?:choose|select)|explain) (?:a |the )?payment method\b|\bpayment methods? (?:kaise|kahan|kya)\b/i.test(query);
+  const live=/\b(my|our|this|missing|failed|lost|balance|balances|refund|refunds|payout|revenue|invoice|invoices|credit|credits|charge|paid|collected|received|arrived|amount|kitna|mera|meri|mere|nahi)\b|[$£€]\s*\d/i.test(query);
+  if(general&&!live)return false;
+  // "How do I create an invoice / record a fine / take a payment" asks for interface guidance, not an
+  // investigation. It retrieves guidance only and gains no finance tool, record or navigation permission.
+  const howTo=/^\s*(?:how (?:do|can|should|would) (?:i|we)|how to|where (?:do|can) (?:i|we)|is there a way to)\b|\b(?:kaise|kis tarah) (?:karun|karein|karte|banaun|banayein|add|record|bhejun)\b/i.test(query);
+  const investigation=/\b(missing|failed|failing|lost|balance|balances|refund|refunds|refunded|payout|payouts|revenue|charged|collected|received|arrived|amount|owe|owed|kitna|kitne|kitni|nahi|why)\b|[$£€]\s*\d/i.test(query);
+  if(howTo&&!investigation)return false;
   return /\b(stripe|balance|balances|payment|payments|refund|refunds|payout|revenue|invoice|invoices|credit|credits|paise|paisa|raqam)\b/i.test(query);
 }
 function searchApplicationKnowledge(input:unknown,env:ToolContext):Guide[] {

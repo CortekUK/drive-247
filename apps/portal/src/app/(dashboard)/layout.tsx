@@ -40,6 +40,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { TraxAIDialog } from "@/components/chat";
 import { TraxLauncher, type TraxLauncherHandle } from "@/components/trax/trax-launcher";
+import { TraxSupportDialog } from "@/components/trax/support/TraxSupportDialog";
+import { isTraxTestTenant } from "@/lib/trax-test-tenants";
 import { isV2 } from "@/lib/v2";
 import { MaintenanceBanner } from "@/components/dashboard/maintenance-banner";
 import { AppBannerStack } from "@/components/banners/app-banner-stack";
@@ -452,7 +454,9 @@ export default function DashboardLayout({
               <div className="min-w-0 w-auto sm:w-56 lg:w-64 shrink-0 sm:shrink">
                 <HeaderSearch />
               </div>
-              <TraxAIDialog />
+              {/* Local test tenants (NEXT_PUBLIC_TRAX_TEST_TENANTS, dev only) get the V2
+                  TRAX assistant in place of the V1 dialog. Still one assistant. */}
+              {isTraxTestTenant(tenant?.slug) ? <TraxSupportDialog /> : <TraxAIDialog />}
               <div className="ml-auto flex items-center gap-0.5 sm:gap-2 flex-shrink-0">
                 <div className="hidden min-[420px]:flex items-center gap-1 sm:gap-2">
                   <BonzahBalance />

@@ -39,5 +39,5 @@ Native financial/return endpoints, RLS on unrelated business tables, customer ch
 - Rental-finance versus whole-account funds permission matrix.
 - Historical Stripe platform, environment and connected-account provenance.
 - Restricted Stripe credentials provisioned through server secret management, never chat.
-- Conversation/log retention and provider data-processing policy.
-- Provider/model-assisted routing, if desired later; current answers use deterministic bilingual sections.
+- Provider/log/backup retention verification. Initial TRAX application retention is specified in support-escalation.md; destructive production cleanup remains disabled pending approval.
+- Reviewed support migration rollout, explicit staff assignments and signed-in provider/storage verification. Responses orchestration is implemented; model account quota currently prevents a successful live test.

@@ -1,0 +1,54 @@
+{
+  "verifiedAt": "2026-09-15",
+  "unit": {
+    "cases": 299,
+    "passed": 299,
+    "failed": 0
+  },
+  "sql": {
+    "messaging": 34,
+    "priorStorageRetention": 24,
+    "passed": 58
+  },
+  "browser": {
+    "messaging": {
+      "passed": true,
+      "liveEmail": false,
+      "liveTenants": false,
+      "actualSql": true,
+      "checks": [
+        "composer has no writes",
+        "atomic first send",
+        "Support 2 → 1",
+        "two-way automatic updates",
+        "failed draft retry",
+        "resolved ticket reopens",
+        "refresh restores conversation",
+        "offline reconnect catches up without duplicate messages",
+        "lost first-send response retries across refresh without duplicate",
+        "mobile no clipping"
+      ],
+      "errors": []
+    },
+    "existingModes": [
+      "prepared-guidance",
+      "operational",
+      "finance",
+      "support-composer-retention"
+    ],
+    "existingModesPassed": true
+  },
+  "live": {
+    "hostedTenantsTested": false,
+    "migrationsApplied": false,
+    "emailSent": false,
+    "destructiveCleanupEnabled": false
+  },
+  "typecheck": {
+    "backend": "passed",
+    "adminFocused": "passed",
+    "portalExistingDiagnostics": 7,
+    "newPortalDiagnostics": 0,
+    "wholePortalClean": false
+  }
+}

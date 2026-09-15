@@ -1,3 +1,5 @@
+> Historical Phase 0/1 report. Current local changes and verification limits are in [completion-status.md](completion-status.md).
+
 # TRAX Phase 0/1 implementation and verification
 
 Local implementation completed on 2026-09-12 against audited base commit `13f9ea8679fbc6e35940b7d5824efa77b9da4b2d`, on the existing `main` branch. Changes remain uncommitted and ready for review. No application release or production deployment match is asserted. The unrelated document lock file was preserved.

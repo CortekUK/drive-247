@@ -471,3 +471,15 @@ verify_jwt = false
 # editable by anyone who opened the marketing site.
 [functions.manage-signup-plans]
 verify_jwt = true
+
+[functions.trax-messaging]
+verify_jwt = true
+
+# Dedicated scheduler secret is checked inside; no public/user invocation.
+[functions.trax-support-notifications]
+verify_jwt = false
+
+# TRAX read-only Stripe bridge. The service-role key is checked inside (constant time);
+# only fixed GET reads run, using the existing Stripe secrets by name.
+[functions.trax-stripe-read]
+verify_jwt = false

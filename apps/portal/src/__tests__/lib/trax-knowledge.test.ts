@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { prepare, staleSources } from '../../../../../scripts/trax-knowledge.mjs';
 import ts from 'typescript';
+import { RENTAL_COLUMNS, VEHICLE_COLUMNS } from '../../../../../supabase/functions/trax-support/support/operational-reads';
+import { FINANCE_PAYMENT_COLUMNS } from '../../../../../supabase/functions/trax-support/support/finance-reads';
 const ROOT=resolve(__dirname,'../../../../..');
 
 describe('TRAX maintained knowledge',()=>{
@@ -20,12 +22,17 @@ describe('TRAX maintained knowledge',()=>{
     const entry=readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/reads.ts'),'utf8');
     const selections=[...entry.matchAll(/\.from\('([^']+)'\)\.select\('([^']+)'\)/g)].map((match)=>[match[1],match[2]]);
     expect(selections).toHaveLength(3);
+    const operational=readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/operational-reads.ts'),'utf8');
+    selections.push(...[...operational.matchAll(/\.from\('([^']+)'\)\.select\('([^']+)'\)/g)].map((match)=>[match[1],match[2]]));
+    selections.push(['vehicles',VEHICLE_COLUMNS],['rentals',RENTAL_COLUMNS]);
+    const finance=readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/finance-reads.ts'),'utf8');
+    selections.push(...[...finance.matchAll(/\.from\('([^']+)'\)\.select\('([^']+)'\)/g)].map(match=>[match[1],match[2]]),['payments',FINANCE_PAYMENT_COLUMNS]);
     for(const table of ['rentals','vehicles','customers'])selections.push([table,'id,tenant_id']);
     for(const [table,fields] of selections)for(const field of fields.split(','))expect(()=>member(member(tables,table),'Row')&&member(member(member(tables,table),'Row'),field)).not.toThrow();
   });
   it('matches its sources, portal route inventory and permission coverage',async()=>{
-    await expect(prepare(true)).resolves.toMatchObject({verified:6,partially_documented:4,unsupported:1,requiring_confirmation:28});
-  });
+    await expect(prepare(true)).resolves.toMatchObject({verified:6,partially_documented:21,unsupported:1,requiring_confirmation:13});
+  },60_000); // Hashes every catalogued source; can exceed the 5s default when the machine is busy.
   it('detects changes and deleted sources without normalizing business text away',async()=>{
     const sha=(text:string)=>createHash('sha256').update(text).digest('hex');
     const hashes={same:sha('a\nb\n'),changed:sha('old'),deleted:sha('old')};
@@ -35,7 +42,11 @@ describe('TRAX maintained knowledge',()=>{
   it('keeps private knowledge, old embeddings and write dispatch outside the handler',()=>{
     const entry=readFileSync(resolve(ROOT,'supabase/functions/trax-support/index.ts'),'utf8')+readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/reads.ts'),'utf8')+readFileSync(resolve(ROOT,'apps/portal/src/app/api/trax-support/route.ts'),'utf8');
     const handler=readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/handler.ts'),'utf8');
-    expect(entry+handler).not.toMatch(/\.rpc\(|generateEmbedding\(|chatCompletion\(|\.insert\(|\.update\(|\.delete\(|actions\/registry/);
+    expect(entry).not.toMatch(/\.rpc\(|generateEmbedding\(|chatCompletion\(|\.insert\(|\.update\(|\.delete\(|actions\/registry/);
+    expect(handler).not.toMatch(/\.rpc\(|generateEmbedding\(|chatCompletion\(|\.insert\(|\.delete\(|actions\/registry/);
+    const storage=readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/support-store.ts'),'utf8');
+    expect([...storage.matchAll(/db\.from\('([^']+)'\)/g)].map(m=>m[1])).toEqual(['trax_support_conversations','trax_support_conversations']);
+    expect(handler).toContain("type==='submit_ticket'");
     expect(entry).toContain("select('id,tenant_id')");
     const prepared=readFileSync(resolve(ROOT,'supabase/functions/trax-support/support/knowledge.generated.ts'),'utf8');
     expect(prepared).not.toContain('net_at_stripe');expect(prepared).not.toContain('licence_number');

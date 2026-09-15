@@ -11,6 +11,7 @@ import { ChatChart } from '@/components/chat/ChatChart';
 import { ChatRentalCards } from '@/components/chat/ChatRentalCards';
 import { ChatActionCard, ActionResultBadge } from '@/components/chat/ChatActionCard';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
+import { PaymentEvidence } from './PaymentEvidence';
 import type { ChatMessage as ChatMessageType, TraxNavigation } from '@/types/trax-support';
 
 interface ChatMessageProps {
@@ -20,9 +21,10 @@ interface ChatMessageProps {
   onNavigate?: () => void;
   isLoading?: boolean;
   onVerifyNavigation?: (action: TraxNavigation) => Promise<boolean>;
+  onCheckAgain?: () => Promise<void>;
 }
 
-export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, isLoading }: ChatMessageProps) {
+export function ChatMessage({ message, onConfirmAction, onRejectAction, onNavigate, onVerifyNavigation, onCheckAgain, isLoading }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const { branding } = useTenantBranding();
@@ -149,17 +151,9 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
                       {children}
                     </blockquote>
                   ),
-                  a: ({ children, href }) => (
-                    <a
-                      href={href}
-                      className="underline underline-offset-2"
-                      style={{ color: accentColor }}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {children}
-                    </a>
-                  ),
+                  // Only server-verified navigation buttons may open destinations.
+                  a: ({ children }) => <span>{children}</span>,
+                  img: () => null,
                   hr: () => <hr className="my-3 border-border/40" />,
                 }}
               >
@@ -191,11 +185,21 @@ export function ChatMessage({ message, onConfirmAction, onRejectAction, onNaviga
         {!isUser && message.provenance && (
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
-              Application guide · Live records not checked
+              {message.provenance.engine==='model'?'AI answer':'Prepared guidance fallback'} · {message.provenance.liveDataChecked?'Live records checked':'Live records not checked'}
             </summary>
             <p className="mt-1">{message.sources?.map((source) => source.title).filter(Boolean).join(', ') || 'Phase 1 support scope'} · Guide {message.provenance.knowledgeVersion}. Release match has not been verified. This conversation is kept in browser memory only.</p>
           </details>
         )}
+        {!isUser && message.evidence?.filter(result=>result.checks.length||result.findings.length||result.limitations.length).map((result,index)=>(
+          <div key={index} className="w-full rounded-lg border border-border/60 bg-background/60 p-3 text-xs">
+            <p className="font-medium">{result.status==='verified'?'Record check':result.status==='needs_input'?'More context needed':'Incomplete check'} · {new Date(result.observedAt).toLocaleString()}</p>
+            {result.findings.length>0 && <ul className="mt-2 space-y-2">{result.findings.map((finding,i)=><li key={i}>{finding.summary}</li>)}</ul>}
+            {result.status==='verified'&&!result.findings.some(f=>f.blocking)&&result.checks.some(c=>['website_visibility','rental_occupancy','checkout_overlap_precheck'].includes(c))&&<p className="mt-2">No blocker found in the evaluated checks.</p>}
+            {!!result.limitations.length && <p className="mt-2 text-muted-foreground">{result.limitations.join(' ')}</p>}
+            {Array.isArray(result.data?.paymentCards) && <div className="mt-2"><PaymentEvidence cards={result.data!.paymentCards!} totals={result.data!.totals} explanations={result.data!.explanations} /></div>}
+          </div>
+        ))}
+        {!isUser && message.canRecheck && onCheckAgain && <button type="button" disabled={isLoading} onClick={()=>void onCheckAgain()} className="rounded-lg border border-border px-3 py-2 text-xs font-medium hover:bg-secondary focus-visible:outline focus-visible:outline-2 disabled:opacity-50">Check Again</button>}
         {!isUser && onVerifyNavigation && !!message.navigation?.length && (
           <div className="flex flex-wrap gap-2">
             {message.navigation.map((action) => (

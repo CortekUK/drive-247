@@ -14,6 +14,7 @@ import { TraxIcon } from '@/components/chat/TraxIcon';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from './ChatMessage';
+import { SupportWorkspace } from './SupportWorkspace';
 import { ChatChart } from '@/components/chat/ChatChart';
 import { useTraxSupport } from '@/hooks/use-trax-support';
 import { useTenantBranding } from '@/hooks/use-tenant-branding';
@@ -120,10 +121,14 @@ function EmptyState({
   onSuggestionClick,
   accentColor,
   userName,
+  modelReady,
+  financeReady,
 }: {
   onSuggestionClick: (msg: string) => void;
   accentColor: string;
   userName?: string;
+  modelReady?: boolean;
+  financeReady?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center px-4 py-6 sm:px-6 sm:py-10">
@@ -149,7 +154,7 @@ function EmptyState({
         {userName ? `Hey ${userName}, how can I help?` : 'How can I help?'}
       </h3>
       <p className="mt-2 max-w-[360px] text-[13px] text-muted-foreground text-center leading-relaxed">
-        {userName
+        {modelReady ? (financeReady ? 'I can check authorized rental, vehicle and payment records. Tell me what happened; financial actions always stay in the existing workflows.' : "I can explain reviewed workflows and check authorized vehicle and rental records. Tell me what happened or start from a vehicle page.") : userName
           ? "I can explain documented workflows and help you find the right screen. Live account checks are not available yet."
           : 'Explore documented workflows and portal navigation in English or Roman Urdu. Live account checks are not available yet.'}
       </p>
@@ -354,7 +359,7 @@ function ThinkingIndicator({ accentColor }: { accentColor: string }) {
 
 // ── Dialog inner content (reusable) ──────────────────────────────
 function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (open: boolean) => void }) {
-  const { messages, isLoading, error, sendMessage, confirmAction, rejectAction, clearChat, navigate } = useTraxSupport(isOpen);
+  const { messages, isLoading, error, sendMessage, confirmAction, rejectAction, clearChat, navigate, capabilities, checkAgain, supportRequest, issues, activeIssueId, recentConversations, contextKey } = useTraxSupport(isOpen);
   const { branding } = useTenantBranding();
   const { appUser } = useAuth();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -421,7 +426,7 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
             </div>
             <div>
               <h2 className="text-[15px] font-semibold tracking-tight">Trax AI</h2>
-              <p className="text-xs text-muted-foreground">Application guidance · Live checks unavailable</p>
+              <p className="text-xs text-muted-foreground">{capabilities?.modelReady ? 'AI support · Read-only operational checks' : 'Prepared guidance · Model not configured'}</p>
             </div>
           </div>
 
@@ -449,6 +454,7 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
           </div>
         </div>
 
+        <SupportWorkspace key={contextKey} request={supportRequest} capabilities={capabilities} issues={issues} activeIssueId={activeIssueId} recent={recentConversations} busy={isLoading}>
         {/* Messages area */}
         <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
           <div className="flex flex-col gap-1 px-3 py-2 sm:px-5">
@@ -459,6 +465,8 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
                 }}
                 accentColor={accentColor}
                 userName={firstName || undefined}
+                modelReady={capabilities?.modelReady}
+                financeReady={capabilities?.finance}
               />
             ) : (
               messages.map((message) => (
@@ -469,18 +477,20 @@ function TraxSupportDialogInner({ isOpen, setIsOpen }: { isOpen: boolean; setIsO
                   onRejectAction={rejectAction}
                   onNavigate={() => setIsOpen(false)}
                   onVerifyNavigation={navigate}
+                  onCheckAgain={message.id===messages.at(-1)?.id?checkAgain:undefined}
                   isLoading={isLoading}
                 />
               ))
             )}
 
-            {isLoading && <ThinkingIndicator accentColor={accentColor} />}
+            {isLoading && <><p role="status" className="px-2 py-2 text-xs text-muted-foreground">{capabilities?.finance&&/\b(payments?|stripe|refunds?|receipt|paid|charged?|paisa|paise|raqam)\b/i.test(messages.filter((m)=>m.role==='user').at(-1)?.content??'')?'Checking rental payments… Verifying with Stripe…':capabilities?.modelReady?'Checking guidance and authorized records…':'Loading application guidance…'}</p><ThinkingIndicator accentColor={accentColor} /></>}
           </div>
         </ScrollArea>
 
         {/* Input */}
-        {error && <p role="alert" className="mx-3 rounded-lg border border-border bg-secondary/30 p-3 text-sm sm:mx-5">{error}</p>}
         <TraxInput onSend={sendMessage} isLoading={isLoading} accentColor={accentColor} />
+        </SupportWorkspace>
+        {error && <p role="alert" className="mx-3 my-2 rounded-lg border border-border bg-secondary/30 p-3 text-sm sm:mx-5">{error}</p>}
       </div>
     </>
   );
