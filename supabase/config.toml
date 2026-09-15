@@ -502,3 +502,15 @@ verify_jwt = false
 # turo_vehicle_map.confirmed_by, which is NOT NULL by design. Neither decision
 # may be made by a bearer of a pairing token, because a token proves which
 # tenant and never which person. Do not add them.
+
+[functions.trax-messaging]
+verify_jwt = true
+
+# Dedicated scheduler secret is checked inside; no public/user invocation.
+[functions.trax-support-notifications]
+verify_jwt = false
+
+# TRAX read-only Stripe bridge. The service-role key is checked inside (constant time);
+# only fixed GET reads run, using the existing Stripe secrets by name.
+[functions.trax-stripe-read]
+verify_jwt = false

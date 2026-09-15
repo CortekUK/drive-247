@@ -35,13 +35,17 @@ describe("fleet-quote shared copy", () => {
     // Belt and braces: assert the byte-identity directly rather than trusting the
     // generator to be checking what it claims. A generator bug that silently
     // emitted a truncated file would pass --check but fail here.
-    const src = readFileSync(resolve(ROOT, "apps/portal/src/lib/fleet-quote.ts"), "utf8");
+    // Git may check out CRLF on Windows. Compare every source character after
+    // canonicalizing only the transport line ending, never trimming the body.
+    const src = readFileSync(resolve(ROOT, "apps/portal/src/lib/fleet-quote.ts"), "utf8").replace(/\r\n/g, "\n");
     const genPath = resolve(ROOT, "supabase/functions/_shared/fleet-quote.ts");
     expect(existsSync(genPath)).toBe(true);
-    const gen = readFileSync(genPath, "utf8");
+    const gen = readFileSync(genPath, "utf8").replace(/\r\n/g, "\n");
 
     const srcMarker = 'import { formatCurrency } from "@/lib/format-utils";\n';
     const genMarker = 'import { formatCurrency } from "./format-utils.ts";\n';
+    expect(src.indexOf(srcMarker)).toBeGreaterThanOrEqual(0);
+    expect(gen.indexOf(genMarker)).toBeGreaterThanOrEqual(0);
     const srcBody = src.slice(src.indexOf(srcMarker) + srcMarker.length);
     const genBody = gen.slice(gen.indexOf(genMarker) + genMarker.length);
 

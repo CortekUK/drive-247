@@ -1,0 +1,10 @@
+{
+  "state": "unavailable",
+  "httpStatus": null,
+  "providerCode": null,
+  "durationMs": 18034,
+  "tenantDataSent": false,
+  "paymentDataSent": false,
+  "signedInPortalVerified": false,
+  "observedAt": "2026-09-14T22:17:03.286Z"
+}

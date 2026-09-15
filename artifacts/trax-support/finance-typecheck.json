@@ -1,0 +1,43 @@
+{
+  "currentDiagnostics": 7,
+  "baselineDiagnostics": 7,
+  "comparison": "Only equivalent ReactNode import-path spellings are normalized.",
+  "newDiagnostics": [],
+  "diagnostics": [
+    {
+      "file": "apps/portal/src/components/trax/support/TraxSupportDialog.tsx",
+      "code": 2322,
+      "message": "Type 'RefObject<HTMLDivElement>' is not assignable to type 'Ref<never>'.   Type 'RefObject<HTMLDivElement>' is not assignable to type 'RefObject<never>'.     Type 'HTMLDivElement' is not assignable to type 'never'."
+    },
+    {
+      "file": "apps/portal/src/components/ui/button.tsx",
+      "code": 2322,
+      "message": "Type '{ disabled?: boolean; form?: string; formAction?: string | ((formData: FormData) => void | Promise<void>); formEncType?: string; formMethod?: string; formNoValidate?: boolean; ... 282 more ...; ref: ForwardedRef<...>; }' is not assignable to type 'SlotProps'.   Types of property 'children' are incompatible.     Type 'React.ReactNode' is not assignable to type 'import(\"C:/Users/User/Documents/Drive_247/drive-247/node_modules/@types/react/index\").ReactNode'.       Type 'ReactElement<unknown, string | JSXElementConstructor<any>>' is not assignable to type 'ReactNode'.         Property 'children' is missing in type 'ReactElement<unknown, string | JSXElementConstructor<any>>' but required in type 'ReactPortal'."
+    },
+    {
+      "file": "apps/portal/src/contexts/TenantContext.tsx",
+      "code": 2339,
+      "message": "Property 'company_name' does not exist on type 'GenericStringError'."
+    },
+    {
+      "file": "apps/portal/src/contexts/TenantContext.tsx",
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'GenericStringError'."
+    },
+    {
+      "file": "apps/portal/src/contexts/TenantContext.tsx",
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'GenericStringError'."
+    },
+    {
+      "file": "apps/portal/src/contexts/TenantContext.tsx",
+      "code": 2352,
+      "message": "Conversion of type 'GenericStringError' to type 'Tenant' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.   Type '{ error: true; } & String' is missing the following properties from type 'Tenant': id, slug, company_name, status, and 53 more."
+    },
+    {
+      "file": "apps/portal/src/stores/auth-store.ts",
+      "code": 2322,
+      "message": "Type '() => Promise<() => void>' is not assignable to type '() => Promise<void>'.   Type 'Promise<() => void>' is not assignable to type 'Promise<void>'.     Type '() => void' is not assignable to type 'void'."
+    }
+  ]
+}
