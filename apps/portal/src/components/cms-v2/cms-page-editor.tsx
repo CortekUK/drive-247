@@ -295,7 +295,9 @@ function CmsFieldEditor({
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-10 md:px-12">
+      /* Starts where the loaded header starts (24.5px at md+, below), so
+         nothing jumps when the page lands. */
+      <div className="mx-auto max-w-3xl px-6 py-10 md:px-12 md:pt-[24.5px]">
         <Skeleton className="h-9 w-56" />
         <Skeleton className="mt-3 h-4 w-72" />
         <Skeleton className="mt-10 h-64 w-full rounded-4xl" />
@@ -305,7 +307,9 @@ function CmsFieldEditor({
 
   if (!spec) {
     return (
-      <div className="mx-auto max-w-3xl px-6 py-10 md:px-12">
+      /* Switch row alignment: this h1 is text-2xl with no leading class, a 32px
+         line box, so at md+ 50 + 26 + 16 = 92 centres it on the sidebar switch. */
+      <div className="mx-auto max-w-3xl px-6 py-10 md:px-12 md:pt-[26px]">
         <h1 className="font-heading text-2xl font-medium">Unknown page</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           “{slug}” is not one of the pages on your website.
@@ -316,7 +320,11 @@ function CmsFieldEditor({
 
   return (
     <div className="relative min-h-full">
-      <div className="mx-auto max-w-3xl px-6 pb-40 pt-10 md:px-12">
+      {/* Switch row alignment: at md+ the h1 (text-[28px] leading-tight, a 35px
+          line box) is centred on the sidebar's Portal / Website switch at
+          y=92: 50 + 24.5 + 17.5. PageStatus stays on the same row (items-start).
+          pt-10 put it at 107.5. Below md it keeps pt-10. */}
+      <div className="mx-auto max-w-3xl px-6 pb-40 pt-10 md:px-12 md:pt-[24.5px]">
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
             {/* The tenant's OWN name for the page, not the spec's. The sidebar

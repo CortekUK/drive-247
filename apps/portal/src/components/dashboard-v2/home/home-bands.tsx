@@ -25,7 +25,7 @@
  * tenant is resolved — see V2_PLAN §5, RLS is OFF on these tables.
  */
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTenant } from '@/contexts/TenantContext';
 import { useDashboardKPIs } from '@/hooks/use-dashboard-kpis';
@@ -90,7 +90,11 @@ function toFlow(m: OpsMovement): Movement {
   };
 }
 
-export function HomeBands() {
+/**
+ * `aside` renders at the right of the FIRST band's title row ("On your desk",
+ * which always renders). DashboardV2 passes New Rental through it.
+ */
+export function HomeBands({ aside }: { aside?: ReactNode } = {}) {
   const router = useRouter();
   const { tenant } = useTenant();
   const { canView } = useManagerPermissions();
@@ -269,7 +273,11 @@ export function HomeBands() {
       {/* ── Important ─────────────────────────────────────────────────────── */}
       {/* Rhythm: narrow · wide · narrow. The poster is a fixed shape; the list
           that can ruin your morning gets the width. */}
-      <Band title="On your desk" hint="What’s new, what to learn, and what you wrote down">
+      <Band
+        title="On your desk"
+        hint="What’s new, what to learn, and what you wrote down"
+        aside={aside}
+      >
         <AnnouncementCarousel className="min-h-[288px] rounded-2xl border-0 shadow-none" />
 
         {/* The middle slot is the CHECKLIST, per Ghulam's own assignment of these

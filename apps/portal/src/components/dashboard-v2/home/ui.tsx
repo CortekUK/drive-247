@@ -98,11 +98,14 @@ export function Band({
   title,
   hint,
   action,
+  aside,
   children,
 }: {
   title: string;
   hint?: string;
   action?: string;
+  /** A control at the right of the title row, centred on the title's line (not the hint). */
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -118,6 +121,14 @@ export function Band({
           </h2>
           {hint && <p className="mt-2.5 text-[13px] leading-none text-[var(--pv-ink-3)]">{hint}</p>}
         </div>
+        {aside && (
+          /* A box exactly the h2's line box (text-[26px] leading-none = 26px),
+             centring the control on the title line. A taller control (New
+             Rental is 40px) overflows it by 7px above and below without
+             changing the row's height, so title and hint keep their spacing.
+             `ml-auto` keeps it right-aligned when `action` sits beside it. */
+          <div className="ml-auto flex h-[26px] shrink-0 items-center self-start">{aside}</div>
+        )}
         {action && (
           <button
             type="button"

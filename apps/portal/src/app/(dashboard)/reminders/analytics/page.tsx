@@ -12,6 +12,7 @@ import {
 import { ArrowLeft, Info } from "lucide-react";
 import { format, subMonths, startOfMonth } from "date-fns";
 import { useReminders } from "@/hooks/use-reminders";
+import { useV2 } from "@/lib/v2-context";
 
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -48,6 +49,10 @@ const monthlyConfig: ChartConfig = {
 
 export default function RemindersAnalyticsPage() {
   const { data: reminders = [], isLoading } = useReminders({});
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the early returns, as every hook must be.
+  const v2Chrome = useV2("chrome");
 
   const severityDonutData = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -82,11 +87,15 @@ export default function RemindersAnalyticsPage() {
   }, [reminders]);
 
   if (isLoading) {
-    return (<div className="container mx-auto py-8 space-y-6"><div className="h-8 bg-muted animate-pulse rounded"></div><div className="h-96 bg-muted animate-pulse rounded"></div></div>);
+    // v2 (switch row alignment): the same md top as the loaded page, so the bar
+    // starts where the title will (y=74), not 8px lower.
+    return (<div className={`container mx-auto py-8 space-y-6${v2Chrome ? " md:pt-6" : ""}`}><div className="h-8 bg-muted animate-pulse rounded"></div><div className="h-96 bg-muted animate-pulse rounded"></div></div>);
   }
 
+  // v2 (switch row alignment): md:pt-6 centres the 36px title on the sidebar
+  // switch's row at y=92 (main starts at 50, + 24 + 18). py-8 left it 8px low.
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className={`container mx-auto py-8 space-y-6${v2Chrome ? " md:pt-6" : ""}`}>
       <div className="flex items-center gap-4">
         <Link href="/reminders"><Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button></Link>
         <div>

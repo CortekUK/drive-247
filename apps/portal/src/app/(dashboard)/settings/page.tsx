@@ -1951,8 +1951,12 @@ const Settings = () => {
 
   // Show error state with fallback
   if (error && !settings) {
+    // v2 (switch row alignment): at md <main> starts at y=50. This state's title
+    // is a bare <h1>, 48px tall (the base h1 style), so 18px of top padding
+    // centres it at 50 + 18 + 24 = 92, on the sidebar switch's row, and keeps it
+    // clear of the 64px top bar. v1 keeps "space-y-6" byte for byte.
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6${v2Chrome ? " md:pt-[18px]" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-foreground">Settings</h1>
@@ -1987,8 +1991,12 @@ const Settings = () => {
   }
 
   if (isLoading && !settings) {
+    // v2 (switch row alignment): at md <main> starts at y=50. This state's title
+    // is a bare <h1>, 48px tall (the base h1 style), so 18px of top padding
+    // centres it at 50 + 18 + 24 = 92, on the sidebar switch's row, and keeps it
+    // clear of the 64px top bar. v1 keeps "space-y-6" byte for byte.
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6${v2Chrome ? " md:pt-[18px]" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-foreground">Settings</h1>

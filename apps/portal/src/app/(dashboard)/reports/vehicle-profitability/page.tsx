@@ -26,6 +26,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { useFeatureAccess } from "@/hooks/use-feature-access";
+import { useV2 } from "@/lib/v2-context";
 import {
   useVehicleProfitability,
   type ProfitabilityPeriod,
@@ -47,6 +48,10 @@ export default function VehicleProfitabilityPage() {
 
   const access = useFeatureAccess("finance_sync");
   const query = useVehicleProfitability(period);
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the early returns, as every hook must be.
+  const v2Chrome = useV2("chrome");
 
   const sortedVehicles = useMemo(() => {
     const rows = (query.data?.vehicles ?? []).filter((v) => {
@@ -76,11 +81,14 @@ export default function VehicleProfitabilityPage() {
   }, [query.data, search, showDisposed, sortKey, sortDir]);
 
   if (access.isLoading) {
-    return <main className="p-6"><Skeleton className="h-96 w-full rounded-lg" /></main>;
+    // v2 (switch row alignment): the same md top as the loaded page, so the
+    // skeleton starts where the Back link will (y=84), not 10px above it.
+    return <main className={`p-6${v2Chrome ? " md:pt-[34px]" : ""}`}><Skeleton className="h-96 w-full rounded-lg" /></main>;
   }
   if (!access.canAccess) {
+    // v2 (switch row alignment): the same md top as the loaded page (y=84).
     return (
-      <main className="p-6">
+      <main className={`p-6${v2Chrome ? " md:pt-[34px]" : ""}`}>
         <Card>
           <CardContent className="py-12 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50">
@@ -102,11 +110,16 @@ export default function VehicleProfitabilityPage() {
   const currency = query.data?.currency ?? "USD";
   const kpis = query.data?.kpis;
 
+  // v2 (switch row alignment): "Back to Reports" is this page's first line. As an
+  // inline-flex box it sat on the body font's line box (1px below the top at
+  // 14px body text, 4px at 16px), so at md it becomes a fit-width flex row: 16px
+  // tall from 50 + 34, centred at 92 on the sidebar switch's row at every md
+  // width. Its 8px bottom margin keeps the title 24px below the link, as before.
   return (
-    <main className="p-6">
+    <main className={`p-6${v2Chrome ? " md:pt-[34px]" : ""}`}>
       {/* Header */}
       <div className="mb-6">
-        <Link href="/reports" className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <Link href="/reports" className={`mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground${v2Chrome ? " md:flex md:w-fit" : ""}`}>
           <ArrowLeft className="h-3 w-3" /> Back to Reports
         </Link>
         <div className="flex flex-wrap items-end justify-between gap-3">

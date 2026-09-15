@@ -225,14 +225,22 @@ export function CmsVisualEditor({
 
   if (!src) {
     return (
-      <div className="p-10 text-sm text-muted-foreground">No website address for this tenant.</div>
+      /* Switch row alignment: a text-sm line (20px) at md+ 50 + 32 + 10 = 92. */
+      <div className="p-10 text-sm text-muted-foreground md:pt-8">No website address for this tenant.</div>
     );
   }
 
   return (
-    <div className="flex h-[calc(100dvh-1rem)] min-h-[600px] flex-col">
+    /* Switch row alignment (md+): main's content box starts at 50px, and the
+       h1 (text-[17px] leading-tight, a 21.25px line box) is the top of the
+       tallest item in the toolbar row, so a 31.375px top padding centres it on
+       the sidebar switch: 50 + 31.375 + 10.625 = 92. The frame is re-derived to
+       fill the viewport from that top: 100dvh - 50 - 16 (main's bottom padding)
+       = calc(100dvh - 66px). The old calc(100dvh - 1rem) predates the 64px top
+       bar and overflowed the document by 50px at md+. Below md both unchanged. */
+    <div className="flex h-[calc(100dvh-1rem)] min-h-[600px] flex-col md:h-[calc(100dvh-66px)]">
       {/* ── top bar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 py-3">
+      <div className="flex items-center gap-3 px-5 py-3 md:pt-[31.375px]">
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-heading text-[17px] font-medium leading-tight">
             {page?.name ?? slug}

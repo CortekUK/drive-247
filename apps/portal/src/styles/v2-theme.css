@@ -908,3 +908,29 @@ body.v2-theme {
 .v2-theme [class~="rounded-md"][class~="whitespace-nowrap"][class~="ring-offset-background"] {
   border-radius: var(--v2-radius-4xl);
 }
+
+/* --- Trax docked panel: width and offset --------------------------------
+ * ONE definition of the docked panel's width, on the root, because two kinds of
+ * consumer need it and only one of them lives inside the layout's flex row:
+ *
+ *   --trax-width   the panel and its flow gap (components/trax/trax-panel.tsx).
+ *                  A clamp because breakpoints read the viewport, not the
+ *                  narrowed column: 30vw, never below 340px, never above 440px.
+ *   --trax-offset  how far a VIEWPORT-pinned overlay must stay from the right
+ *                  edge so it does not sit under the panel — the setup guide
+ *                  (portalled to <body>) and the Appearance save bar. It is the
+ *                  width only while the panel is open AND docked (md+); below md
+ *                  the panel is a full-screen sheet with no column beside it.
+ *
+ * Keyed on `data-trax-panel`, which TraxPanel sets on <html> while it is
+ * mounted. TraxPanel is v2-only, so no v1 page ever matches; every consumer
+ * writes `var(--trax-offset, 0px)`, which is exactly its old position. */
+html[data-trax-panel] {
+  --trax-width: clamp(340px, 30vw, 440px);
+  --trax-offset: 0px;
+}
+@media (min-width: 768px) {
+  html[data-trax-panel="open"] {
+    --trax-offset: var(--trax-width);
+  }
+}

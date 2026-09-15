@@ -129,8 +129,19 @@ CREATE TABLE IF NOT EXISTS public.setup_checklist_items (
   --
   -- Either may be an in-portal path ('/settings?tab=payg') or an absolute URL.
   -- The card treats a leading '/' as in-portal and routes it; anything else
-  -- opens in a new tab.
+  -- opens in a new tab. Only a same-origin path or an http(s) URL is ever
+  -- used — the portal ignores anything else (a `javascript:` URL, say) exactly
+  -- as if the field were blank, so this column is free text but never an href
+  -- on trust.
   video_url     text,
+
+  -- The runtime of `video_url` in whole seconds, printed as m:ss beside the
+  -- row's play button and in the video dialog's header — "make sure to add the
+  -- video timing too" — so an operator knows what a walkthrough will cost them
+  -- before pressing play. NULL when there is no video; required when there is
+  -- one. Both rules are the CHECKs at the bottom of this table.
+  video_duration_seconds integer,
+
   guide_url     text,
 
   -- Order is a column, not array position: an admin reordering rows must not
@@ -159,10 +170,88 @@ CREATE TABLE IF NOT EXISTS public.setup_checklist_items (
   -- btrim/coalesce rather than a NULL check: '' and '   ' are what a form
   -- actually submits when someone clears a field, and both are just as dead as
   -- NULL.
+  --
+  -- This counts ANY non-blank text as a link. Whether it is a link the portal
+  -- will actually use — an http(s) URL, or a path that stays on the portal —
+  -- is not checked here: the admin form refuses anything else before saving
+  -- (`usableLink`), and the portal reader treats it as blank (`safeChecklistLink`
+  -- in apps/portal/src/lib/setup-checklist.ts). A psql writer is not held to
+  -- that rule, so a row whose only link fails it is dropped from the card.
   CONSTRAINT setup_checklist_items_has_a_link CHECK (
     coalesce(btrim(video_url), '') <> '' OR coalesce(btrim(guide_url), '') <> ''
+  ),
+
+  -- ───────────────────────────────────────────────────────────────────────────
+  -- A VIDEO CARRIES ITS LENGTH. The time is a promise about the file, printed
+  -- next to every play button; a video with no length would either print
+  -- nothing (the operator cannot tell a 40-second clip from a 40-minute one)
+  -- or tempt a later change into printing "0:00". So a non-blank video_url
+  -- requires a length — blank judged the same btrim/coalesce way as the link
+  -- rule above, so clearing the video field in the form clears the demand too.
+  --
+  -- The range is 1 second to 4 hours. Zero is not a length, and anything past
+  -- four hours is a typo, not a walkthrough of one feature. The same ceiling is
+  -- MAX_VIDEO_DURATION_SECONDS in apps/portal/src/lib/setup-checklist.ts and in
+  -- the admin form's parser; the portal reader treats a value outside it as
+  -- unknown and prints no time.
+  CONSTRAINT setup_checklist_items_video_duration_range CHECK (
+    video_duration_seconds IS NULL OR video_duration_seconds BETWEEN 1 AND 14400
+  ),
+  CONSTRAINT setup_checklist_items_video_has_duration CHECK (
+    coalesce(btrim(video_url), '') = '' OR video_duration_seconds IS NOT NULL
   )
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BRINGING AN EXISTING TABLE UP TO THIS SHAPE
+--
+-- `CREATE TABLE IF NOT EXISTS` does nothing at all to a table made from an
+-- earlier copy of this file, which had no video_duration_seconds. The
+-- statements below add the column and the two CHECKs to such a table, and are
+-- no-ops on one the CREATE above just made. Re-running the file stays harmless.
+--
+-- ORDER MATTERS FOR THE PORTAL: apps/portal's reader selects
+-- video_duration_seconds by name, so against a table without the column its
+-- read fails and the canary quietly falls back to the compiled list.
+ALTER TABLE public.setup_checklist_items
+  ADD COLUMN IF NOT EXISTS video_duration_seconds integer;
+
+-- Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, hence the lookup by name.
+--
+-- The has-duration CHECK is added NOT VALID, deliberately. On an existing table
+-- a super admin may already have saved a video URL with no length — the column
+-- did not exist to hold one — and a validating ADD would fail on that row and
+-- abort the file. NOT VALID skips the rows already there but binds every
+-- INSERT and UPDATE from now on, so the next save of such a row must supply a
+-- length (the admin form already insists). Once every video row has one:
+--   ALTER TABLE public.setup_checklist_items
+--     VALIDATE CONSTRAINT setup_checklist_items_video_has_duration;
+-- The range CHECK needs no such care: the column is new, so it is all NULL.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.setup_checklist_items'::regclass
+      AND conname = 'setup_checklist_items_video_duration_range'
+  ) THEN
+    ALTER TABLE public.setup_checklist_items
+      ADD CONSTRAINT setup_checklist_items_video_duration_range CHECK (
+        video_duration_seconds IS NULL OR video_duration_seconds BETWEEN 1 AND 14400
+      );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.setup_checklist_items'::regclass
+      AND conname = 'setup_checklist_items_video_has_duration'
+  ) THEN
+    ALTER TABLE public.setup_checklist_items
+      ADD CONSTRAINT setup_checklist_items_video_has_duration CHECK (
+        coalesce(btrim(video_url), '') = '' OR video_duration_seconds IS NOT NULL
+      ) NOT VALID;
+  END IF;
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS setup_checklist_items_order
   ON public.setup_checklist_items (sort_order)
@@ -243,8 +332,13 @@ COMMENT ON TABLE public.setup_checklist_items IS
 -- all; it cannot tell a real guide from a placeholder.
 --
 -- Replace them from /admin/setup-checklist the moment a real URL exists: put
--- the recording in `video_url` and the written guide in `guide_url`. Nothing
--- else has to change — the card renders whichever links are present.
+-- the recording in `video_url` with its length in `video_duration_seconds`
+-- (the form takes m:ss), and the written guide in `guide_url`. Nothing else
+-- has to change — the card renders whichever links are present.
+--
+-- video_duration_seconds is NULL on every seed row because video_url is: there
+-- is no recording to time. (The canary's card plays a clearly-badged sample
+-- clip in the meantime; that is decided in the portal, not stored here.)
 --
 -- Every path here was checked against apps/portal:
 --   /settings?tab=auto-extend   settings/page.tsx  TabsContent value="auto-extend"
@@ -260,11 +354,12 @@ COMMENT ON TABLE public.setup_checklist_items IS
 -- the canary and for the other 56 tenants, which /integrations would not.
 
 INSERT INTO public.setup_checklist_items
-  (item_key, title, description, video_url, guide_url, sort_order, is_published)
+  (item_key, title, description, video_url, video_duration_seconds, guide_url, sort_order, is_published)
 VALUES
   ('auto_extension',
    'Auto-extension',
    'Rentals that renew themselves each period, charged upfront. Worth understanding what happens when a card fails and the rental pauses rather than lapsing.',
+   NULL,
    NULL,
    '/settings?tab=auto-extend',
    10, true),
@@ -273,6 +368,7 @@ VALUES
    'Installments',
    'Splitting a rental into scheduled payments — how the plan is built, what happens when one payment is missed, and how the balance settles.',
    NULL,
+   NULL,
    '/settings?tab=installments',
    20, true),
 
@@ -280,12 +376,14 @@ VALUES
    'Pay as you go',
    'The settings under pay-as-you-go are the fiddliest in the product. Go through them once with someone rather than guessing.',
    NULL,
+   NULL,
    '/settings?tab=payg',
    30, true),
 
   ('bonzah',
    'Bonzah insurance',
    'Connecting Bonzah, what the quote actually covers, and how the balance and the low-balance alerts work.',
+   NULL,
    NULL,
    '/settings?tab=insurance',
    40, true)

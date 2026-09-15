@@ -212,10 +212,19 @@ export function TraxThread({ density = "page", autoFocus = false, className }: T
         </div>
       </div>
 
-      {/* 3 — suggestions, empty state only. Quiet chips, not a grid of cards. */}
+      {/* 3 — suggestions, empty state only. Never a grid of cards.
+          Page: one quiet row of pills under the wide composer.
+          Panel: a short vertical list of plain rows. Four pills in a ~380px
+          column wrap two-and-two into the same 2x2 block the lead rejected, so
+          the narrow surface gets a different shape rather than a squeezed one. */}
       {empty && (
-        <div className={cn("flex flex-[1_0_auto] justify-center px-4", page ? "pb-12 pt-5" : "pb-8 pt-4")}>
-          <div className={cn("flex h-fit w-full flex-wrap content-start justify-center gap-2", page && "max-w-[720px]")}>
+        <div className={cn("flex flex-[1_0_auto] justify-center px-4", page ? "pb-12 pt-5" : "pb-8 pt-3")}>
+          <div
+            className={cn(
+              "flex h-fit w-full",
+              page ? "max-w-[720px] flex-wrap content-start justify-center gap-2" : "flex-col items-stretch gap-0.5",
+            )}
+          >
             {SUGGESTIONS.map(({ icon: Icon, label, prompt }) => (
               <button
                 key={label}
@@ -223,12 +232,15 @@ export function TraxThread({ density = "page", autoFocus = false, className }: T
                 disabled={isLoading}
                 onClick={() => send(prompt, [])}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full bg-card/50 px-3 py-1.5 text-[12px] text-muted-foreground backdrop-blur transition-colors",
-                  "hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+                  "items-center text-muted-foreground transition-colors",
+                  "hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+                  page
+                    ? "inline-flex gap-1.5 rounded-full bg-card/50 px-3 py-1.5 text-[12px] backdrop-blur hover:bg-card"
+                    : "flex w-full gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] hover:bg-card/60",
                 )}
               >
-                <Icon className="size-3.5 text-primary dark:text-[hsl(var(--chart-2))]" aria-hidden />
-                {label}
+                <Icon className="size-3.5 shrink-0 text-primary dark:text-[hsl(var(--chart-2))]" aria-hidden />
+                <span className="truncate">{label}</span>
               </button>
             ))}
           </div>

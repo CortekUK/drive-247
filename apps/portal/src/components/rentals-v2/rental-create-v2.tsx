@@ -3147,7 +3147,10 @@ export const RentalCreateV2 = () => {
       currentStep={creationProgress}
       steps={creationSteps}
     />
-    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
+    {/* Switch row alignment: at md+ the h1 (text-2xl, a 32px line box) tops the
+        tallest item of the header row, so 26px of top padding centres it on the
+        sidebar's Portal / Website switch: 50 + 26 + 16 = 92. md:py-8 put it at 98. */}
+    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8 md:pt-[26px] lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-4 mb-2">
         <Button

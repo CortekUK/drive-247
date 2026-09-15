@@ -5,6 +5,7 @@ import { Play, ExternalLink, Info, Check, ChevronLeft, ChevronRight } from "luci
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui-v2/dialog";
+import { SAMPLE_EXPLAINER_URL } from "@/lib/explainers";
 
 export type BookingMode = "fixed" | "auto_extend" | "installments" | "payg";
 
@@ -25,8 +26,9 @@ interface ModeOption {
 
 // MOCK: placeholder sample video so every section plays for now.
 // Swap each mode's videoUrl for the real /explainers/{mode}.mp4 when ready.
-const SAMPLE_VIDEO =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+// The shared, self-hosted sample clip — the Google sample bucket this used to
+// point at now answers 403. See SAMPLE_EXPLAINER_URL in lib/explainers.ts.
+const SAMPLE_VIDEO = SAMPLE_EXPLAINER_URL;
 
 const MODES: ModeOption[] = [
   {

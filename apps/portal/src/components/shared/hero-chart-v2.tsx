@@ -140,7 +140,7 @@ export function HeroChart({
   defaultRange?: HeroRange;
   /** A small chip beside the range picker, e.g. "Filtered". */
   note?: ReactNode;
-  /** data-tour anchor on the metric label and numbers (always rendered, small). */
+  /** data-tour anchor on the headline: the metric, the period and the numbers (always rendered). */
   anchor?: string;
   /**
    * The day the windows end on. Without it, the clock is read on every render,
@@ -200,8 +200,12 @@ export function HeroChart({
 
   return (
     <section className="flex flex-col gap-3" aria-label={`${metric.label}, ${rangeInfo.label.toLowerCase()}`}>
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
-        <div className="flex min-w-0 flex-col gap-2" data-tour={anchor}>
+      {/* Two rows, so a narrow row wraps cleanly: what is measured and over
+          which period on top; the number, how it moved and the legend under
+          it, the legend dropping to its own right-aligned line when there is
+          no room beside the number. */}
+      <div className="flex flex-col gap-2" data-tour={anchor}>
+        <div className="flex items-center justify-between gap-4">
           {metrics.length > 1 ? (
             <DropdownMenu>
               <DropdownMenuTrigger className={cn(PICKER, "self-start")} aria-label={`Metric: ${metric.label}`}>
@@ -221,30 +225,7 @@ export function HeroChart({
           ) : (
             <span className="text-sm font-medium text-foreground">{headlineLabel}</span>
           )}
-          {/* The number, how it moved, and what it moved from, read as one line:
-              "$9,177.00  ↗ 1,659%  vs $522.00 previous 30 days". */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="flex items-baseline gap-1.5" title={metric.description}>
-              <span className="font-heading text-3xl leading-none tracking-tight tabular-nums">
-                {metric.format(series.currentTotal)}
-              </span>
-              {metric.suffix && <span className="text-sm text-muted-foreground">{metric.suffix}</span>}
-            </span>
-            <ChangeChip
-              kind={metric.kind}
-              current={series.currentTotal}
-              previous={series.previousTotal}
-              format={metric.format}
-            />
-            <span className="text-sm text-muted-foreground">
-              vs <span className="font-medium tabular-nums text-foreground/80">{metric.format(series.previousTotal)}</span>{" "}
-              {midSentence(compareLabel)}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-end justify-between gap-2 self-stretch">
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {note && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground/80">
                 {note}
@@ -266,8 +247,30 @@ export function HeroChart({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5">
+          {/* The number, how it moved, and what it moved from, read as one line:
+              "$9,177.00  ↗ 1,659%  vs $522.00 previous 30 days". */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="flex items-baseline gap-1.5" title={metric.description}>
+              <span className="font-heading text-3xl leading-none tracking-tight tabular-nums">
+                {metric.format(series.currentTotal)}
+              </span>
+              {metric.suffix && <span className="text-sm text-muted-foreground">{metric.suffix}</span>}
+            </span>
+            <ChangeChip
+              kind={metric.kind}
+              current={series.currentTotal}
+              previous={series.previousTotal}
+              format={metric.format}
+            />
+            <span className="text-sm text-muted-foreground">
+              vs <span className="font-medium tabular-nums text-foreground/80">{metric.format(series.previousTotal)}</span>{" "}
+              {midSentence(compareLabel)}
+            </span>
+          </div>
           {secondaryLabel && series.secondaryTotal !== null && (
-            <div className="flex min-h-[30px] flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
+            <div className="ml-auto flex min-h-[30px] flex-wrap items-center justify-end gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-hidden>
               <span className="inline-flex items-center gap-1.5">
                 <span className={cn("h-0.5 w-3 rounded-full", SWATCH.current)} />
                 {metric.label}

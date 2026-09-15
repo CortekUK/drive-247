@@ -44,6 +44,7 @@ import { LogoStudio } from '@/components/settings/appearance/logo-studio';
 
 import { useTenantBranding, type TenantBranding } from '@/hooks/use-tenant-branding';
 import { useTenant } from '@/contexts/TenantContext';
+import { useV2 } from '@/lib/v2-context';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { useThemePreview } from '@/hooks/use-theme-preview';
 import { toast } from '@/hooks/use-toast';
@@ -124,6 +125,10 @@ export function AppearanceSettings() {
   const { tenant } = useTenant();
   const { branding, updateBranding, isUpdating } = useTenantBranding();
   const { canEditSettings, isLoading: permissionsLoading } = useManagerPermissions();
+  // v2 chrome (northwind only; fails closed to v1). Used only to put this page's
+  // header on the sidebar switch's row at md; every other tenant renders the
+  // classes it did before. Above the early returns, as every hook must be.
+  const v2Chrome = useV2('chrome');
 
   const readOnly = !permissionsLoading && !canEditSettings('branding');
 
@@ -243,8 +248,11 @@ export function AppearanceSettings() {
   };
 
   if (!loaded) {
+    // v2 (switch row alignment): the same 28px top as the loaded header below, so
+    // the skeleton starts where the Back button will (y=78 at md) rather than at
+    // y=54, under the 64px top bar.
     return (
-      <div className="space-y-6 p-1">
+      <div className={`space-y-6 p-1${v2Chrome ? ' md:pt-7' : ''}`}>
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96" />
         <Skeleton className="h-64 w-full" />
@@ -252,8 +260,11 @@ export function AppearanceSettings() {
     );
   }
 
+  // v2 (switch row alignment): at md <main> starts at y=50. The header's first
+  // line is the 28px Back button, so 28px of top padding centres it at
+  // 50 + 28 + 14 = 92, the sidebar switch's row. It sat at y=50, under the top bar.
   return (
-    <div className="space-y-8 pb-16">
+    <div className={`space-y-8 pb-16${v2Chrome ? ' md:pt-7' : ''}`}>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
@@ -395,9 +406,12 @@ export function AppearanceSettings() {
         </div>
       </section>
 
-      {/* Sticky save affordance so a tenant deep in the page never loses changes */}
+      {/* Sticky save affordance so a tenant deep in the page never loses changes.
+          Its right edge stops at `--trax-offset` — the docked Trax panel's width
+          in v2 (styles/v2-theme.css), 0px everywhere else — so Save and Discard
+          stay beside the panel instead of under it. */}
       {dirty && !readOnly && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="fixed bottom-0 left-0 right-[var(--trax-offset,0px)] z-40 border-t bg-background/95 px-4 py-3 backdrop-blur transition-[right] duration-200 ease-linear motion-reduce:transition-none supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
             <span className="text-sm text-muted-foreground">
               You&apos;re trying this out — nobody else sees it until you save.

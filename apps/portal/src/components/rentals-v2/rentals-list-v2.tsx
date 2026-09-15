@@ -456,8 +456,11 @@ export function RentalsListV2() {
 
 
   if (isLoading) {
+    // md:pt-6 (switch row alignment): the loaded list pads its top 24px at md,
+    // so its title starts at y=74 (centred at 92, on the sidebar switch's row).
+    // Without it this skeleton started at y=50, 14px under the 64px top bar.
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 md:pt-6">
         <div className="h-8 bg-muted animate-pulse rounded"></div>
         <div className="h-96 bg-muted animate-pulse rounded"></div>
       </div>

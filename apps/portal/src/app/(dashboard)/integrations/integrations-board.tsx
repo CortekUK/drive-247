@@ -250,7 +250,11 @@ export function IntegrationsBoard() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6">
+    /* Switch row alignment: at md+ the h1 (text-3xl leading-tight, a 37.5px
+       line box) is centred on the sidebar's Portal / Website switch at y=92.
+       main's content box starts at 50px there: 50 + 23.25 + 18.75 = 92. It sat
+       at 50, under the 64px top bar. Below md there is still no top padding. */
+    <div className="mx-auto w-full max-w-[1200px] space-y-6 px-1 pb-6 md:pt-[23.25px]">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-semibold leading-tight tracking-tight">Integrations</h1>

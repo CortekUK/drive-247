@@ -723,8 +723,12 @@ const CustomersList = () => {
   };
 
   if (isLoading) {
+    // v2 (switch row alignment): the loaded page's 24px top padding at md, so this
+    // skeleton starts where the title does (y=74, title centred on the sidebar
+    // switch's row at 92) instead of at y=50 under the 64px top bar. v1 keeps
+    // "space-y-6" byte for byte.
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6${v2Chrome ? " md:pt-6" : ""}`}>
         <div className="flex items-center justify-between">
           <div>
             <Skeleton className="h-8 w-48 mb-2" />

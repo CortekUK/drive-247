@@ -421,16 +421,12 @@ export default function DashboardLayout({
           same on both trees. `undefined` outside the gate leaves the element's
           class list byte-for-byte what it was for the other 56 tenants. */}
       <Provider
-        /* `--trax-width` is the docked Trax panel's width, read by both halves
-           of trax-panel.tsx (its flow gap and the fixed panel) and available to
-           anything that has to sit clear of it. A clamp, because breakpoints
-           read the viewport rather than the narrowed column: 30vw, never below
-           340px, never above 440px. v2 only; v1's wrapper gets no style. */
-        style={
-          v2Chrome
-            ? ({ "--trax-width": "clamp(340px, 30vw, 440px)" } as React.CSSProperties)
-            : undefined
-        }
+        /* The docked Trax panel's width is NOT set here any more. It lives in
+           styles/v2-theme.css as `--trax-width` (plus `--trax-offset`), keyed on
+           the `data-trax-panel` attribute TraxPanel puts on <html>. It had to
+           move up to the root: the setup guide portals to <body>, outside this
+           wrapper, and still has to sit clear of the panel. v1 never mounts
+           TraxPanel, so no v1 page gets either variable. */
         className={
           [
             v2Theme ? "bg-background bg-app-gradient" : "",
@@ -544,11 +540,24 @@ export default function DashboardLayout({
               removed, `flex-1` distributes the wrapper's bounded height and no
               viewport arithmetic is needed anywhere — v1's 4rem header is a
               sibling above, so the flex pass subtracts it on its own. */}
+          {/* v2: THE PAGE HEADER SITS ON THE SIDEBAR SWITCH'S ROW. The user asked
+              for the page title row (Rentals, Customers, Vehicles and every page
+              like them) to line up with the Portal / Website switch in the
+              sidebar. Measured in headless Chrome on the real AppSidebarV2 and
+              TopBarV2: the switch is centred 92px from the top at every desktop
+              width, collapsed or not, and a page header (a 24px page padding,
+              then a 36px title row) was centred at 122px, so 30px low. Dropping
+              main's 16px top padding and pulling main up 14px under the
+              transparent top bar puts it at 92px. Desktop only (md, where the
+              sidebar is on screen). `[header+&]` applies it only when main sits
+              directly under the top bar: with a maintenance or deposit banner
+              showing in between, main keeps today's spacing instead of sliding
+              under the banner. The v1 branch is unchanged. */}
           <main
             className={
               isBoundedHeight
                 ? `flex min-h-0 flex-1 flex-col overflow-hidden p-0${v2Chrome ? " min-w-0" : ""}`
-                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-w-0" : " pt-0"}`
+                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-w-0 md:[header+&]:pt-0 md:[header+&]:-mt-3.5" : " pt-0"}`
             }
           >
             {children}

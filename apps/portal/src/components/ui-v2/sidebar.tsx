@@ -184,7 +184,10 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          /* No edge line on phones: the Sheet primitive draws a border on its
+             inner edge, and v2 separates surfaces by tone and space, never by
+             rules. Same modifier as the primitive's, so tailwind-merge drops it. */
+          className="w-[var(--sidebar-width)] bg-sidebar p-0 text-sidebar-foreground data-[side=left]:border-r-0 data-[side=right]:border-l-0 [&>button]:hidden"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,

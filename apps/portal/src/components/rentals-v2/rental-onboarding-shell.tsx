@@ -62,7 +62,13 @@ export function RentalOnboardingShell({
   }, []);
 
   return (
-    <div ref={rootRef} style={{ height }} className="min-h-0 flex flex-col overflow-hidden">
+    /* Switch row alignment: at md+ the h1 (text-3xl, a 36px line box) is
+       centred on the sidebar's Portal / Website switch. main's content box
+       starts at 50px there, so 50 + 24 + 18 = 92; it sat at 50, under the 64px
+       top bar. The padding is inside the measured height (border-box), and the
+       height still comes from the live top: innerHeight - 50 - 12, ending 12px
+       above the viewport bottom exactly as it did from the old top of 80. */
+    <div ref={rootRef} style={{ height }} className="min-h-0 flex flex-col overflow-hidden md:pt-6">
       <div className="mx-auto w-full max-w-5xl flex flex-1 min-h-0 flex-col">
         {/* Fixed header */}
         <div className="shrink-0">

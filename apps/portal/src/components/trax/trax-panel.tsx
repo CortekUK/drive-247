@@ -65,9 +65,10 @@ import { isTraxPath, useTraxOptional } from "./trax-provider";
  *
  * The panel element stays mounted so it can slide both ways. Closed, it is
  * `invisible` as well as off-screen, which takes it out of the tab order and the
- * accessibility tree (visibility interpolates, so it stays visible until the
- * slide-out finishes). The conversation inside is not rendered until the panel
- * is first opened, so a page load that never opens Trax renders no thread and
+ * accessibility tree. It becomes visible the instant it opens and hidden only
+ * once the slide-out finishes (see the class list for why that asymmetry is
+ * load-bearing). The conversation inside is not rendered until the panel is
+ * first opened, so a page load that never opens Trax renders no thread and
  * sends no request for it.
  *
  * On `/trax` it renders nothing: the full page IS the conversation, and a
@@ -139,6 +140,19 @@ export function TraxPanel() {
     }
   }, [shown]);
 
+  /* Publish the dock state on <html> for everything that is NOT in the flex
+     row: viewport-pinned overlays (the setup guide is portalled to <body>, the
+     Appearance save bar is `fixed`) cannot see the gap, so they read
+     `--trax-offset` instead — 0px when closed or below `md`, the panel's width
+     when docked. The variables themselves live in styles/v2-theme.css, keyed on
+     this attribute, so the width has one definition. The attribute exists only
+     while this v2-only component is mounted: no v1 page ever gets it. */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-trax-panel", shown ? "open" : "closed");
+  }, [shown]);
+  useEffect(() => () => document.documentElement.removeAttribute("data-trax-panel"), []);
+
   if (!trax || onFullPage) return null;
 
   const { closeSheet, startNewConversation, expandToFullPage, chat } = trax;
@@ -173,8 +187,17 @@ export function TraxPanel() {
         className={[
           "fixed inset-0 z-40 flex flex-col text-foreground",
           "md:inset-y-0 md:left-auto md:right-0 md:w-[var(--trax-width,440px)]",
-          "transition-[transform,visibility] duration-200 ease-linear motion-reduce:transition-none",
-          shown ? "visible translate-x-0" : "invisible translate-x-full",
+          /* Visibility flips ON at once and OFF only after the slide. A
+             `visibility` transition interpolates as `hidden` on its very first
+             frame, and the composer focuses its textarea on exactly that frame
+             — the browser silently refuses to focus a hidden element, so ⌘J
+             opened a panel you could not type into. Opening therefore
+             transitions `transform` alone; closing delays `visibility` by the
+             slide's 200ms so the panel stays painted while it leaves. */
+          shown
+            ? "visible translate-x-0 [transition:transform_200ms_linear]"
+            : "invisible translate-x-full [transition:transform_200ms_linear,visibility_0s_linear_200ms]",
+          "motion-reduce:transition-none",
           /* ONE background. Beside the page (md+) the panel is transparent and
              the layout's app gradient shows straight through the space the gap
              reserved — no slab, no edge. Full screen on a phone it sits OVER the

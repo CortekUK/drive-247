@@ -270,21 +270,10 @@ function ChartPlaceholder({
   const nbsp = "\u00a0";
   return (
     <section className="flex flex-col gap-3" aria-label="Cars on rent" aria-busy={!failed}>
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
-        <div className="flex min-w-0 flex-col gap-2" data-tour="vehicles-chart">
+      <div className="flex flex-col gap-2" data-tour="vehicles-chart">
+        <div className="flex items-center justify-between gap-4">
           <span className="text-sm font-medium text-foreground">Cars on rent today</span>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" aria-hidden>
-            <span className="flex items-baseline gap-1.5">
-              <span className={`font-heading text-3xl leading-none tracking-tight tabular-nums w-10 ${blank}`}>
-                {failed ? "—" : nbsp}
-              </span>
-              <span className={`text-sm w-16 ${blank}`}>{nbsp}</span>
-            </span>
-            <span className={`text-sm w-28 ${blank}`}>{nbsp}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end justify-between gap-2 self-stretch">
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {note && (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground/80">
                 {note}
@@ -295,6 +284,15 @@ function ChartPlaceholder({
               <ChevronDown className="size-3.5" aria-hidden />
             </span>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" aria-hidden>
+          <span className="flex items-baseline gap-1.5">
+            <span className={`font-heading text-3xl leading-none tracking-tight tabular-nums w-10 ${blank}`}>
+              {failed ? "—" : nbsp}
+            </span>
+            <span className={`text-sm w-16 ${blank}`}>{nbsp}</span>
+          </span>
+          <span className={`text-sm w-28 ${blank}`}>{nbsp}</span>
         </div>
       </div>
 
