@@ -25,6 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { useV2 } from '@/lib/v2-context';
+import { GlobalBlacklistTableV2 } from '@/components/blacklist-v2/global-blacklist-table-v2';
 
 interface BlockingTenant {
   tenant_id: string;
@@ -47,6 +49,10 @@ export default function GlobalBlacklistPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 the table is the
+  // rentals list's (components/shared/list-table-v2): no pager, rows arrive as
+  // it scrolls. The page has no early return, so this runs on every render.
+  const v2Chrome = useV2('chrome');
 
   // Fetch global blacklist with tenant details
   const { data: blacklist, isLoading, error } = useQuery({
@@ -161,6 +167,50 @@ export default function GlobalBlacklistPage() {
       </div>
 
       {/* Blacklist Table */}
+      {v2Chrome ? (
+        // v2: no Card around the table, because the kit's table is the card, so
+        // v1's card header sits above it. Loading, error and empty keep v1's
+        // copy with no table chrome around them.
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg md:text-xl font-semibold tracking-tight">
+              Blacklisted Customers
+            </h2>
+            <p className="text-xs md:text-sm text-muted-foreground">
+              Click on a row to view blocking details from each company
+            </p>
+          </div>
+          {isLoading ? (
+            <div className="h-[320px] rounded-xl bg-muted animate-pulse" />
+          ) : error ? (
+            <Alert variant="destructive">
+              <AlertDescription>
+                Failed to load blacklist. Please try again later.
+              </AlertDescription>
+            </Alert>
+          ) : filteredBlacklist.length > 0 ? (
+            // Every searched row, no slice. The order is the query's own and the
+            // data is platform-wide, so the search term is the only input that
+            // changes the set. The row and its Show/Hide button both call
+            // toggleRow, as v1's row trigger does.
+            <GlobalBlacklistTableV2
+              entries={filteredBlacklist}
+              resetKey={searchTerm}
+              expandedIds={expandedRows}
+              onToggle={toggleRow}
+            />
+          ) : (
+            <div className="text-center py-12">
+              <h3 className="text-lg font-medium">No Blacklisted Customers</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+                {searchTerm
+                  ? 'No results match your search. Try a different term.'
+                  : 'Customers will appear here when blocked by 3 or more rental companies on the platform.'}
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
       <Card>
         <CardHeader className="p-4 md:p-6">
           <CardTitle className="text-lg md:text-xl">
@@ -375,6 +425,7 @@ export default function GlobalBlacklistPage() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

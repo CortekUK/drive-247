@@ -44,12 +44,17 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAuditLogs,
+  useAuditLogsServerCount,
+  AUDIT_LOGS_V2_LIMIT,
   useAuditLogActions,
   useAdminUsers,
   formatActionName,
   getActionColor,
   AuditLogsFilters,
 } from "@/hooks/use-audit-logs";
+import { useV2 } from "@/lib/v2-context";
+import { useTenant } from "@/contexts/TenantContext";
+import { AuditLogsTableV2 } from "@/components/admin-v2/audit-logs-table-v2";
 
 const AuditLogs = () => {
   const [filters, setFilters] = useState<AuditLogsFilters>({});
@@ -60,6 +65,16 @@ const AuditLogs = () => {
   const { data: logs, isLoading } = useAuditLogs(filters);
   const { data: actions } = useAuditLogActions();
   const { data: adminUsers } = useAdminUsers();
+
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 there is no
+  // pager: useAuditLogs loads up to AUDIT_LOGS_V2_LIMIT rows and the table
+  // grows as it scrolls. When that fetch comes back full, a HEAD count says how
+  // many match on the server, so the footer never calls a capped list complete.
+  // Up here, above the loading early return, so the hooks run on every render.
+  const v2Chrome = useV2("chrome");
+  const { tenant } = useTenant();
+  const logsCapped = v2Chrome && (logs?.length ?? 0) >= AUDIT_LOGS_V2_LIMIT;
+  const { data: serverLogCount } = useAuditLogsServerCount(filters, logsCapped);
 
   // Pagination
   const totalLogs = logs?.length || 0;
@@ -311,6 +326,16 @@ const AuditLogs = () => {
 
       {/* Audit Logs Table */}
       {logs && logs.length > 0 ? (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2).
+          // Every fetched row, no page slice and no pager: rows arrive as it
+          // scrolls. Rows open nothing, as in v1.
+          <AuditLogsTableV2
+            logs={logs}
+            resetKey={`${tenant?.id ?? ""}|${filters.entityType ?? ""}|${filters.action ?? ""}|${filters.actorId ?? ""}|${filters.dateFrom ?? ""}|${filters.dateTo ?? ""}`}
+            serverCount={logsCapped ? serverLogCount : undefined}
+          />
+        ) : (
         <>
           <Card>
             <CardContent className="p-0">
@@ -449,6 +474,7 @@ const AuditLogs = () => {
             </div>
           </div>
         </>
+        )
       ) : (
         <div className="text-center py-12">
           <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />

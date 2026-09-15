@@ -49,6 +49,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { parseLocalDate } from "@/lib/date-utils";
+import { useV2 } from "@/lib/v2-context";
+import { PlatesTableV2 } from "@/components/fleet-v2/plates-table-v2";
 
 interface Plate {
   id: string;
@@ -90,6 +92,10 @@ export default function PlatesListEnhanced() {
   const router = useRouter();
   const { toast } = useToast();
   const { tenant } = useTenant();
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 there is no pager
+  // and no page-size control: the table grows as it scrolls, like the rentals
+  // list, and nothing on v2 reads `?page` or `?size`.
+  const v2Chrome = useV2("chrome");
 
   // UI State
   const [addPlateOpen, setAddPlateOpen] = useState(false);
@@ -458,6 +464,32 @@ export default function PlatesListEnhanced() {
       </div>
 
       {/* Table */}
+      {v2Chrome ? (
+        // v2: the rentals list's table (components/fleet-v2/plates-table-v2).
+        // Every plate the query returned, 25 more at a time as it scrolls. The
+        // fill resets only when the result set does, so the key mirrors the
+        // query key (debounced search, not the raw input) and nothing in it
+        // moves on refetch(). Every cell and menu item calls v1's own handler.
+        <PlatesTableV2
+          plates={(plates ?? []) as Plate[]}
+          resetKey={`${tenant?.id}|${debouncedSearch}|${statusFilter}|${documentFilter}`}
+          isLoading={isLoading}
+          hasActiveFilters={!!hasActiveFilters}
+          currencyCode={tenant?.currency_code || 'USD'}
+          documentTitle={(plate) => getDocumentFilename(plate.document_url, plate.document_name)}
+          onCopyPlateNumber={copyPlateNumber}
+          onOpenVehicle={(plate) => router.push(`/vehicles/${plate.vehicles?.id}`)}
+          onOpenDocument={(plate) => window.open(plate.document_url, '_blank')}
+          onEdit={handleEditPlate}
+          onViewHistory={handleViewHistory}
+          onAssign={handleAssignPlate}
+          onUnassign={handleUnassignPlate}
+          onMarkExpired={handleMarkExpired}
+          onDelete={handleDeletePlate}
+          onClearFilters={clearFilters}
+          onAddPlate={() => setAddPlateOpen(true)}
+        />
+      ) : (
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -630,8 +662,10 @@ export default function PlatesListEnhanced() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
       {/* Pagination */}
+      {!v2Chrome && (
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">
           Showing {paginatedPlates.length} of {totalCount} plates
@@ -671,6 +705,7 @@ export default function PlatesListEnhanced() {
           </Select>
         </div>
       </div>
+      )}
 
       {/* Dialogs */}
       <EnhancedAddPlateDialog

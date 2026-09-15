@@ -34,6 +34,9 @@ import { VerificationStatusChip } from "./verification-score-badge";
 import { VerificationUploadDialog } from "./verification-upload-dialog";
 import { AttachVerificationDialog } from "./attach-verification-dialog";
 import { VerificationDetailSheet } from "./verification-detail-sheet";
+import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
+import { InsuranceVerificationsTableV2 } from "@/components/insurance-v2/insurance-verifications-table-v2";
 
 export function VerificationsTab() {
   const { data: verifications = [], isLoading } = useInsuranceVerifications();
@@ -44,6 +47,9 @@ export function VerificationsTab() {
   const [attachOpen, setAttachOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // v2 (northwind) swaps only the populated table for the rentals list's table.
+  const { tenant } = useTenant();
+  const v2Chrome = useV2("chrome");
 
   const selected = useMemo(
     () => verifications.find((v) => v.id === selectedId) ?? null,
@@ -120,6 +126,17 @@ export function VerificationsTab() {
           }
         />
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). Rows
+          // arrive as it scrolls. The row opens the detail sheet, as in v1.
+          <InsuranceVerificationsTableV2
+            verifications={filtered}
+            resetKey={`${tenant?.id ?? ""}|${search.trim().toLowerCase()}`}
+            onOpen={openDetail}
+            onAttach={openAttach}
+            onDelete={handleDelete}
+          />
+        ) : (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-auto">
@@ -239,6 +256,7 @@ export function VerificationsTab() {
             </div>
           </CardContent>
         </Card>
+        )
       )}
 
       <VerificationUploadDialog

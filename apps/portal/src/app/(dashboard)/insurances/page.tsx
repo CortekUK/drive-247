@@ -37,6 +37,8 @@ import {
   InshurModeChip,
   InshurStatusBadge,
 } from "@/components/rentals/inshur-coverage-block";
+import { useV2 } from "@/lib/v2-context";
+import { InsurancePoliciesTableV2 } from "@/components/insurance-v2/insurance-policies-table-v2";
 
 /** Three providers now share this list, so a boolean discriminator no longer
  *  works: `uploaded` documents can name Bonzah as their carrier while not being
@@ -87,6 +89,9 @@ export default function InsurancesList() {
   const [downloadingBonzahPdf, setDownloadingBonzahPdf] = useState<string | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [paymentDoc, setPaymentDoc] = useState<InsuranceDoc | null>(null);
+  // v2 (northwind) swaps only the populated Policies table and its pager for the
+  // rentals list's table. Above the `isLoading` return, so it runs every render.
+  const v2Chrome = useV2("chrome");
 
   // Fetch insurance documents from customer_documents table
   const { data: insuranceDocuments = [], isLoading: isLoadingDocs } = useQuery({
@@ -845,6 +850,22 @@ export default function InsurancesList() {
         />
         )
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). Every
+          // filtered row in v1's order, no page slice and no pager: rows arrive
+          // as it scrolls. A row opens its rental where v1 offers View Rental;
+          // every action is v1's, with the page's own handlers.
+          <InsurancePoliciesTableV2
+            rows={filteredInsurances}
+            resetKey={`${tenant?.id ?? ""}|${searchQuery}|${providerFilter ?? ""}|${inshurEnabled}`}
+            downloadingBonzahPdf={downloadingBonzahPdf}
+            onDownload={handleDownload}
+            onView={handleView}
+            onBonzahDownload={handleBonzahDownload}
+            onAddPayment={setPaymentDoc}
+            onViewRental={(doc) => router.push(`/rentals/${doc.rental_id}`)}
+          />
+        ) : (
         <>
           <Card>
             <CardContent className="p-0">
@@ -1063,6 +1084,7 @@ export default function InsurancesList() {
             </div>
           </div>
         </>
+        )
       )}
 
         </TabsContent>

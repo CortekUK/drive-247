@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
 
 export interface AuditLog {
   id: string;
@@ -26,8 +27,19 @@ export interface AuditLogsFilters {
   dateTo?: string;
 }
 
+/**
+ * v2 only: the most rows the v2 table loads at once. PostgREST's per-request
+ * maximum; v1 keeps its own 500.
+ */
+export const AUDIT_LOGS_V2_LIMIT = 1000;
+
 export function useAuditLogs(filters?: AuditLogsFilters) {
   const { tenant } = useTenant();
+  // v2 (northwind) loads more rows; see the branch above the limit below. The
+  // gate is resolved on the server per tenant and cannot change during a
+  // session, and tenant.id is already in the key, so the key stays exactly v1's
+  // and every ["audit-logs"] prefix invalidation still matches.
+  const v2Chrome = useV2("chrome");
 
   return useQuery({
     queryKey: ["audit-logs", tenant?.id, filters],
@@ -55,6 +67,7 @@ export function useAuditLogs(filters?: AuditLogsFilters) {
         .eq("tenant_id", tenant.id)
         .order("created_at", { ascending: false });
 
+      // Kept in step with useAuditLogsServerCount below, which counts the same set.
       // Apply filters
       if (filters?.entityType && filters.entityType !== "all") {
         query = query.eq("entity_type", filters.entityType);
@@ -76,6 +89,20 @@ export function useAuditLogs(filters?: AuditLogsFilters) {
         query = query.lte("created_at", filters.dateTo + "T23:59:59");
       }
 
+      // v2 (northwind): its table has no pager and grows as it scrolls, so it
+      // loads up to AUDIT_LOGS_V2_LIMIT rows where v1 loads 500. v1 never
+      // enters this block and still reaches its own limit below.
+      if (v2Chrome) {
+        const { data, error } = await query.limit(AUDIT_LOGS_V2_LIMIT);
+
+        if (error) {
+          console.error("Error fetching audit logs:", error);
+          throw error;
+        }
+
+        return data as AuditLog[];
+      }
+
       const { data, error } = await query.limit(500);
 
       if (error) {
@@ -86,6 +113,73 @@ export function useAuditLogs(filters?: AuditLogsFilters) {
       return data as AuditLog[];
     },
     enabled: !!tenant,
+  });
+}
+
+/**
+ * v2 only: how many audit log rows match `filters` on the server, for the v2
+ * table's footer once the 1,000-row fetch has come back full. v1 never calls it.
+ *
+ * Exact, because the footer states the number as a fact ("Showing the first
+ * 1000 of N"); a planner estimate can be off by any factor once the filters and
+ * the RLS policy are applied. It is kept cheap instead: a HEAD request (no
+ * rows), sent only when `enabled` (the fetch was capped), in a query of its own
+ * so the rows never wait for it. Until it answers, or if it fails, the footer
+ * words itself without a total.
+ *
+ * The key extends useAuditLogs' key, so every ["audit-logs"] prefix
+ * invalidation refreshes the count with the rows. The filter clauses repeat
+ * useAuditLogs' own and must stay in step with them, or the count and the rows
+ * would describe different sets.
+ */
+export function useAuditLogsServerCount(filters: AuditLogsFilters | undefined, enabled: boolean) {
+  const { tenant } = useTenant();
+
+  return useQuery({
+    queryKey: ["audit-logs", tenant?.id, filters, "server-count"],
+    queryFn: async () => {
+      if (!tenant) throw new Error("No tenant context available");
+
+      let query = supabase
+        .from("audit_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenant.id);
+
+      if (filters?.entityType && filters.entityType !== "all") {
+        query = query.eq("entity_type", filters.entityType);
+      }
+
+      if (filters?.action && filters.action !== "all") {
+        query = query.eq("action", filters.action);
+      }
+
+      if (filters?.actorId && filters.actorId !== "all") {
+        query = query.eq("actor_id", filters.actorId);
+      }
+
+      if (filters?.dateFrom) {
+        query = query.gte("created_at", filters.dateFrom);
+      }
+
+      if (filters?.dateTo) {
+        query = query.lte("created_at", filters.dateTo + "T23:59:59");
+      }
+
+      // supabase-js returns {error}; it never throws.
+      const { count, error } = await query;
+
+      if (error) {
+        console.error("Error counting audit logs:", error);
+        throw error;
+      }
+
+      return count ?? null;
+    },
+    enabled: !!tenant && enabled,
+    // A count that failed (most likely the statement timeout on a very large
+    // set) would fail again: no retries, and the footer keeps its wording
+    // without a total until the next invalidation or filter change.
+    retry: false,
   });
 }
 
