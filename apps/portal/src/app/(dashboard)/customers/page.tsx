@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw, Upload } from "lucide-react";
+import { Users, Plus, Mail, Phone, Eye, Edit, Search, Shield, ArrowUpDown, ArrowUp, ArrowDown, X, MoreHorizontal, Ban, Trash2, XCircle, UserCheck, Link2, Briefcase, BarChart3, ChevronDown, ShieldCheck, RefreshCw, Upload, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -38,7 +38,29 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { CustomersTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import {
+  LIST_CLASSES,
+  LIST_ROW_ACTION,
+  ListBody,
+  ListCell,
+  ListFooter,
+  ListHead,
+  ListMetaChip,
+  ListRow,
+  ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
+} from "@/components/shared/list-table-v2";
+import { formatCurrency } from "@/lib/format-utils";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { OverviewFlip } from "@/components/shared/layout/overview-flip";
+import { CustomersFilterPanel, countActiveCustomerFilters } from "@/components/customers-v2/customers-filter-panel";
+import { CustomersOverview } from "@/components/customers-v2/customers-overview";
 
 interface Customer {
   id: string;
@@ -133,6 +155,12 @@ const CustomersList = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>((searchParams.get('sortOrder') as SortOrder) || 'asc');
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
   const [pageSize, setPageSize] = useState(parseInt(searchParams.get('pageSize') || '25'));
+
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 the search field
+  // and the filter button live in the top bar, and the filter panel is the back
+  // face of the stat cards. `filtersOpen` is only ever read on the v2 path.
+  const v2Chrome = useV2("chrome");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -437,6 +465,24 @@ const CustomersList = () => {
   const endIndex = Math.min(startIndex + pageSize, totalCustomers);
   const paginatedCustomers = filteredAndSortedCustomers.slice(startIndex, endIndex);
 
+  /**
+   * v2 (northwind) has no pager: the table grows 25 rows at a time as it is
+   * scrolled, like the rentals list. Every row the filters return is already in
+   * `filteredAndSortedCustomers`, so this is a bigger slice and no new query.
+   * The fill resets when the result set changes: search, filters or sort.
+   */
+  const customerRows = useProgressiveRows(
+    filteredAndSortedCustomers,
+    `${debouncedSearchTerm}|${statusFilter}|${userTypeFilter}|${sortField}|${sortOrder}`,
+  );
+
+  // With no pager on screen, a `?page=` left in the URL (an old bookmark, or a
+  // link from before) would leave `paginatedCustomers` on an empty page and
+  // show the "no customers" state over a full list. v2 always sits on page 1.
+  useEffect(() => {
+    if (v2Chrome && currentPage !== 1) setCurrentPage(1);
+  }, [v2Chrome, currentPage]);
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -639,6 +685,34 @@ const CustomersList = () => {
   const devForceEmpty = useForcedEmptyState("customers");
   const teachEmptyCustomers = isLeanTenant(tenantSlug) && (!customers?.length || devForceEmpty);
 
+  /**
+   * v2 only: hand the top bar this page's search and filter button. `null` on
+   * v1, which leaves the bar (and the v1 page) exactly as it was.
+   *
+   * `value` is the RAW `searchTerm` and `onChange` is the RAW setter. The bar
+   * waits 400ms before pushing, and the page's own `useDebounce(searchTerm, 300)`
+   * stays the single thing that feeds filtering and the URL. Passing the
+   * debounced term as `value` would echo back 300ms late and overwrite what the
+   * user is still typing in the bar.
+   *
+   * It sits down here, after every piece of state it reads, and before the
+   * `isLoading` early return, so the hook runs on every render.
+   */
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search customers…",
+          value: searchTerm,
+          onChange: setSearchTerm,
+          filters: {
+            open: filtersOpen,
+            onOpenChange: setFiltersOpen,
+            activeCount: countActiveCustomerFilters({ status: statusFilter, userType: userTypeFilter }),
+          },
+        }
+      : null,
+  );
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
     return sortOrder === 'asc' ? <ArrowUp className="h-4 w-4 text-primary" /> : <ArrowDown className="h-4 w-4 text-primary" />;
@@ -658,11 +732,29 @@ const CustomersList = () => {
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
+        {!v2Chrome && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
+        )}
+        {/* v2 has no stat cards: hold the hero row's shape instead (the graph
+            across three quarters, and the featured card only when this viewer
+            gets one), so the table does not jump when the list lands. 260px is
+            the loaded graph's height; 13rem is the card's when the row stacks. */}
+        {v2Chrome && (
+          <div className="grid grid-cols-1 gap-6 py-2 lg:grid-cols-4">
+            {canEdit('customers') || (isLeanTenant(tenantSlug) && canView('blocked_customers')) ? (
+              <>
+                <Skeleton className="h-[260px] lg:col-span-3" />
+                <Skeleton className="h-52 lg:h-[260px]" />
+              </>
+            ) : (
+              <Skeleton className="h-[260px] lg:col-span-4" />
+            )}
+          </div>
+        )}
         <Card>
           <CardHeader>
             <Skeleton className="h-6 w-48" />
@@ -678,6 +770,39 @@ const CustomersList = () => {
       </div>
     );
   }
+
+  // v2 header export: the customers the table is showing, filters and search
+  // applied, with the same Verified wording as the table's column.
+  const handleExportCustomersCsv = () => {
+    const verifiedLabel = (status?: string | null) =>
+      status === 'verified' || status === 'manually_verified'
+        ? 'Verified'
+        : status === 'pending'
+          ? 'Pending'
+          : status === 'failed'
+            ? 'Failed'
+            : 'Unverified';
+    downloadCsv(
+      csvFilename('customers'),
+      ['Name', 'Email', 'Phone', 'Type', 'User type', 'Status', 'Verified', 'Gig driver', 'Balance', 'Balance status', 'Added'],
+      filteredAndSortedCustomers.map((customer) => {
+        const balance = customerBalances[customer.id];
+        return [
+          customer.name,
+          customer.email,
+          customer.phone,
+          customer.type,
+          customer.user_type || 'Guest',
+          customer.status,
+          verifiedLabel((customer as any).identity_verification_status),
+          (customer as any).is_gig_driver ? 'Yes' : 'No',
+          balance ? Number(balance.balance) || 0 : '',
+          balance ? balance.status : '',
+          csvDate(customer.created_at),
+        ];
+      }),
+    );
+  };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
@@ -708,6 +833,12 @@ const CustomersList = () => {
           {/* Canary-only: self-gates on the resolved tenant slug, so this
               shared v1 header is unchanged for the other 56 tenants. */}
           <TabTourButton tour="customers" size="h-10" />
+          {/* v2 headers carry one labelled button, the main action; the rest
+              are icons with their names in tooltips (team lead, Sep 15 2026).
+              Each v1 control below is wrapped, unchanged, in !v2Chrome and its
+              v2 icon sits beside it under the same condition. */}
+          {!v2Chrome && (
+            <>
           {isLeanTenant(tenantSlug) && canView('blocked_customers') && (
             <Link href="/blocked-customers" className="shrink-0" data-tour="customers-blocked">
               <Button variant="outline" className="flex-1 sm:flex-none">
@@ -716,6 +847,17 @@ const CustomersList = () => {
               </Button>
             </Link>
           )}
+            </>
+          )}
+          {v2Chrome && isLeanTenant(tenantSlug) && canView('blocked_customers') && (
+            <HeaderIconButton href="/blocked-customers" label="Blocked customers" size="icon-lg" data-tour="customers-blocked">
+              <Ban className="h-4 w-4" />
+            </HeaderIconButton>
+          )}
+          {/* v2 has no Analytics tab: the overview graph replaces this link. The
+              /customers/analytics route itself still answers. */}
+          {!v2Chrome && (
+            <>
           {customers && customers.length > 0 && (
             <Link href="/customers/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
@@ -723,6 +865,10 @@ const CustomersList = () => {
               </Button>
             </Link>
           )}
+            </>
+          )}
+          {!v2Chrome && (
+            <>
           {canEdit('customers') && (
             <Button variant="outline" size="icon" data-tour="customer-invite" onClick={() => setInviteDialogOpen(true)} className="shrink-0">
               <Link2 className="h-4 w-4" />
@@ -738,6 +884,28 @@ const CustomersList = () => {
               Import CSV
             </Button>
           )}
+            </>
+          )}
+          {v2Chrome && canEdit('customers') && (
+            <>
+              <HeaderIconButton label="Invite link" size="icon-lg" data-tour="customer-invite" onClick={() => setInviteDialogOpen(true)}>
+                <Link2 className="h-4 w-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label="Import CSV" size="icon-lg" onClick={() => setCsvImportOpen(true)}>
+                <Upload className="h-4 w-4" />
+              </HeaderIconButton>
+            </>
+          )}
+          {v2Chrome && (
+            <HeaderIconButton
+              label="Export CSV"
+              size="icon-lg"
+              onClick={handleExportCustomersCsv}
+              disabled={filteredAndSortedCustomers.length === 0}
+            >
+              <Download className="h-4 w-4" />
+            </HeaderIconButton>
+          )}
           {canEdit('customers') && (
             <Button className="bg-gradient-primary flex-1 sm:flex-none" data-tour="add-customer" onClick={handleAddCustomer}>
               <Plus className="h-4 w-4 mr-2" />
@@ -748,9 +916,39 @@ const CustomersList = () => {
       </div>
 
       {/* Summary Cards */}
-      {customers && <CustomerSummaryCards customers={customers} />}
+      {!v2Chrome && customers && <CustomerSummaryCards customers={customers} />}
+      {/* v2: the overview turns over to show the filter panel. Its front face is
+          the hero row (one graph and a featured card) over the same rows the
+          table shows, and it carries the customers-stats tour anchor on its root.
+          The card is the featured deck: the invite link, CSV import and the
+          blocklist among others, each under its header control's own check. */}
+      {v2Chrome && customers && (
+        <OverviewFlip
+          flipped={filtersOpen}
+          onFlipBack={() => setFiltersOpen(false)}
+          front={
+            <CustomersOverview
+              customers={filteredAndSortedCustomers}
+              filtered={!!hasActiveFilters}
+              onInvite={canEdit('customers') ? () => setInviteDialogOpen(true) : undefined}
+              onImport={canEdit('customers') ? () => setCsvImportOpen(true) : undefined}
+            />
+          }
+          back={
+            <CustomersFilterPanel
+              status={statusFilter}
+              userType={userTypeFilter}
+              onStatusChange={setStatusFilter}
+              onUserTypeChange={setUserTypeFilter}
+              onClear={clearFilters}
+              onClose={() => setFiltersOpen(false)}
+            />
+          }
+        />
+      )}
 
       {/* Search and Filters */}
+      {!v2Chrome && (
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center">
         <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -800,9 +998,243 @@ const CustomersList = () => {
           </Button>
         )}
       </div>
+      )}
 
       {/* Table */}
       {paginatedCustomers.length > 0 && !teachEmptyCustomers ? (
+        <>
+        {v2Chrome ? (
+          <>
+            {/* v2: the rentals list's table (components/shared/list-table-v2).
+                No pager, rows arrive as the table scrolls. No View column: the
+                row opens the customer. The actions menu is the same menu. */}
+            <ListTable rows={customerRows} minWidth="min-w-[880px]">
+              <ListTableHeader>
+                <ListHead
+                  className="w-[20%]"
+                  sort={{ direction: sortField === 'name' ? sortOrder : null, onSort: () => handleSort('name') }}
+                >
+                  Name
+                </ListHead>
+                <ListHead
+                  className="w-[10%]"
+                  sort={{ direction: sortField === 'type' ? sortOrder : null, onSort: () => handleSort('type') }}
+                >
+                  Type
+                </ListHead>
+                <ListHead className="w-[10%]" data-tour="customers-verified-column">Verified</ListHead>
+                <ListHead className="w-[9%]">Gig driver</ListHead>
+                {/* Email and phone as two one-line columns rather than one
+                    two-line cell: rows stay the height of a rentals row. */}
+                <ListHead className="w-[22%]">Email</ListHead>
+                <ListHead className="w-[13%]">Phone</ListHead>
+                <ListHead
+                  className="w-[10%]"
+                  sort={{ direction: sortField === 'balance' ? sortOrder : null, onSort: () => handleSort('balance') }}
+                >
+                  Balance
+                </ListHead>
+                <ListHead className="w-[6%] text-right">
+                  <span className="sr-only">Actions</span>
+                </ListHead>
+              </ListTableHeader>
+              <ListBody>
+                {customerRows.visible.map((customer) => {
+                  const balanceData = customerBalances[customer.id];
+                  const verification = (customer as any).identity_verification_status;
+
+                  return (
+                    <ListRow
+                      key={customer.id}
+                      data-tour="customer-row"
+                      // Read by `lib/tab-tours` to walk from this list into a record.
+                      data-record-kind="customers"
+                      data-record-id={customer.id}
+                      onOpen={() => router.push(`/customers/${customer.id}`)}
+                    >
+                      <ListCell>
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          {/* A real button, so the record stays reachable by keyboard. */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/customers/${customer.id}`);
+                            }}
+                            className={`${LIST_CLASSES.identifier} truncate text-left hover:underline`}
+                          >
+                            {customer.name}
+                          </button>
+                          {hasNextOfKin(customer) && (
+                            <span title="Emergency contact on file" className="shrink-0">
+                              <Shield className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          )}
+                        </div>
+                      </ListCell>
+                      <ListCell>
+                        <ListMetaChip>{customer.user_type || 'Guest'}</ListMetaChip>
+                      </ListCell>
+                      <ListCell>
+                        {/* manually_verified is an operator's hand check, which New
+                            Rental accepts as verified; the overview graph's
+                            Verified line counts the same two. */}
+                        {verification === 'verified' || verification === 'manually_verified' ? (
+                          <ListStatusText tone="success">Verified</ListStatusText>
+                        ) : verification === 'pending' ? (
+                          <ListStatusText tone="warning">Pending</ListStatusText>
+                        ) : verification === 'failed' ? (
+                          <ListStatusText tone="danger">Failed</ListStatusText>
+                        ) : (
+                          <ListStatusText tone="muted">Unverified</ListStatusText>
+                        )}
+                      </ListCell>
+                      <ListCell>
+                        {(customer as any).is_gig_driver ? (
+                          <ListStatusText tone="info">Yes</ListStatusText>
+                        ) : (
+                          <ListStatusText tone="muted">No</ListStatusText>
+                        )}
+                      </ListCell>
+                      <ListCell>
+                        {customer.email ? (
+                          <span className={`block truncate ${LIST_CLASSES.text}`} title={customer.email}>
+                            {customer.email}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </ListCell>
+                      <ListCell>
+                        {customer.phone ? (
+                          <span className={`block truncate tabular-nums ${LIST_CLASSES.text}`}>{customer.phone}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </ListCell>
+                      {/* The balance in the list's own type and status palette:
+                          red owed, green in credit, muted settled. The chip v1
+                          uses is 12px over a second line. Its charges/payments
+                          breakdown moves to the hover title. */}
+                      <ListCell className="tabular-nums">
+                        {!balanceData || balanceData.status === 'Settled' || balanceData.balance === 0 ? (
+                          <ListStatusText tone="muted">Settled</ListStatusText>
+                        ) : (
+                          <span
+                            title={
+                              balanceData.totalCharges !== undefined && balanceData.totalPayments !== undefined
+                                ? `${balanceData.status === 'In Debt' ? 'Outstanding' : 'In credit'} · Charges ${formatCurrency(balanceData.totalCharges, tenant?.currency_code || 'USD')} · Payments ${formatCurrency(balanceData.totalPayments, tenant?.currency_code || 'USD')}`
+                                : balanceData.status
+                            }
+                          >
+                            <ListStatusText tone={balanceData.status === 'In Debt' ? 'danger' : 'success'}>
+                              {formatCurrency(balanceData.balance, tenant?.currency_code || 'USD')}
+                            </ListStatusText>
+                          </span>
+                        )}
+                      </ListCell>
+                      {/* The menu must not open the record: clicks on the trigger
+                          and on its items (portalled, but still React children
+                          of this cell) stop here. */}
+                      <ListCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={LIST_ROW_ACTION}
+                              aria-label={`Actions for ${customer.name}`}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {customer.status === 'Rejected' ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleViewRejectedDetails(customer)}
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                {canEdit('customers') && (
+                                  <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                {canEdit('customers') && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleApproveCustomer(customer)}
+                                    className="text-green-600 focus:text-green-600"
+                                  >
+                                    <UserCheck className="h-4 w-4 mr-2" />
+                                    Approve Customer
+                                  </DropdownMenuItem>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {canEdit('customers') && (
+                                  <DropdownMenuItem onClick={() => handleEditCustomer(customer)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                )}
+                                {canEdit('customers') && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setVerificationCustomer(customer);
+                                      setVerificationDialogOpen(true);
+                                    }}
+                                  >
+                                    {(customer as any).identity_verification_status === 'verified' ? (
+                                      <>
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Re-verify
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShieldCheck className="h-4 w-4 mr-2" />
+                                        Start Verification
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                {canEdit('customers') && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleBlockClick(customer)}
+                                    className="text-orange-600 focus:text-orange-600"
+                                  >
+                                    <Ban className="h-4 w-4 mr-2" />
+                                    Block Customer
+                                  </DropdownMenuItem>
+                                )}
+                              </>
+                            )}
+                            <DropdownMenuSeparator />
+                            {canEdit('customers') && (
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteClick(customer)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </ListCell>
+                    </ListRow>
+                  );
+                })}
+              </ListBody>
+            </ListTable>
+            <ListFooter rows={customerRows} one="customer" many="customers" />
+          </>
+        ) : (
         <>
         <Card>
           <CardContent className="p-0">
@@ -1069,6 +1501,8 @@ const CustomersList = () => {
             </Button>
           </div>
         </div>
+        </>
+        )}
         </>
       ) : teachEmptyCustomers ? (
         <CustomersTeachingEmptyState

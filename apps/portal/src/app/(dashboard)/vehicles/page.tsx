@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, Plus, Search, BarChart3, ChevronDown, X, ShieldCheck } from "lucide-react";
+import { Eye, Plus, Search, BarChart3, ChevronDown, X, ShieldCheck, Download } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/data-display/empty-state";
@@ -35,6 +35,20 @@ import { useTenant } from "@/contexts/TenantContext";
 import { isAreaHidden, isLeanTenant } from "@/lib/lean-areas";
 import { VehiclesTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import {
+  LIST_CLASSES,
+  ListBody,
+  ListCell,
+  ListFooter,
+  ListHead,
+  ListMetaChip,
+  ListRow,
+  ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
+  type ListTone,
+} from "@/components/shared/list-table-v2";
 import { usePickupLocations } from "@/hooks/use-pickup-locations";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useVehicleOwners } from "@/hooks/use-vehicle-owners";
@@ -42,6 +56,14 @@ import { useFleetHealth, useFleetHealthEnabled } from "@/hooks/use-fleet-health"
 import { HealthStatusChip } from "@/components/fleet-health/health-status-chip";
 import type { VehicleHealthStatus } from "@/types/fleet-health";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
+import { useV2 } from "@/lib/v2-context";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { OverviewFlip } from "@/components/shared/layout/overview-flip";
+import { VehiclesFilterPanel, countActiveVehicleFilters } from "@/components/vehicles-v2/vehicles-filter-panel";
+import { VehiclesOverview } from "@/components/vehicles-v2/vehicles-overview";
+import { useVehiclesOnRentV2 } from "@/hooks/use-vehicles-on-rent-v2";
 
 interface VehiclePhoto {
   photo_url: string;
@@ -81,6 +103,20 @@ interface Vehicle {
 
 type SortField = 'reg' | 'make_model' | 'year' | 'status';
 type SortDirection = 'asc' | 'desc';
+
+/**
+ * v2 status colours for the vehicles table: coloured text, the rentals list's
+ * palette. Keyed by the lowercased label `resolveVehicleStatus` returns.
+ */
+const VEHICLE_STATUS_TONE: Record<string, ListTone> = {
+  available: 'success',
+  rented: 'info',
+  reserved: 'info',
+  maintenance: 'warning',
+  paused: 'warning',
+  unavailable: 'danger',
+  disposed: 'muted',
+};
 type PerformanceFilter = 'all' | 'profitable' | 'loss';
 /** `needs_attention` is the roll-up (not_road_legal + overdue + attention); the rest are exact statuses. */
 type HealthFilter = 'all' | 'needs_attention' | 'not_road_legal' | 'overdue' | 'unknown';
@@ -555,6 +591,68 @@ export default function VehiclesListEnhanced() {
   const devForceEmpty = useForcedEmptyState("vehicles");
   const teachEmptyFleet = isLeanTenant(tenantSlug) && (vehicles.length === 0 || devForceEmpty);
 
+  /**
+   * v2 chrome (northwind only; fails closed to v1): the search field and the
+   * filter button move into the top bar, and the filter panel becomes the BACK
+   * of the stat-cards row. Every other tenant registers nothing — `null` hands
+   * the bar back its global search pill — and renders the inline bar below,
+   * untouched.
+   *
+   * Placed AFTER every value it reads (filters, updateFilters, the owner/health
+   * gates) and BEFORE the loading early-return, so the hook order is stable.
+   *
+   * No debounce here: this page never debounced its search — `updateFilters`
+   * pushes the URL per keystroke — so the top bar's 400ms debounce is the only
+   * one, and `onChange` is the raw setter.
+   */
+  const v2Chrome = useV2("chrome");
+  // v2 only: the rentals behind the overview's "Cars on rent" graph. With v2
+  // chrome off the query is disabled, so no other tenant issues the request.
+  const onRentV2 = useVehiclesOnRentV2(v2Chrome);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  /**
+   * v2 (northwind) has no pager: the table grows 25 rows at a time as it is
+   * scrolled, like the rentals list. `filteredVehicles` already holds every row
+   * the filters return, in sort order, so this is a bigger slice and no new
+   * query. The fill resets when the result set changes.
+   */
+  const vehicleRows = useProgressiveRows(
+    filteredVehicles,
+    `${JSON.stringify(filters)}|${sortField}|${sortDirection}|${inshurFilter}`,
+  );
+
+  /** A sortable v2 column, writing the same `sort` / `dir` params the page reads. */
+  const vehicleSort = (field: SortField) => ({
+    direction: sortField === field ? sortDirection : null,
+    onSort: () => {
+      const params = new URLSearchParams(searchParams.toString());
+      const nextDirection = sortField === field && sortDirection === 'asc' ? 'desc' : 'asc';
+      params.set('sort', field);
+      if (nextDirection === 'asc') params.delete('dir');
+      else params.set('dir', nextDirection);
+      params.delete('page');
+      router.push(`?${params.toString()}`);
+    },
+  });
+  usePageSearch(
+    v2Chrome
+      ? {
+          placeholder: "Search vehicles…",
+          value: filters.search,
+          onChange: (next) => updateFilters({ search: next }),
+          filters: {
+            open: filtersOpen,
+            onOpenChange: setFiltersOpen,
+            activeCount: countActiveVehicleFilters(filters, {
+              showOwnership: !ownersHidden,
+              showHealth: fleetHealthEnabled,
+            }),
+          },
+        }
+      : null,
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -585,6 +683,26 @@ export default function VehiclesListEnhanced() {
     );
   }
 
+  // v2 header export: the cars the table is showing, filters and search
+  // applied, with the Status the table's column shows (Rented vs Reserved).
+  const handleExportVehiclesCsv = () => {
+    downloadCsv(
+      csvFilename('vehicles'),
+      ['Registration', 'Make', 'Model', 'Year', 'Colour', 'Status', 'Owner', 'VIN', 'Added'],
+      filteredVehicles.map((vehicle) => [
+        vehicle.reg,
+        vehicle.make,
+        vehicle.model,
+        vehicle.year ?? '',
+        vehicle.colour,
+        resolveVehicleStatus(withRentalSignal(vehicle)),
+        vehicle.vehicle_owners?.full_name ?? '',
+        vehicle.vin ?? '',
+        csvDate((vehicle as { created_at?: string | null }).created_at),
+      ]),
+    );
+  };
+
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -600,12 +718,29 @@ export default function VehiclesListEnhanced() {
               resolved tenant's slug — so the other 56 tenants see this shared
               v1 header exactly as they do today. */}
           <TabTourButton tour="vehicles" size="h-10" />
+          {/* v2: one labelled button (Add Vehicle), every other control an icon. */}
+          {v2Chrome && (
+            <HeaderIconButton
+              label="Export CSV"
+              size="icon-lg"
+              onClick={handleExportVehiclesCsv}
+              disabled={filteredVehicles.length === 0}
+            >
+              <Download className="h-4 w-4" />
+            </HeaderIconButton>
+          )}
+          {/* v2 has no Analytics tab: the overview graph stands in for it. The
+              /vehicles/analytics route itself stays for every tenant. */}
+          {!v2Chrome && (
+          <>
           {vehicles.length > 0 && (
             <Link href="/vehicles/analytics" className="shrink-0">
               <Button variant="outline" size="icon" className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             </Link>
+          )}
+          </>
           )}
           {canEdit('vehicles') && (
             <div data-add-vehicle-trigger data-tour="add-vehicle" className="flex-1 sm:flex-none [&>button]:w-full sm:[&>button]:w-auto">
@@ -616,10 +751,39 @@ export default function VehiclesListEnhanced() {
       </div>
 
       {/* Fleet Summary Cards */}
+      {v2Chrome ? (
+        <OverviewFlip
+          flipped={filtersOpen}
+          onFlipBack={() => setFiltersOpen(false)}
+          front={
+            // One graph, "Cars on rent", and the Availability card, over the same
+            // rows the table shows (every page of them). v1 keeps the six tiles.
+            <VehiclesOverview
+              vehicles={filteredVehicles}
+              onRent={onRentV2}
+              filtered={Object.values(filters).some((value) => !!value && value !== 'all') || !!inshurFilterSpec}
+            />
+          }
+          back={
+            <VehiclesFilterPanel
+              filters={filters}
+              onChange={updateFilters}
+              onClear={() => updateFilters({ search: '', status: 'all', make: 'all', year: 'all', performance: 'all', ownership: 'all', health: 'all' })}
+              onClose={() => setFiltersOpen(false)}
+              makes={uniqueMakes}
+              years={uniqueYears}
+              showOwnership={!ownersHidden}
+              owners={vehicleOwnersList}
+              showHealth={fleetHealthEnabled}
+            />
+          }
+        />
+      ) : (
       <FleetSummaryCards vehicles={filteredVehicles} currencyCode={currencyCode} />
+      )}
 
       {/* Filters */}
-      {(() => {
+      {!v2Chrome && (() => {
         const statusOptions = [
           { value: 'all', label: 'All Status' },
           { value: 'available', label: 'Available' },
@@ -795,6 +959,132 @@ export default function VehiclesListEnhanced() {
         />
         )
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). No
+          // pager, rows arrive as it scrolls. The photo folds into the vehicle
+          // cell and the View column is gone: the row opens the vehicle.
+          <ListTable rows={vehicleRows} minWidth="min-w-[880px]">
+            <ListTableHeader>
+              <ListHead className="w-[20%]" sort={vehicleSort('reg')}>Vehicle</ListHead>
+              <ListHead className="w-[18%]" sort={vehicleSort('make_model')}>Make / model</ListHead>
+              <ListHead className="w-[8%]" sort={vehicleSort('year')}>Year</ListHead>
+              <ListHead className="w-[10%]">Color</ListHead>
+              {!ownersHidden && <ListHead className="w-[12%]">Owner</ListHead>}
+              {hasPickupLocations && <ListHead className="w-[16%]">Location</ListHead>}
+              {inshurEnabled && <ListHead className="w-[12%]">INSHUR</ListHead>}
+              {/* Not sortable: the page's sort compares the raw `status` column,
+                  but this column shows `resolveVehicleStatus`, so Paused and
+                  Unavailable cars would sort inside Available. */}
+              <ListHead className="w-[12%]">Status</ListHead>
+              {fleetHealthEnabled && <ListHead className="w-[10%]">Health</ListHead>}
+            </ListTableHeader>
+            <ListBody>
+              {vehicleRows.visible.map((vehicle, index) => {
+                const status = resolveVehicleStatus(withRentalSignal(vehicle));
+                return (
+                  <ListRow
+                    key={vehicle.id}
+                    // Anchor for the Vehicles tab tour: the FIRST row only.
+                    data-tour={index === 0 ? 'vehicle-row' : undefined}
+                    onOpen={() => handleRowClick(vehicle.id)}
+                  >
+                    <ListCell>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <VehiclePhotoThumbnail
+                          photoUrl={vehicle.vehicle_photos?.[0]?.photo_url || vehicle.photo_url}
+                          vehicleReg={vehicle.reg}
+                          size="sm"
+                          className="h-7 w-10 shrink-0"
+                        />
+                        {/* A real link, so the record stays reachable by keyboard. */}
+                        <Link
+                          href={`/vehicles/${vehicle.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`${LIST_CLASSES.identifier} truncate hover:underline`}
+                        >
+                          {vehicle.reg}
+                        </Link>
+                      </div>
+                    </ListCell>
+                    {/* One line, like every rentals cell: two-line cells made
+                        these rows a quarter taller than the rentals rows. */}
+                    <ListCell>
+                      <span className={`block truncate ${LIST_CLASSES.text}`}>
+                        {vehicle.make} <span className="font-normal text-muted-foreground">{vehicle.model}</span>
+                      </span>
+                    </ListCell>
+                    <ListCell className="tabular-nums">
+                      {vehicle.year ? (
+                        <span className={LIST_CLASSES.text}>{vehicle.year}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </ListCell>
+                    <ListCell>
+                      {vehicle.colour ? (
+                        <span className={`block truncate ${LIST_CLASSES.text}`}>{vehicle.colour}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </ListCell>
+                    {!ownersHidden && (
+                      <ListCell>
+                        {vehicle.owner_id ? (
+                          <Link
+                            href={`/vehicle-owners/${vehicle.owner_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block truncate text-sm font-medium text-primary hover:underline"
+                          >
+                            {vehicle.vehicle_owners?.full_name ?? "Owner"}
+                          </Link>
+                        ) : (
+                          <ListMetaChip>Own fleet</ListMetaChip>
+                        )}
+                      </ListCell>
+                    )}
+                    {hasPickupLocations && (
+                      <ListCell>
+                        {vehicle.pickup_location_id ? (
+                          <span className={`block truncate ${LIST_CLASSES.text}`}>
+                            {locationNameById.get(vehicle.pickup_location_id) ?? "—"}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Any</span>
+                        )}
+                      </ListCell>
+                    )}
+                    {inshurEnabled && (
+                      // The whole row navigates; the badge's re-check button must not.
+                      <ListCell onClick={(e) => e.stopPropagation()}>
+                        <InshurEligibilityBadge
+                          compact
+                          state={inshurStateByVehicle.get(vehicle.id) ?? 'not_checked'}
+                          sourceMode={inshurEligibilityByVehicle.get(vehicle.id)?.source_mode ?? inshurConfig.mode}
+                          checkedAt={inshurEligibilityByVehicle.get(vehicle.id)?.checked_at}
+                          vin={vehicle.vin}
+                          vehicleState={vehicle.garaging_state}
+                          statesAllowed={inshurConfig.statesAllowed}
+                          isRechecking={inshurPendingVehicleId === vehicle.id}
+                          onRecheck={vehicle.vin ? () => recheckInshur(vehicle.id) : undefined}
+                        />
+                      </ListCell>
+                    )}
+                    <ListCell>
+                      <ListStatusText tone={VEHICLE_STATUS_TONE[(status || '').toLowerCase()] ?? 'muted'}>
+                        {status ? status.charAt(0).toUpperCase() + status.slice(1) : '—'}
+                      </ListStatusText>
+                    </ListCell>
+                    {fleetHealthEnabled && (
+                      <ListCell>
+                        <HealthStatusChip status={healthStatusFor(vehicle.id)} compact />
+                      </ListCell>
+                    )}
+                  </ListRow>
+                );
+              })}
+            </ListBody>
+          </ListTable>
+        ) : (
         <Card>
           <CardContent className="p-0">
             <div className="max-h-[calc(100vh-380px)] min-h-[300px] overflow-auto relative">
@@ -921,9 +1211,14 @@ export default function VehiclesListEnhanced() {
             </div>
           </CardContent>
         </Card>
+        )
       )}
 
       {/* Pagination */}
+      {v2Chrome && filteredVehicles.length > 0 && !teachEmptyFleet && (
+        <ListFooter rows={vehicleRows} one="vehicle" many="vehicles" />
+      )}
+      {!v2Chrome && (
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div className="text-sm text-muted-foreground">
           Showing {paginatedVehicles.length} of {filteredVehicles.length} vehicles
@@ -985,6 +1280,7 @@ export default function VehiclesListEnhanced() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

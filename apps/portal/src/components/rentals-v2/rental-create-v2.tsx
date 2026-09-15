@@ -3250,7 +3250,7 @@ export const RentalCreateV2 = () => {
             })}>
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:flex-1 lg:min-h-0">
             {/* ── Left: Scrollable Form ─────────────────────── */}
-            <div className="lg:col-span-3 lg:overflow-y-auto lg:pr-2 space-y-6 lg:flex lg:flex-col lg:min-h-0">
+            <div className="lg:col-span-3 lg:overflow-y-auto no-scrollbar lg:pr-2 space-y-6 lg:flex lg:flex-col lg:min-h-0">
               {/* ── Section 1: Customer & Vehicle ──────────────────────────── */}
               <div className="rounded-xl border bg-card shadow-sm">
                 <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">
@@ -6118,7 +6118,7 @@ export const RentalCreateV2 = () => {
             </div>
 
             {/* ── Right: Static Preview ─────────────────────── */}
-            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto lg:min-h-0">
+            <div className="hidden lg:block lg:col-span-2 lg:overflow-y-auto no-scrollbar lg:min-h-0">
               <div className="space-y-5">
                 <div className="rounded-xl border bg-card shadow-sm sticky top-0">
                   <div className="flex items-center gap-1.5 px-6 py-3.5 border-b bg-primary/15 rounded-t-xl">

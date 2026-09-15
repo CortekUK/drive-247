@@ -25,6 +25,68 @@ import { formatCurrency } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import AddFineDialog from "@/components/fines/add-fine-dialog";
+import { MoreHorizontal } from "lucide-react";
+import { Button as ButtonV2 } from "@/components/ui-v2/button";
+import { Checkbox as CheckboxV2 } from "@/components/ui-v2/checkbox";
+import { parseLocalDate } from "@/lib/date-utils";
+import {
+  LIST_CLASSES,
+  LIST_ROW_ACTION,
+  LIST_TONES,
+  ListBody,
+  ListCell,
+  ListFooter,
+  ListHead,
+  ListRow,
+  ListStatusText,
+  ListTable,
+  ListTableHeader,
+  useProgressiveRows,
+  type ListTone,
+} from "@/components/shared/list-table-v2";
+import { useV2 } from "@/lib/v2-context";
+
+// v2 only: the Status column's hue, by meaning, keyed on the lower-cased label.
+// Open waits on the operator (charge or waive); Charged, Partially Paid and the
+// appeal states are underway; Overdue and Appeal Rejected need attention; the
+// closed outcomes recede. Anything unknown falls back to muted at the call site.
+const FINE_STATUS_TONE_V2: Record<string, ListTone> = {
+  paid: 'success',
+  open: 'warning',
+  charged: 'info',
+  'partially paid': 'info',
+  appealed: 'info',
+  'appeal submitted': 'info',
+  overdue: 'danger',
+  'appeal rejected': 'danger',
+  waived: 'muted',
+  'appeal successful': 'muted',
+  refunded: 'muted',
+  'partially refunded': 'muted',
+};
+
+// v2 only: the label `FineStatusBadge` prints, computed the same way (its
+// `getDisplayText`, fed the same props the v1 row passes), so both paths name a
+// fine alike. The badge itself is shared with the fine and customer detail
+// pages and stays untouched.
+const fineStatusLabelV2 = (fine: EnhancedFine): string => {
+  if (fine.status === 'Open') {
+    const isOverdue = parseLocalDate(fine.due_date) < new Date() && fine.amount > 0;
+    return isOverdue ? 'Overdue' : 'Open';
+  }
+  return fine.status || 'Open';
+};
+
+// v2 only: the rentals list's date format ("14 Sep", with the year only when it
+// is not this year). `parseLocalDate`, because these are date-only strings.
+const FINE_DATE_V2 = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+const FINE_DATE_WITH_YEAR_V2 = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
+const formatFineDateV2 = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const d = parseLocalDate(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getFullYear() === new Date().getFullYear() ? FINE_DATE_V2.format(d) : FINE_DATE_WITH_YEAR_V2.format(d);
+};
 
 const FinesList = () => {
   const router = useRouter();
@@ -52,11 +114,20 @@ const FinesList = () => {
 
   const [selectedFines, setSelectedFines] = useState<string[]>([]);
 
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 there is no
+  // pager: the table grows as it scrolls, like the rentals list.
+  const v2Chrome = useV2("chrome");
+
   // Fetch fines data with current filters
   const { data: finesData, isLoading, error } = useFinesData({
     filters,
     sortBy,
     sortOrder,
+    // v2: page 1 of up to 1,000 rows (PostgREST's per-request maximum), grown
+    // on screen by `useProgressiveRows`. Same hook, so the "fines-enhanced" key
+    // prefix every invalidation uses still matches. v1 passes nothing extra, so
+    // its defaults (25 rows) and its query key stay exactly as they were.
+    ...(v2Chrome ? { page: 1, pageSize: 1000 } : {}),
   });
 
   // All fines with pagination
@@ -75,6 +146,24 @@ const FinesList = () => {
 
   // Get selected fine objects for bulk actions
   const selectedFineObjects = filteredFines.filter(fine => selectedFines.includes(fine.id));
+
+  /**
+   * v2 (northwind) has no pager: the table grows 25 rows at a time as it is
+   * scrolled, like the rentals list. On v2 the hook above fetched up to 1,000
+   * rows, so this is a bigger slice of `allFines` and no new query. The fill
+   * resets only when the result set changes: tenant, any filter, or the sort.
+   * Nothing here moves on a background refetch (a waive or a payment).
+   * Dates go in as epoch millis: an unparseable URL date is an Invalid Date,
+   * whose `toISOString()` would throw during render.
+   */
+  const fineRows = useProgressiveRows(
+    allFines,
+    `${tenant?.id}|${filters.search ?? ''}|${filters.vehicleSearch}|${filters.customerSearch}|${filters.status.join(',')}|${filters.issueDateFrom?.getTime()}|${filters.issueDateTo?.getTime()}|${filters.dueDateFrom?.getTime()}|${filters.dueDateTo?.getTime()}|${filters.quickFilter}|${sortBy}|${sortOrder}`,
+  );
+
+  // v2: the bulk bar acts on the selected rows that are on screen, as v1's acts
+  // on the selected rows of the page on screen.
+  const selectedFineObjectsV2 = fineRows.visible.filter(fine => selectedFines.includes(fine.id));
 
   const waiveFineAction = useMutation({
     mutationFn: async (fineId: string) => {
@@ -385,6 +474,248 @@ const FinesList = () => {
     </div>
   );
 
+  // v2: the rentals list's table (components/shared/list-table-v2). No pager:
+  // rows arrive as the table scrolls. No View column: the row opens the fine at
+  // the same /fines/:id the v1 eye button pushes. The actions menu is the v1
+  // menu, with the same items, permission gates and handlers.
+  const renderFinesTableV2 = () => {
+    const allShownSelected =
+      fineRows.visible.length > 0 && fineRows.visible.every((fine) => selectedFines.includes(fine.id));
+    const serverCount = finesData?.serverCount ?? 0;
+
+    return (
+      <>
+        <ListTable rows={fineRows} minWidth="min-w-[880px]">
+          <ListTableHeader>
+            <ListHead className="w-[4%]">
+              {canEdit('fines') && (
+                <CheckboxV2
+                  checked={allShownSelected}
+                  onCheckedChange={(checked) =>
+                    setSelectedFines(checked === true ? fineRows.visible.map((fine) => fine.id) : [])
+                  }
+                  aria-label="Select all shown fines"
+                />
+              )}
+            </ListHead>
+            {/* Widths, measured in Manrope on a 944px card. Rental #, Issue
+                date, Due date, Status and Amount hold their longest values in
+                full: "R-" plus 6 characters (uppercase too), "May 30, 2025" /
+                "30 Sept 2025", "1352 days overdue", "Appeal Successful",
+                "$12,345.67". Reference, Vehicle and Customer are the columns
+                that truncate, each with its full value in a title. */}
+            <ListHead className="w-[10%]">Reference</ListHead>
+            <ListHead className="w-[11%]">Rental #</ListHead>
+            <ListHead className="w-[9%]">Vehicle</ListHead>
+            <ListHead className="w-[9%]">Customer</ListHead>
+            <ListHead className="w-[12.5%]">Issue date</ListHead>
+            {/* Server sort on `due_date`, the date this column shows. */}
+            <ListHead
+              className="w-[13.5%]"
+              sort={{ direction: sortBy === 'due_date' ? sortOrder : null, onSort: () => handleSort('due_date') }}
+            >
+              Due date
+            </ListHead>
+            <ListHead className="w-[16%]">Status</ListHead>
+            {/* Server sort on `amount`, the figure this column shows. */}
+            <ListHead
+              className="w-[11%]"
+              sort={{ direction: sortBy === 'amount' ? sortOrder : null, onSort: () => handleSort('amount') }}
+            >
+              Amount
+            </ListHead>
+            <ListHead className="w-[4%] text-right">
+              <span className="sr-only">Actions</span>
+            </ListHead>
+          </ListTableHeader>
+          <ListBody>
+            {fineRows.visible.map((fine) => {
+              const canCharge = fine.status === 'Open';
+              const canWaive = fine.status === 'Open';
+              const reference = fine.reference_no || fine.id.slice(0, 8);
+              const statusLabel = fineStatusLabelV2(fine);
+              const issueDate = formatFineDateV2(fine.issue_date);
+              const dueDate = formatFineDateV2(fine.due_date);
+              const reg = fine.vehicles?.reg;
+              // v1 prints "reg • make model". Here make and model follow the
+              // plate on the same line, quieter, as the invoices list does.
+              const makeModel = [fine.vehicles?.make, fine.vehicles?.model].filter(Boolean).join(' ');
+              const daysOverdue = Math.abs(fine.daysUntilDue);
+              const overdueText = `${daysOverdue} ${daysOverdue === 1 ? 'day' : 'days'} overdue`;
+
+              return (
+                <ListRow
+                  key={fine.id}
+                  data-state={selectedFines.includes(fine.id) ? 'selected' : undefined}
+                  // The rentals list's flag treatment: a faint tint and a 2px
+                  // rail, in place of v1's 4px destructive border.
+                  className={cn(fine.isOverdue && 'bg-red-500/5 border-l-2 border-l-red-500')}
+                  onOpen={() => router.push(`/fines/${fine.id}`)}
+                >
+                  <ListCell onClick={(e) => e.stopPropagation()}>
+                    {canEdit('fines') && (
+                      <CheckboxV2
+                        checked={selectedFines.includes(fine.id)}
+                        onCheckedChange={(checked) => handleSelectFine(fine.id, checked as boolean)}
+                        aria-label={`Select fine ${reference}`}
+                      />
+                    )}
+                  </ListCell>
+                  {/* A real link to the same record, so it stays reachable by
+                      keyboard now the eye button is gone. */}
+                  <ListCell onClick={(e) => e.stopPropagation()}>
+                    <Link
+                      href={`/fines/${fine.id}`}
+                      className={`block truncate ${LIST_CLASSES.identifier} hover:underline`}
+                      title={reference}
+                    >
+                      {reference}
+                    </Link>
+                  </ListCell>
+                  <ListCell>
+                    {fine.rentals?.rental_number ? (
+                      <span
+                        className={`block truncate tabular-nums ${LIST_CLASSES.text}`}
+                        title={fine.rentals.rental_number}
+                      >
+                        {fine.rentals.rental_number}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </ListCell>
+                  <ListCell>
+                    {reg || makeModel ? (
+                      <span className="block truncate" title={[reg, makeModel].filter(Boolean).join(' · ')}>
+                        {reg ? (
+                          <span className={`tabular-nums ${LIST_CLASSES.text}`}>{reg}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                        {makeModel && <span className="ml-1.5 text-muted-foreground">{makeModel}</span>}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </ListCell>
+                  <ListCell>
+                    {fine.customers?.name ? (
+                      <span className={`block truncate ${LIST_CLASSES.text}`} title={fine.customers.name}>
+                        {fine.customers.name}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </ListCell>
+                  <ListCell className="tabular-nums">
+                    {issueDate ? (
+                      <span className={`block truncate ${LIST_CLASSES.text}`} title={issueDate}>
+                        {issueDate}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </ListCell>
+                  {/* Overdue: the date stays whole on the first line, in the
+                      danger hue, and v1's "N days overdue" badge becomes the
+                      rentals list's flag line under it. A chip beside the date
+                      squeezed a past-year date down to "Nov …". */}
+                  <ListCell
+                    className="tabular-nums"
+                    title={fine.isOverdue ? `${dueDate ?? ''} · ${overdueText}` : undefined}
+                  >
+                    {dueDate ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className={cn(
+                            'block truncate',
+                            fine.isOverdue ? `font-medium ${LIST_TONES.danger}` : LIST_CLASSES.text,
+                          )}
+                        >
+                          {dueDate}
+                        </span>
+                        {fine.isOverdue && (
+                          <span className="flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
+                            {overdueText}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </ListCell>
+                  <ListCell>
+                    <span className="block truncate" title={statusLabel}>
+                      <ListStatusText tone={FINE_STATUS_TONE_V2[statusLabel.toLowerCase()] ?? 'muted'}>
+                        {statusLabel}
+                      </ListStatusText>
+                    </span>
+                  </ListCell>
+                  <ListCell className="tabular-nums">
+                    <span className={`block truncate ${LIST_CLASSES.text}`}>
+                      {formatCurrency(Number(fine.amount), tenant?.currency_code || 'USD')}
+                    </span>
+                  </ListCell>
+                  {/* The menu must not open the record: clicks on the trigger
+                      and on its items (portalled, but still React children of
+                      this cell) stop here. */}
+                  <ListCell className="px-1 text-right" onClick={(e) => e.stopPropagation()}>
+                    {(canCharge || canWaive) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <ButtonV2
+                            variant="ghost"
+                            size="icon-sm"
+                            // `flex ml-auto`: an inline button sits on the text
+                            // baseline, so with the kit's -my-1.5 alone an Open
+                            // row still measured 48px against 45px for the rest.
+                            // As a block it adds no height, right-aligned.
+                            className={cn(LIST_ROW_ACTION, 'flex ml-auto')}
+                            aria-label={`Actions for fine ${reference}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </ButtonV2>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canEdit('fines') && canCharge && (
+                            <DropdownMenuItem
+                              onClick={() => openPaymentDialog(fine)}
+                            >
+                              <DollarSign className="h-4 w-4 mr-2" />
+                              Record Payment
+                            </DropdownMenuItem>
+                          )}
+                          {canEdit('fines') && canWaive && (
+                            <DropdownMenuItem
+                              onClick={() => waiveFineAction.mutate(fine.id)}
+                              disabled={waiveFineAction.isPending}
+                            >
+                              <Ban className="h-4 w-4 mr-2" />
+                              Waive Fine
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </ListCell>
+                </ListRow>
+              );
+            })}
+          </ListBody>
+        </ListTable>
+        {/* `serverTotal` only when the 1,000-row fetch was actually capped. The
+            count is taken before the client-side search, so passing it
+            unconditionally would call a complete, searched list truncated. */}
+        <ListFooter
+          rows={fineRows}
+          one="fine"
+          many="fines"
+          serverTotal={serverCount > 1000 ? serverCount : undefined}
+        />
+      </>
+    );
+  };
+
   if (error) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -436,16 +767,40 @@ const FinesList = () => {
 
       {/* Bulk Action Bar */}
       {canEdit('fines') && selectedFines.length > 0 && (
+        v2Chrome ? (
+          <BulkActionBar
+            selectedFines={selectedFineObjectsV2}
+            onClearSelection={() => setSelectedFines([])}
+          />
+        ) : (
         <BulkActionBar
           selectedFines={selectedFineObjects}
           onClearSelection={() => setSelectedFines([])}
         />
+        )
       )}
 
       {/* Fines Table */}
       {isLoading ? (
         <div className="text-center py-8">Loading fines...</div>
       ) : (
+        v2Chrome && allFines.length > 0 ? (
+          renderFinesTableV2()
+        ) : v2Chrome && allFines.length === 0 ? (
+          // v2, nothing to list: the v1 empty row's message on its own, with
+          // no table header or View column around it, as the other v2 lists
+          // show theirs.
+          <div className="text-center py-12">
+            <AlertTriangle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No fines found</h3>
+            <p className="text-muted-foreground">
+              {filters.status.length > 0 || filters.vehicleSearch || filters.customerSearch || filters.search
+                ? "Try adjusting your filters"
+                : "Get started by adding your first fine"
+              }
+            </p>
+          </div>
+        ) : (
         <>
           <Card>
             <CardContent className="p-0">
@@ -483,6 +838,7 @@ const FinesList = () => {
             </div>
           )}
         </>
+        )
       )}
     </div>
 

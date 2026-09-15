@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,10 @@ import { UserMenu } from "@/components/shared/layout/user-menu";
 import { AppSidebar } from "@/components/shared/layout/app-sidebar";
 import { useV2 } from "@/lib/v2-context";
 import { AppSidebarV2 } from "@/components/shared/layout/app-sidebar-v2";
-import { QuickDock } from "@/components/shared/layout/quick-dock";
+import { TopBarV2 } from "@/components/shared/layout/top-bar-v2";
+import { TraxProvider } from "@/components/trax/trax-provider";
+import { TraxPanel } from "@/components/trax/trax-panel";
+import { PageSearchProvider } from "@/components/shared/layout/page-search-slot";
 import { NotificationBell } from "@/components/shared/layout/notification-bell";
 import { CreditBalance } from "@/components/shared/layout/credit-balance";
 import { BonzahBalance } from "@/components/shared/layout/bonzah-balance";
@@ -170,6 +173,30 @@ export default function DashboardLayout({
    */
   const isMessagesWorkspace =
     pathname === "/messages" || !!pathname?.startsWith("/messages/");
+
+  /* Trax's full-screen page. It needs the same HEIGHT treatment as Messages — a
+     conversation must scroll inside itself rather than growing the document —
+     but NOT the same chrome treatment: Messages hides the sidebar, whereas on
+     Trax the sidebar stays and BECOMES the conversation rail (AppSidebarV2 →
+     TraxRail), with Back at its top. Hence a second flag rather than widening
+     the first. */
+  const isTraxWorkspace = pathname === "/trax" || !!pathname?.startsWith("/trax/");
+
+  /* Routes that bound their own height instead of letting the document scroll. */
+  const isBoundedHeight = isMessagesWorkspace || isTraxWorkspace;
+
+  /* Trax's shared conversation, provided to the top bar, the docked panel and
+     the full page so all three are the SAME thread. v2 only: for v1 this is a
+     Fragment, so the other 56 tenants do not mount a chat hook and fire a
+     conversations query for a surface they cannot reach. A context provider
+     emits no DOM either way, so the flex row above is unaffected. */
+  const TraxWrap = v2Chrome ? TraxProvider : Fragment;
+
+  /* Lets a LIST page lend the top bar its own search field and filter button —
+     the one part of the bar that changes per page. Must sit above BOTH the bar
+     and `{children}`: the page registers on mount and the bar reads it. v2 only,
+     for the same reason as TraxWrap. */
+  const SearchSlotWrap = v2Chrome ? PageSearchProvider : Fragment;
 
   const hasActivePlans = !!plans && plans.length > 0;
 
@@ -394,6 +421,16 @@ export default function DashboardLayout({
           same on both trees. `undefined` outside the gate leaves the element's
           class list byte-for-byte what it was for the other 56 tenants. */}
       <Provider
+        /* `--trax-width` is the docked Trax panel's width, read by both halves
+           of trax-panel.tsx (its flow gap and the fixed panel) and available to
+           anything that has to sit clear of it. A clamp, because breakpoints
+           read the viewport rather than the narrowed column: 30vw, never below
+           340px, never above 440px. v2 only; v1's wrapper gets no style. */
+        style={
+          v2Chrome
+            ? ({ "--trax-width": "clamp(340px, 30vw, 440px)" } as React.CSSProperties)
+            : undefined
+        }
         className={
           [
             v2Theme ? "bg-background bg-app-gradient" : "",
@@ -404,29 +441,22 @@ export default function DashboardLayout({
                rather than scrolling within itself. Measured, not assumed: with
                only the floor, `main` came out 4250px tall in an 820px window
                and the document scrolled 3430px. */
-            isMessagesWorkspace ? "h-svh overflow-hidden" : "",
+            isBoundedHeight ? "h-svh overflow-hidden" : "",
           ]
             .filter(Boolean)
             .join(" ") || undefined
         }
       >
+        <TraxWrap>
+        <SearchSlotWrap>
         {isMessagesWorkspace ? null : v2Chrome ? <AppSidebarV2 /> : <AppSidebar />}
 
-        {/* v2 has no top bar — and the SidebarTrigger lived in it. On desktop
-            the sidebar still collapses the way the source does: the
-            `SidebarRail` hairline down its edge, plus ⌘B. Both are desktop
-            only, though — the rail is `sm:flex`, and below 768px the sidebar
-            is an off-canvas Sheet with no opener of its own — so without this
-            handle a v2 tenant on a phone would have no route to navigation at
-            all. Mirrors the dock's tucked handle on the opposite edge.
-            `Trigger` is the v2 trigger here, from the same module as
-            `Provider`, so the sidebar context still resolves. */}
-        {v2Chrome && !isMessagesWorkspace && (
-          <Trigger
-            aria-label="Open navigation"
-            className="fixed left-0 top-1/2 z-40 h-11 w-7 -translate-y-1/2 rounded-l-none rounded-r-2xl border border-l-0 border-border/70 bg-card text-muted-foreground shadow-[6px_0_20px_-12px_rgba(0,0,0,0.18)] md:hidden"
-          />
-        )}
+        {/* The floating left-edge SidebarTrigger that used to live here is gone:
+            it existed only because "v2 has no top bar — and the SidebarTrigger
+            lived in it". There is a top bar now, so the phone-only opener sits
+            in it (see TopBarV2), which is both its normal home and one less
+            floating artifact over the page. Desktop is unchanged — the sidebar
+            still collapses via the `SidebarRail` hairline and ⌘B. */}
 
         {/* `bg-transparent` is load-bearing, and the branch carries it for the
             same reason: SidebarInset's own base class is `bg-background`, an
@@ -434,14 +464,47 @@ export default function DashboardLayout({
             this the wash above would be visible only in the 8px gutter and the
             screen would still read as white. Gated, so the other 56 tenants
             keep the opaque inset they have today. */}
-        <Inset className={v2Theme ? "overflow-x-hidden bg-transparent" : "overflow-x-hidden"}>
-          {/* v1 only — the v2 chrome deletes this row outright, which is the
-              single most visible difference between the two designs. Nothing
-              in it is v2's last route to anything: search and the user menu
-              (which carries the theme switch) moved into the sidebar, Trax and
-              notifications into the right-edge dock, credits to their own nav
-              entry, and the Bonzah balance to Settings → Insurance and the
-              dashboard's balance widget. */}
+        {/* `overflow-x-hidden` is dropped for v2 CHROME specifically, and that is
+            what makes the top bar able to pin. `overflow-x: hidden` forces
+            `overflow-y` to compute to `auto` (CSS Overflow 3), which turns this
+            element into a scroll container — and a `sticky` child resolves
+            against the nearest scroll container, not the viewport. Since the
+            Inset's height grows with its content it never actually scrolls, so
+            the bar would have scrolled away with the page. Horizontal overflow is
+            still clamped: `html, body { overflow-x: hidden }` in global.css
+            covers it for every tenant. The other 56 keep the class they have. */}
+        {/* `min-w-0` (v2) is what lets the Trax panel DOCK. A flex item's
+            default `min-width: auto` floors it at its content width, so without
+            it the Inset could not give up room to the panel's flow gap: the row
+            ran past the viewport and `body.v2-theme`'s `overflow-x: clip` cut
+            the page's right edge off. With the floor gone, `flex-1` narrows the
+            whole column — top bar included — and wide content scrolls inside
+            its own card as designed. */}
+        <Inset
+          className={
+            [v2Chrome ? "min-w-0" : "overflow-x-hidden", v2Theme ? "bg-transparent" : ""]
+              .filter(Boolean)
+              .join(" ") || undefined
+          }
+        >
+          {/* v2 only — the Stripe-style chrome row: search, messages,
+              notifications. Sits in exactly the slot v1's <header> occupies, as a
+              `shrink-0` flex sibling ABOVE the banners and <main>, so the flex
+              pass subtracts its height the same way it already does for v1 —
+              which is what keeps the /messages `h-svh` scroll bound intact. */}
+          {/* Not on /trax: the full page is laid out like Claude's — the rail
+              carries Back and the conversations, the page is one conversation
+              column — and the bar's Trax button would only toggle a panel that
+              route never shows. */}
+          {v2Chrome && !isTraxWorkspace && <TopBarV2 showNavTrigger={!isMessagesWorkspace} />}
+          {/* v1 only. v2 renders TopBarV2 above instead, so the two never
+              coexist. Where each of this row's controls went for v2: SEARCH and
+              NOTIFICATIONS are in the top bar (they were briefly in the sidebar
+              and the right-edge dock respectively, which is what the bar
+              replaced); the user menu, carrying the theme switch, is in the
+              sidebar; Trax opens from the rental and vehicle rails and the setup
+              guide; credits have their own nav entry; and the Bonzah balance is
+              in Settings → Insurance and the dashboard's balance widget. */}
           {!v2Chrome && (
             <header className="flex h-16 shrink-0 items-center gap-1 sm:gap-2 border-b px-2 sm:px-4">
               <Trigger className="-ml-1 flex-shrink-0" />
@@ -483,21 +546,28 @@ export default function DashboardLayout({
               sibling above, so the flex pass subtracts it on its own. */}
           <main
             className={
-              isMessagesWorkspace
-                ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? "" : " pt-0"}`
+              isBoundedHeight
+                ? `flex min-h-0 flex-1 flex-col overflow-hidden p-0${v2Chrome ? " min-w-0" : ""}`
+                : `flex flex-1 flex-col gap-4 p-4${v2Chrome ? " min-w-0" : " pt-0"}`
             }
           >
             {children}
           </main>
         </Inset>
 
-        {/* v2 right-edge quick dock — Ask AI · Messages · Enquiries ·
-            Notifications. Replaces the header row above. It owns the v2
-            tenant's single Trax instance (v1's still comes from
-            `<TraxAIDialog />` in the header), so the two never coexist.
-            v2 chrome only — v1 tenants never mount it. */}
-        {v2Chrome && <QuickDock />}
+        {/* Trax, DOCKED: a third child of this flex row. It renders a flow gap
+            that narrows the Inset above by `--trax-width`, and a fixed panel
+            over the room the gap reserves — the Sidebar primitive's own
+            pattern, mirrored on the right. See the header of trax-panel.tsx. */}
+        <TraxPanel />
+        </SearchSlotWrap>
+        </TraxWrap>
+
+        {/* The v2 right-edge QuickDock is no longer mounted. Its two remaining
+            affordances — Messages and Notifications — moved into TopBarV2, which
+            is where an operator looks for them. The component is deliberately
+            NOT deleted: it is the only record of the dock design, and a revert
+            here is one line rather than a rebuild. */}
 
         {/* Global voice call — always listening for inbound calls */}
         <GlobalVoiceCallProvider />

@@ -43,15 +43,18 @@ import {
   Plus,
   XCircle,
   ShieldAlert,
+  CalendarDays,
+  Download,
+  List,
 } from "lucide-react";
 import { parseLocalDate } from "@/lib/date-utils";
 import { useEnhancedRentals, RentalFilters, EnhancedRental } from "@/hooks/use-enhanced-rentals";
-import { RentalsFilterBar } from "@/components/rentals-v2/rentals-filter-bar";
+import { usePageSearch } from "@/components/shared/layout/page-search-slot";
+import { countActiveRentalFilters } from "@/components/rentals-v2/rentals-filter-panel";
 import { RentalsFilterPanel } from "@/components/rentals-v2/rentals-filter-panel";
 import { RentalsOverview } from "@/components/rentals-v2/rentals-overview";
 import { RentalsOverviewFlip } from "@/components/rentals-v2/rentals-overview-flip";
 import { ConnectedTimeline } from "@/components/timeline-v2/connected-timeline";
-import { getCurrencySymbol } from "@/lib/format-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { useRentalCreationGate } from "@/hooks/use-rental-creation-gate";
 import { ConnectStripeRequiredDialog } from "@/components/rentals/connect-stripe-required-dialog";
@@ -60,6 +63,8 @@ import { RentalsTeachingEmptyState } from "@/components/empty-states/lean-empty-
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { TabTourButton } from "@/components/onboarding/tab-tour-button";
+import { HeaderIconButton } from "@/components/shared/header-icon-button-v2";
+import { csvDate, csvFilename, downloadCsv } from "@/lib/csv-export";
 
 /**
  * `30 Sep`, or `30 Sep 2027` when the year is not the current one.
@@ -214,6 +219,7 @@ export function RentalsListV2() {
    */
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersFlipped = filtersOpen && currentView !== "calendar";
+
 
   // Parse filters from URL
   const filters: RentalFilters = useMemo(
@@ -379,6 +385,34 @@ export function RentalsListV2() {
     });
     router.push(`?${params.toString()}`);
   };
+  /**
+   * Lend the top bar this page's search and filter button.
+   *
+   * `null` in calendar view, which is what the old inline bar did by not
+   * rendering: there is no list to search there, and a field that filters
+   * nothing is worse than no field. Handing back null returns the bar to the
+   * global ⌘K pill.
+   *
+   * `tourAnchor` carries `data-tour="rentals-search"` across with it. The
+   * rentals tab tour anchors a step to that attribute, and a missing anchor
+   * does not fail loudly — it waits out the timeout, skips, and eats the wait
+   * budget of every later step on this route.
+   */
+  usePageSearch(
+    currentView === "calendar"
+      ? null
+      : {
+          placeholder: "Search customer, reg, rental #…",
+          value: filters.search || "",
+          onChange: (next) => handleFiltersChange({ ...filters, search: next, page: 1 }),
+          tourAnchor: "rentals-search",
+          filters: {
+            open: filtersFlipped,
+            onOpenChange: setFiltersOpen,
+            activeCount: countActiveRentalFilters(filters),
+          },
+        },
+  );
 
   const handleClearFilters = () => {
     const params = new URLSearchParams();
@@ -397,6 +431,27 @@ export function RentalsListV2() {
       params.set("view", view);
     }
     router.push(`?${params.toString()}`);
+  };
+
+  // The rentals the list is showing, filters and search applied: the same set
+  // the overview graph and the table read.
+  const handleExportCsv = () => {
+    const currency = tenant?.currency_code || "USD";
+    downloadCsv(
+      csvFilename("rentals"),
+      ["Rental #", "Customer", "Vehicle", "Pickup", "Return", "Status", "Total", "Currency", "Booked on"],
+      allRentals.map((r) => [
+        r.rental_number,
+        r.customer?.name ?? "",
+        r.vehicle ? `${r.vehicle.reg} (${r.vehicle.make} ${r.vehicle.model})` : "",
+        csvDate(r.start_date),
+        csvDate(r.end_date),
+        r.computed_status,
+        Number(r.total_amount) || 0,
+        currency,
+        csvDate(r.created_at),
+      ]),
+    );
   };
 
 
@@ -434,24 +489,42 @@ export function RentalsListV2() {
             Search is hidden in calendar view, where it has nothing to filter —
             New Rental stays. */}
         <div className="flex w-full min-w-0 items-start gap-2 sm:w-auto sm:flex-1 sm:justify-end">
-          {currentView !== "calendar" && (
-            <div className="min-w-0 flex-1 sm:max-w-md">
-              <RentalsFilterBar
-                filters={filters}
-                onFiltersChange={handleFiltersChange}
-                onClearFilters={handleClearFilters}
-                open={filtersFlipped}
-                onOpenChange={setFiltersOpen}
-              />
-            </div>
-          )}
+          {/* The search field and its filter toggle used to be drawn here, in
+              the page header, by `RentalsFilterBar`. They now live in the top
+              bar — lent to it by the `usePageSearch` call above — because two
+              search boxes on one screen, one global and one for this list with
+              nothing on screen saying which is which, is exactly the confusion
+              the top bar was introduced to remove.
+              The PANEL is untouched: it still flips onto the back of the
+              overview card below, driven by the same `filtersOpen` state. */}
           <div className="flex shrink-0 items-center gap-2">
-          {/* The view toggle, the analytics link and the CSV export were all
-              removed from this header at the user's request. Calendar view is
-              still reachable — the overview's calendar card opens it — and
+          {/* One labelled button, New Rental; every other control is an icon
+              with its name in a tooltip (team lead, Sep 15 2026). The calendar
+              icon is the header's own way into the timeline, so reaching it
+              never depends on which featured card is showing, and in calendar
+              view it turns into the way back to the list. Export writes the
+              rentals the list is showing, filters and search applied.
               /rentals/analytics still resolves if navigated to directly. */}
           {/* h-9 here, not h-10: this header is v2 and its Buttons are h-9. */}
           <TabTourButton tour="rentals" size="h-9" />
+          {currentView === "calendar" ? (
+            <HeaderIconButton label="List view" onClick={() => handleViewChange("list")}>
+              <List className="size-4" />
+            </HeaderIconButton>
+          ) : (
+            <>
+              <HeaderIconButton
+                label="Calendar view"
+                onClick={() => handleViewChange("calendar")}
+                data-tour="rentals-calendar"
+              >
+                <CalendarDays className="size-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label="Export CSV" onClick={handleExportCsv} disabled={allRentals.length === 0}>
+                <Download className="size-4" />
+              </HeaderIconButton>
+            </>
+          )}
           {canEdit('rentals') && (
             <Button
               // Lean tenants without a usable Stripe Connect account get told
@@ -482,7 +555,8 @@ export function RentalsListV2() {
             <RentalsOverview
               stats={stats}
               rentals={allRentals}
-              currencySymbol={getCurrencySymbol(tenant?.currency_code || "USD")}
+              currencyCode={tenant?.currency_code || "USD"}
+              filtered={countActiveRentalFilters(filters) > 0 || !!filters.search}
               onOpenCalendar={() => handleViewChange("calendar")}
             />
           }
@@ -506,9 +580,14 @@ export function RentalsListV2() {
           <Card>
             {/* The scroll root the observer measures against — see the sentinel
                 at the foot of this container. */}
+            {/* The last class switches off ui-v2 Table's own overflow-x-auto
+                wrapper. As a scroll container of its own, it was what the
+                sticky header pinned to, and it never scrolls vertically, so the
+                header scrolled away with the rows. Kept identical to
+                LIST_CLASSES.scrollRoot in components/shared/list-table-v2.tsx. */}
             <CardContent
               ref={scrollRootRef}
-              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto relative"
+              className="p-0 overflow-x-auto max-h-[520px] overflow-y-auto no-scrollbar relative [&>[data-slot=table-container]]:overflow-visible"
             >
               {/* `table-fixed` with declared widths, so the five columns keep
                   their proportions instead of handing every spare pixel to

@@ -138,7 +138,7 @@ export function RentalDetailV2() {
               {notFound ? "That rental is not here" : "That rental would not load"}
             </h2>
           </div>
-          <div className="mt-7 min-h-0 flex-1 overflow-y-auto">
+          <div className="mt-7 min-h-0 flex-1 overflow-y-auto no-scrollbar">
             <EmptyHint>
               {notFound
                 ? "It has either been deleted, or it belongs to a different account. Nothing was changed."

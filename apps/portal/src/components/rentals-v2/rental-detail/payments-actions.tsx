@@ -164,7 +164,7 @@ function AimDialog({
 
   return (
     <DialogContent
-      className="max-h-[85vh] overflow-y-auto"
+      className="max-h-[85vh] overflow-y-auto no-scrollbar"
       aria-describedby={undefined}
       /* No implicit submit. This is not a form and Enter does nothing here —
          the confirming control has to be reached and pressed deliberately. */

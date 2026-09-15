@@ -118,7 +118,7 @@ export function OnTheMoveToday({ className }: { className?: string }) {
             </p>
           </div>
         ) : (
-          <div className="-mx-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1">
+          <div className="-mx-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto no-scrollbar px-1">
             {movements.map((m) => (
               <MovementRow
                 key={`${m.kind}-${m.id}`}

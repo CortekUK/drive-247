@@ -41,12 +41,20 @@ import { HOME_PALETTE } from "@/components/dashboard-v2/home/ui";
 
 // ─── Greeting ────────────────────────────────────────────────────────────────
 
-function getGreeting(hour: number): { text: string; emoji: string } {
-  if (hour < 5) return { text: "Working late", emoji: "🦉" };
-  if (hour < 12) return { text: "Good morning", emoji: "☕" };
-  if (hour < 17) return { text: "Good afternoon", emoji: "🌤️" };
-  if (hour < 21) return { text: "Good evening", emoji: "🌇" };
-  return { text: "Good night", emoji: "✨" };
+/**
+ * The time-of-day greeting.
+ *
+ * Text only. Each branch used to carry an emoji (🦉 ☕ 🌤️ 🌇 ✨) rendered after
+ * the name; it was dropped on request — it read as decoration on an operator's
+ * working screen. The field is removed rather than left unused, so nobody puts
+ * it back assuming a heading lost it by accident.
+ */
+function getGreeting(hour: number): { text: string } {
+  if (hour < 5) return { text: "Working late" };
+  if (hour < 12) return { text: "Good morning" };
+  if (hour < 17) return { text: "Good afternoon" };
+  if (hour < 21) return { text: "Good evening" };
+  return { text: "Good night" };
 }
 
 // ─── Working hours ───────────────────────────────────────────────────────────
@@ -229,8 +237,7 @@ export function DashboardV2() {
         <div>
           <h1 className="text-3xl font-semibold leading-tight tracking-tight">
             {greeting.text}
-            {firstName ? `, ${firstName}` : ""}.{" "}
-            <span className="align-middle">{greeting.emoji}</span>
+            {firstName ? `, ${firstName}` : ""}.
           </h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             <span>

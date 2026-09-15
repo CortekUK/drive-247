@@ -432,7 +432,16 @@
 body.v2-theme {
   font-family: var(--font-manrope, "Inter"), -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, sans-serif;
+  /* `clip`, not `hidden`, and the difference is the sticky top bar.
+     global.css sets `html, body { overflow-x: hidden }`. With <html> already
+     non-visible, <body>'s overflow is not handed to the viewport, so `hidden`
+     made <body> a scroll container that never scrolls, and TopBarV2's
+     `position: sticky` pinned to THAT box and scrolled away with the page.
+     `clip` still cuts horizontal overflow but creates no scroll container, so
+     the bar pins to the viewport. `hidden` stays first as the fallback for a
+     browser without `clip`. */
   overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

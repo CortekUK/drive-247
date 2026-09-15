@@ -96,16 +96,15 @@ import { useManagerPermissions } from "@/hooks/use-manager-permissions";
 import { useCMSPages } from "@/hooks/use-cms-pages";
 import { useCmsOutline } from "@/stores/cms-outline-store";
 import { ROUTE_TO_TAB } from "@/lib/permissions";
-import { GlobalSearch } from "@/components/shared/layout/global-search";
 import { UserMenuV2 } from "@/components/shared/layout/user-menu-v2";
 import { OrgSwitcher } from "@/components/shared/layout/org-switcher";
 import { SidebarPromo } from "@/components/shared/layout/sidebar-promo";
 import { DevSection } from "@/components/shared/layout/dev-section";
-import { SidebarSearchScene, useTypedHint } from "@/components/shared/layout/sidebar-search-scene";
 import { SidebarCustomizerDialog } from "@/components/shared/layout/sidebar-customizer-dialog";
 import { useNavPreferences } from "@/hooks/use-nav-preferences";
 import { applyNavPreferences } from "@/lib/nav-preferences";
-import { TraxIcon } from "@/components/chat/TraxIcon";
+// The Trax conversation rail — the scoped rail this sidebar becomes on /trax.
+import { TraxRail } from "@/components/trax/trax-rail";
 // The rental control centre's stage rail. The sidebar becomes it on a rental
 // detail page, the same way it becomes the Settings rail on /settings — see
 // `isRentalDetailPage` below.
@@ -144,25 +143,6 @@ import {
   sectionHref as customerSectionHref,
 } from "@/components/customers-v2/customer-detail/sections";
 import { useCustomerRailHeader } from "@/components/customers-v2/customer-detail/use-customer-detail-v2";
-
-/**
- * The search field's specular sweep.
- *
- * The source worktree keeps this in its own `global.css`; that file is out of
- * scope for this port, and an `animate-[shine-sweep_…]` class with no matching
- * @keyframes silently leaves the band parked across the middle of the field.
- * Declaring it here keeps the animation self-contained in the one component
- * that uses it. Values are the source's, unchanged: it crosses in the first
- * 14% of the cycle and idles for the rest, so it glints once every four
- * seconds rather than pulsing like a loading bar.
- */
-const SHINE_KEYFRAMES = `
-@keyframes shine-sweep {
-  0% { transform: translateX(-120%); }
-  14% { transform: translateX(120%); }
-  100% { transform: translateX(120%); }
-}
-`;
 
 /** Website nav order — matches the order the pages appear on the live site. */
 const CMS_PAGE_ORDER = [
@@ -416,13 +396,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
   const showPendingBookings = settings?.payment_mode === 'manual';
   const collapsed = state === "collapsed";
 
-  const [searchOpen, setSearchOpen] = useState(false);
-  /** What was typed into the sidebar field. Seeds and drives the search scene. */
-  const [searchSeed, setSearchSeed] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-  /** Search mode: the rail becomes the result list instead of the nav. */
-  const [searchScene, setSearchScene] = useState(false);
-  const typedHint = useTypedHint(!collapsed && !searchScene && !searchSeed);
   const [customizerOpen, setCustomizerOpen] = useState(false);
   const { preferences: navPreferences } = useNavPreferences();
   // The open page's sections, published by the CMS visual editor. Empty
@@ -496,6 +469,13 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
 
   // Settings mode: when on /settings path, show settings sidebar
   const isSettingsPage = pathname?.startsWith("/settings") || false;
+
+  // Trax mode: on the full Trax page the sidebar becomes the conversation rail
+  // (Back, New conversation, history) — the Claude layout. A plain derivation,
+  // not a hook; the branch that uses it sits below the last hook call. No area
+  // flag is needed: this component and the Trax provider both exist only under
+  // the v2 chrome gate.
+  const isTraxPage = pathname === "/trax" || !!pathname?.startsWith("/trax/");
   const activeSettingsTab = searchParams.get('tab') || 'general';
   const [settingsSearch, setSettingsSearch] = useState("");
 
@@ -861,6 +841,12 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
      where the conversation list is always on screen, so there is nothing to go
      "back" to — and replacing the nav would strand somebody inside an inbox
      with no way to reach the rest of the portal. */
+
+  // --- Trax Mode ---
+  // Its own component because everything it reads comes from the Trax provider,
+  // not from the navigation hooks above — which have all already run, so this
+  // early return keeps the hook order identical on every route.
+  if (isTraxPage) return <TraxRail />;
 
   if (isRentalDetailPage && rentalDetailId) {
     const heroTitle = rentalDetail
@@ -1496,116 +1482,8 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
         <OrgSwitcher collapsed={collapsed} />
       </SidebarHeader>
 
-      {/* Search mode takes the whole rail: the results land where the field
-          that produced them is, instead of behind a modal over the page. */}
-      {searchScene && !collapsed ? (
-        <SidebarContent className="gap-0 pt-1">
-          <SidebarSearchScene
-            query={searchSeed}
-            onQueryChange={setSearchSeed}
-            onClose={() => {
-              setSearchScene(false);
-              setSearchSeed("");
-            }}
-          />
-        </SidebarContent>
-      ) : (
-      /* Navigation — fingertip items + drill-in groups */
+      {/* Navigation — fingertip items + drill-in groups */}
       <SidebarContent className="gap-0 pt-1 transition-all duration-300 ease-in-out">
-        {/* Search — prominent field at the very top */}
-        <SidebarGroup className="p-1.5 pb-1">
-          <SidebarGroupContent>
-            {collapsed ? (
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setSearchOpen(true)}
-                    tooltip="Search"
-                    className="h-8 transition-colors"
-                  >
-                    <Search className="h-4 w-4 shrink-0" />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            ) : (
-              /* A real field, not a button that opens one. The first keystroke
-                 swaps the rail for the search scene and is carried across in
-                 `searchSeed`, so nothing typed here is lost. */
-              <div
-                className={[
-                  "relative flex h-8 w-full items-center gap-2 overflow-hidden rounded-lg px-2.5",
-                  // A real border rather than a ring, so the inner glass layers
-                  // below can be inset by a pixel and leave the edge intact.
-                  "border border-primary/25 bg-primary/[0.07] backdrop-blur-[2px]",
-                  // The depth, in one shadow: a lit inner top edge, a shaded
-                  // inner floor, a tight contact shadow and a soft lift beneath.
-                  // Together they read as a raised pane rather than a flat tint.
-                  "shadow-[inset_0_1px_0_rgba(255,255,255,0.65),inset_0_-1px_0_rgba(0,0,0,0.05),0_1px_1px_rgba(0,0,0,0.04),0_6px_14px_-8px_rgba(0,0,0,0.20)]",
-                  "transition-colors focus-within:border-primary/50 focus-within:bg-primary/10 hover:bg-primary/10",
-                ].join(" ")}
-              >
-                <style>{SHINE_KEYFRAMES}</style>
-                {/* The glass itself: a sheen resting in the upper half, and a
-                    blurred specular band crossing every four seconds. Both are
-                    inset a pixel to keep off the border, take no clicks, and the
-                    moving one drops out entirely under reduced motion. */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-px top-px h-1/2 rounded-t-lg bg-gradient-to-b from-white/30 to-transparent dark:from-white/[0.07]"
-                />
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-y-px left-px w-full -skew-x-[18deg] animate-[shine-sweep_4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent blur-[3px] motion-reduce:hidden dark:via-white/20"
-                />
-                {/* Trax's own mark rather than a magnifier: the field is the
-                    portal's one "ask it anything" control, and its face says
-                    that faster than any label could. `currentColor` because
-                    TraxIcon paints through SVG presentation attributes, where a
-                    var() would never resolve. */}
-                <span className="flex shrink-0 items-center justify-center text-primary">
-                  <TraxIcon size={16} color="currentColor" />
-                </span>
-                <div className="relative min-w-0 flex-1 overflow-hidden">
-                  <input
-                    type="text"
-                    value={searchSeed}
-                    onChange={(e) => {
-                      setSearchSeed(e.target.value);
-                      setSearchScene(true);
-                    }}
-                    onFocus={() => {
-                      setSearchFocused(true);
-                      // Clicking the field is the whole gesture — the rail
-                      // swaps to results rather than a modal opening over it.
-                      setSearchScene(true);
-                    }}
-                    onBlur={() => setSearchFocused(false)}
-                    /* The visible hint is the overlay below — a native
-                       placeholder can't carry a caret of its own. */
-                    placeholder=""
-                    aria-label="Search"
-                    className="w-full bg-transparent text-[13px] text-foreground outline-none"
-                  />
-                  {!searchSeed && (
-                    <span
-                      aria-hidden
-                      /* Clipped by the wrapper and faded over the last 14px, so a
-                         long hint dissolves rather than running into the ⌘K badge. */
-                      className="pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-nowrap pr-2 text-[13px] leading-none text-muted-foreground [mask-image:linear-gradient(to_right,black_calc(100%-14px),transparent)]"
-                    >
-                      {typedHint}
-                      {!searchFocused && (
-                        <span className="ml-0.5 inline-block h-3 w-px animate-pulse bg-muted-foreground/80" />
-                      )}
-                    </span>
-                  )}
-                </div>
-                <kbd className="shrink-0 rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">⌘K</kbd>
-              </div>
-            )}
-          </SidebarGroupContent>
-        </SidebarGroup>
-
         {/* Section tabs: Portal / Website. Hidden entirely from a manager
             without the `cms` grant — v1 hides "Website Content" from them too. */}
         {canSeeCms && !collapsed && (
@@ -1667,11 +1545,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
-
-        {/* The collapsed rail's search dialog. Mounted unconditionally; its
-            underlying query is `enabled: debouncedQuery.length > 0`, so a
-            closed one costs nothing. */}
-        <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
         {view === "cms" ? (
           /* Website — the site's pages, each with its live/off switch. Anything
@@ -2154,7 +2027,6 @@ export function AppSidebarV2({ onAskAI }: { onAskAI?: () => void } = {}) {
           </>
         )}
       </SidebarContent>
-      )}
 
       {/* Pinned Footer */}
       <SidebarFooter className="p-1.5">

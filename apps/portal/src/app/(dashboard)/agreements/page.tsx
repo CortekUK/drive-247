@@ -28,6 +28,8 @@ import { useRouter } from "next/navigation";
 import { isLeanTenant } from "@/lib/lean-areas";
 import { AgreementsTeachingEmptyState } from "@/components/empty-states/lean-empty-states";
 import { useForcedEmptyState } from "@/hooks/use-forced-empty-state";
+import { useV2 } from "@/lib/v2-context";
+import { AgreementsTableV2 } from "@/components/agreements-v2/agreements-table-v2";
 
 interface AgreementDoc {
   id: string;
@@ -51,6 +53,10 @@ export default function AgreementsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(25);
   const { tenant, tenantSlug } = useTenant();
+  // v2 chrome (canary tenants only; fails closed to v1). v2 swaps only the
+  // populated table for the rentals list's table, with no pager. Loading,
+  // teaching and "no results" states, and every dialog, stay shared.
+  const v2Chrome = useV2("chrome");
   const router = useRouter();
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
@@ -757,6 +763,28 @@ export default function AgreementsList() {
         />
         )
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). No
+          // pager, rows arrive as it scrolls. Rows open nothing, as in v1; every
+          // action calls the same handler with the same busy state.
+          <AgreementsTableV2
+            rows={filteredAgreements}
+            resetKey={`${tenant?.id ?? ""}|${searchQuery}`}
+            justSignedIds={justSignedIds}
+            signingDocId={signingDocId}
+            viewingDocId={viewDialogLoading ? viewDialogDoc?.id ?? null : null}
+            downloadingDocId={downloadingDocId}
+            resendingId={resendingId}
+            voidingId={voidingId}
+            onSign={handleSign}
+            onView={handleViewAgreement}
+            onDownload={handleDownloadAgreement}
+            onResend={handleResend}
+            onRequestVoid={setVoidConfirmDoc}
+            onDownloadFile={handleDownload}
+            onOpenFile={handleView}
+          />
+        ) : (
         <>
           <Card>
             <CardContent className="p-0">
@@ -936,6 +964,7 @@ export default function AgreementsList() {
             </div>
           </div>
         </>
+        )
       )}
 
       {/* Document Viewer Dialog */}

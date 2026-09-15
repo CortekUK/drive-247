@@ -61,6 +61,15 @@ interface UsePaymentsDataOptions {
   sortOrder: 'asc' | 'desc';
   page: number;
   pageSize: number;
+  /**
+   * v2 only, and optional: absent, the select, filters and query key are
+   * exactly v1's. When true and a customer search is active, `customers` is
+   * embedded `!inner`, so the name filter narrows the PAYMENTS on the server:
+   * `count` is the matches and `.range` reaches every one of them. Without it
+   * the filter only blanks the embed, non-matches are dropped after the fetch,
+   * and a match beyond the fetched range can never load.
+   */
+  innerJoinSearch?: boolean;
 }
 
 export const usePaymentsData = ({
@@ -69,6 +78,7 @@ export const usePaymentsData = ({
   sortOrder,
   page,
   pageSize
+  , innerJoinSearch
 }: UsePaymentsDataOptions) => {
   const { tenant } = useTenant();
 
@@ -88,6 +98,9 @@ export const usePaymentsData = ({
     page,
     pageSize
   ];
+  // Appended only when set: v1's key is untouched, and every ["payments-data"]
+  // prefix invalidation still matches the v2 entries.
+  if (innerJoinSearch) stableQueryKey.push("inner-join-search");
 
   return useQuery({
     queryKey: stableQueryKey,
@@ -128,6 +141,23 @@ export const usePaymentsData = ({
           rentals!payments_rental_id_fkey(id, rental_number, rental_period_type, monthly_amount, start_date, end_date)
         `, { count: 'exact' })
         .eq("tenant_id", tenant.id);
+
+      // `innerJoinSearch` with a customer search: the same select with
+      // `customers` embedded `!inner` (same foreign-key hint), so the ilike below
+      // filters the payments instead of blanking their embed. Keep these column
+      // lists in step with the select above. (vehicleSearch needs no such change:
+      // it filters the top-level `vehicle_id` column, which already narrows.)
+      if (innerJoinSearch && filters.customerSearch) {
+        query = supabase
+          .from("payments")
+          .select(`
+          *,
+          customers!payments_customer_id_fkey!inner(id, name),
+          vehicles!payments_vehicle_id_fkey(id, reg, make, model, daily_rent, weekly_rent, monthly_rent),
+          rentals!payments_rental_id_fkey(id, rental_number, rental_period_type, monthly_amount, start_date, end_date)
+        `, { count: 'exact' })
+          .eq("tenant_id", tenant.id) as unknown as typeof query;
+      }
 
       // Apply filters
       if (filters.customerSearch) {

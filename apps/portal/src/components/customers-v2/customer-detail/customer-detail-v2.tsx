@@ -154,7 +154,7 @@ export function CustomerDetailV2() {
             </Button>
             <h2 className="font-heading text-2xl font-medium tracking-tight">That customer is not here</h2>
           </div>
-          <div className="mt-7 min-h-0 flex-1 overflow-y-auto">
+          <div className="mt-7 min-h-0 flex-1 overflow-y-auto no-scrollbar">
             <EmptyHint>
               It has either been deleted, or it belongs to a different account. Nothing was changed.
             </EmptyHint>

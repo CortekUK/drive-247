@@ -301,7 +301,7 @@ export function RailMessages({ detail }: { detail: RentalDetailV2 }) {
       </div>
 
       {/* The thread takes every pixel the composer does not. */}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto py-2">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto no-scrollbar py-2">
         {isLoading ? (
           <p className="px-1 text-[11px] text-muted-foreground">Reading the conversation…</p>
         ) : messages.length === 0 ? (

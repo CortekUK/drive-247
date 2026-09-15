@@ -20,6 +20,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { formatCurrency } from '@/lib/format-utils';
+import { useV2 } from '@/lib/v2-context';
+import { useManagerPermissions } from '@/hooks/use-manager-permissions';
+import { ExtrasTableV2 } from '@/components/settings-v2/extras-table-v2';
 import {
   DndContext,
   closestCenter,
@@ -164,6 +167,12 @@ export function ExtrasSettings() {
   const [stockTarget, setStockTarget] = useState<RentalExtra | null>(null);
   const [stockValue, setStockValue] = useState('');
   const notifiedRef = useRef(false);
+
+  // v2 chrome (northwind only; every other tenant keeps v1). Above the loading
+  // return, so both hooks run on every render. `canEditSettings('extras')` is
+  // the check behind the Settings page's view-only banner for this tab.
+  const v2Chrome = useV2('chrome');
+  const { canEditSettings } = useManagerPermissions();
 
   // Fetch all tenant vehicles for per-vehicle pricing picker
   const { data: allVehicles } = useQuery({
@@ -371,6 +380,15 @@ export function ExtrasSettings() {
     }
   };
 
+  // v2: the same spinner, without the v1 card around it.
+  if (isLoading && v2Chrome) {
+    return (
+      <div className="py-12 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <Card>
@@ -383,6 +401,50 @@ export function ExtrasSettings() {
 
   return (
     <div className="space-y-6">
+      {v2Chrome ? (
+        // v2: no card inside a card. The header sits above and the kit's
+        // ListTable is the card; the empty message is v1's, centred, with no
+        // table. `pointer-events-auto` because a view-only manager's tab body is
+        // `pointer-events-none`: without it the table could neither scroll nor
+        // show more than its first 25 extras. Add Extra and the row menu render
+        // only for `canEditSettings('extras')`, and every handler is this
+        // component's own, so the dialogs below serve both branches.
+        <div className="pointer-events-auto space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="font-heading text-base font-medium">Rental Extras</h2>
+              <p className="text-sm text-muted-foreground">
+                Manage optional add-ons customers can select during booking (GPS, baby seats, drinks, etc.)
+              </p>
+            </div>
+            {canEditSettings('extras') && (
+              <Button onClick={handleOpenAdd} className="w-full sm:w-auto shrink-0">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Extra
+              </Button>
+            )}
+          </div>
+          {extras.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <ImageIcon className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">No extras configured yet.</p>
+              <p className="text-xs mt-1">Add extras that customers can select during booking.</p>
+            </div>
+          ) : (
+            <ExtrasTableV2
+              extras={extras}
+              resetKey={tenant?.id ?? ''}
+              currencyCode={tenant?.currency_code || 'USD'}
+              canEdit={canEditSettings('extras')}
+              isLowStock={isLowStock}
+              onEdit={handleOpenEdit}
+              onUpdateStock={(extra) => { setStockTarget(extra); setStockValue(''); }}
+              onToggleActive={handleToggleActive}
+              onDelete={(extra) => setDeleteTarget(extra)}
+            />
+          )}
+        </div>
+      ) : (
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -546,6 +608,7 @@ export function ExtrasSettings() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

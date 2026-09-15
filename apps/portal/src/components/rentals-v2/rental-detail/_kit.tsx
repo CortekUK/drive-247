@@ -357,7 +357,7 @@ export function Panel({
 
       {/* `min-h-0` is load-bearing: without it a flex child refuses to shrink
           below its content and the column grows the page instead of scrolling. */}
-      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto pb-2 pr-1">{children}</div>
+      <div className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto no-scrollbar pb-2 pr-1">{children}</div>
 
       {footer && <div className="shrink-0 pt-4">{footer}</div>}
     </div>

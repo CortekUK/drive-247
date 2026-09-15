@@ -59,6 +59,14 @@ export interface BlogPostFilters {
   search?: string;
   page?: number;
   pageSize?: number;
+  /**
+   * v2 list only, optional: a PostgREST column list that replaces the list
+   * query's `*, category:blog_categories(*)`. Rows then carry only those
+   * fields, whatever `BlogPost` says. Absent, the select is v1's.
+   */
+  columns?: string;
+  /** v2 list only, optional: keep the last result on screen while a new filter loads. */
+  keepPreviousResults?: boolean;
 }
 
 export interface CreateBlogPostInput {

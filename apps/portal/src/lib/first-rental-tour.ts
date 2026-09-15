@@ -385,26 +385,36 @@ export const FIRST_RENTAL_TOUR: readonly TourStep[] = [
     // `lib/tab-tours/vehicles.ts` does it better, because it can then walk
     // INTO the record. Here we only say what this page is.
     //
-    // ONE stat tile, never the grid: the six-card row is most of the fold on a
-    // laptop, and a spotlight that big degrades to a wash that teaches nothing.
-    // The tile is rendered above the empty-state branch, so it is on the page
-    // for a brand-new tenant with no cars at all — reading zero, which is the
-    // honest thing for it to say to them.
+    // The graph's label and headline number, never the whole hero row: the row
+    // runs the width of the content column, and a card with nowhere clear of
+    // the spotlight to stand degrades to a wash that teaches nothing. The
+    // overview is rendered above the empty-state branch and draws this anchor
+    // while its rentals are still loading, so it is on the page for a brand-new
+    // tenant with no cars at all — reading zero, which is the honest thing for
+    // it to say to them. Then the overview's root, then the stat tile this step
+    // used to name (v1 still draws it), then the title.
     title: 'Your fleet',
-    body: 'Every car you rent out lives here, with its rates, its photos and whether it is free to book right now.',
+    body: 'Every car you rent out lives here, with its rates, its photos and whether it is free to book. The graph up top counts how many are out on rent.',
     route: '/vehicles',
-    anchors: ['[data-tour="fleet-stat-total-vehicles"]', PAGE_TITLE],
+    anchors: [
+      '[data-tour="vehicles-chart"]',
+      '[data-tour="fleet-overview"]',
+      '[data-tour="fleet-stat-total-vehicles"]',
+      PAGE_TITLE,
+    ],
     side: 'bottom',
   },
   {
     id: 'customers',
     label: 'Customers',
     title: 'Everyone who rents from you',
-    body: 'Anyone who books on your site lands here on their own. Their licence, their history and what they owe sit on one page.',
+    body: 'Anyone who books on your site lands here on their own, and the graph up top counts each new customer. Their licence, history and what they owe sit on one page.',
     route: '/customers',
-    // The four counts render at zero rather than not at all, so this is as
-    // present on a brand-new tenant's empty tab as on a busy one.
-    anchors: ['[data-tour="customers-stats"]', PAGE_TITLE],
+    // The graph's label and headline number. It renders at zero rather than not
+    // at all, so this is as present on a brand-new tenant's empty tab as on a
+    // busy one. Then the overview's root, `customers-stats` (the name the v1
+    // four-card grid still carries), then the title.
+    anchors: ['[data-tour="customers-chart"]', '[data-tour="customers-stats"]', PAGE_TITLE],
     side: 'bottom',
   },
   {
@@ -680,7 +690,15 @@ export type ResolvedStop = ResolvedStep;
  */
 export function isVisible(el: Element): boolean {
   const rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  // Laid out is not the same as shown. The v2 overview card turns over to show
+  // its filters, and the face it turns away keeps its full box, so the stat
+  // cards on it still measure. That face is `inert` straight away and
+  // `visibility: hidden` once the turn settles. Without these checks, a tour
+  // started with the filters open spotlights an empty patch and never falls
+  // back to the heading its step names next.
+  if (el.closest("[inert]")) return false;
+  return getComputedStyle(el).visibility !== "hidden";
 }
 
 /**

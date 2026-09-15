@@ -248,7 +248,7 @@ function CustomerOverview({
       {/* `pr-5` here, on top of each group's `px-4`, keeps the rail's values
           clear of the fixed right-edge dock, which floats over anything that
           reaches the viewport edge. */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-6 pr-5">
+      <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-6 pr-5">
         {/* ── the verdict ─────────────────────────────────────────────── */}
         <div className="px-4 pt-1">
           <div className={cn("rounded-3xl px-4 py-3.5 ring-1", verdictCls[verdict.tone])}>

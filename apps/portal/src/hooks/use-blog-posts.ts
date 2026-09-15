@@ -53,6 +53,18 @@ export function useBlogPosts(filters?: BlogPostFilters) {
         .eq("tenant_id", tenant!.id)
         .order("created_at", { ascending: false });
 
+      // `columns` (v2 list only): the same query asking for just those columns,
+      // so a 1,000-row list does not carry every article's HTML `content`. The
+      // filters and range below apply to it unchanged. Absent (every v1 caller),
+      // the select above stands. Keep the base in step with the one above.
+      if (filters?.columns) {
+        query = (supabase as any)
+          .from("blog_posts")
+          .select(filters.columns, { count: "exact" })
+          .eq("tenant_id", tenant!.id)
+          .order("created_at", { ascending: false });
+      }
+
       if (filters?.status && filters.status !== "all") {
         query = query.eq("status", filters.status);
       }
@@ -80,6 +92,16 @@ export function useBlogPosts(filters?: BlogPostFilters) {
       };
     },
     enabled: !!tenant?.id,
+    // `keepPreviousResults` (v2 list only): while a new filter's first fetch is
+    // in flight, keep this tenant's last result up, so `isLoading` stays false
+    // and the page does not unmount its search box mid-typing. Absent (v1),
+    // nothing is added and loading behaves as before.
+    ...(filters?.keepPreviousResults
+      ? {
+          placeholderData: (previous: any, previousQuery: any) =>
+            previousQuery?.queryKey?.[1] === tenant?.id ? previous : undefined,
+        }
+      : {}),
   });
 
   // Get single post by ID

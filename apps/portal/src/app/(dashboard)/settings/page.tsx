@@ -71,6 +71,7 @@ import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog
 import { useAuditLogOnOpen } from '@/hooks/use-audit-log-on-open';
 import { useAuditLog } from '@/hooks/use-audit-log';
 import { useV2 } from '@/lib/v2-context';
+import { PromoCodesTableV2 } from '@/components/settings-v2/promo-codes-table-v2';
 
 /**
  * The pointer left behind by a control that now lives in the Website section.
@@ -228,6 +229,13 @@ const Settings = () => {
    * other 56.
    */
   const websiteMoved = useV2('cms');
+
+  /**
+   * v2 chrome (northwind only; every other tenant keeps v1). On this page it
+   * swaps only the Promo Codes tab's list for the rentals list's table. Above
+   * the early returns, so it runs on every render.
+   */
+  const v2Chrome = useV2('chrome');
 
   /**
    * The four SEO columns, included in a branding save ONLY while this page
@@ -4929,6 +4937,9 @@ const Settings = () => {
                 </div>
               )}
 
+              {/* v2 (northwind) lists the codes below this card instead, where the kit's table is the card. */}
+              {v2Chrome ? null : (
+              <>
               <Separator className="my-6" />
 
               {/* Promo Codes List */}
@@ -5030,8 +5041,49 @@ const Settings = () => {
                   </div>
                 </div>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
+          {v2Chrome && (
+            // v2: no card inside a card. The list leaves the form card above and
+            // the kit's ListTable is the card. `pointer-events-auto` because a
+            // view-only manager's tab body is `pointer-events-none`: without it
+            // the table could neither scroll nor show more than its first 25
+            // codes. Edit and Delete render only for `canEditSettings('promos')`,
+            // the check the Add button uses; Copy only reads, so it stays. The
+            // loading and empty messages are v1's, centred, with no table.
+            <div className="pointer-events-auto space-y-3">
+              <h2 className="font-heading text-base font-medium">All Promo Codes</h2>
+              {isLoadingPromos ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                  Loading promo codes...
+                </div>
+              ) : promoCodes && promoCodes.length > 0 ? (
+                <PromoCodesTableV2
+                  promos={promoCodes}
+                  resetKey={tenant?.id ?? ''}
+                  currencyCode={tenant?.currency_code || 'USD'}
+                  canEdit={canEditSettings('promos')}
+                  onCopy={(code) => {
+                    navigator.clipboard.writeText(code);
+                    toast({ title: "Copied!", description: "Promo code copied to clipboard" });
+                  }}
+                  onEdit={(promo) => setEditingPromo({
+                    ...promo,
+                    // Ensure dates are date objects for calendar
+                    expires_at: new Date(promo.expires_at)
+                  })}
+                  onDelete={(promo) => setDeletingPromo(promo)}
+                />
+              ) : (
+                <div className="py-8 text-center text-muted-foreground">
+                  No promo codes found. Create one to get started.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Edit Promo Dialog */}
           <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>

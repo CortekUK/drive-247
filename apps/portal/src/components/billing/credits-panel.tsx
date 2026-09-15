@@ -3,6 +3,10 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCreditWallet, CreditTransaction } from "@/hooks/use-credit-wallet";
+import { useV2 } from "@/lib/v2-context";
+import { useTenant } from "@/contexts/TenantContext";
+import { CreditTransactionsTableV2 } from "@/components/credits-v2/credit-transactions-table-v2";
+import { useCreditTransactionsV2, CREDIT_TRANSACTIONS_V2_LIMIT } from "@/components/credits-v2/use-credit-transactions-v2";
 // Canary-only sample data, so the Credits surface can be reviewed on a tenant
 // whose wallet has never been used. See billing-preview.tsx for why the gate is
 // keyed on the tenant SLUG.
@@ -148,6 +152,25 @@ export function CreditsPanel() {
   const wallet = previewActive ? previewWallet : realWallet;
   const balance = previewActive ? previewWallet!.balance : realBalance;
   const transactions = previewActive ? previewTransactions : realTransactions;
+
+  // v2 chrome (canary tenants only; fails closed to v1). The Transaction History
+  // table has no cap on screen: it lists up to 1,000 rows from its own query,
+  // because the wallet hook's 100 are shared with the top-bar credits pill. It
+  // shows the 100 already loaded until that query answers, so nothing flashes,
+  // and previews the same sample rows v1 does. Above the early return.
+  const v2Chrome = useV2("chrome");
+  const { tenant } = useTenant();
+  const transactionsV2Query = useCreditTransactionsV2(v2Chrome && !previewActive);
+  const transactionsV2 = previewActive
+    ? previewTransactions
+    : transactionsV2Query.data?.rows ?? realTransactions;
+  // The tenant's full count, only when the 1,000-row fetch was capped, and only
+  // from the response the rows came from.
+  const transactionsV2Count = previewActive ? null : transactionsV2Query.data?.count ?? null;
+  const transactionsV2ServerTotal =
+    transactionsV2Count !== null && transactionsV2Count > CREDIT_TRANSACTIONS_V2_LIMIT
+      ? transactionsV2Count
+      : undefined;
 
   // Mirrors CREDIT_CONFIG.MIN_PURCHASE_CREDITS in the edge function: the
   // credits account settles in AED and Stripe rejects Checkout totals under
@@ -401,6 +424,29 @@ export function CreditsPanel() {
         </summary>
         <div className="space-y-6 border-t border-border/60 p-5">
       {/* ── Transaction History (full width) ── */}
+      {v2Chrome ? (
+        // v2: no Card around the table, because the kit's table is the card, so
+        // v1's card header sits above it. Rows open nothing, as in v1.
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium">Transaction History</p>
+            <p className="text-sm text-muted-foreground">All credit activity including purchases, usage, refunds, and gifts</p>
+          </div>
+          {transactionsV2.length === 0 ? (
+            // Nothing to list: v1's empty-row message on its own, with no table
+            // header around it.
+            <div className="py-8 text-center text-sm text-muted-foreground">No transactions yet</div>
+          ) : (
+            // Reset on tenant and preview only: nothing here searches, filters or
+            // sorts, and the post-purchase poll must not snap the list back.
+            <CreditTransactionsTableV2
+              transactions={transactionsV2}
+              resetKey={`${tenant?.id ?? ""}|${previewActive}`}
+              serverTotal={transactionsV2ServerTotal}
+            />
+          )}
+        </div>
+      ) : (
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Transaction History</CardTitle>
@@ -457,6 +503,7 @@ export function CreditsPanel() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* ── Usage History Chart (live only) ── */}
       <Card>

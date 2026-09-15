@@ -49,6 +49,8 @@ import { CredentialsModal } from '@/components/users/credentials-modal';
 import { ManagerPermissionsSelector } from '@/components/users/manager-permissions-selector';
 import type { AddUserFormValues, PermissionEntry } from '@/client-schemas/users/add-user';
 import { useAuditLog } from '@/hooks/use-audit-log';
+import { useV2 } from '@/lib/v2-context';
+import { UsersTableV2 } from '@/components/admin-v2/users-table-v2';
 
 interface UserCredentials {
   name: string;
@@ -61,6 +63,11 @@ export default function UsersManagement() {
   const { tenant } = useTenant();
   const queryClient = useQueryClient();
   const { logAction } = useAuditLog();
+
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 the Team Members
+  // list is the rentals list's table with no card around it. Up here, above the
+  // access-denied early return, so the hook runs on every render.
+  const v2Chrome = useV2('chrome');
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -427,6 +434,52 @@ export default function UsersManagement() {
         />
       </div>
 
+      {v2Chrome ? (
+        // v2: no card inside a card. The Team Members header sits above and the
+        // kit's ListTable is the card. The loading and empty messages are v1's,
+        // centred, with no table around them. Each menu handler below is v1's
+        // own inline body, so the dialogs and mutations run exactly as in v1.
+        <div className="space-y-3">
+          <div>
+            <h2 className="font-heading text-base font-medium">Team Members</h2>
+            <p className="text-sm text-muted-foreground">
+              All users with access to this portal. Head admins can create admins, operations staff, and viewers.
+            </p>
+          </div>
+          {isLoading ? (
+            <div className="text-center py-8">Loading users...</div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              {searchQuery ? "No users match your search." : 'No users found. Click "Add User" to create one.'}
+            </div>
+          ) : (
+            <UsersTableV2
+              users={filteredUsers}
+              resetKey={`${tenant?.id ?? ''}|${searchQuery}`}
+              currentUserId={appUser?.id}
+              roleLabel={getRoleDisplay}
+              onResetPassword={(user) => {
+                setSelectedUser(user);
+                setResetPassword(generatePassword());
+                setShowResetDialog(true);
+              }}
+              onChangeRole={(user) => {
+                setSelectedUser(user);
+                setSelectedRole(user.role);
+                setRolePermissions([]);
+                setShowRoleDialog(true);
+              }}
+              onEditPermissions={(user) => handleOpenEditPermissions(user)}
+              onToggleActive={(user) =>
+                toggleActiveMutation.mutate({
+                  userId: user.id,
+                  isActive: !user.is_active
+                })
+              }
+            />
+          )}
+        </div>
+      ) : (
       <Card>
         <CardHeader>
           <CardTitle>Team Members</CardTitle>
@@ -563,6 +616,7 @@ export default function UsersManagement() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Add User Dialog */}
       <AddUserDialog

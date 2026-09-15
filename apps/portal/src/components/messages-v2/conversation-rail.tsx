@@ -192,7 +192,7 @@ export function ConversationRail({
 
       {/* The one scroll region in this column. The search header above is a
           sibling, not a wrapper, so it stays put without `sticky`. */}
-      <div className={`min-h-0 flex-1 overflow-y-auto ${NO_SCROLLBAR}`}>
+      <div className={`min-h-0 flex-1 overflow-y-auto no-scrollbar ${NO_SCROLLBAR}`}>
         {isLoading ? (
           <div className="space-y-1 p-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (

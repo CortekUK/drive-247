@@ -294,7 +294,7 @@ export function BookingModeGrid({ selected, onSelect, available }: BookingModeGr
           </DialogHeader>
 
           {/* Page body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-8 py-10 flex flex-col items-center justify-center text-center">
+          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-8 py-10 flex flex-col items-center justify-center text-center">
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-lg font-semibold text-primary">
               {infoPage + 1}
             </span>

@@ -95,12 +95,12 @@ function mount(html: string): () => void {
 }
 
 const SIDEBAR = '<div data-sidebar="sidebar"><div data-sidebar="content"><a href="/vehicles">Vehicles</a></div></div>';
-/** The Vehicles stop's anchor: one fleet stat tile, inside the page shell. */
-const FLEET_TILE =
-  '<div data-slot="sidebar-inset"><h1>Fleet</h1><div data-tour="fleet-stat-total-vehicles"></div></div>';
-/** The Customers stop's anchor: the four counts, which render even at zero. */
-const CUSTOMER_STATS =
-  '<div data-slot="sidebar-inset"><h1>Customers</h1><div data-tour="customers-stats"></div></div>';
+/** The Vehicles stop's anchor: the graph's label and number, inside the overview, inside the page shell. */
+const FLEET_CHART =
+  '<div data-slot="sidebar-inset"><h1>Fleet</h1><div data-tour="fleet-overview"><div data-tour="vehicles-chart"></div></div></div>';
+/** The Customers stop's anchor: the graph's label and number, which render even at zero. */
+const CUSTOMERS_CHART =
+  '<div data-slot="sidebar-inset"><h1>Customers</h1><div data-tour="customers-stats"><div data-tour="customers-chart"></div></div></div>';
 
 function setup(suppressed = false) {
   return renderHook(({ s }: { s: boolean }) => useFirstRentalTour(s), {
@@ -259,13 +259,15 @@ describe('walkthrough hook — crossing pages', () => {
     expect(hook.result.current.phase).toBe('navigating');
     expect(hook.result.current.current).toBeNull();
 
-    // The page mounts its stat tiles a beat after arrival.
+    // The page mounts its overview a beat after arrival.
     arrive(hook, '/vehicles');
     expect(hook.result.current.phase).toBe('waiting');
-    mount(FLEET_TILE);
+    mount(FLEET_CHART);
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
     expect(hook.result.current.phase).toBe('showing');
     expect(hook.result.current.current?.step.id).toBe('vehicles');
+    // The graph itself, not the heading beside it.
+    expect(hook.result.current.current?.element?.getAttribute('data-tour')).toBe('vehicles-chart');
   });
 
   it('SKIPS a step whose anchor never mounts, instead of stalling on it', () => {
@@ -275,7 +277,7 @@ describe('walkthrough hook — crossing pages', () => {
     act(() => hook.result.current.next()); // sidebar
     act(() => hook.result.current.next()); // → /vehicles
     arrive(hook, '/vehicles');
-    // Neither the stat tile nor even an <h1> ever appears (a hard failure, a
+    // Neither the graph nor even an <h1> ever appears (a hard failure, a
     // query that never resolves…).
     waitOut(ANCHOR_WAIT_MS);
     // Moved on to Customers without ever rendering a card for Vehicles.
@@ -341,7 +343,7 @@ describe('walkthrough hook — wandering off, and coming back', () => {
   it('a reload on the step’s own page resumes silently — no prompt, no push', () => {
     writeTourProgress(USER, { stepId: 'vehicles', status: 'active' });
     markTourSeen(USER);
-    mount(FLEET_TILE);
+    mount(FLEET_CHART);
     currentPath = '/vehicles';
     const hook = setup();
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
@@ -366,11 +368,12 @@ describe('walkthrough hook — wandering off, and coming back', () => {
   it('pausing keeps their place', () => {
     writeTourProgress(USER, { stepId: 'customers', status: 'active' });
     markTourSeen(USER);
-    mount(CUSTOMER_STATS);
+    mount(CUSTOMERS_CHART);
     currentPath = '/customers';
     const hook = setup();
     act(() => void vi.advanceTimersByTime(ANCHOR_POLL_MS));
     expect(hook.result.current.current?.step.id).toBe('customers');
+    expect(hook.result.current.current?.element?.getAttribute('data-tour')).toBe('customers-chart');
 
     act(() => hook.result.current.pause());
     expect(hook.result.current.phase).toBe('idle');

@@ -56,6 +56,8 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import type { BlogPost } from "@/types/blog";
+import { useV2 } from "@/lib/v2-context";
+import { BlogPostsTableV2, BLOG_POST_LIST_COLUMNS_V2 } from "@/components/cms-v2/blog-posts-table-v2";
 
 export default function BlogListingPage() {
   const router = useRouter();
@@ -70,6 +72,9 @@ export default function BlogListingPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null);
+  // v2 chrome (canary tenants only; fails closed to v1). On v2 there is no
+  // pager: the kit's table grows as it scrolls (see the spread below).
+  const v2Chrome = useV2("chrome");
 
   const { posts, total, totalPages, isLoading, deletePost, isDeleting } =
     useBlogPosts({
@@ -77,6 +82,14 @@ export default function BlogListingPage() {
       categoryId: categoryFilter === "all" ? undefined : categoryFilter,
       search: searchQuery || undefined,
       page: currentPage,
+      // v2: page 1 of up to 1,000 posts (PostgREST's per-request maximum), grown
+      // on screen by `BlogPostsTableV2`, with only the columns that table reads,
+      // and the last result kept up while a new filter loads so a keystroke in
+      // the search no longer swaps the page (and the search box) for skeletons.
+      // Absent on v1, whose select, query key and loading are unchanged.
+      ...(v2Chrome
+        ? { page: 1, pageSize: 1000, columns: BLOG_POST_LIST_COLUMNS_V2, keepPreviousResults: true }
+        : {}),
     });
 
   const { categories } = useBlogCategories();
@@ -245,6 +258,19 @@ export default function BlogListingPage() {
           </CardContent>
         </Card>
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). No
+          // pager: rows arrive as the table scrolls. The row opens the post, where
+          // v1's row and Edit/View button go; Delete opens the same dialog below.
+          <BlogPostsTableV2
+            posts={posts}
+            resetKey={`${tenant?.id}|${statusFilter}|${categoryFilter}|${searchQuery}`}
+            serverTotal={total}
+            canDelete={hasEditAccess}
+            onOpen={(post) => router.push(`/cms/blog/${post.id}`)}
+            onDelete={(post) => setDeleteTarget(post)}
+          />
+        ) : (
         <>
           <Card>
             <Table>
@@ -374,6 +400,7 @@ export default function BlogListingPage() {
             </div>
           )}
         </>
+        )
       )}
 
       {/* Delete Confirmation */}

@@ -139,6 +139,24 @@ const railLink = (section: string) => `[data-sidebar="sidebar"] a[href*="section
  */
 const EMPTY_POINTS = '[data-tour="customers-empty-points"]';
 
+/**
+ * The hero row's graph: its label and headline number, tagged by `HeroChart`
+ * from the `anchor` prop in `components/customers-v2/customers-overview.tsx`.
+ *
+ * The label and number, not the row. The row runs the width of the content
+ * column, and the card needs somewhere clear of the spotlight to stand; with
+ * nowhere, it degrades to the centred wash that teaches nothing. The graph
+ * renders at zero rather than not at all, so it is there on an empty tab too.
+ */
+const CHART = '[data-tour="customers-chart"]';
+
+/**
+ * The root of that same overview. It kept the name of the four-card grid it
+ * replaced, which v1 still draws, so it is the fallback under the graph and
+ * ahead of the title.
+ */
+const OVERVIEW = '[data-tour="customers-stats"]';
+
 /** `/customers/<id>?section=…`, or null on a tenant with no customers yet. */
 const sectionRoute = (section: string) => (ctx: TourBuildContext) =>
   recordRoute(ctx.sampleIds?.customerId, '/customers', `section=${section}`);
@@ -181,9 +199,9 @@ const STEPS: readonly TourStep[] = [
     title: 'Most of these add themselves',
     body: 'Anyone who books on your public site lands here as a record on their own. An empty list on your first day is normal, not a job to clear.',
     route: '/customers',
-    // The four counts render at zero rather than not at all, so this anchor is
-    // as present on an empty tab as on a full one.
-    anchors: ['[data-tour="customers-stats"]', LIST_H1],
+    // The graph renders at zero rather than not at all, so this anchor is as
+    // present on an empty tab as on a full one.
+    anchors: [CHART, OVERVIEW, LIST_H1],
     side: 'bottom',
     requires: { noRecord: 'customerId' },
   },
@@ -191,19 +209,19 @@ const STEPS: readonly TourStep[] = [
     id: 'customers.list',
     label: 'The list',
     title: 'Your customers, at a glance',
-    body: 'Anyone who books through your site is added here on their own. These four counts are the list in summary, so you can see the shape of it without reading it.',
+    body: 'Anyone who books through your site is added here on their own. The graph counts how many were added in the period you pick, with the period before it dotted behind.',
     route: '/customers',
-    anchors: ['[data-tour="customers-stats"]', LIST_H1],
+    anchors: [CHART, OVERVIEW, LIST_H1],
     side: 'bottom',
-    // Four counts of nothing teach nothing. `customers.empty.arrive` takes this
-    // same anchor on an empty tab and says the useful thing instead.
+    // A graph of nothing teaches nothing. `customers.empty.arrive` takes these
+    // same anchors on an empty tab and says the useful thing instead.
     requires: { record: 'customerId' },
     notes: [
       {
         // Only the canary renders this button, and only for someone with the
         // `blocked_customers` grant — so the line is dropped rather than
         // promising a door that is not there.
-        text: 'Anyone you block drops out of this list. Blocked is where they go.',
+        text: 'Anyone you block drops out of this list and its graph. Blocked is where they go.',
         anchors: ['[data-tour="customers-blocked"]'],
       },
     ],

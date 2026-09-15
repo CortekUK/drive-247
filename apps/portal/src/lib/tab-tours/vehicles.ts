@@ -25,9 +25,9 @@
  * three steps written for the empty fleet carry `requires.noRecord`.
  * `stepAllowed` keeps exactly one half, from ids `launch()` reads off the DOM.
  *
- *   EMPTY fleet   5 steps — the counters, why one real car comes first, what a
- *                 record holds, the Add button, and the teaching card's own CTA
- *                 with a pause on it so the operator goes and does the thing.
+ *   EMPTY fleet   5 steps — the fleet graph, why one real car comes first, what
+ *                 a record holds, the Add button, and the teaching card's own
+ *                 CTA with a pause on it so the operator goes and does the thing.
  *   WITH a car   11 steps — the list, then eight stops inside one vehicle.
  *
  * The `record` guard is NOT redundant with `routeFor` already returning null on
@@ -45,15 +45,18 @@
  * ---------------------------------------------------------------------------
  * THIS TAB SPANS TWO DESIGN GENERATIONS, and every anchor below depends on it
  *
- * The LIST (`/vehicles`) is the shared v1 page that all 57 tenants load —
- * shadcn Cards, a real `<table>`, the gradient stat tiles in
- * `components/vehicles/fleet-summary-cards.tsx`. The RECORD (`/vehicles/<id>`)
+ * The LIST (`/vehicles`) is the shared page that all 57 tenants load. Its v1
+ * branch is shadcn Cards, a real `<table>` and the gradient stat tiles in
+ * `components/vehicles/fleet-summary-cards.tsx`. Under the v2 chrome, which is
+ * the only place a tour ever runs, the tiles are gone: the top of the page is
+ * one graph and a featured card (`components/vehicles-v2/vehicles-overview.tsx`),
+ * and `vehicles.fleet` points at that graph. The RECORD (`/vehicles/<id>`)
  * is v2 and canary-only: `components/vehicles-v2/`, nine sections rendered one
  * at a time from `?section=`, with the app sidebar replaced by that record's
  * own rail. So the list steps — the empty-fleet ones included, since the
- * teaching card that replaces the table is rendered by that same v1 page — are
- * written against v1 markup and the last eight against the v2 tree, and the two
- * share no conventions.
+ * teaching card that replaces the table is rendered by that same page — are
+ * written against the list page's markup and the last eight against the v2
+ * record tree, and the two share no conventions.
  *
  * ---------------------------------------------------------------------------
  * THE ANCHORS, and the fallback that makes the back half safe
@@ -133,19 +136,54 @@ const LIST_HEADING = ['[data-slot="sidebar-inset"] h1', 'main h1'] as const;
 
 const STEPS: readonly TourStep[] = [
   {
+    /**
+     * The top of the list: one graph, "Cars on rent".
+     *
+     * Do not delete this step now that the tiles it described are gone. It is
+     * the only step here that carries the outline, it opens the empty run as
+     * well as the full one, and without it a view-only manager on an empty
+     * fleet is left with exactly `MIN_TOUR_STOPS` anchored steps.
+     *
+     * The anchor is the graph's label and headline number (`HeroChart`'s
+     * `anchor` prop in `components/vehicles-v2/vehicles-overview.tsx`), not the
+     * row: the row runs the width of the content column, and the card needs
+     * somewhere clear of the spotlight to stand. It is drawn while the rentals
+     * load and if they fail, so it is on the page as early as the heading and
+     * never loses the race to it. Then the overview's root, then the v1 tiles
+     * this step used to name, then the heading.
+     *
+     * The body names the graph rather than saying "this number", so it still
+     * reads true when the filters are open, the graph is turned away, and the
+     * spotlight lands on the heading instead.
+     */
     id: 'vehicles.fleet',
     label: 'Your fleet',
-    title: 'Your fleet, counted',
-    body: 'Available means bookable right now. Unavailable means every hire length is switched off. Paused means you took the car off the road.',
+    title: 'How busy your fleet is',
+    body: 'The graph up top counts your cars out on rent. The big number is today; the line is how it moved over the period you pick, with the one before it dotted.',
     route: '/vehicles',
-    anchors: ['[data-tour="fleet-stat-available"]', '[data-tour="fleet-stat-unavailable"]', ...LIST_HEADING],
+    anchors: [
+      '[data-tour="vehicles-chart"]',
+      '[data-tour="fleet-overview"]',
+      '[data-tour="fleet-stat-available"]',
+      '[data-tour="fleet-stat-unavailable"]',
+      ...LIST_HEADING,
+    ],
     side: 'bottom',
     showOutline: true,
+    notes: [
+      {
+        // What the tiles used to count now sits on each row. Anchored to the
+        // first row, so an empty fleet, whose table is replaced by the teaching
+        // card, is not sent looking for a column it cannot see.
+        text: 'Available, Rented, Paused and the rest are on every row of the list, under Status.',
+        anchors: ['[data-tour="vehicle-row"]'],
+      },
+    ],
   },
   // ── The empty fleet's own three steps ───────────────────────────────────
   // They sit interleaved with the shared ones rather than in a block, because
   // `buildTour` keeps the array's order and the empty run has to READ in order:
-  // the counters, why a car comes first, what a record holds, the button, then
+  // the fleet graph, why a car comes first, what a record holds, the button, then
   // the card's own CTA. Grouping them at the end would put "add your first car"
   // before "here is what a car record even is".
   {
@@ -332,7 +370,7 @@ export const VEHICLES_TAB_TOUR: TabTour = {
   //
   // An empty fleet is NO LONGER that case, which is the point of this change:
   // it now has three steps of its own and runs five in total. Nor is a
-  // view-only manager, who keeps the counters and both empty-fleet teaching
+  // view-only manager, who keeps the fleet graph and both empty-fleet teaching
   // steps once the two add steps are dropped — three, which clears the floor.
   //
   // So this is close to unreachable, and the honest remaining cause is access

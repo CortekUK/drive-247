@@ -50,12 +50,17 @@ import { usePendingBookings, PendingBooking } from "@/hooks/use-pending-bookings
 import { useApproveBooking, useRejectBooking } from "@/hooks/use-booking-approval";
 import { CancelRentalDialog } from "@/components/shared/dialogs/cancel-rental-dialog";
 import { useManagerPermissions } from "@/hooks/use-manager-permissions";
+import { useV2 } from "@/lib/v2-context";
+import { PendingBookingsTableV2 } from "@/components/fleet-v2/pending-bookings-table-v2";
 
 const PendingBookings = () => {
   const { data: bookings, isLoading, error, refetch } = usePendingBookings();
   const approveBooking = useApproveBooking();
   const rejectBooking = useRejectBooking();
   const { canEdit } = useManagerPermissions();
+  // v2 chrome (canary tenants only; fails closed to v1). Above the early returns
+  // below, as every hook must be.
+  const v2Chrome = useV2("chrome");
 
   const [selectedBooking, setSelectedBooking] = useState<PendingBooking | null>(
     null
@@ -211,6 +216,27 @@ const PendingBookings = () => {
           <p className="text-muted-foreground">No pending bookings require your attention.</p>
         </div>
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/fleet-v2), no pager. Its
+          // Reject and Approve buttons run v1's exact bodies below: select the
+          // booking and open the confirmation. Capture and release happen only
+          // in those dialogs, through handleApprove and handleReject.
+          <PendingBookingsTableV2
+            bookings={bookings}
+            canEdit={canEdit('pending_bookings')}
+            actionsDisabled={approveBooking.isPending || rejectBooking.isPending}
+            vehicleName={getVehicleName}
+            daysUntilExpiry={getDaysUntilExpiry}
+            onReject={(booking) => {
+              setSelectedBooking(booking);
+              setShowRejectDialog(true);
+            }}
+            onApprove={(booking) => {
+              setSelectedBooking(booking);
+              setShowApproveDialog(true);
+            }}
+          />
+        ) : (
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -336,6 +362,7 @@ const PendingBookings = () => {
             </Table>
           </CardContent>
         </Card>
+        )
       )}
 
       {/* Approve Confirmation Dialog */}

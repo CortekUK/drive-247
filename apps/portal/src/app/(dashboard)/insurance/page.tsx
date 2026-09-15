@@ -61,6 +61,8 @@ import { exportInsuranceToCSV } from "@/lib/csv-export";
 import { type InsurancePolicyStatus } from "@/lib/insurance-utils";
 import { useTenant } from "@/contexts/TenantContext";
 import { isInsuranceExemptTenant } from "@/config/tenant-config";
+import { useV2 } from "@/lib/v2-context";
+import { InsurancePolicyListV2 } from "@/components/insurance-v2/insurance-policy-list-v2";
 
 type SortField = "customer" | "vehicle" | "policy_number" | "provider" | "start_date" | "expiry_date" | "status" | "docs_count";
 type SortDirection = "asc" | "desc";
@@ -91,6 +93,9 @@ export default function InsuranceListEnhanced() {
   const queryClient = useQueryClient();
   const { tenant } = useTenant();
   const router = useRouter();
+  // v2 (northwind) swaps the policies table for the rentals list's table. Above
+  // the exempt-tenant `return null` below, so it runs on every render.
+  const v2Chrome = useV2("chrome");
 
   // Redirect insurance-exempt tenants (like Kedic Services) away from this page
   useEffect(() => {
@@ -298,6 +303,41 @@ export default function InsuranceListEnhanced() {
       </Card>
 
       {/* Policies Table */}
+      {v2Chrome ? (
+        isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading insurance policies...</div>
+        ) : sortedPolicies.length === 0 ? (
+          // v2, nothing to list: v1's empty row on its own, with no table header
+          // around it, as the other v2 lists show theirs.
+          <div className="text-center py-12 space-y-3">
+            <div className="text-muted-foreground">
+              {filters.search || filters.status !== "all" || filters.dateRange.from || filters.dateRange.to
+                ? "No policies match your current filters"
+                : "No insurance policies found"
+              }
+            </div>
+            <Button onClick={handleAddPolicy} variant="outline" className="mt-2">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Policy
+            </Button>
+          </div>
+        ) : (
+          // v2: the rentals list's table (components/shared/list-table-v2). Rows
+          // arrive as it scrolls. The row opens the policy drawer, as in v1.
+          <InsurancePolicyListV2
+            policies={sortedPolicies}
+            resetKey={`${tenant?.id ?? ""}|${filters.search}|${filters.status}|${filters.dateRange.from?.getTime() ?? ""}|${filters.dateRange.to?.getTime() ?? ""}|${sortField}|${sortDirection}`}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            isUrgent={isPolicyUrgent}
+            onView={handleViewPolicy}
+            onEdit={handleEditPolicy}
+            onUpload={handleUploadDocument}
+            onDeactivate={handleDeactivatePolicy}
+          />
+        )
+      ) : (
       <Card>
         <CardContent className="p-0">
           <div className="border rounded-lg overflow-x-auto">
@@ -530,6 +570,7 @@ export default function InsuranceListEnhanced() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Dialogs */}
       <CustomerSelectionDialog

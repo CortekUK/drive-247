@@ -60,7 +60,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-2">
+        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2">
           {filtered.length === 0 ? (
             <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
               {search.trim()
@@ -112,7 +112,7 @@ export function VehicleList({ selected, onSelect, vehicles, currency = "$" }: Ve
       </div>
 
       {/* ── Right (70%): selected vehicle info ─────────────────── */}
-      <div className="min-h-0 rounded-2xl border bg-card overflow-y-auto">
+      <div className="min-h-0 rounded-2xl border bg-card overflow-y-auto no-scrollbar">
         {!current ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">

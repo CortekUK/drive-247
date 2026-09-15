@@ -37,11 +37,17 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Plus, Edit, Trash2, Tags, Loader2 } from "lucide-react";
 import type { BlogCategoryWithCount } from "@/types/blog";
+import { useTenant } from "@/contexts/TenantContext";
+import { useV2 } from "@/lib/v2-context";
+import { BlogCategoriesTableV2 } from "@/components/cms-v2/blog-categories-table-v2";
 
 export default function BlogCategoriesPage() {
   const router = useRouter();
   const { canEdit } = useManagerPermissions();
   const hasEditAccess = canEdit("cms");
+  // v2 chrome (canary tenants only; fails closed to v1): the kit's table below.
+  const v2Chrome = useV2("chrome");
+  const { tenant } = useTenant();
 
   const {
     categories,
@@ -180,6 +186,18 @@ export default function BlogCategoriesPage() {
           </CardContent>
         </Card>
       ) : (
+        v2Chrome ? (
+          // v2: the rentals list's table (components/shared/list-table-v2). No
+          // pager: rows arrive as the table scrolls. Rows open nothing, as in v1;
+          // Edit and Delete open the same dialogs below.
+          <BlogCategoriesTableV2
+            categories={categories}
+            resetKey={`${tenant?.id}`}
+            canEdit={hasEditAccess}
+            onEdit={openEdit}
+            onDelete={(cat) => setDeleteTarget(cat)}
+          />
+        ) : (
         <Card>
           <Table>
             <TableHeader>
@@ -236,6 +254,7 @@ export default function BlogCategoriesPage() {
             </TableBody>
           </Table>
         </Card>
+        )
       )}
 
       {/* Create/Edit Dialog */}
