@@ -6,7 +6,6 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useManagerPermissions } from '@/hooks/use-manager-permissions';
 import { TraxRequestScope, traxPageContext } from '@/lib/trax-session';
 import { isV2 } from '@/lib/v2';
-import { isTraxTestTenant } from '@/lib/trax-test-tenants';
 import { useV2 } from '@/lib/v2-context';
 import type { ChatMessage, ChatApiResponse, UseChatReturn, TraxNavigation, TraxCapabilities } from '@/types/trax-support';
 
@@ -18,9 +17,8 @@ export function useTraxSupport(enabled = true): UseChatReturn {
   const { appUser, user } = useAuthStore();
   const { tenant } = useTenant();
   const chromeEnabled=useV2('chrome');
-  // Follow the reviewed V2 rollout, including tenants enrolled after Northwind. Local development
-  // may also name test tenants (NEXT_PUBLIC_TRAX_TEST_TENANTS); other builds ignore that list.
-  enabled=enabled && ((chromeEnabled && isV2('chrome',tenant?.slug)) || isTraxTestTenant(tenant?.slug));
+  // Follow the reviewed V2 rollout, including tenants enrolled after Northwind.
+  enabled=enabled && chromeEnabled && isV2('chrome',tenant?.slug);
   const { permissions } = useManagerPermissions();
   const pathname=usePathname();const router=useRouter();
   const userId=user?.id??appUser?.auth_user_id;

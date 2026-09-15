@@ -10,7 +10,6 @@ import { configuredFinance } from '../../../../../../supabase/functions/trax-sup
 import type { FinanceDatabase } from '../../../../../../supabase/functions/trax-support/support/finance-reads';
 import { calendarClock } from '../../../../../../supabase/functions/trax-support/support/calendar-clock';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
-import { traxTestTenantSlugs } from '@/lib/trax-test-tenants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,8 +47,6 @@ export async function POST(request: Request): Promise<Response> {
       finance:configuredFinance(db as unknown as FinanceDatabase,key=>process.env[key]),
       store:process.env.TRAX_SUPPORT_STORAGE==='enabled'?createTicketStore(db as unknown as TicketDatabase):undefined,
       escalationPolicy:configuredEscalationPolicy(process.env.TRAX_ESCALATION_POLICY),
-      // Local manual testing: NEXT_PUBLIC_TRAX_TEST_TENANTS (development only, see the helper).
-      testTenantSlugs:traxTestTenantSlugs(),
       audit:event=>{if(event.kind==='model')modelCalls++;else toolCalls++;},
     });
     // Dev execution evidence contains counters only, never account or record data.

@@ -3,7 +3,7 @@ import { redactSupportText } from './issues.ts';
 import { object, onlyKeys, SupportError, UUID, type SupportReads } from './types.ts';
 
 export interface MessagingDatabase {rpc(name:string,args:Record<string,unknown>):PromiseLike<{data:unknown;error:unknown}>}
-export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;enabled:boolean;/** Local development route only. */testTenantSlugs?:readonly string[]}
+export interface MessagingDependencies {reads:SupportReads;db:MessagingDatabase;enabled:boolean}
 const fields:Record<string,string[]>={count:[],list:['search','status','offset'],detail:['id','before'],read:['id','through'],send:['id','nonce','body'],status:['id','nonce','body','status'],create:['nonce','body','subject']};
 /** Dedicated human API. No model, opaque AI session, or client author identity. */
 export async function handleMessaging(req:Request,deps:MessagingDependencies):Promise<Response>{
@@ -39,7 +39,7 @@ export async function handleMessaging(req:Request,deps:MessagingDependencies):Pr
       if(!staff||!staff.is_active||!staff.is_super_admin||staff.auth_user_id!==user.id)throw new SupportError('forbidden','Platform support access is required.',403);
       userId=user.id;staffId=staff.id;tenantId=null;
     }else{
-      const ctx=await authorize(deps.reads,bearer,body.tenantId,{testTenantSlugs:deps.testTenantSlugs});userId=ctx.userId;staffId=ctx.staffId;tenantId=ctx.tenant.id;
+      const ctx=await authorize(deps.reads,bearer,body.tenantId);userId=ctx.userId;staffId=ctx.staffId;tenantId=ctx.tenant.id;
     }
     if(!deps.enabled)throw new SupportError('support_unavailable','Support messaging is not configured in this environment. No message has been sent.',503);
     // RPC rechecks active membership and the dedicated support grant atomically.

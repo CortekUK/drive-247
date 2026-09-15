@@ -40,18 +40,6 @@ describe('TRAX request authorization',()=>{
     const result=await request({message:'rentals',tenantId:tenantA});
     expect(result.status).toBe(403);expect(result.body.code).toBe('feature_unavailable');
   });
-  it('lets only the local development route name test tenants without V2 enrollment',async()=>{
-    tenant.slug='offline-test-tenant';
-    const call=async(testTenantSlugs?:string[])=>(await handleSupportRequest(new Request('http://local.test/chat',{method:'POST',headers:{Authorization:'Bearer offline-session','Content-Type':'application/json'},body:JSON.stringify({message:'rentals'})}),{reads,signingSecret,now:()=>now,testTenantSlugs})).status;
-    expect(await call()).toBe(403);
-    expect(await call(['another-tenant'])).toBe(403);
-    expect(await call(['offline-test-tenant'])).toBe(200);
-  });
-  it('never lets a test tenant list move ordinary staff to another tenant',async()=>{
-    tenant={id:tenantB,slug:'offline-test-tenant',status:'active'};
-    const res=await handleSupportRequest(new Request('http://local.test/chat',{method:'POST',headers:{Authorization:'Bearer offline-session','Content-Type':'application/json'},body:JSON.stringify({message:'rentals',tenantId:tenantB})}),{reads,signingSecret,now:()=>now,testTenantSlugs:['offline-test-tenant']});
-    expect(res.status).toBe(403);expect(reads.tenant).not.toHaveBeenCalledWith(tenantB);
-  });
   it('does not trust a client-supplied Northwind slug or V2 flag',async()=>{
     tenant.slug='offline-other';
     expect((await request({message:'rentals',tenantSlug:'northwind',v2:true})).status).toBe(400);

@@ -11,7 +11,7 @@ import { newIssue, issueView, recordIssueEvent, redactSupportText, DEFAULT_ESCAL
 import { ticketInput, type TicketStore } from './support-store.ts';
 import { financeScopes, type FinanceServices } from './finance-types.ts';
 
-export interface Dependencies { reads:SupportReads; signingSecret:string; now?:()=>number; model?:SupportModel; operational?:OperationalReads; fleet?:FleetReads; finance?:FinanceServices; store?:TicketStore; escalationPolicy?:EscalationPolicy; clock?:CalendarClock; audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void; /** Local development route only. */ testTenantSlugs?:readonly string[] }
+export interface Dependencies { reads:SupportReads; signingSecret:string; now?:()=>number; model?:SupportModel; operational?:OperationalReads; fleet?:FleetReads; finance?:FinanceServices; store?:TicketStore; escalationPolicy?:EscalationPolicy; clock?:CalendarClock; audit?:(event:{kind:'model'|'tool';name:string;status:string})=>void }
 const disclaimer={en:'This is application guidance. I have not checked live records, vehicle availability or Stripe.','ur-Latn':'Ye application guidance hai. Maine live records, gaari ki availability ya Stripe check nahi kiya.'};
 const unavailable={en:'This prepared fallback cannot run a live diagnostic. Balances and business actions are not available. Ask about Rentals, returns, Vehicles, Customers, Availability, Messages, Reminders, Website Content or Settings. I only show destinations your account can access.','ur-Latn':'Is prepared fallback mein live diagnosis nahi hota. Balance aur business actions available nahi hain. Rentals, return, Vehicles, Customers, Availability, Messages, Reminders, Website Content ya Settings ke bare mein poochein. Sirf aap ke account ke liye allowed destinations dikhaye jate hain.'};
 const provenance={kind:'application_guidance',liveDataChecked:false,knowledgeVersion:KNOWLEDGE.version,sourceCommit:KNOWLEDGE.sourceCommit,verifiedAt:KNOWLEDGE.verifiedAt,productionReleaseVerified:false,conversationStorage:'browser_memory_only'};
@@ -63,7 +63,7 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
     const body=await boundedBody(req);onlyKeys(body,['type','message','tenantId','conversationId','contextScope','pageContext','navigation','locale','issueId','resumeId','ticket','policy','retentionHold']);
     const type=body.type??'message';
     if(!['message','context','navigate','recheck','resume','select_issue','new_issue','resolve_issue','escalate','submit_ticket','tickets','ticket_detail','update_ticket','retention_policy','retention_preview','retention_hold'].includes(String(type)))throw new SupportError('tool_unavailable','Business actions are not available in this TRAX phase.',403);
-    const auth=await authorize(deps.reads,token,body.tenantId,{testTenantSlugs:deps.testTenantSlugs});auth.scope=await digest(auth.scope+authorizationRevision);
+    const auth=await authorize(deps.reads,token,body.tenantId);auth.scope=await digest(auth.scope+authorizationRevision);
     if(body.contextScope!=null && body.contextScope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);
     const now=deps.now?.()??Date.now();
     let conversation=body.conversationId==null?{id:crypto.randomUUID(),expires:now+30*60_000} as Conversation:await verifyConversation(deps.signingSecret,auth,body.conversationId,now);
@@ -83,7 +83,7 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
     }
     const env={auth,reads:deps.reads};let page:PageContext|undefined;
     if(body.pageContext!=null){const p=object(body.pageContext);onlyKeys(p,['kind','id']);if(typeof p.kind!=='string'||typeof p.id!=='string')throw new SupportError('invalid_input','Invalid page context.');page=p as unknown as PageContext;await validateEntity(env,page);}
-    const reauthorize=async()=>{const fresh=await authorize(deps.reads,token,body.tenantId,{testTenantSlugs:deps.testTenantSlugs});fresh.scope=await digest(fresh.scope+authorizationRevision);if(fresh.scope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);};
+    const reauthorize=async()=>{const fresh=await authorize(deps.reads,token,body.tenantId);fresh.scope=await digest(fresh.scope+authorizationRevision);if(fresh.scope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);};
     const modelReady=!!(deps.model&&deps.operational&&deps.clock);
     const financeReady=modelReady&&financeScopes(auth,deps.finance?.policy).length>0;
     let response:Record<string,unknown>={response:'',sources:[],navigation:[],provenance:{...provenance,engine:'prepared_fallback'},capabilities:{modelReady,operationalChecks:modelReady,finance:financeReady,supportStorage:storageReady,supportAgent:supportAccess.supportAgent,managePolicy:supportAccess.managePolicy,supportSubmission:storageReady&&supportAccess.deliveryReady}};
@@ -178,7 +178,7 @@ export async function handleSupportRequest(req:Request,deps:Dependencies):Promis
       const currentIssue=conversation.issues?.find(i=>i.id===conversation.activeIssueId);
       if(currentIssue&&!modelAnswer){currentIssue.excerpts=[...currentIssue.excerpts.filter(e=>!(e.at===new Date(now).toISOString()&&e.role==='user'&&e.content===redactSupportText(String(body.message)))),{role:'user' as const,content:redactSupportText(String(body.message)),at:new Date(now).toISOString()},{role:'assistant' as const,content:redactSupportText(String(response.response)),at:new Date(now).toISOString()}].slice(-8);}
     }
-    const fresh=await authorize(deps.reads,token,body.tenantId,{testTenantSlugs:deps.testTenantSlugs});fresh.scope=await digest(fresh.scope+authorizationRevision);
+    const fresh=await authorize(deps.reads,token,body.tenantId);fresh.scope=await digest(fresh.scope+authorizationRevision);
     if(fresh.scope!==auth.scope)throw new SupportError('context_changed','Account access changed. Start a new conversation.',409);
     if(storageReady&&stateChanged){conversation.persisted=true;revision=await deps.store!.save(auth,conversation,revision);}
     if(storageReady){const latestAccess=await deps.store!.capabilities(fresh);if(JSON.stringify(latestAccess)!==JSON.stringify(supportAccess))throw new SupportError('context_changed','Support permissions changed. Reload this conversation.',409);}

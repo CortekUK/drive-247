@@ -2,16 +2,6 @@
 
 The normal local entry point is `http://northwind.portal.localhost:4002`. Open **Ask AI** in the V2 sidebar or press **Ctrl+J** (Cmd+J on macOS). No deployment is required for this development path. Other tenants use their own subdomain and must already be enrolled in V2 through the existing rollout policy. Do not change tenant enrollment to run a test.
 
-## Test another tenant locally (development only)
-
-To manually test TRAX against a tenant that is not in the V2 rollout (for example a UAE own-account tenant such as `test` or `jangramrentals`), add its slug to the git-ignored `apps/portal/.env.local` and restart the portal:
-
-```dotenv
-NEXT_PUBLIC_TRAX_TEST_TENANTS=test,jangramrentals
-```
-
-Then open that tenant's own subdomain, for example `http://test.portal.localhost:4002`, sign in with a staff account of that tenant or a super admin, and use the **TRAX** button in the V1 header (Ctrl+J). The list only affects `next dev`: production builds ignore it, the hosted edge function never reads it, and it does not enroll the tenant in V2 or change its portal. Switching the URL switches everything else with it: staff access, records and Stripe routing all come from the selected tenant (its platform account, test/live mode and connected account). Comma-separate up to 20 slugs; remove a slug to turn it off.
-
 ## What this test can establish
 
 TRAX has two explicit modes: prepared guidance when no approved model is configured, and model-backed support with read-only operational tools when the approved provider/key/policy is present. A rendered dialog or prepared answer does not verify model integration. The additional [read-only finance package](read-only-finance.md) remains disabled unless its explicit server grants and restricted credentials are configured. No mode provides business writes.

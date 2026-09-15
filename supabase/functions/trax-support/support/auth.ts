@@ -7,12 +7,8 @@ export async function digest(value: string): Promise<string> {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export interface AuthorizeOptions {
-  /** Local development routes only: tenant slugs that may use TRAX without V2 enrollment. */
-  testTenantSlugs?: readonly string[];
-}
 /** The selected tenant is a hint; ordinary staff always use their membership. */
-export async function authorize(reads: SupportReads, bearer: string, tenantHint: unknown, options: AuthorizeOptions = {}): Promise<SupportContext> {
+export async function authorize(reads: SupportReads, bearer: string, tenantHint: unknown): Promise<SupportContext> {
   const user = await reads.authenticate(bearer);
   if (!user) throw new SupportError('unauthorized', 'Sign in again to use TRAX.', 401);
   const staff = await reads.staff(user.id);
@@ -32,9 +28,8 @@ export async function authorize(reads: SupportReads, bearer: string, tenantHint:
   }
   // Scope comes from the authenticated membership and server-loaded tenant.
   // A client slug, V2 flag or super-admin role cannot enroll a V1 tenant.
-  // Use the same rollout policy as the portal, including future V2 tenants. Only the local
-  // development routes may add server-configured test tenants; the edge function never does.
-  if (!isV2('chrome',tenant.slug) && !options.testTenantSlugs?.includes(tenant.slug)) {
+  // Use the same rollout policy as the portal, including future V2 tenants.
+  if (!isV2('chrome',tenant.slug)) {
     throw new SupportError('feature_unavailable','This TRAX experience is available only for tenants enabled for V2.',403);
   }
   const role = (staff.is_super_admin ? 'head_admin' : staff.role) as StaffRole;

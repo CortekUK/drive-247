@@ -130,22 +130,6 @@ describe('useTraxSupport Phase 1',()=>{
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(result.current.messages).toEqual([]);
   });
-  it('lets a named local test tenant use TRAX from the V1 layout, only in development',async()=>{
-    mocks.v2=false;mocks.tenant={id:'tenant-a',slug:'jangramrentals'};
-    vi.stubEnv('NEXT_PUBLIC_TRAX_TEST_TENANTS','test,jangramrentals');vi.stubEnv('NODE_ENV','development');
-    const {result}=renderHook(()=>useTraxSupport());
-    await waitFor(()=>expect(result.current.isLoading).toBe(false));
-    await act(()=>result.current.sendMessage('rentals'));
-    expect(mocks.fetch).toHaveBeenCalled();
-    expect(mocks.fetch.mock.calls.every(([url])=>url==='/api/trax-support')).toBe(true);
-  });
-  it('ignores the local test tenant list outside development',async()=>{
-    mocks.v2=false;mocks.tenant={id:'tenant-a',slug:'jangramrentals'};
-    vi.stubEnv('NEXT_PUBLIC_TRAX_TEST_TENANTS','jangramrentals');vi.stubEnv('NODE_ENV','production');
-    const {result}=renderHook(()=>useTraxSupport());
-    await act(()=>result.current.sendMessage('rentals'));
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
   it('never contacts support from a V1 layout, even with a Northwind tenant',async()=>{
     mocks.v2=false;
     const {result}=renderHook(()=>useTraxSupport());
